@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/moussa/internal/tools"
 
 	"github.com/joho/godotenv"
 )
@@ -58,7 +59,7 @@ func main() {
 			req := openrouter.ChatRequest{
 				Model:    model,
 				Messages: messages,
-				Tools:    ToolSchemas(),
+				Tools:    tools.Schemas(),
 			}
 
 			res, err := client.Chat(req)
@@ -81,7 +82,7 @@ func main() {
 
 			for _, toolCall := range res.Choices[0].Message.ToolCalls {
 				fmt.Printf("[calling %s]\n", toolCall.Function.Name)
-				messages = append(messages, ExecuteTool(toolCall))
+				messages = append(messages, tools.Execute(toolCall))
 			}
 
 		}

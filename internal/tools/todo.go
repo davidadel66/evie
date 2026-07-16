@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"encoding/json"
@@ -57,9 +57,9 @@ var todoAddTool = openrouter.Tool{
 	},
 }
 
-// ToDoList shells out to `todo list` and returns its output verbatim for
+// toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.
-func ToDoList(_ string) (string, error) {
+func toDoList(_ string) (string, error) {
 	out, err := exec.Command("todo", "list").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("command failed: %w: %s", err, out)
@@ -68,11 +68,11 @@ func ToDoList(_ string) (string, error) {
 	return string(out), nil
 }
 
-// ToDoAdd unmarshals the model's arguments and shells out to `todo add`,
+// toDoAdd unmarshals the model's arguments and shells out to `todo add`,
 // translating each optional field into the matching CLI flag. Title is
 // required; a missing title or bad JSON comes back as an error for the
 // dispatcher to relay to the model.
-func ToDoAdd(args string) (string, error) {
+func toDoAdd(args string) (string, error) {
 	var params struct {
 		Title       string `json:"title"`
 		Description string `json:"description"`

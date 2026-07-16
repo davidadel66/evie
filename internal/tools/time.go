@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"time"
@@ -20,9 +20,9 @@ var getTimeTool = openrouter.Tool{
 	},
 }
 
-// GetTime returns the current local time. It takes the arguments string
-// only to satisfy the AgentTool Execute contract and ignores it — this
-// tool has no parameters.
-func GetTime(_ string) (string, error) {
+// getTime returns the current local time. It takes the arguments string
+// only to satisfy the Execute contract and ignores it — this tool has no
+// parameters.
+func getTime(_ string) (string, error) {
 	return time.Now().Format("2006-01-02 15:04:05"), nil
 }
