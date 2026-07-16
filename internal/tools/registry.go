@@ -29,6 +29,8 @@ var all = []Tool{
 	{Schema: todoListTool, Execute: toDoList},
 	{Schema: todoAddTool, Execute: toDoAdd},
 	{Schema: financeSyncTool, Execute: financeSync},
+	{Schema: financeRulesTool, Execute: financeRules},
+	{Schema: financeCategorizeTool, Execute: financeCategorize},
 }
 
 // Schemas extracts just the wire-format schemas from the registry for the

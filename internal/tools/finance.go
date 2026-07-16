@@ -2,6 +2,8 @@ package tools
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/davidadel66/moussa/internal/finance"
 	"github.com/davidadel66/moussa/internal/openrouter"
@@ -52,4 +54,71 @@ func financeSync(_ string) (string, error) {
 	}
 	out += fmt.Sprintf("Total: %d added, %d modified, %d removed\n", res.Totals.Added, res.Totals.Modified, res.Totals.Removed)
 	return out, nil
+}
+
+// financeRulesTool describes finance_rules to the model: reload the
+// categorization rules from the canonical lookup file, no parameters.
+var financeRulesTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "finance_rules",
+		Description: "Reload merchant-to-category rules into the finance database from ~/.finance/merchantLookup.json. Run this after the lookup file changes. Takes no arguments.",
+		Parameters: openrouter.Parameter{
+			Type:       "object",
+			Properties: map[string]openrouter.Property{},
+		},
+	},
+}
+
+// financeRules seeds the rules table from the canonical lookup file —
+// the same hardcoded path the CLI uses. The model gets no path parameter
+// on purpose: it has no business inventing file paths.
+func financeRules(_ string) (string, error) {
+	db, err := finance.OpenDB()
+	if err != nil {
+		return "", fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("find home dir: %w", err)
+	}
+	rulesPath := filepath.Join(home, ".finance", "merchantLookup.json")
+
+	if err := finance.RulesSeed(db, rulesPath); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Seeded rules from %s\n", rulesPath), nil
+}
+
+// financeCategorizeTool describes finance_categorize to the model: apply
+// the stored rules to uncategorized transactions, no parameters.
+var financeCategorizeTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "finance_categorize",
+		Description: "Apply stored merchant-to-category rules to all unreviewed transactions in the finance database. Returns how many transactions were categorized and how many remain uncategorized. Takes no arguments.",
+		Parameters: openrouter.Parameter{
+			Type:       "object",
+			Properties: map[string]openrouter.Property{},
+		},
+	},
+}
+
+// financeCategorize runs rule-based categorization and reports the counts.
+// Human-reviewed and hand-categorized transactions are never touched —
+// that guarantee lives in the domain query, not here.
+func financeCategorize(_ string) (string, error) {
+	db, err := finance.OpenDB()
+	if err != nil {
+		return "", fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+
+	matched, unmatched, err := finance.Categorize(db)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d categorized by rule, %d uncategorized\n", matched, unmatched), nil
 }
