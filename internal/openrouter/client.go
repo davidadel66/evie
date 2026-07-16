@@ -1,4 +1,10 @@
-// Package openrouter provides the client used for Chat with OpenRouter
+// Package openrouter is a minimal client for OpenRouter's OpenAI-compatible
+// chat-completions API. It owns the wire format: every type in schema.go
+// mirrors the JSON OpenRouter sends or expects, field for field. Nothing in
+// here knows about the agent harness — the harness imports this package,
+// never the reverse. If a second provider is ever added, this package is
+// the template: a sibling package translating the same ideas to different
+// wire types.
 package openrouter
 
 import (
@@ -10,6 +16,9 @@ import (
 	"net/http"
 )
 
+// NewClient is the only way to build a Client: it rejects an empty API key
+// up front so a misconfigured environment fails at startup with a clear
+// message instead of failing weirdly at the first request.
 func NewClient(key string) (*Client, error) {
 	if key == "" {
 		return nil, errors.New("API key is empty")
@@ -18,6 +27,11 @@ func NewClient(key string) (*Client, error) {
 	return &Client{apiKey: key}, nil
 }
 
+// Chat sends one chat-completions request and returns the parsed response.
+// It normalizes every failure mode — marshal errors, transport errors,
+// non-200 statuses, unparseable bodies, and responses with no choices —
+// into a single error return, so callers may rely on Choices[0] existing
+// whenever err is nil.
 func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 	jsonBody, err := json.Marshal(r)
 	if err != nil {

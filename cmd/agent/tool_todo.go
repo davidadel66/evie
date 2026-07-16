@@ -8,6 +8,8 @@ import (
 	"github.com/davidadel66/moussa/internal/openrouter"
 )
 
+// todoListTool describes todo_list to the model: read the current task
+// list, no parameters.
 var todoListTool = openrouter.Tool{
 	Type: "function",
 	Function: openrouter.Function{
@@ -20,6 +22,9 @@ var todoListTool = openrouter.Tool{
 	},
 }
 
+// todoAddTool describes todo_add to the model: create a task with a
+// required title and optional priority, description, and due date —
+// mirroring the flags of the todo CLI it shells out to.
 var todoAddTool = openrouter.Tool{
 	Type: "function",
 	Function: openrouter.Function{
@@ -52,6 +57,8 @@ var todoAddTool = openrouter.Tool{
 	},
 }
 
+// ToDoList shells out to `todo list` and returns its output verbatim for
+// the model to read. Ignores args — the tool has no parameters.
 func ToDoList(_ string) (string, error) {
 	out, err := exec.Command("todo", "list").CombinedOutput()
 	if err != nil {
@@ -61,6 +68,10 @@ func ToDoList(_ string) (string, error) {
 	return string(out), nil
 }
 
+// ToDoAdd unmarshals the model's arguments and shells out to `todo add`,
+// translating each optional field into the matching CLI flag. Title is
+// required; a missing title or bad JSON comes back as an error for the
+// dispatcher to relay to the model.
 func ToDoAdd(args string) (string, error) {
 	var params struct {
 		Title       string `json:"title"`

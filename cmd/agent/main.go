@@ -1,3 +1,10 @@
+// Command agent is the moussa agent harness — the nucleus of this repo.
+// It runs an interactive REPL: user input goes to an LLM via OpenRouter,
+// and any tool calls the model makes are executed against the registry in
+// tools.go, with results fed back until the model answers in plain text.
+//
+// Every capability under internal/ (todo, finance, ...) is meant to be
+// exposed to the model here as an AgentTool over time.
 package main
 
 import (
@@ -11,6 +18,10 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// main runs the chat loop. Outer loop: one user turn. Inner loop: call the
+// model, execute every tool call it requests, and go around again until the
+// model responds with no tool calls — that response ends the turn. Request
+// failures print and return to the prompt rather than killing the session.
 func main() {
 	_ = godotenv.Load("../../.env")
 	apiKey := os.Getenv("OPENROUTER_API_KEY")

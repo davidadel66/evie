@@ -4,28 +4,29 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
-
-	"github.com/joho/godotenv"
 )
 
-// SyncTxn is one transaction from a Plaid /transactions/sync page,
-// reduced to the fields we persist.
+// SyncTxn is one transaction from a Plaid /transactions/sync page, reduced
+// to the fields we persist. Date is YYYY-MM-DD. Amount is Plaid's
+// convention — dollars as a float, positive meaning money out — and is
+// converted to integer cents at persistence time.
 type SyncTxn struct {
 	TransactionID string
 	AccountID     string
-	Date          string // YYYY-MM-DD
+	Date          string
 	Name          string
 	MerchantName  string
-	Amount        float64 // Plaid dollars; positive = money out
+	Amount        float64
 	Category      string
 	Pending       bool
 }
 
-// applySyncPage applies one page of Plaid sync results and the item's new
-// cursor in a single SQL transaction. Silent; returns error.
+// applySyncPage persists one page of Plaid sync results — upserts for
+// added/modified, deletes for removed — together with the item's new
+// cursor, all inside a single SQL transaction. That atomicity is the
+// core sync guarantee: a page and its cursor land together or not at
+// all, so a crash mid-sync can never record progress it didn't make.
 func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error {
-	_ = godotenv.Load("../../.env", ".env")
-
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin sync page: %w", err)

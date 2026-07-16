@@ -1,3 +1,10 @@
+// Package finance owns the personal-finance domain: linking banks through
+// Plaid, syncing transactions into a local SQLite database
+// (~/.finance/finance.db), and rule-based categorization. Functions return
+// data and errors rather than printing, so the finance CLI and the agent
+// can both drive the same logic and render results their own way (the
+// interactive Link flow is the current exception). Plaid access tokens
+// live in the database, which is why it is created 0600.
 package finance
 
 import (
@@ -9,6 +16,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// schema is the full DDL, applied on every open. Every statement is
+// CREATE IF NOT EXISTS so reopening an existing database is a no-op —
+// there is no separate migration step.
 const schema = `
 CREATE TABLE IF NOT EXISTS items (
 	item_id      TEXT PRIMARY KEY,
@@ -46,6 +56,10 @@ CREATE TABLE IF NOT EXISTS rules (
 );
 `
 
+// OpenDB opens (creating if needed) the canonical database at
+// ~/.finance/finance.db, ensuring the directory exists first. All
+// callers — CLI commands and agent tools alike — go through here so
+// there is exactly one database location.
 func OpenDB() (*sql.DB, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -58,9 +72,12 @@ func OpenDB() (*sql.DB, error) {
 	return openDBAt(filepath.Join(dir, "finance.db"))
 }
 
+// openDBAt opens a database at an explicit path, applies the schema, and
+// locks the file down to 0600 (access tokens live in it). Foreign keys are
+// enabled via the _pragma query parameter rather than an Exec because the
+// pragma applies per connection — this way every pooled connection gets
+// it, not just the first. Split from OpenDB so tests can use a temp path.
 func openDBAt(path string) (*sql.DB, error) {
-	// _pragma applies per connection, so the FK constraint is enforced
-	// on every pooled connection, not just the first.
 	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
@@ -69,7 +86,7 @@ func openDBAt(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil { // secrets live here
+	if err := os.Chmod(path, 0o600); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("secure db: %w", err)
 	}

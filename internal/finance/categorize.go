@@ -8,16 +8,26 @@ import (
 	"strings"
 )
 
+// candidate is a transaction eligible for rule-based categorization: its
+// id and the merchant name to match rules against.
 type candidate struct {
 	id       string
 	merchant string
 }
 
+// matchTxn looks a merchant up in the rules map, case-insensitively (the
+// map is keyed lowercase; the merchant is lowered here). The whole matching
+// strategy lives in this one function so it can grow (prefixes, patterns)
+// without touching Categorize.
 func matchTxn(rules map[string]string, merchantName string) (category string, ok bool) {
 	category, ok = rules[strings.ToLower(merchantName)]
 	return category, ok
 }
 
+// RulesSeed loads a merchant→category JSON file into the rules table (and
+// any new categories into categories), all in one transaction. Upsert
+// semantics: re-seeding updates a merchant's category rather than
+// duplicating or failing, so the JSON file stays the source of truth.
 func RulesSeed(db *sql.DB, path string) error {
 	merchantLookup, err := os.ReadFile(path)
 	if err != nil {
@@ -59,6 +69,11 @@ func RulesSeed(db *sql.DB, path string) error {
 	return nil
 }
 
+// Categorize applies the rules table to every transaction that hasn't been
+// human-reviewed and wasn't hand-categorized (category_source NULL or
+// 'rule' — human decisions are never overwritten). Matches are written in
+// one transaction with category_source = 'rule'; the returned counts say
+// how many matched a rule and how many are left for manual review.
 func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 

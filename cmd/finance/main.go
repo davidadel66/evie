@@ -1,3 +1,8 @@
+// Command finance is the CLI frontend over internal/finance: link banks
+// via Plaid, sync transactions, seed categorization rules, and
+// sanity-check the database. All user-facing output formatting lives
+// here; the domain package returns data and this file decides how it
+// prints.
 package main
 
 import (
@@ -10,19 +15,25 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// usage prints the command summary to stderr — it accompanies exit-code-2
+// "you called this wrong" paths, so it belongs on the error stream.
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: finance <command>
 
 commands:
-  link    link a bank via hosted Plaid Link
-  sync    pull new transactions for all linked banks
-  db      sanity-check the database
-  help    show this message`)
+  link        link a bank via hosted Plaid Link
+  sync        pull new transactions for all linked banks
+  rules       seed categorization rules from data/merchantLookup.json
+  categorize  apply rules to unreviewed transactions
+  db          sanity-check the database
+  help        show this message`)
 }
 
+// main dispatches on the subcommand, opens the database for the commands
+// that need it, and renders domain results. Plaid credentials load from
+// the repo-root .env when run from cmd/finance, falling back to a local
+// .env; a missing file is fine and silently ignored.
 func main() {
-	// Load creds from the repo-root .env when run from cmd/finance;
-	// falls back to a local .env. Missing file is fine (ignored).
 	_ = godotenv.Load("../../.env", ".env")
 
 	if len(os.Args) < 2 {
