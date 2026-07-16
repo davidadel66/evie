@@ -28,6 +28,7 @@ var all = []Tool{
 	{Schema: getTimeTool, Execute: getTime},
 	{Schema: todoListTool, Execute: toDoList},
 	{Schema: todoAddTool, Execute: toDoAdd},
+	{Schema: financeSyncTool, Execute: financeSync},
 }
 
 // Schemas extracts just the wire-format schemas from the registry for the
