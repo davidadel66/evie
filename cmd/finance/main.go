@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/davidadel66/moussa/internal/finance"
 	"github.com/joho/godotenv"
@@ -23,7 +24,7 @@ func usage() {
 commands:
   link        link a bank via hosted Plaid Link
   sync        pull new transactions for all linked banks
-  rules       seed categorization rules from data/merchantLookup.json
+  rules       seed categorization rules from ~/.finance/merchantLookup.json
   categorize  apply rules to unreviewed transactions
   db          sanity-check the database
   help        show this message`)
@@ -78,10 +79,15 @@ func main() {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		if err := finance.RulesSeed(db, "~/.finance/merchantLookup.json"); err != nil {
+		home, err := os.UserHomeDir()
+		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("Seeded rules from data/merchantLookup.json")
+		rulesPath := filepath.Join(home, ".finance", "merchantLookup.json")
+		if err := finance.RulesSeed(db, rulesPath); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Seeded rules from %s\n", rulesPath)
 	case "categorize":
 		db, err := finance.OpenDB()
 		if err != nil {
