@@ -1,156 +1,19 @@
-// Command todo is a small task manager with stable IDs and JSON
-// persistence. State lives in ~/.todo/<name>.json — human-readable, and
-// the source directory stays clean. TODO_DIR and TODO_NAME select which
-// list to operate on, so multiple named lists coexist with zero config
-// for the common case.
-//
-// The file splits in two layers by design: taskList/task methods change
-// state silently and return errors, while main owns every printed line —
-// which is what lets the agent drive this same logic through a tool.
+// Command todo is the CLI frontend over internal/todo: a small task
+// manager with stable IDs and JSON persistence in ~/.todo/<name>.json.
+// TODO_DIR and TODO_NAME select which list to operate on, so multiple
+// named lists coexist with zero config for the common case. This file
+// owns every printed line; the engine stays silent.
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/davidadel66/moussa/internal/todo"
 )
-
-type task struct {
-	ID          int
-	Title       string
-	Description string
-	CreatedAt   time.Time
-	Priority    int
-	Status      bool
-	DueDate     time.Time
-}
-
-type taskList struct {
-	Tasks  []task
-	NextID int
-	Name   string `json:"-"`
-	Dir    string `json:"-"`
-}
-
-// Add appends a task, stamping it with the next stable ID and creation
-// time. NextID only ever increments — deleted IDs are never reused, so an
-// ID always means the same task for the whole life of the list.
-func (list *taskList) Add(t task) {
-	t.ID = list.NextID
-	t.CreatedAt = time.Now()
-	list.Tasks = append(list.Tasks, t)
-	list.NextID++
-}
-
-// LoadPath computes the JSON file's absolute path from the list's Dir and
-// Name — the one place that mapping exists, used by both Save and Load.
-func (list *taskList) LoadPath() (string, error) {
-	if list.Dir == "" {
-		return "", errors.New("directory path is not set")
-	}
-	if list.Name == "" {
-		return "", errors.New("name of task list is not set")
-	}
-
-	homePath, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to load user home directory: %w", err)
-	}
-	return filepath.Join(homePath, list.Dir, list.Name+".json"), nil
-}
-
-// Find returns the index and a pointer to the task with the given ID, or
-// (-1, nil) if absent. The pointer is into the slice itself, so callers
-// can mutate the task in place (done uses this).
-func (list *taskList) Find(id int) (int, *task) {
-	for idx := range list.Tasks {
-		if list.Tasks[idx].ID == id {
-			return idx, &list.Tasks[idx]
-		}
-	}
-	return -1, nil
-}
-
-// Delete removes the task with the given ID, erroring if it doesn't
-// exist. The ID is retired with it — NextID never goes backwards.
-func (list *taskList) Delete(id int) error {
-	i, t := list.Find(id)
-	if t == nil {
-		return errors.New("task does not exist")
-	}
-	list.Tasks = append(list.Tasks[:i], list.Tasks[i+1:]...)
-	return nil
-}
-
-// Save writes the whole list back to disk as indented JSON, creating the
-// directory if needed. Whole-file rewrite every time — at personal-list
-// scale, simplicity beats incremental updates.
-func (list *taskList) Save() error {
-	jsonBytes, err := json.MarshalIndent(list, "", " ")
-	if err != nil {
-		return fmt.Errorf("failed to convert tasks into JSON: %w", err)
-	}
-
-	localPath, err := list.LoadPath()
-	if err != nil {
-		return fmt.Errorf("failed to constuct local path: %w", err)
-	}
-
-	makeDirError := os.MkdirAll(filepath.Dir(localPath), 0o755)
-	if makeDirError != nil {
-		return fmt.Errorf("failed to create the directory: %w", makeDirError)
-	}
-
-	err = os.WriteFile(localPath, jsonBytes, 0o644)
-	if err != nil {
-		return fmt.Errorf("failed to save JSON: %w", err)
-	}
-
-	return nil
-}
-
-// Load reads the list from disk into the receiver. A missing file is not
-// an error — it's the legitimate first-run state, and the zero-value list
-// is correct: empty tasks, NextID starting fresh.
-func (list *taskList) Load() error {
-	localPath, err := list.LoadPath()
-	if err != nil {
-		return fmt.Errorf("failed to constuct local path: %w", err)
-	}
-	data, err := os.ReadFile(localPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("failed to read tasklist: %w", err)
-	}
-
-	return json.Unmarshal(data, list)
-}
-
-// String renders one task as a checklist line — "[x] #3 title (p2) due
-// 2026-07-20" — omitting priority and due date when unset. Implementing
-// the standard Stringer interface means fmt.Println(t) just works.
-func (t task) String() string {
-	box := "[ ]"
-	if t.Status {
-		box = "[x]"
-	}
-	line := fmt.Sprintf("%s #%d %s", box, t.ID, t.Title)
-
-	if t.Priority != 0 {
-		line += fmt.Sprintf(" (p%d)", t.Priority)
-	}
-	if !t.DueDate.IsZero() {
-		line += fmt.Sprintf(" due %s", t.DueDate.Format("2006-01-02"))
-	}
-	return line
-}
 
 // usage prints the command summary.
 func usage() {
@@ -177,7 +40,7 @@ func envOr(key, fallback string) string {
 // the end for every state-changing command — list and help return early
 // specifically to skip that save.
 func main() {
-	list := taskList{
+	list := todo.TaskList{
 		Dir:  envOr("TODO_DIR", ".todo/"),
 		Name: envOr("TODO_NAME", "DayToDay"),
 	}
@@ -221,7 +84,7 @@ func main() {
 			return
 		}
 
-		t := task{Title: title, Description: *desc, Priority: *priority}
+		t := todo.Task{Title: title, Description: *desc, Priority: *priority}
 		if *due != "" {
 			parsed, err := time.Parse("2006-01-02", *due)
 			if err != nil {
