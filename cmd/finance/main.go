@@ -78,7 +78,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		if err := finance.RulesSeed(db, "data/merchantLookup.json"); err != nil {
+		if err := finance.RulesSeed(db, "~/.finance/merchantLookup.json"); err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Seeded rules from data/merchantLookup.json")
