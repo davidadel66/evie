@@ -1,4 +1,4 @@
-package main
+package finance
 
 import (
 	"database/sql"
@@ -18,7 +18,7 @@ func matchTxn(rules map[string]string, merchantName string) (category string, ok
 	return category, ok
 }
 
-func runRulesSeed(db *sql.DB, path string) error {
+func RulesSeed(db *sql.DB, path string) error {
 	merchantLookup, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read merchant lookup: %w", err)
@@ -59,7 +59,7 @@ func runRulesSeed(db *sql.DB, path string) error {
 	return nil
 }
 
-func runCategorize(db *sql.DB) (matched, unmatched int, err error) {
+func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 
 	rows, err := db.Query(`SELECT merchant, category FROM rules`)

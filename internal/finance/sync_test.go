@@ -1,4 +1,4 @@
-package main
+package finance
 
 // Tests for applySyncPage, written from SPEC.md before the implementation
 // exists (red -> green). Contract under test:

@@ -1,4 +1,4 @@
-package main
+package finance
 
 import (
 	"context"
@@ -59,7 +59,7 @@ func waitForPublicToken(ctx context.Context, client *plaid.APIClient, linkToken 
 	return "", fmt.Errorf("timed out waiting for link to complete")
 }
 
-func runLink() error {
+func Link() error {
 	client, err := plaidClient()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func runLink() error {
 	itemID := exchResp.GetItemId()
 	accessToken := exchResp.GetAccessToken()
 
-	db, err := openDB()
+	db, err := OpenDB()
 	if err != nil {
 		return err
 	}
@@ -235,50 +235,63 @@ func toSyncTxns(txns []plaid.Transaction) []SyncTxn {
 	return out
 }
 
-func runSync(db *sql.DB) error {
+type SyncCounts struct {
+	Added, Modified, Removed int
+}
+
+type BankSync struct {
+	Label    string
+	Counts   SyncCounts
+	Warnings []string
+	Err      error // nil = synced fine; non-nil = this bank failed
+}
+
+type SyncResult struct {
+	Banks  []BankSync
+	Totals SyncCounts
+}
+
+func Sync(db *sql.DB) (*SyncResult, error) {
 	client, err := plaidClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ctx := context.Background()
 
 	rows, err := db.Query(`SELECT item_id, access_token, cursor, COALESCE(institution, '') FROM items`)
 	if err != nil {
-		return fmt.Errorf("load items: %w", err)
+		return nil, fmt.Errorf("load items: %w", err)
 	}
 	var items []syncItem
 	for rows.Next() {
 		var it syncItem
 		if err := rows.Scan(&it.itemID, &it.accessToken, &it.cursor, &it.institution); err != nil {
 			rows.Close()
-			return fmt.Errorf("scan item: %w", err)
+			return nil, fmt.Errorf("scan item: %w", err)
 		}
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return fmt.Errorf("read items: %w", err)
+		return nil, fmt.Errorf("read items: %w", err)
 	}
 	rows.Close()
 
 	if len(items) == 0 {
-		fmt.Println("No linked banks. Run `finance link` first.")
-		return nil
+		return nil, errors.New("no linked banks: run `finance link` first")
 	}
 
-	var (
-		errs                                    []error
-		totalAdded, totalModified, totalRemoved int
-	)
+	result := &SyncResult{}
 	for _, it := range items {
+		var bank BankSync
 		if it.institution == "" {
 			if err := backfillInstitution(ctx, client, db, &it); err != nil {
-				fmt.Printf("warning: could not resolve institution for %s: %v\n", it.itemID, err)
+				bank.Warnings = append(bank.Warnings, fmt.Sprintf("could not resolve institution for %s: %v", it.itemID, err))
 			}
 		}
-		label := it.institution
-		if label == "" {
-			label = it.itemID
+		bank.Label = it.institution
+		if bank.Label == "" {
+			bank.Label = it.itemID
 		}
 
 		added, modified, removed, err := syncOneItem(ctx, client, db, it)
@@ -293,17 +306,17 @@ func runSync(db *sql.DB) error {
 			}
 		}
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", label, err))
-			fmt.Printf("%s: sync failed: %v\n", label, err)
+			bank.Err = err
+			result.Banks = append(result.Banks, bank)
 			continue
 		}
 
-		fmt.Printf("%s: %d added, %d modified, %d removed\n", label, added, modified, removed)
-		totalAdded += added
-		totalModified += modified
-		totalRemoved += removed
+		bank.Counts = SyncCounts{Added: added, Modified: modified, Removed: removed}
+		result.Banks = append(result.Banks, bank)
+		result.Totals.Added += added
+		result.Totals.Modified += modified
+		result.Totals.Removed += removed
 	}
 
-	fmt.Printf("Total: %d added, %d modified, %d removed\n", totalAdded, totalModified, totalRemoved)
-	return errors.Join(errs...)
+	return result, nil
 }

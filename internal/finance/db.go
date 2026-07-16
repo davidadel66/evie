@@ -1,4 +1,4 @@
-package main
+package finance
 
 import (
 	"database/sql"
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS rules (
 );
 `
 
-func openDB() (*sql.DB, error) {
+func OpenDB() (*sql.DB, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err

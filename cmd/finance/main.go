@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/davidadel66/moussa/internal/finance"
 	"github.com/joho/godotenv"
 )
 
@@ -30,41 +32,58 @@ func main() {
 
 	switch os.Args[1] {
 	case "link":
-		if err := runLink(); err != nil {
+		if err := finance.Link(); err != nil {
 			log.Fatal(err)
 		}
 	case "sync":
-		db, err := openDB()
+		db, err := finance.OpenDB()
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		if err := runSync(db); err != nil {
+		res, err := finance.Sync(db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		var errs []error
+		for _, b := range res.Banks {
+			for _, w := range b.Warnings {
+				fmt.Printf("warning: %s\n", w)
+			}
+			if b.Err != nil {
+				fmt.Printf("%s: sync failed: %v\n", b.Label, b.Err)
+				errs = append(errs, fmt.Errorf("%s: %w", b.Label, b.Err))
+				continue
+			}
+			fmt.Printf("%s: %d added, %d modified, %d removed\n", b.Label, b.Counts.Added, b.Counts.Modified, b.Counts.Removed)
+		}
+		fmt.Printf("Total: %d added, %d modified, %d removed\n", res.Totals.Added, res.Totals.Modified, res.Totals.Removed)
+		if err := errors.Join(errs...); err != nil {
 			log.Fatal(err)
 		}
 	case "rules":
-		db, err := openDB()
+		db, err := finance.OpenDB()
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		if err := runRulesSeed(db, "data/merchantLookup.json"); err != nil {
+		if err := finance.RulesSeed(db, "data/merchantLookup.json"); err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Seeded rules from data/merchantLookup.json")
 	case "categorize":
-		db, err := openDB()
+		db, err := finance.OpenDB()
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		matched, unmatched, err := runCategorize(db)
+		matched, unmatched, err := finance.Categorize(db)
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Printf("%d categorized by rule, %d uncategorized\n", matched, unmatched)
 	case "db":
-		db, err := openDB()
+		db, err := finance.OpenDB()
 		if err != nil {
 			log.Fatal(err)
 		}
