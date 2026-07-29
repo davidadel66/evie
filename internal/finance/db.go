@@ -54,6 +54,22 @@ CREATE TABLE IF NOT EXISTS rules (
 	merchant TEXT NOT NULL UNIQUE,
 	category TEXT NOT NULL REFERENCES categories(name)
 );
+
+CREATE TABLE IF NOT EXISTS budget_entries (
+	id             INTEGER PRIMARY KEY,
+	transaction_id TEXT NOT NULL REFERENCES transactions(transaction_id),
+	category       TEXT NOT NULL REFERENCES categories(name),
+	amount_cents   INTEGER NOT NULL,
+	source         TEXT NOT NULL DEFAULT 'rule',
+	tags           TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS budget_limits (
+	category    TEXT NOT NULL REFERENCES categories(name),
+	month       TEXT,
+	limit_cents INTEGER NOT NULL,
+	UNIQUE(category, month)
+);
 `
 
 // OpenDB opens (creating if needed) the canonical database at
