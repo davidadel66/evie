@@ -31,6 +31,7 @@ var all = []Tool{
 	{Schema: financeSyncTool, Execute: financeSync},
 	{Schema: financeRulesTool, Execute: financeRules},
 	{Schema: financeCategorizeTool, Execute: financeCategorize},
+	{Schema: financeQueryTool, Execute: financeQuery},
 }
 
 // Schemas extracts just the wire-format schemas from the registry for the

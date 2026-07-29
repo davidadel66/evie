@@ -26,7 +26,7 @@ import (
 func main() {
 	_ = godotenv.Load("../../.env")
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "deepseek/deepseek-v4-flash"
+	model := "moonshotai/kimi-k3"
 	client, err := openrouter.NewClient(apiKey)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)

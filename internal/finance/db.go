@@ -72,6 +72,21 @@ func OpenDB() (*sql.DB, error) {
 	return openDBAt(filepath.Join(dir, "finance.db"))
 }
 
+func OpenDBReadOnly() (*sql.DB, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	path := filepath.Join(home, ".finance", "finance.db")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return nil, fmt.Errorf("open db readonly error: %w", err)
+	}
+
+	return db, nil
+}
+
 // openDBAt opens a database at an explicit path, applies the schema, and
 // locks the file down to 0600 (access tokens live in it). Foreign keys are
 // enabled via the _pragma query parameter rather than an Exec because the

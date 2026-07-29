@@ -1,9 +1,11 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/davidadel66/moussa/internal/finance"
 	"github.com/davidadel66/moussa/internal/openrouter"
@@ -21,6 +23,77 @@ var financeSyncTool = openrouter.Tool{
 			Properties: map[string]openrouter.Property{},
 		},
 	},
+}
+
+// financeQueryTool describes finance_query to the model: free-form
+// read-only SQL over the finance database. The schema in the description
+// deliberately omits the items table — it holds bank access tokens and
+// queries touching it are rejected.
+var financeQueryTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name: "finance_query",
+		Description: `Run a read-only SQL SELECT against the personal finance SQLite database and get the results as a table. Use this to answer any question about transactions, categories, rules, or budgets — filtering, aggregating (SUM/COUNT/GROUP BY), and joining are all fine.
+
+Schema:
+  transactions(transaction_id, item_id, account_id, date TEXT 'YYYY-MM-DD', name, merchant_name, amount_cents INTEGER (positive = money out), plaid_category, category, category_source, reviewed INTEGER 0/1, pending INTEGER 0/1, tags)
+  categories(name)
+  rules(id, merchant, category)
+
+Notes: amounts are integer cents. Awaiting-review transactions are reviewed = 0 AND category IS NULL. The items table is off-limits.`,
+		Parameters: openrouter.Parameter{
+			Type:     "object",
+			Required: []string{"query"},
+			Properties: map[string]openrouter.Property{
+				"query": {
+					Type:        "string",
+					Description: "A single SQL SELECT statement. No writes — the connection is read-only.",
+				},
+			},
+		},
+	},
+}
+
+// financeQuery runs the model's SQL through a read-only connection and
+// renders the result as a pipe-separated table. Two fences, layered:
+// mode=ro at the SQLite engine level makes writes impossible regardless
+// of the SQL, and a crude text check rejects anything that isn't a
+// SELECT or that mentions the items table (bank access tokens live
+// there; they must never enter the conversation, which flows through a
+// remote model provider).
+func financeQuery(args string) (string, error) {
+	var params struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal([]byte(args), &params); err != nil {
+		return "", fmt.Errorf("parse arguments: %w", err)
+	}
+
+	q := strings.TrimSpace(params.Query)
+	if !strings.HasPrefix(strings.ToUpper(q), "SELECT") {
+		return "", fmt.Errorf("only SELECT statements are allowed")
+	}
+	if strings.Contains(strings.ToLower(q), "items") {
+		return "", fmt.Errorf("the items table is off-limits")
+	}
+
+	db, err := finance.OpenDBReadOnly()
+	if err != nil {
+		return "", fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+
+	columns, rows, err := finance.Query(db, q)
+	if err != nil {
+		return "", err
+	}
+
+	out := strings.Join(columns, " | ") + "\n"
+	for _, row := range rows {
+		out += strings.Join(row, " | ") + "\n"
+	}
+	out += fmt.Sprintf("(%d rows)\n", len(rows))
+	return out, nil
 }
 
 // financeSync opens the finance database, syncs all linked banks, and
