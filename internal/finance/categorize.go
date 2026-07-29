@@ -8,11 +8,15 @@ import (
 	"strings"
 )
 
-// candidate is a transaction eligible for rule-based categorization: its
-// id and the merchant name to match rules against.
+// candidate is a transaction with no budget entry yet: what's needed to
+// mint one — merchant for rule matching, amount for the entry itself,
+// and any category the legacy column already carries.
 type candidate struct {
-	id       string
-	merchant string
+	id          string
+	merchant    string
+	amountCents int64
+	category    string
+	source      string
 }
 
 // matchTxn looks a merchant up in the rules map, case-insensitively (the
@@ -69,11 +73,16 @@ func RulesSeed(db *sql.DB, path string) error {
 	return nil
 }
 
-// Categorize applies the rules table to every transaction that hasn't been
-// human-reviewed and wasn't hand-categorized (category_source NULL or
-// 'rule' — human decisions are never overwritten). Matches are written in
-// one transaction with category_source = 'rule'; the returned counts say
-// how many matched a rule and how many are left for manual review.
+// Categorize mints a budget_entries row (full amount, one row per
+// transaction) for every transaction that doesn't have one yet.
+// Transactions whose legacy category column is already set — the old
+// system's output, including human decisions — get their entry from it,
+// preserving the source; bare transactions go through the rules table
+// with source 'rule'. "No entry yet" is the candidate filter, which
+// makes the pass idempotent (re-runs skip everything already entered)
+// and makes the legacy backfill automatic. Unmatched transactions stay
+// entry-less — that is the awaiting-review state. The legacy category
+// column is no longer written.
 func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 
@@ -99,8 +108,12 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	}
 
 	txns, err := db.Query(`
-		SELECT transaction_id, COALESCE(merchant_name, '') FROM transactions
-		WHERE reviewed = 0 AND (category_source IS NULL OR category_source = 'rule')`)
+		SELECT t.transaction_id, COALESCE(t.merchant_name, ''), t.amount_cents,
+		       COALESCE(t.category, ''), COALESCE(t.category_source, 'rule')
+		FROM transactions t
+		WHERE NOT EXISTS (
+			SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id
+		)`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("load transactions: %w", err)
 	}
@@ -110,7 +123,7 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	var candidates []candidate
 	for txns.Next() {
 		var c candidate
-		if err := txns.Scan(&c.id, &c.merchant); err != nil {
+		if err := txns.Scan(&c.id, &c.merchant, &c.amountCents, &c.category, &c.source); err != nil {
 			return 0, 0, fmt.Errorf("scan transactions: %w", err)
 		}
 		candidates = append(candidates, c)
@@ -130,17 +143,28 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	defer tx.Rollback()
 
 	for _, c := range candidates {
-		category, ok := matchTxn(rules, c.merchant)
-		if !ok {
-			unmatched++
-			continue
+		category, source := c.category, c.source
+		if category == "" {
+			var ok bool
+			category, ok = matchTxn(rules, c.merchant)
+			if !ok {
+				unmatched++
+				continue
+			}
+			source = "rule"
+		}
+
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO categories (name) VALUES (?)`, category,
+		); err != nil {
+			return matched, unmatched, fmt.Errorf("insert category %q: %w", category, err)
 		}
 
 		if _, err := tx.Exec(`
-			UPDATE transactions SET category = ?, category_source = 'rule'
-			WHERE transaction_id = ?
-			`, category, c.id); err != nil {
-			return matched, unmatched, fmt.Errorf("update transactions: %w", err)
+			INSERT INTO budget_entries (transaction_id, category, amount_cents, source)
+			VALUES (?, ?, ?, ?)
+			`, c.id, category, c.amountCents, source); err != nil {
+			return matched, unmatched, fmt.Errorf("insert budget entry: %w", err)
 		}
 		matched++
 	}

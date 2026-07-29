@@ -20,11 +20,13 @@ var queryDBTool = openrouter.Tool{
 		Description: `Run a read-only SQL SELECT against a registered SQLite database and get the results as a table. Filtering, aggregating (SUM/COUNT/GROUP BY), and joining are all fine. Use edit_db for writes.
 
 Databases: "finance" — personal finance. Schema:
-  transactions(transaction_id, item_id, account_id, date TEXT 'YYYY-MM-DD', name, merchant_name, amount_cents INTEGER (positive = money out), plaid_category, category, category_source, reviewed INTEGER 0/1, pending INTEGER 0/1, tags)
+  transactions(transaction_id, item_id, account_id, date TEXT 'YYYY-MM-DD', name, merchant_name, amount_cents INTEGER (positive = money out), plaid_category, category (legacy — do not use), category_source, reviewed INTEGER 0/1, pending INTEGER 0/1, tags JSON array)
+  budget_entries(id, transaction_id, category, amount_cents, source 'rule'|'human', tags JSON array) — where money went; every categorized transaction has one entry with its full amount, a split bill has several entries summing to the total, refunds are negative entries that net the category down
+  budget_limits(category, month, limit_cents) — month NULL is the standing monthly template, month 'YYYY-MM' overrides it for that month
   categories(name)
   rules(id, merchant, category)
 
-Notes: amounts are integer cents. Awaiting-review transactions are reviewed = 0 AND category IS NULL. The items table is off-limits.`,
+Notes: amounts are integer cents. Spend per category = SUM(budget_entries.amount_cents) joined to transactions for the date. Awaiting-review transactions are those with NO budget_entries row. The items table is off-limits.`,
 		Parameters: openrouter.Parameter{
 			Type:     "object",
 			Required: []string{"db", "query"},
@@ -102,9 +104,9 @@ var editDBTool = openrouter.Tool{
 		Name: "edit_db",
 		Description: `Run a write statement (INSERT, UPDATE, DELETE) against a registered SQLite database. Every call is shown to David for approval before it executes — keep statements small and targeted, and explain what you're about to change before calling this. Use query_db for reads.
 
-Databases: "finance" — the personal finance db (same schema as finance_query; the items table is off-limits).
+Databases: "finance" — the personal finance db (same schema as query_db; the items table is off-limits).
 
-Common uses: set a transaction's category (also set category_source='human', reviewed=1), add a rule (insert the category into categories first if new), fix a merchant name.`,
+Common uses: categorize a transaction (INSERT INTO budget_entries with the full amount_cents and source='human'; insert the category into categories first if new), split a bill (several budget_entries rows summing to the transaction total), set or override a monthly limit in budget_limits, add a rule, tag an entry.`,
 		Parameters: openrouter.Parameter{
 			Type:     "object",
 			Required: []string{"db", "statement"},

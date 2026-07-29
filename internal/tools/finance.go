@@ -98,7 +98,7 @@ var financeCategorizeTool = openrouter.Tool{
 	Type: "function",
 	Function: openrouter.Function{
 		Name:        "finance_categorize",
-		Description: "Apply stored merchant-to-category rules to all unreviewed transactions in the finance database. Returns how many transactions were categorized and how many remain uncategorized. Takes no arguments.",
+		Description: "Apply stored merchant-to-category rules to every transaction that has no budget entry yet, creating one budget_entries row (full amount) per match. Returns how many entries were created and how many transactions remain awaiting review. Takes no arguments.",
 		Parameters: openrouter.Parameter{
 			Type:       "object",
 			Properties: map[string]openrouter.Property{},
