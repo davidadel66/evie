@@ -80,8 +80,39 @@ type ChatResponse struct {
 
 // ChatRequest is the body of one chat-completions call: the full
 // conversation so far plus every tool the model is allowed to use.
+// Stream is set by ChatStream, never by callers.
 type ChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Tools    []Tool    `json:"tools,omitempty"`
+	Stream   bool      `json:"stream,omitempty"`
+}
+
+// streamChunk is one SSE "data:" event in a streaming response. Deltas
+// are fragments: content arrives token by token, and tool calls arrive
+// as indexed pieces (id and name first, arguments split across many
+// chunks) that the client reassembles.
+type streamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Role      string          `json:"role"`
+			Content   string          `json:"content"`
+			ToolCalls []toolCallDelta `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+}
+
+// toolCallDelta is one fragment of a tool call in a stream. Index says
+// which call it belongs to (a message can carry several); ID, Type, and
+// the function name arrive on the first fragment, argument JSON drips
+// in across the rest.
+type toolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }

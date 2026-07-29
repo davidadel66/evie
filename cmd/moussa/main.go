@@ -13,12 +13,54 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/moussa/internal/openrouter"
 	"github.com/davidadel66/moussa/internal/tools"
 
 	"github.com/joho/godotenv"
 )
+
+// smoothPrinter decouples token arrival from display so bursty network
+// chunks render as steady typing. Deltas go into a channel; a printer
+// goroutine drains them into a buffer and prints a few characters per
+// tick — more when the buffer is deep, so it catches up instead of
+// lagging. Call the returned onDelta from the stream, then done() to
+// flush the tail and stop the printer.
+func smoothPrinter() (onDelta func(string), done func()) {
+	ch := make(chan string, 64)
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+		var buf []rune
+		ticker := time.NewTicker(12 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case s, ok := <-ch:
+				if !ok {
+					fmt.Print(string(buf))
+					return
+				}
+				buf = append(buf, []rune(s)...)
+			case <-ticker.C:
+				if len(buf) == 0 {
+					continue
+				}
+				n := 1 + len(buf)/20
+				if n > len(buf) {
+					n = len(buf)
+				}
+				fmt.Print(string(buf[:n]))
+				buf = buf[n:]
+			}
+		}
+	}()
+
+	return func(s string) { ch <- s },
+		func() { close(ch); <-finished }
+}
 
 // main runs the chat loop. Outer loop: one user turn. Inner loop: call the
 // model, execute every tool call it requests, and go around again until the
@@ -75,7 +117,9 @@ func main() {
 				Tools:    tools.Schemas(),
 			}
 
-			res, err := client.Chat(req)
+			onDelta, done := smoothPrinter()
+			res, err := client.ChatStream(req, onDelta)
+			done()
 			if err != nil {
 				fmt.Printf("request failed: %v\n", err)
 				break
@@ -87,7 +131,9 @@ func main() {
 			}
 
 			messages = append(messages, res.Choices[0].Message)
-			fmt.Println(res.Choices[0].Message.Content)
+			if res.Choices[0].Message.Content != "" {
+				fmt.Println()
+			}
 
 			if len(res.Choices[0].Message.ToolCalls) == 0 {
 				break
