@@ -14,9 +14,13 @@ import (
 
 // Tool binds what the model sees (Schema, the wire-format tool
 // definition) to what runs when the model calls it (Execute).
+// NeedsApproval marks tools whose calls must be confirmed by the user
+// before executing — the confirmation itself is supplied by the caller
+// of Execute, because this package never touches the terminal.
 type Tool struct {
-	Schema  openrouter.Tool
-	Execute func(args string) (string, error)
+	Schema        openrouter.Tool
+	Execute       func(args string) (string, error)
+	NeedsApproval bool
 }
 
 // all is the single registry of every tool the agent can use. Adding a
@@ -31,7 +35,8 @@ var all = []Tool{
 	{Schema: financeSyncTool, Execute: financeSync},
 	{Schema: financeRulesTool, Execute: financeRules},
 	{Schema: financeCategorizeTool, Execute: financeCategorize},
-	{Schema: financeQueryTool, Execute: financeQuery},
+	{Schema: queryDBTool, Execute: queryDB},
+	{Schema: editDBTool, Execute: editDB, NeedsApproval: true},
 }
 
 // Schemas extracts just the wire-format schemas from the registry for the
@@ -49,12 +54,24 @@ func Schemas() []openrouter.Tool {
 
 // Execute dispatches one model tool call to the matching registry entry
 // and wraps the outcome into the Role:"tool" message the API requires for
-// every tool_call_id. Failures — a tool error or an unknown tool name —
-// are returned as message content rather than dropped, so the model can
-// read what went wrong and correct itself on the next turn.
-func Execute(call openrouter.ToolCall) openrouter.Message {
+// every tool_call_id. Failures — a tool error, an unknown tool name, or
+// a declined approval — are returned as message content rather than
+// dropped, so the model can read what went wrong and correct itself on
+// the next turn.
+//
+// approve is asked before any NeedsApproval tool runs; the frontend owns
+// how (terminal y/n today). Passing nil means "no approver available",
+// which declines every gated call rather than silently allowing it.
+func Execute(call openrouter.ToolCall, approve func(name, args string) bool) openrouter.Message {
 	for _, tool := range all {
 		if tool.Schema.Function.Name == call.Function.Name {
+			if tool.NeedsApproval && (approve == nil || !approve(call.Function.Name, call.Function.Arguments)) {
+				return openrouter.Message{
+					Role:       "tool",
+					Content:    "David declined this tool call. Do not retry it unless he asks for something different.",
+					ToolCallID: call.ID,
+				}
+			}
 			resp, err := tool.Execute(call.Function.Arguments)
 			if err != nil {
 				return openrouter.Message{

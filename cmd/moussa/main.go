@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/davidadel66/moussa/internal/openrouter"
 	"github.com/davidadel66/moussa/internal/tools"
@@ -40,6 +41,18 @@ func main() {
 	}
 
 	scanner := bufio.NewScanner(os.Stdin)
+
+	// approve is the terminal half of the write gate: gated tools show
+	// what they're about to run and wait for a y/yes before executing.
+	// It shares the REPL's scanner — stdin has exactly one reader.
+	approve := func(name, args string) bool {
+		fmt.Printf("\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
+		if !scanner.Scan() {
+			return false
+		}
+		answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		return answer == "y" || answer == "yes"
+	}
 
 	for {
 		fmt.Print("< ")
@@ -82,7 +95,7 @@ func main() {
 
 			for _, toolCall := range res.Choices[0].Message.ToolCalls {
 				fmt.Printf("[calling %s]\n", toolCall.Function.Name)
-				messages = append(messages, tools.Execute(toolCall))
+				messages = append(messages, tools.Execute(toolCall, approve))
 			}
 
 		}

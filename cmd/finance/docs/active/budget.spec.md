@@ -3,64 +3,77 @@
 ## Vision
 
 A monthly budget with per-category limits, kept current automatically:
-scheduled jobs sync transactions and auto-categorize the easy ones via
-rules; anything uncertain accumulates in the database in an
-awaiting-review state. When David is ready, he reviews in moussa chat —
-the agent pulls the pending pile, proposes categories, writes back his
-decisions, and mints new rules from them so the pile shrinks over time.
-Monthly / on-demand analysis of spend vs budget.
+scheduled jobs sync transactions and auto-categorize the easy ones;
+anything uncertain accumulates awaiting review. David reviews in moussa
+chat — the agent pulls the pending pile, proposes categories (including
+splits), writes back his decisions via the gated edit_db, and mints new
+rules from them. Monthly / on-demand analysis of spend vs budget.
 
-## Decisions (2026-07-17)
+## Data model (decided 2026-07-28)
 
-- **Categories are David's own list** (~10–15). Plaid's category is a
-  hint only; every budgeted transaction maps to David's taxonomy. The
-  existing `categories` table is the source of truth.
-- **Budgets are template + overrides.** A standing set of limits applies
-  to every month; a specific month can override specific categories.
-- **Sync/categorize run on a schedule, not in conversation.** moussa
-  gains a general cron capability (useful beyond finance): a tool that
-  schedules shell commands. The scheduled job is just the `finance` CLI
-  (`finance sync && finance categorize`) — no agent in the loop.
-- **Review is async and on demand, in moussa chat.** Unmatched
-  transactions simply sit in the db (`reviewed = 0`, no category — the
-  state already exists); a review session pulls them when David asks.
-- **Reports are HTML** (charts/visual), generated monthly or on demand.
-  Built last; needs a render-and-open mechanism — design TBD.
-- Data lives in the existing SQLite db (`~/.finance/finance.db`) — no
-  new storage.
-
-## Schema sketch
+Two new tables, two jobs. Transactions stay Plaid's raw truth; budget
+rows **reference** transactions, never copy them, so re-syncs
+(modify/remove) can't strand stale copies.
 
 ```sql
--- month NULL = the standing template; month 'YYYY-MM' = override row.
--- Resolution: override wins over template for that month+category.
-CREATE TABLE IF NOT EXISTS budgets (
+-- Where money went: every categorization is an entry. A normal
+-- transaction has one row for its full amount; a split bill has
+-- several rows summing to the transaction total. Refunds/returns are
+-- entries with negative amounts — they net the category's SUM down
+-- while staying visible as rows.
+CREATE TABLE IF NOT EXISTS budget_entries (
+    id             INTEGER PRIMARY KEY,
+    transaction_id TEXT NOT NULL REFERENCES transactions(transaction_id),
+    category       TEXT NOT NULL REFERENCES categories(name),
+    amount_cents   INTEGER NOT NULL,
+    source         TEXT NOT NULL DEFAULT 'rule'   -- 'rule' | 'human'
+);
+
+-- Where money is allowed to go: month NULL = standing template;
+-- month 'YYYY-MM' = override for that month. Override wins.
+CREATE TABLE IF NOT EXISTS budget_limits (
     category    TEXT NOT NULL REFERENCES categories(name),
-    month       TEXT,              -- NULL or 'YYYY-MM'
+    month       TEXT,
     limit_cents INTEGER NOT NULL,
     UNIQUE(category, month)
 );
 ```
 
-`transactions` already carries what the review loop needs: `category`,
-`category_source` ('rule' | future 'human'), `reviewed`.
+Spend for a category-month = SUM(entries) joined to transactions for
+the date. `transactions.category` becomes a legacy/Plaid-hint field
+once Categorize writes entries instead.
 
-## Steps (each independently useful)
+## Decisions
 
-1. **finance_query** — read path for the agent (filters: month,
-   category, awaiting-review, merchant). Prerequisite for everything
-   below.
-2. **Budgets** — `budgets` table + domain funcs + `finance_budget_set`
-   / `finance_budget_get` tools (template + override resolution).
-3. **Review write-path** — tool to categorize one transaction by id
-   (set category, `category_source='human'`, `reviewed=1`), with an
-   optional "make this a rule" flag. Enables the on-demand review
-   session.
-4. **Cron capability** — general moussa tool to schedule/list/remove
-   recurring shell commands (crontab-backed). First customer: daily
-   `finance sync && finance categorize`.
-5. **Analysis** — spend vs budget per category/month. Start as
-   finance_query + model arithmetic; dedicated report tool only if that
-   proves sloppy.
-6. **HTML report** — visual monthly report, on demand. Separate design
-   pass (rendering + how it opens).
+- **Categories are David's own list** (~10–15); Plaid's category is a
+  hint. `categories` table is the source of truth.
+- **Splits are just multiple entries** for one transaction (amounts
+  sum to the transaction total — advisory, not DB-enforced for now).
+- **Refunds net, visibly**: negative entries in the same category
+  cancel outflows in the SUM but remain as rows. Income (paychecks) is
+  not budgeted.
+- **No rollover** — each month stands alone against its limit.
+- **Pending counts** — budget reflects committed spending.
+- **Limits are template + overrides** (month NULL vs 'YYYY-MM').
+- **No new budget tools needed to start**: query_db and edit_db already
+  cover reading and gated writing of both tables — the schema blurbs in
+  their descriptions are the integration point. Dedicated tools only if
+  the flows prove clumsy.
+- **Sync/categorize on a schedule** (cron capability, future); review
+  is async in moussa chat whenever David asks.
+- **Reports are HTML**, monthly or on demand — built last.
+
+## Build steps
+
+1. **Schema**: add both tables to db.go's schema const.
+2. **Migrate Categorize**: write budget_entries (full amount, source
+   'rule') instead of transactions.category; one-time backfill entries
+   for already-categorized transactions.
+3. **Tool descriptions**: add budget_entries/budget_limits to query_db
+   and edit_db schema blurbs, with the netting and split conventions
+   spelled out.
+4. **Seed limits**: David sets his standing template via chat (edit_db)
+   or a small CLI command.
+5. **Analysis**: spend vs limits via query_db + model math; dedicated
+   report tool only if needed.
+6. **HTML report**: separate design pass.
