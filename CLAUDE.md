@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> Status board: `docs/BACKLOG.md` (updated by `/wrap`) — read its "Next session" block when starting work.
+
 ## What this repo is
 
 A personal collection of small Go command-line tools, built by David. It serves **two purposes at once**:
