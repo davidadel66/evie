@@ -37,6 +37,9 @@ var all = []Tool{
 	{Schema: financeCategorizeTool, Execute: financeCategorize},
 	{Schema: queryDBTool, Execute: queryDB},
 	{Schema: editDBTool, Execute: editDB, NeedsApproval: true},
+	{Schema: readFileTool, Execute: readFile},
+	{Schema: editFileTool, Execute: editFile, NeedsApproval: true},
+	{Schema: bashTool, Execute: runBash},
 }
 
 // Schemas extracts just the wire-format schemas from the registry for the

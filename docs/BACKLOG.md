@@ -11,7 +11,6 @@ Status board for this project, updated by `/wrap` at session end. One line per s
 - file-tools: read_file + edit_file — spec committed, build is David's next tutor session
 
 ## Next (ordered tool roadmap, decided 2026-07-29)
-- bash (gated) — general executor; system prompt grows a CLI-documentation paragraph
 - glob + grep — file discovery and content search
 - web_fetch — URL → text, stdlib only
 - cron — schedule recurring shell commands; first customer: daily finance sync + categorize

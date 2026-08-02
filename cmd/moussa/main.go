@@ -67,6 +67,10 @@ func smoothPrinter() (onDelta func(string), done func()) {
 // model responds with no tool calls — that response ends the turn. Request
 // failures print and return to the prompt rather than killing the session.
 func main() {
+	// Capture the user's shell environment in the background now, so the
+	// first bash call doesn't pay for it mid-conversation.
+	tools.Warm()
+
 	_ = godotenv.Load("../../.env")
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := "moonshotai/kimi-k3"
