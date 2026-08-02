@@ -35,18 +35,24 @@ work on code.
 - **Approval preview**: rely on the existing gate printing args;
   nicer diff rendering is a future (TUI/web) concern.
 
-## Open questions — resolve in the build session
+## Open questions — RESOLVED 2026-07-30
 
-1. May `edit_file` **create** a new file (old_string empty ⇒ write
-   whole content), or is creation a separate `write_file` later?
-2. **Path handling**: absolute-only, or allow `~` expansion (the
-   model will try `~/...` — decide who expands it)? Note moussa's
-   process cwd is wherever it was launched — relative paths are a
-   trap.
-3. Denylist contents and shape: hardcoded list vs. patterns; block
-   reads only, or writes too?
-4. Does `read_file` return line numbers (helps the model quote
-   old_string precisely) or raw content?
+Reasoning for each lives in `file-tools.build.md` Part 0.
+
+1. **Creation is a separate `write_file`, later.** `edit_file` requires
+   an existing file; empty `old_string` is an error, not a whole-file
+   write.
+2. **No root jail.** Absolute paths, `~` expanded by us (Go doesn't),
+   relative treated as cwd-relative — all through one `resolvePath`
+   chokepoint. A cwd jail would block the first customer
+   (`~/.finance/...`); path scoping belongs to `glob`/`grep`.
+3. **Hardcoded patterns, blocking reads *and* writes**, checked inside
+   `resolvePath` so no tool can skip the fence.
+4. **Numbered lines (`%6d\t`), always the whole file** — no snippets, no
+   pagination; the size cap errors instead of truncating. Numbers are
+   display-only, so `edit_file` strips them from `old_string`/
+   `new_string` (all-or-nothing per line) *and* says so in its
+   description.
 
 ## Build steps
 
