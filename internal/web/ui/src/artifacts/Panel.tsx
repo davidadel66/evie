@@ -30,7 +30,7 @@ export function Panel({ open, onToggle }: Props) {
   return (
     <div className="bg-panel flex min-h-0 w-[620px] flex-none flex-col">
       <div className="flex h-[42px] flex-none items-center gap-2 border-b border-[#1e2624] px-4">
-        <span className="text-muted">
+        <span className="text-muted-text">
           <FileIcon size={14} />
         </span>
         <span className="text-body-dim font-sans text-[12.5px] font-semibold">

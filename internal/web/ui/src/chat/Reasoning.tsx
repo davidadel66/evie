@@ -29,7 +29,7 @@ export function Reasoning({ item }: Props) {
       >
         <ChevronDown size={12} />
       </span>
-      <span className="text-muted font-sans text-[11.5px]">
+      <span className="text-muted-text font-sans text-[11.5px]">
         {item.streaming ? "Thinking…" : `Thought for ${formatDuration(item.ms)}`}
       </span>
     </div>

@@ -70,5 +70,5 @@ function gutterColor(sign: Sign): string {
 function textColor(sign: Sign): string {
   if (sign === "-") return "var(--color-danger-ink)";
   if (sign === "+") return "var(--color-ok-ink)";
-  return "var(--color-muted)";
+  return "var(--color-muted-text)";
 }

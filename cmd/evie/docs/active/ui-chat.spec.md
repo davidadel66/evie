@@ -31,11 +31,22 @@ handwriting). Tokens, verbatim from the design:
 | green (ok / added) | `#5fae7d`, text `#a8d4b5` |
 | radii | 3–12px (bubbles `10px 10px 3px 10px`, cards 7–9px) |
 
-Layout: 46px top bar (logo, Chat/Whiteboard/Reports tabs, status dot right) →
+Layout: 46px top bar (`EVIE` wordmark, Chat/Whiteboard/Reports tabs, text-size
+control right) →
 optional connection banner → tab body. Chat body = message column (`flex:1`,
 `max-width:min(720px,100%)` per assistant message, user bubbles `62%`
 right-aligned) + composer, beside a 620px artifacts panel that collapses to a
 34px vertical rail.
+
+**Polish amendment (2026-08-09):** the top bar carries no connection/activity
+status; approval cards and the error banner own the states that require
+attention. The old badge + name is one uppercase `EVIE` wordmark. A compact
+`Aa` chat-text control (`13px` / `15px` default / `17px`, persisted in
+localStorage) sits at the right. Streamdown's
+shadcn-style theme names are bridged to the palette above, inline code uses the
+amber attention color, and fenced code uses an Evie-specific Shiki theme:
+amber language structure, teal names/functions/types, green strings, muted
+comments, and body-gray variables/punctuation.
 
 Message kinds in the design: user bubble, thinking block, tool card
 (collapsible, mono, status chip right), assistant markdown (with fenced code
@@ -45,7 +56,7 @@ blocks carrying a filename header + `copy`), approval card (pending → approved
 
 ## Scope: what ships, what doesn't
 
-**Ships:** shell + tabs + status dot, connection banner, chat column (user,
+**Ships:** shell + tabs, connection banner, chat column (user,
 assistant markdown, tool cards incl. error state, streaming caret), approval
 card with diff and Y/N hotkeys, composer, artifacts panel as rail + empty
 state, static serving + embed + build workflow.
@@ -236,7 +247,7 @@ test), so `evie serve` + `vite dev` side by side works with hot reload.
    `store/events.ts`, `reducer.ts`, `useSession.ts`, `reducer.test.ts`
    (vitest). Demo: a temporary debug view dumping items as JSON while a real
    turn streams from the live server — proves the protocol before any pixels.
-3. **Shell + chat.** `App.tsx` (top bar, tabs, status dot, deferred-tab
+3. **Shell + chat.** `App.tsx` (top bar, tabs, text size, deferred-tab
    notices), `Chat.tsx`, `Message.tsx`, `Markdown.tsx`, `ToolCard.tsx`,
    `Composer.tsx`, artifacts rail + empty state. Demo: a real conversation with
    a tool call, rendered to the design.
@@ -273,7 +284,8 @@ test), so `evie serve` + `vite dev` side by side works with hot reload.
 ## End-to-end verification (must actually run)
 
 1. `npm --prefix internal/web/ui run build && go build -o ~/go/bin/evie ./cmd/evie`
-2. `evie serve` → open the printed URL: shell renders, status dot idle.
+2. `evie serve` → open the printed URL: shell renders with the `EVIE` wordmark,
+   no top-bar status, and the `Aa` control defaults to 15px.
 3. Ask a plain question → text streams token by token with the blink caret,
    caret clears on completion.
 4. "What time is it?" → a `get_time` tool card with a `✓ {ms}ms` chip that

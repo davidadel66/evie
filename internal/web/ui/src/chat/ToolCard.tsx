@@ -26,7 +26,7 @@ export function ToolCard({ tool }: Props) {
         {failed ? (
           <Alert stroke="var(--color-danger)" />
         ) : (
-          <Wrench stroke="var(--color-muted)" />
+          <Wrench stroke="var(--color-muted-text)" />
         )}
         <span className="text-body-dim font-mono text-xs">{tool.name}</span>
         <span className="text-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]">
@@ -46,7 +46,7 @@ export function ToolCard({ tool }: Props) {
           className={`m-0 overflow-x-auto border-t px-[14px] py-[10px] font-mono text-[11.5px] leading-[1.6] ${
             failed
               ? "border-[#2c1a1e] bg-[#120d0f] text-[#c98f8f]"
-              : "border-[#1b2124] bg-[#0e1213] text-muted"
+              : "border-[#1b2124] bg-[#0e1213] text-muted-text"
           }`}
         >
           {tool.result}

@@ -10,6 +10,7 @@
    v4 skips node_modules when scanning for classes, so its markup would render
    unstyled without this. */
 @source "../node_modules/streamdown/dist";
+@source "../node_modules/@streamdown/code/dist";
 
 /* Design tokens from `Moussa App.dc.html`. Names are by role, not by hue, so
    JSX never carries a raw hex and a retheme touches only this block. */
@@ -38,7 +39,7 @@
   --color-ink: #e2e6e3;
   --color-body: #c9cfcb;
   --color-body-dim: #c3cac6;
-  --color-muted: #8b9491;
+  --color-muted-text: #8b9491;
   --color-faint: #68716e;
   --color-fainter: #5b6663;
   --color-ghost: #4a5350;
@@ -72,6 +73,21 @@
   --color-ok: #5fae7d;
   --color-ok-ink: #a8d4b5;
   --color-ok-gutter: #4a6b55;
+
+  /* Streamdown speaks shadcn-style semantic names. Keep this bridge here so
+     its generated controls share Evie's surfaces instead of falling back to
+     currentColor (the bright white borders we had before). `muted` is a
+     surface in that vocabulary; Evie's muted text therefore lives at
+     `muted-text` above. */
+  --color-background: var(--color-code);
+  --color-foreground: var(--color-body);
+  --color-border: var(--color-hair-strong);
+  --color-sidebar: var(--color-card);
+  --color-sidebar-foreground: var(--color-body);
+  --color-muted: #171d1f;
+  --color-muted-foreground: var(--color-muted-text);
+  --color-primary: var(--color-teal-hover);
+  --color-primary-foreground: #0a0c0d;
 }
 
 html,
@@ -86,6 +102,133 @@ body {
   font-family: var(--font-sans);
   color: var(--color-ink);
   font-size: 13px;
+}
+
+[data-chat-size="compact"] {
+  --chat-text-size: 13px;
+}
+[data-chat-size="default"] {
+  --chat-text-size: 15px;
+}
+[data-chat-size="large"] {
+  --chat-text-size: 17px;
+}
+
+/* Streamdown owns parsing and streaming behavior; Evie owns presentation.
+   Keep every markdown override behind this boundary so its broad element
+   selectors cannot restyle tool cards or the surrounding shell. */
+.evie-markdown {
+  color: var(--color-body);
+  font-size: var(--chat-text-size);
+  line-height: 1.65;
+}
+
+.evie-markdown p {
+  margin: 0;
+}
+
+.evie-markdown [data-streamdown="heading-1"],
+.evie-markdown [data-streamdown="heading-2"],
+.evie-markdown [data-streamdown="heading-3"],
+.evie-markdown [data-streamdown="heading-4"] {
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.3;
+  margin: 1.35em 0 0.45em;
+}
+
+.evie-markdown [data-streamdown="heading-1"] {
+  font-size: 1.4em;
+}
+.evie-markdown [data-streamdown="heading-2"] {
+  font-size: 1.2em;
+}
+.evie-markdown [data-streamdown="heading-3"] {
+  font-size: 1.08em;
+}
+.evie-markdown [data-streamdown="heading-4"] {
+  font-size: 1em;
+}
+
+.evie-markdown [data-streamdown="strong"] {
+  color: var(--color-ink);
+}
+
+.evie-markdown [data-streamdown="link"] {
+  color: var(--color-teal-hover);
+  text-decoration-color: var(--color-teal-deeper);
+  text-underline-offset: 3px;
+}
+
+.evie-markdown [data-streamdown="ordered-list"],
+.evie-markdown [data-streamdown="unordered-list"] {
+  list-style-position: outside;
+  padding-left: 1.4em;
+}
+
+.evie-markdown [data-streamdown="list-item"] {
+  padding: 0.12em 0;
+}
+
+.evie-markdown [data-streamdown="list-item"]::marker {
+  color: var(--color-teal);
+}
+
+.evie-markdown [data-streamdown="blockquote"] {
+  border-left-color: var(--color-teal-deeper);
+  color: var(--color-muted-text);
+  margin: 1em 0;
+  padding: 0.15em 0 0.15em 1em;
+}
+
+.evie-markdown [data-streamdown="horizontal-rule"] {
+  border-color: var(--color-hair-strong);
+  margin: 1.5em 0;
+}
+
+.evie-markdown [data-streamdown="inline-code"] {
+  background: var(--color-muted);
+  border: 1px solid var(--color-hair-strong);
+  border-radius: 4px;
+  color: var(--color-amber-ink);
+  font-size: 0.9em;
+  padding: 0.08em 0.38em;
+}
+
+.evie-markdown [data-streamdown="code-block"] {
+  background: var(--color-card);
+  border-color: var(--color-hair-strong);
+  border-radius: 8px;
+  gap: 4px;
+  margin: 1em 0;
+  padding: 6px;
+}
+
+.evie-markdown [data-streamdown="code-block-header"] {
+  color: var(--color-muted-text);
+  height: 30px;
+}
+
+.evie-markdown [data-streamdown="code-block-body"] {
+  background: var(--color-code);
+  border-color: var(--color-hair-strong);
+  border-radius: 6px;
+  font-size: calc(var(--chat-text-size) - 1px);
+  line-height: 1.6;
+  padding: 14px;
+}
+
+.evie-markdown [data-streamdown="code-block-actions"] {
+  background: color-mix(in srgb, var(--color-card) 92%, transparent);
+  border-color: var(--color-hair-bubble);
+}
+
+.evie-markdown [data-streamdown="code-block-copy-button"] {
+  color: var(--color-muted-text);
+}
+
+.evie-markdown [data-streamdown="code-block-copy-button"]:hover {
+  color: var(--color-teal-hover);
 }
 
 a {

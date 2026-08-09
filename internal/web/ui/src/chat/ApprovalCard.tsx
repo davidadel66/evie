@@ -34,7 +34,7 @@ function Pending({ tool, onAnswer }: Props) {
         <span className="text-amber-ink font-sans text-xs font-semibold">
           Approval required
         </span>
-        <span className="text-muted min-w-0 truncate font-mono text-[11.5px]">
+        <span className="text-muted-text min-w-0 truncate font-mono text-[11.5px]">
           {tool.name}
           {view.subject && ` · ${view.subject}`}
         </span>
@@ -49,7 +49,7 @@ function Pending({ tool, onAnswer }: Props) {
         </pre>
       )}
       {view.shape === "json" && (
-        <pre className="text-muted m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
+        <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.json}
         </pre>
       )}
@@ -92,11 +92,11 @@ function Resolved({ tool }: { tool: Tool }) {
       {approved ? (
         <Check stroke="var(--color-ok)" />
       ) : (
-        <Cross stroke="var(--color-muted)" />
+        <Cross stroke="var(--color-muted-text)" />
       )}
       <span
         className={`font-mono text-xs ${
-          approved ? "text-body-dim" : "text-muted line-through"
+          approved ? "text-body-dim" : "text-muted-text line-through"
         }`}
       >
         {tool.name}
@@ -110,7 +110,7 @@ function Resolved({ tool }: { tool: Tool }) {
       </span>
       <span
         className={`font-mono text-[10.5px] whitespace-nowrap ${
-          approved ? "text-ok" : "text-muted"
+          approved ? "text-ok" : "text-muted-text"
         }`}
       >
         {label(state)}

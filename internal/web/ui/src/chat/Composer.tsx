@@ -45,7 +45,7 @@ export function Composer({ value, onChange, onSend, streaming }: Props) {
             }
           }}
           placeholder={streaming ? "Queue a message…" : "Message Evie…"}
-          className="text-ink placeholder:text-fainter flex-1 resize-none border-none bg-transparent py-1 font-sans text-[13px] leading-[1.5]"
+          className="text-ink placeholder:text-fainter flex-1 resize-none border-none bg-transparent py-1 font-sans text-[length:var(--chat-text-size)] leading-[1.5]"
         />
         <div
           onClick={onSend}

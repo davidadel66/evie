@@ -6,15 +6,23 @@ import { useEffect, useState } from "react";
 import { Panel } from "./artifacts/Panel";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
-import { useSession, type Status } from "./store/useSession";
+import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
+import { TextSizeMenu } from "./ui/TextSizeMenu";
+import {
+  defaultChatTextSize,
+  resolveChatTextSize,
+  type ChatTextSize,
+} from "./ui/textSize";
 
 type Tab = "chat" | "board" | "reports";
+const textSizeStorageKey = "evie.chatTextSize";
 
 export default function App() {
   const { items, status, queue, problem, send, answer, dismissProblem } = useSession();
   const [tab, setTab] = useState<Tab>("chat");
   const [draft, setDraft] = useState("");
+  const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
   // The artifacts rail starts collapsed — an empty 620px panel is wasted
   // space. The whiteboard feature owns the other half of this: when artifact
   // events exist, pinning one should setPanelOpen(true) from the stream.
@@ -42,9 +50,26 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [pendingId, tab, answer]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(textSizeStorageKey, textSize);
+    } catch {
+      // Storage can be unavailable in locked-down browser contexts; the
+      // in-memory setting still works for this page load.
+    }
+  }, [textSize]);
+
   return (
-    <div className="bg-app text-ink flex h-screen flex-col overflow-hidden text-[13px]">
-      <TopBar tab={tab} onTab={setTab} status={status} pendingApproval={!!pendingId} />
+    <div
+      data-chat-size={textSize}
+      className="bg-app text-ink flex h-screen flex-col overflow-hidden text-[13px]"
+    >
+      <TopBar
+        tab={tab}
+        onTab={setTab}
+        textSize={textSize}
+        onTextSize={setTextSize}
+      />
 
       {problem && <Banner message={problem} onDismiss={dismissProblem} />}
 
@@ -90,21 +115,18 @@ export default function App() {
 function TopBar({
   tab,
   onTab,
-  status,
-  pendingApproval,
+  textSize,
+  onTextSize,
 }: {
   tab: Tab;
   onTab: (t: Tab) => void;
-  status: Status;
-  pendingApproval: boolean;
+  textSize: ChatTextSize;
+  onTextSize: (value: ChatTextSize) => void;
 }) {
   return (
     <div className="border-hair bg-topbar flex h-[46px] flex-none items-center gap-[22px] border-b px-5">
-      <span className="flex items-center gap-[9px]">
-        <span className="bg-teal flex h-[22px] w-[22px] items-center justify-center rounded-md font-sans text-xs font-bold text-[#0a0c0d]">
-          E
-        </span>
-        <span className="font-sans text-[13px] font-semibold">Evie</span>
+      <span className="text-ink font-sans text-[17px] font-bold tracking-[0.18em]">
+        EVIE
       </span>
       <div className="flex h-full items-stretch gap-[2px]">
         <TabButton label="Chat" active={tab === "chat"} onClick={() => onTab("chat")} />
@@ -112,7 +134,7 @@ function TopBar({
         <TabButton label="Reports" active={tab === "reports"} onClick={() => onTab("reports")} />
       </div>
       <div className="flex-1" />
-      <StatusPill status={status} pendingApproval={pendingApproval} />
+      <TextSizeMenu value={textSize} onChange={onTextSize} />
     </div>
   );
 }
@@ -147,35 +169,12 @@ function TabButton({
   );
 }
 
-function StatusPill({
-  status,
-  pendingApproval,
-}: {
-  status: Status;
-  pendingApproval: boolean;
-}) {
-  const { label, color } = pendingApproval
-    ? { label: "awaiting approval", color: "var(--color-amber)" }
-    : describeStatus(status);
-  return (
-    <span className="flex items-center gap-[6px] font-mono text-[11px]">
-      <span
-        className="h-[6px] w-[6px] rounded-full"
-        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
-      />
-      <span style={{ color }}>{label}</span>
-    </span>
-  );
-}
-
-function describeStatus(status: Status): { label: string; color: string } {
-  switch (status) {
-    case "streaming":
-      return { label: "streaming", color: "var(--color-teal)" };
-    case "error":
-      return { label: "disconnected", color: "var(--color-danger)" };
-    default:
-      return { label: "idle", color: "var(--color-ok)" };
+function loadChatTextSize(): ChatTextSize {
+  try {
+    const stored = localStorage.getItem(textSizeStorageKey);
+    return resolveChatTextSize(stored);
+  } catch {
+    return defaultChatTextSize;
   }
 }
 

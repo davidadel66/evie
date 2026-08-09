@@ -6,7 +6,7 @@ import { Markdown } from "./Markdown";
 
 export function UserMessage({ text }: { text: string }) {
   return (
-    <div className="bg-bubble border-hair-bubble text-[#d7dcd9] max-w-[62%] flex-none self-end rounded-[10px_10px_3px_10px] border px-[14px] py-[10px] leading-[1.55] whitespace-pre-wrap">
+    <div className="bg-bubble border-hair-bubble text-[#d7dcd9] max-w-[62%] flex-none self-end rounded-[10px_10px_3px_10px] border px-[14px] py-[10px] text-[length:var(--chat-text-size)] leading-[1.55] whitespace-pre-wrap">
       {text}
     </div>
   );

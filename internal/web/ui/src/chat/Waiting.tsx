@@ -16,7 +16,7 @@ export function Waiting() {
         />
         <span className="bg-amber h-[5px] w-[5px] rounded-full" />
       </span>
-      <span className="text-muted font-sans text-[11.5px]">
+      <span className="text-muted-text font-sans text-[11.5px]">
         Evie is thinking…
       </span>
     </div>
