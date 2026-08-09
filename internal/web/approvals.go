@@ -42,12 +42,12 @@ func (s *Server) dropPending(id string) {
 // approver builds the per-turn gate handed to Send: emit the request on
 // this turn's stream, then block until the browser answers or the
 // request dies. This is the pause the REPL gets from scanner.Scan().
-func (s *Server) approver(ctx context.Context, ev *sseEvents) func(name, args string) tools.Decision {
-	return func(name, args string) tools.Decision {
+func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
+	return func(name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
 		defer s.dropPending(id)
 
-		ev.ApprovalRequest(id, name, args)
+		ev.ApprovalRequest(id, name, args, preview)
 
 		select {
 		case approved := <-ch:

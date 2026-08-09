@@ -373,6 +373,66 @@ func TestEditFile(t *testing.T) {
 	})
 }
 
+func TestPreparedFileEditRejectsStalePreview(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notes.md")
+	const before = "alpha\nbeta\ngamma\n"
+	if err := os.WriteFile(path, []byte(before), 0o644); err != nil {
+		t.Fatalf("setup write failed: %v", err)
+	}
+	args, _ := json.Marshal(map[string]string{
+		"path": path, "old_string": "beta", "new_string": "delta",
+	})
+
+	prepared, err := prepareEditFileTool(string(args))
+	if err != nil {
+		t.Fatalf("prepareEditFileTool returned error: %v", err)
+	}
+	preview := prepared.Preview
+	if preview == nil {
+		t.Fatal("prepared preview is nil")
+	}
+	if preview.Path != path || preview.OldText != before || preview.NewText != "alpha\ndelta\ngamma\n" || preview.IsNew {
+		t.Errorf("preview = %+v", preview)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back failed: %v", err)
+	}
+	if string(data) != before {
+		t.Errorf("preview modified the file: %q", data)
+	}
+
+	const concurrent = "alpha\nbeta\ngamma\nexternal change\n"
+	if err := os.WriteFile(path, []byte(concurrent), 0o644); err != nil {
+		t.Fatalf("concurrent write failed: %v", err)
+	}
+	if _, err := prepared.Execute(); err == nil || !strings.Contains(err.Error(), "changed after the approval preview") {
+		t.Fatalf("prepared execute error = %v, want stale-preview error", err)
+	}
+	data, _ = os.ReadFile(path)
+	if string(data) != concurrent {
+		t.Errorf("stale prepared edit overwrote concurrent bytes: %q", data)
+	}
+
+	if err := os.WriteFile(path, []byte(before), 0o644); err != nil {
+		t.Fatalf("reset write failed: %v", err)
+	}
+	prepared, err = prepareEditFileTool(string(args))
+	if err != nil {
+		t.Fatalf("second prepare failed: %v", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatalf("concurrent chmod failed: %v", err)
+	}
+	if _, err := prepared.Execute(); err == nil || !strings.Contains(err.Error(), "permissions changed after the approval preview") {
+		t.Fatalf("prepared execute error = %v, want stale-permissions error", err)
+	}
+	info, _ := os.Stat(path)
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("stale prepared edit restored old permissions: %o", info.Mode().Perm())
+	}
+}
+
 func TestWriteFileAtomicLeavesNoTempFiles(t *testing.T) {
 	// The temp file lives in the target's own directory, so a leaked one is
 	// litter in the user's working tree — assert it never survives.

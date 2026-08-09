@@ -91,6 +91,9 @@ func TestApprovalApprovedRunsTool(t *testing.T) {
 	if !strings.Contains(body, "event: approval_request\n") {
 		t.Fatalf("stream missing approval_request:\n%s", body)
 	}
+	if !strings.Contains(body, `"oldText":"hello world","newText":"hello evie"`) {
+		t.Fatalf("approval request missing full-file preview:\n%s", body)
+	}
 	if !strings.Contains(body, "event: turn_done\n") {
 		t.Fatalf("stream missing turn_done:\n%s", body)
 	}

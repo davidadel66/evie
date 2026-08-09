@@ -1,74 +1,123 @@
-// The diff shown before an edit_file runs. The approval payload carries only
-// old_string / new_string — never the file — so absolute line numbers are
-// unknowable and the design's 14/15/16 gutter would be invented. A −/+ gutter
-// is the honest version of the same shape.
+// Full-file approval preview. Each pane is a handful of text blocks rather
+// than one React node per line, so the 100KB file limit remains responsive.
 
-import { diffLines } from "diff";
+import {
+  fullFileDiff,
+  newFilePane,
+  type DiffPane,
+  type DiffSection,
+} from "./fileDiff";
 
-type Props = { oldText: string; newText: string };
+type Props = { oldText: string; newText: string; isNew?: boolean };
 
-export function Diff({ oldText, newText }: Props) {
-  const rows = toRows(oldText, newText);
+export function Diff({ oldText, newText, isNew = false }: Props) {
+  if (isNew) {
+    return (
+      <Frame single>
+        <Pane label="New file" pane={newFilePane(newText)} />
+      </Frame>
+    );
+  }
 
+  const diff = fullFileDiff(oldText, newText);
   return (
-    <div className="py-[10px] font-mono text-[11.5px] leading-[1.7]">
-      {rows.map((row, i) => (
-        <div
-          key={i}
-          className="flex"
-          style={{ background: rowBackground(row.sign) }}
-        >
-          <span
-            className="w-[38px] flex-none pr-[10px] text-right"
-            style={{ color: gutterColor(row.sign) }}
-          >
-            {row.sign}
-          </span>
-          <span
-            className="whitespace-pre-wrap"
-            style={{ color: textColor(row.sign) }}
-          >
-            {row.text === "" ? " " : row.text}
-          </span>
-        </div>
-      ))}
-    </div>
+    <Frame>
+      <Pane label="Before" pane={diff.before} />
+      <Pane label="After" pane={diff.after} bordered />
+    </Frame>
   );
 }
 
-type Sign = "-" | "+" | " ";
-type Row = { sign: Sign; text: string };
+function Frame({ children, single = false }: { children: React.ReactNode; single?: boolean }) {
+  return (
+    <section
+      aria-label="Complete file change preview"
+      className="border-hair-strong bg-code overflow-x-auto border-y font-mono text-[11.5px] leading-[1.65]"
+    >
+      <div className={`${single ? "min-w-[460px]" : "grid min-w-[820px] grid-cols-2"}`}>
+        {children}
+      </div>
+    </section>
+  );
+}
 
-/** toRows flattens jsdiff's per-change chunks into one row per line. A change
- *  chunk holds many lines, and each needs its own gutter cell. */
-function toRows(oldText: string, newText: string): Row[] {
-  const rows: Row[] = [];
-  for (const part of diffLines(oldText, newText)) {
-    const sign: Sign = part.added ? "+" : part.removed ? "-" : " ";
-    // A trailing newline yields an empty final element; drop it so the diff
-    // doesn't end in a phantom blank row.
-    const lines = part.value.split("\n");
-    if (lines.at(-1) === "") lines.pop();
-    for (const text of lines) rows.push({ sign, text });
+function Pane({
+  label,
+  pane,
+  bordered = false,
+}: {
+  label: string;
+  pane: DiffPane;
+  bordered?: boolean;
+}) {
+  return (
+    <section
+      aria-label={`${label} file version`}
+      className={bordered ? "border-hair-strong min-w-0 border-l" : "min-w-0"}
+    >
+      <div className="border-hair-strong text-fainter border-b px-3 py-[7px] font-sans text-[10.5px] font-semibold uppercase tracking-[.08em]">
+        {label}
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-max">
+          {pane.sections.length === 0 ? (
+            <div className="text-fainter px-3 py-4">Empty file</div>
+          ) : (
+            pane.sections.map((section) => (
+              <Section key={`${section.startLine}-${section.kind}`} section={section} />
+            ))
+          )}
+          {pane.missingFinalNewline && (
+            <div role="note" className="text-amber-ink px-3 py-1 text-[10.5px] italic">
+              No newline at end of file
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Section({ section }: { section: DiffSection }) {
+  if (section.kind === "spacer") {
+    const blank = Array.from({ length: section.lines.length }, () => " ").join("\n");
+    return (
+      <div aria-hidden="true" className="flex bg-[rgba(255,255,255,.012)]">
+        <pre className="m-0 flex-none py-0 pr-[10px] pl-2">{blank}</pre>
+        <pre className="m-0 pr-3">{blank}</pre>
+      </div>
+    );
   }
-  return rows;
-}
 
-// Colours lifted from the design's approval card.
-function rowBackground(sign: Sign): string | undefined {
-  if (sign === "-") return "rgba(217,107,107,.08)";
-  if (sign === "+") return "rgba(95,174,125,.09)";
-  return undefined;
-}
+  const sign = section.kind === "removed" ? "-" : section.kind === "added" ? "+" : " ";
+  const endLine = section.startLine + section.lines.length - 1;
+  const tone =
+    section.kind === "removed"
+      ? "bg-[rgba(217,107,107,.08)] text-danger-ink"
+      : section.kind === "added"
+        ? "bg-[rgba(95,174,125,.09)] text-ok-ink"
+        : "text-muted-text";
+  const gutter =
+    section.kind === "removed"
+      ? "text-danger-gutter"
+      : section.kind === "added"
+        ? "text-ok-gutter"
+        : "text-ghost";
+  const label =
+    section.kind === "same"
+      ? `Unchanged lines ${section.startLine} to ${endLine}`
+      : `${section.kind === "removed" ? "Removed" : "Added"} lines ${section.startLine} to ${endLine}`;
 
-function gutterColor(sign: Sign): string {
-  if (sign === "-") return "var(--color-danger-gutter)";
-  if (sign === "+") return "var(--color-ok-gutter)";
-  return "var(--color-ghost)";
-}
-
-function textColor(sign: Sign): string {
-  if (sign === "-") return "var(--color-danger-ink)";
-  if (sign === "+") return "var(--color-ok-ink)";
-  return "var(--color-muted-text)";
+  return (
+    <div aria-label={label} className={`${tone} flex`}>
+      <pre className={`${gutter} m-0 flex-none py-0 pr-[10px] pl-2 text-right select-none`}>
+        {section.lines
+          .map((_, index) => `${sign} ${section.startLine + index}`)
+          .join("\n")}
+      </pre>
+      <pre className="m-0 pr-3 whitespace-pre">
+        {section.lines.map((line) => (line === "" ? " " : line)).join("\n")}
+      </pre>
+    </div>
+  );
 }

@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 // sseEvents renders a turn onto one open HTTP response. Every emit is
@@ -95,12 +97,13 @@ func (e *sseEvents) ToolResult(id, content string, isErr bool) {
 // The three below aren't part of agent.Events — they're the server's own
 // vocabulary around a turn (see serve.spec.md).
 
-func (e *sseEvents) ApprovalRequest(id, name, args string) {
+func (e *sseEvents) ApprovalRequest(id, name, args string, preview *tools.FileChangePreview) {
 	e.emit("approval_request", struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		Args string `json:"args"`
-	}{id, name, args})
+		ID      string                   `json:"id"`
+		Name    string                   `json:"name"`
+		Args    string                   `json:"args"`
+		Preview *tools.FileChangePreview `json:"preview,omitempty"`
+	}{id, name, args, preview})
 }
 
 func (e *sseEvents) Error(message string) {

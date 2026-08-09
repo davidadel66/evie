@@ -74,7 +74,6 @@ to feed them; building empty chrome now means building it twice:
 - **Whiteboard tab, Reports tab, 3D viewer overlay, model attachment chip.**
   Tabs render and are clickable; their bodies are a centered one-line notice
   naming the feature that will fill them. Nothing else.
-- **Absolute line numbers in the diff** — see the diff decision below.
 
 ## Stack decisions (two amendments to serve.decisions.md, record them)
 
@@ -96,8 +95,9 @@ to feed them; building empty chrome now means building it twice:
 
 Deps (frontend only; the Go side stays stdlib): `react`, `react-dom`,
 `typescript`, `vite`, `@vitejs/plugin-react`, `tailwindcss`,
-`@tailwindcss/vite`, `streamdown`, `diff` (jsdiff, for the approval diff),
-`vitest`. Fonts load from Google Fonts as the design does — a known offline
+`@tailwindcss/vite`, `streamdown`, `@streamdown/code`, `vitest`. The approval
+diff uses edit_file's single-replacement invariant rather than a general diff
+dependency. Fonts load from Google Fonts as the design does — a known offline
 gap; self-hosting is a later polish item.
 
 ## Files
@@ -186,20 +186,28 @@ splitting on `\n\n`, then `event:` / `data:` per block — ~40 lines mirroring
 ## The approval diff
 
 `edit_file` args are `path`, `old_string`, `new_string`
-(`internal/tools/file.go`). The approval payload does **not** carry the file, so
-absolute line numbers are unknowable — the design's `14/15/16` gutter would be
-invented. `Diff.tsx` renders a jsdiff `diffLines(old_string, new_string)` with a
-`−`/`+` gutter instead of line numbers, keeping the design's exact row colors
-(`rgba(217,107,107,.08)` / `rgba(95,174,125,.09)`) and mono type. Real line
-numbers need the file contents in the approval event — a serve-core change,
-noted for later, not smuggled in here.
+(`internal/tools/file.go`). **Amended 2026-08-09:** edit_file's registry entry
+prepares its exact read/validate/replace operation before emitting approval. The
+optional approval payload therefore carries the complete before/after file
+contents and resolved path, and approval runs that prepared operation. It
+re-reads immediately before writing and refuses if disk bytes changed while
+David was deciding. `Diff.tsx` renders both complete files side-by-side with
+real independent line numbers and red/green replacement blocks, without
+vertical truncation. Because edit_file has one contiguous replacement, a
+linear common-prefix/suffix split replaces a potentially pathological general
+diff algorithm; each pane renders at most three content sections even at the 100KB
+file limit. Final-newline changes get an explicit marker. The full preview
+remains in the transcript after approve/decline instead of collapsing. The wire
+shape includes `isNew`; a future gated file-creation tool renders one full green
+"New file" pane rather than an empty before pane. (`edit_file` itself still
+cannot create files.)
 
 `edit_db` (the other gated tool) has no diff shape: render `statement` in a mono
 block with the `db` name in the header. Any other gated tool: pretty-printed
 JSON args. The card keeps the design's amber pending chrome, `Approve Y` /
-`Decline N` buttons, and the "Evie is paused until you decide" line; on resolve
-it collapses to the compact approved/declined row with the tool name and
-outcome, and stays in the transcript.
+`Decline N` buttons, and the "Evie is paused until you decide" line. Non-file
+approvals collapse to the compact outcome row; file approvals retain the full
+preview and add the outcome to its header.
 
 Hotkeys, from the design's key handler: `y` / `n` resolve the pending approval
 when the Chat tab is focused and the event target isn't a `TEXTAREA`/`INPUT`.
@@ -290,9 +298,11 @@ test), so `evie serve` + `vite dev` side by side works with hot reload.
    caret clears on completion.
 4. "What time is it?" → a `get_time` tool card with a `✓ {ms}ms` chip that
    expands to the raw result.
-5. "In <scratch file>, change X to Y with edit_file" → approval card with a
-   rendered diff → `Y` → file changed on disk (`cat`), card collapses to the
-   approved row. Repeat with `N` → file untouched, Evie says so.
+5. "In <scratch file>, change X to Y with edit_file" → approval card shows the
+   complete before/after files side-by-side with real line numbers → `Y` → file
+   changed on disk (`cat`) and the full preview remains with an Approved header.
+   Repeat with `N` → file untouched and the proposed full preview remains marked
+   Declined.
 6. Send a second message while the first turn streams → composer is disabled;
    force it via curl → 409 surfaces as a banner, not a console error.
 7. Kill the server mid-stream → "Lost connection" banner, Retry clears it.

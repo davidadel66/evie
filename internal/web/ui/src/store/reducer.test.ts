@@ -88,14 +88,26 @@ describe("reduce", () => {
   });
 
   it("attaches an approval to the matching pending tool call", () => {
+    const preview = {
+      path: "/tmp/a",
+      oldText: "before",
+      newText: "after",
+      isNew: false,
+    };
     const items = fold([
       { type: "tool_call", id: "c1", name: "edit_file", args: '{"path":"a"}' },
-      { type: "approval_request", id: "ap1", name: "edit_file", args: '{"path":"a"}' },
+      {
+        type: "approval_request",
+        id: "ap1",
+        name: "edit_file",
+        args: '{"path":"a"}',
+        preview,
+      },
     ]);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       kind: "tool",
-      approval: { reqId: "ap1", state: "pending" },
+      approval: { reqId: "ap1", state: "pending", preview },
     });
   });
 
@@ -255,6 +267,23 @@ describe("parseEvent", () => {
     });
     expect(parseEvent("reasoning_done", "{}")).toEqual({
       type: "reasoning_done",
+    });
+  });
+
+  it("parses a full-file approval preview", () => {
+    expect(
+      parseEvent(
+        "approval_request",
+        '{"id":"ap1","name":"edit_file","args":"{}","preview":{"path":"/tmp/a","oldText":"before","newText":"after","isNew":false}}',
+      ),
+    ).toMatchObject({
+      type: "approval_request",
+      preview: {
+        path: "/tmp/a",
+        oldText: "before",
+        newText: "after",
+        isNew: false,
+      },
     });
   });
 });

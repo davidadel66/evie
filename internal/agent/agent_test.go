@@ -59,9 +59,9 @@ type recorder struct {
 	events []string
 }
 
-func (r *recorder) Delta(text string)          { r.events = append(r.events, "delta:"+text) }
-func (r *recorder) Reasoning(text string)      { r.events = append(r.events, "reasoning:"+text) }
-func (r *recorder) ReasoningDone()             { r.events = append(r.events, "reasoningdone") }
+func (r *recorder) Delta(text string)            { r.events = append(r.events, "delta:"+text) }
+func (r *recorder) Reasoning(text string)        { r.events = append(r.events, "reasoning:"+text) }
+func (r *recorder) ReasoningDone()               { r.events = append(r.events, "reasoningdone") }
 func (r *recorder) AssistantDone(content string) { r.events = append(r.events, "done:"+content) }
 func (r *recorder) ToolCall(id, name, args string) {
 	r.events = append(r.events, fmt.Sprintf("call:%s:%s:%s", id, name, args))
@@ -247,7 +247,7 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 		assistantStep("ok", nil),
 	}}
 	s := New(c, "test-model")
-	approve := func(name, args string) tools.Decision { return tools.Approved }
+	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Approved }
 
 	if err := s.Send("go", &recorder{}, approve, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -264,7 +264,7 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 	}}
 	s = New(c, "test-model")
 	rec := &recorder{}
-	deny := func(name, args string) tools.Decision { return tools.Declined }
+	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Declined }
 
 	if err := s.Send("go", rec, deny, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)

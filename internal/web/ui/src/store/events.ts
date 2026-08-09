@@ -1,6 +1,13 @@
 // The wire vocabulary, mirroring internal/web/events.go exactly. If a field
 // name changes there, it changes here — these types are the contract.
 
+export type FilePreview = {
+  path: string;
+  oldText: string;
+  newText: string;
+  isNew: boolean;
+};
+
 export type ServerEvent =
   | { type: "delta"; text: string }
   | { type: "reasoning"; text: string }
@@ -8,7 +15,13 @@ export type ServerEvent =
   | { type: "assistant_done"; content: string }
   | { type: "tool_call"; id: string; name: string; args: string }
   | { type: "tool_result"; id: string; content: string; isError: boolean }
-  | { type: "approval_request"; id: string; name: string; args: string }
+  | {
+      type: "approval_request";
+      id: string;
+      name: string;
+      args: string;
+      preview?: FilePreview;
+    }
   | { type: "error"; message: string }
   | { type: "turn_done" };
 

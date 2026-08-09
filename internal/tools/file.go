@@ -245,6 +245,15 @@ func readFile(args string) (string, error) {
 // filesystems is not atomic and may fail outright, so a temp file in /tmp
 // would defeat the entire point.
 func writeFileAtomic(abs string, data []byte, perm fs.FileMode) error {
+	return writeFileAtomicChecked(abs, data, perm, nil)
+}
+
+type fileSnapshot struct {
+	data string
+	perm fs.FileMode
+}
+
+func writeFileAtomicChecked(abs string, data []byte, perm fs.FileMode, expected *fileSnapshot) error {
 	dir := filepath.Dir(abs)
 
 	tmp, err := os.CreateTemp(dir, ".evie-*")
@@ -272,6 +281,26 @@ func writeFileAtomic(abs string, data []byte, perm fs.FileMode) error {
 	// CreateTemp always makes 0600; restore whatever the real file carried.
 	if err := os.Chmod(tmpName, perm); err != nil {
 		return fmt.Errorf("chmod temp file: %w", err)
+	}
+
+	// Do the stale-preview check after the replacement file is complete, at the
+	// last possible point before atomic rename. Bytes and permissions are both
+	// part of what David reviewed; neither may drift while approval is pending.
+	if expected != nil {
+		current, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Errorf("re-read %s before write: %w", abs, err)
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			return fmt.Errorf("re-stat %s before write: %w", abs, err)
+		}
+		if string(current) != expected.data {
+			return fmt.Errorf("%s changed after the approval preview; read it again and retry the edit", abs)
+		}
+		if info.Mode().Perm() != expected.perm {
+			return fmt.Errorf("%s permissions changed after the approval preview; read it again and retry the edit", abs)
+		}
 	}
 
 	if err := os.Rename(tmpName, abs); err != nil {
@@ -319,41 +348,96 @@ This tool cannot create files: the file must already exist, and an empty old_str
 	},
 }
 
+// FileChangePreview is the browser-only view of a gated file write. OldText
+// and NewText are complete file contents, not the small replacement fragments
+// in edit_file's arguments. IsNew lets a future write_file tool use the same
+// approval protocol without inventing an empty "before" pane.
+type FileChangePreview struct {
+	Path    string `json:"path"`
+	OldText string `json:"oldText"`
+	NewText string `json:"newText"`
+	IsNew   bool   `json:"isNew"`
+}
+
+type preparedFileEdit struct {
+	path        string
+	oldText     string
+	newText     string
+	permissions fs.FileMode
+	line        int
+}
+
+func prepareEditFileTool(args string) (PreparedTool, error) {
+	edit, err := prepareFileEdit(args)
+	if err != nil {
+		return PreparedTool{}, err
+	}
+	preview := &FileChangePreview{
+		Path:    edit.path,
+		OldText: edit.oldText,
+		NewText: edit.newText,
+	}
+	return PreparedTool{
+		Preview: preview,
+		Execute: func() (string, error) { return executePreparedFileEdit(edit) },
+	}, nil
+}
+
 // editFile applies one approved string replacement. Every failure returns
 // an error rather than a partial write, and those error strings are the
 // model's only feedback — they are written to be acted on, not just read.
 func editFile(args string) (string, error) {
+	edit, err := prepareFileEdit(args)
+	if err != nil {
+		return "", err
+	}
+	return executePreparedFileEdit(edit)
+}
+
+func executePreparedFileEdit(edit preparedFileEdit) (string, error) {
+	expected := &fileSnapshot{data: edit.oldText, perm: edit.permissions}
+	if err := writeFileAtomicChecked(edit.path, []byte(edit.newText), edit.permissions, expected); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("OK — replaced 1 occurrence in %s at line %d\n", edit.path, edit.line), nil
+}
+
+// prepareFileEdit owns every read-side rule shared by preview and execution.
+// Keeping one preparation path prevents the UI from approving bytes produced
+// by subtly different validation or line-number stripping logic.
+func prepareFileEdit(args string) (preparedFileEdit, error) {
 	var params struct {
 		Path      string `json:"path"`
 		OldString string `json:"old_string"`
 		NewString string `json:"new_string"`
 	}
 	if err := json.Unmarshal([]byte(args), &params); err != nil {
-		return "", fmt.Errorf("parse arguments: %w", err)
+		return preparedFileEdit{}, fmt.Errorf("parse arguments: %w", err)
 	}
 
 	abs, err := resolvePath(params.Path)
 	if err != nil {
-		return "", err
+		return preparedFileEdit{}, err
 	}
 
 	info, err := os.Stat(abs)
 	if err != nil {
-		return "", fmt.Errorf("stat %s: %w", abs, err)
+		return preparedFileEdit{}, fmt.Errorf("stat %s: %w", abs, err)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("%s is a directory, not a file", abs)
+		return preparedFileEdit{}, fmt.Errorf("%s is a directory, not a file", abs)
 	}
 	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("%s is not a regular file", abs)
+		return preparedFileEdit{}, fmt.Errorf("%s is not a regular file", abs)
 	}
 	if info.Size() > maxReadBytes {
-		return "", fmt.Errorf("%s is %dKB; the limit is %dKB", abs, info.Size()/1024, maxReadBytes/1024)
+		return preparedFileEdit{}, fmt.Errorf("%s is %dKB; the limit is %dKB", abs, info.Size()/1024, maxReadBytes/1024)
 	}
 
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		return "", fmt.Errorf("read %s: %w", abs, err)
+		return preparedFileEdit{}, fmt.Errorf("read %s: %w", abs, err)
 	}
 
 	// Be liberal in what we accept: a model that quoted read_file's output
@@ -363,12 +447,14 @@ func editFile(args string) (string, error) {
 
 	out, line, err := applyEdit(string(data), oldString, newString)
 	if err != nil {
-		return "", err
+		return preparedFileEdit{}, err
 	}
 
-	if err := writeFileAtomic(abs, []byte(out), info.Mode().Perm()); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("OK — replaced 1 occurrence in %s at line %d\n", abs, line), nil
+	return preparedFileEdit{
+		path:        abs,
+		oldText:     string(data),
+		newText:     out,
+		permissions: info.Mode().Perm(),
+		line:        line,
+	}, nil
 }

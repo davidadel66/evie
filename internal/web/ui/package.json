@@ -12,14 +12,12 @@
   "dependencies": {
     "@streamdown/code": "^1.1.1",
     "@tailwindcss/vite": "^4.3.3",
-    "diff": "^9.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "streamdown": "^2.5.0",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@types/diff": "^7.0.2",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

@@ -5,7 +5,7 @@
 // card resolving into the compact tool row — so the approval lives on the tool
 // item it gates.
 
-import type { ServerEvent } from "./events";
+import type { FilePreview, ServerEvent } from "./events";
 
 export type ApprovalState = "pending" | "approved" | "declined" | "expired";
 
@@ -13,6 +13,8 @@ export type Approval = {
   /** The server's approval id — what /api/approve is called with. */
   reqId: string;
   state: ApprovalState;
+  /** Complete before/after files generated server-side before execution. */
+  preview?: FilePreview;
 };
 
 export type Item =
@@ -141,7 +143,11 @@ export function reduce(
 
     case "approval_request": {
       const idx = findAwaitingTool(items, ev.name);
-      const approval: Approval = { reqId: ev.id, state: "pending" };
+      const approval: Approval = {
+        reqId: ev.id,
+        state: "pending",
+        preview: ev.preview,
+      };
       if (idx === -1) {
         // No matching tool call — the request arrived out of band (a reload
         // mid-turn, say). Synthesize the item so the card is still actionable

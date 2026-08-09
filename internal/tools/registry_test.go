@@ -82,7 +82,7 @@ func TestExecuteWithGatedExtraDeclined(t *testing.T) {
 		ran = true
 		return "should not run", nil
 	})
-	deny := func(name, args string) Decision { return Declined }
+	deny := func(name, args string, _ *FileChangePreview) Decision { return Declined }
 
 	msg, isErr := ExecuteWith([]Tool{extra}, callFor("dangerous", "{}"), deny)
 

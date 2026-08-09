@@ -37,12 +37,12 @@ type Client interface {
 // until an AssistantDone with no tool calls ends the turn. Implementations
 // must be fast or buffer internally — the loop blocks on them.
 type Events interface {
-	Delta(text string)                            // streaming assistant text
-	Reasoning(text string)                        // streaming thinking text
-	ReasoningDone()                               // thinking ended for this assistant message
-	AssistantDone(content string)                 // every assistant message, even empty (tool-only)
-	ToolCall(id, name, args string)               // emitted immediately before executing
-	ToolResult(id, content string, isErr bool)    // tool finished (includes declines)
+	Delta(text string)                         // streaming assistant text
+	Reasoning(text string)                     // streaming thinking text
+	ReasoningDone()                            // thinking ended for this assistant message
+	AssistantDone(content string)              // every assistant message, even empty (tool-only)
+	ToolCall(id, name, args string)            // emitted immediately before executing
+	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
 }
 
 // Session is one conversation: the transcript plus the client that
@@ -62,7 +62,7 @@ type Session struct {
 // passes none). The error return is the turn aborting — a failed request
 // or an empty response — never a tool failure; those go back to the model
 // as tool messages so it can correct itself.
-func (s *Session) Send(input string, ev Events, approve func(name, args string) tools.Decision, extra ...tools.Tool) error {
+func (s *Session) Send(input string, ev Events, approve tools.Approver, extra ...tools.Tool) error {
 	if !s.mu.TryLock() {
 		return ErrBusy
 	}

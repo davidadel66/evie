@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 func TestSSEHeadersAndFlush(t *testing.T) {
@@ -31,7 +33,9 @@ func TestEventWireFormat(t *testing.T) {
 	ev.AssistantDone("Hello David")
 	ev.ToolCall("c1", "get_time", "{}")
 	ev.ToolResult("c1", "3pm", false)
-	ev.ApprovalRequest("a1", "edit_file", `{"path":"x"}`)
+	ev.ApprovalRequest("a1", "edit_file", `{"path":"x"}`, &tools.FileChangePreview{
+		Path: "x", OldText: "before", NewText: "after",
+	})
 	ev.Error("boom")
 	ev.TurnDone()
 
@@ -44,7 +48,7 @@ func TestEventWireFormat(t *testing.T) {
 		"event: tool_result\n" +
 		`data: {"id":"c1","content":"3pm","isError":false}` + "\n\n" +
 		"event: approval_request\n" +
-		`data: {"id":"a1","name":"edit_file","args":"{\"path\":\"x\"}"}` + "\n\n" +
+		`data: {"id":"a1","name":"edit_file","args":"{\"path\":\"x\"}","preview":{"path":"x","oldText":"before","newText":"after","isNew":false}}` + "\n\n" +
 		"event: error\n" +
 		`data: {"message":"boom"}` + "\n\n" +
 		"event: turn_done\n" +

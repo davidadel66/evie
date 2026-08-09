@@ -117,7 +117,7 @@ func runREPL(session *agent.Session) {
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
-	approve := func(name, args string) tools.Decision {
+	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
 		fmt.Printf("\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
 		if !scanner.Scan() {
 			return tools.Declined

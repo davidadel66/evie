@@ -25,10 +25,16 @@ export function ApprovalCard({ tool, onAnswer }: Props) {
 
 function Pending({ tool, onAnswer }: Props) {
   const view = readApprovalArgs(tool.name, tool.args);
+  const preview = tool.approval!.preview;
   const reqId = tool.approval!.reqId;
+  const subject = preview?.path || view.subject;
 
   return (
-    <div className="border-amber-hair-strong bg-amber-card min-w-0 max-w-[min(720px,100%)] flex-none self-stretch overflow-hidden rounded-[9px] border">
+    <div
+      className={`border-amber-hair-strong bg-amber-card min-w-0 flex-none self-stretch overflow-hidden rounded-[9px] border ${
+        preview ? "max-w-[min(1100px,100%)]" : "max-w-[min(720px,100%)]"
+      }`}
+    >
       <div className="border-amber-hair bg-amber-bg flex items-center gap-[9px] border-b px-[13px] py-[9px]">
         <span className="bg-amber h-[7px] w-[7px] rounded-full" />
         <span className="text-amber-ink font-sans text-xs font-semibold">
@@ -36,19 +42,21 @@ function Pending({ tool, onAnswer }: Props) {
         </span>
         <span className="text-muted-text min-w-0 truncate font-mono text-[11.5px]">
           {tool.name}
-          {view.subject && ` · ${view.subject}`}
+          {subject && ` · ${subject}`}
         </span>
       </div>
 
-      {view.shape === "diff" && (
+      {preview ? (
+        <Diff oldText={preview.oldText} newText={preview.newText} isNew={preview.isNew} />
+      ) : view.shape === "diff" ? (
         <Diff oldText={view.oldText} newText={view.newText} />
-      )}
-      {view.shape === "statement" && (
+      ) : null}
+      {!preview && view.shape === "statement" && (
         <pre className="text-body m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.statement}
         </pre>
       )}
-      {view.shape === "json" && (
+      {!preview && view.shape === "json" && (
         <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.json}
         </pre>
@@ -82,6 +90,31 @@ function Resolved({ tool }: { tool: Tool }) {
   const state = tool.approval!.state;
   const approved = state === "approved";
   const view = readApprovalArgs(tool.name, tool.args);
+  const preview = tool.approval!.preview;
+
+  if (preview) {
+    return (
+      <div className="border-hair-strong bg-card min-w-0 max-w-[min(1100px,100%)] flex-none self-stretch overflow-hidden rounded-lg border">
+        <div className="border-hair-strong flex items-center gap-[10px] border-b px-3 py-2">
+          {approved ? (
+            <Check stroke="var(--color-ok)" />
+          ) : (
+            <Cross stroke="var(--color-muted-text)" />
+          )}
+          <span className={approved ? "text-body-dim font-mono text-xs" : "text-muted-text font-mono text-xs line-through"}>
+            {tool.name}
+          </span>
+          <span className="text-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]">
+            {preview.path}
+          </span>
+          <span className={approved ? "text-ok font-mono text-[10.5px]" : "text-muted-text font-mono text-[10.5px]"}>
+            {label(state)}
+          </span>
+        </div>
+        <Diff oldText={preview.oldText} newText={preview.newText} isNew={preview.isNew} />
+      </div>
+    );
+  }
 
   return (
     <div

@@ -33,8 +33,21 @@ const (
 type Tool struct {
 	Schema        openrouter.Tool
 	Execute       func(args string) (string, error)
+	Prepare       func(args string) (PreparedTool, error)
 	NeedsApproval bool
 }
+
+// PreparedTool binds an approval preview to the exact operation that produced
+// it. The closure must reject stale source state rather than executing a
+// different change after David approves what he saw.
+type PreparedTool struct {
+	Preview *FileChangePreview
+	Execute func() (string, error)
+}
+
+// Approver is frontend-owned. Preview is nil for tools whose arguments are
+// already the complete review surface (edit_db, for example).
+type Approver func(name, args string, preview *FileChangePreview) Decision
 
 // all is the single registry of every tool the agent can use. Adding a
 // tool means adding one entry here — the schema reaches the model via
@@ -51,7 +64,7 @@ var all = []Tool{
 	{Schema: queryDBTool, Execute: queryDB},
 	{Schema: editDBTool, Execute: editDB, NeedsApproval: true},
 	{Schema: readFileTool, Execute: readFile},
-	{Schema: editFileTool, Execute: editFile, NeedsApproval: true},
+	{Schema: editFileTool, Execute: editFile, Prepare: prepareEditFileTool, NeedsApproval: true},
 	{Schema: bashTool, Execute: runBash},
 	{Schema: webFetchTool, Execute: webFetch},
 	{Schema: webSearchTool, Execute: webSearch},
@@ -94,7 +107,7 @@ func SchemasWith(extra []Tool) []openrouter.Tool {
 // approve is asked before any NeedsApproval tool runs; the frontend owns
 // how (terminal y/n today). Passing nil means "no approver available",
 // which declines every gated call rather than silently allowing it.
-func Execute(call openrouter.ToolCall, approve func(name, args string) Decision) openrouter.Message {
+func Execute(call openrouter.ToolCall, approve Approver) openrouter.Message {
 	msg, _ := ExecuteWith(nil, call, approve)
 	return msg
 }
@@ -107,14 +120,26 @@ func Execute(call openrouter.ToolCall, approve func(name, args string) Decision)
 // The bool reports whether the outcome was a failure (tool error or
 // unknown tool) so frontends can mark it without parsing the content. A
 // decline is not a failure — it's the gate working as intended.
-func ExecuteWith(extra []Tool, call openrouter.ToolCall, approve func(name, args string) Decision) (openrouter.Message, bool) {
+func ExecuteWith(extra []Tool, call openrouter.ToolCall, approve Approver) (openrouter.Message, bool) {
 	for _, list := range [][]Tool{all, extra} {
 		for _, tool := range list {
 			if tool.Schema.Function.Name == call.Function.Name {
+				var prepared *PreparedTool
 				if tool.NeedsApproval {
 					decision := Declined
 					if approve != nil {
-						decision = approve(call.Function.Name, call.Function.Arguments)
+						if tool.Prepare != nil {
+							p, err := tool.Prepare(call.Function.Arguments)
+							if err != nil {
+								return toolError(call.ID, err)
+							}
+							prepared = &p
+						}
+						var preview *FileChangePreview
+						if prepared != nil {
+							preview = prepared.Preview
+						}
+						decision = approve(call.Function.Name, call.Function.Arguments, preview)
 					}
 					switch decision {
 					case Approved:
@@ -133,13 +158,15 @@ func ExecuteWith(extra []Tool, call openrouter.ToolCall, approve func(name, args
 						}, false
 					}
 				}
-				resp, err := tool.Execute(call.Function.Arguments)
+				var resp string
+				var err error
+				if prepared != nil {
+					resp, err = prepared.Execute()
+				} else {
+					resp, err = tool.Execute(call.Function.Arguments)
+				}
 				if err != nil {
-					return openrouter.Message{
-						Role:       "tool",
-						Content:    fmt.Sprintf("tool call came back with error %v", err),
-						ToolCallID: call.ID,
-					}, true
+					return toolError(call.ID, err)
 				}
 				return openrouter.Message{
 					Role:       "tool",
@@ -153,5 +180,13 @@ func ExecuteWith(extra []Tool, call openrouter.ToolCall, approve func(name, args
 		ToolCallID: call.ID,
 		Role:       "tool",
 		Content:    fmt.Sprintf("Unknown Tool Call: %s", call.Function.Name),
+	}, true
+}
+
+func toolError(id string, err error) (openrouter.Message, bool) {
+	return openrouter.Message{
+		Role:       "tool",
+		Content:    fmt.Sprintf("tool call came back with error %v", err),
+		ToolCallID: id,
 	}, true
 }
