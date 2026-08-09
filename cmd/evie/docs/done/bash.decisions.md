@@ -20,10 +20,10 @@ denylist worth the name — `cat ~/.ssh/id_rsa` is one command, and so is
 have bought false confidence, not safety, so there isn't one. `cwd` gets
 `expandHome` (so `~` works) and deliberately not `denied`.
 
-The gate is the real decision, and it's David's: moussa can run arbitrary
+The gate is the real decision, and it's David's: evie can run arbitrary
 shell commands — `rm -rf`, `curl | sh`, anything — with nothing between
 the model and the machine. The stated tradeoff was that a gate on a tool
-this general is friction on every call, and that reading what moussa does
+this general is friction on every call, and that reading what evie does
 is the control. Recorded here because it is the single largest security
 decision in the repo, not because it is in doubt.
 
@@ -56,7 +56,7 @@ mutex.
 The reversal was deliberate, and Claude Code decided it the same way. It
 appends `pwd -P >| <tmpfile>` to every command, reads the file back, and
 calls `setCwd()` — so a `cd` in one call becomes the working directory of
-the next. moussa now does the same thing with the same mechanism.
+the next. evie now does the same thing with the same mechanism.
 
 Why the earlier reasoning doesn't hold here:
 
@@ -88,8 +88,8 @@ tens of MB, and unlike `read_file` there is nothing to `Stat` in advance —
 you only learn the size after the command ran. One such call doesn't just
 waste tokens, it ends the session.
 
-Over the cap, moussa returns the first 30k characters plus
-`[output trimmed: … full output saved to /tmp/moussa-output-<pid>.txt]`.
+Over the cap, evie returns the first 30k characters plus
+`[output trimmed: … full output saved to /tmp/evie-output-<pid>.txt]`.
 The model reads the rest with `head`, `tail`, or `grep` — which it has,
 because it has a shell. Note the file will usually exceed `read_file`'s
 100KB limit, which is why the note names shell tools instead.
@@ -110,7 +110,7 @@ cancellation and closes the pipes.
 A timeout returns a Go `error` with the partial output embedded in the
 message, since whatever the command printed before dying is usually the
 diagnosis. This differs from a non-zero exit on purpose: a timeout means
-moussa could not complete the operation, not that the command answered.
+evie could not complete the operation, not that the command answered.
 
 ## Login shell plus a startup snapshot
 
@@ -121,7 +121,7 @@ developer's machine invisible.
 
 That alone misses the interactive-only half: aliases and functions live in
 `.zshrc` / `.bashrc`, which a login shell never reads. Running an
-interactive shell per command would be slow and noisy, so moussa does what
+interactive shell per command would be slow and noisy, so evie does what
 Claude Code does — capture once, replay per command. See
 `internal/tools/shellsnapshot.go`.
 
@@ -158,11 +158,11 @@ wrote the literal five characters instead of expanding them, so the
 snapshot's PATH line was a no-op. `%q` rather than `%s` so a directory
 containing a space survives the round trip.
 
-**`SysProcAttr{Setsid: true}` — this one froze moussa.** An interactive
+**`SysProcAttr{Setsid: true}` — this one froze evie.** An interactive
 shell does job control and tries to take ownership of the controlling
 terminal. Spawned from a background goroutine, which is not the foreground
-process group, that raises SIGTTOU against moussa's own group and suspends
-the whole REPL: launching moussa printed
+process group, that raises SIGTTOU against evie's own group and suspends
+the whole REPL: launching evie printed
 `[1] + 80300 suspended (tty input)` before it could read a single prompt.
 `Setsid` puts the snapshot shell in a fresh session with no controlling
 terminal, so there is nothing to fight over; stdio is detached for the
@@ -174,7 +174,7 @@ have no tty, passed throughout.
 51KB / 1836 lines, 231 aliases available to commands. Sourcing it costs
 **~9ms per command** (30ms with, 21ms without). Most of the bulk is zsh's
 own `vcs_info` machinery rather than user code; Claude Code filters only
-completion functions (`^_[^_]`) and moussa matches that. Not worth
+completion functions (`^_[^_]`) and evie matches that. Not worth
 filtering harder for 9ms.
 
 Failure is never surfaced to the model: a snapshot that times out or comes
@@ -195,5 +195,5 @@ login shell. A missing alias is a degraded shell, not a broken tool.
   in a command string.
 - **Not adopted from Claude Code:** they disable extglob before each
   command to stop malicious filenames expanding past their command
-  validator. moussa has no validator to bypass, so there's nothing to
+  validator. evie has no validator to bypass, so there's nothing to
   protect.

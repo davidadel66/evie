@@ -32,7 +32,7 @@ denylist lives at the same chokepoint as path resolution, so no tool can
 forget to call it.
 
 **4. Numbered lines, always the whole file.** Claude Code reads up to
-2000 lines with `offset`/`limit` escape hatches; moussa substitutes a
+2000 lines with `offset`/`limit` escape hatches; evie substitutes a
 hard size cap. Under the cap you get everything, over it you get a clear
 error. Silent truncation is the real danger and this design has none.
 The cost is the numbering trap — see Part 2.
@@ -329,7 +329,7 @@ into the conversation, which is what the denylist is for. Two different
 threat models, two different defenses — the spec's central point.)
 
 **Checkpoint: build, install, and actually use it.** `go build -o
-~/go/bin/moussa ./cmd/moussa`, then ask moussa to read a file. Then ask
+~/go/bin/evie ./cmd/evie`, then ask evie to read a file. Then ask
 it to read `~/.zshrc` and confirm you get the fence error. Don't start
 stage 4 until reading works.
 
@@ -398,7 +398,7 @@ the file is gone — on `merchantLookup.json`, that's real data. The fix
 is the standard pattern, and it's short:
 
 ```
-write temp file in the SAME directory as abs   (os.CreateTemp(filepath.Dir(abs), ".moussa-*"))
+write temp file in the SAME directory as abs   (os.CreateTemp(filepath.Dir(abs), ".evie-*"))
 write out to it, close it, chmod it to info.Mode().Perm()
 os.Rename(temp, abs)     // atomic on the same filesystem
 on any failure before the rename: os.Remove(temp)
@@ -409,7 +409,7 @@ may fail outright), so a temp file in `/tmp` defeats the purpose.
 
 Then the live-fire from the spec's build steps:
 
-1. Ask moussa to read `~/.finance/merchantLookup.json` — this should
+1. Ask evie to read `~/.finance/merchantLookup.json` — this should
    **fail**, `~/.finance` is denied. Decide right then whether the
    denylist is too blunt: the db holds Plaid tokens, a JSON lookup table
    doesn't. Options are a file-level exception, or moving the lookup

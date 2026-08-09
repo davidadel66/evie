@@ -384,7 +384,7 @@ func TestWriteFileAtomicLeavesNoTempFiles(t *testing.T) {
 		}
 		var found []string
 		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), ".moussa-") {
+			if strings.HasPrefix(e.Name(), ".evie-") {
 				found = append(found, e.Name())
 			}
 		}

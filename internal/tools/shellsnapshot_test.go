@@ -19,7 +19,7 @@ func TestCaptureShell(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	rc := "alias moussatest='echo aliased'\nmoussafunc() { echo functioned; }\nexport MOUSSA_PROBE=1\n"
+	rc := "alias evietest='echo aliased'\neviefunc() { echo functioned; }\nexport EVIE_PROBE=1\n"
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(rc), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -37,10 +37,10 @@ func TestCaptureShell(t *testing.T) {
 	}
 	got := string(data)
 
-	if !strings.Contains(got, "moussatest") {
+	if !strings.Contains(got, "evietest") {
 		t.Errorf("snapshot missing the alias:\n%s", got)
 	}
-	if !strings.Contains(got, "moussafunc") {
+	if !strings.Contains(got, "eviefunc") {
 		t.Errorf("snapshot missing the function:\n%s", got)
 	}
 	if !strings.Contains(got, "export PATH=") {
@@ -60,7 +60,7 @@ func TestSnapshotDefinitionsAreUsable(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	rc := "alias moussatest='echo aliased'\nmoussafunc() { echo functioned; }\n"
+	rc := "alias evietest='echo aliased'\neviefunc() { echo functioned; }\n"
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(rc), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -73,8 +73,8 @@ func TestSnapshotDefinitionsAreUsable(t *testing.T) {
 	defer os.Remove(snap)
 
 	for _, tc := range []struct{ command, want string }{
-		{"moussatest", "aliased"},
-		{"moussafunc", "functioned"},
+		{"evietest", "aliased"},
+		{"eviefunc", "functioned"},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
 			script := "source " + shellQuote(snap) + " 2>/dev/null || true\neval " + shellQuote(tc.command) + "\n"

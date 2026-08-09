@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 // maxReadBytes caps a single read. The constraint isn't disk, it's the
@@ -247,7 +247,7 @@ func readFile(args string) (string, error) {
 func writeFileAtomic(abs string, data []byte, perm fs.FileMode) error {
 	dir := filepath.Dir(abs)
 
-	tmp, err := os.CreateTemp(dir, ".moussa-*")
+	tmp, err := os.CreateTemp(dir, ".evie-*")
 	if err != nil {
 		return fmt.Errorf("create temp file in %s: %w", dir, err)
 	}

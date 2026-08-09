@@ -33,6 +33,13 @@ Today there is **one tool (`todo`)**. The repo will grow to hold more over time.
 
 ## Current tools
 
+### `evie`
+The agent harness (`cmd/evie`, packages `internal/agent`, `internal/openrouter`,
+`internal/tools`, `internal/web`). No args runs the terminal REPL; `evie serve`
+runs the web UI on `127.0.0.1:6687`. Env: `OPENROUTER_API_KEY` (required),
+`EVIE_MODEL` (default `moonshotai/kimi-k3`), `EVIE_REASONING` (`on` default /
+`off` / `high` / `medium` / low — `off` omits the key entirely).
+
 ### `todo`
 A task manager. Full CRUD with stable, persisted IDs (a monotonic `NextID` counter, never reused), multiple named lists (via `TODO_NAME`), priorities and due dates (via flags), and JSON persistence in `~/.todo/`.
 

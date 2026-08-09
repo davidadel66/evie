@@ -14,7 +14,7 @@ import (
 
 // snapshotTimeout bounds capturing the user's shell environment. A shell
 // whose rc file hangs — waiting on a network call, a slow version manager
-// — must not hold moussa up; past this we fall back to a login shell.
+// — must not hold evie up; past this we fall back to a login shell.
 const snapshotTimeout = 10 * time.Second
 
 // A login shell (`-l`) loads .zprofile and .profile, which is enough for
@@ -59,7 +59,7 @@ func snapshot() string {
 // that reads .zshrc / .bashrc — and also why stderr is discarded: prompt
 // setup and job-control warnings are normal noise in that mode.
 func captureShell(shell string) (string, error) {
-	out, err := os.CreateTemp("", "moussa-shell-*.sh")
+	out, err := os.CreateTemp("", "evie-shell-*.sh")
 	if err != nil {
 		return "", fmt.Errorf("create snapshot file: %w", err)
 	}
@@ -74,7 +74,7 @@ func captureShell(shell string) (string, error) {
 
 	// An interactive shell does job control: it tries to take ownership of
 	// the controlling terminal. Run from a background goroutine that is not
-	// the foreground process group, that raises SIGTTOU and suspends moussa
+	// the foreground process group, that raises SIGTTOU and suspends evie
 	// itself — the whole REPL freezes at startup. Setsid puts the snapshot
 	// shell in a fresh session with no controlling terminal, so it has no
 	// terminal to fight over. Stdio goes nowhere for the same reason.

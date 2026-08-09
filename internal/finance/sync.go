@@ -282,7 +282,22 @@ func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed
 		}
 	}
 
+	// budget_entries.transaction_id REFERENCES transactions, so the child
+	// rows must go first or the parent delete fails with FOREIGN KEY
+	// constraint failed (787) — which is exactly what happened in
+	// production: a pending transaction that Plaid later removed had
+	// already been categorized, and the whole page (cursor included)
+	// rolled back on every subsequent sync, wedging that bank permanently.
+	//
+	// Deleting the entry is right, not merely expedient: a removed
+	// transaction is Plaid retracting a row that was never real, not David
+	// un-deciding a categorization. The posted replacement gets its own
+	// entry from the same rule on the next categorize run, at the final
+	// amount — keeping the old entry would double-count.
 	for _, id := range removed {
+		if _, err := tx.Exec(`DELETE FROM budget_entries WHERE transaction_id = ?`, id); err != nil {
+			return fmt.Errorf("delete budget entries for transaction %s: %w", id, err)
+		}
 		if _, err := tx.Exec(`DELETE FROM transactions WHERE transaction_id = ?`, id); err != nil {
 			return fmt.Errorf("delete transaction %s: %w", id, err)
 		}

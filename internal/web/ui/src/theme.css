@@ -1,0 +1,138 @@
+/* Fonts as the design specifies them: IBM Plex Sans for UI, IBM Plex Mono for
+   anything machine-authored (tool names, args, results), Caveat for the
+   whiteboard's handwriting. Loaded from Google Fonts — offline is a known gap.
+   Must precede the tailwind import: @import can't follow emitted rules. */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Caveat:wght@500;600&display=swap");
+@import "tailwindcss";
+@import "streamdown/styles.css";
+
+/* Streamdown ships Tailwind utility classes inside its compiled JS. Tailwind
+   v4 skips node_modules when scanning for classes, so its markup would render
+   unstyled without this. */
+@source "../node_modules/streamdown/dist";
+
+/* Design tokens from `Moussa App.dc.html`. Names are by role, not by hue, so
+   JSX never carries a raw hex and a retheme touches only this block. */
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-hand: "Caveat", cursive;
+
+  /* surfaces */
+  --color-app: #0e1113;
+  --color-topbar: #0b0e0f;
+  --color-card: #121618;
+  --color-bubble: #1b2225;
+  --color-code: #0b0e10;
+  --color-panel: #0f1312;
+  --color-artifact: #131a18;
+  --color-docked: #0c0f10;
+
+  /* borders */
+  --color-hair: #1d2326;
+  --color-hair-strong: #20272a;
+  --color-hair-bubble: #242c30;
+  --color-hair-input: #2a3336;
+
+  /* text */
+  --color-ink: #e2e6e3;
+  --color-body: #c9cfcb;
+  --color-body-dim: #c3cac6;
+  --color-muted: #8b9491;
+  --color-faint: #68716e;
+  --color-fainter: #5b6663;
+  --color-ghost: #4a5350;
+
+  /* teal — Evie's accent */
+  --color-teal: #4fb8a5;
+  --color-teal-hover: #6fd0be;
+  --color-teal-deep: #2b4a42;
+  --color-teal-deeper: #2f6b5d;
+  --color-teal-hair: #26433d;
+
+  /* amber — pending, attention */
+  --color-amber: #d9a04a;
+  --color-amber-ink: #e8c98a;
+  --color-amber-bg: #1b1810;
+  --color-amber-card: #141310;
+  --color-amber-hair: #2a2415;
+  --color-amber-hair-strong: #6b5527;
+
+  /* red — errors, removed lines */
+  --color-danger: #d96b6b;
+  --color-danger-ink: #d9a0a0;
+  --color-danger-ink-soft: #e0a3a3;
+  --color-danger-bg: #161113;
+  --color-danger-banner: #1c1113;
+  --color-danger-hair: #4a2a2e;
+  --color-danger-hair-soft: #3a2226;
+  --color-danger-gutter: #6b4a4a;
+
+  /* green — success, added lines */
+  --color-ok: #5fae7d;
+  --color-ok-ink: #a8d4b5;
+  --color-ok-gutter: #4a6b55;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--color-app);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+a {
+  color: var(--color-teal);
+}
+a:hover {
+  color: var(--color-teal-hover);
+}
+
+textarea {
+  outline: none;
+}
+
+/* Evie's pen marker on the whiteboard (feature 4) and the streaming caret. */
+@keyframes evepulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-hair-bubble);
+  border-radius: 5px;
+  border: 2px solid var(--color-app);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

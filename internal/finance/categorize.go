@@ -74,15 +74,15 @@ func RulesSeed(db *sql.DB, path string) error {
 }
 
 // Categorize mints a budget_entries row (full amount, one row per
-// transaction) for every transaction that doesn't have one yet.
+// transaction) for every POSTED transaction that doesn't have one yet.
 // Transactions whose legacy category column is already set — the old
 // system's output, including human decisions — get their entry from it,
 // preserving the source; bare transactions go through the rules table
-// with source 'rule'. "No entry yet" is the candidate filter, which
-// makes the pass idempotent (re-runs skip everything already entered)
-// and makes the legacy backfill automatic. Unmatched transactions stay
-// entry-less — that is the awaiting-review state. The legacy category
-// column is no longer written.
+// with source 'rule'. "Posted and no entry yet" is the candidate filter,
+// which makes the pass idempotent (re-runs skip everything already
+// entered) and makes the legacy backfill automatic. Unmatched
+// transactions stay entry-less — that is the awaiting-review state. The
+// legacy category column is no longer written.
 func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 
@@ -107,11 +107,19 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 		return 0, 0, fmt.Errorf("read rules: %w", err)
 	}
 
+	// Pending transactions are excluded: Plaid's normal lifecycle is to
+	// issue a pending row, then remove it and add a posted one when it
+	// settles. Categorizing the pending leg mints an entry at an amount
+	// that is often wrong (gas holds, unadded tips) and that sync then has
+	// to delete — so budget totals moved on their own and the delete
+	// wedged the sync. The posted transaction gets categorized on the next
+	// run; a day's lag beats an entry that is wrong and then vanishes.
 	txns, err := db.Query(`
 		SELECT t.transaction_id, COALESCE(t.merchant_name, ''), t.amount_cents,
 		       COALESCE(t.category, ''), COALESCE(t.category_source, 'rule')
 		FROM transactions t
-		WHERE NOT EXISTS (
+		WHERE t.pending = 0
+		  AND NOT EXISTS (
 			SELECT 1 FROM budget_entries e WHERE e.transaction_id = t.transaction_id
 		)`)
 	if err != nil {

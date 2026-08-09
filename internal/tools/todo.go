@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 // todoListTool describes todo_list to the model: read the current task

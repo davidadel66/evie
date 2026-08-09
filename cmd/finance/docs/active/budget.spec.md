@@ -4,7 +4,7 @@
 
 A monthly budget with per-category limits, kept current automatically:
 scheduled jobs sync transactions and auto-categorize the easy ones;
-anything uncertain accumulates awaiting review. David reviews in moussa
+anything uncertain accumulates awaiting review. David reviews in evie
 chat — the agent pulls the pending pile, proposes categories (including
 splits), writes back his decisions via the gated edit_db, and mints new
 rules from them. Monthly / on-demand analysis of spend vs budget.
@@ -60,7 +60,7 @@ once Categorize writes entries instead.
   their descriptions are the integration point. Dedicated tools only if
   the flows prove clumsy.
 - **Sync/categorize on a schedule** (cron capability, future); review
-  is async in moussa chat whenever David asks.
+  is async in evie chat whenever David asks.
 - **Reports are HTML**, monthly or on demand — built last.
 
 ## Build steps

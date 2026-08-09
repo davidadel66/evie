@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 // state: the model works in a project for a long stretch, and making it
 // re-pass cwd on every call is friction with no safety benefit — a shell
 // that can `cd` can reach anywhere regardless. Empty means "wherever
-// moussa was launched", which is what a subprocess inherits by default.
+// evie was launched", which is what a subprocess inherits by default.
 //
 // It reverses the "internal/tools is stateless" decision recorded in
 // file-tools.decisions.md; see bash.decisions.md for why.
@@ -48,7 +48,7 @@ var (
 // approval prompt and no path denylist — a shell walks around any fence
 // worth the name (`cat ~/.ssh/id_rsa` is one command), so pretending
 // otherwise would buy false confidence rather than safety. The defense is
-// that David reads what moussa is doing.
+// that David reads what evie is doing.
 var bashTool = openrouter.Tool{
 	Type: "function",
 	Function: openrouter.Function{
@@ -96,7 +96,7 @@ func shellPath() string {
 }
 
 // startDir decides where this command begins: an explicit cwd wins, then
-// whatever the previous command left behind, then moussa's own directory.
+// whatever the previous command left behind, then evie's own directory.
 // A remembered directory that has since been deleted is discarded rather
 // than passed to exec, which would fail every subsequent command.
 func startDir(explicit string) (string, error) {
@@ -157,7 +157,7 @@ func runBash(args string) (string, error) {
 	// The shell reports where it ended up through a temp file rather than
 	// through stdout, so a `cd` is observable without polluting the output
 	// the model reads.
-	pwdFile, err := os.CreateTemp("", "moussa-pwd-*")
+	pwdFile, err := os.CreateTemp("", "evie-pwd-*")
 	if err != nil {
 		return "", fmt.Errorf("create pwd file: %w", err)
 	}
@@ -181,7 +181,7 @@ func runBash(args string) (string, error) {
 	} else {
 		script.WriteString(params.Command + "\n")
 	}
-	fmt.Fprintf(&script, "__moussa_status=$?\npwd -P > %s 2>/dev/null\nexit $__moussa_status\n",
+	fmt.Fprintf(&script, "__evie_status=$?\npwd -P > %s 2>/dev/null\nexit $__evie_status\n",
 		shellQuote(pwdPath))
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -251,7 +251,7 @@ func capOutput(out []byte) string {
 		return string(out)
 	}
 
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("moussa-output-%d.txt", os.Getpid()))
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("evie-output-%d.txt", os.Getpid()))
 	note := fmt.Sprintf("\n\n[output trimmed: %d of %d characters shown", maxBashOutput, len(out))
 	if err := os.WriteFile(path, out, 0o600); err != nil {
 		note += "; the rest could not be saved]"

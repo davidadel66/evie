@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/davidadel66/moussa/internal/finance"
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/finance"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 // queryDBTool describes query_db to the model: free-form read-only SQL
@@ -26,14 +27,19 @@ Databases: "finance" — personal finance. Schema:
   categories(name)
   rules(id, merchant, category)
 
-Notes: amounts are integer cents. Spend per category = SUM(budget_entries.amount_cents) joined to transactions for the date. Awaiting-review transactions are those with NO budget_entries row. The items table is off-limits.`,
+Notes: amounts are integer cents. Spend per category = SUM(budget_entries.amount_cents) joined to transactions for the date. Awaiting-review transactions are those with NO budget_entries row. The items table is off-limits.
+
+Databases: "evie" — evie's own state. Schema:
+  jobs(id, name UNIQUE, schedule '5-field cron', command, created_at RFC3339 local, enabled INTEGER (always 1 in v1))
+  job_runs(id, job_id -> jobs.id, started_at, finished_at RFC3339 local, exit_code INTEGER (-1 = did not complete: could not start, or killed at timeout), output TEXT (combined stdout+stderr, capped 64KB))
+"Did my jobs run?" = job_runs joined to jobs; highest job_runs.id per job is the latest run. Rows outlive their job — job_runs keeps history for removed jobs.`,
 		Parameters: openrouter.Parameter{
 			Type:     "object",
 			Required: []string{"db", "query"},
 			Properties: map[string]openrouter.Property{
 				"db": {
 					Type:        "string",
-					Enum:        []string{"finance"},
+					Enum:        []string{"finance", "evie"},
 					Description: "Which registered database to query.",
 				},
 				"query": {
@@ -71,8 +77,10 @@ func queryDB(args string) (string, error) {
 			return "", fmt.Errorf("the items table is off-limits")
 		}
 		db, err = finance.OpenDBReadOnly()
+	case "evie":
+		db, err = eviedb.OpenDBReadOnly()
 	default:
-		return "", fmt.Errorf("unknown db %q — registered databases: finance", params.DB)
+		return "", fmt.Errorf("unknown db %q — registered databases: finance, evie", params.DB)
 	}
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)
@@ -149,8 +157,12 @@ func editDB(args string) (string, error) {
 			return "", fmt.Errorf("the items table is off-limits")
 		}
 		db, err = finance.OpenDB()
+	case "evie":
+		// A hand-edited jobs row would silently diverge from the launchd
+		// plist it was generated into — the cron tools keep both in step.
+		return "", fmt.Errorf("the evie db is read-only through edit_db — its jobs table is kept in sync with launchd by the cron tools; use cron_add/cron_remove instead")
 	default:
-		return "", fmt.Errorf("unknown db %q — registered databases: finance", params.DB)
+		return "", fmt.Errorf("unknown db %q — registered databases: finance, evie", params.DB)
 	}
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)

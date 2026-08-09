@@ -3,7 +3,7 @@
 Cross-feature decisions, newest first: date, what, why — a few lines each. Feature-scoped decisions belong in that feature's `docs/*/<feature>.decisions.md`.
 
 **2026-07-29 — Rich output goes to a web frontend, not desktop app or TUI graphics.**
-`moussa serve`: Go net/http + go:embed UI + WebSocket/SSE, a new cmd/ door. The frontend is web tech under any shell, so web-first keeps Wails wrapping open and adds phone-on-LAN for free. When it leaves localhost, the approval gate + an auth token become security-critical.
+`evie serve`: Go net/http + go:embed UI + WebSocket/SSE, a new cmd/ door. The frontend is web tech under any shell, so web-first keeps Wails wrapping open and adds phone-on-LAN for free. When it leaves localhost, the approval gate + an auth token become security-critical.
 
 **2026-07-29 — Tool roadmap ordered; typed tools coexist with bash.**
 When bash lands, CLI knowledge moves to prompt layers (training data, system-prompt paragraph, `help` self-discovery) — schemas don't transfer. High-traffic flows keep typed tools; bash serves the long tail. Todo tools are retirement candidates only after bash proves reliable.

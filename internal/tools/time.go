@@ -3,7 +3,7 @@ package tools
 import (
 	"time"
 
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 // getTimeTool describes get_time to the model: fetch the current local

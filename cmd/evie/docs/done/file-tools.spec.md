@@ -5,7 +5,7 @@
 Give the agent eyes and hands on the filesystem: `read_file` and
 `edit_file` in `internal/tools/file.go`. First customers: editing
 `~/.finance/merchantLookup.json` conversationally, reading/writing
-notes and configs. Long-term this is the seed of moussa doing real
+notes and configs. Long-term this is the seed of evie doing real
 work on code.
 
 ## Decisions (2026-07-29)

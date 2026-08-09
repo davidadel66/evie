@@ -136,7 +136,7 @@ func TestRunBash(t *testing.T) {
 	t.Run("a deleted session directory is discarded", func(t *testing.T) {
 		resetSessionCwd(t)
 
-		dir, err := os.MkdirTemp("", "moussa-gone-*")
+		dir, err := os.MkdirTemp("", "evie-gone-*")
 		if err != nil {
 			t.Fatalf("setup: %v", err)
 		}
@@ -221,7 +221,7 @@ func TestRunBash(t *testing.T) {
 }
 
 // resetSessionCwd clears the persistent working directory so a subtest
-// starts from moussa's own directory regardless of what ran before it.
+// starts from evie's own directory regardless of what ran before it.
 func resetSessionCwd(t *testing.T) {
 	t.Helper()
 	sessionCwdMu.Lock()

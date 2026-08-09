@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/davidadel66/moussa/internal/finance"
+	"github.com/davidadel66/evie/internal/finance"
 	"github.com/joho/godotenv"
 )
 

@@ -1,14 +1,18 @@
 package openrouter
 
+import "encoding/json"
+
 // Message is one entry in a conversation. The same struct covers all roles:
 // system and user messages fill Role and Content; an assistant turn that
 // requests tools carries ToolCalls; a tool result answers with Role "tool",
 // its Content, and the ToolCallID it is responding to.
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Role             string          `json:"role"`
+	Reasoning        string          `json:"reasoning,omitempty"`
+	ReasoningDetails json.RawMessage `json:"reasoning_details,omitempty"`
+	Content          string          `json:"content,omitempty"`
+	ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID       string          `json:"tool_call_id,omitempty"`
 }
 
 // Choice is one candidate completion in a response; we only ever use the
@@ -22,7 +26,8 @@ type Choice struct {
 // purpose: construction goes through NewClient so an empty key can never
 // reach request time.
 type Client struct {
-	apiKey string
+	apiKey  string
+	baseURL string
 }
 
 // Tool is the wire format for advertising one tool to the model. Type is
@@ -78,14 +83,24 @@ type ChatResponse struct {
 	Choices []Choice `json:"choices"`
 }
 
+// ReasoningConfig opts a request into reasoning. Effort ("low", "medium",
+// "high") implies enabled; Enabled alone asks for the provider's default.
+type ReasoningConfig struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	Effort  string `json:"effort,omitempty"`
+}
+
 // ChatRequest is the body of one chat-completions call: the full
 // conversation so far plus every tool the model is allowed to use.
-// Stream is set by ChatStream, never by callers.
+// Stream is set by ChatStream, never by callers. Reasoning is a pointer so
+// a nil omits the key entirely — a model without reasoning support must
+// see exactly the request it saw before this field existed.
 type ChatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Tools    []Tool    `json:"tools,omitempty"`
-	Stream   bool      `json:"stream,omitempty"`
+	Model     string           `json:"model"`
+	Messages  []Message        `json:"messages"`
+	Tools     []Tool           `json:"tools,omitempty"`
+	Stream    bool             `json:"stream,omitempty"`
+	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
 }
 
 // streamChunk is one SSE "data:" event in a streaming response. Deltas
@@ -95,9 +110,11 @@ type ChatRequest struct {
 type streamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Role      string          `json:"role"`
-			Content   string          `json:"content"`
-			ToolCalls []toolCallDelta `json:"tool_calls"`
+			Role             string            `json:"role"`
+			Content          string            `json:"content"`
+			ToolCalls        []toolCallDelta   `json:"tool_calls"`
+			Reasoning        string            `json:"reasoning"`
+			ReasoningDetails []json.RawMessage `json:"reasoning_details"`
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`

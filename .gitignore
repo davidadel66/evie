@@ -2,3 +2,9 @@
 .DS_Store
 
 cmd/finance/data/
+
+# Frontend: build output is embedded into the binary, never committed (a
+# committed placeholder gets clobbered by every build and dirties the tree).
+# Run `npm --prefix internal/web/ui run build` before `go build ./cmd/evie`.
+internal/web/ui/node_modules/
+internal/web/ui/dist/

@@ -80,7 +80,7 @@ personal CLI tool.
   silently decides whether `edit_file` succeeds). The first is fine, the
   second is still declined.
 - **Stray temp files on crash.** A crash between `CreateTemp` and
-  `Rename` leaves a `.moussa-*` file in the target's directory. No
+  `Rename` leaves a `.evie-*` file in the target's directory. No
   startup sweep; accepted cost of the pattern.
 - **`stripLineNumbers` false positive.** A file where *every* line
   legitimately reads `<digits><tab><text>` — a TSV, say — gets its first

@@ -26,7 +26,7 @@ func NewClient(key string) (*Client, error) {
 		return nil, errors.New("API key is empty")
 	}
 
-	return &Client{apiKey: key}, nil
+	return &Client{apiKey: key, baseURL: "https://openrouter.ai/api/v1/chat/completions"}, nil
 }
 
 // ChatStream sends one chat-completions request with streaming enabled,
@@ -37,14 +37,21 @@ func NewClient(key string) (*Client, error) {
 // fragments are reassembled by index; OpenRouter's ": ..." keepalive
 // comment lines are skipped per the SSE spec; the stream ends at the
 // "[DONE]" sentinel.
-func (c *Client) ChatStream(r ChatRequest, onDelta func(string)) (ChatResponse, error) {
+// StreamHandlers carries the live callbacks ChatStream invokes as fragments
+// arrive. A zero StreamHandlers streams nothing and assembles normally.
+type StreamHandlers struct {
+	OnContent   func(string)
+	OnReasoning func(string)
+}
+
+func (c *Client) ChatStream(r ChatRequest, h StreamHandlers) (ChatResponse, error) {
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to build request: %w", err)
 	}
@@ -65,6 +72,7 @@ func (c *Client) ChatStream(r ChatRequest, onDelta func(string)) (ChatResponse, 
 
 	var (
 		msg          Message
+		details      []json.RawMessage
 		finishReason string
 		gotChunk     bool
 	)
@@ -94,9 +102,20 @@ func (c *Client) ChatStream(r ChatRequest, onDelta func(string)) (ChatResponse, 
 
 		if choice.Delta.Content != "" {
 			msg.Content += choice.Delta.Content
-			if onDelta != nil {
-				onDelta(choice.Delta.Content)
+			if h.OnContent != nil {
+				h.OnContent(choice.Delta.Content)
 			}
+		}
+
+		if choice.Delta.Reasoning != "" {
+			msg.Reasoning += choice.Delta.Reasoning
+			if h.OnReasoning != nil {
+				h.OnReasoning(choice.Delta.Reasoning)
+			}
+		}
+
+		if len(choice.Delta.ReasoningDetails) != 0 {
+			details = append(details, choice.Delta.ReasoningDetails...)
 		}
 		for _, tcd := range choice.Delta.ToolCalls {
 			for len(msg.ToolCalls) <= tcd.Index {
@@ -125,6 +144,13 @@ func (c *Client) ChatStream(r ChatRequest, onDelta func(string)) (ChatResponse, 
 		return ChatResponse{}, errors.New("stream contained no chunks")
 	}
 
+	if len(details) > 0 {
+		msg.ReasoningDetails, err = json.Marshal(details)
+		if err != nil {
+			return ChatResponse{}, fmt.Errorf("failed to marshal reasoning details: %w", err)
+		}
+	}
+
 	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}}, nil
 }
 
@@ -139,7 +165,7 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to send request: %w", err)
 	}

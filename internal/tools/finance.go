@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/davidadel66/moussa/internal/finance"
-	"github.com/davidadel66/moussa/internal/openrouter"
+	"github.com/davidadel66/evie/internal/finance"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 // financeSyncTool describes finance_sync to the model: pull new
