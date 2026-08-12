@@ -155,7 +155,7 @@ func New(client Client, model string) *Session {
 		messages: []openrouter.Message{
 			{
 				Role:    "system",
-				Content: "You're name is Evie - A helpful assistant to David with the intent to be his personal 'jarvis'",
+				Content: systemPrompt,
 			},
 		},
 	}
