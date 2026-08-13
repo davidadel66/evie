@@ -1,0 +1,23 @@
+{
+  "playabilityStatus": {"status": "OK"},
+  "videoDetails": {
+    "videoId": "dQw4w9WgXcQ",
+    "title": "Fixture video",
+    "channelId": "UCaaaaaaaaaaaaaaaaaaaaaa",
+    "author": "Fixture Channel",
+    "lengthSeconds": "123",
+    "isLiveContent": false
+  },
+  "microformat": {"playerMicroformatRenderer": {
+    "publishDate": "2026-08-01",
+    "ownerProfileUrl": "https://www.youtube.com/@FixtureChannel",
+    "liveBroadcastDetails": {"isLiveNow": false}
+  }},
+  "captions": {"playerCaptionsTracklistRenderer": {"captionTracks": [
+    {"baseUrl": "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&fmt=srv3&sig=signed%2Bvalue", "name": {"simpleText": "English generated"}, "languageCode": "en", "kind": "asr"},
+    {"baseUrl": "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&fmt=vtt&sig=signed%2Bvalue", "name": {"simpleText": "English"}, "languageCode": "en"},
+    {"baseUrl": "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&sig=gb", "name": {"simpleText": "English (UK)"}, "languageCode": "en-GB", "kind": "asr"},
+    {"baseUrl": "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&sig=us", "name": {"simpleText": "English (US)"}, "languageCode": "en-US"},
+    {"baseUrl": "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&sig=fr", "name": {"simpleText": "Français"}, "languageCode": "fr", "kind": "asr"}
+  ]}}
+}

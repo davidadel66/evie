@@ -1,0 +1,8 @@
+{
+  "events": [
+    {"tStartMs": 0, "dDurationMs": 1000, "segs": [{"utf8": "  Hello "}, {"utf8": "world  "}]},
+    {"tStartMs": 1000, "segs": [{"utf8": " [Music] "}]},
+    {"tStartMs": 2000, "segs": [{"utf8": "   "}, {}]},
+    {"tStartMs": 3000, "segs": [{"utf8": "Keep"}, {"utf8": " cues"}]}
+  ]
+}

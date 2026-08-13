@@ -9,7 +9,7 @@ A personal collection of small Go command-line tools, built by David. It serves 
 1. **Learning Go.** David is using these tools as hands-on practice to get fluent in Go — language idioms, the standard library, project structure, error handling, etc.
 2. **Building a useful CLI toolkit.** Each tool is meant to be genuinely useful day-to-day, installed on `PATH`, and — longer term — usable by an **agent/harness as a tool** (an agent shells out to `todo add ...`, `todo list`, etc.). The tools are being designed to be scriptable and composable with that future in mind.
 
-Today there is **one tool (`todo`)**. The repo will grow to hold more over time.
+Today the repo contains the `evie`, `todo`, `finance`, and `ytscribe` binaries.
 
 ## How to work with David here (IMPORTANT)
 
@@ -23,8 +23,8 @@ Today there is **one tool (`todo`)**. The repo will grow to hold more over time.
 
 ## Conventions
 
-- **Build / install:** `go build -o ~/go/bin/todo .` — compiles and drops the binary in `~/go/bin` (on PATH). The installed binary is a snapshot; rerun this after any change you want live. This is the "deploy" step. Don't leave stray binaries in the source dir.
-- **Data location:** tools store state in `~/.todo/<name>.json` (JSON, human-readable). The source directory stays clean — only code lives here.
+- **Build / install:** build a command from the repo root with `go build -o ~/go/bin/<name> ./cmd/<name>`. The installed binary is a snapshot; rerun this after any change you want live. This is the "deploy" step. Don't leave stray binaries in the source dir.
+- **Data location:** each tool owns state under its documented home directory (`~/.todo`, `~/.finance`, or `~/.evie`). The source directory stays clean — only code lives here.
 - **Config via env vars with defaults:** e.g. `TODO_NAME` / `TODO_DIR` select which list, falling back to sensible defaults so the common case needs zero config. Prefer this over flags for ambient config, since flags fight subcommand layout.
 - **CLI shape:** `tool <command> [args] [--flags]`. Dispatch on `os.Args[1]` with a `switch`; per-subcommand `flag.NewFlagSet` for optional flags; keep required values positional.
 - **Separation of concerns:** data/domain methods (`Add`, `Delete`, `Save`, …) change state and stay silent — return errors instead of printing. The CLI/`main` layer owns all user-facing output. This keeps the core reusable (including by an agent).
@@ -49,6 +49,18 @@ Commands: `list`, `add <title> [--priority N] [--due YYYY-MM-DD] [--desc text]`,
 Personal finance tool backed by Plaid + SQLite (`~/.finance/finance.db`, tables `items` + `transactions`; access tokens live there, file is 0600). Env: `PLAID_CLIENT_ID` / `PLAID_SECRET` (loaded from repo-root `.env`).
 
 Commands: `link` (hosted Plaid Link flow, saves item + access token), `sync` (incremental `/transactions/sync` per linked bank, cursor-based, atomic per page), `db` (sanity check). Decisions and gotchas: `cmd/finance/docs/done/sync.decisions.md`.
+
+### `ytscribe`
+YouTube transcript library backed by SQLite + FTS5 at
+`~/.evie/transcripts/transcripts.db`. It fetches public captions through the
+YouTube web protocol, caches successful transcripts and terminal outcomes, and
+can copy the legacy scraper corpus without modifying it.
+
+Commands: `fetch [--language en] [--refresh] <video>`,
+`scrape [--language en] [--limit N] [--delay 1.5s] <channel>`,
+`import [--language en] <root>`, `help`. Evie exposes the same high-traffic
+flows as `youtube_transcript` and bounded `youtube_scrape_channel` tools;
+`query_db` registers the transcript database read-only.
 
 ## Future direction
 

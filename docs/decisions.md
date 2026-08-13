@@ -2,6 +2,11 @@
 
 Cross-feature decisions, newest first: date, what, why — a few lines each. Feature-scoped decisions belong in that feature's `docs/*/<feature>.decisions.md`.
 
+**2026-08-13 — SQLite `mode=ro` does not make free-form SQL side-effect free.**
+It protects the main database, but a multi-statement query can `ATTACH` and
+write another file. Any model-facing read-only SQL surface must also enforce a
+single read statement and fence attachment/other side-effecting operations.
+
 **2026-07-29 — Rich output goes to a web frontend, not desktop app or TUI graphics.**
 `evie serve`: Go net/http + go:embed UI + WebSocket/SSE, a new cmd/ door. The frontend is web tech under any shell, so web-first keeps Wails wrapping open and adds phone-on-LAN for free. When it leaves localhost, the approval gate + an auth token become security-critical.
 

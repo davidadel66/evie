@@ -61,6 +61,8 @@ var all = []Tool{
 	{Schema: financeSyncTool, Execute: financeSync},
 	{Schema: financeRulesTool, Execute: financeRules},
 	{Schema: financeCategorizeTool, Execute: financeCategorize},
+	{Schema: youtubeTranscriptTool, Execute: youtubeTranscript},
+	{Schema: youtubeScrapeChannelTool, Execute: youtubeScrapeChannel},
 	{Schema: queryDBTool, Execute: queryDB},
 	{Schema: editDBTool, Execute: editDB, NeedsApproval: true},
 	{Schema: readFileTool, Execute: readFile},
