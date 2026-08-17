@@ -1,5 +1,28 @@
 # memory - decisions
 
+- **2026-08-17 - research topics are an optional first-class scope after the core feature.**
+  A sustained inquiry should not require a fake code-project root or pollute
+  global memory. Optional Stage 10 adds registered `research:<id>` workspaces.
+  Research sessions retrieve only their own session, topic, and eligible global
+  claims; topic-to-global promotion is explicit. This extends, rather than
+  weakens, the existing project/session isolation model.
+
+- **2026-08-17 - research artifacts are inspectable files; research claims remain SQLite state.**
+  Each topic may expose a manifest plus source, note, and output directories.
+  SQLite owns registry metadata and generates the manifest. Every ingested source
+  has a mandatory immutable content-addressed evidence version; workspace edits
+  create new versions. Hashes, authority, candidates, temporal claims, and
+  provenance remain in SQLite. Outputs and graph exports are compiler-ineligible
+  by default. Referenced evidence remains retained until an explicit future
+  hard-erasure policy permits deletion; optional Git history and limits for
+  unreferenced artifacts remain Stage 10 decisions.
+
+- **2026-08-17 - research access uses the same scope and egress fences as memory.**
+  Project and research bindings are mutually exclusive. Generic file tools cannot
+  access `~/.evie/research`; typed APIs bind the current topic and apply remote
+  opt-in, secret scanning, and untrusted-data rendering. Research extraction may
+  write only its topic; global promotion is explicit and approved.
+
 - **2026-08-14 - semantic memory is a temporal property graph in SQLite.**
   This supersedes the 2026-08-12 decisions that made Git-backed documents the
   semantic source of truth and deferred graph/vector retrieval. Reified claims,

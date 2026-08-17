@@ -1,5 +1,7 @@
 .env
 .DS_Store
+/experiments/
+.letta/
 
 cmd/finance/data/
 

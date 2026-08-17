@@ -29,7 +29,8 @@ The first release is single-owner and local-machine only. It does not add user
 accounts, authentication, cloud sync, backups, session branching, inherited
 parent-session memory, implicit cross-project imports, a remote graph service, or
 a provider-neutral replacement for the current OpenRouter conversational client.
-Hard erasure is deferred separately from reversible retirement.
+First-class research-topic workspaces are deferred to optional Stage 10. Hard
+erasure is deferred separately from reversible retirement.
 
 ## Recommendation
 
@@ -281,6 +282,61 @@ Source authority is explicit and ordered for conflict handling:
 
 This ordering is a policy input, not a relevance score. A semantically similar
 external document cannot overwrite a direct user correction.
+
+### Optional research-topic scope
+
+Stage 10 may add research workspaces without pretending every sustained inquiry
+is a code project. A research topic has a random stable ID, title, archive state,
+timestamps, and no required project root. Stage 10 extends `ScopeContext` with a
+discriminated `global | project | research` binding: project ID and research ID
+are mutually exclusive, and a research session binds immutably to one
+`research:<id>` scope.
+
+When enabled, its boundaries are exact:
+
+- retrieval: `session:<id>` plus one `research:<id>` plus eligible `global`;
+- default writes: the bound `research:<id>`;
+- excluded: every project and other research topic;
+- promotion: research to global requires an explicit typed operation;
+- graph references: research claims may reference global or same-topic entities,
+  while session claims may additionally reference same-session entities;
+- mutation: research jobs cannot create or mutate global/project entities,
+  aliases, summaries, claims, or links except through approved promotion;
+- traversal: global/traversable edges cannot point into a private research scope.
+
+The optional user-visible artifact workspace is separate from semantic truth:
+
+```text
+~/.evie/research/
+  .objects/sha256/     immutable retained source versions
+  <research-id>/
+    manifest.md        generated ID/title/scope/source-policy projection
+    brief.md           user-authored questions and research goals
+    sources/           imported papers, pages, and datasets
+    notes/             user and assistant working notes
+    outputs/           reports and generated artifacts
+```
+
+SQLite is authoritative for research registry metadata and generates the
+read-only manifest. The manifest and brief are budgeted context for that research
+session; other files are loaded on demand through scope-bound research APIs.
+Generic file tools reject the entire research root. Model-facing research reads
+use the same remote-memory opt-in, secret scan, source taint, and untrusted-data
+rendering as semantic retrieval; direct local inspection remains available.
+
+Each ingestion event owns or content-addressably references an immutable retained
+copy of the exact bytes and extracted text used as evidence. Editing a workspace
+file creates a new source version and never rewrites prior evidence. SQLite stores
+its hash, actor/authority, URL or path, ingestion timestamp, candidates, accepted
+claims, temporal state, and provenance. Assistant notes and external sources
+remain lower-authority evidence and cannot silently become global facts.
+Evidence versions referenced by any event, candidate, claim, or accepted operation
+remain retained; routine pruning may remove only unreferenced workspace copies.
+Deleting referenced evidence requires the future hard-erasure policy.
+`outputs/` and generated graph exports are compiler-ineligible by default;
+explicit re-ingestion preserves root-source lineage and cannot increase authority
+or count as independent corroboration. Graph exports remain read-only projections,
+never a second semantic source of truth.
 
 ## Semantic Graph Model
 
@@ -599,8 +655,9 @@ and commit the semantic operation, graph transitions, FTS, vector job, revision,
 and job completion atomically under the lease fence; the vector job is included
 only when an embedding generation is enabled.
 
-The compiler never writes global scope from a project job unless the source is an
-explicit global promotion operation.
+The compiler never writes global scope from a project or research job unless the
+source is an explicit approved global promotion operation. A research job also
+cannot write any project scope.
 
 ### Local inference boundary
 
@@ -1111,6 +1168,47 @@ memory operations as the REPL.
 
 **Done when:** changing a memory policy produces a comparable before/after report.
 
+### Optional Stage 10 - Research-topic workspaces
+
+**Goal:** support durable, isolated research programs that are not tied to code
+project roots.
+
+**Tasks:**
+
+- decide whether Git supplements mandatory immutable content-addressed evidence
+  versions and record limits for unreferenced artifacts before implementation;
+- add the research registry and harness-owned `research:<id>` session scope;
+- enforce a global/project/research scope discriminator and reference matrix in
+  storage constraints and typed operations;
+- initialize research roots/directories as `0700` and managed regular files as
+  `0600`; reject or quarantine permissive, symlinked, or non-regular paths;
+- fence the research root from generic file tools and expose only scope-bound,
+  opt-in-gated, secret-scanned typed research reads/writes;
+- ingest local files, fetched pages, and structured datasets as hashed source
+  events with immutable retained content, actor, URL/path, timestamp, and
+  authority;
+- reuse the existing `web_fetch` URL/credential/redirect/timeout/byte fences,
+  bound regular-file ingestion by size, and approve an allowlist of source formats
+  before enabling import;
+- compile source-linked entities and claim candidates through the existing local
+  compiler rather than a separate factual pipeline;
+- exclude outputs/exports from compilation and preserve root lineage on explicit
+  re-ingestion;
+- add create/select/archive, source inspection, citation, promotion, and export
+  operations to the REPL and web UI;
+- test isolation across two research topics, projects, global memory, and session
+  memory, including prompt injection and stale-source updates;
+- evaluate research retrieval and grounded report generation against versioned
+  citation-bearing fixtures.
+
+**Go lesson:** optional domain extensions, content-addressed artifacts, provenance
+boundaries, scoped retrieval, and reusing a pipeline without collapsing distinct
+concepts into one abstraction.
+
+**Done when:** a research session survives restart, retrieves only its topic plus
+eligible global memory, produces a report whose claims trace to source artifacts,
+and promotes a conclusion globally only through explicit approval.
+
 ## Anticipated Package Seams
 
 ```text
@@ -1136,6 +1234,7 @@ internal/memory/
   embeddings.go        local embedder/vector index interfaces
   procedural.go        Git-backed reviewed procedures
   worker.go            bounded background coordinator
+  research.go          optional research registry/artifact workspace
 
 internal/tools/
   memory.go            scoped explicit memory operations
@@ -1196,6 +1295,9 @@ These remain explicit until the relevant stage:
 7. What graph depth and token budget should retrieval use by default?
 8. How will the web UI select and display active project scope?
 9. What hard-erasure semantics should a future `forget` feature provide?
+10. Should optional research workspaces add Git history on top of mandatory
+    immutable content-addressed evidence, what limits apply to unreferenced
+    artifacts, and which source formats need first-class ingestion?
 
 ## References
 
