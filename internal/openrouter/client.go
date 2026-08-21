@@ -10,6 +10,7 @@ package openrouter
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,14 +45,19 @@ type StreamHandlers struct {
 	OnReasoning func(string)
 }
 
-func (c *Client) ChatStream(r ChatRequest, h StreamHandlers) (ChatResponse, error) {
+func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers) (ChatResponse, error) {
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL,
+		bytes.NewReader(jsonBody),
+	)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to build request: %w", err)
 	}

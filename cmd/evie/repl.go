@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -135,7 +136,7 @@ func runREPL(session *agent.Session) {
 		if !scanner.Scan() {
 			break
 		}
-		if err := session.Send(scanner.Text(), ev, approve); err != nil {
+		if err := session.Send(context.Background(), scanner.Text(), ev, approve); err != nil {
 			fmt.Printf("request failed: %v\n", err)
 		}
 	}

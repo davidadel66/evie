@@ -6,11 +6,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
@@ -47,7 +49,24 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to create client: %v", err)
 		}
-		return agent.New(client, "")
+
+		db, err := eviedb.OpenDB()
+		if err != nil {
+			log.Fatalf("failed to open Evie database: %v", err)
+		}
+		store := eviedb.NewStore(db)
+
+		storedSession, err := store.CreateGlobalSession(context.Background())
+		if err != nil {
+			log.Fatalf("failed to create session: %v", err)
+		}
+
+		return agent.New(
+			client,
+			"",
+			store.BindHistory(storedSession.ID),
+			storedSession.ScopeContext(),
+		)
 	}
 
 	switch cmd {

@@ -1,12 +1,15 @@
 package openrouter
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // serveFixture builds a local SSE server replaying one captured stream,
@@ -35,7 +38,7 @@ func TestChatStreamAssemblesReasoning(t *testing.T) {
 	c := serveFixture(t, "testdata/kimi-reasoning-stream.txt")
 
 	var contentFrags, reasoningFrags []string
-	res, err := c.ChatStream(ChatRequest{Model: "test"}, StreamHandlers{
+	res, err := c.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{
 		OnContent:   func(s string) { contentFrags = append(contentFrags, s) },
 		OnReasoning: func(s string) { reasoningFrags = append(reasoningFrags, s) },
 	})
@@ -102,7 +105,7 @@ func TestChatStreamWithoutReasoning(t *testing.T) {
 	c.baseURL = srv.URL
 
 	reasoningCalled := false
-	res, err := c.ChatStream(ChatRequest{Model: "test"}, StreamHandlers{
+	res, err := c.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{
 		OnReasoning: func(string) { reasoningCalled = true },
 	})
 	if err != nil {
@@ -123,5 +126,44 @@ func TestChatStreamWithoutReasoning(t *testing.T) {
 	}
 	if reasoningCalled {
 		t.Error("OnReasoning fired on a stream with no reasoning")
+	}
+}
+
+func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-release
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient("test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	c.baseURL = srv.URL
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.ChatStream(ctx, ChatRequest{Model: "test"}, StreamHandlers{})
+		done <- err
+	}()
+
+	<-started
+	cancel()
+
+	var gotErr error
+	select {
+	case err := <-done:
+		gotErr = err
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("ChatStream did not stop after context cancellation")
+	}
+	close(release)
+	if !errors.Is(gotErr, context.Canceled) {
+		t.Fatalf("ChatStream error = %v, want context.Canceled", gotErr)
 	}
 }

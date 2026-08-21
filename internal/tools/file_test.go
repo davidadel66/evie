@@ -172,6 +172,20 @@ func TestResolvePath(t *testing.T) {
 		{name: "finance dir is deliberately open", in: "~/.finance/merchantLookup.json", want: filepath.Join(home, ".finance", "merchantLookup.json")},
 		{name: "file merely containing env in its name is allowed", in: "/tmp/environment.md", want: "/tmp/environment.md"},
 
+		// Allowed near-miss.
+		{
+			name: "evie database near-miss is allowed",
+			in:   filepath.Join(home, ".evie", "evie.db.backup"),
+			want: filepath.Join(home, ".evie", "evie.db.backup"),
+		},
+
+		// Rejected: memory-owned storage.
+		{name: "evie database is fenced", in: filepath.Join(home, ".evie", "evie.db"), wantErr: true},
+		{name: "evie WAL is fenced", in: filepath.Join(home, ".evie", "evie.db-wal"), wantErr: true},
+		{name: "evie shared memory is fenced", in: filepath.Join(home, ".evie", "evie.db-shm"), wantErr: true},
+		{name: "procedural root is fenced", in: filepath.Join(home, ".evie", "procedural"), wantErr: true},
+		{name: "procedural descendants are fenced", in: filepath.Join(home, ".evie", "procedural", "system", "user.md"), wantErr: true},
+
 		// Rejected: bad input.
 		{name: "empty path errors", in: "", wantErr: true},
 		{name: "whitespace-only path errors", in: "   ", wantErr: true},
@@ -371,6 +385,44 @@ func TestEditFile(t *testing.T) {
 			t.Errorf("perm = %o, want 600", got)
 		}
 	})
+}
+
+func TestResolvePathRejectsSymlinksToMemoryStorage(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	targets := []struct {
+		name string
+		path string
+	}{
+		{
+			name: "database",
+			path: filepath.Join(home, ".evie", "evie.db"),
+		},
+		{
+			name: "procedural file",
+			path: filepath.Join(home, ".evie", "procedural", "system", "user.md"),
+		},
+	}
+
+	for _, tt := range targets {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.MkdirAll(filepath.Dir(tt.path), 0o700); err != nil {
+				t.Fatalf("create target directory: %v", err)
+			}
+			if err := os.WriteFile(tt.path, []byte("private"), 0o0600); err != nil {
+				t.Fatalf("create target: %v", err)
+			}
+
+			link := filepath.Join(t.TempDir(), "innocent-looking-file")
+			if err := os.Symlink(tt.path, link); err != nil {
+				t.Fatalf("create symlink: %v", err)
+			}
+			if got, err := resolvePath(link); err == nil {
+				t.Fatalf("resolvePath(%q) = %q, want an error", link, got)
+			}
+		})
+	}
 }
 
 func TestPreparedFileEditRejectsStalePreview(t *testing.T) {

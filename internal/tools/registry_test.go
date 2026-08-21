@@ -143,3 +143,81 @@ func TestExecuteWithUnknownTool(t *testing.T) {
 		t.Fatalf("unknown-tool reply lost the call id, got %q", msg.ToolCallID)
 	}
 }
+
+func TestExecuteWithApprovalObservesDecisionBeforeExecution(t *testing.T) {
+	observed := false
+	ranAfterObservation := false
+	extra := extraTool("dangerous", true, func(args string) (string, error) {
+		ranAfterObservation = observed
+		return "ran", nil
+	})
+	approve := func(name, args string, _ *FileChangePreview) Decision { return Approved }
+	observe := func(decision Decision) error {
+		if decision != Approved {
+			t.Fatalf("observed decision = %v, want Approved", decision)
+		}
+		observed = true
+		return nil
+	}
+
+	msg, isErr, err := ExecuteWithApproval(
+		[]Tool{extra}, callFor("dangerous", "{}"), approve, observe,
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithApproval: %v", err)
+	}
+	if isErr || msg.Content != "ran" || !ranAfterObservation {
+		t.Fatalf("result = (%+v, isErr=%v), ran after observation=%v", msg, isErr, ranAfterObservation)
+	}
+}
+
+func TestExecuteWithApprovalObserverFailurePreventsExecution(t *testing.T) {
+	ran := false
+	extra := extraTool("dangerous", true, func(args string) (string, error) {
+		ran = true
+		return "must not run", nil
+	})
+	approve := func(name, args string, _ *FileChangePreview) Decision { return Approved }
+
+	_, _, err := ExecuteWithApproval(
+		[]Tool{extra},
+		callFor("dangerous", "{}"),
+		approve,
+		func(Decision) error { return errors.New("persist approval: disk full") },
+	)
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("observer error = %v, want disk full", err)
+	}
+	if ran {
+		t.Fatal("tool ran after approval observer failed")
+	}
+}
+
+func TestExecuteWithApprovalObservesDecline(t *testing.T) {
+	ran := false
+	extra := extraTool("dangerous", true, func(args string) (string, error) {
+		ran = true
+		return "must not run", nil
+	})
+	var observed Decision
+	observedDecision := false
+
+	msg, isErr, err := ExecuteWithApproval(
+		[]Tool{extra},
+		callFor("dangerous", "{}"),
+		func(name, args string, _ *FileChangePreview) Decision { return Declined },
+		func(decision Decision) error {
+			observed = decision
+			observedDecision = true
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithApproval: %v", err)
+	}
+	if !observedDecision || observed != Declined || ran || isErr ||
+		!strings.Contains(msg.Content, "David declined") {
+		t.Fatalf("decision observed=%v/%v, ran=%v, result=(%+v, %v)",
+			observedDecision, observed, ran, msg, isErr)
+	}
+}

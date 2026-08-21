@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
 )
@@ -18,6 +21,7 @@ type fakeClient struct {
 	reqs    []openrouter.ChatRequest
 	entered chan struct{} // signaled when ChatStream is reached
 	release chan struct{} // if non-nil, ChatStream waits on it
+	onCall  func()
 }
 
 type step struct {
@@ -27,7 +31,49 @@ type step struct {
 	err       error
 }
 
-func (f *fakeClient) ChatStream(req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+type fakeHistory struct {
+	events         []memory.Event
+	appendAttempts int
+	appendErrAt    int
+	appendErr      error
+}
+
+func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+	f.appendAttempts++
+	if f.appendErr != nil && (f.appendErrAt == 0 || f.appendAttempts == f.appendErrAt) {
+		return memory.Event{}, f.appendErr
+	}
+	event := memory.Event{
+		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
+		SessionID:     memory.SessionID("test-session"),
+		Sequence:      int64(len(f.events) + 1),
+		ParentID:      input.ParentID,
+		Type:          input.Type,
+		Role:          input.Role,
+		ExecutionID:   input.ExecutionID,
+		Content:       input.Content,
+		Payload:       append([]byte(nil), input.Payload...),
+		FormatVersion: 1,
+	}
+	f.events = append(f.events, event)
+	return event, nil
+}
+
+func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
+	return append([]memory.Event(nil), f.events...), nil
+}
+
+func newTestSession(client Client, model string) *Session {
+	return New(client, model, &fakeHistory{}, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: memory.SessionID("test-session"),
+	})
+}
+
+func (f *fakeClient) ChatStream(_ context.Context, req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	if f.onCall != nil {
+		f.onCall()
+	}
 	if f.entered != nil {
 		f.entered <- struct{}{}
 	}
@@ -51,6 +97,273 @@ func (f *fakeClient) ChatStream(req openrouter.ChatRequest, h openrouter.StreamH
 		}
 	}
 	return s.res, s.err
+}
+
+func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
+	history := &fakeHistory{}
+	providerSawUser := false
+	c := &fakeClient{steps: []step{assistantStep("done", nil)}}
+	c.onCall = func() {
+		providerSawUser = len(history.events) == 1 &&
+			history.events[0].Type == memory.EventUserMessage &&
+			history.events[0].Role == memory.RoleUser &&
+			history.events[0].Content == "hello"
+	}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	if err := s.Send(context.Background(), "hello", &recorder{}, nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !providerSawUser {
+		t.Fatal("provider was called before the user event was durable")
+	}
+}
+
+func TestSendStopsWhenUserEventAppendFails(t *testing.T) {
+	history := &fakeHistory{appendErr: errors.New("disk full")}
+	c := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	err := s.Send(context.Background(), "hello", &recorder{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Send error = %v, want durable append failure", err)
+	}
+	if len(c.reqs) != 0 {
+		t.Fatalf("provider received %d requests after append failure", len(c.reqs))
+	}
+}
+
+func TestSendPersistsAssistantBeforeToolExecution(t *testing.T) {
+	history := &fakeHistory{}
+	intentWasDurable := false
+	tool := echoTool("echo", false, nil)
+	tool.Execute = func(args string) (string, error) {
+		if len(history.events) != 3 || history.events[1].Type != memory.EventAssistantMessage ||
+			history.events[2].Type != memory.EventToolIntent ||
+			history.events[2].ParentID != history.events[1].ID || history.events[2].ExecutionID == "" {
+			return "echo:" + args, nil
+		}
+		var payload memory.ToolIntentPayload
+		if err := json.Unmarshal(history.events[2].Payload, &payload); err == nil &&
+			payload.Call.ID == "call-1" && payload.Call.Name == "echo" &&
+			payload.Call.Arguments == `{"x":1}` {
+			intentWasDurable = true
+		}
+		return "echo:" + args, nil
+	}
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "echo", `{"x":1}`)),
+		assistantStep("done", nil),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	if err := s.Send(context.Background(), "go", &recorder{}, nil, tool); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !intentWasDurable {
+		t.Fatal("tool executed before its intent was durable")
+	}
+	if len(history.events) < 5 {
+		t.Fatalf("durable turn events = %+v", history.events)
+	}
+	intentEvent := history.events[2]
+	outcomeEvent := history.events[3]
+	if outcomeEvent.Type != memory.EventToolSucceeded || outcomeEvent.Role != memory.RoleTool ||
+		outcomeEvent.ParentID != intentEvent.ID || outcomeEvent.ExecutionID != intentEvent.ExecutionID ||
+		outcomeEvent.Content != `echo:{"x":1}` {
+		t.Errorf("tool outcome event = %+v, intent = %+v", outcomeEvent, intentEvent)
+	}
+	var outcomePayload memory.ToolResultPayload
+	if err := json.Unmarshal(outcomeEvent.Payload, &outcomePayload); err != nil ||
+		outcomePayload.ToolCallID != "call-1" || outcomePayload.IsError {
+		t.Errorf("tool outcome payload = %+v, error = %v", outcomePayload, err)
+	}
+	last := history.events[len(history.events)-1]
+	if last.Type != memory.EventAssistantMessage || last.Content != "done" {
+		t.Errorf("durable turn events = %+v", history.events)
+	}
+}
+
+func TestSendStopsWhenAssistantEventAppendFails(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2, appendErr: errors.New("disk full")}
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Send error = %v, want assistant append failure", err)
+	}
+	if ran {
+		t.Fatal("tool executed after assistant append failure")
+	}
+}
+
+func TestSendStopsWhenToolIntentAppendFails(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 3, appendErr: errors.New("disk full")}
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Send error = %v, want tool intent append failure", err)
+	}
+	if ran {
+		t.Fatal("tool executed after intent append failure")
+	}
+}
+
+func TestSendStopsWhenToolOutcomeAppendFails(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 4, appendErr: errors.New("disk full")}
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Send error = %v, want tool outcome append failure", err)
+	}
+	if !ran {
+		t.Fatal("tool did not run before its outcome append failed")
+	}
+	if len(c.reqs) != 1 {
+		t.Fatalf("provider received %d requests, want only the pre-tool request", len(c.reqs))
+	}
+}
+
+func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
+	history := &fakeHistory{}
+	approvalWasDurable := false
+	tool := echoTool("dangerous", true, nil)
+	tool.Execute = func(args string) (string, error) {
+		if len(history.events) != 4 {
+			return "ran", nil
+		}
+		intentEvent := history.events[2]
+		approvalEvent := history.events[3]
+		if approvalEvent.Type != memory.EventApproval ||
+			approvalEvent.ParentID != intentEvent.ID ||
+			approvalEvent.ExecutionID != intentEvent.ExecutionID {
+			return "ran", nil
+		}
+		var payload memory.ApprovalPayload
+		if err := json.Unmarshal(approvalEvent.Payload, &payload); err == nil &&
+			payload.Decision == memory.ApprovalApproved {
+			approvalWasDurable = true
+		}
+		return "ran", nil
+	}
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
+		assistantStep("done", nil),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Approved
+	}
+
+	if err := s.Send(context.Background(), "go", &recorder{}, approve, tool); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !approvalWasDurable {
+		t.Fatal("gated tool executed before approval was durable")
+	}
+}
+
+func TestSendStopsWhenApprovalAppendFails(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 4, appendErr: errors.New("disk full")}
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Approved
+	}
+
+	err := s.Send(
+		context.Background(), "go", &recorder{}, approve,
+		echoTool("dangerous", true, &ran),
+	)
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Send error = %v, want approval append failure", err)
+	}
+	if ran {
+		t.Fatal("gated tool ran after approval append failure")
+	}
+}
+
+func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
+	history := &fakeHistory{}
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
+		assistantStep("understood", nil),
+	}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Declined
+	}
+
+	if err := s.Send(
+		context.Background(), "go", &recorder{}, deny,
+		echoTool("dangerous", true, &ran),
+	); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if ran {
+		t.Fatal("declined tool executed")
+	}
+	if len(history.events) != 6 {
+		t.Fatalf("durable events = %+v", history.events)
+	}
+	approvalEvent := history.events[3]
+	outcomeEvent := history.events[4]
+	if approvalEvent.Type != memory.EventApproval ||
+		outcomeEvent.Type != memory.EventToolCancelled ||
+		outcomeEvent.ParentID != approvalEvent.ID ||
+		outcomeEvent.ExecutionID != approvalEvent.ExecutionID {
+		t.Errorf("approval = %+v, cancelled outcome = %+v", approvalEvent, outcomeEvent)
+	}
+	var payload memory.ToolResultPayload
+	if err := json.Unmarshal(outcomeEvent.Payload, &payload); err != nil ||
+		payload.ToolCallID != "call-1" || payload.IsError {
+		t.Errorf("cancelled payload = %+v, error = %v", payload, err)
+	}
 }
 
 // recorder flattens the event stream into strings so a test asserts order
@@ -111,10 +424,10 @@ func echoTool(name string, gated bool, ran *bool) tools.Tool {
 
 func TestPlainAnswer(t *testing.T) {
 	c := &fakeClient{steps: []step{assistantStep("Hello David", []string{"Hello ", "David"})}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	rec := &recorder{}
 
-	if err := s.Send("hi", rec, nil); err != nil {
+	if err := s.Send(context.Background(), "hi", rec, nil); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -123,9 +436,12 @@ func TestPlainAnswer(t *testing.T) {
 		t.Fatalf("events = %v, want %v", rec.events, want)
 	}
 
-	roles := rolesOf(s.messages)
-	if roles != "system,user,assistant" {
-		t.Fatalf("messages = %s", roles)
+	if roles := rolesOf(c.reqs[0].Messages); roles != "system,user" {
+		t.Fatalf("request messages = %s", roles)
+	}
+	if history := s.history.(*fakeHistory); len(history.events) != 2 ||
+		history.events[1].Type != memory.EventAssistantMessage {
+		t.Fatalf("durable events = %+v", history.events)
 	}
 	if len(c.reqs) != 1 || c.reqs[0].Model != "test-model" {
 		t.Fatalf("request model = %q", c.reqs[0].Model)
@@ -140,10 +456,10 @@ func TestToolRoundTrip(t *testing.T) {
 		assistantStep("", nil, toolCall("c1", "echo", `{"x":1}`)),
 		assistantStep("all done", []string{"all done"}),
 	}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	rec := &recorder{}
 
-	if err := s.Send("go", rec, nil, echoTool("echo", false, nil)); err != nil {
+	if err := s.Send(context.Background(), "go", rec, nil, echoTool("echo", false, nil)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -158,8 +474,8 @@ func TestToolRoundTrip(t *testing.T) {
 		t.Fatalf("events = %v, want %v", rec.events, want)
 	}
 
-	if roles := rolesOf(s.messages); roles != "system,user,assistant,tool,assistant" {
-		t.Fatalf("messages = %s", roles)
+	if roles := rolesOf(c.reqs[1].Messages); roles != "system,user,assistant,tool" {
+		t.Fatalf("second request messages = %s", roles)
 	}
 	// Both requests must advertise the extra alongside the base registry.
 	for i, req := range c.reqs {
@@ -173,10 +489,10 @@ func TestReasoningStreamsThenContent(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		reasoningStep("391", []string{"Compute ", "17*23"}, []string{"391"}),
 	}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	rec := &recorder{}
 
-	if err := s.Send("what is 17*23", rec, nil); err != nil {
+	if err := s.Send(context.Background(), "what is 17*23", rec, nil); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -200,10 +516,10 @@ func TestReasoningDoneOncePerMessageAcrossToolRoundTrip(t *testing.T) {
 		reasoningStep("", []string{"need a tool"}, nil, toolCall("c1", "echo", "{}")),
 		reasoningStep("done", []string{"now answer"}, []string{"done"}),
 	}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	rec := &recorder{}
 
-	if err := s.Send("go", rec, nil, echoTool("echo", false, nil)); err != nil {
+	if err := s.Send(context.Background(), "go", rec, nil, echoTool("echo", false, nil)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -227,10 +543,10 @@ func TestNoReasoningMeansNoReasoningEvents(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		assistantStep("plain", []string{"plain"}),
 	}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	rec := &recorder{}
 
-	if err := s.Send("hi", rec, nil); err != nil {
+	if err := s.Send(context.Background(), "hi", rec, nil); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -246,10 +562,10 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 		assistantStep("", nil, toolCall("c1", "danger", "{}")),
 		assistantStep("ok", nil),
 	}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Approved }
 
-	if err := s.Send("go", &recorder{}, approve, echoTool("danger", true, &ran)); err != nil {
+	if err := s.Send(context.Background(), "go", &recorder{}, approve, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if !ran {
@@ -262,11 +578,11 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 		assistantStep("", nil, toolCall("c1", "danger", "{}")),
 		assistantStep("ok", nil),
 	}}
-	s = New(c, "test-model")
+	s = newTestSession(c, "test-model")
 	rec := &recorder{}
 	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Declined }
 
-	if err := s.Send("go", rec, deny, echoTool("danger", true, &ran)); err != nil {
+	if err := s.Send(context.Background(), "go", rec, deny, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if ran {
@@ -275,7 +591,7 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 	if !strings.Contains(fmt.Sprint(rec.events), "David declined") {
 		t.Fatalf("decline not surfaced in events: %v", rec.events)
 	}
-	last := s.messages[len(s.messages)-2] // tool message sits before the final assistant
+	last := c.reqs[1].Messages[len(c.reqs[1].Messages)-1]
 	if last.Role != "tool" || !strings.Contains(last.Content, "David declined") {
 		t.Fatalf("decline not recorded in transcript: %+v", last)
 	}
@@ -283,23 +599,52 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 
 func TestProviderErrorAbortsTurn(t *testing.T) {
 	c := &fakeClient{steps: []step{{err: errors.New("boom")}}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 
-	err := s.Send("hi", &recorder{}, nil)
+	err := s.Send(context.Background(), "hi", &recorder{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("err = %v, want wrapped boom", err)
 	}
-	// The user message stays: the turn failed, the input wasn't lost.
-	if roles := rolesOf(s.messages); roles != "system,user" {
-		t.Fatalf("messages = %s", roles)
+	// The user event stays durable even though the provider failed.
+	history := s.history.(*fakeHistory)
+	if len(history.events) != 1 || history.events[0].Type != memory.EventUserMessage ||
+		history.events[0].Content != "hi" {
+		t.Fatalf("durable events = %+v", history.events)
+	}
+}
+
+func TestSendBuildsProviderRequestFromDurableHistory(t *testing.T) {
+	history := &fakeHistory{events: []memory.Event{
+		{ID: "event-1", SessionID: "test-session", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "earlier question"},
+		{ID: "event-2", SessionID: "test-session", Sequence: 2, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "earlier answer", Payload: json.RawMessage(`{}`)},
+	}}
+	c := &fakeClient{steps: []step{assistantStep("new answer", nil)}}
+	s := New(c, "test-model", history, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	})
+
+	if err := s.Send(context.Background(), "new question", &recorder{}, nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(c.reqs) != 1 {
+		t.Fatalf("provider requests = %d, want 1", len(c.reqs))
+	}
+	got := c.reqs[0].Messages
+	if roles := rolesOf(got); roles != "system,user,assistant,user" {
+		t.Fatalf("request messages = %s", roles)
+	}
+	if got[1].Content != "earlier question" || got[2].Content != "earlier answer" ||
+		got[3].Content != "new question" {
+		t.Fatalf("request messages = %+v", got)
 	}
 }
 
 func TestNoChoicesIsAnError(t *testing.T) {
 	c := &fakeClient{steps: []step{{res: openrouter.ChatResponse{}}}}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 
-	if err := s.Send("hi", &recorder{}, nil); err == nil {
+	if err := s.Send(context.Background(), "hi", &recorder{}, nil); err == nil {
 		t.Fatal("empty choices did not error")
 	}
 }
@@ -310,13 +655,13 @@ func TestSecondSendGetsErrBusy(t *testing.T) {
 		entered: make(chan struct{}),
 		release: make(chan struct{}),
 	}
-	s := New(c, "test-model")
+	s := newTestSession(c, "test-model")
 	firstDone := make(chan error, 1)
 
-	go func() { firstDone <- s.Send("hi", &recorder{}, nil) }()
+	go func() { firstDone <- s.Send(context.Background(), "hi", &recorder{}, nil) }()
 	<-c.entered // first turn is now inside ChatStream, holding the lock
 
-	if err := s.Send("again", &recorder{}, nil); !errors.Is(err, ErrBusy) {
+	if err := s.Send(context.Background(), "again", &recorder{}, nil); !errors.Is(err, ErrBusy) {
 		t.Fatalf("second Send = %v, want ErrBusy", err)
 	}
 
@@ -328,14 +673,14 @@ func TestSecondSendGetsErrBusy(t *testing.T) {
 
 func TestModelResolution(t *testing.T) {
 	t.Setenv("EVIE_MODEL", "env-model")
-	if s := New(nil, ""); s.model != "env-model" {
+	if s := newTestSession(nil, ""); s.model != "env-model" {
 		t.Fatalf("model = %q, want env override", s.model)
 	}
-	if s := New(nil, "explicit"); s.model != "explicit" {
+	if s := newTestSession(nil, "explicit"); s.model != "explicit" {
 		t.Fatalf("model = %q, explicit arg must win", s.model)
 	}
 	t.Setenv("EVIE_MODEL", "")
-	if s := New(nil, ""); s.model != DefaultModel {
+	if s := newTestSession(nil, ""); s.model != DefaultModel {
 		t.Fatalf("model = %q, want DefaultModel", s.model)
 	}
 }

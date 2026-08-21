@@ -7,35 +7,38 @@
 package agent
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
+	"github.com/google/uuid"
 )
 
-// DefaultModel is the fallback when neither the caller nor EVIE_MODEL
-// says otherwise. One source of truth for every frontend.
 const DefaultModel = "moonshotai/kimi-k3"
 
-// ErrBusy means a turn is already running on this session. Frontends map
-// it to their own affordance (the web server answers HTTP 409).
 var ErrBusy = errors.New("agent: a turn is already in progress")
 
-// Client is what a Session needs from a provider: one streaming chat
-// call. Satisfied by *openrouter.Client; defined here, on the consumer
-// side, so tests can script a fake and a second provider can slot in
-// without touching the loop.
-type Client interface {
-	ChatStream(req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error)
+type Session struct {
+	mu        sync.Mutex
+	client    Client
+	model     string
+	reasoning *openrouter.ReasoningConfig
+	history   History
+	scope     memory.ScopeContext
 }
-
-// Events receives everything a frontend needs to render a turn, in the
-// order it happens: Delta* AssistantDone (ToolCall ToolResult)* repeating
-// until an AssistantDone with no tool calls ends the turn. Implementations
-// must be fast or buffer internally — the loop blocks on them.
+type Client interface {
+	ChatStream(
+		ctx context.Context,
+		req openrouter.ChatRequest,
+		h openrouter.StreamHandlers,
+	) (openrouter.ChatResponse, error)
+}
 type Events interface {
 	Delta(text string)                         // streaming assistant text
 	Reasoning(text string)                     // streaming thinking text
@@ -45,43 +48,61 @@ type Events interface {
 	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
 }
 
-// Session is one conversation: the transcript plus the client that
-// extends it. One turn at a time — Send fails fast with ErrBusy rather
-// than queueing, so a frontend always knows whether it got the slot.
-type Session struct {
-	mu        sync.Mutex
-	client    Client
-	model     string
-	reasoning *openrouter.ReasoningConfig
-	messages  []openrouter.Message
+func (s *Session) requestMessages(
+	ctx context.Context,
+) ([]openrouter.Message, error) {
+	events, err := s.history.Events(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load durable history: %w", err)
+	}
+
+	conversation, err := messagesFromEvents(events)
+	if err != nil {
+		return nil, fmt.Errorf("project durable history: %w", err)
+	}
+
+	messages := make([]openrouter.Message, 0, len(conversation)+1)
+	messages = append(messages, openrouter.Message{
+		Role:    "system",
+		Content: systemPrompt,
+	})
+	messages = append(messages, conversation...)
+
+	return messages, nil
 }
 
-// Send runs one full turn: append the user message, then model↔tools
-// until the model answers without tool calls. extra tools are offered to
-// the model for this turn only (the web frontend passes "show"; the REPL
-// passes none). The error return is the turn aborting — a failed request
-// or an empty response — never a tool failure; those go back to the model
-// as tool messages so it can correct itself.
-func (s *Session) Send(input string, ev Events, approve tools.Approver, extra ...tools.Tool) error {
+func (s *Session) Send(
+	ctx context.Context,
+	input string,
+	ev Events,
+	approve tools.Approver,
+	extra ...tools.Tool,
+) error {
 	if !s.mu.TryLock() {
 		return ErrBusy
 	}
 	defer s.mu.Unlock()
 
-	s.messages = append(s.messages, openrouter.Message{Role: "user", Content: input})
+	if _, err := s.history.Append(ctx, memory.EventInput{
+		Type:    memory.EventUserMessage,
+		Role:    memory.RoleUser,
+		Content: input,
+	}); err != nil {
+		return fmt.Errorf("persist user message: %w", err)
+	}
 
 	for {
+		messages, err := s.requestMessages(ctx)
+		if err != nil {
+			return err
+		}
+
 		req := openrouter.ChatRequest{
 			Model:     s.model,
-			Messages:  s.messages,
+			Messages:  messages,
 			Tools:     tools.SchemasWith(extra),
 			Reasoning: s.reasoning,
 		}
-
-		// thinking tracks whether reasoning is open for this one assistant
-		// message: the first content delta ends it, and a tool-only message
-		// (no delta ever arrives) ends it after assembly. ReasoningDone
-		// fires at most once per message, and only if reasoning streamed.
 		thinking := false
 		h := openrouter.StreamHandlers{
 			OnReasoning: func(text string) {
@@ -97,7 +118,7 @@ func (s *Session) Send(input string, ev Events, approve tools.Approver, extra ..
 			},
 		}
 
-		res, err := s.client.ChatStream(req, h)
+		res, err := s.client.ChatStream(ctx, req, h)
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}
@@ -106,7 +127,19 @@ func (s *Session) Send(input string, ev Events, approve tools.Approver, extra ..
 		}
 
 		msg := res.Choices[0].Message
-		s.messages = append(s.messages, msg)
+		assistantInput, err := assistantEventInput(msg)
+		if err != nil {
+			return err
+		}
+
+		assistantEvent, err := s.history.Append(
+			ctx,
+			assistantInput,
+		)
+		if err != nil {
+			return fmt.Errorf("persist assistant message: %w", err)
+		}
+
 		if thinking {
 			ev.ReasoningDone()
 		}
@@ -117,19 +150,82 @@ func (s *Session) Send(input string, ev Events, approve tools.Approver, extra ..
 		}
 
 		for _, call := range msg.ToolCalls {
+			executionUUID, err := uuid.NewRandom()
+			if err != nil {
+				return fmt.Errorf("generate execution ID: %w", err)
+			}
+			executionID := memory.ExecutionID(executionUUID.String())
+			intentInput, err := toolIntentInput(assistantEvent.ID, executionID, call)
+			if err != nil {
+				return err
+			}
+			intentEvent, err := s.history.Append(ctx, intentInput)
+			if err != nil {
+				return fmt.Errorf("persist tool intent: %w", err)
+			}
+
 			ev.ToolCall(call.ID, call.Function.Name, call.Function.Arguments)
-			result, isErr := tools.ExecuteWith(extra, call, approve)
-			s.messages = append(s.messages, result)
+			var approvalEventID memory.EventID
+			var approvalDecision tools.Decision
+
+			observeApproval := func(decision tools.Decision) error {
+				input, err := approvalEventInput(
+					intentEvent.ID,
+					executionID,
+					decision,
+				)
+				if err != nil {
+					return err
+				}
+				approvalEvent, err := s.history.Append(ctx, input)
+				if err != nil {
+					return fmt.Errorf("persist approval: %w", err)
+				}
+
+				approvalEventID = approvalEvent.ID
+				approvalDecision = decision
+				return nil
+			}
+
+			result, isErr, err := tools.ExecuteWithApproval(
+				extra,
+				call,
+				approve,
+				observeApproval,
+			)
+			if err != nil {
+				return fmt.Errorf("execute tool lifecycle: %w", err)
+			}
+
+			outcomeParentID := intentEvent.ID
+			outcomeType := memory.EventToolSucceeded
+			if isErr {
+				outcomeType = memory.EventToolFailed
+			}
+			if approvalEventID != "" {
+				outcomeParentID = approvalEventID
+				if approvalDecision != tools.Approved {
+					outcomeType = memory.EventToolCancelled
+				}
+			}
+
+			outcomeInput, err := toolOutcomeInput(
+				outcomeParentID,
+				executionID,
+				result,
+				outcomeType,
+			)
+			if err != nil {
+				return err
+			}
+			if _, err := s.history.Append(ctx, outcomeInput); err != nil {
+				return fmt.Errorf("persist tool outcome: %w", err)
+			}
 			ev.ToolResult(call.ID, result.Content, isErr)
 		}
 	}
 }
 
-// New creates a session seeded with the system prompt. model may be ""
-// to mean "resolve it": EVIE_MODEL if set, else DefaultModel.
-// resolveReasoning maps EVIE_REASONING to a request config: "off" leaves
-// the key out entirely (nil), "on"/"" ask for the provider default, and an
-// effort level implies enabled. Unknown values fall back to on.
 func resolveReasoning(v string) *openrouter.ReasoningConfig {
 	switch v {
 	case "off":
@@ -141,7 +237,12 @@ func resolveReasoning(v string) *openrouter.ReasoningConfig {
 	}
 }
 
-func New(client Client, model string) *Session {
+func New(
+	client Client,
+	model string,
+	history History,
+	scope memory.ScopeContext,
+) *Session {
 	if model == "" {
 		model = os.Getenv("EVIE_MODEL")
 	}
@@ -149,14 +250,135 @@ func New(client Client, model string) *Session {
 		model = DefaultModel
 	}
 	return &Session{
-		client:    client,
-		model:     model,
-		reasoning: resolveReasoning(os.Getenv("EVIE_REASONING")),
-		messages: []openrouter.Message{
-			{
-				Role:    "system",
-				Content: systemPrompt,
-			},
-		},
+		client: client,
+		model:  model,
+		reasoning: resolveReasoning(
+			os.Getenv("EVIE_REASONING"),
+		),
+		scope:   scope,
+		history: history,
 	}
+}
+
+func assistantEventInput(msg openrouter.Message) (
+	memory.EventInput, error,
+) {
+	payload := memory.AssistantMessagePayload{
+		ToolCalls: make([]memory.ToolCall, len(msg.ToolCalls)),
+	}
+
+	for i, call := range msg.ToolCalls {
+		payload.ToolCalls[i] = memory.ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: call.Function.Arguments,
+		}
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return memory.EventInput{}, fmt.Errorf("encode assistant payload: %w", err)
+	}
+
+	return memory.EventInput{
+		Type:    memory.EventAssistantMessage,
+		Role:    memory.RoleAssistant,
+		Content: msg.Content,
+		Payload: payloadJSON,
+	}, nil
+}
+
+func toolIntentInput(
+	parentID memory.EventID,
+	executionID memory.ExecutionID,
+	call openrouter.ToolCall,
+) (memory.EventInput, error) {
+	payloadJSON, err := json.Marshal(memory.ToolIntentPayload{
+		Call: memory.ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: call.Function.Arguments,
+		},
+	})
+	if err != nil {
+		return memory.EventInput{}, fmt.Errorf("encode tool intent payload: %w", err)
+	}
+
+	return memory.EventInput{
+		ParentID:    parentID,
+		Type:        memory.EventToolIntent,
+		ExecutionID: executionID,
+		Payload:     payloadJSON,
+	}, nil
+}
+
+func toolOutcomeInput(
+	parentID memory.EventID,
+	executionID memory.ExecutionID,
+	result openrouter.Message,
+	eventType memory.EventType,
+) (memory.EventInput, error) {
+	switch eventType {
+	case memory.EventToolSucceeded,
+		memory.EventToolFailed,
+		memory.EventToolCancelled:
+	default:
+		return memory.EventInput{}, fmt.Errorf(
+			"invalid tool outcome type %q",
+			eventType,
+		)
+	}
+
+	payloadJSON, err := json.Marshal(memory.ToolResultPayload{
+		ToolCallID: result.ToolCallID,
+		IsError:    eventType == memory.EventToolFailed,
+	})
+	if err != nil {
+		return memory.EventInput{}, fmt.Errorf("encode tool outcome payload: %w", err)
+	}
+
+	return memory.EventInput{
+		ParentID:    parentID,
+		Type:        eventType,
+		Role:        memory.RoleTool,
+		ExecutionID: executionID,
+		Content:     result.Content,
+		Payload:     payloadJSON,
+	}, nil
+}
+
+func approvalEventInput(
+	parentID memory.EventID,
+	executionID memory.ExecutionID,
+	decision tools.Decision,
+) (memory.EventInput, error) {
+	var storedDecision memory.ApprovalDecision
+
+	switch decision {
+	case tools.Approved:
+		storedDecision = memory.ApprovalApproved
+	case tools.Declined:
+		storedDecision = memory.ApprovalDeclined
+	case tools.Expired:
+		storedDecision = memory.ApprovalExpired
+	default:
+		return memory.EventInput{}, fmt.Errorf(
+			"unsupported approval decision %d",
+			decision,
+		)
+	}
+
+	payloadJSON, err := json.Marshal(memory.ApprovalPayload{
+		Decision: storedDecision,
+	})
+	if err != nil {
+		return memory.EventInput{}, fmt.Errorf("encode approval payload: %w", err)
+	}
+
+	return memory.EventInput{
+		ParentID:    parentID,
+		Type:        memory.EventApproval,
+		ExecutionID: executionID,
+		Payload:     payloadJSON,
+	}, nil
 }

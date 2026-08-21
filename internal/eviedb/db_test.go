@@ -17,6 +17,7 @@ package eviedb
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -292,5 +293,375 @@ func TestBusyTimeoutWriterWaitsForLock(t *testing.T) {
 	// real wait is what proves the write actually blocked on the lock.
 	if elapsed < 200*time.Millisecond {
 		t.Errorf("blocked write returned in %s, want it to have waited for the lock (~400ms)", elapsed)
+	}
+}
+
+func TestOpenDBAtConfiguresEveryConnection(t *testing.T) {
+	db := newTestDB(t)
+	db.SetMaxOpenConns(2)
+
+	if _, err := db.Exec(`
+		CREATE TABLE pragma_test_parents (id INTEGER PRIMARY KEY);
+		CREATE TABLE pragma_test_children (
+			id        INTEGER PRIMARY KEY,
+			parent_id INTEGER NOT NULL REFERENCES pragma_test_parents(id)
+		);
+	`); err != nil {
+		t.Fatalf("create foreign-key test tables: %v", err)
+	}
+
+	ctx := context.Background()
+	connA, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("acquire first connection: %v", err)
+	}
+	defer connA.Close()
+
+	connB, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("acquire second connection: %v", err)
+	}
+	defer connB.Close()
+
+	for i, conn := range []*sql.Conn{connA, connB} {
+		var journalMode string
+		if err := conn.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+			t.Fatalf("connection %d journal mode: %v", i+1, err)
+		}
+		if journalMode != "wal" {
+			t.Errorf("connection %d journal mode = %q, want wal", i+1, journalMode)
+		}
+
+		var foreignKeys int
+		if err := conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+			t.Fatalf("connection %d foreign keys: %v", i+1, err)
+		}
+		if foreignKeys != 1 {
+			t.Errorf("connection %d foreign_keys = %d, want 1", i+1, foreignKeys)
+		}
+
+		if _, err := conn.ExecContext(ctx,
+			`INSERT INTO pragma_test_children (id, parent_id) VALUES (?, 999)`, i+1,
+		); err == nil {
+			t.Errorf("connection %d accepted a child with no parent", i+1)
+		}
+	}
+}
+
+func TestOpenDBReadOnlyConfiguresEveryConnection(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	writer, err := OpenDB()
+	if err != nil {
+		t.Fatalf("create canonical database: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	db, err := OpenDBReadOnly()
+	if err != nil {
+		t.Fatalf("open canonical database read-only: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	db.SetMaxOpenConns(2)
+
+	ctx := context.Background()
+	connA, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("acquire first read-only connection: %v", err)
+	}
+	defer connA.Close()
+
+	connB, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("acquire second read-only connection: %v", err)
+	}
+	defer connB.Close()
+
+	for i, conn := range []*sql.Conn{connA, connB} {
+		var journalMode string
+		if err := conn.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+			t.Fatalf("connection %d journal mode: %v", i+1, err)
+		}
+		if journalMode != "wal" {
+			t.Errorf("connection %d journal mode = %q, want wal", i+1, journalMode)
+		}
+
+		var foreignKeys int
+		if err := conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+			t.Fatalf("connection %d foreign keys: %v", i+1, err)
+		}
+		if foreignKeys != 1 {
+			t.Errorf("connection %d foreign_keys = %d, want 1", i+1, foreignKeys)
+		}
+
+		if _, err := conn.ExecContext(ctx,
+			`INSERT INTO jobs (name, schedule, command, created_at) VALUES (?, '* * * * *', 'true', '2026-08-17T12:00:00Z')`,
+			fmt.Sprintf("forbidden-%d", i+1),
+		); err == nil {
+			t.Errorf("connection %d accepted a write through mode=ro", i+1)
+		}
+	}
+}
+
+func TestProjectsSchemaAndConstraints(t *testing.T) {
+	db := newTestDB(t)
+
+	const (
+		projectID = "project-1"
+		root      = "/tmp/evie-project"
+		createdAt = "2026-08-17T12:00:00Z"
+		updatedAt = "2026-08-17T12:00:00Z"
+	)
+
+	if _, err := db.Exec(`
+		INSERT INTO projects (id, display_name, canonical_root, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, projectID, "Evie", root, createdAt, updatedAt); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+
+	var (
+		gotName, gotRoot, gotCreatedAt, gotUpdatedAt string
+		gotArchived                                  int
+	)
+	if err := db.QueryRow(`
+		SELECT display_name, canonical_root, archived, created_at, updated_at
+		FROM projects
+		WHERE id = ?
+	`, projectID).Scan(&gotName, &gotRoot, &gotArchived, &gotCreatedAt, &gotUpdatedAt); err != nil {
+		t.Fatalf("read project: %v", err)
+	}
+	if gotName != "Evie" || gotRoot != root || gotArchived != 0 ||
+		gotCreatedAt != createdAt || gotUpdatedAt != updatedAt {
+		t.Errorf("project = (%q, %q, %d, %q, %q)", gotName, gotRoot, gotArchived, gotCreatedAt, gotUpdatedAt)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO projects (id, display_name, canonical_root, created_at, updated_at)
+		VALUES ('project-2', 'Same root', ?, ?, ?)
+	`, root, createdAt, updatedAt); err == nil {
+		t.Error("duplicate canonical root was accepted")
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO projects (id, display_name, canonical_root, archived, created_at, updated_at)
+		VALUES ('project-3', 'Invalid archive state', '/tmp/another-project', 2, ?, ?)
+	`, createdAt, updatedAt); err == nil {
+		t.Error("archive state outside 0 or 1 was accepted")
+	}
+}
+
+func TestSessionsSchemaAndScopeConstraints(t *testing.T) {
+	db := newTestDB(t)
+	const now = "2026-08-17T12:00:00Z"
+
+	if _, err := db.Exec(`
+		INSERT INTO projects (id, display_name, canonical_root, created_at, updated_at)
+		VALUES ('project-1', 'Evie', '/tmp/evie-project', ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("seed project: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO sessions (id, created_at, updated_at)
+		VALUES ('global-session', ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("insert global session: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO sessions (
+			id, project_id, project_root_snapshot, parent_session_id, created_at, updated_at
+		) VALUES ('project-session', 'project-1', '/tmp/evie-project', 'global-session', ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("insert project session: %v", err)
+	}
+
+	var (
+		projectID    sql.NullString
+		rootSnapshot sql.NullString
+		status       string
+	)
+	if err := db.QueryRow(`
+		SELECT project_id, project_root_snapshot, status
+		FROM sessions
+		WHERE id = 'global-session'
+	`).Scan(&projectID, &rootSnapshot, &status); err != nil {
+		t.Fatalf("read global session: %v", err)
+	}
+	if projectID.Valid || rootSnapshot.Valid || status != "active" {
+		t.Errorf("global session = (project=%v, root=%v, status=%q)", projectID, rootSnapshot, status)
+	}
+
+	invalidInserts := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "project without root snapshot",
+			sql:  `INSERT INTO sessions (id, project_id, created_at, updated_at) VALUES ('bad-1', 'project-1', '` + now + `', '` + now + `')`,
+		},
+		{
+			name: "root snapshot without project",
+			sql:  `INSERT INTO sessions (id, project_root_snapshot, created_at, updated_at) VALUES ('bad-2', '/tmp/x', '` + now + `', '` + now + `')`,
+		},
+		{
+			name: "missing project",
+			sql:  `INSERT INTO sessions (id, project_id, project_root_snapshot, created_at, updated_at) VALUES ('bad-3', 'missing', '/tmp/x', '` + now + `', '` + now + `')`,
+		},
+		{
+			name: "missing parent",
+			sql:  `INSERT INTO sessions (id, parent_session_id, created_at, updated_at) VALUES ('bad-4', 'missing', '` + now + `', '` + now + `')`,
+		},
+		{
+			name: "invalid status",
+			sql:  `INSERT INTO sessions (id, status, created_at, updated_at) VALUES ('bad-5', 'unknown', '` + now + `', '` + now + `')`,
+		},
+	}
+
+	for _, tt := range invalidInserts {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := db.Exec(tt.sql); err == nil {
+				t.Error("invalid session was accepted")
+			}
+		})
+	}
+
+	if _, err := db.Exec(`
+		UPDATE sessions
+		SET project_id = 'project-1', project_root_snapshot = '/tmp/evie-project'
+		WHERE id = 'global-session'
+	`); err == nil {
+		t.Error("immutable session scope was updated")
+	}
+
+	if _, err := db.Exec(`UPDATE sessions SET status = 'closed', updated_at = ? WHERE id = 'global-session'`, now); err != nil {
+		t.Fatalf("close session: %v", err)
+	}
+}
+
+func TestEventsSchemaAndAppendOnlyConstraints(t *testing.T) {
+	db := newTestDB(t)
+	const now = "2026-08-17T12:00:00Z"
+
+	if _, err := db.Exec(`
+		INSERT INTO projects (id, display_name, canonical_root, created_at, updated_at)
+		VALUES ('project-1', 'Evie', '/tmp/evie-project', ?, ?);
+		INSERT INTO sessions (id, created_at, updated_at)
+		VALUES ('global-session', ?, ?);
+		INSERT INTO sessions (id, project_id, project_root_snapshot, created_at, updated_at)
+		VALUES ('project-session', 'project-1', '/tmp/evie-project', ?, ?);
+	`, now, now, now, now, now, now); err != nil {
+		t.Fatalf("seed event scopes: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO events (
+			id, session_id, sequence, event_type, role, content, payload_json, recorded_at
+		) VALUES ('event-global-1', 'global-session', 1, 'user_message', 'user',
+			'hello', '{"source":"repl"}', ?)
+	`, now); err != nil {
+		t.Fatalf("insert global event: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO events (
+			id, session_id, sequence, project_id, event_type, role, content, recorded_at
+		) VALUES ('event-project-1', 'project-session', 1, 'project-1',
+			'assistant_message', 'assistant', 'hello back', ?)
+	`, now); err != nil {
+		t.Fatalf("insert project event: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO events (
+			id, session_id, sequence, parent_id, event_type, execution_id, payload_json, recorded_at
+		) VALUES ('event-global-2', 'global-session', 2, 'event-global-1',
+			'tool_intent', 'execution-1', '{"tool":"time"}', ?)
+	`, now); err != nil {
+		t.Fatalf("insert child execution event: %v", err)
+	}
+
+	var (
+		projectID, parentID, executionID sql.NullString
+		content, payload, eventType      string
+		sequence, formatVersion          int
+	)
+	if err := db.QueryRow(`
+		SELECT sequence, project_id, parent_id, event_type, execution_id,
+			content, payload_json, format_version
+		FROM events
+		WHERE id = 'event-global-2'
+	`).Scan(
+		&sequence, &projectID, &parentID, &eventType, &executionID,
+		&content, &payload, &formatVersion,
+	); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if sequence != 2 || projectID.Valid || !parentID.Valid || parentID.String != "event-global-1" ||
+		eventType != "tool_intent" || !executionID.Valid || executionID.String != "execution-1" ||
+		content != "" || payload != `{"tool":"time"}` || formatVersion != 1 {
+		t.Errorf("event round trip mismatch: sequence=%d project=%v parent=%v type=%q execution=%v content=%q payload=%q version=%d",
+			sequence, projectID, parentID, eventType, executionID, content, payload, formatVersion)
+	}
+
+	invalidInserts := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "duplicate session sequence",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, recorded_at) VALUES ('bad-1', 'global-session', 1, 'user_message', '` + now + `')`,
+		},
+		{
+			name: "missing session",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, recorded_at) VALUES ('bad-2', 'missing', 1, 'user_message', '` + now + `')`,
+		},
+		{
+			name: "project scope omitted",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, recorded_at) VALUES ('bad-3', 'project-session', 2, 'user_message', '` + now + `')`,
+		},
+		{
+			name: "project scope added to global session",
+			sql:  `INSERT INTO events (id, session_id, sequence, project_id, event_type, recorded_at) VALUES ('bad-4', 'global-session', 3, 'project-1', 'user_message', '` + now + `')`,
+		},
+		{
+			name: "parent from another session",
+			sql:  `INSERT INTO events (id, session_id, sequence, project_id, parent_id, event_type, recorded_at) VALUES ('bad-5', 'project-session', 2, 'project-1', 'event-global-1', 'tool_succeeded', '` + now + `')`,
+		},
+		{
+			name: "invalid role",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, role, recorded_at) VALUES ('bad-6', 'global-session', 3, 'user_message', 'developer', '` + now + `')`,
+		},
+		{
+			name: "invalid payload JSON",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, payload_json, recorded_at) VALUES ('bad-7', 'global-session', 3, 'user_message', '{', '` + now + `')`,
+		},
+		{
+			name: "non-positive sequence",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, recorded_at) VALUES ('bad-8', 'global-session', 0, 'user_message', '` + now + `')`,
+		},
+		{
+			name: "non-positive format version",
+			sql:  `INSERT INTO events (id, session_id, sequence, event_type, format_version, recorded_at) VALUES ('bad-9', 'global-session', 3, 'user_message', 0, '` + now + `')`,
+		},
+	}
+
+	for _, tt := range invalidInserts {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := db.Exec(tt.sql); err == nil {
+				t.Error("invalid event was accepted")
+			}
+		})
+	}
+
+	if _, err := db.Exec(`UPDATE events SET content = 'rewritten' WHERE id = 'event-global-1'`); err == nil {
+		t.Error("event update was accepted")
+	}
+	if _, err := db.Exec(`DELETE FROM events WHERE id = 'event-project-1'`); err == nil {
+		t.Error("event deletion was accepted")
 	}
 }

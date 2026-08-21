@@ -1,5 +1,11 @@
 # memory - decisions
 
+- **2026-08-21 - startup cwd discovers project scope but never grants it silently.**
+  The REPL canonicalizes its launch directory and may suggest one matching active
+  registered project, but David must explicitly confirm project scope before a
+  session is created or resumed. An unmatched directory offers registration or
+  global scope. Later `bash` cwd changes never alter the immutable session scope.
+
 - **2026-08-17 - research topics are an optional first-class scope after the core feature.**
   A sustained inquiry should not require a fake code-project root or pollute
   global memory. Optional Stage 10 adds registered `research:<id>` workspaces.

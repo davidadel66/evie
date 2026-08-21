@@ -1,8 +1,3 @@
-// Package eviedb owns evie's own state database at ~/.evie/evie.db —
-// the first customer is the cron tables (jobs + job_runs), with future
-// evie-internal state expected to land here rather than growing new
-// files. Mirrors internal/finance/db.go: one CREATE IF NOT EXISTS blob
-// applied on every open, no migrations.
 package eviedb
 
 import (
@@ -14,19 +9,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// schema is applied in full on every open; every statement must stay
-// idempotent (CREATE TABLE IF NOT EXISTS), which is this package's whole
-// migration story, same as finance.
-//
-// jobs is the cron ledger — the source of truth that launchd plists are
-// generated FROM, never reconciled back to. job_runs is append-only
-// history whose rows deliberately outlive their job: job_id points at
-// jobs.id logically but carries NO foreign-key constraint, because the
-// audit trail surviving cron_remove is the point of the table, and an
-// enforced REFERENCES would make deleting any job that ever ran fail
-// (caught by code review — the constraint and the design contradicted
-// each other, and the constraint lost). enabled is forward provision
-// for a future cron_pause: v1 always writes 1 and never reads it.
 const schema = `
 CREATE TABLE IF NOT EXISTS jobs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,24 +27,98 @@ CREATE TABLE IF NOT EXISTS job_runs (
     exit_code   INTEGER NOT NULL,
     output      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS projects (
+    id             TEXT PRIMARY KEY NOT NULL,
+    display_name   TEXT NOT NULL,
+    canonical_root TEXT NOT NULL UNIQUE,
+    archived       INTEGER NOT NULL DEFAULT 0 CHECK (archived IN (0, 1)),
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id                    TEXT PRIMARY KEY NOT NULL,
+    project_id            TEXT REFERENCES projects(id),
+    project_root_snapshot TEXT,
+    parent_session_id     TEXT REFERENCES sessions(id),
+    status                TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    CHECK (
+        (project_id IS NULL AND project_root_snapshot IS NULL) OR
+        (project_id IS NOT NULL AND project_root_snapshot IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
+CREATE INDEX IF NOT EXISTS sessions_parent_session_id_idx ON sessions(parent_session_id);
+
+CREATE TRIGGER IF NOT EXISTS sessions_scope_immutable
+BEFORE UPDATE OF project_id, project_root_snapshot, parent_session_id ON sessions
+FOR EACH ROW
+WHEN NEW.project_id IS NOT OLD.project_id
+    OR NEW.project_root_snapshot IS NOT OLD.project_root_snapshot
+    OR NEW.parent_session_id IS NOT OLD.parent_session_id
+BEGIN
+    SELECT RAISE(ABORT, 'session scope is immutable');
+END;
+
+CREATE TABLE IF NOT EXISTS events (
+    id             TEXT PRIMARY KEY NOT NULL,
+    session_id     TEXT NOT NULL REFERENCES sessions(id),
+    sequence       INTEGER NOT NULL CHECK (sequence > 0),
+    project_id     TEXT REFERENCES projects(id),
+    parent_id      TEXT,
+    event_type     TEXT NOT NULL CHECK (length(trim(event_type)) > 0),
+    role           TEXT CHECK (role IS NULL OR role IN ('user', 'assistant', 'tool')),
+    execution_id   TEXT,
+    content        TEXT NOT NULL DEFAULT '',
+    payload_json   TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(payload_json)),
+    recorded_at    TEXT NOT NULL,
+    format_version INTEGER NOT NULL DEFAULT 1 CHECK (format_version > 0),
+    UNIQUE (session_id, sequence),
+    UNIQUE (id, session_id),
+    FOREIGN KEY (parent_id, session_id) REFERENCES events(id, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS events_project_id_idx ON events(project_id);
+CREATE INDEX IF NOT EXISTS events_parent_id_idx ON events(parent_id);
+CREATE INDEX IF NOT EXISTS events_execution_id_idx ON events(execution_id) WHERE execution_id IS NOT NULL;
+
+CREATE TRIGGER IF NOT EXISTS events_scope_matches_session
+BEFORE INSERT ON events
+FOR EACH ROW
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM sessions
+    WHERE sessions.id = NEW.session_id
+      AND sessions.project_id IS NEW.project_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'event scope does not match session scope');
+END;
+
+CREATE TRIGGER IF NOT EXISTS events_append_only_update
+BEFORE UPDATE ON events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS events_append_only_delete
+BEFORE DELETE ON events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'events are append-only');
+END;
 `
 
-// dsnPragmas ride the DSN rather than an Exec so every pooled connection
-// gets them, not just the first. busy_timeout is the one finance doesn't
-// carry, and here it is load-bearing: a launchd-spawned cron-exec writes
-// this db while the REPL may hold it open, and modernc.org/sqlite with
-// no busy_timeout returns SQLITE_BUSY immediately instead of waiting —
-// losing the run row exactly when evie is in use.
-//
-// No foreign_keys pragma: nothing in this schema declares a foreign key
-// (see job_runs above), so enabling enforcement would be provision for a
-// constraint the design deliberately refuses.
-const dsnPragmas = "?_pragma=busy_timeout(5000)"
+const (
+	dsnPragmas        = "?" + connectionPragmas
+	connectionPragmas = "_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+)
 
-// OpenDB opens (creating if needed) the canonical database at
-// ~/.evie/evie.db, ensuring the directory exists first. All callers —
-// cron tools and the cron-exec subcommand alike — go through here so
-// there is exactly one database location.
 func OpenDB() (*sql.DB, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -75,8 +131,6 @@ func OpenDB() (*sql.DB, error) {
 	return OpenDBAt(filepath.Join(dir, "evie.db"))
 }
 
-// OpenDBReadOnly opens the canonical database engine-level read-only,
-// for query_db. No schema exec — reading must not create anything.
 func OpenDBReadOnly() (*sql.DB, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -84,7 +138,7 @@ func OpenDBReadOnly() (*sql.DB, error) {
 	}
 
 	path := filepath.Join(home, ".evie", "evie.db")
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&"+connectionPragmas)
 	if err != nil {
 		return nil, fmt.Errorf("open db readonly: %w", err)
 	}
@@ -92,13 +146,6 @@ func OpenDBReadOnly() (*sql.DB, error) {
 	return db, nil
 }
 
-// OpenDBAt opens a database at an explicit path, applies the schema, and
-// locks the file down to 0600. Split from OpenDB so tests can use a temp
-// path — exported because internal/tools' cron tests need a db shaped by
-// this exact schema and these exact pragmas. Hand-copying the DDL into a
-// test file let the real schema drift from the tested one (a dropped
-// foreign key stayed green for exactly that reason); there is now one
-// definition and every caller, test or not, goes through it.
 func OpenDBAt(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path+dsnPragmas)
 	if err != nil {

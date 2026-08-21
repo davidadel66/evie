@@ -20,7 +20,116 @@ const (
 	transcriptQueryEnd      = "[end untrusted transcript database output]"
 )
 
-var openTranscriptDB = youtube.OpenDBReadOnly
+var (
+	openTranscriptDB = youtube.OpenDBReadOnly
+	evieQueryTables  = map[string]struct{}{
+		"JOBS":     {},
+		"JOB_RUNS": {},
+	}
+)
+
+func validateEvieSelect(query string) error {
+	if err := validateSingleSelect(query, "evie"); err != nil {
+		return err
+	}
+	return validateEvieTableReferences(query)
+}
+
+func validateEvieTableReferences(query string) error {
+	expectTable := false
+	inFromClause := false
+	fromDepth := 0
+	parenDepth := 0
+
+	for i := 0; i < len(query); {
+		switch {
+		case isSQLSpace(query[i]):
+			i++
+		case query[i] == '\'' || query[i] == '"' || query[i] == '`':
+			if expectTable {
+				return errors.New("evie queries may not use quoted table names")
+			}
+			next, _ := skipSQLQuoted(query, i, query[i])
+			i = next
+		case query[i] == '[':
+			if expectTable {
+				return errors.New("evie queries may not use quoted table names")
+			}
+			end := strings.IndexByte(query[i+1:], ']')
+			i += end + 2
+
+		case query[i] == '-' && i+1 < len(query) && query[i+1] == '-':
+			i += 2
+			for i < len(query) && query[i] != '\r' && query[i] != '\n' {
+				i++
+			}
+
+		case query[i] == '/' && i+1 < len(query) && query[i+1] == '*':
+			end := strings.Index(query[i+2:], "*/")
+			i += end + 4
+
+		case query[i] == '(':
+			if expectTable {
+				return errors.New("evie queries may not use derived tables")
+			}
+			parenDepth++
+			i++
+
+		case query[i] == ')':
+			if inFromClause && parenDepth == fromDepth {
+				inFromClause = false
+			}
+			if parenDepth > 0 {
+				parenDepth--
+			}
+			i++
+
+		case query[i] == ',':
+			if inFromClause && parenDepth == fromDepth {
+				expectTable = true
+			}
+			i++
+
+		case isSQLWordByte(query[i]):
+			start := i
+			for i < len(query) && isSQLWordByte(query[i]) {
+				i++
+			}
+			token := strings.ToUpper(query[start:i])
+
+			if expectTable {
+				if _, allowed := evieQueryTables[token]; !allowed {
+					return fmt.Errorf("evie table %q is not available through query_db", query[start:i])
+				}
+				expectTable = false
+				inFromClause = true
+				fromDepth = parenDepth
+				continue
+			}
+
+			if token == "FROM" || token == "JOIN" {
+				expectTable = true
+				continue
+			}
+
+			if inFromClause && parenDepth == fromDepth {
+				switch token {
+				case "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT",
+					"UNION", "EXCEPT", "INTERSECT", "WINDOW":
+					inFromClause = false
+				}
+			}
+
+		default:
+			i++
+		}
+	}
+
+	if expectTable {
+		return errors.New("evie query is missing a table after FROM or JOIN")
+	}
+	return nil
+}
 
 // queryDBTool describes query_db to the model: free-form read-only SQL
 // against a registered database — the read twin of edit_db, ungated
@@ -91,6 +200,9 @@ func queryDB(args string) (string, error) {
 		}
 		db, err = finance.OpenDBReadOnly()
 	case "evie":
+		if err := validateEvieSelect(q); err != nil {
+			return "", err
+		}
 		db, err = eviedb.OpenDBReadOnly()
 	case "transcripts":
 		if err := validateTranscriptSelect(q); err != nil {
@@ -228,6 +340,10 @@ func appendBoundedString(dst *strings.Builder, value string, limit int) bool {
 }
 
 func validateTranscriptSelect(query string) error {
+	return validateSingleSelect(query, "transcript")
+}
+
+func validateSingleSelect(query, database string) error {
 	firstToken := ""
 	for i := 0; i < len(query); {
 		switch {
@@ -236,13 +352,13 @@ func validateTranscriptSelect(query string) error {
 		case query[i] == '\'' || query[i] == '"' || query[i] == '`':
 			next, ok := skipSQLQuoted(query, i, query[i])
 			if !ok {
-				return errors.New("transcript query contains an unterminated quoted value")
+				return fmt.Errorf("%s query contains an unterminated quoted value", database)
 			}
 			i = next
 		case query[i] == '[':
 			end := strings.IndexByte(query[i+1:], ']')
 			if end < 0 {
-				return errors.New("transcript query contains an unterminated quoted identifier")
+				return fmt.Errorf("%s query contains an unterminated quoted identifier", database)
 			}
 			i += end + 2
 		case query[i] == '-' && i+1 < len(query) && query[i+1] == '-':
@@ -253,12 +369,12 @@ func validateTranscriptSelect(query string) error {
 		case query[i] == '/' && i+1 < len(query) && query[i+1] == '*':
 			end := strings.Index(query[i+2:], "*/")
 			if end < 0 {
-				return errors.New("transcript query contains an unterminated comment")
+				return fmt.Errorf("%s query contains an unterminated comment", database)
 			}
 			i += end + 4
 		case query[i] == ';':
 			if !onlySQLWhitespace(query[i+1:]) {
-				return errors.New("transcript queries must contain exactly one SELECT statement")
+				return fmt.Errorf("%s queries must contain exactly one SELECT statement", database)
 			}
 			i = len(query)
 		case isSQLWordByte(query[i]):
@@ -271,14 +387,14 @@ func validateTranscriptSelect(query string) error {
 				firstToken = token
 			}
 			if token == "ATTACH" || token == "DETACH" {
-				return fmt.Errorf("transcript queries may not use %s", token)
+				return fmt.Errorf("%s queries may not use %s", database, token)
 			}
 		default:
 			i++
 		}
 	}
 	if firstToken != "SELECT" {
-		return errors.New("transcript queries must contain exactly one read-only SELECT statement")
+		return fmt.Errorf("%s queries must contain exactly one read-only SELECT statement", database)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,7 +137,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendErr := s.session.Send(req.Message, ev, s.approver(r.Context(), ev))
+	sendErr := s.session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
 
 	if errors.Is(sendErr, agent.ErrBusy) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")

@@ -1,13 +1,16 @@
 package web
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 )
 
@@ -28,7 +31,32 @@ type fakeStep struct {
 	err       error
 }
 
-func (f *fakeClient) ChatStream(req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+type fakeHistory struct {
+	events []memory.Event
+}
+
+func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+	event := memory.Event{
+		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
+		SessionID:     "test-session",
+		Sequence:      int64(len(f.events) + 1),
+		ParentID:      input.ParentID,
+		Type:          input.Type,
+		Role:          input.Role,
+		ExecutionID:   input.ExecutionID,
+		Content:       input.Content,
+		Payload:       append([]byte(nil), input.Payload...),
+		FormatVersion: 1,
+	}
+	f.events = append(f.events, event)
+	return event, nil
+}
+
+func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
+	return append([]memory.Event(nil), f.events...), nil
+}
+
+func (f *fakeClient) ChatStream(_ context.Context, req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	if f.entered != nil {
 		f.entered <- struct{}{}
 	}
@@ -64,7 +92,10 @@ func newTestServer(c *fakeClient) http.Handler {
 }
 
 func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
-	srv := NewServer(agent.New(c, "test-model"))
+	srv := NewServer(agent.New(c, "test-model", &fakeHistory{}, memory.ScopeContext{
+		OwnerID:   memory.LocalOwnerID,
+		SessionID: "test-session",
+	}))
 	return srv, srv.Handler()
 }
 

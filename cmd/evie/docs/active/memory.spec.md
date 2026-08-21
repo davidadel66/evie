@@ -1,6 +1,6 @@
 # memory - local temporal-graph memory for Evie
 
-Status: draft (pending David's approval)
+Status: approved by David on 2026-08-17; Stage 1 in progress as of 2026-08-21
 
 ## Purpose
 
@@ -225,8 +225,11 @@ authority.
 
 V1 uses one fixed local owner identity. Projects live in a durable registry with
 a random stable ID, display name, unique canonical root, and timestamps. A
-project is selected explicitly when a session is created or resumed; launch cwd
-and `EVIE_PROJECT_ROOT` do not grant project scope. Relocation is an explicit
+project is selected explicitly when a session is created or resumed. The REPL
+may canonicalize its launch cwd and exact-match it to one active registered root
+as a discovery hint, but David must confirm the project before scope is granted.
+An unmatched cwd offers explicit registration or global scope.
+`EVIE_PROJECT_ROOT` does not grant project scope. Relocation is an explicit
 operation that preserves the project ID, while existing sessions retain their
 original root snapshot.
 
@@ -861,10 +864,16 @@ Local layout:
   proposals/
 ```
 
-Files under `system/` are pinned within a strict budget. Project files are listed
-in the context manifest and loaded on demand. Procedural changes use dedicated
-tools; generic file tools reject the procedural root. Existing `bash` remains a
-privileged exception.
+Files under `system/` and the active project's `instructions.md` are pinned within
+separate strict budgets on every request. The context composer loads these files
+mechanically from the session's immutable project ID; the model never has to
+remember to request them. A missing, unreadable, quarantined, or over-budget
+required file fails the request visibly rather than silently omitting governing
+instructions. Other project files are listed in the context manifest and loaded
+on demand. Approved procedural content is rendered as a trusted supplemental
+system-role block without modifying the code-owned base system prompt.
+Procedural changes use dedicated tools; generic file tools reject the procedural
+root. Existing `bash` remains a privileged exception.
 
 Git is required only when procedural memory is enabled. The repository receives
 a local identity (`Evie <evie@localhost>`) and never modifies global Git config.
@@ -948,8 +957,6 @@ start the next stage until the current tests pass and David approves the result.
 - run current Letta locally and inspect MemFS, compaction, Git commits, and
   dreaming;
 - record the exact Letta version/commit;
-- run a minimal Graphiti example locally or inspect its episode -> entity -> edge
-  pipeline and database output;
 - record observed differences from the papers;
 - check in a research note with exact versions/commits, commands, observed
   schemas, and an applicability/difference matrix approved by David.
@@ -961,23 +968,38 @@ semantic claims, graph indexes, and procedural files.
 
 **Goal:** make the existing agent loop restart-safe and observable.
 
+**Progress (2026-08-21):** the durable event spine is integrated into the agent
+loop and all current tests pass. The REPL still creates a fresh global session at
+startup, so restart-safe selection/resume, leases, and unknown-execution recovery
+remain unfinished. Exact canonical-root lookup for cwd discovery is implemented;
+the terminal confirmation and session chooser are the current implementation
+seam.
+
 **Tasks:**
 
-- before the first event write, remove memory-owned tables from generic
+- [x] before the first event write, remove memory-owned tables from generic
   `query_db` and reject `evie.db`/WAL/SHM paths in every file tool;
-- enable/test WAL and foreign keys on every connection and preserve database mode
+- [x] enable/test WAL and foreign keys on every connection and preserve database mode
   `0600`;
-- add project registry/register/list/relocate, session, immutable scope, event,
-  session-turn-lease, and execution-projection tables;
-- define a provider-neutral event envelope and format version;
-- inject `History`, immutable `ScopeContext`, and lease-cancellable provider/tool
-  contexts into `Session`;
-- persist each user/provider/tool/approval event in the required before-action
-  order and fence appends with the turn lease;
-- add project/session selection and resume for the REPL;
-- block unknown side effects and append explicit synthetic resolution events;
-- capture provider usage;
-- run a provider replay spike for opaque reasoning/continuation blocks. Until an
+- [x] add project registry/register/list/relocate/exact-root lookup, session,
+  immutable scope, and event tables;
+- [ ] add session-turn-lease and execution-projection tables;
+- [x] define a provider-neutral event envelope and format version;
+- [x] inject a durable `History` interface into `Session` and rebuild provider
+  context from ordered events;
+- [x] propagate cancellation contexts through the agent, provider client, and
+  tool execution paths;
+- [ ] inject immutable `ScopeContext` and lease-cancellable turn ownership into
+  `Session`;
+- [x] persist user/assistant messages plus tool intent, approval, success,
+  failure, and cancellation events in before-action order;
+- [ ] fence event appends with the durable turn lease and persist provider
+  failure/interruption events;
+- [ ] add cwd-assisted explicit project confirmation, session selection, and
+  resume for the REPL;
+- [ ] block unknown side effects and append explicit synthetic resolution events;
+- [ ] capture provider usage;
+- [ ] run a provider replay spike for opaque reasoning/continuation blocks. Until an
   encryption/key-management policy is approved, omit those blocks and mark
   dependent interrupted chains non-resumable rather than persisting them.
 
@@ -1016,6 +1038,9 @@ accounting, and table-driven boundary tests.
 
 **Tasks:**
 
+- before DDL, run a minimal Graphiti example locally or inspect its episode ->
+  entity -> edge pipeline and database output, recording the exact version,
+  observed schema, and differences from Evie's model in the research note;
 - before DDL, record canonical ID, typed-literal, UTC timestamp/precision,
   predicate-normalization, duplicate-equality, and scope-column encodings;
 - add entity, alias, claim, source, generic state-event, link, candidate, accepted
@@ -1117,7 +1142,9 @@ selected p95 latency/memory target.
 **Tasks:**
 
 - initialize the procedural repository and local Git identity;
-- load budgeted system instructions and project manifests;
+- load budgeted global instructions and the active project's required
+  `instructions.md` on every request, while representing other project files in
+  an on-demand scoped manifest;
 - add procedural proposal/approval tools;
 - journal Git operations with commit markers and startup reconciliation;
 - test the documented crash matrix, cross-process lock recovery, restrictive

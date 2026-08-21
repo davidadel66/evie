@@ -24,10 +24,21 @@ const maxReadBytes = 100 * 1024
 // as well as writes. Reading ~/.zshrc leaks API keys into the conversation and
 // thus to the model provider; writing it is a foot-gun with no upside.
 // Entries are "~"-relative and expanded at check time.
-var deniedDirs = []string{"~/.ssh", "~/.aws", "~/.gnupg"}
+var deniedDirs = []string{
+	"~/.ssh",
+	"~/.aws",
+	"~/.gnupg",
+	"~/.evie/procedural",
+}
 
 // File names that carry credentials wherever they happen to live.
 var deniedNames = []string{".zshrc", ".bashrc", ".zprofile", ".bash_profile", ".netrc"}
+
+var deniedFiles = []string{
+	"~/.evie/evie.db",
+	"~/.evie/evie.db-wal",
+	"~/.evie/evie.db-shm",
+}
 
 var lineNumRe = regexp.MustCompile(`^[ \t]*\d+\t`)
 
@@ -154,6 +165,21 @@ func denied(abs string) bool {
 		return true
 	}
 
+	for _, file := range deniedFiles {
+		expanded, err := expandHome(file)
+		if err != nil {
+			continue
+		}
+		if abs == expanded {
+			return true
+		}
+		// Canonicalize the configured path too: on macOS, for example,
+		// /var and /private/var can name the same protected file.
+		if resolved, err := filepath.EvalSymlinks(expanded); err == nil && abs == resolved {
+			return true
+		}
+	}
+
 	for _, dir := range deniedDirs {
 		expanded, err := expandHome(dir)
 		if err != nil {
@@ -162,6 +188,10 @@ func denied(abs string) bool {
 		// The separator matters: comparing against the bare prefix would let
 		// ~/.financeXYZ match ~/.finance.
 		if abs == expanded || strings.HasPrefix(abs, expanded+string(os.PathSeparator)) {
+			return true
+		}
+		if resolved, err := filepath.EvalSymlinks(expanded); err == nil &&
+			(abs == resolved || strings.HasPrefix(abs, resolved+string(os.PathSeparator))) {
 			return true
 		}
 	}
