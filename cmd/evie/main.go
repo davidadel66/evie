@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
@@ -44,7 +46,7 @@ func main() {
 	// cron-exec runs headless under launchd with no API key — it must
 	// never pay for (or die on) client construction, so the session is
 	// built inside the arms that talk to the model.
-	newSession := func() *agent.Session {
+	newSession := func(selectStoredSession func(*eviedb.Store) (memory.Session, error)) *agent.Session {
 		client, err := openrouter.NewClient(os.Getenv("OPENROUTER_API_KEY"))
 		if err != nil {
 			log.Fatalf("failed to create client: %v", err)
@@ -56,7 +58,7 @@ func main() {
 		}
 		store := eviedb.NewStore(db)
 
-		storedSession, err := store.CreateGlobalSession(context.Background())
+		storedSession, err := selectStoredSession(store)
 		if err != nil {
 			log.Fatalf("failed to create session: %v", err)
 		}
@@ -71,9 +73,20 @@ func main() {
 
 	switch cmd {
 	case "":
-		runREPL(newSession())
+		launchDir, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("failed to read launch directory: %v", err)
+		}
+		scanner := bufio.NewScanner(os.Stdin)
+		session := newSession(func(store *eviedb.Store) (memory.Session, error) {
+			return selectREPLSession(context.Background(), store, launchDir, scanner, os.Stdout)
+		})
+		runREPL(session, scanner)
 	case "serve":
-		if err := web.Serve(newSession()); err != nil {
+		globalSession := newSession(func(store *eviedb.Store) (memory.Session, error) {
+			return store.CreateGlobalSession(context.Background())
+		})
+		if err := web.Serve(globalSession); err != nil {
 			log.Fatalf("serve: %v", err)
 		}
 	case "cron-exec":

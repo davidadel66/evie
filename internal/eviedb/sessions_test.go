@@ -2,6 +2,8 @@ package eviedb
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -87,5 +89,41 @@ func TestCreateProjectSessionRejectsUnavailableProject(t *testing.T) {
 	}
 	if _, err := store.CreateProjectSession(ctx, project.ID); err == nil {
 		t.Error("session creation for archived project succeeded")
+	}
+}
+
+func TestCreateProjectSessionFromCanonicalRootLookupFreezesScope(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	root := t.TempDir()
+	project, err := store.RegisterProject(ctx, "Evie", root)
+	if err != nil {
+		t.Fatalf("register project: %v", err)
+	}
+
+	alias := filepath.Join(t.TempDir(), "evie-alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatalf("create root alias: %v", err)
+	}
+	discovered, err := store.FindActiveProjectByRoot(ctx, alias)
+	if err != nil {
+		t.Fatalf("discover project from launch root: %v", err)
+	}
+
+	session, err := store.CreateProjectSession(ctx, discovered.ID)
+	if err != nil {
+		t.Fatalf("create discovered project session: %v", err)
+	}
+	if session.ProjectID != project.ID || session.ProjectRootSnapshot != project.CanonicalRoot {
+		t.Fatalf("created session = %+v, want project %q rooted at %q",
+			session, project.ID, project.CanonicalRoot)
+	}
+
+	scope := session.ScopeContext()
+	if scope.ProjectID != project.ID || scope.ProjectRoot != project.CanonicalRoot {
+		t.Errorf("scope = %+v, want frozen project %q rooted at %q",
+			scope, project.ID, project.CanonicalRoot)
 	}
 }

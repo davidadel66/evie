@@ -6,14 +6,204 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
-	"os"
+	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/tools"
 )
+
+type replSessionStore interface {
+	FindProjectByRoot(context.Context, string) (memory.Project, error)
+	RegisterProject(context.Context, string, string) (memory.Project, error)
+	CreateProjectSession(context.Context, memory.ProjectID) (memory.Session, error)
+	CreateGlobalSession(context.Context) (memory.Session, error)
+}
+
+const (
+	projectScopeChoice  = "project"
+	registerScopeChoice = "register"
+	globalScopeChoice   = "global"
+)
+
+func selectREPLSession(
+	ctx context.Context,
+	store replSessionStore,
+	launchDir string,
+	scanner *bufio.Scanner,
+	out io.Writer,
+) (memory.Session, error) {
+	canonicalRoot, err := memory.CanonicalProjectRoot(launchDir)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("canonicalize launch directory: %w", err)
+	}
+
+	project, err := store.FindProjectByRoot(ctx, canonicalRoot)
+	if err == nil {
+		return selectKnownREPLProject(ctx, store, canonicalRoot, project, scanner, out)
+	}
+	if !errors.Is(err, eviedb.ErrProjectNotFound) {
+		return memory.Session{}, fmt.Errorf("discover project for launch directory: %w", err)
+	}
+
+	if _, err := fmt.Fprintf(out, "No active project is registered for %q.\n", canonicalRoot); err != nil {
+		return memory.Session{}, fmt.Errorf("write unregistered directory notice: %w", err)
+	}
+	choice, err := readREPLChoice(
+		scanner,
+		out,
+		"[r]egister this directory or use [g]lobal scope? ",
+		"Please enter r or g.\n",
+		map[string]string{
+			"r":        registerScopeChoice,
+			"register": registerScopeChoice,
+			"g":        globalScopeChoice,
+			"global":   globalScopeChoice,
+		},
+	)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
+	}
+	if choice == globalScopeChoice {
+		return createGlobalREPLSession(ctx, store)
+	}
+
+	defaultName := filepath.Base(canonicalRoot)
+	if _, err := fmt.Fprintf(out, "Project name [%s]: ", defaultName); err != nil {
+		return memory.Session{}, fmt.Errorf("write project-name prompt: %w", err)
+	}
+	displayName, err := scanREPLLine(scanner)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("read project name: %w", err)
+	}
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		displayName = defaultName
+	}
+
+	project, err = store.RegisterProject(ctx, displayName, canonicalRoot)
+	if err != nil {
+		concurrentProject, lookupErr := store.FindProjectByRoot(ctx, canonicalRoot)
+		if lookupErr == nil {
+			return selectKnownREPLProject(ctx, store, canonicalRoot, concurrentProject, scanner, out)
+		}
+		return memory.Session{}, fmt.Errorf("register launch directory: %w", err)
+	}
+	session, err := store.CreateProjectSession(ctx, project.ID)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("create registered project session: %w", err)
+	}
+	return session, nil
+}
+
+func selectKnownREPLProject(
+	ctx context.Context,
+	store replSessionStore,
+	canonicalRoot string,
+	project memory.Project,
+	scanner *bufio.Scanner,
+	out io.Writer,
+) (memory.Session, error) {
+	if project.Archived {
+		if _, err := fmt.Fprintf(
+			out,
+			"Launch directory %q belongs to archived project %q; archived projects cannot start sessions.\n",
+			canonicalRoot,
+			project.DisplayName,
+		); err != nil {
+			return memory.Session{}, fmt.Errorf("write archived project notice: %w", err)
+		}
+		_, err := readREPLChoice(
+			scanner,
+			out,
+			"Start a new session with [g]lobal scope? ",
+			"Please enter g.\n",
+			map[string]string{
+				"g":      globalScopeChoice,
+				"global": globalScopeChoice,
+			},
+		)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
+		}
+		return createGlobalREPLSession(ctx, store)
+	}
+
+	if _, err := fmt.Fprintf(out, "Launch directory %q matches active project %q.\n", canonicalRoot, project.DisplayName); err != nil {
+		return memory.Session{}, fmt.Errorf("write project suggestion: %w", err)
+	}
+	choice, err := readREPLChoice(
+		scanner,
+		out,
+		"Start a new session with [p]roject or [g]lobal scope? ",
+		"Please enter p or g.\n",
+		map[string]string{
+			"p":       projectScopeChoice,
+			"project": projectScopeChoice,
+			"g":       globalScopeChoice,
+			"global":  globalScopeChoice,
+		},
+	)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
+	}
+	if choice == projectScopeChoice {
+		session, err := store.CreateProjectSession(ctx, project.ID)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("create project-scoped session: %w", err)
+		}
+		return session, nil
+	}
+	return createGlobalREPLSession(ctx, store)
+}
+
+func readREPLChoice(
+	scanner *bufio.Scanner,
+	out io.Writer,
+	prompt string,
+	invalidMessage string,
+	choices map[string]string,
+) (string, error) {
+	for {
+		if _, err := fmt.Fprint(out, prompt); err != nil {
+			return "", fmt.Errorf("write prompt: %w", err)
+		}
+		line, err := scanREPLLine(scanner)
+		if err != nil {
+			return "", err
+		}
+		if choice, ok := choices[strings.ToLower(strings.TrimSpace(line))]; ok {
+			return choice, nil
+		}
+		if _, err := fmt.Fprint(out, invalidMessage); err != nil {
+			return "", fmt.Errorf("write invalid-choice message: %w", err)
+		}
+	}
+}
+
+func scanREPLLine(scanner *bufio.Scanner) (string, error) {
+	if scanner.Scan() {
+		return scanner.Text(), nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", io.EOF
+}
+
+func createGlobalREPLSession(ctx context.Context, store replSessionStore) (memory.Session, error) {
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("create global session: %w", err)
+	}
+	return session, nil
+}
 
 // smoothPrinter decouples token arrival from display so bursty network
 // chunks render as steady typing. Deltas go into a channel; a printer
@@ -112,9 +302,7 @@ func (r *replEvents) ToolResult(id, content string, isErr bool) {}
 
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
 // print and return to the prompt rather than killing the session.
-func runREPL(session *agent.Session) {
-	scanner := bufio.NewScanner(os.Stdin)
-
+func runREPL(session *agent.Session, scanner *bufio.Scanner) {
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
