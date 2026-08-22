@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS session_turn_leases (
     fencing_token    INTEGER NOT NULL CHECK (typeof(fencing_token) = 'integer' AND fencing_token > 0),
     lease_generation INTEGER NOT NULL CHECK (typeof(lease_generation) = 'integer' AND lease_generation > 0),
     expires_at       TEXT,
+    CHECK (fencing_token = lease_generation),
     CHECK (
         (holder_id IS NULL AND expires_at IS NULL) OR
         (holder_id IS NOT NULL AND expires_at IS NOT NULL)

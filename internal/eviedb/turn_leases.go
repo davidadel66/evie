@@ -345,9 +345,15 @@ func turnLeaseWindow(
 	}
 
 	now = now.UTC()
+	if year := now.Year(); year < 0 || year > 9999 {
+		return "", time.Time{}, "", errors.New("lease time is outside the supported storage range")
+	}
 	expiresAt := now.Add(duration)
 	if !expiresAt.After(now) {
 		return "", time.Time{}, "", errors.New("lease expiry must be after current time")
+	}
+	if year := expiresAt.Year(); year < 0 || year > 9999 {
+		return "", time.Time{}, "", errors.New("lease duration overflows the supported storage range")
 	}
 	return now.Format(turnLeaseTimeFormat), expiresAt, expiresAt.Format(turnLeaseTimeFormat), nil
 }

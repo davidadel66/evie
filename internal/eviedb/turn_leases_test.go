@@ -71,6 +71,20 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 		!renewed.ExpiresAt.Equal(now.Add(12*time.Second)) {
 		t.Errorf("renewed lease = %+v", renewed)
 	}
+	setTurnLeaseTime(store, now.Add(3*time.Second))
+	preserved, err := store.HeartbeatTurnLease(
+		ctx,
+		session.ID,
+		renewed.HolderID,
+		renewed.FencingToken,
+		time.Second,
+	)
+	if err != nil {
+		t.Fatalf("heartbeat with shorter window: %v", err)
+	}
+	if preserved.ExpiresAt != renewed.ExpiresAt {
+		t.Errorf("short heartbeat expiry = %v, want preserved %v", preserved.ExpiresAt, renewed.ExpiresAt)
+	}
 
 	staleToken := first.FencingToken + 1
 	setTurnLeaseTime(store, now.Add(3*time.Second))
@@ -101,6 +115,9 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	if second.FencingToken <= first.FencingToken || second.Generation <= first.Generation {
 		t.Errorf("replacement lease did not advance monotonically: first=%+v second=%+v", first, second)
 	}
+	if second.FencingToken != memory.FencingToken(second.Generation) {
+		t.Errorf("replacement lease epoch diverged: token=%d generation=%d", second.FencingToken, second.Generation)
+	}
 	setTurnLeaseTime(store, now.Add(4*time.Second))
 	if !first.UnexpiredAt(now.Add(4 * time.Second)) {
 		t.Error("stale snapshot should remain locally unexpired")
@@ -117,6 +134,53 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	}
 	if err := store.ReleaseTurnLease(ctx, session.ID, first.HolderID, first.FencingToken); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("replaced holder released current lease: %v", err)
+	}
+}
+
+func TestTurnLeaseRejectsInvalidAndOverflowingDurations(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	now := time.Date(2026, 8, 22, 12, 30, 0, 0, time.UTC)
+	setTurnLeaseTime(store, now)
+	for _, duration := range []time.Duration{0, -time.Nanosecond} {
+		if _, err := store.AcquireTurnLease(ctx, session.ID, "worker-a", duration); err == nil {
+			t.Errorf("acquire duration %v succeeded, want validation error", duration)
+		}
+	}
+
+	setTurnLeaseTime(store, time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC))
+	if _, err := store.AcquireTurnLease(ctx, session.ID, "worker-a", time.Nanosecond); err == nil {
+		t.Error("acquire with overflowing duration succeeded")
+	}
+
+	setTurnLeaseTime(store, now)
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "worker-a", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire valid lease: %v", err)
+	}
+	for _, duration := range []time.Duration{0, -time.Nanosecond} {
+		if _, err := store.HeartbeatTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken, duration); err == nil {
+			t.Errorf("heartbeat duration %v succeeded, want validation error", duration)
+		}
+	}
+
+	setTurnLeaseTime(store, time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC))
+	if _, err := store.HeartbeatTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken, time.Nanosecond); err == nil {
+		t.Error("heartbeat with overflowing duration succeeded")
+	}
+
+	observed, err := store.GetTurnLease(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("get lease after invalid heartbeats: %v", err)
+	}
+	if observed != lease {
+		t.Errorf("invalid heartbeat mutated lease: got %+v want %+v", observed, lease)
 	}
 }
 
@@ -551,6 +615,7 @@ func TestSessionTurnLeaseSchemaConstraints(t *testing.T) {
 		{name: "empty holder", sessionID: session.ID, holder: "", token: 1, generation: 1, expires: "2026-08-22T12:00:00.000000000Z"},
 		{name: "nonpositive fencing token", sessionID: session.ID, holder: "worker", token: 0, generation: 1, expires: "2026-08-22T12:00:00.000000000Z"},
 		{name: "nonpositive generation", sessionID: session.ID, holder: "worker", token: 1, generation: 0, expires: "2026-08-22T12:00:00.000000000Z"},
+		{name: "mismatched acquisition epoch", sessionID: session.ID, holder: "worker", token: 1, generation: 2, expires: "2026-08-22T12:00:00.000000000Z"},
 		{name: "holder without expiry", sessionID: session.ID, holder: "worker", token: 1, generation: 1, expires: nil},
 		{name: "expiry without holder", sessionID: session.ID, holder: nil, token: 1, generation: 1, expires: "2026-08-22T12:00:00.000000000Z"},
 	}
