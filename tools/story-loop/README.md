@@ -3,17 +3,19 @@
 `evie-story-loop` is an executable controller for one approved engineering
 story. It automates the task handoff that otherwise happens manually:
 
-1. start one persistent, workspace-write implementation task with
-   `implement-story`;
+1. prepare an isolated Git worktree and start one persistent, workspace-write
+   implementation task with a controller-owned worker contract;
 2. review its exact commit in a brand-new, read-only task with `review-story`;
 3. run operator-supplied deterministic checks outside both model tasks;
 4. resume the original implementation task with the combined review and
    validation delta; and
 5. repeat until the candidate is ready or a bounded stop condition fires.
 
-The controller is deliberately not a skill. Skills define each agent's job;
-this process owns transitions, persistence, candidate identity, validation,
-locking, convergence, and delivery.
+The controller is deliberately not a skill. The external `review-story` skill
+defines the review task; a small embedded worker contract avoids invoking the
+high-level `implement-story` workflow and then conflicting with its own review
+and delivery gates. The process owns transitions, persistence, candidate
+identity, validation, locking, convergence, and delivery.
 
 ## Install
 
@@ -43,12 +45,19 @@ Codex app or a working Codex CLI, then rerun it.
 ## Start one story
 
 Start from any worktree in the target repository; the CLI resolves the primary
-worktree before invoking `implement-story`. The story must already have an
-approved execution contract.
+worktree, loads the approved issue contract with `gh`, and prepares
+`.worktrees/<run-id>` itself before granting an agent write access. The primary
+worktree is never the implementation task's writable root.
+
+`review-story` is currently an explicit external dependency because its skill
+files are not yet committed on `master`. Pass the absolute path to the reviewed
+skill contract. Once that separate skill work lands, the CLI can gain a
+repository default without coupling this controller PR to those changes.
 
 ```sh
 uv run --project tools/story-loop evie-story-loop start \
   --story https://github.com/davidadel66/evie/issues/54 \
+  --review-skill /absolute/path/to/review-story/SKILL.md \
   --base master \
   --check 'git diff --check master...HEAD' \
   --check 'go test ./...' \
@@ -62,6 +71,12 @@ Important controls:
 - `--check` is repeatable and required. These shell commands are trusted
   operator input saved in immutable run configuration. The controller never
   executes commands proposed by a model.
+- `--review-skill` is required and may point to a repository, personal, or
+  installed `review-story/SKILL.md`. Startup fails before creating a run if the
+  file is absent.
+- The story URL is resolved with `gh issue view` before either sandboxed task
+  starts. Use `--story-contract-file` for an approved local execution contract
+  or an environment without GitHub access.
 - `--draft-pr` is explicit delivery authorization. Without it, a passing run
   stops with a local candidate ready for human handoff. The controller never
   approves or merges.
@@ -73,10 +88,14 @@ Important controls:
   Codex authentication. Override it explicitly when another available model is
   required.
 
-The implementation task is told to commit locally but not push or create a
-pull request. After both fresh review and deterministic validation pass, the
-controller performs those delivery actions itself only when `--draft-pr` was
-set.
+The implementation task is scoped to the controller-created worktree and told
+to commit locally but not push or create a pull request. Its thread ID is
+persisted before the first write-producing turn. On resume, a clean advanced
+commit from an interrupted implementation or repair turn is reconciled as a
+candidate and still has to pass fresh review and deterministic validation.
+After both pass, the controller performs delivery only when `--draft-pr` was
+set and verifies that the resulting PR is open, draft, on the configured base
+and head branches, and bound to the exact candidate SHA.
 
 ## Inspect and resume
 
@@ -147,7 +166,9 @@ PYTHONPATH=tools/story-loop/src \
   python3 -m unittest discover -s tools/story-loop/tests -v
 ```
 
-The suite covers success, repair feedback, validation failures, human-decision
-and incomplete-review stops, convergence bounds, stale candidates, invalid
-structured output, locking, atomic receipts, SDK thread/sandbox selection, and
-resume behavior.
+The suite covers success, repair feedback, changing and repeated validation
+failures, human-decision and incomplete-review stops, convergence bounds,
+stale candidates, contradictory or invalid structured output, isolated
+worktree preparation, locking, atomic receipts, exact draft-PR metadata, SDK
+thread/sandbox selection, and interruption recovery after implementation and
+repair commits.

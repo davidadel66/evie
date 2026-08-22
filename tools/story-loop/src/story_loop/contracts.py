@@ -262,6 +262,10 @@ def validate_review(value: Any) -> dict[str, Any]:
 
     if verdict == "READY_FOR_HUMAN_REVIEW" and findings:
         raise ContractError("a ready review must not contain findings")
+    if verdict == "READY_FOR_HUMAN_REVIEW" and any(
+        check["status"] != "PASSED" for check in payload["checks"]
+    ):
+        raise ContractError("a ready review must not contain failed or skipped checks")
     if verdict == "CHANGES_REQUIRED" and not findings:
         raise ContractError("CHANGES_REQUIRED must contain at least one finding")
     if (

@@ -15,3 +15,4 @@ internal/web/ui/dist/
 /tools/story-loop/.venv/
 /tools/story-loop/**/__pycache__/
 /tools/story-loop/**/*.pyc
+/.worktrees/

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -46,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument(
         "--story", required=True, help="approved story issue URL or stable reference"
     )
+    start.add_argument(
+        "--story-contract-file",
+        help="approved contract text; otherwise load the GitHub issue with gh",
+    )
     start.add_argument("--repo", default=".", help="path inside the target repository")
     start.add_argument("--base", default="master", help="pull-request base branch")
     start.add_argument(
@@ -74,8 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="gpt-5.6-terra",
         help="Codex model (default: gpt-5.6-terra)",
     )
-    start.add_argument("--implement-skill", help="path to implement-story/SKILL.md")
-    start.add_argument("--review-skill", help="path to review-story/SKILL.md")
+    start.add_argument(
+        "--review-skill",
+        required=True,
+        help="explicit path to the external review-story/SKILL.md contract",
+    )
 
     resume = subparsers.add_parser("resume", help="continue a durable interrupted run")
     resume.add_argument("--repo", default=".", help="path inside the target repository")
@@ -103,12 +111,8 @@ def _store(repository: Path, run_id: str) -> RunStore:
     return RunStore(git_common_dir(repository) / "story-loop", validate_run_id(run_id))
 
 
-def _skill_path(argument: str | None, repository: Path, name: str) -> Path:
-    path = (
-        Path(argument).expanduser()
-        if argument
-        else repository / ".agents" / "skills" / name / "SKILL.md"
-    )
+def _skill_path(argument: str, name: str) -> Path:
+    path = Path(argument).expanduser()
     path = path.resolve()
     if not path.is_file():
         raise StateError(f"required skill is missing: {path}")
@@ -118,10 +122,46 @@ def _skill_path(argument: str | None, repository: Path, name: str) -> Path:
 def _backend(config: dict[str, Any]) -> CodexBackend:
     return CodexBackend(
         repository=Path(config["repository"]),
-        implement_skill=Path(config["implement_skill"]),
         review_skill=Path(config["review_skill"]),
         model=config["model"] or None,
     )
+
+
+def _story_contract(
+    story: str, contract_file: str | None, repository: Path
+) -> tuple[str, str]:
+    if contract_file:
+        path = Path(contract_file).expanduser().resolve()
+        try:
+            body = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise StateError(f"cannot read story contract {path}: {exc}") from exc
+        if not body.strip():
+            raise StateError(f"story contract is empty: {path}")
+        first_line = next(line.strip() for line in body.splitlines() if line.strip())
+        return first_line.lstrip("# "), body
+
+    result = subprocess.run(
+        ["gh", "issue", "view", story, "--json", "title,body,url"],
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise StateError(
+            "cannot load the approved story contract with gh; pass --story-contract-file"
+            + (f": {detail}" if detail else "")
+        )
+    try:
+        issue = json.loads(result.stdout)
+        title = issue["title"]
+        body = issue["body"]
+        url = issue["url"]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise StateError("gh returned an invalid story contract") from exc
+    return title, f"# {title}\n\nSource: {url}\n\n{body}"
 
 
 def _summary(state: dict[str, Any], store: RunStore) -> dict[str, Any]:
@@ -149,22 +189,30 @@ def _execute(store: RunStore, state: dict[str, Any]) -> dict[str, Any]:
 
 def _start(arguments: argparse.Namespace) -> tuple[dict[str, Any], RunStore]:
     repository = primary_worktree(Path(arguments.repo).expanduser().resolve())
-    git_text(repository, "rev-parse", "--verify", f"{arguments.base}^{{commit}}")
-    run_id = validate_run_id(arguments.run_id or _run_id_from_story(arguments.story))
-    implement_skill = _skill_path(
-        arguments.implement_skill, repository, "implement-story"
+    base_commit = git_text(
+        repository, "rev-parse", "--verify", f"{arguments.base}^{{commit}}"
     )
-    review_skill = _skill_path(arguments.review_skill, repository, "review-story")
+    run_id = validate_run_id(arguments.run_id or _run_id_from_story(arguments.story))
+    review_skill = _skill_path(arguments.review_skill, "review-story")
+    story_title, story_contract = _story_contract(
+        arguments.story, arguments.story_contract_file, repository
+    )
+    branch = f"codex/{run_id}"
+    worktree = repository / ".worktrees" / run_id
     config = {
         "run_id": run_id,
         "story": arguments.story,
         "repository": str(repository),
         "base_branch": arguments.base,
+        "base_commit": base_commit,
+        "branch": branch,
+        "worktree": str(worktree),
+        "story_title": story_title,
+        "story_contract": story_contract,
         "checks": list(arguments.check),
         "check_timeout_seconds": arguments.check_timeout,
         "max_review_passes": arguments.max_review_passes,
         "draft_pr": bool(arguments.draft_pr),
-        "implement_skill": str(implement_skill),
         "review_skill": str(review_skill),
         "model": arguments.model,
     }
@@ -204,11 +252,6 @@ def _smoke(arguments: argparse.Namespace) -> dict[str, Any]:
     repository = primary_worktree(Path(arguments.repo).expanduser().resolve())
     backend = CodexBackend(
         repository=repository,
-        implement_skill=repository
-        / ".agents"
-        / "skills"
-        / "implement-story"
-        / "SKILL.md",
         review_skill=repository / ".agents" / "skills" / "review-story" / "SKILL.md",
         model=arguments.model,
     )

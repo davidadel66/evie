@@ -12,6 +12,12 @@ from unittest import mock
 
 from story_loop import cli
 from story_loop.backend import CodexBackend
+from story_loop.contracts import (
+    IMPLEMENTATION_SCHEMA,
+    REVIEW_SCHEMA,
+    ContractError,
+    validate_review,
+)
 from story_loop.controller import Controller, new_state
 from story_loop.storage import RunLockedError, RunStore, StateError
 
@@ -41,26 +47,23 @@ def make_repository(parent: Path) -> Path:
     git(repository, "config", "user.name", "Story Loop Tests")
     git(repository, "config", "user.email", "story-loop@example.invalid")
     commit(repository, "base.txt", "base\n", "base")
-    git(repository, "switch", "-c", "codex/test-story")
-    commit(repository, "story.txt", "candidate\n", "candidate")
-    for skill in ("implement-story", "review-story"):
-        path = repository / ".agents" / "skills" / skill / "SKILL.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"# {skill}\n", encoding="utf-8")
+    path = repository / ".agents" / "skills" / "review-story" / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# review-story\n", encoding="utf-8")
     git(repository, "add", ".agents")
     git(repository, "commit", "-m", "test skill fixtures")
     return repository
 
 
-def implementation_payload(config: dict, repository: Path) -> dict:
+def implementation_payload(config: dict, worktree: Path) -> dict:
     return {
         "status": "CANDIDATE_READY",
         "story_ref": config["story"],
         "title": "Test story",
-        "worktree": str(repository),
-        "branch": git(repository, "branch", "--show-current"),
+        "worktree": str(worktree),
+        "branch": git(worktree, "branch", "--show-current"),
         "base_branch": config["base_branch"],
-        "head_sha": git(repository, "rev-parse", "HEAD"),
+        "head_sha": git(worktree, "rev-parse", "HEAD"),
         "pr_url": "",
         "summary": ["implemented test candidate"],
         "checks": [{"command": "true", "status": "PASSED", "evidence": "exit 0"}],
@@ -104,6 +107,7 @@ class FakeBackend:
         self.repository = repository
         self.reviews = list(reviews)
         self.implementation_calls = 0
+        self.implementation_thread_calls = 0
         self.review_calls = 0
         self.repair_calls = 0
         self.review_thread_ids: list[str] = []
@@ -111,9 +115,17 @@ class FakeBackend:
         self.repair_callback = None
         self.closed = False
 
-    def start_implementation(self, config: dict) -> tuple[str, dict]:
+    def start_implementation_thread(self, _config: dict) -> str:
+        self.implementation_thread_calls += 1
+        return "implementation-thread"
+
+    def run_implementation(self, config: dict, thread_id: str) -> dict:
         self.implementation_calls += 1
-        return "implementation-thread", implementation_payload(config, self.repository)
+        if thread_id != "implementation-thread":
+            raise AssertionError("implementation did not use its persisted thread")
+        worktree = Path(config["worktree"])
+        commit(worktree, "story.txt", "candidate\n", "candidate")
+        return implementation_payload(config, worktree)
 
     def review(self, config: dict, candidate: dict) -> tuple[str, dict]:
         self.review_calls += 1
@@ -139,13 +151,12 @@ class FakeBackend:
         self.repair_deltas.append(delta)
         if thread_id != "implementation-thread":
             raise AssertionError("repair did not resume the implementation thread")
+        worktree = Path(candidate["worktree"])
         if self.repair_callback is None:
-            commit(
-                self.repository, f"repair-{self.repair_calls}.txt", "fixed\n", "repair"
-            )
+            commit(worktree, f"repair-{self.repair_calls}.txt", "fixed\n", "repair")
         else:
             self.repair_callback(self.repair_calls, delta)
-        return implementation_payload(config, self.repository)
+        return implementation_payload(config, worktree)
 
     def close(self) -> None:
         self.closed = True
@@ -159,18 +170,21 @@ class ControllerTest(unittest.TestCase):
         self.repository = make_repository(self.root)
 
     def config(self, **overrides: object) -> dict:
+        base_commit = git(self.repository, "rev-parse", "master")
         value = {
             "run_id": "test-run",
             "story": "https://example.invalid/issues/1",
             "repository": str(self.repository),
             "base_branch": "master",
+            "base_commit": base_commit,
+            "branch": "codex/test-run",
+            "worktree": str(self.repository / ".worktrees" / "test-run"),
+            "story_title": "Test story",
+            "story_contract": "# Test story\n\nApproved test contract.",
             "checks": ["true"],
             "check_timeout_seconds": 10,
             "max_review_passes": 3,
             "draft_pr": False,
-            "implement_skill": str(
-                self.repository / ".agents/skills/implement-story/SKILL.md"
-            ),
             "review_skill": str(
                 self.repository / ".agents/skills/review-story/SKILL.md"
             ),
@@ -245,7 +259,12 @@ class ControllerTest(unittest.TestCase):
         )
 
         def repair(_number: int, _delta: list[dict]) -> None:
-            commit(self.repository, "marker", "present\n", "make validation pass")
+            commit(
+                Path(self.config()["worktree"]),
+                "marker",
+                "present\n",
+                "make validation pass",
+            )
 
         backend.repair_callback = repair
         state, _store = self.run_controller(
@@ -255,6 +274,54 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual("READY_FOR_HUMAN_REVIEW", state["outcome"])
         self.assertEqual("validation", backend.repair_deltas[0][0]["source"])
         self.assertEqual("test -f marker", backend.repair_deltas[0][0]["command"])
+
+    def test_changed_validation_evidence_is_not_stalled(self) -> None:
+        backend = FakeBackend(
+            self.repository,
+            [
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                ),
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                ),
+            ],
+        )
+
+        def repair(_number: int, _delta: list[dict]) -> None:
+            commit(
+                Path(self.config()["worktree"]),
+                "story.txt",
+                "different failure\n",
+                "advance failing evidence",
+            )
+
+        backend.repair_callback = repair
+        state, _store = self.run_controller(
+            backend,
+            self.config(
+                checks=["cat story.txt; exit 1"],
+                max_review_passes=2,
+            ),
+        )
+        self.assertEqual("MAX_PASSES", state["outcome"])
+
+    def test_identical_validation_evidence_stops_as_stalled(self) -> None:
+        backend = FakeBackend(
+            self.repository,
+            [
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                ),
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                ),
+            ],
+        )
+        state, _store = self.run_controller(
+            backend, self.config(checks=["printf same; exit 1"])
+        )
+        self.assertEqual("STALLED", state["outcome"])
 
     def test_decision_required_stops_after_recording_validation(self) -> None:
         backend = FakeBackend(
@@ -323,12 +390,14 @@ class ControllerTest(unittest.TestCase):
     def test_stale_implementation_candidate_stops(self) -> None:
         backend = FakeBackend(self.repository, [])
 
-        def stale(config: dict) -> tuple[str, dict]:
-            payload = implementation_payload(config, self.repository)
+        def stale(config: dict, _thread_id: str) -> dict:
+            worktree = Path(config["worktree"])
+            commit(worktree, "story.txt", "candidate\n", "candidate")
+            payload = implementation_payload(config, worktree)
             payload["head_sha"] = "0" * 40
-            return "implementation-thread", payload
+            return payload
 
-        backend.start_implementation = stale  # type: ignore[method-assign]
+        backend.run_implementation = stale  # type: ignore[method-assign]
         state, _store = self.run_controller(backend)
         self.assertEqual("INVALID_CANDIDATE", state["outcome"])
 
@@ -337,6 +406,87 @@ class ControllerTest(unittest.TestCase):
         state, _store = self.run_controller(backend)
         self.assertEqual("REVIEW_INCOMPLETE", state["outcome"])
         self.assertEqual(0, state["passes_completed"])
+
+    def test_ready_review_with_failed_check_stops_safely(self) -> None:
+        def contradictory(candidate: dict) -> dict:
+            payload = review_payload(candidate["head_sha"], "READY_FOR_HUMAN_REVIEW")
+            payload["checks"][0]["status"] = "FAILED"
+            return payload
+
+        backend = FakeBackend(self.repository, [contradictory])
+        state, _store = self.run_controller(backend)
+        self.assertEqual("REVIEW_INCOMPLETE", state["outcome"])
+
+    def test_resume_recovers_commit_from_interrupted_implementation_turn(self) -> None:
+        backend = FakeBackend(
+            self.repository,
+            [
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                )
+            ],
+        )
+        original = backend.run_implementation
+
+        def interrupted(config: dict, thread_id: str) -> dict:
+            original(config, thread_id)
+            raise KeyboardInterrupt()
+
+        backend.run_implementation = interrupted  # type: ignore[method-assign]
+        config = self.config()
+        store = RunStore(self.root / "state", config["run_id"])
+        state = new_state(config)
+        store.save(state)
+        controller = Controller(store=store, backend=backend)
+        with self.assertRaises(KeyboardInterrupt):
+            controller.run(state)
+
+        resumed = store.load()
+        self.assertEqual("IMPLEMENT", resumed["phase"])
+        self.assertEqual("implementation-thread", resumed["implementation_thread_id"])
+        backend.run_implementation = original  # type: ignore[method-assign]
+        final = controller.run(resumed)
+        self.assertEqual("READY_FOR_HUMAN_REVIEW", final["outcome"])
+        self.assertEqual(1, backend.implementation_thread_calls)
+        self.assertEqual(1, backend.implementation_calls)
+
+    def test_resume_recovers_commit_from_interrupted_repair_turn(self) -> None:
+        backend = FakeBackend(
+            self.repository,
+            [
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "CHANGES_REQUIRED", findings=[finding()]
+                ),
+                lambda candidate: review_payload(
+                    candidate["head_sha"], "READY_FOR_HUMAN_REVIEW"
+                ),
+            ],
+        )
+
+        def interrupted(_number: int, _delta: list[dict]) -> None:
+            commit(
+                Path(self.config()["worktree"]),
+                "repair.txt",
+                "fixed\n",
+                "interrupted repair",
+            )
+            raise KeyboardInterrupt()
+
+        backend.repair_callback = interrupted
+        config = self.config()
+        store = RunStore(self.root / "state", config["run_id"])
+        state = new_state(config)
+        store.save(state)
+        controller = Controller(store=store, backend=backend)
+        with self.assertRaises(KeyboardInterrupt):
+            controller.run(state)
+
+        resumed = store.load()
+        self.assertEqual("REPAIR", resumed["phase"])
+        backend.repair_callback = None
+        final = controller.run(resumed)
+        self.assertEqual("READY_FOR_HUMAN_REVIEW", final["outcome"])
+        self.assertEqual(1, backend.repair_calls)
 
     def test_resume_does_not_repeat_completed_implementation(self) -> None:
         backend = FakeBackend(
@@ -389,6 +539,83 @@ class StorageTest(unittest.TestCase):
                 store.write_iteration(1, {"decision": "CHANGED"})
 
 
+class ContractTest(unittest.TestCase):
+    def test_schema_and_runtime_payload_fields_stay_aligned(self) -> None:
+        implementation_fields = {
+            "status",
+            "story_ref",
+            "title",
+            "worktree",
+            "branch",
+            "base_branch",
+            "head_sha",
+            "pr_url",
+            "summary",
+            "checks",
+            "known_gaps",
+            "decision",
+        }
+        review_fields = {
+            "candidate_sha",
+            "verdict",
+            "summary",
+            "findings",
+            "checks",
+            "decision",
+        }
+        self.assertEqual(implementation_fields, set(IMPLEMENTATION_SCHEMA["required"]))
+        self.assertEqual(
+            implementation_fields, set(IMPLEMENTATION_SCHEMA["properties"])
+        )
+        self.assertEqual(review_fields, set(REVIEW_SCHEMA["required"]))
+        self.assertEqual(review_fields, set(REVIEW_SCHEMA["properties"]))
+
+    def test_ready_review_rejects_skipped_check(self) -> None:
+        payload = review_payload("a" * 40, "READY_FOR_HUMAN_REVIEW")
+        payload["checks"][0]["status"] = "SKIPPED"
+        with self.assertRaises(ContractError):
+            validate_review(payload)
+
+
+class DeliveryMetadataTest(unittest.TestCase):
+    def state(self) -> dict:
+        return {
+            "config": {"base_branch": "master"},
+            "candidate": {
+                "branch": "codex/story",
+                "head_sha": "a" * 40,
+            },
+        }
+
+    def metadata(self, **overrides: object) -> str:
+        payload = {
+            "url": "https://example.invalid/pr/1",
+            "state": "OPEN",
+            "isDraft": True,
+            "baseRefName": "master",
+            "headRefName": "codex/story",
+            "headRefOid": "a" * 40,
+        }
+        payload.update(overrides)
+        return json.dumps(payload)
+
+    def test_exact_open_draft_is_accepted(self) -> None:
+        self.assertEqual(
+            "https://example.invalid/pr/1",
+            Controller._validated_pr_url(self.state(), self.metadata()),
+        )
+
+    def test_non_draft_or_stale_pr_is_rejected(self) -> None:
+        for metadata in (
+            self.metadata(isDraft=False),
+            self.metadata(baseRefName="other"),
+            self.metadata(headRefOid="b" * 40),
+            self.metadata(state="MERGED"),
+        ):
+            with self.subTest(metadata=metadata), self.assertRaises(RuntimeError):
+                Controller._validated_pr_url(self.state(), metadata)
+
+
 class BackendBoundaryTest(unittest.TestCase):
     class Values:
         deny_all = "deny-all"
@@ -435,7 +662,6 @@ class BackendBoundaryTest(unittest.TestCase):
         fake_codex = self.Codex(lambda: review_payload(sha, "READY_FOR_HUMAN_REVIEW"))
         backend = CodexBackend(
             repository=Path("/repo"),
-            implement_skill=Path("/implement"),
             review_skill=Path("/review"),
         )
         backend._codex = fake_codex
@@ -450,6 +676,7 @@ class BackendBoundaryTest(unittest.TestCase):
             "story": "story",
             "base_branch": "master",
             "passes_completed": 0,
+            "story_contract": "approved contract",
         }
         candidate = {
             "worktree": "/repo/worktree",
@@ -476,6 +703,7 @@ class BackendBoundaryTest(unittest.TestCase):
             "repository": "/repo",
             "base_branch": "master",
             "checks": ["true"],
+            "story_contract": "approved contract",
         }
         payload = {
             "status": "CANDIDATE_READY",
@@ -494,7 +722,6 @@ class BackendBoundaryTest(unittest.TestCase):
         fake_codex = self.Codex(lambda: payload)
         backend = CodexBackend(
             repository=Path("/repo"),
-            implement_skill=Path("/implement"),
             review_skill=Path("/review"),
         )
         backend._codex = fake_codex
@@ -511,6 +738,57 @@ class BackendBoundaryTest(unittest.TestCase):
         self.assertEqual("workspace-write", fake_codex.resumed[0][1]["sandbox"])
         self.assertEqual("workspace-write", fake_codex.resumed[0][2].runs[0]["sandbox"])
 
+    def test_implementation_thread_is_created_before_write_turn(self) -> None:
+        sha = "c" * 40
+        payload = {
+            "status": "CANDIDATE_READY",
+            "story_ref": "story",
+            "title": "Story",
+            "worktree": "/repo/worktree",
+            "branch": "codex/story",
+            "base_branch": "master",
+            "head_sha": sha,
+            "pr_url": "",
+            "summary": ["implemented"],
+            "checks": [],
+            "known_gaps": [],
+            "decision": "",
+        }
+        fake_codex = self.Codex(lambda: payload)
+        backend = CodexBackend(
+            repository=Path("/repo"),
+            review_skill=Path("/review"),
+        )
+        backend._codex = fake_codex
+        backend._sdk = {
+            "ApprovalMode": self.Values,
+            "Sandbox": self.Values,
+            "SkillInput": self.Input,
+            "TextInput": self.Input,
+        }
+        config = {
+            "run_id": "run",
+            "story": "story",
+            "story_title": "Story",
+            "story_contract": "approved contract",
+            "base_branch": "master",
+            "base_commit": "d" * 40,
+            "branch": "codex/story",
+            "worktree": "/repo/worktree",
+            "checks": ["true"],
+        }
+
+        thread_id = backend.start_implementation_thread(config)
+        self.assertEqual("fresh-1", thread_id)
+        self.assertEqual([], fake_codex.resumed)
+        result = backend.run_implementation(config, thread_id)
+
+        self.assertEqual(sha, result["head_sha"])
+        self.assertEqual("/repo/worktree", fake_codex.started[0][0]["cwd"])
+        self.assertEqual("workspace-write", fake_codex.started[0][0]["sandbox"])
+        self.assertEqual(thread_id, fake_codex.resumed[0][0])
+        self.assertEqual("workspace-write", fake_codex.resumed[0][1]["sandbox"])
+
 
 class CliTest(unittest.TestCase):
     def test_start_runs_with_injected_backend_and_prints_receipt_locations(
@@ -518,6 +796,10 @@ class CliTest(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repository = make_repository(Path(directory))
+            contract_file = Path(directory) / "story.md"
+            contract_file.write_text(
+                "# Test story\n\nApproved contract.\n", encoding="utf-8"
+            )
             backend = FakeBackend(
                 repository,
                 [
@@ -540,6 +822,10 @@ class CliTest(unittest.TestCase):
                         str(repository),
                         "--base",
                         "master",
+                        "--story-contract-file",
+                        str(contract_file),
+                        "--review-skill",
+                        str(repository / ".agents/skills/review-story/SKILL.md"),
                         "--check",
                         "true",
                     ]
@@ -548,6 +834,13 @@ class CliTest(unittest.TestCase):
             self.assertEqual(0, exit_code)
             self.assertEqual("issue-42", result["run_id"])
             self.assertEqual("READY_FOR_HUMAN_REVIEW", result["outcome"])
+            self.assertEqual(
+                (repository / ".worktrees" / "issue-42").resolve(),
+                Path(result["worktree"]).resolve(),
+            )
+            self.assertEqual(
+                "", git(repository, "status", "--porcelain", "--untracked-files=no")
+            )
             self.assertTrue(Path(result["state_path"]).is_file())
             self.assertTrue(backend.closed)
 

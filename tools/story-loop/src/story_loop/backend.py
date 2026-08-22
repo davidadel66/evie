@@ -26,12 +26,10 @@ class CodexBackend:
         self,
         *,
         repository: Path,
-        implement_skill: Path,
         review_skill: Path,
         model: str | None = None,
     ) -> None:
         self.repository = repository.resolve()
-        self.implement_skill = implement_skill.resolve()
         self.review_skill = review_skill.resolve()
         self.model = model
         self._codex: Any = None
@@ -66,41 +64,54 @@ class CodexBackend:
             self._codex.close()
             self._codex = None
 
-    def start_implementation(
-        self, config: dict[str, Any]
-    ) -> tuple[str, dict[str, Any]]:
+    def start_implementation_thread(self, config: dict[str, Any]) -> str:
         codex = self._ensure_client()
         sdk = self._sdk
         thread = codex.thread_start(
             approval_mode=sdk["ApprovalMode"].deny_all,
-            cwd=str(self.repository),
+            cwd=config["worktree"],
             model=self.model,
             sandbox=sdk["Sandbox"].workspace_write,
         )
         thread.set_name(f"story-loop implement {config['run_id']}")
+        return thread.id
+
+    def run_implementation(
+        self, config: dict[str, Any], thread_id: str
+    ) -> dict[str, Any]:
+        codex = self._ensure_client()
+        sdk = self._sdk
+        thread = codex.thread_resume(
+            thread_id,
+            approval_mode=sdk["ApprovalMode"].deny_all,
+            cwd=config["worktree"],
+            model=self.model,
+            sandbox=sdk["Sandbox"].workspace_write,
+        )
         prompt = "\n".join(
             [
-                "Use the implement-story workflow for exactly one approved story.",
+                "Implement exactly one approved engineering story in the already prepared isolated worktree.",
                 f"Story: {config['story']}",
+                f"Story title: {config['story_title']}",
                 f"Base branch: {config['base_branch']}",
-                f"Repository: {config['repository']}",
+                f"Base commit: {config['base_commit']}",
+                f"Editable worktree: {config['worktree']}",
+                f"Required branch: {config['branch']}",
                 "You are the persistent implementation worker in an outer review-repair loop.",
-                "Prepare the skill's isolated worktree, implement only the story contract, run its deterministic checks, and commit the candidate.",
+                "Read AGENTS.md and applicable repository specifications and decisions. Implement only the supplied story contract, add tests for changed behavior, run its deterministic checks, and commit the candidate.",
+                "Do not create or switch branches or worktrees; the controller already prepared and validated them.",
                 "The outer controller owns the fresh review passes and draft-PR delivery. Do not push, open or edit a pull request, approve, or merge.",
                 "Return only the requested structured result. A CANDIDATE_READY result must identify the exact clean worktree, branch, and full HEAD SHA.",
                 "Use empty strings or arrays for non-applicable fields; never omit a field.",
                 f"Controller validation commands (informational only; the controller runs them independently): {json.dumps(config['checks'])}",
+                "Approved execution contract:",
+                config["story_contract"],
             ]
         )
         result = thread.run(
-            [
-                sdk["SkillInput"](
-                    name="implement-story", path=str(self.implement_skill)
-                ),
-                sdk["TextInput"](text=prompt),
-            ],
+            sdk["TextInput"](text=prompt),
             approval_mode=sdk["ApprovalMode"].deny_all,
-            cwd=str(self.repository),
+            cwd=config["worktree"],
             model=self.model,
             output_schema=IMPLEMENTATION_SCHEMA,
             sandbox=sdk["Sandbox"].workspace_write,
@@ -108,7 +119,7 @@ class CodexBackend:
         payload = validate_implementation(
             parse_json_object(result.final_response, "implementation")
         )
-        return thread.id, payload
+        return payload
 
     def repair(
         self,
@@ -136,6 +147,8 @@ class CodexBackend:
                 "If the feedback requires a product/specification choice, return DECISION_REQUIRED instead of guessing.",
                 "Return only the requested structured result with every field present.",
                 json.dumps({"remaining_delta": delta}, indent=2, sort_keys=True),
+                "Approved execution contract:",
+                config["story_contract"],
             ]
         )
         result = thread.run(
@@ -183,6 +196,8 @@ class CodexBackend:
                 "Return only the requested structured result with every field present.",
                 "Use zero for unknown line numbers and an empty decision string when no decision is required.",
                 "READY_FOR_HUMAN_REVIEW must have no findings. CHANGES_REQUIRED must contain actionable findings.",
+                "Approved execution contract:",
+                config["story_contract"],
             ]
         )
         result = thread.run(

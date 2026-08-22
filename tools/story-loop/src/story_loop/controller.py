@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,15 +15,19 @@ from .repository import (
     RepositoryError,
     ValidationRunner,
     inspect_candidate,
+    inspect_worktree,
+    prepare_story_worktree,
     validate_candidate_unchanged,
 )
 from .storage import RunStore, StateError
 
 
 class Backend(Protocol):
-    def start_implementation(
-        self, config: dict[str, Any]
-    ) -> tuple[str, dict[str, Any]]: ...
+    def start_implementation_thread(self, config: dict[str, Any]) -> str: ...
+
+    def run_implementation(
+        self, config: dict[str, Any], thread_id: str
+    ) -> dict[str, Any]: ...
 
     def repair(
         self,
@@ -40,6 +45,8 @@ class Backend(Protocol):
 
 
 PHASES = {
+    "PREPARE",
+    "START_IMPLEMENTATION",
     "IMPLEMENT",
     "REVIEW",
     "VALIDATE",
@@ -59,7 +66,7 @@ def new_state(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "version": 1,
         "run_id": config["run_id"],
-        "phase": "IMPLEMENT",
+        "phase": "PREPARE",
         "config": config,
         "implementation_thread_id": "",
         "candidate": {},
@@ -119,17 +126,8 @@ def validate_state(state: dict[str, Any]) -> None:
     if state["passes_completed"] < 0:
         raise StateError("passes_completed must not be negative")
     if (
-        state["phase"] != "IMPLEMENT"
+        state["phase"] not in {"PREPARE", "START_IMPLEMENTATION", "TERMINAL"}
         and not state["implementation_thread_id"]
-        and (
-            state["phase"] not in {"TERMINAL"}
-            or state["outcome"]
-            not in {
-                "DECISION_REQUIRED",
-                "IMPLEMENTATION_INCOMPLETE",
-                "IMPLEMENTATION_FAILED",
-            }
-        )
     ):
         raise StateError("non-initial state is missing its implementation thread ID")
 
@@ -153,6 +151,10 @@ class Controller:
             try:
                 if phase == "IMPLEMENT":
                     self._implement(state)
+                elif phase == "PREPARE":
+                    self._prepare(state)
+                elif phase == "START_IMPLEMENTATION":
+                    self._start_implementation(state)
                 elif phase == "REVIEW":
                     self._review(state)
                 elif phase == "VALIDATE":
@@ -181,7 +183,7 @@ class Controller:
             except Exception as exc:  # noqa: BLE001
                 if phase == "REVIEW":
                     outcome = "REVIEW_INCOMPLETE"
-                elif phase in {"IMPLEMENT", "REPAIR"}:
+                elif phase in {"START_IMPLEMENTATION", "IMPLEMENT", "REPAIR"}:
                     outcome = "IMPLEMENTATION_FAILED"
                 elif phase == "DELIVER":
                     outcome = "DELIVERY_FAILED"
@@ -201,6 +203,56 @@ class Controller:
         state["message"] = message
         self._save(state)
 
+    def _prepare(self, state: dict[str, Any]) -> None:
+        config = state["config"]
+        prepare_story_worktree(
+            Path(config["repository"]),
+            worktree=Path(config["worktree"]),
+            branch=config["branch"],
+            base_commit=config["base_commit"],
+        )
+        state["phase"] = "START_IMPLEMENTATION"
+        self._save(state)
+
+    def _start_implementation(self, state: dict[str, Any]) -> None:
+        thread_id = self.backend.start_implementation_thread(state["config"])
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            raise ContractError("implementation backend returned an invalid thread ID")
+        state["implementation_thread_id"] = thread_id
+        state["phase"] = "IMPLEMENT"
+        self._save(state)
+
+    @staticmethod
+    def _recovered_candidate(
+        state: dict[str, Any], *, previous_sha: str
+    ) -> dict[str, Any] | None:
+        config = state["config"]
+        snapshot = inspect_worktree(
+            Path(config["repository"]),
+            worktree=Path(config["worktree"]),
+            branch=config["branch"],
+        )
+        if snapshot["head_sha"] == previous_sha or not snapshot["clean"]:
+            return None
+        return {
+            "status": "CANDIDATE_READY",
+            "story_ref": config["story"],
+            "title": config["story_title"],
+            "worktree": config["worktree"],
+            "branch": config["branch"],
+            "base_branch": config["base_branch"],
+            "head_sha": snapshot["head_sha"],
+            "pr_url": "",
+            "summary": [
+                "Recovered a clean advanced commit after an interrupted write turn."
+            ],
+            "checks": [],
+            "known_gaps": [
+                "The interrupted agent turn did not return its structured summary."
+            ],
+            "decision": "",
+        }
+
     def _accept_candidate(
         self,
         state: dict[str, Any],
@@ -217,6 +269,14 @@ class Controller:
             raise ContractError(
                 f"candidate base mismatch: expected {config['base_branch']}, got {payload['base_branch']}"
             )
+        if Path(payload["worktree"]).resolve() != Path(config["worktree"]).resolve():
+            raise ContractError(
+                f"candidate worktree mismatch: expected {config['worktree']}, got {payload['worktree']}"
+            )
+        if payload["branch"] != config["branch"]:
+            raise ContractError(
+                f"candidate branch mismatch: expected {config['branch']}, got {payload['branch']}"
+            )
         inspected = inspect_candidate(Path(config["repository"]), payload)
         if previous_sha and inspected["head_sha"] == previous_sha:
             raise RepositoryError("repair did not produce a new candidate commit")
@@ -225,9 +285,18 @@ class Controller:
         state["candidate"] = candidate
 
     def _implement(self, state: dict[str, Any]) -> None:
-        thread_id, raw_payload = self.backend.start_implementation(state["config"])
+        recovered = self._recovered_candidate(
+            state, previous_sha=state["config"]["base_commit"]
+        )
+        if recovered is not None:
+            self._accept_candidate(state, recovered)
+            state["phase"] = "REVIEW"
+            self._save(state)
+            return
+        raw_payload = self.backend.run_implementation(
+            state["config"], state["implementation_thread_id"]
+        )
         payload = validate_implementation(raw_payload)
-        state["implementation_thread_id"] = thread_id
         if payload["status"] == "DECISION_REQUIRED":
             state["last_repair"] = payload
             self._stop(state, "DECISION_REQUIRED", payload["decision"])
@@ -317,8 +386,11 @@ class Controller:
             else:
                 semantic.append(
                     {
-                        key: item[key]
-                        for key in ("source", "command", "status", "exit_code")
+                        "source": item["source"],
+                        "command": item["command"],
+                        "status": item["status"],
+                        "exit_code": item["exit_code"],
+                        "output": re.sub(r"\s+", " ", item["output"]).strip(),
                     }
                 )
         encoded = json.dumps(semantic, sort_keys=True, separators=(",", ":")).encode()
@@ -389,7 +461,17 @@ class Controller:
     def _repair(self, state: dict[str, Any]) -> None:
         config = state["config"]
         candidate = state["candidate"]
-        validate_candidate_unchanged(Path(config["repository"]), candidate)
+        recovered = self._recovered_candidate(state, previous_sha=candidate["head_sha"])
+        if recovered is not None:
+            state["last_repair"] = recovered
+            self._accept_candidate(state, recovered, previous_sha=candidate["head_sha"])
+            state["pending_review_thread_id"] = ""
+            state["pending_review"] = {}
+            state["pending_validation"] = {}
+            state["pending_delta"] = []
+            state["phase"] = "REVIEW"
+            self._save(state)
+            return
         raw_payload = self.backend.repair(
             config,
             state["implementation_thread_id"],
@@ -428,21 +510,52 @@ class Controller:
             text=True,
         )
         existing = subprocess.run(
-            ["gh", "pr", "view", branch, "--json", "url"],
+            [
+                "gh",
+                "pr",
+                "view",
+                branch,
+                "--json",
+                "url,state,isDraft,baseRefName,headRefName,headRefOid",
+            ],
             cwd=worktree,
             check=False,
             capture_output=True,
             text=True,
         )
         if existing.returncode == 0:
-            pr_url = json.loads(existing.stdout)["url"]
+            pr_url = self._validated_pr_url(state, existing.stdout)
         else:
+            summary = (
+                "\n".join(f"- {item}" for item in candidate["summary"])
+                or "- Candidate produced by the persistent implementation worker."
+            )
+            checks = "\n".join(
+                f"- `{command}` — passed" for command in config["checks"]
+            )
+            gaps = "\n".join(f"- {item}" for item in candidate["known_gaps"])
+            if not gaps:
+                gaps = "- No known gaps reported."
             body = "\n".join(
                 [
                     f"Closes {config['story']}",
                     "",
-                    f"Delivered by story-loop run `{config['run_id']}` after fresh review and deterministic validation.",
+                    "## Summary",
+                    "",
+                    summary,
+                    "",
+                    "## Verification",
+                    "",
+                    checks,
+                    "",
+                    f"Fresh review passes: {state['passes_completed']}",
                     f"Candidate: `{candidate['head_sha']}`",
+                    f"Audit receipts: `{self.store.iterations_directory}`",
+                    "",
+                    "## Known gaps and risks",
+                    "",
+                    gaps,
+                    "- Human approval is still required; this controller never approves or merges.",
                 ]
             )
             created = subprocess.run(
@@ -465,10 +578,65 @@ class Controller:
                 capture_output=True,
                 text=True,
             )
-            pr_url = created.stdout.strip()
+            if not created.stdout.strip():
+                raise RuntimeError("gh pr create did not return a pull-request URL")
+            confirmed = subprocess.run(
+                [
+                    "gh",
+                    "pr",
+                    "view",
+                    branch,
+                    "--json",
+                    "url,state,isDraft,baseRefName,headRefName,headRefOid",
+                ],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            pr_url = self._validated_pr_url(state, confirmed.stdout)
         state["pr_url"] = pr_url
         self._stop(
             state,
             "READY_FOR_HUMAN_REVIEW",
             f"draft pull request ready for human review: {pr_url}",
         )
+
+    @staticmethod
+    def _validated_pr_url(state: dict[str, Any], raw: str) -> str:
+        try:
+            payload = json.loads(raw)
+            values = {
+                key: payload[key]
+                for key in (
+                    "url",
+                    "state",
+                    "isDraft",
+                    "baseRefName",
+                    "headRefName",
+                    "headRefOid",
+                )
+            }
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("gh returned incomplete pull-request metadata") from exc
+        config = state["config"]
+        candidate = state["candidate"]
+        expected = {
+            "state": "OPEN",
+            "isDraft": True,
+            "baseRefName": config["base_branch"],
+            "headRefName": candidate["branch"],
+            "headRefOid": candidate["head_sha"],
+        }
+        mismatches = {
+            key: {"expected": expected_value, "actual": values[key]}
+            for key, expected_value in expected.items()
+            if values[key] != expected_value
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"existing pull request does not match authorized draft handoff: {mismatches}"
+            )
+        if not isinstance(values["url"], str) or not values["url"].strip():
+            raise RuntimeError("pull-request URL is missing")
+        return values["url"]
