@@ -131,6 +131,19 @@
   HTTP request already sent, so it guarantees accepted state/side-effect ordering
   rather than zero overlap in remote computation.
 
+- **2026-08-22 - session turn leases retain one monotonic acquisition epoch.**
+  A successful acquisition of an active session starts a new ownership epoch:
+  both the fencing token and lease generation begin at one and advance together
+  on every successful acquisition, including takeover after release or expiry.
+  Release clears the holder and expiry while retaining the row and counters
+  across restart. Heartbeat sets expiry to the later of the stored expiry and
+  `now + duration`, so it never shortens a lease; callers own operational TTL
+  bounds while storage rejects non-positive or overflowing durations. Expiry is
+  half-open (`now >= expiry` is expired), and observations are persisted
+  snapshots rather than proof of current ownership. Closed sessions cannot
+  acquire, renew, or authorize writes; the matching unexpired holder may still
+  release for cleanup.
+
 - **2026-08-14 - compiler and index coverage are generation-keyed.**
   Compiler runs, FTS, and vector indexes carry immutable configuration hashes and
   durable coverage checkpoints. A new extractor can process all source events

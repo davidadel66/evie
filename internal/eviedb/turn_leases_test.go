@@ -15,7 +15,7 @@ func setTurnLeaseTime(store *Store, now time.Time) {
 	store.now = func() time.Time { return now }
 }
 
-func noOpTurnLeaseWrite(TurnLeaseWriter) error { return nil }
+func noOpTurnLeaseWrite(turnLeaseWriteExecutor) error { return nil }
 
 func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	db := newTestDB(t)
@@ -49,7 +49,7 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 		t.Errorf("observed lease = %+v, want %+v", observed, first)
 	}
 	setTurnLeaseTime(store, now.Add(time.Second))
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, first.HolderID, first.FencingToken, noOpTurnLeaseWrite); err != nil {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, first.HolderID, first.FencingToken, noOpTurnLeaseWrite); err != nil {
 		t.Fatalf("authorize current lease: %v", err)
 	}
 	if _, err := store.AcquireTurnLease(ctx, session.ID, "worker-b", 10*time.Second); !errors.Is(err, ErrTurnLeaseHeld) {
@@ -80,7 +80,7 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	if err := store.ReleaseTurnLease(ctx, session.ID, first.HolderID, staleToken); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("stale release error = %v, want ErrTurnLeaseLost", err)
 	}
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, first.HolderID, staleToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, first.HolderID, staleToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("stale authorization error = %v, want ErrTurnLeaseLost", err)
 	}
 
@@ -90,7 +90,7 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	if _, err := store.GetTurnLease(ctx, session.ID); !errors.Is(err, ErrTurnLeaseNotHeld) {
 		t.Fatalf("get released lease error = %v, want ErrTurnLeaseNotHeld", err)
 	}
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, renewed.HolderID, renewed.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, renewed.HolderID, renewed.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("released authorization error = %v, want ErrTurnLeaseLost", err)
 	}
 
@@ -106,7 +106,7 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 		t.Error("stale snapshot should remain locally unexpired")
 	}
 	staleCallbackRan := false
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, first.HolderID, first.FencingToken, func(TurnLeaseWriter) error {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, first.HolderID, first.FencingToken, func(turnLeaseWriteExecutor) error {
 		staleCallbackRan = true
 		return nil
 	}); !errors.Is(err, ErrTurnLeaseLost) {
@@ -202,7 +202,7 @@ func TestExpiredTurnLeaseReplacementIsAtomicAcrossConnections(t *testing.T) {
 	if err := stores[0].ReleaseTurnLease(ctx, session.ID, expired.HolderID, expired.FencingToken); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("expired release error = %v, want ErrTurnLeaseLost", err)
 	}
-	if err := stores[0].WithTurnLeaseWrite(ctx, session.ID, expired.HolderID, expired.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
+	if err := stores[0].withTurnLeaseWrite(ctx, session.ID, expired.HolderID, expired.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("expired authorization error = %v, want ErrTurnLeaseLost", err)
 	}
 }
@@ -230,7 +230,7 @@ func TestExpiredTurnLeaseCannotBeRenewedReleasedOrAuthorized(t *testing.T) {
 	if err := store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("release at expiry error = %v, want ErrTurnLeaseLost", err)
 	}
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, noOpTurnLeaseWrite); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("authorization at expiry error = %v, want ErrTurnLeaseLost", err)
 	}
 }
@@ -272,8 +272,8 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 	setTurnLeaseTime(storeB, lease.ExpiresAt)
 
 	var takeoverSucceededInsideFence bool
-	err = storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer TurnLeaseWriter) error {
-		if _, err := writer.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('stale')`); err != nil {
+	err = storeA.withTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer turnLeaseWriteExecutor) error {
+		if _, err := writer.execContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('stale')`); err != nil {
 			return err
 		}
 		if _, err := storeB.AcquireTurnLease(ctx, session.ID, "worker-b", time.Minute); err == nil {
@@ -302,7 +302,7 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 		t.Fatalf("acquire after fenced rollback: %v", err)
 	}
 	staleCallbackRan := false
-	if err := storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(TurnLeaseWriter) error {
+	if err := storeA.withTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(turnLeaseWriteExecutor) error {
 		staleCallbackRan = true
 		return nil
 	}); !errors.Is(err, ErrTurnLeaseLost) {
@@ -311,8 +311,8 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 	if staleCallbackRan {
 		t.Fatal("stale lease write callback ran after takeover")
 	}
-	if err := storeB.WithTurnLeaseWrite(ctx, session.ID, winner.HolderID, winner.FencingToken, func(writer TurnLeaseWriter) error {
-		_, err := writer.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('winner')`)
+	if err := storeB.withTurnLeaseWrite(ctx, session.ID, winner.HolderID, winner.FencingToken, func(writer turnLeaseWriteExecutor) error {
+		_, err := writer.execContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('winner')`)
 		return err
 	}); err != nil {
 		t.Fatalf("winner write: %v", err)
@@ -372,7 +372,7 @@ func TestTurnLeaseClockIsSampledUnderWriterLock(t *testing.T) {
 	if _, err := store.HeartbeatTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken, time.Minute); err != nil {
 		t.Fatalf("heartbeat lease: %v", err)
 	}
-	if err := store.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, noOpTurnLeaseWrite); err != nil {
+	if err := store.withTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, noOpTurnLeaseWrite); err != nil {
 		t.Fatalf("fenced write: %v", err)
 	}
 	if err := store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
@@ -383,7 +383,7 @@ func TestTurnLeaseClockIsSampledUnderWriterLock(t *testing.T) {
 	}
 }
 
-func TestTurnLeaseWriteCallbackCannotCommitBeforeFinalFence(t *testing.T) {
+func TestTurnLeaseWriteExecutorCannotOutliveFinalFence(t *testing.T) {
 	db := newTestDB(t)
 	store := NewStore(db)
 	ctx := context.Background()
@@ -402,27 +402,22 @@ func TestTurnLeaseWriteCallbackCannotCommitBeforeFinalFence(t *testing.T) {
 		t.Fatalf("acquire lease: %v", err)
 	}
 	var exposedCommit bool
-	var transactionControlErr error
-	var capturedWriter TurnLeaseWriter
-	err = store.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer TurnLeaseWriter) error {
+	var capturedWriter turnLeaseWriteExecutor
+	err = store.withTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer turnLeaseWriteExecutor) error {
 		capturedWriter = writer
 		if _, ok := any(writer).(interface{ Commit() error }); ok {
 			exposedCommit = true
 		}
-		if _, err := writer.ExecContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('stale')`); err != nil {
+		if _, err := writer.execContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('stale')`); err != nil {
 			return err
 		}
-		_, transactionControlErr = writer.ExecContext(ctx, `COMMIT`)
 		setTurnLeaseTime(store, lease.ExpiresAt)
 		return nil
 	})
 	if exposedCommit {
 		t.Error("turn lease writer exposed Commit")
 	}
-	if !errors.Is(transactionControlErr, errTurnLeaseTransactionControl) {
-		t.Errorf("transaction control error = %v, want errTurnLeaseTransactionControl", transactionControlErr)
-	}
-	if _, err := capturedWriter.ExecContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('late')`); !errors.Is(err, errTurnLeaseWriterClosed) {
+	if _, err := capturedWriter.execContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('late')`); !errors.Is(err, errTurnLeaseWriterClosed) {
 		t.Errorf("closed writer error = %v, want errTurnLeaseWriterClosed", err)
 	}
 	if !errors.Is(err, ErrTurnLeaseLost) {
@@ -472,7 +467,7 @@ func TestClosedSessionCannotAcquireRenewOrAuthorizeLease(t *testing.T) {
 		t.Errorf("closed session heartbeat error = %v, want ErrTurnLeaseLost", err)
 	}
 	callbackRan := false
-	if err := store.WithTurnLeaseWrite(ctx, closedWhileHeld.ID, lease.HolderID, lease.FencingToken, func(TurnLeaseWriter) error {
+	if err := store.withTurnLeaseWrite(ctx, closedWhileHeld.ID, lease.HolderID, lease.FencingToken, func(turnLeaseWriteExecutor) error {
 		callbackRan = true
 		return nil
 	}); !errors.Is(err, ErrTurnLeaseLost) {

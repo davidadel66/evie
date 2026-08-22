@@ -18,14 +18,14 @@ var (
 	ErrTurnLeaseNotHeld         = errors.New("eviedb: turn lease is not held")
 	ErrTurnLeaseSessionInactive = errors.New("eviedb: turn lease session is missing or inactive")
 
-	errTurnLeaseWriterClosed       = errors.New("eviedb: turn lease writer is closed")
-	errTurnLeaseTransactionControl = errors.New("eviedb: turn lease writer cannot control its transaction")
+	errTurnLeaseWriterClosed = errors.New("eviedb: turn lease writer is closed")
 )
 
-// TurnLeaseWriter is the restricted database surface available to a fenced
-// write callback. Transaction commit and rollback remain owned by Store.
-type TurnLeaseWriter interface {
-	ExecContext(context.Context, string, ...any) (sql.Result, error)
+// turnLeaseWriteExecutor is deliberately package-private. Exported store
+// methods must expose typed mutations and use withTurnLeaseWrite internally so
+// arbitrary caller-provided SQL never becomes an authorization surface.
+type turnLeaseWriteExecutor interface {
+	execContext(context.Context, string, ...any) (sql.Result, error)
 }
 
 type turnLeaseWriter struct {
@@ -34,7 +34,7 @@ type turnLeaseWriter struct {
 	closed bool
 }
 
-func (w *turnLeaseWriter) ExecContext(
+func (w *turnLeaseWriter) execContext(
 	ctx context.Context,
 	query string,
 	args ...any,
@@ -44,9 +44,6 @@ func (w *turnLeaseWriter) ExecContext(
 	if w.closed {
 		return nil, errTurnLeaseWriterClosed
 	}
-	if err := validateTurnLeaseWriteStatement(query); err != nil {
-		return nil, err
-	}
 	return w.conn.ExecContext(ctx, query, args...)
 }
 
@@ -54,23 +51,6 @@ func (w *turnLeaseWriter) close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.closed = true
-}
-
-func validateTurnLeaseWriteStatement(query string) error {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return errors.New("turn lease write statement must not be empty")
-	}
-	if strings.Contains(query, ";") || strings.HasPrefix(query, "--") || strings.HasPrefix(query, "/*") {
-		return errTurnLeaseTransactionControl
-	}
-	fields := strings.Fields(query)
-	switch strings.ToUpper(fields[0]) {
-	case "BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE":
-		return errTurnLeaseTransactionControl
-	default:
-		return nil
-	}
 }
 
 // Fixed-width UTC text preserves nanosecond ordering in SQLite comparisons.
@@ -211,16 +191,16 @@ func (s *Store) ReleaseTurnLease(
 	})
 }
 
-// WithTurnLeaseWrite runs write in a transaction that remains fenced to the
-// supplied lease until commit. The callback is not run for a stale lease, and
-// all callback writes are rolled back if the lease expires before commit. The
-// callback must perform its database work through the supplied writer.
-func (s *Store) WithTurnLeaseWrite(
+// withTurnLeaseWrite is the package-internal transaction boundary for typed
+// store mutations that require turn ownership. It keeps the lease fenced until
+// commit, skips write for stale leases, and rolls back if the lease expires
+// before commit. Package code must perform database work through executor.
+func (s *Store) withTurnLeaseWrite(
 	ctx context.Context,
 	sessionID memory.SessionID,
 	holderID memory.LeaseHolderID,
 	token memory.FencingToken,
-	write func(TurnLeaseWriter) error,
+	write func(turnLeaseWriteExecutor) error,
 ) error {
 	if write == nil {
 		return errors.New("turn lease write must not be nil")

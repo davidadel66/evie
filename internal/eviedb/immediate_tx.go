@@ -37,7 +37,10 @@ func withImmediateTransaction(
 	if err := operation(conn); err != nil {
 		return err
 	}
-	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(context.WithoutCancel(ctx), `COMMIT`); err != nil {
 		return fmt.Errorf("commit immediate transaction: %w", err)
 	}
 	committed = true
