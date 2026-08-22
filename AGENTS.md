@@ -52,6 +52,32 @@ Interfaces should normally be owned by the package that consumes them.
 - When implementation is requested, complete the scoped work autonomously.
   Use tutor-style, line-by-line development only when the user asks for it.
 
+## Delivery workflow
+
+- An initiative is a broad program, an epic is a coherent outcome spanning
+  multiple stories, and a story is one independently verifiable pull request.
+- Use initiatives and epics to provide context, dependency order, and completion
+  evidence. Do not hand an entire multi-story epic to an implementation agent as
+  one coding task.
+- Select one dependency-ready story before implementation. Its execution contract
+  must state the outcome, in-scope and out-of-scope boundaries, observable
+  acceptance criteria, deterministic verification, dependencies, risks, and the
+  intended one-PR boundary.
+- Implement one selected story per task, branch or worktree, and pull request.
+  Read the applicable initiative, epic, specification, and decisions for context,
+  but change only what the selected story authorizes.
+- Do not implement later stories opportunistically. If the selected story cannot
+  be completed or verified independently, stop and propose a revised story
+  boundary before continuing.
+- After the story passes verification, obtain review and hand off its pull
+  request for human approval. Never merge it on the user's behalf.
+- Record the story outcome, then select the next dependency-ready story. Declare
+  an epic complete only after all required stories and its epic-level completion
+  evidence pass.
+- Parallel story work is appropriate only when the stories are independently
+  ready, use isolated worktrees, and do not depend on unmerged behavior from one
+  another.
+
 ## Git safety
 
 - Preserve user-owned and pre-existing working-tree changes.
