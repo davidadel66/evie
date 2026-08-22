@@ -4,18 +4,19 @@ Status board for this project, updated by `/wrap` at session end. One line per
 story; details live in active plans/specs and completed feature records.
 
 ## Next session
-- Last session: the memory delivery initiative and nine-epic story breakdown were
-  approved and recorded in the [memory initiative plan](../cmd/evie/docs/active/memory/README.md).
+- Last session: the memory initiative was audited into 50 complete GitHub
+  execution-contract issues; MEM-1.1 is [issue #2](https://github.com/davidadel66/evie/issues/2).
 - Mid-flight: MEM-1 is in progress. Its event/session foundation is implemented;
   explicit scope selection, durable leases, safe resume, unknown-execution
   recovery, provider replay policy, and usage capture remain.
-- Start with: select MEM-1.1 from the
-  [restart-safe scoped sessions epic](../cmd/evie/docs/active/memory/epics/mem-1-restart-safe-scoped-sessions.md)
-  and create its GitHub execution-contract issue.
+- Start with: deliver [MEM-1.1](https://github.com/davidadel66/evie/issues/2)
+  through `$implement-story`; MEM-1.R0's independent research contract is
+  [issue #1](https://github.com/davidadel66/evie/issues/1) and must close before
+  MEM-1 completes.
 
 ## In progress
 - memory — [approved delivery initiative](../cmd/evie/docs/active/memory/README.md);
-  MEM-1 in progress, no next implementation story selected
+  MEM-1 in progress, MEM-1.1 selected as the next implementation story
 
 ## Next (ordered tool roadmap, decided 2026-07-29)
 - budget analysis verdict — ask evie "how am I tracking against budget?"; transcript decides if step 5 needs a dedicated tool

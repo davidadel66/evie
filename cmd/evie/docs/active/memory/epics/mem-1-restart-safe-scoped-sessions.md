@@ -38,6 +38,22 @@ cancellation propagation, and generic storage fences are completed foundation.
 
 ## Stories
 
+### MEM-1.R0 - Reference-system adaptation note
+
+- Outcome: Complete the Stage 0 evidence required to distinguish the memory
+  layers and record which reference-system behavior Evie is deliberately
+  adapting or rejecting.
+- Depends on: Access to the cited MemGPT, Generative Agents, and current Letta
+  sources plus a reproducible local Letta inspection path.
+- Acceptance summary: Record exact paper sections and Letta version/commit,
+  commands, observed MemFS/compaction/Git/dreaming behavior, differences from the
+  papers, and an Evie applicability matrix; obtain David's approval of the note.
+- Verification summary: Re-run documented commands or fixtures, verify every
+  factual observation has a source/version, check affected links, and run
+  `git diff --check`.
+- Proposed PR boundary: Research note and approval record only; no production
+  code, schema, dependency, or behavior change.
+
 ### MEM-1.1 - Explicit REPL scope selection and new scoped sessions
 
 - Outcome: Replace unconditional global-session creation with an explicit startup
@@ -158,17 +174,16 @@ cancellation propagation, and generic storage fences are completed foundation.
 
 ## Risks and open decisions
 
-- The required Stage 0 reference-system research note is missing and must be
+- MEM-1.R0 owns the missing Stage 0 reference-system research note and must be
   completed before this epic is closed.
 - MEM-1.R1 may prove same-chain continuation impossible without opaque state; the
   already-approved safe fallback is a new provider-neutral turn.
 - Durable leases fence accepted work but cannot recall provider bytes already
   sent remotely.
-- None of the stories is implementation-ready until David selects it; MEM-1.1 is
-  the recommended first story.
+- All story contracts are queued on GitHub; MEM-1.1 is selected first, and every
+  later story remains gated by its named dependencies and material decisions.
 
 ## Approval record
 
 - 2026-08-21: David approved this epic and its story boundaries as part of the
   memory delivery initiative.
-

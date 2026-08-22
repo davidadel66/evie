@@ -1,6 +1,6 @@
 # Request planning workflow
 
-Status: manual v0
+Status: manual v1
 
 ## Purpose
 
@@ -38,7 +38,11 @@ one story.
    before building consumers on top of them.
 8. Review the proposed breakdown with David and revise it.
 9. Freeze the approved initiative and epic breakdown.
-10. Select one story for implementation and create its GitHub issue.
+10. Select exactly one dependency-ready story for implementation.
+11. Expand that selected story into its full execution contract and check it
+    against the definition of ready.
+12. Create or reuse its GitHub issue, then hand the issue to the implementation
+    workflow.
 
 Planning approval does not itself authorize code changes. Implementation begins
 only when David selects a story.
@@ -105,6 +109,10 @@ Keep proposed stories as concise summaries in their epic file. Once David
 selects a ready story for implementation, create a GitHub issue containing its
 full execution contract. That issue owns the story's active discussion, status,
 acceptance criteria, and pull-request link.
+
+Create execution-contract issues one selected story at a time. Do not freeze
+future story details or fill GitHub with issues for work whose dependencies,
+implementation seams, or decisions may change before selection.
 
 Do not create a nested Markdown file for every story by default. Create a
 separate repository document only when a story needs a durable specification or
@@ -180,3 +188,37 @@ An approved story issue contains:
 - manual demonstration when applicable;
 - risks, approved decisions, and known exclusions;
 - the intended one-PR boundary.
+
+Use this issue shape unless the repository defines a stricter template:
+
+```md
+# <story ID>: <story title>
+
+## Outcome and value
+
+## Sources
+
+## Dependencies
+
+## In scope
+
+## Out of scope
+
+## Acceptance criteria
+
+## Verification
+
+## Manual demonstration
+
+## Risks and approved decisions
+
+## One-PR boundary
+```
+
+Before creation, search open and closed issues for the story ID and outcome. If
+an existing issue already owns the story, return it instead of creating a
+duplicate. If the contract fails the definition of ready, report the missing
+decision or evidence and do not create the issue.
+
+Creating the issue authorizes planning state only. It does not authorize a
+branch, worktree, product-code change, commit, push, pull request, or merge.

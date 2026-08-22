@@ -7,8 +7,8 @@ Use the `skill` tool to load `plan-request`, then apply it to this request:
 
 $ARGUMENTS
 
-Start with the proposal gate even though the build agent has file access. Do not
-write files on the initial invocation. After I explicitly approve the proposal,
-create only the approved planning artifacts. Do not implement product code,
-change Git state, create GitHub issues, or open pull requests unless I request
-that separate action.
+Choose the gate authorized by my request. Start with the proposal gate for a new
+or unapproved request. Write planning artifacts only after explicit approval.
+Use the story-selection gate only when I explicitly select one story from an
+approved plan and request its GitHub execution-contract issue. Never implement
+product code, change Git state, bulk-create story issues, or open a pull request.

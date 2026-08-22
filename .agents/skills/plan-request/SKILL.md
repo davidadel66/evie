@@ -1,6 +1,6 @@
 ---
 name: plan-request
-description: Convert a product or engineering request, feature specification, or large active spec into the smallest appropriate story, epic, or initiative breakdown using Evie's planning conventions. Use when asked to plan, decompose, scope, stage, or prepare PR-sized work. Do not use for implementation or pull-request review.
+description: Convert a product or engineering request or large active spec into PR-sized delivery work, write approved initiative or epic plans, and materialize one selected story as a ready GitHub execution-contract issue. Use when asked to plan, decompose, scope, stage, select, or prepare work for implementation. Do not use for implementation or pull-request review.
 ---
 
 # Plan a Request
@@ -33,15 +33,34 @@ to create or update its planning files.
 - Run documentation verification and report the files written.
 - Stop after the planning artifacts are complete.
 
-In both gates:
+### Gate 3: Select one story and create its execution contract
+
+Enter this gate only when the user explicitly selects exactly one story from an
+approved plan and authorizes creation of its GitHub issue.
+
+- Read the approved story summary, applicable specification and decisions,
+  dependencies, current code seams, and existing GitHub issues.
+- Refuse a duplicate issue. Return the existing issue when it already represents
+  the selected story.
+- Expand the summary into the complete contract defined by
+  `docs/request-planning.md`; do not add behavior absent from approved sources.
+- Check the contract against the definition of ready before creating the issue.
+- Stop without creating an issue when a missing choice materially affects
+  behavior, security, persistence, recovery, concurrency, or a public interface.
+- Create one GitHub issue only after the story is ready. Do not assume labels,
+  milestones, or project-board fields that the repository does not define.
+- Return the issue URL and readiness evidence, then stop before implementation.
+
+In all gates:
 
 - Do not implement product code.
 - Do not create or switch branches or worktrees.
 - Do not commit, push, create GitHub issues, or open pull requests unless the
-  user explicitly requests that separate action.
+  active gate and user authorization explicitly permit the action.
+- Do not bulk-create execution-contract issues for future or unselected stories.
 - Treat working-tree changes as user-owned and preserve them.
 - Ask only about unresolved choices that materially affect behavior, security,
-  persistence, public interfaces, or the proposed story boundaries.
+  persistence, recovery, concurrency, public interfaces, or story boundaries.
 
 ## Workflow
 
@@ -66,8 +85,11 @@ In both gates:
 9. Present the proposal for approval and recommend the smallest useful first
    story.
 10. If the user explicitly approves writing the planning artifacts, create only
-    the approved initiative and epic files, verify them, and stop. Otherwise,
-    stop without changing files.
+    the approved initiative and epic files, verify them, and stop.
+11. When the user later selects exactly one approved story and authorizes its
+    GitHub issue, build and validate its full execution contract.
+12. Create or return that one issue and stop. Implementation belongs to
+    `$implement-story`.
 
 ## Output
 
@@ -87,3 +109,11 @@ of focused questions instead of manufacturing a detailed backlog.
 
 In Gate 2, return the paths created or updated, documentation checks and their
 results, and any approved items that could not be recorded.
+
+In Gate 3, return:
+
+- the selected story and authoritative sources;
+- the GitHub issue URL, or the readiness blocker;
+- the outcome, non-goals, acceptance criteria, verification, dependencies, and
+  one-PR boundary recorded in the issue; and
+- the exact `$implement-story` invocation to use next when the issue is ready.

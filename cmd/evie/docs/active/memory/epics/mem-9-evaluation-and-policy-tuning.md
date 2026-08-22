@@ -107,6 +107,25 @@ changes are decided from comparable versioned evidence.
   of the selected story, the smallest policy/configuration change; larger
   behavior changes receive new stories.
 
+### MEM-9.5 - Core memory end-to-end acceptance scenario
+
+- Outcome: Own the specification's required scripted proof that the complete
+  core memory system works across admission, scope, recovery, egress, replay,
+  indexes, and concurrent processes.
+- Depends on: MEM-9.R1 and completion of MEM-1 through MEM-8.
+- Acceptance summary: One reproducible scenario creates and approves a candidate,
+  proves global/project/session fences, races two processes, restarts, resolves
+  an interrupted execution, captures the opted-in remote payload, drops and
+  rebuilds graph/index projections, and compares the accepted snapshot without
+  exposing private raw events.
+- Verification summary: Run the scripted scenario from a clean temporary Evie
+  home, `go test -tags eval ./...`, `go test ./...`, and `go vet ./...`; preserve
+  redacted logs and deterministic snapshot comparisons as review evidence.
+- Proposed PR boundary: End-to-end harness, redacted fixtures, deterministic
+  assertions, and run documentation only; behavioral defects discovered by the
+  scenario receive separate focused stories unless a minimal correction is
+  explicitly approved.
+
 ## Epic completion evidence
 
 - Changing a memory configuration produces a reproducible before/after report
@@ -125,6 +144,8 @@ changes are decided from comparable versioned evidence.
   and disclose variance rather than hide it.
 - Personalized PageRank and automatic admission are optional hypotheses, not
   promised outcomes.
+- MEM-9.5 owns the required cross-epic scripted acceptance proof; it must not
+  become a catch-all implementation PR for defects found during the run.
 
 ## Approval record
 

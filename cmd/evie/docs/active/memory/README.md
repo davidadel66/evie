@@ -44,8 +44,8 @@ safe session resume, execution recovery, provider replay policy, and provider
 usage capture remain in MEM-1.
 
 The Stage 0 reference-system research note required by the specification was not
-found in the repository. It remains a bounded evidence gap that must be closed
-before Stage 1 is declared complete.
+found in the repository. MEM-1.R0 now owns that bounded evidence gap and must be
+closed before Stage 1 is declared complete.
 
 ## Epics
 
@@ -67,9 +67,10 @@ Follow MEM-1 through MEM-9 in order. The specification requires each stage to be
 tested and approved before the next begins, even where parts of two epics could
 technically be developed independently.
 
-The smallest useful next story is MEM-1.1, explicit REPL scope selection and new
-scoped sessions. It follows the current implementation seam without exposing
-existing-session resume before durable lease ownership exists.
+The smallest useful next implementation story is MEM-1.1, explicit REPL scope
+selection and new scoped sessions. MEM-1.R0 is independent research required
+before the epic closes and may proceed without widening MEM-1.1. Existing-session
+resume remains deferred until durable lease ownership exists.
 
 ## Story workflow
 
@@ -79,12 +80,17 @@ and David selects it. The selected story then receives a GitHub issue containing
 its full execution contract, active discussion, status, acceptance criteria,
 verification, and pull-request link.
 
+David explicitly authorized a one-time batch materialization of all 50 approved
+contracts on 2026-08-21. Those issues are a dependency-ordered queue, not
+authorization to implement blocked stories or combine them into one pull
+request. MEM-1.1 is the next implementation story.
+
 Planning approval does not authorize product-code implementation.
 
 ## Open decisions and research spikes
 
-- Complete the Stage 0 Letta, MemGPT, and Generative Agents adaptation note before
-  closing MEM-1.
+- Complete MEM-1.R0's Stage 0 Letta, MemGPT, and Generative Agents adaptation
+  note before closing MEM-1.
 - MEM-1.R1 decides provider continuation behavior without persisting unapproved
   opaque state.
 - MEM-2.R1 decides context budgets and compaction failure behavior.
@@ -105,4 +111,9 @@ Planning approval does not authorize product-code implementation.
 - 2026-08-21: David approved the core initiative, nine-epic breakdown, story
   boundaries, dependency order, and MEM-1.1 as the recommended next story.
 - 2026-08-21: David authorized creation of these planning artifacts and the
-  project-backlog link. No implementation story has been selected yet.
+  project-backlog link.
+- 2026-08-21: A contract-readiness audit added MEM-1.R0 to own the missing Stage
+  0 evidence and MEM-9.5 to own the required core end-to-end acceptance scenario.
+- 2026-08-21: David authorized creation of all 50 GitHub execution-contract
+  issues as a dependency-gated queue and selected MEM-1.1 as the next
+  implementation story.
