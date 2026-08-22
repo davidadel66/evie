@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
+import shlex
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +21,9 @@ from story_loop.contracts import (
     ContractError,
     validate_review,
 )
-from story_loop.controller import Controller, new_state
+from story_loop.controller import Controller, new_state, validate_state
+from story_loop.prompts import REVIEW_COORDINATOR_CONTRACT
+from story_loop.repository import ValidationRunner
 from story_loop.storage import RunLockedError, RunStore, StateError
 
 
@@ -47,11 +52,6 @@ def make_repository(parent: Path) -> Path:
     git(repository, "config", "user.name", "Story Loop Tests")
     git(repository, "config", "user.email", "story-loop@example.invalid")
     commit(repository, "base.txt", "base\n", "base")
-    path = repository / ".agents" / "skills" / "review-story" / "SKILL.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("# review-story\n", encoding="utf-8")
-    git(repository, "add", ".agents")
-    git(repository, "commit", "-m", "test skill fixtures")
     return repository
 
 
@@ -85,7 +85,11 @@ def finding(identifier: str = "F1") -> dict:
 
 
 def review_payload(
-    sha: str, verdict: str, *, findings: list[dict] | None = None
+    sha: str,
+    verdict: str,
+    *,
+    findings: list[dict] | None = None,
+    criteria: list[str] | None = None,
 ) -> dict:
     decision = ""
     if verdict == "DECISION_REQUIRED":
@@ -96,6 +100,23 @@ def review_payload(
         "candidate_sha": sha,
         "verdict": verdict,
         "summary": f"review result: {verdict}",
+        "lenses": [
+            {
+                "name": name,
+                "completed": True,
+                "summary": f"{name} lens completed",
+                "gaps": [],
+            }
+            for name in ("contract", "correctness", "maintainability")
+        ],
+        "acceptance_coverage": [
+            {
+                "criterion": criterion,
+                "status": "COVERED",
+                "evidence": "candidate and deterministic evidence inspected",
+            }
+            for criterion in (criteria or ["Approved test criterion."])
+        ],
         "findings": list(findings or []),
         "checks": [{"command": "true", "status": "PASSED", "evidence": "exit 0"}],
         "decision": decision,
@@ -113,19 +134,31 @@ class FakeBackend:
         self.review_thread_ids: list[str] = []
         self.repair_deltas: list[list[dict]] = []
         self.repair_callback = None
+        self.last_completed: tuple[str, dict] | None = None
         self.closed = False
 
     def start_implementation_thread(self, _config: dict) -> str:
         self.implementation_thread_calls += 1
         return "implementation-thread"
 
-    def run_implementation(self, config: dict, thread_id: str) -> dict:
+    def run_implementation(self, config: dict, thread_id: str) -> tuple[str, dict]:
         self.implementation_calls += 1
         if thread_id != "implementation-thread":
             raise AssertionError("implementation did not use its persisted thread")
         worktree = Path(config["worktree"])
         commit(worktree, "story.txt", "candidate\n", "candidate")
-        return implementation_payload(config, worktree)
+        self.last_completed = (
+            "implementation-turn-1",
+            implementation_payload(config, worktree),
+        )
+        return self.last_completed
+
+    def recover_implementation(
+        self, _config: dict, _thread_id: str, after_turn_id: str
+    ) -> tuple[str, dict] | None:
+        if self.last_completed is None or self.last_completed[0] == after_turn_id:
+            return None
+        return self.last_completed
 
     def review(self, config: dict, candidate: dict) -> tuple[str, dict]:
         self.review_calls += 1
@@ -146,7 +179,7 @@ class FakeBackend:
         thread_id: str,
         candidate: dict,
         delta: list[dict],
-    ) -> dict:
+    ) -> tuple[str, dict]:
         self.repair_calls += 1
         self.repair_deltas.append(delta)
         if thread_id != "implementation-thread":
@@ -156,7 +189,11 @@ class FakeBackend:
             commit(worktree, f"repair-{self.repair_calls}.txt", "fixed\n", "repair")
         else:
             self.repair_callback(self.repair_calls, delta)
-        return implementation_payload(config, worktree)
+        self.last_completed = (
+            f"repair-turn-{self.repair_calls}",
+            implementation_payload(config, worktree),
+        )
+        return self.last_completed
 
     def close(self) -> None:
         self.closed = True
@@ -180,14 +217,16 @@ class ControllerTest(unittest.TestCase):
             "branch": "codex/test-run",
             "worktree": str(self.repository / ".worktrees" / "test-run"),
             "story_title": "Test story",
-            "story_contract": "# Test story\n\nApproved test contract.",
+            "story_contract": "# Test story\n\n## Acceptance criteria\n\n- Approved test criterion.",
+            "acceptance_criteria": ["Approved test criterion."],
+            "review_contract": REVIEW_COORDINATOR_CONTRACT,
+            "review_contract_sha256": hashlib.sha256(
+                REVIEW_COORDINATOR_CONTRACT.encode()
+            ).hexdigest(),
             "checks": ["true"],
             "check_timeout_seconds": 10,
             "max_review_passes": 3,
             "draft_pr": False,
-            "review_skill": str(
-                self.repository / ".agents/skills/review-story/SKILL.md"
-            ),
             "model": "",
         }
         value.update(overrides)
@@ -363,6 +402,9 @@ class ControllerTest(unittest.TestCase):
         self.assertEqual(0, backend.repair_calls)
 
     def test_unchanged_delta_stops_as_stalled(self) -> None:
+        reworded = finding("F2")
+        reworded["title"] = "Same boundary, different wording"
+        reworded["body"] = "Fresh review described the same location differently."
         backend = FakeBackend(
             self.repository,
             [
@@ -370,13 +412,43 @@ class ControllerTest(unittest.TestCase):
                     candidate["head_sha"], "CHANGES_REQUIRED", findings=[finding()]
                 ),
                 lambda candidate: review_payload(
-                    candidate["head_sha"], "CHANGES_REQUIRED", findings=[finding()]
+                    candidate["head_sha"],
+                    "CHANGES_REQUIRED",
+                    findings=[reworded],
                 ),
             ],
         )
         state, _store = self.run_controller(backend)
         self.assertEqual("STALLED", state["outcome"])
         self.assertEqual(1, backend.repair_calls)
+
+    def test_delta_fingerprint_ignores_fresh_review_wording_and_order(self) -> None:
+        first = finding("F1")
+        second = finding("F2")
+        second["file"] = "other.go"
+        second["start"] = 20
+        second["end"] = 21
+        original = [{"source": "review", **first}, {"source": "review", **second}]
+        reworded = [
+            {
+                "source": "review",
+                **second,
+                "id": "NEW-2",
+                "title": "Rephrased second finding",
+                "body": "Different prose for the same location.",
+            },
+            {
+                "source": "review",
+                **first,
+                "id": "NEW-1",
+                "title": "Rephrased first finding",
+                "body": "Another description for the same location.",
+            },
+        ]
+        self.assertEqual(
+            Controller._delta_fingerprint(original),
+            Controller._delta_fingerprint(reworded),
+        )
 
     def test_stale_review_candidate_stops(self) -> None:
         stale_sha = "0" * 40
@@ -390,16 +462,22 @@ class ControllerTest(unittest.TestCase):
     def test_stale_implementation_candidate_stops(self) -> None:
         backend = FakeBackend(self.repository, [])
 
-        def stale(config: dict, _thread_id: str) -> dict:
+        def stale(config: dict, _thread_id: str) -> tuple[str, dict]:
             worktree = Path(config["worktree"])
             commit(worktree, "story.txt", "candidate\n", "candidate")
             payload = implementation_payload(config, worktree)
             payload["head_sha"] = "0" * 40
-            return payload
+            return "stale-turn", payload
 
         backend.run_implementation = stale  # type: ignore[method-assign]
         state, _store = self.run_controller(backend)
         self.assertEqual("INVALID_CANDIDATE", state["outcome"])
+
+    def test_corrupt_nested_config_is_rejected_before_execution(self) -> None:
+        state = new_state(self.config())
+        state["config"]["acceptance_criteria"] = []
+        with self.assertRaises(StateError):
+            validate_state(state)
 
     def test_invalid_structured_review_stops_safely(self) -> None:
         backend = FakeBackend(self.repository, [{"verdict": "READY_FOR_HUMAN_REVIEW"}])
@@ -417,6 +495,38 @@ class ControllerTest(unittest.TestCase):
         state, _store = self.run_controller(backend)
         self.assertEqual("REVIEW_INCOMPLETE", state["outcome"])
 
+    def test_review_must_cover_exact_configured_acceptance_criteria(self) -> None:
+        backend = FakeBackend(
+            self.repository,
+            [
+                lambda candidate: review_payload(
+                    candidate["head_sha"],
+                    "READY_FOR_HUMAN_REVIEW",
+                    criteria=["A different criterion."],
+                )
+            ],
+        )
+        state, _store = self.run_controller(backend)
+        self.assertEqual("REVIEW_INCOMPLETE", state["outcome"])
+
+    def test_candidate_must_descend_from_exact_configured_base(self) -> None:
+        backend = FakeBackend(self.repository, [])
+
+        def unrelated(config: dict, _thread_id: str) -> tuple[str, dict]:
+            backend.implementation_calls += 1
+            worktree = Path(config["worktree"])
+            empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+            unrelated_sha = git(worktree, "commit-tree", empty_tree, "-m", "unrelated")
+            git(worktree, "reset", "--hard", unrelated_sha)
+            payload = implementation_payload(config, worktree)
+            backend.last_completed = ("unrelated-turn", payload)
+            return backend.last_completed
+
+        backend.run_implementation = unrelated  # type: ignore[method-assign]
+        state, _store = self.run_controller(backend)
+        self.assertEqual("INVALID_CANDIDATE", state["outcome"])
+        self.assertIn("does not descend", state["message"])
+
     def test_resume_recovers_commit_from_interrupted_implementation_turn(self) -> None:
         backend = FakeBackend(
             self.repository,
@@ -428,7 +538,7 @@ class ControllerTest(unittest.TestCase):
         )
         original = backend.run_implementation
 
-        def interrupted(config: dict, thread_id: str) -> dict:
+        def interrupted(config: dict, thread_id: str) -> tuple[str, dict]:
             original(config, thread_id)
             raise KeyboardInterrupt()
 
@@ -448,6 +558,44 @@ class ControllerTest(unittest.TestCase):
         final = controller.run(resumed)
         self.assertEqual("READY_FOR_HUMAN_REVIEW", final["outcome"])
         self.assertEqual(1, backend.implementation_thread_calls)
+        self.assertEqual(1, backend.implementation_calls)
+
+    def test_resume_recovers_non_commit_decision_from_thread_history(self) -> None:
+        backend = FakeBackend(self.repository, [])
+
+        def interrupted_decision(config: dict, _thread_id: str) -> tuple[str, dict]:
+            backend.implementation_calls += 1
+            payload = {
+                "status": "DECISION_REQUIRED",
+                "story_ref": config["story"],
+                "title": config["story_title"],
+                "worktree": "",
+                "branch": "",
+                "base_branch": "",
+                "head_sha": "",
+                "pr_url": "",
+                "summary": [],
+                "checks": [],
+                "known_gaps": [],
+                "decision": "Choose the public behavior before implementation.",
+            }
+            backend.last_completed = ("decision-turn", payload)
+            raise KeyboardInterrupt()
+
+        backend.run_implementation = interrupted_decision  # type: ignore[method-assign]
+        config = self.config()
+        store = RunStore(self.root / "state", config["run_id"])
+        state = new_state(config)
+        store.save(state)
+        controller = Controller(store=store, backend=backend)
+        with self.assertRaises(KeyboardInterrupt):
+            controller.run(state)
+
+        resumed = store.load()
+        self.assertEqual("IMPLEMENT", resumed["phase"])
+        final = controller.run(resumed)
+        self.assertEqual("DECISION_REQUIRED", final["outcome"])
+        self.assertEqual("decision-turn", final["last_implementation_turn_id"])
         self.assertEqual(1, backend.implementation_calls)
 
     def test_resume_recovers_commit_from_interrupted_repair_turn(self) -> None:
@@ -539,6 +687,19 @@ class StorageTest(unittest.TestCase):
                 store.write_iteration(1, {"decision": "CHANGED"})
 
 
+class ValidationRunnerTest(unittest.TestCase):
+    def test_timeout_terminates_descendant_process_group(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            marker = cwd / "late-marker"
+            command = f"(sleep 0.5; touch {shlex.quote(str(marker))}) & wait"
+            result = ValidationRunner().run([command], cwd=cwd, timeout_seconds=0.1)
+
+            self.assertEqual("TIMED_OUT", result["results"][0]["status"])
+            time.sleep(0.7)
+            self.assertFalse(marker.exists())
+
+
 class ContractTest(unittest.TestCase):
     def test_schema_and_runtime_payload_fields_stay_aligned(self) -> None:
         implementation_fields = {
@@ -559,6 +720,8 @@ class ContractTest(unittest.TestCase):
             "candidate_sha",
             "verdict",
             "summary",
+            "lenses",
+            "acceptance_coverage",
             "findings",
             "checks",
             "decision",
@@ -573,6 +736,19 @@ class ContractTest(unittest.TestCase):
     def test_ready_review_rejects_skipped_check(self) -> None:
         payload = review_payload("a" * 40, "READY_FOR_HUMAN_REVIEW")
         payload["checks"][0]["status"] = "SKIPPED"
+        with self.assertRaises(ContractError):
+            validate_review(payload)
+
+    def test_ready_review_requires_all_three_completed_lenses(self) -> None:
+        payload = review_payload("a" * 40, "READY_FOR_HUMAN_REVIEW")
+        payload["lenses"][1]["completed"] = False
+        payload["lenses"][1]["gaps"] = ["correctness inspection did not run"]
+        with self.assertRaises(ContractError):
+            validate_review(payload)
+
+    def test_review_requires_exactly_the_three_named_lenses(self) -> None:
+        payload = review_payload("a" * 40, "CHANGES_REQUIRED", findings=[finding()])
+        payload["lenses"][2]["name"] = "correctness"
         with self.assertRaises(ContractError):
             validate_review(payload)
 
@@ -631,13 +807,18 @@ class BackendBoundaryTest(unittest.TestCase):
             self.id = identifier
             self.payload = payload
             self.runs: list[dict] = []
+            self.inputs: list[object] = []
 
         def set_name(self, _name: str) -> None:
             return None
 
-        def run(self, _input: object, **options: object) -> SimpleNamespace:
+        def run(self, input_value: object, **options: object) -> SimpleNamespace:
+            self.inputs.append(input_value)
             self.runs.append(options)
-            return SimpleNamespace(final_response=json.dumps(self.payload))
+            return SimpleNamespace(
+                id=f"{self.id}-turn-{len(self.runs)}",
+                final_response=json.dumps(self.payload),
+            )
 
     class Codex:
         def __init__(self, payload_factory) -> None:
@@ -657,26 +838,85 @@ class BackendBoundaryTest(unittest.TestCase):
             self.resumed.append((thread_id, options, thread))
             return thread
 
-    def test_reviews_always_start_fresh_read_only_threads(self) -> None:
-        sha = "a" * 40
-        fake_codex = self.Codex(lambda: review_payload(sha, "READY_FOR_HUMAN_REVIEW"))
-        backend = CodexBackend(
-            repository=Path("/repo"),
-            review_skill=Path("/review"),
+    def test_completed_write_turn_can_be_recovered_from_sdk_history(self) -> None:
+        payload = {
+            "status": "DECISION_REQUIRED",
+            "story_ref": "story",
+            "title": "Story",
+            "worktree": "",
+            "branch": "",
+            "base_branch": "",
+            "head_sha": "",
+            "pr_url": "",
+            "summary": [],
+            "checks": [],
+            "known_gaps": [],
+            "decision": "Choose the intended behavior.",
+        }
+
+        class HistoryItem:
+            def model_dump(self, **_options: object) -> dict:
+                return {
+                    "type": "agentMessage",
+                    "phase": "final_answer",
+                    "text": json.dumps(payload),
+                }
+
+        class HistoryThread:
+            def read(self, *, include_turns: bool) -> SimpleNamespace:
+                if not include_turns:
+                    raise AssertionError("turn history was not requested")
+                turns = [
+                    SimpleNamespace(id="processed-turn", status="completed", items=[]),
+                    SimpleNamespace(
+                        id="decision-turn",
+                        status="completed",
+                        items=[HistoryItem()],
+                    ),
+                ]
+                return SimpleNamespace(thread=SimpleNamespace(turns=turns))
+
+        fake_codex = SimpleNamespace(
+            thread_resume=lambda *_args, **_options: HistoryThread()
         )
+        backend = CodexBackend(repository=Path("/repo"))
         backend._codex = fake_codex
         backend._sdk = {
             "ApprovalMode": self.Values,
             "Sandbox": self.Values,
-            "SkillInput": self.Input,
+            "TextInput": self.Input,
+        }
+
+        recovered = backend.recover_implementation(
+            {"worktree": "/repo/worktree"},
+            "implementation-thread",
+            "processed-turn",
+        )
+
+        self.assertIsNotNone(recovered)
+        assert recovered is not None
+        self.assertEqual("decision-turn", recovered[0])
+        self.assertEqual("DECISION_REQUIRED", recovered[1]["status"])
+
+    def test_reviews_always_start_fresh_read_only_threads(self) -> None:
+        sha = "a" * 40
+        fake_codex = self.Codex(lambda: review_payload(sha, "READY_FOR_HUMAN_REVIEW"))
+        backend = CodexBackend(repository=Path("/repo"))
+        backend._codex = fake_codex
+        backend._sdk = {
+            "ApprovalMode": self.Values,
+            "Sandbox": self.Values,
             "TextInput": self.Input,
         }
         config = {
             "run_id": "run",
             "story": "story",
             "base_branch": "master",
+            "base_commit": "d" * 40,
             "passes_completed": 0,
             "story_contract": "approved contract",
+            "acceptance_criteria": ["criterion one"],
+            "review_contract": REVIEW_COORDINATOR_CONTRACT,
         }
         candidate = {
             "worktree": "/repo/worktree",
@@ -694,6 +934,10 @@ class BackendBoundaryTest(unittest.TestCase):
         for options, thread in fake_codex.started:
             self.assertEqual("read-only", options["sandbox"])
             self.assertEqual("read-only", thread.runs[0]["sandbox"])
+            prompt = thread.inputs[0].values["text"]
+            self.assertIn("Exact base commit: " + "d" * 40, prompt)
+            self.assertIn(REVIEW_COORDINATOR_CONTRACT, prompt)
+            self.assertIn('"criterion one"', prompt)
 
     def test_repair_resumes_implementation_thread_workspace_write(self) -> None:
         sha = "b" * 40
@@ -720,15 +964,11 @@ class BackendBoundaryTest(unittest.TestCase):
             "decision": "",
         }
         fake_codex = self.Codex(lambda: payload)
-        backend = CodexBackend(
-            repository=Path("/repo"),
-            review_skill=Path("/review"),
-        )
+        backend = CodexBackend(repository=Path("/repo"))
         backend._codex = fake_codex
         backend._sdk = {
             "ApprovalMode": self.Values,
             "Sandbox": self.Values,
-            "SkillInput": self.Input,
             "TextInput": self.Input,
         }
 
@@ -755,15 +995,11 @@ class BackendBoundaryTest(unittest.TestCase):
             "decision": "",
         }
         fake_codex = self.Codex(lambda: payload)
-        backend = CodexBackend(
-            repository=Path("/repo"),
-            review_skill=Path("/review"),
-        )
+        backend = CodexBackend(repository=Path("/repo"))
         backend._codex = fake_codex
         backend._sdk = {
             "ApprovalMode": self.Values,
             "Sandbox": self.Values,
-            "SkillInput": self.Input,
             "TextInput": self.Input,
         }
         config = {
@@ -783,7 +1019,7 @@ class BackendBoundaryTest(unittest.TestCase):
         self.assertEqual([], fake_codex.resumed)
         result = backend.run_implementation(config, thread_id)
 
-        self.assertEqual(sha, result["head_sha"])
+        self.assertEqual(sha, result[1]["head_sha"])
         self.assertEqual("/repo/worktree", fake_codex.started[0][0]["cwd"])
         self.assertEqual("workspace-write", fake_codex.started[0][0]["sandbox"])
         self.assertEqual(thread_id, fake_codex.resumed[0][0])
@@ -798,7 +1034,8 @@ class CliTest(unittest.TestCase):
             repository = make_repository(Path(directory))
             contract_file = Path(directory) / "story.md"
             contract_file.write_text(
-                "# Test story\n\nApproved contract.\n", encoding="utf-8"
+                "# Test story\n\n## Acceptance criteria\n\n- Approved test criterion.\n",
+                encoding="utf-8",
             )
             backend = FakeBackend(
                 repository,
@@ -824,8 +1061,6 @@ class CliTest(unittest.TestCase):
                         "master",
                         "--story-contract-file",
                         str(contract_file),
-                        "--review-skill",
-                        str(repository / ".agents/skills/review-story/SKILL.md"),
                         "--check",
                         "true",
                     ]

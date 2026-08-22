@@ -26,11 +26,9 @@ class CodexBackend:
         self,
         *,
         repository: Path,
-        review_skill: Path,
         model: str | None = None,
     ) -> None:
         self.repository = repository.resolve()
-        self.review_skill = review_skill.resolve()
         self.model = model
         self._codex: Any = None
         self._sdk: dict[str, Any] = {}
@@ -43,7 +41,6 @@ class CodexBackend:
                 ApprovalMode,
                 Codex,
                 Sandbox,
-                SkillInput,
                 TextInput,
             )
         except ImportError as exc:
@@ -53,7 +50,6 @@ class CodexBackend:
         self._sdk = {
             "ApprovalMode": ApprovalMode,
             "Sandbox": Sandbox,
-            "SkillInput": SkillInput,
             "TextInput": TextInput,
         }
         self._codex = Codex()
@@ -78,7 +74,7 @@ class CodexBackend:
 
     def run_implementation(
         self, config: dict[str, Any], thread_id: str
-    ) -> dict[str, Any]:
+    ) -> tuple[str, dict[str, Any]]:
         codex = self._ensure_client()
         sdk = self._sdk
         thread = codex.thread_resume(
@@ -119,7 +115,52 @@ class CodexBackend:
         payload = validate_implementation(
             parse_json_object(result.final_response, "implementation")
         )
-        return payload
+        return result.id, payload
+
+    def recover_implementation(
+        self, config: dict[str, Any], thread_id: str, after_turn_id: str
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Recover an uncheckpointed completed write-turn result from thread history."""
+        codex = self._ensure_client()
+        sdk = self._sdk
+        thread = codex.thread_resume(
+            thread_id,
+            approval_mode=sdk["ApprovalMode"].deny_all,
+            cwd=config["worktree"],
+            model=self.model,
+            sandbox=sdk["Sandbox"].workspace_write,
+        )
+        turns = thread.read(include_turns=True).thread.turns
+        turn_ids = [turn.id for turn in turns]
+        if after_turn_id:
+            if after_turn_id not in turn_ids:
+                raise RuntimeError(
+                    f"last processed implementation turn is missing: {after_turn_id}"
+                )
+            turns = turns[turn_ids.index(after_turn_id) + 1 :]
+        for turn in reversed(turns):
+            status = getattr(turn.status, "value", turn.status)
+            if status != "completed":
+                continue
+            response: str | None = None
+            fallback: str | None = None
+            for item in reversed(turn.items):
+                value = item.model_dump(by_alias=True, mode="json")
+                if value.get("type") != "agentMessage":
+                    continue
+                phase = value.get("phase")
+                if phase == "final_answer":
+                    response = value.get("text")
+                    break
+                if phase is None and fallback is None:
+                    fallback = value.get("text")
+            response = response or fallback
+            if response is None:
+                raise RuntimeError(f"completed turn has no final response: {turn.id}")
+            return turn.id, validate_implementation(
+                parse_json_object(response, "recovered implementation turn")
+            )
+        return None
 
     def repair(
         self,
@@ -127,7 +168,7 @@ class CodexBackend:
         thread_id: str,
         candidate: dict[str, Any],
         delta: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    ) -> tuple[str, dict[str, Any]]:
         codex = self._ensure_client()
         sdk = self._sdk
         thread = codex.thread_resume(
@@ -159,7 +200,7 @@ class CodexBackend:
             output_schema=IMPLEMENTATION_SCHEMA,
             sandbox=sdk["Sandbox"].workspace_write,
         )
-        return validate_implementation(
+        return result.id, validate_implementation(
             parse_json_object(result.final_response, "repair")
         )
 
@@ -184,27 +225,29 @@ class CodexBackend:
         thread.set_name(f"story-loop review {config['run_id']} pass {pass_number}")
         prompt = "\n".join(
             [
-                "Use the review-story workflow for one exact, immutable candidate.",
+                "Perform the versioned review workflow below for one exact, immutable candidate.",
                 f"Story: {config['story']}",
                 f"Candidate worktree: {candidate['worktree']}",
                 f"Candidate branch: {candidate['branch']}",
                 f"Candidate commit: {candidate['head_sha']}",
                 f"Base branch: {config['base_branch']}",
+                f"Exact base commit: {config['base_commit']}",
                 f"Pull request, if one already exists: {candidate.get('pr_url', '')}",
                 "This thread is a fresh read-only reviewer. Do not edit files, post comments, approve, merge, or delegate fixes.",
                 "Run read-only deterministic checks when useful, but keep their results distinct from model findings.",
                 "Return only the requested structured result with every field present.",
                 "Use zero for unknown line numbers and an empty decision string when no decision is required.",
                 "READY_FOR_HUMAN_REVIEW must have no findings. CHANGES_REQUIRED must contain actionable findings.",
+                "Required acceptance criteria (use these exact strings in acceptance_coverage):",
+                json.dumps(config["acceptance_criteria"], indent=2),
+                "Versioned review coordinator contract:",
+                config["review_contract"],
                 "Approved execution contract:",
                 config["story_contract"],
             ]
         )
         result = thread.run(
-            [
-                sdk["SkillInput"](name="review-story", path=str(self.review_skill)),
-                sdk["TextInput"](text=prompt),
-            ],
+            sdk["TextInput"](text=prompt),
             approval_mode=sdk["ApprovalMode"].deny_all,
             cwd=candidate["worktree"],
             model=self.model,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -163,13 +164,24 @@ def inspect_worktree(
     }
 
 
-def inspect_candidate(repository: Path, payload: dict[str, Any]) -> dict[str, str]:
+def inspect_candidate(
+    repository: Path, payload: dict[str, Any], *, base_commit: str
+) -> dict[str, str]:
     worktree = Path(payload["worktree"]).expanduser().resolve()
     snapshot = inspect_worktree(repository, worktree=worktree, branch=payload["branch"])
     actual_sha = snapshot["head_sha"]
     if actual_sha != payload["head_sha"]:
         raise RepositoryError(
             f"stale candidate: reported {payload['head_sha']}, worktree is {actual_sha}"
+        )
+    ancestor = _run(
+        ["git", "merge-base", "--is-ancestor", base_commit, actual_sha],
+        cwd=worktree,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        raise RepositoryError(
+            f"candidate {actual_sha} does not descend from configured base {base_commit}"
         )
     if not snapshot["clean"]:
         raise RepositoryError(
@@ -183,7 +195,10 @@ def inspect_candidate(repository: Path, payload: dict[str, Any]) -> dict[str, st
 
 
 def validate_candidate_unchanged(repository: Path, candidate: dict[str, Any]) -> None:
-    inspect_candidate(repository, candidate)
+    base_commit = candidate.get("base_commit")
+    if not isinstance(base_commit, str) or not base_commit:
+        raise RepositoryError("candidate is missing its configured base commit")
+    inspect_candidate(repository, candidate, base_commit=base_commit)
 
 
 class ValidationRunner:
@@ -201,31 +216,40 @@ class ValidationRunner:
     ) -> dict[str, Any]:
         results: list[dict[str, Any]] = []
         for command in commands:
+            process = subprocess.Popen(
+                ["/bin/sh", "-lc", command],
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=os.environ.copy(),
+                start_new_session=True,
+            )
             try:
-                completed = subprocess.run(
-                    ["/bin/sh", "-lc", command],
-                    cwd=cwd,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_seconds,
-                    env=os.environ.copy(),
-                )
-                combined = "\n".join(
-                    part for part in (completed.stdout, completed.stderr) if part
-                )
+                stdout, stderr = process.communicate(timeout=timeout_seconds)
+                combined = "\n".join(part for part in (stdout, stderr) if part)
                 results.append(
                     {
                         "command": command,
-                        "status": "PASSED" if completed.returncode == 0 else "FAILED",
-                        "exit_code": completed.returncode,
+                        "status": "PASSED" if process.returncode == 0 else "FAILED",
+                        "exit_code": process.returncode,
                         "output": combined[-self.output_limit :],
                     }
                 )
-            except subprocess.TimeoutExpired as exc:
-                output = "\n".join(
-                    str(part) for part in (exc.stdout, exc.stderr) if part is not None
-                )
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    stdout, stderr = process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    stdout, stderr = process.communicate()
+                output = "\n".join(part for part in (stdout, stderr) if part)
                 results.append(
                     {
                         "command": command,

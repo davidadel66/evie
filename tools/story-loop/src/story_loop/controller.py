@@ -27,7 +27,11 @@ class Backend(Protocol):
 
     def run_implementation(
         self, config: dict[str, Any], thread_id: str
-    ) -> dict[str, Any]: ...
+    ) -> tuple[str, dict[str, Any]]: ...
+
+    def recover_implementation(
+        self, config: dict[str, Any], thread_id: str, after_turn_id: str
+    ) -> tuple[str, dict[str, Any]] | None: ...
 
     def repair(
         self,
@@ -35,7 +39,7 @@ class Backend(Protocol):
         thread_id: str,
         candidate: dict[str, Any],
         delta: list[dict[str, Any]],
-    ) -> dict[str, Any]: ...
+    ) -> tuple[str, dict[str, Any]]: ...
 
     def review(
         self,
@@ -56,6 +60,57 @@ PHASES = {
     "TERMINAL",
 }
 
+IMPLEMENTATION_KEYS = {
+    "status",
+    "story_ref",
+    "title",
+    "worktree",
+    "branch",
+    "base_branch",
+    "head_sha",
+    "pr_url",
+    "summary",
+    "checks",
+    "known_gaps",
+    "decision",
+}
+
+
+def _validate_persisted_validation(value: dict[str, Any], checks: list[str]) -> None:
+    if set(value) != {"overall_passed", "results"}:
+        raise StateError("persisted validation keys are invalid")
+    if not isinstance(value["overall_passed"], bool) or not isinstance(
+        value["results"], list
+    ):
+        raise StateError("persisted validation has invalid field types")
+    if len(value["results"]) != len(checks):
+        raise StateError("persisted validation does not cover every configured check")
+    statuses: list[str] = []
+    for index, (result, expected_command) in enumerate(zip(value["results"], checks)):
+        if not isinstance(result, dict) or set(result) != {
+            "command",
+            "status",
+            "exit_code",
+            "output",
+        }:
+            raise StateError(f"persisted validation result {index} is invalid")
+        if result["command"] != expected_command:
+            raise StateError(
+                f"persisted validation result {index} does not match its configured command"
+            )
+        status = result["status"]
+        if status not in {"PASSED", "FAILED", "TIMED_OUT"}:
+            raise StateError(f"persisted validation result {index} has invalid status")
+        if (
+            isinstance(result["exit_code"], bool)
+            or not isinstance(result["exit_code"], int)
+            or not isinstance(result["output"], str)
+        ):
+            raise StateError(f"persisted validation result {index} has invalid values")
+        statuses.append(status)
+    if value["overall_passed"] != all(status == "PASSED" for status in statuses):
+        raise StateError("persisted validation overall result is inconsistent")
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -69,6 +124,8 @@ def new_state(config: dict[str, Any]) -> dict[str, Any]:
         "phase": "PREPARE",
         "config": config,
         "implementation_thread_id": "",
+        "last_implementation_turn_id": "",
+        "pending_implementation": {},
         "candidate": {},
         "pending_review_thread_id": "",
         "pending_review": {},
@@ -92,6 +149,8 @@ def validate_state(state: dict[str, Any]) -> None:
         "phase",
         "config",
         "implementation_thread_id",
+        "last_implementation_turn_id",
+        "pending_implementation",
         "candidate",
         "pending_review_thread_id",
         "pending_review",
@@ -117,14 +176,162 @@ def validate_state(state: dict[str, Any]) -> None:
         raise StateError(f"unknown state phase: {state['phase']}")
     if not isinstance(state["config"], dict):
         raise StateError("state config must be an object")
-    if state["run_id"] != state["config"].get("run_id"):
+    config = state["config"]
+    config_keys = {
+        "run_id",
+        "story",
+        "repository",
+        "base_branch",
+        "base_commit",
+        "branch",
+        "worktree",
+        "story_title",
+        "story_contract",
+        "acceptance_criteria",
+        "review_contract",
+        "review_contract_sha256",
+        "checks",
+        "check_timeout_seconds",
+        "max_review_passes",
+        "draft_pr",
+        "model",
+    }
+    if set(config) != config_keys:
+        raise StateError(
+            f"config keys mismatch; missing={sorted(config_keys - set(config))}, "
+            f"extra={sorted(set(config) - config_keys)}"
+        )
+    if state["run_id"] != config.get("run_id"):
         raise StateError("state run ID differs from its immutable config")
+    for key in (
+        "run_id",
+        "story",
+        "repository",
+        "base_branch",
+        "base_commit",
+        "branch",
+        "worktree",
+        "story_title",
+        "story_contract",
+        "review_contract",
+        "review_contract_sha256",
+        "model",
+    ):
+        if not isinstance(config[key], str) or (key != "model" and not config[key]):
+            raise StateError(f"config.{key} must be a non-empty string")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", config["base_commit"]):
+        raise StateError("config.base_commit must be a full Git object ID")
+    contract_hash = hashlib.sha256(config["review_contract"].encode()).hexdigest()
+    if contract_hash != config["review_contract_sha256"]:
+        raise StateError("persisted review contract does not match its digest")
+    for key in ("acceptance_criteria", "checks"):
+        if (
+            not isinstance(config[key], list)
+            or not config[key]
+            or any(not isinstance(item, str) or not item for item in config[key])
+        ):
+            raise StateError(f"config.{key} must be a non-empty string array")
+    if len(set(config["acceptance_criteria"])) != len(config["acceptance_criteria"]):
+        raise StateError("config.acceptance_criteria contains duplicates")
+    for key in ("check_timeout_seconds", "max_review_passes"):
+        if (
+            isinstance(config[key], bool)
+            or not isinstance(config[key], int)
+            or config[key] < 1
+        ):
+            raise StateError(f"config.{key} must be a positive integer")
+    if not isinstance(config["draft_pr"], bool):
+        raise StateError("config.draft_pr must be a boolean")
     if isinstance(state["passes_completed"], bool) or not isinstance(
         state["passes_completed"], int
     ):
         raise StateError("passes_completed must be an integer")
     if state["passes_completed"] < 0:
         raise StateError("passes_completed must not be negative")
+    if state["passes_completed"] > config["max_review_passes"]:
+        raise StateError("passes_completed exceeds the configured review limit")
+    for key in (
+        "run_id",
+        "implementation_thread_id",
+        "last_implementation_turn_id",
+        "pending_review_thread_id",
+        "previous_delta_fingerprint",
+        "outcome",
+        "message",
+        "pr_url",
+        "created_at",
+        "updated_at",
+    ):
+        if not isinstance(state[key], str):
+            raise StateError(f"state.{key} must be a string")
+    for key in (
+        "candidate",
+        "pending_implementation",
+        "pending_review",
+        "pending_validation",
+        "last_repair",
+    ):
+        if not isinstance(state[key], dict):
+            raise StateError(f"state.{key} must be an object")
+    if not isinstance(state["pending_delta"], list):
+        raise StateError("state.pending_delta must be an array")
+    if any(
+        not isinstance(item, dict) or item.get("source") not in {"review", "validation"}
+        for item in state["pending_delta"]
+    ):
+        raise StateError("state.pending_delta contains an invalid entry")
+    try:
+        if state["pending_implementation"]:
+            validate_implementation(state["pending_implementation"])
+        if state["last_repair"]:
+            validate_implementation(state["last_repair"])
+        if state["pending_review"]:
+            review = validate_review(state["pending_review"])
+            criteria = [entry["criterion"] for entry in review["acceptance_coverage"]]
+            if criteria != config["acceptance_criteria"]:
+                raise StateError(
+                    "persisted review does not cover the configured acceptance criteria"
+                )
+        if state["candidate"]:
+            candidate = state["candidate"]
+            if set(candidate) != IMPLEMENTATION_KEYS | {"base_commit"}:
+                raise StateError("persisted candidate keys are invalid")
+            candidate_payload = {key: candidate[key] for key in IMPLEMENTATION_KEYS}
+            validated_candidate = validate_implementation(candidate_payload)
+            if validated_candidate["status"] != "CANDIDATE_READY":
+                raise StateError("persisted candidate is not ready")
+            if candidate["base_commit"] != config["base_commit"]:
+                raise StateError("persisted candidate base commit differs from config")
+            expected_identity = {
+                "story_ref": config["story"],
+                "branch": config["branch"],
+                "base_branch": config["base_branch"],
+            }
+            if any(
+                candidate[key] != expected
+                for key, expected in expected_identity.items()
+            ):
+                raise StateError("persisted candidate identity differs from config")
+            if (
+                Path(candidate["worktree"]).resolve()
+                != Path(config["worktree"]).resolve()
+            ):
+                raise StateError("persisted candidate worktree differs from config")
+    except ContractError as exc:
+        raise StateError(f"persisted structured payload is invalid: {exc}") from exc
+    if state["pending_validation"]:
+        _validate_persisted_validation(state["pending_validation"], config["checks"])
+    if (
+        state["phase"] in {"REVIEW", "VALIDATE", "FINALIZE", "REPAIR", "DELIVER"}
+        and not state["candidate"]
+    ):
+        raise StateError(f"phase {state['phase']} requires a candidate")
+    if state["phase"] in {"VALIDATE", "FINALIZE"} and not state["pending_review"]:
+        raise StateError(f"phase {state['phase']} requires a completed review")
+    if state["phase"] == "FINALIZE" and not state["pending_validation"]:
+        raise StateError("FINALIZE requires completed validation")
+    if state["phase"] == "REPAIR" and not state["pending_delta"]:
+        raise StateError("REPAIR requires a remaining delta")
     if (
         state["phase"] not in {"PREPARE", "START_IMPLEMENTATION", "TERMINAL"}
         and not state["implementation_thread_id"]
@@ -277,14 +484,29 @@ class Controller:
             raise ContractError(
                 f"candidate branch mismatch: expected {config['branch']}, got {payload['branch']}"
             )
-        inspected = inspect_candidate(Path(config["repository"]), payload)
+        inspected = inspect_candidate(
+            Path(config["repository"]), payload, base_commit=config["base_commit"]
+        )
         if previous_sha and inspected["head_sha"] == previous_sha:
             raise RepositoryError("repair did not produce a new candidate commit")
         candidate = dict(payload)
         candidate.update(inspected)
+        candidate["base_commit"] = config["base_commit"]
         state["candidate"] = candidate
 
     def _implement(self, state: dict[str, Any]) -> None:
+        if state["pending_implementation"]:
+            self._finish_write_result(state, previous_sha="")
+            return
+        recovered_turn = self.backend.recover_implementation(
+            state["config"],
+            state["implementation_thread_id"],
+            state["last_implementation_turn_id"],
+        )
+        if recovered_turn is not None:
+            self._checkpoint_write_result(state, *recovered_turn)
+            self._finish_write_result(state, previous_sha="")
+            return
         recovered = self._recovered_candidate(
             state, previous_sha=state["config"]["base_commit"]
         )
@@ -293,19 +515,36 @@ class Controller:
             state["phase"] = "REVIEW"
             self._save(state)
             return
-        raw_payload = self.backend.run_implementation(
+        turn_id, raw_payload = self.backend.run_implementation(
             state["config"], state["implementation_thread_id"]
         )
-        payload = validate_implementation(raw_payload)
+        self._checkpoint_write_result(state, turn_id, raw_payload)
+        self._finish_write_result(state, previous_sha="")
+
+    def _checkpoint_write_result(
+        self, state: dict[str, Any], turn_id: str, raw_payload: dict[str, Any]
+    ) -> None:
+        if not isinstance(turn_id, str) or not turn_id.strip():
+            raise ContractError("implementation turn returned an invalid turn ID")
+        state["last_implementation_turn_id"] = turn_id
+        state["pending_implementation"] = validate_implementation(raw_payload)
+        self._save(state)
+
+    def _finish_write_result(self, state: dict[str, Any], *, previous_sha: str) -> None:
+        payload = validate_implementation(state["pending_implementation"])
+        state["pending_implementation"] = {}
+        state["last_repair"] = payload
         if payload["status"] == "DECISION_REQUIRED":
-            state["last_repair"] = payload
             self._stop(state, "DECISION_REQUIRED", payload["decision"])
             return
         if payload["status"] == "IMPLEMENTATION_INCOMPLETE":
-            state["last_repair"] = payload
             self._stop(state, "IMPLEMENTATION_INCOMPLETE", payload["decision"])
             return
-        self._accept_candidate(state, payload)
+        self._accept_candidate(state, payload, previous_sha=previous_sha)
+        state["pending_review_thread_id"] = ""
+        state["pending_review"] = {}
+        state["pending_validation"] = {}
+        state["pending_delta"] = []
         state["phase"] = "REVIEW"
         self._save(state)
 
@@ -320,6 +559,14 @@ class Controller:
         if review["candidate_sha"] != candidate["head_sha"]:
             raise RepositoryError(
                 f"review is stale: expected {candidate['head_sha']}, got {review['candidate_sha']}"
+            )
+        expected_criteria = config["acceptance_criteria"]
+        reported_criteria = [
+            entry["criterion"] for entry in review["acceptance_coverage"]
+        ]
+        if reported_criteria != expected_criteria:
+            raise ContractError(
+                "review acceptance coverage must contain every configured criterion exactly once and in order"
             )
         validate_candidate_unchanged(Path(config["repository"]), candidate)
         state["pending_review_thread_id"] = thread_id
@@ -373,10 +620,7 @@ class Controller:
                         key: item[key]
                         for key in (
                             "source",
-                            "id",
                             "priority",
-                            "title",
-                            "body",
                             "file",
                             "start",
                             "end",
@@ -390,11 +634,20 @@ class Controller:
                         "command": item["command"],
                         "status": item["status"],
                         "exit_code": item["exit_code"],
-                        "output": re.sub(r"\s+", " ", item["output"]).strip(),
+                        "output": Controller._stable_validation_output(item["output"]),
                     }
                 )
+        semantic.sort(
+            key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"))
+        )
         encoded = json.dumps(semantic, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def _stable_validation_output(output: str) -> str:
+        value = re.sub(r"/private/var/folders/\S+|/tmp/\S+", "<temp-path>", output)
+        value = re.sub(r"\b\d+(?:\.\d+)?(?:ms|s)\b", "<duration>", value)
+        return re.sub(r"\s+", " ", value).strip()
 
     def _finalize(self, state: dict[str, Any]) -> None:
         review = state["pending_review"]
@@ -425,6 +678,7 @@ class Controller:
             "iteration": next_pass,
             "candidate": state["candidate"],
             "review_thread_id": state["pending_review_thread_id"],
+            "review_contract_sha256": config["review_contract_sha256"],
             "review": review,
             "validation": validation,
             "remaining_delta": delta,
@@ -461,39 +715,32 @@ class Controller:
     def _repair(self, state: dict[str, Any]) -> None:
         config = state["config"]
         candidate = state["candidate"]
+        previous_sha = candidate["head_sha"]
+        if state["pending_implementation"]:
+            self._finish_write_result(state, previous_sha=previous_sha)
+            return
+        recovered_turn = self.backend.recover_implementation(
+            config,
+            state["implementation_thread_id"],
+            state["last_implementation_turn_id"],
+        )
+        if recovered_turn is not None:
+            self._checkpoint_write_result(state, *recovered_turn)
+            self._finish_write_result(state, previous_sha=previous_sha)
+            return
         recovered = self._recovered_candidate(state, previous_sha=candidate["head_sha"])
         if recovered is not None:
-            state["last_repair"] = recovered
-            self._accept_candidate(state, recovered, previous_sha=candidate["head_sha"])
-            state["pending_review_thread_id"] = ""
-            state["pending_review"] = {}
-            state["pending_validation"] = {}
-            state["pending_delta"] = []
-            state["phase"] = "REVIEW"
-            self._save(state)
+            state["pending_implementation"] = recovered
+            self._finish_write_result(state, previous_sha=previous_sha)
             return
-        raw_payload = self.backend.repair(
+        turn_id, raw_payload = self.backend.repair(
             config,
             state["implementation_thread_id"],
             candidate,
             state["pending_delta"],
         )
-        payload = validate_implementation(raw_payload)
-        state["last_repair"] = payload
-        if payload["status"] == "DECISION_REQUIRED":
-            self._stop(state, "DECISION_REQUIRED", payload["decision"])
-            return
-        if payload["status"] == "IMPLEMENTATION_INCOMPLETE":
-            self._stop(state, "IMPLEMENTATION_INCOMPLETE", payload["decision"])
-            return
-        previous_sha = candidate["head_sha"]
-        self._accept_candidate(state, payload, previous_sha=previous_sha)
-        state["pending_review_thread_id"] = ""
-        state["pending_review"] = {}
-        state["pending_validation"] = {}
-        state["pending_delta"] = []
-        state["phase"] = "REVIEW"
-        self._save(state)
+        self._checkpoint_write_result(state, turn_id, raw_payload)
+        self._finish_write_result(state, previous_sha=previous_sha)
 
     def _deliver(self, state: dict[str, Any]) -> None:
         config = state["config"]

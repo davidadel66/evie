@@ -5,26 +5,39 @@ story. It automates the task handoff that otherwise happens manually:
 
 1. prepare an isolated Git worktree and start one persistent, workspace-write
    implementation task with a controller-owned worker contract;
-2. review its exact commit in a brand-new, read-only task with `review-story`;
+2. review its exact commit in a brand-new, read-only task using a versioned
+   three-lens review contract;
 3. run operator-supplied deterministic checks outside both model tasks;
 4. resume the original implementation task with the combined review and
    validation delta; and
 5. repeat until the candidate is ready or a bounded stop condition fires.
 
-The controller is deliberately not a skill. The external `review-story` skill
-defines the review task; a small embedded worker contract avoids invoking the
-high-level `implement-story` workflow and then conflicting with its own review
-and delivery gates. The process owns transitions, persistence, candidate
-identity, validation, locking, convergence, and delivery.
+The controller is deliberately not a skill. Its implementation-worker and
+review-coordinator contracts are versioned with the executable, while the
+process owns transitions, persistence, candidate identity, validation,
+locking, convergence, and delivery. Existing `implement-story` and
+`review-story` skills remain unchanged and can evolve separately.
 
 ## Install
 
 The tool needs Python 3.10 or newer. Its project pins the stable Python Codex
-SDK and the matching bundled Codex runtime:
+SDK and the matching bundled Codex runtime. With
+[uv](https://docs.astral.sh/uv/getting-started/installation/) installed:
 
 ```sh
 uv sync --project tools/story-loop
 ```
+
+Without `uv`, install it in a standard virtual environment:
+
+```sh
+python3 -m venv tools/story-loop/.venv
+tools/story-loop/.venv/bin/python -m pip install -e tools/story-loop
+```
+
+The commands below use `uv run --project tools/story-loop evie-story-loop`;
+after the virtual-environment installation, invoke
+`tools/story-loop/.venv/bin/evie-story-loop` instead.
 
 The bundled runtime uses the same local Codex authentication as the app and
 CLI. A ChatGPT Pro login is sufficient for an interactive local run; an API
@@ -49,15 +62,14 @@ worktree, loads the approved issue contract with `gh`, and prepares
 `.worktrees/<run-id>` itself before granting an agent write access. The primary
 worktree is never the implementation task's writable root.
 
-`review-story` is currently an explicit external dependency because its skill
-files are not yet committed on `master`. Pass the absolute path to the reviewed
-skill contract. Once that separate skill work lands, the CLI can gain a
-repository default without coupling this controller PR to those changes.
+The approved execution contract must contain a bulleted
+`## Acceptance criteria` section. Those exact criteria, the exact base commit,
+and the versioned review-contract digest are frozen in run state before either
+model task starts.
 
 ```sh
 uv run --project tools/story-loop evie-story-loop start \
   --story https://github.com/davidadel66/evie/issues/54 \
-  --review-skill /absolute/path/to/review-story/SKILL.md \
   --base master \
   --check 'git diff --check master...HEAD' \
   --check 'go test ./...' \
@@ -71,9 +83,6 @@ Important controls:
 - `--check` is repeatable and required. These shell commands are trusted
   operator input saved in immutable run configuration. The controller never
   executes commands proposed by a model.
-- `--review-skill` is required and may point to a repository, personal, or
-  installed `review-story/SKILL.md`. Startup fails before creating a run if the
-  file is absent.
 - The story URL is resolved with `gh issue view` before either sandboxed task
   starts. Use `--story-contract-file` for an approved local execution contract
   or an environment without GitHub access.
@@ -90,12 +99,14 @@ Important controls:
 
 The implementation task is scoped to the controller-created worktree and told
 to commit locally but not push or create a pull request. Its thread ID is
-persisted before the first write-producing turn. On resume, a clean advanced
-commit from an interrupted implementation or repair turn is reconciled as a
-candidate and still has to pass fresh review and deterministic validation.
-After both pass, the controller performs delivery only when `--draft-pr` was
-set and verifies that the resulting PR is open, draft, on the configured base
-and head branches, and bound to the exact candidate SHA.
+persisted before the first write-producing turn. On resume, the controller
+first reconciles a completed SDK turn—including decision or incomplete results
+that produced no commit—and then falls back to a clean advanced commit. Every
+candidate must descend from the frozen base commit and still pass fresh review
+and deterministic validation. Validation timeouts terminate the command's
+entire process group. After both phases pass, delivery runs only when
+`--draft-pr` was set and verifies that the resulting PR is open, draft, on the
+configured base and head branches, and bound to the exact candidate SHA.
 
 ## Inspect and resume
 
@@ -113,8 +124,8 @@ directory:
 
 `state.json` is replaced atomically after each completed phase. Each iteration
 receipt is immutable and contains the exact candidate SHA, fresh reviewer task
-ID, structured findings, deterministic command results, remaining delta, and
-controller decision.
+ID, review-contract digest, three-lens and acceptance-coverage evidence,
+deterministic command results, remaining delta, and controller decision.
 
 Inspect a run without starting an agent:
 
@@ -168,7 +179,8 @@ PYTHONPATH=tools/story-loop/src \
 
 The suite covers success, repair feedback, changing and repeated validation
 failures, human-decision and incomplete-review stops, convergence bounds,
-stale candidates, contradictory or invalid structured output, isolated
-worktree preparation, locking, atomic receipts, exact draft-PR metadata, SDK
-thread/sandbox selection, and interruption recovery after implementation and
-repair commits.
+stale or unrelated candidates, exact three-lens and acceptance coverage,
+contradictory or invalid structured output, isolated worktree preparation,
+locking, atomic receipts, exact draft-PR metadata, SDK thread/sandbox
+selection, descendant-process timeout cleanup, and interruption recovery for
+both commit-producing and non-commit implementation results.

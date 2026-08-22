@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -13,6 +14,7 @@ from typing import Any
 
 from .backend import CodexBackend
 from .controller import Controller, new_state
+from .prompts import REVIEW_COORDINATOR_CONTRACT
 from .repository import RepositoryError, git_common_dir, git_text, primary_worktree
 from .storage import RunStore, StateError, validate_run_id
 
@@ -79,11 +81,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="gpt-5.6-terra",
         help="Codex model (default: gpt-5.6-terra)",
     )
-    start.add_argument(
-        "--review-skill",
-        required=True,
-        help="explicit path to the external review-story/SKILL.md contract",
-    )
 
     resume = subparsers.add_parser("resume", help="continue a durable interrupted run")
     resume.add_argument("--repo", default=".", help="path inside the target repository")
@@ -111,18 +108,9 @@ def _store(repository: Path, run_id: str) -> RunStore:
     return RunStore(git_common_dir(repository) / "story-loop", validate_run_id(run_id))
 
 
-def _skill_path(argument: str, name: str) -> Path:
-    path = Path(argument).expanduser()
-    path = path.resolve()
-    if not path.is_file():
-        raise StateError(f"required skill is missing: {path}")
-    return path
-
-
 def _backend(config: dict[str, Any]) -> CodexBackend:
     return CodexBackend(
         repository=Path(config["repository"]),
-        review_skill=Path(config["review_skill"]),
         model=config["model"] or None,
     )
 
@@ -164,6 +152,27 @@ def _story_contract(
     return title, f"# {title}\n\nSource: {url}\n\n{body}"
 
 
+def _acceptance_criteria(contract: str) -> list[str]:
+    criteria: list[str] = []
+    in_section = False
+    for raw_line in contract.splitlines():
+        line = raw_line.strip()
+        if line.lower() == "## acceptance criteria":
+            in_section = True
+            continue
+        if in_section and line.startswith("## "):
+            break
+        if in_section and line.startswith("- "):
+            criteria.append(line[2:].strip())
+    if not criteria:
+        raise StateError(
+            "story contract has no bulleted ## Acceptance criteria section"
+        )
+    if len(set(criteria)) != len(criteria):
+        raise StateError("story contract contains duplicate acceptance criteria")
+    return criteria
+
+
 def _summary(state: dict[str, Any], store: RunStore) -> dict[str, Any]:
     return {
         "run_id": state["run_id"],
@@ -193,10 +202,10 @@ def _start(arguments: argparse.Namespace) -> tuple[dict[str, Any], RunStore]:
         repository, "rev-parse", "--verify", f"{arguments.base}^{{commit}}"
     )
     run_id = validate_run_id(arguments.run_id or _run_id_from_story(arguments.story))
-    review_skill = _skill_path(arguments.review_skill, "review-story")
     story_title, story_contract = _story_contract(
         arguments.story, arguments.story_contract_file, repository
     )
+    acceptance_criteria = _acceptance_criteria(story_contract)
     branch = f"codex/{run_id}"
     worktree = repository / ".worktrees" / run_id
     config = {
@@ -209,11 +218,15 @@ def _start(arguments: argparse.Namespace) -> tuple[dict[str, Any], RunStore]:
         "worktree": str(worktree),
         "story_title": story_title,
         "story_contract": story_contract,
+        "acceptance_criteria": acceptance_criteria,
+        "review_contract": REVIEW_COORDINATOR_CONTRACT,
+        "review_contract_sha256": hashlib.sha256(
+            REVIEW_COORDINATOR_CONTRACT.encode()
+        ).hexdigest(),
         "checks": list(arguments.check),
         "check_timeout_seconds": arguments.check_timeout,
         "max_review_passes": arguments.max_review_passes,
         "draft_pr": bool(arguments.draft_pr),
-        "review_skill": str(review_skill),
         "model": arguments.model,
     }
     store = _store(repository, run_id)
@@ -252,7 +265,6 @@ def _smoke(arguments: argparse.Namespace) -> dict[str, Any]:
     repository = primary_worktree(Path(arguments.repo).expanduser().resolve())
     backend = CodexBackend(
         repository=repository,
-        review_skill=repository / ".agents" / "skills" / "review-story" / "SKILL.md",
         model=arguments.model,
     )
     try:
