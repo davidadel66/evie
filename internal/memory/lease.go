@@ -15,8 +15,9 @@ type (
 	}
 )
 
-// ActiveAt reports whether the lease owns its session at the supplied instant.
-// Expiry is a half-open boundary: a lease is no longer active at ExpiresAt.
-func (l TurnLease) ActiveAt(now time.Time) bool {
+// UnexpiredAt reports whether this snapshot's local expiry is after the supplied
+// instant. It does not prove durable ownership; a newer fencing token may have
+// replaced the snapshot. Expiry is a half-open boundary.
+func (l TurnLease) UnexpiredAt(now time.Time) bool {
 	return l.HolderID != "" && l.ExpiresAt.After(now)
 }

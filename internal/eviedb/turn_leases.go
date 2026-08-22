@@ -6,16 +6,72 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 )
 
 var (
-	ErrTurnLeaseHeld    = errors.New("eviedb: turn lease is held")
-	ErrTurnLeaseLost    = errors.New("eviedb: turn lease is not current")
-	ErrTurnLeaseNotHeld = errors.New("eviedb: turn lease is not held")
+	ErrTurnLeaseHeld            = errors.New("eviedb: turn lease is held")
+	ErrTurnLeaseLost            = errors.New("eviedb: turn lease is not current")
+	ErrTurnLeaseNotHeld         = errors.New("eviedb: turn lease is not held")
+	ErrTurnLeaseSessionInactive = errors.New("eviedb: turn lease session is missing or inactive")
+
+	errTurnLeaseWriterClosed       = errors.New("eviedb: turn lease writer is closed")
+	errTurnLeaseTransactionControl = errors.New("eviedb: turn lease writer cannot control its transaction")
 )
+
+// TurnLeaseWriter is the restricted database surface available to a fenced
+// write callback. Transaction commit and rollback remain owned by Store.
+type TurnLeaseWriter interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+type turnLeaseWriter struct {
+	mu     sync.RWMutex
+	conn   *sql.Conn
+	closed bool
+}
+
+func (w *turnLeaseWriter) ExecContext(
+	ctx context.Context,
+	query string,
+	args ...any,
+) (sql.Result, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.closed {
+		return nil, errTurnLeaseWriterClosed
+	}
+	if err := validateTurnLeaseWriteStatement(query); err != nil {
+		return nil, err
+	}
+	return w.conn.ExecContext(ctx, query, args...)
+}
+
+func (w *turnLeaseWriter) close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.closed = true
+}
+
+func validateTurnLeaseWriteStatement(query string) error {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return errors.New("turn lease write statement must not be empty")
+	}
+	if strings.Contains(query, ";") || strings.HasPrefix(query, "--") || strings.HasPrefix(query, "/*") {
+		return errTurnLeaseTransactionControl
+	}
+	fields := strings.Fields(query)
+	switch strings.ToUpper(fields[0]) {
+	case "BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE":
+		return errTurnLeaseTransactionControl
+	default:
+		return nil
+	}
+}
 
 // Fixed-width UTC text preserves nanosecond ordering in SQLite comparisons.
 const turnLeaseTimeFormat = "2006-01-02T15:04:05.000000000Z07:00"
@@ -26,34 +82,54 @@ func (s *Store) AcquireTurnLease(
 	holderID memory.LeaseHolderID,
 	duration time.Duration,
 ) (memory.TurnLease, error) {
-	now := s.now()
-	nowText, expiresAt, expiresText, err := turnLeaseWindow(sessionID, holderID, now, duration)
+	var lease memory.TurnLease
+	err := withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, s.now(), duration)
+		if err != nil {
+			return err
+		}
+
+		row := conn.QueryRowContext(ctx, `
+			INSERT INTO session_turn_leases (
+				session_id, holder_id, fencing_token, lease_generation, expires_at
+			)
+			SELECT sessions.id, ?, 1, 1, ?
+			FROM sessions
+			WHERE sessions.id = ? AND sessions.status = ?
+			ON CONFLICT(session_id) DO UPDATE SET
+				holder_id = excluded.holder_id,
+				fencing_token = session_turn_leases.fencing_token + 1,
+				lease_generation = session_turn_leases.lease_generation + 1,
+				expires_at = excluded.expires_at
+			WHERE (session_turn_leases.holder_id IS NULL
+			   OR session_turn_leases.expires_at <= ?)
+			  AND EXISTS (
+				SELECT 1 FROM sessions
+				WHERE sessions.id = session_turn_leases.session_id
+				  AND sessions.status = ?
+			  )
+			RETURNING session_id, holder_id, fencing_token, lease_generation, expires_at
+		`, holderID, expiresText, sessionID, memory.SessionActive, nowText, memory.SessionActive)
+
+		lease, err = scanTurnLease(row)
+		if errors.Is(err, sql.ErrNoRows) {
+			active, activeErr := turnLeaseSessionActive(ctx, conn, sessionID)
+			if activeErr != nil {
+				return fmt.Errorf("check turn lease session: %w", activeErr)
+			}
+			if !active {
+				return fmt.Errorf("%w: session %q", ErrTurnLeaseSessionInactive, sessionID)
+			}
+			return fmt.Errorf("%w: session %q", ErrTurnLeaseHeld, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("acquire turn lease: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return memory.TurnLease{}, err
 	}
-
-	row := s.db.QueryRowContext(ctx, `
-		INSERT INTO session_turn_leases (
-			session_id, holder_id, fencing_token, lease_generation, expires_at
-		) VALUES (?, ?, 1, 1, ?)
-		ON CONFLICT(session_id) DO UPDATE SET
-			holder_id = excluded.holder_id,
-			fencing_token = session_turn_leases.fencing_token + 1,
-			lease_generation = session_turn_leases.lease_generation + 1,
-			expires_at = excluded.expires_at
-		WHERE session_turn_leases.holder_id IS NULL
-		   OR session_turn_leases.expires_at <= ?
-		RETURNING session_id, holder_id, fencing_token, lease_generation, expires_at
-	`, sessionID, holderID, expiresText, nowText)
-
-	lease, err := scanTurnLease(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return memory.TurnLease{}, fmt.Errorf("%w: session %q", ErrTurnLeaseHeld, sessionID)
-	}
-	if err != nil {
-		return memory.TurnLease{}, fmt.Errorf("acquire turn lease: %w", err)
-	}
-	lease.ExpiresAt = expiresAt
 	return lease, nil
 }
 
@@ -64,31 +140,41 @@ func (s *Store) HeartbeatTurnLease(
 	token memory.FencingToken,
 	duration time.Duration,
 ) (memory.TurnLease, error) {
-	now := s.now()
-	nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, now, duration)
-	if err != nil {
-		return memory.TurnLease{}, err
-	}
 	if err := validateFencingToken(token); err != nil {
 		return memory.TurnLease{}, err
 	}
 
-	row := s.db.QueryRowContext(ctx, `
-		UPDATE session_turn_leases
-		SET expires_at = max(expires_at, ?)
-		WHERE session_id = ?
-		  AND holder_id = ?
-		  AND fencing_token = ?
-		  AND expires_at > ?
-		RETURNING session_id, holder_id, fencing_token, lease_generation, expires_at
-	`, expiresText, sessionID, holderID, token, nowText)
+	var lease memory.TurnLease
+	err := withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, s.now(), duration)
+		if err != nil {
+			return err
+		}
 
-	lease, err := scanTurnLease(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return memory.TurnLease{}, fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
-	}
+		lease, err = scanTurnLease(conn.QueryRowContext(ctx, `
+			UPDATE session_turn_leases
+			SET expires_at = max(expires_at, ?)
+			WHERE session_id = ?
+			  AND holder_id = ?
+			  AND fencing_token = ?
+			  AND expires_at > ?
+			  AND EXISTS (
+				SELECT 1 FROM sessions
+				WHERE sessions.id = session_turn_leases.session_id
+				  AND sessions.status = ?
+			  )
+			RETURNING session_id, holder_id, fencing_token, lease_generation, expires_at
+		`, expiresText, sessionID, holderID, token, nowText, memory.SessionActive))
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("heartbeat turn lease: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return memory.TurnLease{}, fmt.Errorf("heartbeat turn lease: %w", err)
+		return memory.TurnLease{}, err
 	}
 	return lease, nil
 }
@@ -99,97 +185,98 @@ func (s *Store) ReleaseTurnLease(
 	holderID memory.LeaseHolderID,
 	token memory.FencingToken,
 ) error {
-	now := s.now()
-	nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, now)
-	if err != nil {
-		return err
-	}
+	return withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
+		if err != nil {
+			return err
+		}
 
-	var releasedSessionID string
-	err = s.db.QueryRowContext(ctx, `
-		UPDATE session_turn_leases
-		SET holder_id = NULL, expires_at = NULL
-		WHERE session_id = ?
-		  AND holder_id = ?
-		  AND fencing_token = ?
-		  AND expires_at > ?
-		RETURNING session_id
-	`, sessionID, holderID, token, nowText).Scan(&releasedSessionID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
-	}
-	if err != nil {
-		return fmt.Errorf("release turn lease: %w", err)
-	}
-	return nil
+		var releasedSessionID string
+		err = conn.QueryRowContext(ctx, `
+			UPDATE session_turn_leases
+			SET holder_id = NULL, expires_at = NULL
+			WHERE session_id = ?
+			  AND holder_id = ?
+			  AND fencing_token = ?
+			  AND expires_at > ?
+			RETURNING session_id
+		`, sessionID, holderID, token, nowText).Scan(&releasedSessionID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("release turn lease: %w", err)
+		}
+		return nil
+	})
 }
 
 // WithTurnLeaseWrite runs write in a transaction that remains fenced to the
 // supplied lease until commit. The callback is not run for a stale lease, and
 // all callback writes are rolled back if the lease expires before commit. The
-// callback must perform its database work through the supplied transaction.
+// callback must perform its database work through the supplied writer.
 func (s *Store) WithTurnLeaseWrite(
 	ctx context.Context,
 	sessionID memory.SessionID,
 	holderID memory.LeaseHolderID,
 	token memory.FencingToken,
-	write func(*sql.Tx) error,
+	write func(TurnLeaseWriter) error,
 ) error {
 	if write == nil {
 		return errors.New("turn lease write must not be nil")
 	}
 
-	nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
-	if err != nil {
-		return err
-	}
+	return withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
+		if err != nil {
+			return err
+		}
+		if err := fenceTurnLeaseWrite(ctx, conn, sessionID, holderID, token, nowText); err != nil {
+			return err
+		}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin turn lease write: %w", err)
-	}
-	defer tx.Rollback()
+		writer := &turnLeaseWriter{conn: conn}
+		writeErr := func() error {
+			defer writer.close()
+			return write(writer)
+		}()
+		if writeErr != nil {
+			return fmt.Errorf("turn lease write: %w", writeErr)
+		}
 
-	if err := fenceTurnLeaseWrite(ctx, tx, sessionID, holderID, token, nowText); err != nil {
-		return err
-	}
-	if err := write(tx); err != nil {
-		return fmt.Errorf("turn lease write: %w", err)
-	}
-
-	// Recheck with fresh time so a callback that outlives the lease cannot
-	// commit. The first fencing UPDATE holds SQLite's write lock throughout.
-	nowText, err = validateTurnLeaseAccess(sessionID, holderID, token, s.now())
-	if err != nil {
-		return err
-	}
-	if err := fenceTurnLeaseWrite(ctx, tx, sessionID, holderID, token, nowText); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit turn lease write: %w", err)
-	}
-	return nil
+		// Recheck with fresh time so a callback that outlives the lease cannot
+		// commit. BEGIN IMMEDIATE holds SQLite's write lock throughout.
+		nowText, err = validateTurnLeaseAccess(sessionID, holderID, token, s.now())
+		if err != nil {
+			return err
+		}
+		return fenceTurnLeaseWrite(ctx, conn, sessionID, holderID, token, nowText)
+	})
 }
 
 func fenceTurnLeaseWrite(
 	ctx context.Context,
-	tx *sql.Tx,
+	conn *sql.Conn,
 	sessionID memory.SessionID,
 	holderID memory.LeaseHolderID,
 	token memory.FencingToken,
 	nowText string,
 ) error {
 	var authorized int
-	err := tx.QueryRowContext(ctx, `
+	err := conn.QueryRowContext(ctx, `
 		UPDATE session_turn_leases
 		SET fencing_token = fencing_token
 		WHERE session_id = ?
 		  AND holder_id = ?
 		  AND fencing_token = ?
 		  AND expires_at > ?
+		  AND EXISTS (
+			SELECT 1 FROM sessions
+			WHERE sessions.id = session_turn_leases.session_id
+			  AND sessions.status = ?
+		  )
 		RETURNING 1
-	`, sessionID, holderID, token, nowText).Scan(&authorized)
+	`, sessionID, holderID, token, nowText, memory.SessionActive).Scan(&authorized)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
 	}
@@ -199,6 +286,9 @@ func fenceTurnLeaseWrite(
 	return nil
 }
 
+// GetTurnLease returns the persisted holder snapshot, including an expired
+// holder that has not yet been released or replaced. Only a fenced store
+// operation proves that a snapshot still owns the session.
 func (s *Store) GetTurnLease(ctx context.Context, sessionID memory.SessionID) (memory.TurnLease, error) {
 	if strings.TrimSpace(string(sessionID)) == "" {
 		return memory.TurnLease{}, errors.New("session ID must not be empty")
@@ -216,6 +306,21 @@ func (s *Store) GetTurnLease(ctx context.Context, sessionID memory.SessionID) (m
 		return memory.TurnLease{}, fmt.Errorf("get turn lease: %w", err)
 	}
 	return lease, nil
+}
+
+func turnLeaseSessionActive(
+	ctx context.Context,
+	conn *sql.Conn,
+	sessionID memory.SessionID,
+) (bool, error) {
+	var active bool
+	err := conn.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM sessions
+			WHERE id = ? AND status = ?
+		)
+	`, sessionID, memory.SessionActive).Scan(&active)
+	return active, err
 }
 
 func scanTurnLease(scanner rowScanner) (memory.TurnLease, error) {

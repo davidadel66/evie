@@ -2,7 +2,6 @@ package eviedb
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -16,7 +15,7 @@ func setTurnLeaseTime(store *Store, now time.Time) {
 	store.now = func() time.Time { return now }
 }
 
-func noOpTurnLeaseWrite(*sql.Tx) error { return nil }
+func noOpTurnLeaseWrite(TurnLeaseWriter) error { return nil }
 
 func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 	db := newTestDB(t)
@@ -38,7 +37,7 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 		!first.ExpiresAt.Equal(now.Add(10*time.Second)) {
 		t.Fatalf("first lease = %+v", first)
 	}
-	if !first.ActiveAt(now) || first.ActiveAt(first.ExpiresAt) {
+	if !first.UnexpiredAt(now) || first.UnexpiredAt(first.ExpiresAt) {
 		t.Errorf("lease activity is not half-open at expiry: %+v", first)
 	}
 
@@ -103,6 +102,19 @@ func TestTurnLeaseLifecycleRejectsStaleTokens(t *testing.T) {
 		t.Errorf("replacement lease did not advance monotonically: first=%+v second=%+v", first, second)
 	}
 	setTurnLeaseTime(store, now.Add(4*time.Second))
+	if !first.UnexpiredAt(now.Add(4 * time.Second)) {
+		t.Error("stale snapshot should remain locally unexpired")
+	}
+	staleCallbackRan := false
+	if err := store.WithTurnLeaseWrite(ctx, session.ID, first.HolderID, first.FencingToken, func(TurnLeaseWriter) error {
+		staleCallbackRan = true
+		return nil
+	}); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Errorf("stale snapshot write error = %v, want ErrTurnLeaseLost", err)
+	}
+	if staleCallbackRan {
+		t.Error("locally unexpired stale snapshot authorized a write")
+	}
 	if err := store.ReleaseTurnLease(ctx, session.ID, first.HolderID, first.FencingToken); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Errorf("replaced holder released current lease: %v", err)
 	}
@@ -260,8 +272,8 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 	setTurnLeaseTime(storeB, lease.ExpiresAt)
 
 	var takeoverSucceededInsideFence bool
-	err = storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('stale')`); err != nil {
+	err = storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer TurnLeaseWriter) error {
+		if _, err := writer.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('stale')`); err != nil {
 			return err
 		}
 		if _, err := storeB.AcquireTurnLease(ctx, session.ID, "worker-b", time.Minute); err == nil {
@@ -290,7 +302,7 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 		t.Fatalf("acquire after fenced rollback: %v", err)
 	}
 	staleCallbackRan := false
-	if err := storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(*sql.Tx) error {
+	if err := storeA.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(TurnLeaseWriter) error {
 		staleCallbackRan = true
 		return nil
 	}); !errors.Is(err, ErrTurnLeaseLost) {
@@ -299,8 +311,8 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 	if staleCallbackRan {
 		t.Fatal("stale lease write callback ran after takeover")
 	}
-	if err := storeB.WithTurnLeaseWrite(ctx, session.ID, winner.HolderID, winner.FencingToken, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('winner')`)
+	if err := storeB.WithTurnLeaseWrite(ctx, session.ID, winner.HolderID, winner.FencingToken, func(writer TurnLeaseWriter) error {
+		_, err := writer.ExecContext(ctx, `INSERT INTO lease_write_probe (value) VALUES ('winner')`)
 		return err
 	}); err != nil {
 		t.Fatalf("winner write: %v", err)
@@ -312,6 +324,165 @@ func TestTurnLeaseWriteFenceRollsBackBeforeExpiredTakeover(t *testing.T) {
 	}
 	if winnerWrites != 1 {
 		t.Fatalf("winner writes = %d, want 1", winnerWrites)
+	}
+}
+
+func TestTurnLeaseClockIsSampledUnderWriterLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evie.db")
+	dbA, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatalf("open database A: %v", err)
+	}
+	t.Cleanup(func() { dbA.Close() })
+	dbB, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatalf("open database B: %v", err)
+	}
+	t.Cleanup(func() { dbB.Close() })
+	dbB.SetMaxOpenConns(1)
+	if _, err := dbB.Exec(`PRAGMA busy_timeout=0`); err != nil {
+		t.Fatalf("disable contender busy timeout: %v", err)
+	}
+
+	store := NewStore(dbA)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	now := time.Date(2026, 8, 22, 13, 50, 0, 0, time.UTC)
+	clockSamples := 0
+	store.now = func() time.Time {
+		clockSamples++
+		if _, err := dbB.ExecContext(ctx, `BEGIN IMMEDIATE`); err == nil {
+			if _, rollbackErr := dbB.ExecContext(ctx, `ROLLBACK`); rollbackErr != nil {
+				t.Errorf("rollback contender transaction: %v", rollbackErr)
+			}
+			t.Error("lease clock was sampled before SQLite write ownership")
+		}
+		return now
+	}
+
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "worker-a", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire lease: %v", err)
+	}
+	now = now.Add(time.Second)
+	if _, err := store.HeartbeatTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken, time.Minute); err != nil {
+		t.Fatalf("heartbeat lease: %v", err)
+	}
+	if err := store.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, noOpTurnLeaseWrite); err != nil {
+		t.Fatalf("fenced write: %v", err)
+	}
+	if err := store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
+		t.Fatalf("release lease: %v", err)
+	}
+	if clockSamples != 5 {
+		t.Fatalf("clock samples = %d, want 5", clockSamples)
+	}
+}
+
+func TestTurnLeaseWriteCallbackCannotCommitBeforeFinalFence(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	if _, err := db.Exec(`CREATE TABLE lease_early_commit_probe (value TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create write probe: %v", err)
+	}
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	now := time.Date(2026, 8, 22, 13, 55, 0, 0, time.UTC)
+	setTurnLeaseTime(store, now)
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "worker-a", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire lease: %v", err)
+	}
+	var exposedCommit bool
+	var transactionControlErr error
+	var capturedWriter TurnLeaseWriter
+	err = store.WithTurnLeaseWrite(ctx, session.ID, lease.HolderID, lease.FencingToken, func(writer TurnLeaseWriter) error {
+		capturedWriter = writer
+		if _, ok := any(writer).(interface{ Commit() error }); ok {
+			exposedCommit = true
+		}
+		if _, err := writer.ExecContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('stale')`); err != nil {
+			return err
+		}
+		_, transactionControlErr = writer.ExecContext(ctx, `COMMIT`)
+		setTurnLeaseTime(store, lease.ExpiresAt)
+		return nil
+	})
+	if exposedCommit {
+		t.Error("turn lease writer exposed Commit")
+	}
+	if !errors.Is(transactionControlErr, errTurnLeaseTransactionControl) {
+		t.Errorf("transaction control error = %v, want errTurnLeaseTransactionControl", transactionControlErr)
+	}
+	if _, err := capturedWriter.ExecContext(ctx, `INSERT INTO lease_early_commit_probe (value) VALUES ('late')`); !errors.Is(err, errTurnLeaseWriterClosed) {
+		t.Errorf("closed writer error = %v, want errTurnLeaseWriterClosed", err)
+	}
+	if !errors.Is(err, ErrTurnLeaseLost) {
+		t.Fatalf("early commit error = %v, want ErrTurnLeaseLost", err)
+	}
+
+	var staleWrites int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM lease_early_commit_probe`).Scan(&staleWrites); err != nil {
+		t.Fatalf("count early writes: %v", err)
+	}
+	if staleWrites != 0 {
+		t.Fatalf("early committed writes = %d, want rolled back", staleWrites)
+	}
+}
+
+func TestClosedSessionCannotAcquireRenewOrAuthorizeLease(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 22, 13, 58, 0, 0, time.UTC)
+	setTurnLeaseTime(store, now)
+
+	closedBeforeAcquire, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatalf("create closed session: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE sessions SET status = 'closed' WHERE id = ?`, closedBeforeAcquire.ID); err != nil {
+		t.Fatalf("close session before acquire: %v", err)
+	}
+	if _, err := store.AcquireTurnLease(ctx, closedBeforeAcquire.ID, "worker-a", time.Minute); !errors.Is(err, ErrTurnLeaseSessionInactive) {
+		t.Fatalf("closed session acquire error = %v, want ErrTurnLeaseSessionInactive", err)
+	}
+
+	closedWhileHeld, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatalf("create active session: %v", err)
+	}
+	lease, err := store.AcquireTurnLease(ctx, closedWhileHeld.ID, "worker-a", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire active session: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE sessions SET status = 'closed' WHERE id = ?`, closedWhileHeld.ID); err != nil {
+		t.Fatalf("close held session: %v", err)
+	}
+
+	if _, err := store.HeartbeatTurnLease(ctx, closedWhileHeld.ID, lease.HolderID, lease.FencingToken, time.Minute); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Errorf("closed session heartbeat error = %v, want ErrTurnLeaseLost", err)
+	}
+	callbackRan := false
+	if err := store.WithTurnLeaseWrite(ctx, closedWhileHeld.ID, lease.HolderID, lease.FencingToken, func(TurnLeaseWriter) error {
+		callbackRan = true
+		return nil
+	}); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Errorf("closed session write error = %v, want ErrTurnLeaseLost", err)
+	}
+	if callbackRan {
+		t.Error("closed session write callback ran")
+	}
+	if err := store.ReleaseTurnLease(ctx, closedWhileHeld.ID, lease.HolderID, lease.FencingToken); err != nil {
+		t.Fatalf("release closed session lease: %v", err)
 	}
 }
 
