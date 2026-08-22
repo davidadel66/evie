@@ -10,3 +10,9 @@ cmd/finance/data/
 # Run `npm --prefix internal/web/ui run build` before `go build ./cmd/evie`.
 internal/web/ui/node_modules/
 internal/web/ui/dist/
+
+# Local environment for the repository's Python story-loop tool.
+/tools/story-loop/.venv/
+/tools/story-loop/**/__pycache__/
+/tools/story-loop/**/*.pyc
+/.worktrees/
