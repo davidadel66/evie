@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Request"
+  short_description: "Turn requests into PR-sized delivery plans"
+  default_prompt: "Use $plan-request to propose the smallest appropriate story, epic, or initiative, then create planning files only after I approve them."

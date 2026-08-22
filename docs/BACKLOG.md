@@ -1,14 +1,21 @@
 # Backlog
 
-Status board for this project, updated by `/wrap` at session end. One line per story; details live in specs (`docs/active/`, `docs/done/` inside each tool's dir).
+Status board for this project, updated by `/wrap` at session end. One line per
+story; details live in active plans/specs and completed feature records.
 
 ## Next session
-- Last session: YouTube transcript library shipped end-to-end: SQLite/FTS, 6,185-file import, live fetch/channel tools, `ytscribe`, and read-only transcript queries.
-- Mid-flight: memory remains a draft spec pending David's approval at `cmd/evie/docs/active/memory.spec.md`; no implementation started.
-- Start with: review and approve or revise the memory spec, then choose its first implementation stage.
+- Last session: the memory delivery initiative and nine-epic story breakdown were
+  approved and recorded in the [memory initiative plan](../cmd/evie/docs/active/memory/README.md).
+- Mid-flight: MEM-1 is in progress. Its event/session foundation is implemented;
+  explicit scope selection, durable leases, safe resume, unknown-execution
+  recovery, provider replay policy, and usage capture remain.
+- Start with: select MEM-1.1 from the
+  [restart-safe scoped sessions epic](../cmd/evie/docs/active/memory/epics/mem-1-restart-safe-scoped-sessions.md)
+  and create its GitHub execution-contract issue.
 
 ## In progress
-- memory — local Letta-inspired memory design is drafted; pending approval, no code
+- memory — [approved delivery initiative](../cmd/evie/docs/active/memory/README.md);
+  MEM-1 in progress, no next implementation story selected
 
 ## Next (ordered tool roadmap, decided 2026-07-29)
 - budget analysis verdict — ask evie "how am I tracking against budget?"; transcript decides if step 5 needs a dedicated tool
