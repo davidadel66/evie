@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Story"
+  short_description: "Review one story through three independent lenses"
+  default_prompt: "Use $review-story to review one implemented story or pull request with contract, correctness, and maintainability reviewers plus deterministic checks."

@@ -1,6 +1,6 @@
 ---
 name: implement-story
-description: Implement one ready engineering story in an isolated Git worktree, iterate against its acceptance criteria and deterministic checks, obtain a fresh read-only subagent review, and deliver a draft pull request for human review. Use when asked to implement, execute, or deliver a single approved story or issue. Do not use to plan an epic, combine multiple stories, review an existing pull request, or merge changes.
+description: Implement one ready engineering story in an isolated Git worktree, iterate against its acceptance criteria and deterministic checks, obtain a fresh three-lens read-only review, and deliver a draft pull request for human review. Use when asked to implement, execute, or deliver a single approved story or issue. Do not use to plan an epic, combine multiple stories, review an existing pull request, or merge changes.
 ---
 
 # Implement a Story
@@ -81,43 +81,65 @@ Exit the loop when all acceptance criteria pass, or stop with evidence when:
 - the needed change exceeds the story boundary; or
 - a new product decision is required.
 
+### Pre-review safety audit
+
+When the change touches authorization, persistence, concurrency, time,
+cancellation, or callbacks, complete this audit before the first review:
+
+- Map every applicable binding rule to an enforcing code boundary, a rejection
+  path, and deterministic test evidence.
+- Build an operation-by-state matrix using every relevant state, including
+  absent, active, closed, released, expired, replaced, restarted, exact-boundary,
+  and invalid-input cases.
+- Identify the serialization point. Sample time or mutable state used for an
+  authorization decision only after acquiring the applicable lock or
+  transaction ownership, and exercise queued cross-connection behavior when
+  concurrency is in scope.
+- Treat every callback, interface, executor, database handle, and transaction
+  handle as an adversarial capability. Ensure callers cannot bypass fencing,
+  control the transaction, escape the intended resource scope, or reuse the
+  capability afterward. Prefer typed operations over raw execution surfaces.
+- Define cancellation behavior immediately before and during commit. Test both
+  rollback-before-commit and definitive commit outcomes when applicable.
+- Enforce correlated durable invariants in the schema or persistence boundary,
+  not only in constructors, and test restart or reload behavior.
+- Test monotonic and non-shortening rules in both directions plus zero,
+  negative, maximum, and overflowing inputs when the domain permits them.
+- Distinguish persisted observations from proof of current authority in API
+  names, documentation, and tests.
+
+Do not advance until each applicable rule has enforcement plus negative or
+boundary-test evidence, or a recorded reason deterministic coverage is not
+possible.
+
 Before review, run every check required by the applicable `AGENTS.md`. Do not
 substitute model judgment for deterministic verification.
 
 ## Gate 5: Obtain an independent review
 
-After deterministic checks pass, spawn exactly one fresh read-only reviewer
-subagent. Prefer the project `story_reviewer` or `story-reviewer` agent. When the
-runtime supports context controls, use no inherited conversation history. Give
-the reviewer only:
+After deterministic checks pass, confirm the diff contains only this story and
+commit the candidate with a descriptive message. Then load and apply the project
+`review-story` skill to that clean commit, the base commit, story, specification,
+decisions, and recorded verification. That workflow must run fresh contract,
+correctness, and maintainability lenses without receiving the implementer's
+conclusions.
 
-- the story and non-goals;
-- applicable specification and decision paths;
-- the worktree path, base commit, and branch;
-- the verification commands and results; and
-- instructions to review the diff without editing it.
-
-Do not give the reviewer the implementer's conclusions or intended answer. Ask
-for prioritized, evidence-backed findings about correctness, missing acceptance
-criteria, authorization, persistence, recovery, concurrency, resource safety,
-and missing tests. Ignore style-only preferences.
-
-Fix valid in-scope findings, rerun affected deterministic checks, and request
-one follow-up review only when the fixes materially changed behavior. Limit the
-independent review loop to two passes. If fresh subagents are unavailable,
-perform the platform's dedicated read-only review and clearly report that the
-fresh-context review was skipped.
+Do not proceed on `DECISION_REQUIRED`, `CHANGES_REQUIRED`, or
+`REVIEW_INCOMPLETE`. Fix valid in-scope findings, rerun affected deterministic
+checks, create a new commit without amending the reviewed commit, and request
+one follow-up review only when the fixes materially changed the candidate. Limit
+the independent review loop to two passes. Never resolve a contract gap in code;
+return it for an authoritative decision.
 
 ## Gate 6: Deliver the draft pull request
 
 Proceed only while all required checks pass and no material review finding
 remains.
 
-1. Confirm the diff contains only this story.
-2. Commit the scoped change with a descriptive message.
-3. Push the story branch without force.
-4. Open a draft pull request against `pr_base`.
-5. Include the story, outcome, verification evidence, risks, and deferred work
+1. Confirm the worktree is clean and `HEAD` is the exact reviewed commit.
+2. Push the story branch without force.
+3. Open a draft pull request against `pr_base`.
+4. Include the story, outcome, verification evidence, risks, and deferred work
    in the pull-request body.
 
 If GitHub access, authentication, a remote, or `pr_base` is unavailable, stop
