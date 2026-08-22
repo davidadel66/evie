@@ -110,6 +110,26 @@ func (s *Store) FindActiveProjectByRoot(ctx context.Context, root string) (memor
 	return project, nil
 }
 
+func (s *Store) FindProjectByRoot(ctx context.Context, root string) (memory.Project, error) {
+	canonicalRoot, err := memory.CanonicalProjectRoot(root)
+	if err != nil {
+		return memory.Project{}, err
+	}
+
+	project, err := scanProject(s.db.QueryRowContext(ctx, `
+		SELECT id, display_name, canonical_root, archived, created_at, updated_at
+		FROM projects
+		WHERE canonical_root = ?
+	`, canonicalRoot))
+	if errors.Is(err, sql.ErrNoRows) {
+		return memory.Project{}, fmt.Errorf("%w: %s", ErrProjectNotFound, canonicalRoot)
+	}
+	if err != nil {
+		return memory.Project{}, fmt.Errorf("find project: %w", err)
+	}
+	return project, nil
+}
+
 func (s *Store) RelocateProject(ctx context.Context, id memory.ProjectID, root string) (memory.Project, error) {
 	canonicalRoot, err := memory.CanonicalProjectRoot(root)
 	if err != nil {

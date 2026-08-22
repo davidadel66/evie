@@ -132,4 +132,12 @@ func TestFindActiveProjectByRootCanonicalizesAndExcludesArchived(t *testing.T) {
 	if _, err := store.FindActiveProjectByRoot(ctx, root); !errors.Is(err, ErrProjectNotFound) {
 		t.Fatalf("archived root error = %v, want ErrProjectNotFound", err)
 	}
+
+	archived, err := store.FindProjectByRoot(ctx, root)
+	if err != nil {
+		t.Fatalf("find archived project by root: %v", err)
+	}
+	if archived.ID != project.ID || !archived.Archived {
+		t.Errorf("archived lookup = %+v, want archived project %q", archived, project.ID)
+	}
 }
