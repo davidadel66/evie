@@ -89,9 +89,13 @@ func TestCronAddCancellationPreservesRowWhenLaunchdReconciliationFails(t *testin
 	db := newCronDB(t)
 	originalInstall := installJob
 	originalUninstall := uninstallJob
+	originalRun := runCronLaunchctl
+	originalRemove := removeCronPlist
 	t.Cleanup(func() {
 		installJob = originalInstall
 		uninstallJob = originalUninstall
+		runCronLaunchctl = originalRun
+		removeCronPlist = originalRemove
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	installStarted := make(chan struct{})
@@ -101,7 +105,15 @@ func TestCronAddCancellationPreservesRowWhenLaunchdReconciliationFails(t *testin
 		return ctx.Err()
 	}
 	reconcileErr := errors.New("launchd reconciliation failed")
-	uninstallJob = func(context.Context, string, string) error { return reconcileErr }
+	uninstallJob = reconcileCronJob
+	runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
+		return []byte("launchd state unavailable"), reconcileErr
+	}
+	plistRemoved := make(chan struct{}, 1)
+	removeCronPlist = func(string) error {
+		plistRemoved <- struct{}{}
+		return nil
+	}
 	result := make(chan error, 1)
 	go func() {
 		_, err := cronAdd(ctx, `{"name":"uncertain-add","schedule":"0 9 * * *","command":"echo hi"}`)
@@ -115,6 +127,11 @@ func TestCronAddCancellationPreservesRowWhenLaunchdReconciliationFails(t *testin
 	}
 	if got := jobCount(t, db); got != 1 {
 		t.Fatalf("jobs after uncertain launchd state = %d, want durable correlation preserved", got)
+	}
+	select {
+	case <-plistRemoved:
+		t.Fatal("plist removal ran without a successful bootout")
+	default:
 	}
 }
 
@@ -141,13 +158,18 @@ func TestCronRemoveCancellationPreservesRowWhenUninstallFails(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('cancel-uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
 		t.Fatal(err)
 	}
-	original := uninstallJob
-	t.Cleanup(func() { uninstallJob = original })
+	originalUninstall := uninstallJob
+	originalRun := runCronLaunchctl
+	t.Cleanup(func() {
+		uninstallJob = originalUninstall
+		runCronLaunchctl = originalRun
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	uninstallErr := errors.New("launchd reconciliation failed")
-	uninstallJob = func(context.Context, string, string) error {
+	uninstallJob = reconcileCronJob
+	runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
 		cancel()
-		return uninstallErr
+		return []byte("launchd state unavailable"), uninstallErr
 	}
 
 	_, err := cronRemove(ctx, `{"name":"cancel-uncertain-remove"}`)
@@ -164,10 +186,16 @@ func TestCronRemoveOrdinaryUninstallFailureStillDeletesRow(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
 		t.Fatal(err)
 	}
-	original := uninstallJob
-	t.Cleanup(func() { uninstallJob = original })
+	originalUninstall := uninstallJob
+	originalRemove := removeCronPlist
+	t.Cleanup(func() {
+		uninstallJob = originalUninstall
+		removeCronPlist = originalRemove
+	})
 	uninstallErr := errors.New("launchd still active")
 	uninstallJob = func(context.Context, string, string) error { return uninstallErr }
+	plistRemovalAttempted := false
+	removeCronPlist = func(string) error { plistRemovalAttempted = true; return nil }
 
 	_, err := cronRemove(context.Background(), `{"name":"uncertain-remove"}`)
 	if err != nil {
@@ -175,6 +203,9 @@ func TestCronRemoveOrdinaryUninstallFailureStillDeletesRow(t *testing.T) {
 	}
 	if got := jobCount(t, db); got != 0 {
 		t.Fatalf("jobs after ordinary failed uninstall = %d, want row deleted", got)
+	}
+	if !plistRemovalAttempted {
+		t.Fatal("ordinary remove did not attempt plist cleanup after bootout error")
 	}
 }
 
@@ -199,6 +230,51 @@ func TestCronCleanupContextIsIndependentAndBounded(t *testing.T) {
 	if remaining <= cronCleanupTimeout-time.Second || remaining > cronCleanupTimeout {
 		t.Fatalf("cleanup deadline remaining = %s, want approximately %s", remaining, cronCleanupTimeout)
 	}
+}
+
+func TestReconcileCronJobSurfacesBootoutAndPlistFailures(t *testing.T) {
+	originalRun := runCronLaunchctl
+	originalRemove := removeCronPlist
+	t.Cleanup(func() {
+		runCronLaunchctl = originalRun
+		removeCronPlist = originalRemove
+	})
+
+	t.Run("bootout failure", func(t *testing.T) {
+		bootoutErr := errors.New("launchctl unavailable")
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
+			return []byte("permission denied"), bootoutErr
+		}
+		removed := false
+		removeCronPlist = func(string) error { removed = true; return nil }
+
+		err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist")
+		if !errors.Is(err, bootoutErr) || !strings.Contains(err.Error(), "permission denied") {
+			t.Fatalf("reconcileCronJob error = %v, want bootout failure and output", err)
+		}
+		if removed {
+			t.Fatal("plist was removed before launchd absence was established")
+		}
+	})
+
+	t.Run("plist removal failure", func(t *testing.T) {
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) { return nil, nil }
+		removeErr := errors.New("read-only filesystem")
+		removeCronPlist = func(string) error { return removeErr }
+
+		err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist")
+		if !errors.Is(err, removeErr) {
+			t.Fatalf("reconcileCronJob error = %v, want plist removal failure", err)
+		}
+	})
+
+	t.Run("missing plist is already reconciled", func(t *testing.T) {
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) { return nil, nil }
+		removeCronPlist = func(string) error { return os.ErrNotExist }
+		if err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist"); err != nil {
+			t.Fatalf("reconcileCronJob missing plist: %v", err)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------

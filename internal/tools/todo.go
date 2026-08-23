@@ -63,6 +63,9 @@ var todoAddTool = openrouter.Tool{
 func toDoList(ctx context.Context, _ string) (string, error) {
 	out, err := exec.CommandContext(ctx, "todo", "list").CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", fmt.Errorf("command failed: %w: %s", err, out)
 	}
 
@@ -108,6 +111,9 @@ func toDoAdd(ctx context.Context, args string) (string, error) {
 	}
 	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", fmt.Errorf("tool call failed: %w: %s", err, out)
 	}
 

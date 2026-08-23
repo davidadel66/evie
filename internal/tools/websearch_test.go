@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -381,6 +382,33 @@ func TestWebSearch(t *testing.T) {
 		}
 		if !strings.Contains(strings.ToLower(err.Error()), "timed out") {
 			t.Errorf("error %v does not report a timeout", err)
+		}
+	})
+
+	t.Run("parent cancellation aborts an in-flight request", func(t *testing.T) {
+		started := make(chan struct{})
+		braveServer(t, func(w http.ResponseWriter, r *http.Request) {
+			close(started)
+			<-r.Context().Done()
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		args := searchArgs(t, "q", omitCount)
+		done := make(chan error, 1)
+		go func() {
+			_, err := webSearch(ctx, args)
+			done <- err
+		}()
+		<-started
+		cancel()
+
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("webSearch error = %v, want context.Canceled", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("webSearch did not return after parent cancellation")
 		}
 	})
 

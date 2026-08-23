@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -958,6 +959,37 @@ func TestWebFetch(t *testing.T) {
 		msg := strings.ToLower(err.Error())
 		if !strings.Contains(msg, "timed out") && !strings.Contains(msg, "timeout") && !strings.Contains(msg, "deadline") {
 			t.Errorf("error %v does not report a timeout", err)
+		}
+	})
+
+	t.Run("parent cancellation aborts an in-flight request", func(t *testing.T) {
+		started := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(started)
+			<-r.Context().Done()
+		}))
+		defer srv.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		args, err := json.Marshal(map[string]string{"url": srv.URL})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, err := webFetch(ctx, string(args))
+			done <- err
+		}()
+		<-started
+		cancel()
+
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("webFetch error = %v, want context.Canceled", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("webFetch did not return after parent cancellation")
 		}
 	})
 

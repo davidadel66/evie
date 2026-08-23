@@ -319,16 +319,33 @@ var installJob = func(ctx context.Context, label, plistPath string, plist []byte
 	return nil
 }
 
-// uninstallJob unloads a job from launchd and deletes its plist. All errors are
-// tolerated, preserving the completed cron contract; injected test seams can
-// still return errors so cancellation cleanup can expose uncertainty.
-var uninstallJob = func(ctx context.Context, label, plistPath string) error {
+// Cancellation cleanup is stricter than ordinary removal. The completed cron
+// contract deliberately ignores uninstall failures for an ordinary remove, but
+// a cancelled mutation must not discard its only durable recovery handle unless
+// cleanup can establish that launchd accepted the bootout and the plist is gone.
+var (
+	runCronLaunchctl = func(ctx context.Context, args ...string) ([]byte, error) {
+		return exec.CommandContext(ctx, "launchctl", args...).CombinedOutput()
+	}
+	removeCronPlist = os.Remove
+	uninstallJob    = reconcileCronJob
+)
+
+func reconcileCronJob(ctx context.Context, label, plistPath string) error {
 	uid := strconv.Itoa(os.Getuid())
-	_ = exec.CommandContext(ctx, "launchctl", "bootout", "gui/"+uid+"/"+label).Run()
+	out, err := runCronLaunchctl(ctx, "bootout", "gui/"+uid+"/"+label)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("launchctl bootout %q: %w: %s", label, err, out)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	_ = os.Remove(plistPath)
+	if err := removeCronPlist(plistPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove plist: %w", err)
+	}
 	return nil
 }
 
@@ -610,6 +627,11 @@ func cronRemove(ctx context.Context, args string) (string, error) {
 			"could not reconcile launchd job %q; database row %d was preserved: %w",
 			params.Name, id, uninstallErr)
 		return "", errors.Join(ctx.Err(), cleanupErr)
+	}
+	if uninstallErr != nil {
+		// Ordinary removal retains the completed cron behavior: bootout errors
+		// are ignored, plist removal is still attempted, and the row is deleted.
+		_ = removeCronPlist(plistPath)
 	}
 	deleteCtx := cleanupCtx
 	if ctx.Err() == nil {
