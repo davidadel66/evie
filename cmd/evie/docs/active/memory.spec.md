@@ -208,16 +208,15 @@ authority.
     idempotent, and observable. Durable event coverage cannot depend on a
     process-local queue.
 11. Search indexes and graph caches are disposable and rebuildable.
-12. Unknown side effects are never replayed automatically after a crash.
-13. Raw episodic events may contain conversation or tool data that includes a
+12. Raw episodic events may contain conversation or tool data that includes a
     secret. Detected secrets are excluded from compiler input and rejected from
     semantic/procedural promotion; secret detection is not a guarantee that the
     raw event log is secret-free.
-14. Only the current durable per-session lease holder may start provider calls or
+13. Only the current durable per-session lease holder may start provider calls or
     tools and append turn events. Lease loss cancels the local turn context;
     already-sent provider work may finish remotely, but its response is discarded
     and it cannot start tools or commit events.
-15. Generic file and SQL tools cannot read or mutate memory-owned storage. The
+14. Generic file and SQL tools cannot read or mutate memory-owned storage. The
     existing privileged `bash` escape hatch remains outside this feature's
     containment guarantee until a separate shell-containment feature exists.
 
@@ -522,16 +521,12 @@ state and side-effect ordering, not cancellation of bytes already sent remotely.
   key policy or absent;
 - recorded timestamp and format version.
 
-Execution intent, terminal outcome, and manual resolution are separate immutable
-events; execution status is a rebuildable projection. Intent commits before a
-tool runs. `succeeded`, `failed`, or `cancelled` commits afterward. A started
-execution without terminal evidence projects as `unknown`, blocks the session,
-and is never replayed. David resolves it by appending `assumed_succeeded`,
-`assumed_failed`, or `abandoned`. A synthetic result that states the resolution
-and never invents unavailable output is sent only when the Stage 1 provider spike
-proved that chain resumable without its opaque payload. Otherwise EVIE closes the
-interrupted provider chain and starts a new provider-neutral turn after recording
-the resolution.
+Execution intent and terminal outcomes are separate immutable events. Intent
+commits before a tool runs, and `succeeded`, `failed`, or `cancelled` commits
+afterward. On restart, an intent without terminal evidence is treated as
+unfinished and does not block later turns. EVIE does not synthesize an outcome;
+if real workflows later demonstrate that ambiguous side effects require a
+recovery policy, that policy will be designed from observed evidence.
 
 Required event appends fail closed. User input commits before a provider call,
 tool intent commits before invocation, approval commits before an approved tool
@@ -951,29 +946,24 @@ start the next stage until the current tests pass and David approves the result.
 
 **Goal:** understand the systems being adapted.
 
-**Tasks:**
+**Status (2026-08-23):** satisfied by David's prior Letta and reference-system
+research. David confirmed that the required architectural understanding was
+completed before this specification and explicitly waived a separate checked-in
+research note, version log, and command transcript. The references below remain
+the evidence basis for the design, but Stage 0 creates no additional delivery
+artifact and does not block Stage 1.
 
-- read Generative Agents and MemGPT architecture sections;
-- run current Letta locally and inspect MemFS, compaction, Git commits, and
-  dreaming;
-- record the exact Letta version/commit;
-- record observed differences from the papers;
-- check in a research note with exact versions/commits, commands, observed
-  schemas, and an applicability/difference matrix approved by David.
-
-**Learning checkpoint:** explain the difference between context, episodes,
-semantic claims, graph indexes, and procedural files.
+**Accepted learning checkpoint:** distinguish context, episodes, semantic
+claims, graph indexes, and procedural files.
 
 ### Stage 1 - Session identity and append-only events
 
 **Goal:** make the existing agent loop restart-safe and observable.
 
-**Progress (2026-08-21):** the durable event spine is integrated into the agent
-loop and all current tests pass. The REPL still creates a fresh global session at
-startup, so restart-safe selection/resume, leases, and unknown-execution recovery
-remain unfinished. Exact canonical-root lookup for cwd discovery is implemented;
-the terminal confirmation and session chooser are the current implementation
-seam.
+**Progress (2026-08-23):** the durable event spine, explicit global/project REPL
+scope selection, and SQLite turn-lease primitives are integrated and tested.
+Context-aware tool cancellation, live agent lease integration,
+existing-session resume, and usage capture remain unfinished.
 
 **Tasks:**
 
@@ -983,12 +973,13 @@ seam.
   `0600`;
 - [x] add project registry/register/list/relocate/exact-root lookup, session,
   immutable scope, and event tables;
-- [ ] add session-turn-lease and execution-projection tables;
+- [x] add the session-turn-lease table and fenced store primitives;
 - [x] define a provider-neutral event envelope and format version;
 - [x] inject a durable `History` interface into `Session` and rebuild provider
   context from ordered events;
-- [x] propagate cancellation contexts through the agent, provider client, and
-  tool execution paths;
+- [ ] finish cancellation propagation through tool preparation, approval, and
+  execution; the agent and provider accept caller contexts, but the tool
+  lifecycle and blocking built-ins still create or retain background contexts;
 - [ ] inject immutable `ScopeContext` and lease-cancellable turn ownership into
   `Session`;
 - [x] persist user/assistant messages plus tool intent, approval, success,
@@ -997,17 +988,13 @@ seam.
   failure/interruption events;
 - [ ] add cwd-assisted explicit project confirmation, session selection, and
   resume for the REPL;
-- [ ] block unknown side effects and append explicit synthetic resolution events;
 - [ ] capture provider usage;
-- [ ] run a provider replay spike for opaque reasoning/continuation blocks. Until an
-  encryption/key-management policy is approved, omit those blocks and mark
-  dependent interrupted chains non-resumable rather than persisting them.
 
 **Go lesson:** transaction boundaries, interfaces owned by consumers, and safe
 recovery from partial side effects.
 
 **Done when:** two processes cannot run one session concurrently, and Evie
-resumes after restart without replaying or silently resolving an uncertain write.
+resumes from its accepted provider-neutral event history after restart.
 
 ### Stage 2 - Working context and compaction
 
@@ -1246,7 +1233,7 @@ internal/agent/
 
 internal/eviedb/
   db.go                connection, WAL, schema setup
-  events.go            projects/sessions/events/execution state
+  events.go            projects/sessions/events
   graph.go             entities/claims/sources/links/state
   operations.go        accepted operation replay and scope revisions
   jobs.go              compiler outbox and leases
@@ -1275,7 +1262,6 @@ vector, and Git implementations remain replaceable behind those interfaces.
 - Sessions resume from a provider-neutral append-only event history.
 - Durable turn leases fence accepted events and tool starts to one process;
   lease-lost provider responses are discarded.
-- Unknown side effects are blocked rather than replayed.
 - Context compaction preserves complete tool boundaries.
 - Accepted semantic operations replay the same source-linked temporal graph
   without rerunning a model.

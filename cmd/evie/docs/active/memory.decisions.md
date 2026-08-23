@@ -1,5 +1,12 @@
 # memory - decisions
 
+- **2026-08-23 - prior reference-system research satisfies Stage 0.**
+  David confirmed that he completed the necessary Letta and reference-system
+  research before the current delivery plan. Stage 0 therefore requires no new
+  checked-in research note, version log, or command transcript and does not
+  block Stage 1. The retained references continue to motivate the design without
+  becoming runtime dependencies.
+
 - **2026-08-21 - startup cwd discovers project scope but never grants it silently.**
   The REPL canonicalizes its launch directory and may suggest one matching active
   registered project, but David must explicitly confirm project scope before a
@@ -211,19 +218,18 @@
   block with IDs, scope, timestamps, and provenance; it cannot grant permissions,
   widen scope, alter tool approvals, or become system policy.
 
-- **2026-08-12 - provider replay payloads are optional and fenced.**
-  Events retain provider-neutral content. Stage 1 must first test whether opaque
-  reasoning/continuation blocks are required for interrupted-chain replay. The
-  default is to omit them and mark that provider chain non-resumable; persisting
-  them requires a separately approved encryption/key policy. They are transport
-  state only and never semantic evidence. Manual execution resolution resumes the
-  existing chain only when the spike proves that safe without the opaque payload;
-  otherwise it starts a new provider-neutral turn.
+- **2026-08-23 - opaque provider continuation payloads remain deferred.**
+  Events retain provider-neutral content. EVIE does not currently persist opaque
+  reasoning or continuation blocks. Adding them requires demonstrated need plus
+  a separately approved encryption and key-management policy; they would remain
+  transport state rather than semantic evidence.
 
-- **2026-08-12 - uncertain side effects are resolved, never replayed.**
-  Tool execution intent is durable before execution and terminal status is a
-  later event. After a crash, a started execution without terminal evidence is
-  `unknown` and blocks continuation until David resolves it explicitly.
+- **2026-08-23 - unfinished tool intent does not block later turns.**
+  Tool execution intent remains durable before execution and terminal status is
+  a later event. After restart, an intent without terminal evidence is treated as
+  unfinished without synthesizing success or failure, and later turns may
+  continue. A stronger recovery policy is deferred until observed workflows show
+  that it is necessary.
 
 - **Open - extraction and embedding implementations.**
   Stage 4 must select a local extraction model and structured-output protocol.
