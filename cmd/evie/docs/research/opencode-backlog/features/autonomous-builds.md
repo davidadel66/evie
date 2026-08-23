@@ -14,12 +14,12 @@ permissions, persisted tool states, snapshots, compaction, and worktrees. The
 important lesson is that autonomy is the composition of these controls, not one
 `--auto` flag.
 
-EVIE's own `multi-agent-dev-loop.md` recommends a fixed code-driven workflow
-before model-driven orchestration:
+The current `docs/multi-agent-dev-loop.md` recommends proving a fixed,
+code-driven Codex SDK workflow before making EVIE an execution backend:
 
 ```text
-spec review -> blind tests -> implementation -> deterministic gate
--> fresh review -> live demo -> build report
+implementation -> exact-candidate validation -> deterministic checks
+-> three fresh review lenses -> fresh synthesis -> bounded repair or safe stop
 ```
 
 ## Preconditions
