@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 // pendingID polls until the in-flight turn registers an approval and
@@ -127,7 +128,8 @@ func TestApprovalDeclinedLeavesFileAlone(t *testing.T) {
 
 func TestApprovalExpiresOnDisconnect(t *testing.T) {
 	path := writeTempFile(t)
-	srv, h := newTestServerFull(editFileTurn(path))
+	client := editFileTurn(path)
+	srv, h := newTestServerFull(client)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req := chatRequest(`{"message":"edit it"}`).WithContext(ctx)
@@ -153,11 +155,54 @@ func TestApprovalExpiresOnDisconnect(t *testing.T) {
 	if strings.Contains(body, "David declined") {
 		t.Fatalf("disconnect wrongly reported as a decline:\n%s", body)
 	}
+	if len(client.steps) != 0 {
+		t.Fatalf("provider steps remaining = %d, web disconnect must not cancel the server-side turn", len(client.steps))
+	}
 }
 
 func TestApproveUnknownIDIs404(t *testing.T) {
 	_, h := newTestServerFull(&fakeClient{})
 	if res := postApprove(t, h, "deadbeef", true); res.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", res.Code)
+	}
+}
+
+func TestApprovalPOSTClaimsBeforeDisconnect(t *testing.T) {
+	srv, h := newTestServerFull(&fakeClient{})
+	rec := httptest.NewRecorder()
+	ev, err := newSSEEvents(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan tools.Decision, 1)
+	go func() { result <- srv.approver(ctx, ev)(context.Background(), "edit_file", `{}`, nil) }()
+	id := pendingID(t, srv)
+	if res := postApprove(t, h, id, true); res.Code != http.StatusNoContent {
+		t.Fatalf("approve status = %d", res.Code)
+	}
+	cancel()
+	if got := <-result; got != tools.Approved {
+		t.Fatalf("decision = %v, approval-first must win", got)
+	}
+}
+
+func TestDisconnectClaimsBeforeApprovalPOST(t *testing.T) {
+	srv, h := newTestServerFull(&fakeClient{})
+	rec := httptest.NewRecorder()
+	ev, err := newSSEEvents(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan tools.Decision, 1)
+	go func() { result <- srv.approver(ctx, ev)(context.Background(), "edit_file", `{}`, nil) }()
+	id := pendingID(t, srv)
+	cancel()
+	if got := <-result; got != tools.Expired {
+		t.Fatalf("decision = %v, disconnect-first must win", got)
+	}
+	if res := postApprove(t, h, id, true); res.Code != http.StatusNotFound {
+		t.Fatalf("late approval status = %d, want 404", res.Code)
 	}
 }

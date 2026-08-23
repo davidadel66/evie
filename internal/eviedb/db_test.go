@@ -17,12 +17,25 @@ package eviedb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestOpenDBAtContextCanceledBeforeSetupCreatesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := OpenDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("OpenDBAtContext error = %v, want context.Canceled", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("cancelled setup created database: %v", err)
+	}
+}
 
 // Pin the exported signatures without touching the home directory.
 var (

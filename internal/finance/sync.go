@@ -43,6 +43,8 @@ type SyncResult struct {
 	Totals SyncCounts
 }
 
+var runSyncItem = syncOneItem
+
 // Sync pulls new transactions for every linked bank and returns the
 // results as data — it prints nothing; rendering belongs to the caller.
 // One bank failing is recorded in its BankSync.Err and doesn't stop the
@@ -51,14 +53,12 @@ type SyncResult struct {
 // A TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION failure is retried once
 // from the last committed cursor before being recorded as that bank's
 // error.
-func Sync(db *sql.DB) (*SyncResult, error) {
+func Sync(ctx context.Context, db *sql.DB) (*SyncResult, error) {
 	client, err := plaidClient()
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
-
-	rows, err := db.Query(`SELECT item_id, access_token, cursor, COALESCE(institution, '') FROM items`)
+	rows, err := db.QueryContext(ctx, `SELECT item_id, access_token, cursor, COALESCE(institution, '') FROM items`)
 	if err != nil {
 		return nil, fmt.Errorf("load items: %w", err)
 	}
@@ -83,9 +83,15 @@ func Sync(db *sql.DB) (*SyncResult, error) {
 
 	result := &SyncResult{}
 	for _, it := range items {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		var bank BankSync
 		if it.institution == "" {
 			if err := backfillInstitution(ctx, client, db, &it); err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
 				bank.Warnings = append(bank.Warnings, fmt.Sprintf("could not resolve institution for %s: %v", it.itemID, err))
 			}
 		}
@@ -94,17 +100,26 @@ func Sync(db *sql.DB) (*SyncResult, error) {
 			bank.Label = it.itemID
 		}
 
-		added, modified, removed, err := syncOneItem(ctx, client, db, it)
+		added, modified, removed, err := runSyncItem(ctx, client, db, it)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if err != nil && plaidErrorCode(err) == "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" {
-			if dbErr := db.QueryRow(`SELECT cursor FROM items WHERE item_id = ?`, it.itemID).Scan(&it.cursor); dbErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if dbErr := db.QueryRowContext(ctx, `SELECT cursor FROM items WHERE item_id = ?`, it.itemID).Scan(&it.cursor); dbErr != nil {
 				err = errors.Join(err, fmt.Errorf("re-read cursor: %w", dbErr))
 			} else {
 				var a, m, r int
-				a, m, r, err = syncOneItem(ctx, client, db, it)
+				a, m, r, err = runSyncItem(ctx, client, db, it)
 				added, modified, removed = added+a, modified+m, removed+r
 			}
 		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			bank.Err = err
 			result.Banks = append(result.Banks, bank)
 			continue
@@ -148,7 +163,7 @@ func backfillInstitution(ctx context.Context, client *plaid.APIClient, db *sql.D
 		return fmt.Errorf("institution %s has no name", instID)
 	}
 
-	if _, err := db.Exec(`UPDATE items SET institution = ? WHERE item_id = ?`, name, it.itemID); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE items SET institution = ? WHERE item_id = ?`, name, it.itemID); err != nil {
 		return fmt.Errorf("save institution: %w", err)
 	}
 	it.institution = name
@@ -185,7 +200,7 @@ func syncOneItem(ctx context.Context, client *plaid.APIClient, db *sql.DB, it sy
 			pageRemoved = append(pageRemoved, r.GetTransactionId())
 		}
 
-		if err := applySyncPage(db, it.itemID, pageAdded, pageModified, pageRemoved, resp.GetNextCursor()); err != nil {
+		if err := applySyncPage(ctx, db, it.itemID, pageAdded, pageModified, pageRemoved, resp.GetNextCursor()); err != nil {
 			return added, modified, removed, err
 		}
 
@@ -241,14 +256,14 @@ type SyncTxn struct {
 // cursor, all inside a single SQL transaction. That atomicity is the
 // core sync guarantee: a page and its cursor land together or not at
 // all, so a crash mid-sync can never record progress it didn't make.
-func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error {
-	tx, err := db.Begin()
+func applySyncPage(ctx context.Context, db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin sync page: %w", err)
 	}
 	defer tx.Rollback()
 
-	upsert, err := tx.Prepare(`
+	upsert, err := tx.PrepareContext(ctx, `
 		INSERT INTO transactions
 			(transaction_id, item_id, account_id, date, name, merchant_name, amount_cents, plaid_category, pending)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -273,7 +288,7 @@ func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed
 			if t.Pending {
 				pending = 1
 			}
-			if _, err := upsert.Exec(
+			if _, err := upsert.ExecContext(ctx,
 				t.TransactionID, itemID, t.AccountID, t.Date, t.Name,
 				t.MerchantName, cents, t.Category, pending,
 			); err != nil {
@@ -295,15 +310,15 @@ func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed
 	// entry from the same rule on the next categorize run, at the final
 	// amount — keeping the old entry would double-count.
 	for _, id := range removed {
-		if _, err := tx.Exec(`DELETE FROM budget_entries WHERE transaction_id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM budget_entries WHERE transaction_id = ?`, id); err != nil {
 			return fmt.Errorf("delete budget entries for transaction %s: %w", id, err)
 		}
-		if _, err := tx.Exec(`DELETE FROM transactions WHERE transaction_id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM transactions WHERE transaction_id = ?`, id); err != nil {
 			return fmt.Errorf("delete transaction %s: %w", id, err)
 		}
 	}
 
-	res, err := tx.Exec(`UPDATE items SET cursor = ? WHERE item_id = ?`, nextCursor, itemID)
+	res, err := tx.ExecContext(ctx, `UPDATE items SET cursor = ? WHERE item_id = ?`, nextCursor, itemID)
 	if err != nil {
 		return fmt.Errorf("update cursor for item %s: %w", itemID, err)
 	}
@@ -315,6 +330,9 @@ func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed
 		return fmt.Errorf("update cursor: item %s not found", itemID)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit sync page: %w", err)
 	}

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -301,7 +302,7 @@ func TestEditFile(t *testing.T) {
 		args, _ := json.Marshal(map[string]string{
 			"path": path, "old_string": old, "new_string": new,
 		})
-		return editFile(string(args))
+		return editFile(context.Background(), string(args))
 	}
 
 	t.Run("replaces a unique match on disk", func(t *testing.T) {
@@ -435,7 +436,7 @@ func TestPreparedFileEditRejectsStalePreview(t *testing.T) {
 		"path": path, "old_string": "beta", "new_string": "delta",
 	})
 
-	prepared, err := prepareEditFileTool(string(args))
+	prepared, err := prepareEditFileTool(context.Background(), string(args))
 	if err != nil {
 		t.Fatalf("prepareEditFileTool returned error: %v", err)
 	}
@@ -458,7 +459,7 @@ func TestPreparedFileEditRejectsStalePreview(t *testing.T) {
 	if err := os.WriteFile(path, []byte(concurrent), 0o644); err != nil {
 		t.Fatalf("concurrent write failed: %v", err)
 	}
-	if _, err := prepared.Execute(); err == nil || !strings.Contains(err.Error(), "changed after the approval preview") {
+	if _, err := prepared.Execute(context.Background()); err == nil || !strings.Contains(err.Error(), "changed after the approval preview") {
 		t.Fatalf("prepared execute error = %v, want stale-preview error", err)
 	}
 	data, _ = os.ReadFile(path)
@@ -469,14 +470,14 @@ func TestPreparedFileEditRejectsStalePreview(t *testing.T) {
 	if err := os.WriteFile(path, []byte(before), 0o644); err != nil {
 		t.Fatalf("reset write failed: %v", err)
 	}
-	prepared, err = prepareEditFileTool(string(args))
+	prepared, err = prepareEditFileTool(context.Background(), string(args))
 	if err != nil {
 		t.Fatalf("second prepare failed: %v", err)
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
 		t.Fatalf("concurrent chmod failed: %v", err)
 	}
-	if _, err := prepared.Execute(); err == nil || !strings.Contains(err.Error(), "permissions changed after the approval preview") {
+	if _, err := prepared.Execute(context.Background()); err == nil || !strings.Contains(err.Error(), "permissions changed after the approval preview") {
 		t.Fatalf("prepared execute error = %v, want stale-permissions error", err)
 	}
 	info, _ := os.Stat(path)
@@ -507,7 +508,7 @@ func TestWriteFileAtomicLeavesNoTempFiles(t *testing.T) {
 		args, _ := json.Marshal(map[string]string{
 			"path": path, "old_string": old, "new_string": new,
 		})
-		return editFile(string(args))
+		return editFile(context.Background(), string(args))
 	}
 
 	t.Run("after a successful edit", func(t *testing.T) {

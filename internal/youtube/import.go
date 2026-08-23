@@ -309,6 +309,9 @@ func saveLegacyArtifact(ctx context.Context, db *sql.DB, channelID int64, artifa
 			return "", fmt.Errorf("remove orphaned legacy video for %q: %w", artifact.path, err)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if err := tx.Commit(); err != nil {
 		return "", fmt.Errorf("commit import of %q: %w", artifact.path, err)
 	}

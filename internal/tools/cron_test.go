@@ -11,10 +11,10 @@ package tools
 //	    // names no entry point. Tests never assume calendarDict's shape —
 //	    // dict contents are asserted through plistFor's rendering.
 //	func plistFor(label string, id int64, binPath string, dicts []calendarDict) []byte
-//	var installJob func(label, plistPath string, plist []byte) error
-//	var uninstallJob func(label, plistPath string) error
+//	var installJob func(_ context.Context, label, plistPath string, plist []byte) error
+//	var uninstallJob func(_ context.Context, label, plistPath string) error
 //	var openCronDB = eviedb.OpenDB
-//	    // db seam, type func() (*sql.DB, error): the spec gives eviedb
+//	    // db seam, type func(_ context.Context) (*sql.DB, error): the spec gives eviedb
 //	    // an openDBAt temp-path seam but names none for the tools layer;
 //	    // this follows the fetchTimeout/braveSearchURL/installJob var
 //	    // pattern. Tests replace it with an opener for a temp file.
@@ -25,8 +25,10 @@ package tools
 // implementer's choice.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,6 +40,42 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+func TestCronAddCancellationAfterMutationRollsBackRow(t *testing.T) {
+	db := newCronDB(t)
+	original := installJob
+	t.Cleanup(func() { installJob = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	installJob = func(ctx context.Context, _, _ string, _ []byte) error {
+		cancel()
+		return ctx.Err()
+	}
+	_, err := cronAdd(ctx, `{"name":"cancel-add","schedule":"0 9 * * *","command":"echo hi"}`)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cronAdd error = %v, want context.Canceled", err)
+	}
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
+
+func TestCronRemoveCancellationAfterMutationCompletesConsistencyCleanup(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('cancel-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	original := uninstallJob
+	t.Cleanup(func() { uninstallJob = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	uninstallJob = func(context.Context, string, string) error { cancel(); return nil }
+	_, err := cronRemove(ctx, `{"name":"cancel-remove"}`)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cronRemove error = %v, want context.Canceled", err)
+	}
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -66,7 +104,7 @@ func newCronDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { db.Close() })
 
 	original := openCronDB
-	openCronDB = func() (*sql.DB, error) { return eviedb.OpenDBAt(path) }
+	openCronDB = func(_ context.Context) (*sql.DB, error) { return eviedb.OpenDBAt(path) }
 	t.Cleanup(func() { openCronDB = original })
 	return db
 }
@@ -85,7 +123,7 @@ func captureInstalls(t *testing.T) *[]installCall {
 	t.Helper()
 	var calls []installCall
 	original := installJob
-	installJob = func(label, plistPath string, plist []byte) error {
+	installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 		calls = append(calls, installCall{label: label, plistPath: plistPath, plist: plist})
 		return nil
 	}
@@ -103,7 +141,7 @@ func captureUninstalls(t *testing.T) *[]uninstallCall {
 	t.Helper()
 	var calls []uninstallCall
 	original := uninstallJob
-	uninstallJob = func(label, plistPath string) error {
+	uninstallJob = func(_ context.Context, label, plistPath string) error {
 		calls = append(calls, uninstallCall{label: label, plistPath: plistPath})
 		return nil
 	}
@@ -122,7 +160,7 @@ func runCronTool(t *testing.T, name string, params map[string]any) (string, erro
 	}
 	for _, tool := range all {
 		if tool.Schema.Function.Name == name {
-			return tool.Execute(string(raw))
+			return tool.Execute(context.Background(), string(raw))
 		}
 	}
 	t.Fatalf("%s is not in the tool registry", name)
@@ -578,7 +616,7 @@ func TestCronAdd(t *testing.T) {
 	t.Run("an install failure rolls the row back", func(t *testing.T) {
 		db := newCronDB(t)
 		original := installJob
-		installJob = func(label, plistPath string, plist []byte) error {
+		installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 			return &installBootError{}
 		}
 		t.Cleanup(func() { installJob = original })
@@ -610,15 +648,15 @@ func TestCronAdd(t *testing.T) {
 		// closing it turns the rollback DELETE into an error.
 		var handedOut *sql.DB
 		originalOpen := openCronDB
-		openCronDB = func() (*sql.DB, error) {
-			db, err := originalOpen()
+		openCronDB = func(_ context.Context) (*sql.DB, error) {
+			db, err := originalOpen(context.Background())
 			handedOut = db
 			return db, err
 		}
 		t.Cleanup(func() { openCronDB = originalOpen })
 
 		originalInstall := installJob
-		installJob = func(label, plistPath string, plist []byte) error {
+		installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 			handedOut.Close()
 			return &installBootError{}
 		}
@@ -1052,7 +1090,7 @@ func TestEvieDBRegistration(t *testing.T) {
 	})
 
 	t.Run("edit_db on evie points at the cron tools", func(t *testing.T) {
-		out, err := editDB(`{"db":"evie","statement":"DELETE FROM jobs"}`)
+		out, err := editDB(context.Background(), `{"db":"evie","statement":"DELETE FROM jobs"}`)
 		if err == nil {
 			t.Fatalf("edit_db accepted a evie write: %q", out)
 		}
@@ -1065,7 +1103,7 @@ func TestEvieDBRegistration(t *testing.T) {
 	})
 
 	t.Run("unknown-db errors list both databases", func(t *testing.T) {
-		if _, err := editDB(`{"db":"bogus","statement":"DELETE FROM x"}`); err == nil {
+		if _, err := editDB(context.Background(), `{"db":"bogus","statement":"DELETE FROM x"}`); err == nil {
 			t.Fatal("edit_db accepted an unknown db")
 		} else {
 			for _, want := range []string{"finance", "evie"} {
@@ -1075,7 +1113,7 @@ func TestEvieDBRegistration(t *testing.T) {
 			}
 		}
 
-		if _, err := queryDB(`{"db":"bogus","query":"SELECT 1"}`); err == nil {
+		if _, err := queryDB(context.Background(), `{"db":"bogus","query":"SELECT 1"}`); err == nil {
 			t.Fatal("query_db accepted an unknown db")
 		} else {
 			for _, want := range []string{"finance", "evie"} {

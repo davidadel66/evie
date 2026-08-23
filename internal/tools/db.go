@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -21,7 +22,7 @@ const (
 )
 
 var (
-	openTranscriptDB = youtube.OpenDBReadOnly
+	openTranscriptDB = youtube.OpenDBReadOnlyContext
 	evieQueryTables  = map[string]struct{}{
 		"JOBS":     {},
 		"JOB_RUNS": {},
@@ -177,7 +178,7 @@ Databases: "transcripts" — read-only YouTube transcript library. Query transcr
 // connection and renders the result as a pipe-separated table. Fences
 // per database as in editDB; the SELECT-prefix check and engine-level
 // mode=ro are layered defenses.
-func queryDB(args string) (string, error) {
+func queryDB(ctx context.Context, args string) (string, error) {
 	var params struct {
 		DB    string `json:"db"`
 		Query string `json:"query"`
@@ -198,17 +199,17 @@ func queryDB(args string) (string, error) {
 		if strings.Contains(strings.ToLower(q), "items") {
 			return "", fmt.Errorf("the items table is off-limits")
 		}
-		db, err = finance.OpenDBReadOnly()
+		db, err = finance.OpenDBReadOnlyContext(ctx)
 	case "evie":
 		if err := validateEvieSelect(q); err != nil {
 			return "", err
 		}
-		db, err = eviedb.OpenDBReadOnly()
+		db, err = eviedb.OpenDBReadOnlyContext(ctx)
 	case "transcripts":
 		if err := validateTranscriptSelect(q); err != nil {
 			return "", err
 		}
-		db, err = openTranscriptDB()
+		db, err = openTranscriptDB(ctx)
 	default:
 		return "", fmt.Errorf("unknown db %q — registered databases: finance, evie, transcripts", params.DB)
 	}
@@ -218,10 +219,10 @@ func queryDB(args string) (string, error) {
 	defer db.Close()
 
 	if params.DB == "transcripts" {
-		return queryTranscriptDB(db, q)
+		return queryTranscriptDB(ctx, db, q)
 	}
 
-	columns, rows, err := finance.Query(db, q)
+	columns, rows, err := finance.Query(ctx, db, q)
 	if err != nil {
 		return "", err
 	}
@@ -234,8 +235,8 @@ func queryDB(args string) (string, error) {
 	return out, nil
 }
 
-func queryTranscriptDB(db *sql.DB, query string) (string, error) {
-	result, err := db.Query(query)
+func queryTranscriptDB(ctx context.Context, db *sql.DB, query string) (string, error) {
+	result, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return "", fmt.Errorf("run query: %w", err)
 	}
@@ -468,7 +469,7 @@ Common uses: categorize a transaction (INSERT INTO budget_entries with the full 
 // per-database fences (finance: no items table — bank tokens must never
 // enter the conversation) protect secrets; neither substitutes for the
 // other.
-func editDB(args string) (string, error) {
+func editDB(ctx context.Context, args string) (string, error) {
 	var params struct {
 		DB        string `json:"db"`
 		Statement string `json:"statement"`
@@ -486,7 +487,7 @@ func editDB(args string) (string, error) {
 		if strings.Contains(strings.ToLower(q), "items") {
 			return "", fmt.Errorf("the items table is off-limits")
 		}
-		db, err = finance.OpenDB()
+		db, err = finance.OpenDBContext(ctx)
 	case "evie":
 		// A hand-edited jobs row would silently diverge from the launchd
 		// plist it was generated into — the cron tools keep both in step.
@@ -501,7 +502,10 @@ func editDB(args string) (string, error) {
 	}
 	defer db.Close()
 
-	res, err := db.Exec(q)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	res, err := db.ExecContext(ctx, q)
 	if err != nil {
 		return "", fmt.Errorf("execute: %w", err)
 	}

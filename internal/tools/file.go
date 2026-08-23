@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -230,7 +231,7 @@ Paths may be absolute ("/Users/david/notes.md") or home-relative ("~/notes.md");
 // file is readable and under the cap, and returns it line-numbered. Stat
 // comes before ReadFile deliberately: checking the size after loading the
 // bytes would defeat the entire point of a cap.
-func readFile(args string) (string, error) {
+func readFile(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Path string `json:"path"`
 	}
@@ -257,6 +258,9 @@ func readFile(args string) (string, error) {
 		return "", fmt.Errorf("%s is %dKB; the limit is %dKB. There is no pagination — narrow down with a more specific file", abs, info.Size()/1024, maxReadBytes/1024)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", abs, err)
@@ -275,7 +279,7 @@ func readFile(args string) (string, error) {
 // filesystems is not atomic and may fail outright, so a temp file in /tmp
 // would defeat the entire point.
 func writeFileAtomic(abs string, data []byte, perm fs.FileMode) error {
-	return writeFileAtomicChecked(abs, data, perm, nil)
+	return writeFileAtomicChecked(context.Background(), abs, data, perm, nil)
 }
 
 type fileSnapshot struct {
@@ -283,7 +287,7 @@ type fileSnapshot struct {
 	perm fs.FileMode
 }
 
-func writeFileAtomicChecked(abs string, data []byte, perm fs.FileMode, expected *fileSnapshot) error {
+func writeFileAtomicChecked(ctx context.Context, abs string, data []byte, perm fs.FileMode, expected *fileSnapshot) error {
 	dir := filepath.Dir(abs)
 
 	tmp, err := os.CreateTemp(dir, ".evie-*")
@@ -333,6 +337,9 @@ func writeFileAtomicChecked(abs string, data []byte, perm fs.FileMode, expected 
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.Rename(tmpName, abs); err != nil {
 		return fmt.Errorf("rename temp file over %s: %w", abs, err)
 	}
@@ -397,7 +404,10 @@ type preparedFileEdit struct {
 	line        int
 }
 
-func prepareEditFileTool(args string) (PreparedTool, error) {
+func prepareEditFileTool(ctx context.Context, args string) (PreparedTool, error) {
+	if err := ctx.Err(); err != nil {
+		return PreparedTool{}, err
+	}
 	edit, err := prepareFileEdit(args)
 	if err != nil {
 		return PreparedTool{}, err
@@ -409,24 +419,24 @@ func prepareEditFileTool(args string) (PreparedTool, error) {
 	}
 	return PreparedTool{
 		Preview: preview,
-		Execute: func() (string, error) { return executePreparedFileEdit(edit) },
+		Execute: func(ctx context.Context) (string, error) { return executePreparedFileEdit(ctx, edit) },
 	}, nil
 }
 
 // editFile applies one approved string replacement. Every failure returns
 // an error rather than a partial write, and those error strings are the
 // model's only feedback — they are written to be acted on, not just read.
-func editFile(args string) (string, error) {
+func editFile(ctx context.Context, args string) (string, error) {
 	edit, err := prepareFileEdit(args)
 	if err != nil {
 		return "", err
 	}
-	return executePreparedFileEdit(edit)
+	return executePreparedFileEdit(ctx, edit)
 }
 
-func executePreparedFileEdit(edit preparedFileEdit) (string, error) {
+func executePreparedFileEdit(ctx context.Context, edit preparedFileEdit) (string, error) {
 	expected := &fileSnapshot{data: edit.oldText, perm: edit.permissions}
-	if err := writeFileAtomicChecked(edit.path, []byte(edit.newText), edit.permissions, expected); err != nil {
+	if err := writeFileAtomicChecked(ctx, edit.path, []byte(edit.newText), edit.permissions, expected); err != nil {
 		return "", err
 	}
 

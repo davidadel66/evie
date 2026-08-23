@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -26,7 +27,7 @@ import (
 // because the redirect-loop test calls it from a watchdog goroutine.
 func fetchURL(raw string) (string, error) {
 	args, _ := json.Marshal(map[string]string{"url": raw})
-	return webFetch(string(args))
+	return webFetch(context.Background(), string(args))
 }
 
 // mustParseURL parses a URL for a table row; a bad literal is a bug in the
@@ -572,7 +573,7 @@ func TestCapText(t *testing.T) {
 			t.Errorf("result %q does not report the %d dropped bytes", got[maxFetchOutput:], extra)
 		}
 
-		path := regexp.MustCompile(regexp.QuoteMeta(os.TempDir())+`[^\s\]]+`).FindString(got)
+		path := regexp.MustCompile(regexp.QuoteMeta(os.TempDir()) + `[^\s\]]+`).FindString(got)
 		if path == "" {
 			t.Fatalf("no spill file path in the note: %q", got[maxFetchOutput:])
 		}
@@ -961,7 +962,7 @@ func TestWebFetch(t *testing.T) {
 	})
 
 	t.Run("malformed arguments error", func(t *testing.T) {
-		if got, err := webFetch("not json"); err == nil {
+		if got, err := webFetch(context.Background(), "not json"); err == nil {
 			t.Fatalf("webFetch succeeded on malformed arguments: %q", got)
 		}
 	})

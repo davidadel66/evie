@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -117,7 +118,7 @@ func TestStripTags(t *testing.T) {
 func TestWebSearchFormatsFixture(t *testing.T) {
 	braveServer(t, serveJSON(fixtureJSON(t)))
 
-	got, err := webSearch(searchArgs(t, "golang html parser", omitCount))
+	got, err := webSearch(context.Background(), searchArgs(t, "golang html parser", omitCount))
 	if err != nil {
 		t.Fatalf("webSearch returned error: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestWebSearchFormatsFixture(t *testing.T) {
 func TestWebSearchZeroResults(t *testing.T) {
 	braveServer(t, serveJSON(`{"web":{"results":[]}}`))
 
-	got, err := webSearch(searchArgs(t, "xyzzy plugh nothing", omitCount))
+	got, err := webSearch(context.Background(), searchArgs(t, "xyzzy plugh nothing", omitCount))
 	if err != nil {
 		t.Fatalf("zero results must be a normal result, got error: %v", err)
 	}
@@ -201,7 +202,7 @@ func TestWebSearchMissingFields(t *testing.T) {
 			{"title":"Ageless","url":"https://example.com/a","description":"a description"}
 		]}}`))
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err != nil {
 			t.Fatalf("webSearch returned error: %v", err)
 		}
@@ -218,7 +219,7 @@ func TestWebSearchMissingFields(t *testing.T) {
 			{"title":"Bare","url":"https://example.com/b","description":"","age":"6 days ago"}
 		]}}`))
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err != nil {
 			t.Fatalf("webSearch returned error: %v", err)
 		}
@@ -253,7 +254,7 @@ func TestWebSearch(t *testing.T) {
 		// Spaces and a literal & must survive the trip — url.Values, never
 		// string concatenation.
 		query := `tom & jerry "exact phrase"`
-		if _, err := webSearch(searchArgs(t, query, omitCount)); err != nil {
+		if _, err := webSearch(context.Background(), searchArgs(t, query, omitCount)); err != nil {
 			t.Fatalf("webSearch returned error: %v", err)
 		}
 		if q := gotQuery.Load(); q != query {
@@ -287,7 +288,7 @@ func TestWebSearch(t *testing.T) {
 					serveJSON(`{"web":{"results":[]}}`)(w, r)
 				})
 
-				if _, err := webSearch(searchArgs(t, "q", tt.count)); err != nil {
+				if _, err := webSearch(context.Background(), searchArgs(t, "q", tt.count)); err != nil {
 					t.Fatalf("webSearch returned error: %v", err)
 				}
 				if c := gotCount.Load(); c != tt.want {
@@ -304,7 +305,7 @@ func TestWebSearch(t *testing.T) {
 					w.WriteHeader(code)
 				})
 
-				got, err := webSearch(searchArgs(t, "q", omitCount))
+				got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 				if err == nil {
 					t.Fatalf("webSearch succeeded on a %d: %q", code, got)
 				}
@@ -326,7 +327,7 @@ func TestWebSearch(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 		})
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err == nil {
 			t.Fatalf("webSearch succeeded on a 429: %q", got)
 		}
@@ -344,7 +345,7 @@ func TestWebSearch(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err == nil {
 			t.Fatalf("webSearch succeeded on a 500: %q", got)
 		}
@@ -369,7 +370,7 @@ func TestWebSearch(t *testing.T) {
 		defer close(release)
 
 		start := time.Now()
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		elapsed := time.Since(start)
 
 		if err == nil {
@@ -390,7 +391,7 @@ func TestWebSearch(t *testing.T) {
 			fmt.Fprint(w, big)
 		})
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err == nil {
 			t.Fatalf("webSearch accepted an oversized body: %d bytes returned", len(got))
 		}
@@ -405,7 +406,7 @@ func TestWebSearch(t *testing.T) {
 	t.Run("garbage json is a parse error", func(t *testing.T) {
 		braveServer(t, serveJSON(`{"web": [not json`))
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err == nil {
 			t.Fatalf("webSearch succeeded on a garbage body: %q", got)
 		}
@@ -424,7 +425,7 @@ func TestWebSearch(t *testing.T) {
 		})
 		t.Setenv("BRAVE_API_KEY", "")
 
-		got, err := webSearch(searchArgs(t, "q", omitCount))
+		got, err := webSearch(context.Background(), searchArgs(t, "q", omitCount))
 		if err == nil {
 			t.Fatalf("webSearch succeeded with no key: %q", got)
 		}
@@ -441,14 +442,14 @@ func TestWebSearch(t *testing.T) {
 
 	t.Run("an empty query errors", func(t *testing.T) {
 		t.Setenv("BRAVE_API_KEY", "test-key")
-		if got, err := webSearch(searchArgs(t, "   ", omitCount)); err == nil {
+		if got, err := webSearch(context.Background(), searchArgs(t, "   ", omitCount)); err == nil {
 			t.Fatalf("webSearch succeeded on a whitespace-only query: %q", got)
 		}
 	})
 
 	t.Run("malformed arguments error", func(t *testing.T) {
 		t.Setenv("BRAVE_API_KEY", "test-key")
-		got, err := webSearch("not json")
+		got, err := webSearch(context.Background(), "not json")
 		if err == nil {
 			t.Fatalf("webSearch succeeded on malformed arguments: %q", got)
 		}

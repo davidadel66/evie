@@ -2,6 +2,7 @@
 package youtube
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -185,6 +186,13 @@ const writePragmas = "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 
 // OpenDB opens the canonical writable transcript database.
 func OpenDB() (*sql.DB, error) {
+	return OpenDBContext(context.Background())
+}
+
+func OpenDBContext(ctx context.Context) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	path, err := databasePath()
 	if err != nil {
 		return nil, err
@@ -195,11 +203,18 @@ func OpenDB() (*sql.DB, error) {
 	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("secure transcript database directory: %w", err)
 	}
-	return OpenDBAt(path)
+	return OpenDBAtContext(ctx, path)
 }
 
 // OpenDBReadOnly opens the canonical database without creating it or applying schema.
 func OpenDBReadOnly() (*sql.DB, error) {
+	return OpenDBReadOnlyContext(context.Background())
+}
+
+func OpenDBReadOnlyContext(ctx context.Context) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	path, err := databasePath()
 	if err != nil {
 		return nil, err
@@ -208,7 +223,7 @@ func OpenDBReadOnly() (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open transcript database read-only: %w", err)
 	}
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open transcript database read-only: %w", err)
 	}
@@ -217,13 +232,24 @@ func OpenDBReadOnly() (*sql.DB, error) {
 
 // OpenDBAt opens a writable database at path and applies the idempotent schema.
 func OpenDBAt(path string) (*sql.DB, error) {
+	return OpenDBAtContext(context.Background(), path)
+}
+
+func OpenDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", path+writePragmas)
 	if err != nil {
 		return nil, fmt.Errorf("open transcript database: %w", err)
 	}
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("create transcript schema: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
 		_ = db.Close()

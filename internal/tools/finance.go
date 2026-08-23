@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,20 +30,23 @@ var financeSyncTool = openrouter.Tool{
 // text tells the model exactly which bank failed while still showing the
 // banks that succeeded. The error return is reserved for "nothing ran at
 // all" (no db, no credentials, no linked banks).
-func financeSync(_ string) (string, error) {
-	db, err := finance.OpenDB()
+func financeSync(ctx context.Context, _ string) (string, error) {
+	db, err := finance.OpenDBContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)
 	}
 	defer db.Close()
 
-	res, err := finance.Sync(db)
+	res, err := finance.Sync(ctx, db)
 	if err != nil {
 		return "", err
 	}
 
 	out := ""
 	for _, b := range res.Banks {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		for _, w := range b.Warnings {
 			out += fmt.Sprintf("warning: %s\n", w)
 		}
@@ -73,8 +77,8 @@ var financeRulesTool = openrouter.Tool{
 // financeRules seeds the rules table from the canonical lookup file —
 // the same hardcoded path the CLI uses. The model gets no path parameter
 // on purpose: it has no business inventing file paths.
-func financeRules(_ string) (string, error) {
-	db, err := finance.OpenDB()
+func financeRules(ctx context.Context, _ string) (string, error) {
+	db, err := finance.OpenDBContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)
 	}
@@ -86,7 +90,7 @@ func financeRules(_ string) (string, error) {
 	}
 	rulesPath := filepath.Join(home, ".finance", "merchantLookup.json")
 
-	if err := finance.RulesSeed(db, rulesPath); err != nil {
+	if err := finance.RulesSeed(ctx, db, rulesPath); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("Seeded rules from %s\n", rulesPath), nil
@@ -109,14 +113,14 @@ var financeCategorizeTool = openrouter.Tool{
 // financeCategorize runs rule-based categorization and reports the counts.
 // Human-reviewed and hand-categorized transactions are never touched —
 // that guarantee lives in the domain query, not here.
-func financeCategorize(_ string) (string, error) {
-	db, err := finance.OpenDB()
+func financeCategorize(ctx context.Context, _ string) (string, error) {
+	db, err := finance.OpenDBContext(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open db: %w", err)
 	}
 	defer db.Close()
 
-	matched, unmatched, err := finance.Categorize(db)
+	matched, unmatched, err := finance.Categorize(ctx, db)
 	if err != nil {
 		return "", err
 	}

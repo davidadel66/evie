@@ -81,6 +81,9 @@ func saveRemote(ctx context.Context, db *sql.DB, channel channelRecord, video vi
 		videoID, state.LanguageCode, state.Status, state.Detail, state.CheckedAt); err != nil {
 		return fmt.Errorf("upsert transcript state: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit remote transcript save: %w", err)
 	}
@@ -113,6 +116,9 @@ func saveRemoteState(ctx context.Context, db *sql.DB, channel channelRecord, vid
 			checked_at = excluded.checked_at`,
 		videoID, state.LanguageCode, state.Status, state.Detail, state.CheckedAt); err != nil {
 		return fmt.Errorf("upsert transcript state: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit remote transcript state save: %w", err)

@@ -1,5 +1,15 @@
 # serve — decisions
 
+- **2026-08-23 — approval visibility and turn cancellation stay separate.**
+  The web chat request continues to launch the server-side turn from an
+  independent root, so an SSE disconnect does not cancel provider or tool work.
+  The request context owns only its pending approval visibility. Approval POST
+  and disconnect remove the pending entry under the same lock: the first
+  claimant wins. Approval-first honors David's decision even if disconnect is
+  observed immediately afterward; disconnect-first expires the approval and a
+  later POST receives 404. This preserves the existing whole-turn disconnect
+  behavior while making the approval race deterministic and fail-closed.
+
 - **2026-08-05 — approvers return `tools.Decision`, not bool** (serve-core,
   shipped — spec in docs/done/). A bool can't distinguish "David said no"
   from "David never saw it" (browser disconnect), and the model must be told

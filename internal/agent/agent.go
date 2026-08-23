@@ -82,6 +82,9 @@ func (s *Session) Send(
 		return ErrBusy
 	}
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if _, err := s.history.Append(ctx, memory.EventInput{
 		Type:    memory.EventUserMessage,
@@ -92,6 +95,9 @@ func (s *Session) Send(
 	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		messages, err := s.requestMessages(ctx)
 		if err != nil {
 			return err
@@ -122,6 +128,9 @@ func (s *Session) Send(
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if len(res.Choices) == 0 {
 			return errors.New("agent: provider returned no choices")
 		}
@@ -150,6 +159,9 @@ func (s *Session) Send(
 		}
 
 		for _, call := range msg.ToolCalls {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			executionUUID, err := uuid.NewRandom()
 			if err != nil {
 				return fmt.Errorf("generate execution ID: %w", err)
@@ -168,7 +180,7 @@ func (s *Session) Send(
 			var approvalEventID memory.EventID
 			var approvalDecision tools.Decision
 
-			observeApproval := func(decision tools.Decision) error {
+			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
 				input, err := approvalEventInput(
 					intentEvent.ID,
 					executionID,
@@ -177,7 +189,7 @@ func (s *Session) Send(
 				if err != nil {
 					return err
 				}
-				approvalEvent, err := s.history.Append(ctx, input)
+				approvalEvent, err := s.history.Append(observeCtx, input)
 				if err != nil {
 					return fmt.Errorf("persist approval: %w", err)
 				}
@@ -188,6 +200,7 @@ func (s *Session) Send(
 			}
 
 			result, isErr, err := tools.ExecuteWithApproval(
+				ctx,
 				extra,
 				call,
 				approve,

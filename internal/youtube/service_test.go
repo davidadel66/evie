@@ -577,6 +577,27 @@ func TestServiceScrapeReturnsFatalListAndDatabaseErrors(t *testing.T) {
 	})
 }
 
+func TestServiceScrapeParentCancellationStopsDelayAndLaterVideos(t *testing.T) {
+	db := newYouTubeTestDB(t)
+	h := newServiceHTTPHarness(t, []string{serviceVideoA, serviceVideoB}, map[string]serviceOutcome{
+		serviceVideoA: outcomeSuccess, serviceVideoB: outcomeSuccess,
+	})
+	service := NewService(db, h.client)
+	ctx, cancel := context.WithCancel(context.Background())
+	service.sleep = func(ctx context.Context, _ time.Duration) error {
+		cancel()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	_, err := service.Scrape(ctx, "@ServiceChannel", ScrapeOptions{Language: "en", Delay: time.Second})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Scrape error = %v, want context.Canceled", err)
+	}
+	if got := h.watchOrder(); !reflect.DeepEqual(got, []string{serviceVideoA}) {
+		t.Fatalf("video attempts after cancellation = %v, want only first video", got)
+	}
+}
+
 type fetchExpectation struct {
 	cached        bool
 	videoID       string

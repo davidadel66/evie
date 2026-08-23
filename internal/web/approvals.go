@@ -33,19 +33,22 @@ func (s *Server) newPending() (string, chan bool) {
 	return id, ch
 }
 
-func (s *Server) dropPending(id string) {
+func (s *Server) expirePending(id string) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.pending[id]; !ok {
+		return false
+	}
 	delete(s.pending, id)
-	s.mu.Unlock()
+	return true
 }
 
 // approver builds the per-turn gate handed to Send: emit the request on
 // this turn's stream, then block until the browser answers or the
 // request dies. This is the pause the REPL gets from scanner.Scan().
 func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
-	return func(name, args string, preview *tools.FileChangePreview) tools.Decision {
+	return func(_ context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
-		defer s.dropPending(id)
 
 		ev.ApprovalRequest(id, name, args, preview)
 
@@ -56,7 +59,16 @@ func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
 			}
 			return tools.Declined
 		case <-ctx.Done():
-			return tools.Expired
+			if s.expirePending(id) {
+				return tools.Expired
+			}
+			// A POST removed the entry first under the same lock. Honor that
+			// already-claimed decision even though the disconnect is now visible.
+			approved := <-ch
+			if approved {
+				return tools.Approved
+			}
+			return tools.Declined
 		}
 	}
 }

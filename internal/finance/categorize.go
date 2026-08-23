@@ -1,6 +1,7 @@
 package finance
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -32,7 +33,10 @@ func matchTxn(rules map[string]string, merchantName string) (category string, ok
 // any new categories into categories), all in one transaction. Upsert
 // semantics: re-seeding updates a merchant's category rather than
 // duplicating or failing, so the JSON file stays the source of truth.
-func RulesSeed(db *sql.DB, path string) error {
+func RulesSeed(ctx context.Context, db *sql.DB, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	merchantLookup, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read merchant lookup: %w", err)
@@ -44,7 +48,7 @@ func RulesSeed(db *sql.DB, path string) error {
 		return fmt.Errorf("parse merchant lookup: %w", err)
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin seed: %w", err)
 	}
@@ -52,13 +56,13 @@ func RulesSeed(db *sql.DB, path string) error {
 	defer tx.Rollback()
 
 	for merchant, category := range lookup {
-		if _, err := tx.Exec(
+		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO categories (name) VALUES (?)`, category,
 		); err != nil {
 			return fmt.Errorf("insert category %q: %w", category, err)
 		}
 
-		if _, err := tx.Exec(
+		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO rules (merchant, category) VALUES (?, ?)
 			ON CONFLICT(merchant) DO UPDATE SET category = excluded.category`, merchant, category,
 		); err != nil {
@@ -66,6 +70,9 @@ func RulesSeed(db *sql.DB, path string) error {
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit seed: %w", err)
 	}
@@ -83,10 +90,10 @@ func RulesSeed(db *sql.DB, path string) error {
 // entered) and makes the legacy backfill automatic. Unmatched
 // transactions stay entry-less — that is the awaiting-review state. The
 // legacy category column is no longer written.
-func Categorize(db *sql.DB) (matched, unmatched int, err error) {
+func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err error) {
 	rules := make(map[string]string)
 
-	rows, err := db.Query(`SELECT merchant, category FROM rules`)
+	rows, err := db.QueryContext(ctx, `SELECT merchant, category FROM rules`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("load rules: %w", err)
 	}
@@ -114,7 +121,7 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 	// to delete — so budget totals moved on their own and the delete
 	// wedged the sync. The posted transaction gets categorized on the next
 	// run; a day's lag beats an entry that is wrong and then vanishes.
-	txns, err := db.Query(`
+	txns, err := db.QueryContext(ctx, `
 		SELECT t.transaction_id, COALESCE(t.merchant_name, ''), t.amount_cents,
 		       COALESCE(t.category, ''), COALESCE(t.category_source, 'rule')
 		FROM transactions t
@@ -143,7 +150,7 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 
 	txns.Close()
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, 0, fmt.Errorf("begin categorize: %w", err)
 	}
@@ -162,13 +169,13 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 			source = "rule"
 		}
 
-		if _, err := tx.Exec(
+		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO categories (name) VALUES (?)`, category,
 		); err != nil {
 			return matched, unmatched, fmt.Errorf("insert category %q: %w", category, err)
 		}
 
-		if _, err := tx.Exec(`
+		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO budget_entries (transaction_id, category, amount_cents, source)
 			VALUES (?, ?, ?, ?)
 			`, c.id, category, c.amountCents, source); err != nil {
@@ -177,6 +184,9 @@ func Categorize(db *sql.DB) (matched, unmatched int, err error) {
 		matched++
 	}
 
+	if err := ctx.Err(); err != nil {
+		return matched, unmatched, err
+	}
 	if err := tx.Commit(); err != nil {
 		return matched, unmatched, fmt.Errorf("commit categorize: %w", err)
 	}

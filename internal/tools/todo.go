@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -59,8 +60,8 @@ var todoAddTool = openrouter.Tool{
 
 // toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.
-func toDoList(_ string) (string, error) {
-	out, err := exec.Command("todo", "list").CombinedOutput()
+func toDoList(ctx context.Context, _ string) (string, error) {
+	out, err := exec.CommandContext(ctx, "todo", "list").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("command failed: %w: %s", err, out)
 	}
@@ -72,7 +73,7 @@ func toDoList(_ string) (string, error) {
 // translating each optional field into the matching CLI flag. Title is
 // required; a missing title or bad JSON comes back as an error for the
 // dispatcher to relay to the model.
-func toDoAdd(args string) (string, error) {
+func toDoAdd(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Title       string `json:"title"`
 		Description string `json:"description"`
@@ -102,7 +103,10 @@ func toDoAdd(args string) (string, error) {
 	if params.Due != "" {
 		cmds = append(cmds, "--due", params.Due)
 	}
-	out, err := exec.Command(cmds[0], cmds[1:]...).CombinedOutput()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("tool call failed: %w: %s", err, out)
 	}

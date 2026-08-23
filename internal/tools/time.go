@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"time"
 
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -23,6 +24,6 @@ var getTimeTool = openrouter.Tool{
 // getTime returns the current local time. It takes the arguments string
 // only to satisfy the Execute contract and ignores it — this tool has no
 // parameters.
-func getTime(_ string) (string, error) {
+func getTime(_ context.Context, _ string) (string, error) {
 	return time.Now().Format("2006-01-02 15:04:05"), nil
 }

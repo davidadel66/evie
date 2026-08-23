@@ -433,7 +433,7 @@ http:// URLs are upgraded to https:// except for localhost and private addresses
 // exits: a failed fetch produced nothing worth reading, so there is no
 // result to hand back — the status line in the error is everything the
 // model needs.
-func webFetch(args string) (string, error) {
+func webFetch(parent context.Context, args string) (string, error) {
 	var params struct {
 		URL string `json:"url"`
 	}
@@ -446,7 +446,10 @@ func webFetch(args string) (string, error) {
 		return "", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(parent, fetchTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -475,6 +478,9 @@ func webFetch(args string) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if parent.Err() != nil {
+			return "", parent.Err()
+		}
 		// client.Do wraps the deadline in *url.Error, so a bare ctx.Err()
 		// comparison (bash.go's approach) does not transfer here.
 		if errors.Is(err, context.DeadlineExceeded) {

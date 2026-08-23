@@ -143,7 +143,7 @@ func TestSendPersistsAssistantBeforeToolExecution(t *testing.T) {
 	history := &fakeHistory{}
 	intentWasDurable := false
 	tool := echoTool("echo", false, nil)
-	tool.Execute = func(args string) (string, error) {
+	tool.Execute = func(_ context.Context, args string) (string, error) {
 		if len(history.events) != 3 || history.events[1].Type != memory.EventAssistantMessage ||
 			history.events[2].Type != memory.EventToolIntent ||
 			history.events[2].ParentID != history.events[1].ID || history.events[2].ExecutionID == "" {
@@ -233,6 +233,53 @@ func TestSendStopsWhenToolIntentAppendFails(t *testing.T) {
 	}
 }
 
+func TestSendParentCancellationDuringToolStopsLaterToolsAndProviderIterations(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	first := echoTool("cancel-turn", false, nil)
+	first.Execute = func(ctx context.Context, _ string) (string, error) {
+		cancel()
+		return "", ctx.Err()
+	}
+	secondRan := false
+	second := echoTool("must-not-run", false, &secondRan)
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil,
+			toolCall("call-1", "cancel-turn", `{}`),
+			toolCall("call-2", "must-not-run", `{}`)),
+		assistantStep("must not be requested", nil),
+	}}
+	s := newTestSession(c, "test-model")
+
+	err := s.Send(ctx, "go", &recorder{}, nil, first, second)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled", err)
+	}
+	if secondRan {
+		t.Fatal("later tool executed after parent cancellation")
+	}
+	if len(c.reqs) != 1 {
+		t.Fatalf("provider requests = %d, want exactly the initial iteration", len(c.reqs))
+	}
+}
+
+func TestSendParentCancellationDuringProviderDiscardsResponse(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("late", nil, toolCall("call-1", "must-not-run", `{}`)),
+	}}
+	c.onCall = cancel
+	s := newTestSession(c, "test-model")
+
+	err := s.Send(ctx, "go", &recorder{}, nil, echoTool("must-not-run", false, &ran))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled", err)
+	}
+	if ran {
+		t.Fatal("tool executed from provider response returned after cancellation")
+	}
+}
+
 func TestSendStopsWhenToolOutcomeAppendFails(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 4, appendErr: errors.New("disk full")}
 	ran := false
@@ -260,7 +307,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 	history := &fakeHistory{}
 	approvalWasDurable := false
 	tool := echoTool("dangerous", true, nil)
-	tool.Execute = func(args string) (string, error) {
+	tool.Execute = func(_ context.Context, args string) (string, error) {
 		if len(history.events) != 4 {
 			return "ran", nil
 		}
@@ -286,7 +333,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
 
@@ -308,7 +355,7 @@ func TestSendStopsWhenApprovalAppendFails(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
 
@@ -335,7 +382,7 @@ func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	deny := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Declined
 	}
 
@@ -412,7 +459,7 @@ func echoTool(name string, gated bool, ran *bool) tools.Tool {
 			Type:     "function",
 			Function: openrouter.Function{Name: name, Parameters: openrouter.Parameter{Type: "object"}},
 		},
-		Execute: func(args string) (string, error) {
+		Execute: func(_ context.Context, args string) (string, error) {
 			if ran != nil {
 				*ran = true
 			}
@@ -563,7 +610,9 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 		assistantStep("ok", nil),
 	}}
 	s := newTestSession(c, "test-model")
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Approved }
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Approved
+	}
 
 	if err := s.Send(context.Background(), "go", &recorder{}, approve, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -580,7 +629,9 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 	}}
 	s = newTestSession(c, "test-model")
 	rec := &recorder{}
-	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Declined }
+	deny := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Declined
+	}
 
 	if err := s.Send(context.Background(), "go", rec, deny, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)

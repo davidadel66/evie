@@ -264,7 +264,7 @@ func xmlEscape(s string) string {
 
 // openCronDB is the tools-layer seam onto evie's own database — a var so
 // tests point it at a temp path, same pattern as fetchTimeout.
-var openCronDB = eviedb.OpenDB
+var openCronDB = eviedb.OpenDBContext
 
 // installJob writes a job's plist and loads it into launchd. A var seam
 // so tests capture calls instead of touching launchctl. It owns ALL
@@ -276,19 +276,33 @@ var openCronDB = eviedb.OpenDB
 // ignored unconditionally: distinguishing "not found" from real
 // failures means parsing launchctl stderr, and the bootstrap that
 // follows surfaces anything real.
-var installJob = func(label, plistPath string, plist []byte) error {
+var installJob = func(ctx context.Context, label, plistPath string, plist []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// ~/Library/LaunchAgents can be absent on a fresh account.
 	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
 		return fmt.Errorf("make LaunchAgents dir: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := os.WriteFile(plistPath, plist, 0o644); err != nil {
 		return fmt.Errorf("write plist: %w", err)
 	}
 
 	uid := strconv.Itoa(os.Getuid())
-	_ = exec.Command("launchctl", "bootout", "gui/"+uid+"/"+label).Run()
+	if err := ctx.Err(); err != nil {
+		_ = os.Remove(plistPath)
+		return err
+	}
+	_ = exec.CommandContext(ctx, "launchctl", "bootout", "gui/"+uid+"/"+label).Run()
 
-	if out, err := exec.Command("launchctl", "bootstrap", "gui/"+uid, plistPath).CombinedOutput(); err != nil {
+	if err := ctx.Err(); err != nil {
+		_ = os.Remove(plistPath)
+		return err
+	}
+	if out, err := exec.CommandContext(ctx, "launchctl", "bootstrap", "gui/"+uid, plistPath).CombinedOutput(); err != nil {
 		os.Remove(plistPath)
 		return fmt.Errorf("launchctl bootstrap: %w: %s", err, out)
 	}
@@ -297,9 +311,12 @@ var installJob = func(label, plistPath string, plist []byte) error {
 
 // uninstallJob unloads a job from launchd and deletes its plist. All
 // errors tolerated — removing something already gone is success.
-var uninstallJob = func(label, plistPath string) error {
+var uninstallJob = func(ctx context.Context, label, plistPath string) error {
 	uid := strconv.Itoa(os.Getuid())
-	_ = exec.Command("launchctl", "bootout", "gui/"+uid+"/"+label).Run()
+	_ = exec.CommandContext(ctx, "launchctl", "bootout", "gui/"+uid+"/"+label).Run()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	_ = os.Remove(plistPath)
 	return nil
 }
@@ -354,7 +371,7 @@ To debug a job that is not firing, run "launchctl print gui/$(id -u)/com.evie.cr
 	},
 }
 
-func cronAdd(args string) (string, error) {
+func cronAdd(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Name     string `json:"name"`
 		Schedule string `json:"schedule"`
@@ -385,13 +402,16 @@ func cronAdd(args string) (string, error) {
 		return "", err
 	}
 
-	db, err := openCronDB()
+	db, err := openCronDB(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open evie db: %w", err)
 	}
 	defer db.Close()
 
-	res, err := db.Exec(
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	res, err := db.ExecContext(ctx,
 		`INSERT INTO jobs (name, schedule, command, created_at, enabled) VALUES (?, ?, ?, ?, 1)`,
 		params.Name, params.Schedule, params.Command, time.Now().Format(time.RFC3339),
 	)
@@ -405,20 +425,31 @@ func cronAdd(args string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("job id: %w", err)
 	}
+	cleanupRow := func(primary error) error {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, delErr := db.ExecContext(cleanupCtx, `DELETE FROM jobs WHERE id = ?`, id); delErr != nil {
+			return errors.Join(primary, fmt.Errorf(
+				"could not roll back job row %d (%q) — it is in the database but NOT scheduled; retry cron_remove %s: %w",
+				id, params.Name, params.Name, delErr))
+		}
+		return primary
+	}
+	if err := ctx.Err(); err != nil {
+		return "", cleanupRow(err)
+	}
 
 	// No half-registered jobs: if launchd registration fails, the row
 	// goes too (plist cleanup is installJob's own responsibility). If the
 	// rollback ALSO fails, the db now holds a job that will never fire,
 	// and the model is the only one who can tell David — so both errors
 	// travel together rather than the delete failing silently.
-	if err := installJob(cronLabel(params.Name), plistPath, plistFor(cronLabel(params.Name), id, binPath, dicts)); err != nil {
-		err = fmt.Errorf("register with launchd: %w", err)
-		if _, delErr := db.Exec(`DELETE FROM jobs WHERE id = ?`, id); delErr != nil {
-			return "", errors.Join(err, fmt.Errorf(
-				"could not roll back job row %d (%q) — it is in the database but NOT scheduled; retry cron_remove %s: %w",
-				id, params.Name, params.Name, delErr))
+	if err := installJob(ctx, cronLabel(params.Name), plistPath, plistFor(cronLabel(params.Name), id, binPath, dicts)); err != nil {
+		if ctx.Err() != nil {
+			return "", cleanupRow(ctx.Err())
 		}
-		return "", err
+		err = fmt.Errorf("register with launchd: %w", err)
+		return "", cleanupRow(err)
 	}
 
 	return fmt.Sprintf("Scheduled %q (%s): %s\nPlist: %s\n", params.Name, params.Schedule, params.Command, plistPath), nil
@@ -438,8 +469,8 @@ var cronListTool = openrouter.Tool{
 	},
 }
 
-func cronList(_ string) (string, error) {
-	db, err := openCronDB()
+func cronList(ctx context.Context, _ string) (string, error) {
+	db, err := openCronDB(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open evie db: %w", err)
 	}
@@ -448,7 +479,7 @@ func cronList(_ string) (string, error) {
 	// Latest run = highest job_runs.id, NOT max(started_at): timestamps
 	// are local-time RFC3339, and lexicographic order breaks across the
 	// DST fall-back.
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT j.id, j.name, j.schedule, j.command, j.created_at, r.started_at, r.exit_code
 		FROM jobs j
 		LEFT JOIN job_runs r ON r.id = (SELECT MAX(id) FROM job_runs WHERE job_id = j.id)
@@ -507,7 +538,7 @@ var cronRemoveTool = openrouter.Tool{
 	},
 }
 
-func cronRemove(args string) (string, error) {
+func cronRemove(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Name string `json:"name"`
 	}
@@ -515,16 +546,16 @@ func cronRemove(args string) (string, error) {
 		return "", fmt.Errorf("parse arguments: %w", err)
 	}
 
-	db, err := openCronDB()
+	db, err := openCronDB(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open evie db: %w", err)
 	}
 	defer db.Close()
 
 	var id int64
-	err = db.QueryRow(`SELECT id FROM jobs WHERE name = ?`, params.Name).Scan(&id)
+	err = db.QueryRowContext(ctx, `SELECT id FROM jobs WHERE name = ?`, params.Name).Scan(&id)
 	if err == sql.ErrNoRows {
-		names, _ := jobNames(db)
+		names, _ := jobNames(ctx, db)
 		if len(names) == 0 {
 			return "", fmt.Errorf("no job named %q — there are no scheduled jobs", params.Name)
 		}
@@ -538,18 +569,32 @@ func cronRemove(args string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_ = uninstallJob(cronLabel(params.Name), plistPath)
-
-	if _, err := db.Exec(`DELETE FROM jobs WHERE id = ?`, id); err != nil {
-		return "", fmt.Errorf("delete job: %w", err)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	// Unloading and deleting are one existing consistency sequence. Once the
+	// first mutation starts, finish both under the approved bounded cleanup
+	// context even if the parent is cancelled in between.
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath)
+	_, deleteErr := db.ExecContext(cleanupCtx, `DELETE FROM jobs WHERE id = ?`, id)
+	if ctx.Err() != nil {
+		if deleteErr != nil {
+			return "", errors.Join(ctx.Err(), fmt.Errorf("delete job during cancellation cleanup: %w", deleteErr))
+		}
+		return "", ctx.Err()
+	}
+	if deleteErr != nil {
+		return "", fmt.Errorf("delete job: %w", deleteErr)
 	}
 
 	// job_runs rows are deliberately kept: history outlives the job.
 	return fmt.Sprintf("Removed %q. Its run history is kept in job_runs.\n", params.Name), nil
 }
 
-func jobNames(db *sql.DB) ([]string, error) {
-	rows, err := db.Query(`SELECT name FROM jobs ORDER BY name`)
+func jobNames(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM jobs ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +630,7 @@ const maxRunOutput = 64 * 1024
 // with nobody waiting.
 func RunScheduled(command string, timeout time.Duration) ([]byte, int) {
 	var script strings.Builder
-	if snap := snapshot(); snap != "" {
+	if snap := snapshot(context.Background()); snap != "" {
 		fmt.Fprintf(&script, "source %s 2>/dev/null || true\n", shellQuote(snap))
 		fmt.Fprintf(&script, "eval %s\n", shellQuote(command))
 	} else {
