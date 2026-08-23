@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate-result.schema.json",
+  "title": "Story candidate result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "story",
+    "candidate",
+    "acceptance_coverage",
+    "checks",
+    "finding_dispositions",
+    "known_gaps",
+    "best_files",
+    "summary",
+    "decision"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "CANDIDATE_READY",
+        "DECISION_REQUIRED",
+        "IMPLEMENTATION_INCOMPLETE"
+      ]
+    },
+    "story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "title"],
+      "properties": {
+        "ref": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worktree",
+        "branch",
+        "base_ref",
+        "base_commit",
+        "pr_base",
+        "head_commit",
+        "clean"
+      ],
+      "properties": {
+        "worktree": { "type": "string" },
+        "branch": { "type": "string" },
+        "base_ref": { "type": "string" },
+        "base_commit": {
+          "type": "string",
+          "pattern": "^$|^[0-9a-f]{40}$"
+        },
+        "pr_base": { "type": "string" },
+        "head_commit": {
+          "type": "string",
+          "pattern": "^$|^[0-9a-f]{40}$"
+        },
+        "clean": { "type": "boolean" }
+      }
+    },
+    "acceptance_coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "status",
+          "code_evidence",
+          "test_evidence"
+        ],
+        "properties": {
+          "criterion": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["IMPLEMENTED", "GAP", "UNVERIFIED"] },
+          "code_evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "test_evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status", "exit_code", "evidence"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["PASSED", "FAILED", "SKIPPED"] },
+          "exit_code": {
+            "oneOf": [
+              { "type": "integer" },
+              { "type": "null" }
+            ]
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "finding_dispositions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["finding_id", "status", "evidence"],
+        "properties": {
+          "finding_id": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["ADDRESSED", "DISPUTED", "BLOCKED"] },
+          "evidence": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "known_gaps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "best_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "question", "context", "options"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "question": { "type": "string" },
+        "context": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "CANDIDATE_READY" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "properties": {
+              "worktree": { "minLength": 1 },
+              "branch": { "minLength": 1 },
+              "base_ref": { "minLength": 1 },
+              "base_commit": { "pattern": "^[0-9a-f]{40}$" },
+              "pr_base": { "minLength": 1 },
+              "head_commit": { "pattern": "^[0-9a-f]{40}$" },
+              "clean": { "const": true }
+            }
+          },
+          "decision": {
+            "properties": { "required": { "const": false } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "DECISION_REQUIRED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "required": { "const": true },
+              "question": { "minLength": 1 },
+              "context": { "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

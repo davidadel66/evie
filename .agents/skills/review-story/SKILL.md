@@ -87,6 +87,11 @@ is supplied and checked.
 
 ## Gate 3: Run independent lenses
 
+The agent applying this skill is the review coordinator and must directly own
+all three lens subagents. Do not delegate the complete `review-story` workflow
+to an intermediate subagent, and do not instruct a lens reviewer to apply this
+skill recursively.
+
 Spawn exactly one fresh read-only subagent for each lens, concurrently when the
 runtime supports it:
 
@@ -94,6 +99,10 @@ runtime supports it:
 2. Correctness lens: prefer `story-reviewer` or `story_reviewer`.
 3. Maintainability lens: prefer `maintainability-reviewer` or
    `maintainability_reviewer`.
+
+Read `references/lens-result.schema.json`. Require each reviewer to return
+exactly one JSON object that validates against it, with its assigned lens and
+the supplied base and head commits. Do not accept prose outside the object.
 
 Give every reviewer only:
 
@@ -147,6 +156,10 @@ Do not reward abstraction for its own sake.
 
 ## Gate 4: Validate and synthesize findings
 
+Validate each lens result before considering its findings. Treat malformed
+output, an incorrect lens, or a candidate-commit mismatch as a skipped lens and
+prevent a clean verdict. Do not repair or reinterpret reviewer output.
+
 Treat subagent output as leads, not votes. Check every material finding against
 the diff, source authority, and surrounding code. Deduplicate overlapping
 findings without weakening their impact. Discard style preferences, speculative
@@ -170,7 +183,12 @@ decision and an updated authoritative source before code chooses a side.
 
 ## Gate 5: Return the verdict
 
-Return findings first, ordered by priority, followed by:
+Read `references/review-result.schema.json` and return exactly one JSON object
+that validates against it, with no prose or Markdown outside the object. Keep
+every required field present; use empty strings or arrays when a value is not
+applicable. Order findings by priority.
+
+The result must contain:
 
 - compact acceptance coverage mapping each criterion to code and test evidence;
 - exact deterministic checks and results;

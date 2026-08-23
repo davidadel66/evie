@@ -1,6 +1,6 @@
 ---
 name: implement-story
-description: Implement one ready engineering story in an isolated Git worktree, iterate against its acceptance criteria and deterministic checks, obtain a fresh three-lens read-only review, and deliver a draft pull request for human review. Use when asked to implement, execute, or deliver a single approved story or issue. Do not use to plan an epic, combine multiple stories, review an existing pull request, or merge changes.
+description: Implement one ready engineering story in an isolated Git worktree, verify it against its acceptance criteria and deterministic checks, and return one clean committed candidate for independent review. Use when asked to implement or execute a single approved story or issue. Do not use to plan an epic, combine multiple stories, review a candidate, repair review findings, create a pull request, or merge changes.
 ---
 
 # Implement a Story
@@ -9,10 +9,15 @@ Treat one ready story as the complete execution contract. Read the applicable
 `AGENTS.md`, story, specification, decision record, and only the code needed to
 understand the existing behavior before editing.
 
+Read `references/candidate-result.schema.json` before beginning. Every exit from
+this skill must return exactly one JSON object that validates against it, with
+no prose or Markdown outside the object. Keep every required field present; use
+empty strings or arrays when a value is not applicable.
+
 Invoking `$implement-story` explicitly, or invoking a wrapper command that says
 it uses this skill, authorizes creation of one story worktree and branch. Commit,
-push, and draft-pull-request creation are authorized only when that invocation
-also states that delivery contract. Never merge a pull request.
+but do not push or create, edit, approve, or merge a pull request. Independent
+review, review repair, and delivery belong to separate workflows.
 
 ## Gate 1: Confirm readiness
 
@@ -115,45 +120,25 @@ possible.
 Before review, run every check required by the applicable `AGENTS.md`. Do not
 substitute model judgment for deterministic verification.
 
-## Gate 5: Obtain an independent review
+## Gate 5: Finalize the candidate
 
 After deterministic checks pass, confirm the diff contains only this story and
-commit the candidate with a descriptive message. Then load and apply the project
-`review-story` skill to that clean commit, the base commit, story, specification,
-decisions, and recorded verification. That workflow must run fresh contract,
-correctness, and maintainability lenses without receiving the implementer's
-conclusions.
+commit the candidate with a descriptive message. Confirm the worktree is clean
+and record the full `HEAD` SHA. Do not amend the candidate after recording it.
 
-Do not proceed on `DECISION_REQUIRED`, `CHANGES_REQUIRED`, or
-`REVIEW_INCOMPLETE`. Fix valid in-scope findings, rerun affected deterministic
-checks, create a new commit without amending the reviewed commit, and request
-one follow-up review only when the fixes materially changed the candidate. Limit
-the independent review loop to two passes. Never resolve a contract gap in code;
-return it for an authoritative decision.
-
-## Gate 6: Deliver the draft pull request
-
-Proceed only while all required checks pass and no material review finding
-remains.
-
-1. Confirm the worktree is clean and `HEAD` is the exact reviewed commit.
-2. Push the story branch without force.
-3. Open a draft pull request against `pr_base`.
-4. Include the story, outcome, verification evidence, risks, and deferred work
-   in the pull-request body.
-
-If GitHub access, authentication, a remote, or `pr_base` is unavailable, stop
-after the safest completed local step and give exact continuation commands. Do
-not claim a pull request exists without its URL.
+Return the exact candidate identity and evidence so a fresh reviewer can assess
+it without relying on the implementation conversation. Do not invoke
+`review-story`, spawn reviewers, repair anticipated findings, push the branch,
+or deliver the change from this skill.
 
 ## Handoff
 
-Return:
+Return `CANDIDATE_READY` only for a clean committed candidate whose reported
+identity and checks you observed directly. Map every acceptance criterion to
+code and test evidence. For the initial implementation, return an empty
+`finding_dispositions` array.
 
-- the draft pull-request URL, or the precise delivery blocker;
-- the story and specification sections implemented;
-- the worktree, branch, and base commit;
-- what changed and why;
-- exact verification and independent-review results;
-- known gaps and deliberately deferred work; and
-- the best files for the human reviewer to read first.
+Return `DECISION_REQUIRED` when an authoritative choice is needed, including
+the exact question, context, and known options. Return
+`IMPLEMENTATION_INCOMPLETE` for every other honest stop, with the completed
+checks and known gaps. Never claim readiness through the summary field.
