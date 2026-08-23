@@ -225,12 +225,31 @@ func TestRunBash(t *testing.T) {
 
 func TestRunBashParentCancellationKillsCommand(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	sentinel := filepath.Join(t.TempDir(), "started")
+	args, err := json.Marshal(map[string]any{
+		"command":         fmt.Sprintf("printf started > %s; sleep 30", shellQuote(sentinel)),
+		"timeout_seconds": 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := runBash(ctx, `{"command":"sleep 30","timeout_seconds":60}`)
+		_, err := runBash(ctx, string(args))
 		done <- err
 	}()
-	time.Sleep(50 * time.Millisecond)
+	deadline := time.Now().Add(4 * time.Second)
+	for {
+		if _, err := os.Stat(sentinel); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat child sentinel: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("bash child did not create its start sentinel")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 	started := time.Now()
 	cancel()
 	select {

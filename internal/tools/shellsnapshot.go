@@ -26,12 +26,14 @@ const snapshotTimeout = 10 * time.Second
 //
 // snapshotCapture keeps at most one capture active even if Warm and tool calls
 // race. Waiters cancel independently; when the final waiter leaves, the lazy
-// capture is cancelled and remains retryable.
+// capture is cancelled and remains retryable. Ordinary capture failures retain
+// the prior sticky one-attempt policy.
 var (
-	snapshotMu       sync.Mutex
-	snapshotPath     string
-	snapshotCapture  *shellCapture
-	captureShellFunc = captureShell
+	snapshotMu        sync.Mutex
+	snapshotPath      string
+	snapshotAttempted bool
+	snapshotCapture   *shellCapture
+	captureShellFunc  = captureShell
 )
 
 type shellCapture struct {
@@ -56,11 +58,18 @@ func Warm() {
 // interactive-rc pieces. Failure is never surfaced to the model: a missing
 // alias is a degraded shell, not a broken tool.
 func snapshot(ctx context.Context) string {
+	if ctx.Err() != nil {
+		return ""
+	}
 	snapshotMu.Lock()
 	if snapshotPath != "" {
 		path := snapshotPath
 		snapshotMu.Unlock()
 		return path
+	}
+	if snapshotAttempted {
+		snapshotMu.Unlock()
+		return ""
 	}
 	capture := snapshotCapture
 	if capture == nil {
@@ -70,7 +79,16 @@ func snapshot(ctx context.Context) string {
 		go func(c *shellCapture) {
 			path, err := captureShellFunc(captureCtx, shellPath())
 			snapshotMu.Lock()
-			if err == nil {
+			if cancelErr := captureCtx.Err(); cancelErr != nil {
+				if path != "" {
+					_ = os.Remove(path)
+				}
+				path = ""
+				err = cancelErr
+			} else {
+				snapshotAttempted = true
+			}
+			if err == nil && path != "" {
 				snapshotPath = path
 				c.path = path
 			}

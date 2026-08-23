@@ -7,8 +7,11 @@
   and disconnect remove the pending entry under the same lock: the first
   claimant wins. Approval-first honors David's decision even if disconnect is
   observed immediately afterward; disconnect-first expires the approval and a
-  later POST receives 404. This preserves the existing whole-turn disconnect
-  behavior while making the approval race deterministic and fail-closed.
+  later POST receives 404. The approver separately honors its lifecycle context;
+  lifecycle cancellation removes a still-pending approval and returns so the
+  dispatcher can abort before observation or execution. This preserves the
+  existing whole-turn disconnect behavior while making the approval race
+  deterministic and fail-closed.
 
 - **2026-08-05 — approvers return `tools.Decision`, not bool** (serve-core,
   shipped — spec in docs/done/). A bool can't distinguish "David said no"
@@ -18,12 +21,17 @@
   y/N closure. Verified end-to-end: approvals pause a real curl stream and
   resume on `/api/approve`; disconnect mid-approval writes the expired text.
 
-- **2026-08-04 — `ExecuteWith` returns `(openrouter.Message, bool)`.** The
-  Events contract promises `ToolResult(..., isErr)`, but errors were folded
-  into message text with no flag. The bool marks failures (tool error, unknown
-  tool); a decline is the gate working, not a failure. `Execute` keeps its
-  one-value signature. Surfaced while writing `Send` in feature 1
-  (agent-extract, shipped — spec in docs/done/).
+- **2026-08-23 — tool dispatch carries parent context and lifecycle errors**
+  (supersedes the 2026-08-04 `ExecuteWith` signature decision). `Execute` is
+  `Execute(ctx, call, approve) (openrouter.Message, error)`; `ExecuteWith` is
+  `ExecuteWith(ctx, extra, call, approve) (openrouter.Message, bool, error)`;
+  and `ExecuteWithApproval` has the same result triple plus its observer.
+  The added error channel carries parent cancellation and other lifecycle
+  failures so they abort the turn instead of becoming model-visible tool
+  output. The bool still marks ordinary tool and unknown-tool failures; those
+  remain messages with a nil lifecycle error. A decline is still the gate
+  working, not a failure. The context is propagated through preparation,
+  approval, observation, and direct or prepared execution.
 
 - **2026-08-03 — React 19 + Vite + TS, static SPA embedded via go:embed.**
   Surveyed AI UIs: everything is web tech; the ones pairing a non-Node backend

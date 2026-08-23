@@ -6,6 +6,7 @@ package youtube
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +20,29 @@ var (
 )
 
 const testTimestamp = "2026-08-12T15:04:05Z"
+
+func TestOpenDBAtContextCancellationAfterFileCreationLeavesMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled-after-create.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	original := hardenWritableDBFile
+	hardenWritableDBFile = func(path string) error {
+		err := original(path)
+		cancel()
+		return err
+	}
+	t.Cleanup(func() { hardenWritableDBFile = original })
+
+	if _, err := OpenDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("OpenDBAtContext error = %v, want context.Canceled", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("cancelled transcript database mode = %04o, want 0600", got)
+	}
+}
 
 func newYouTubeTestDB(t *testing.T) *sql.DB {
 	t.Helper()

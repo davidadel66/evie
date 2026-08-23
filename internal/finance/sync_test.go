@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -40,6 +41,29 @@ func TestSyncParentCancellationStopsLaterBanksAndRetries(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("bank attempts = %d, cancellation must stop later banks and retry", calls)
+	}
+}
+
+func TestOpenDBAtContextCancellationAfterFileCreationLeavesMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled-after-create.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	original := hardenWritableDBFile
+	hardenWritableDBFile = func(path string) error {
+		err := original(path)
+		cancel()
+		return err
+	}
+	t.Cleanup(func() { hardenWritableDBFile = original })
+
+	if _, err := openDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("openDBAtContext error = %v, want context.Canceled", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("cancelled finance database mode = %04o, want 0600", got)
 	}
 }
 

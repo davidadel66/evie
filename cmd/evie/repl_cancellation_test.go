@@ -19,6 +19,36 @@ import (
 
 type replCancellationClient struct{ calls atomic.Int32 }
 
+type scanReadBarrier struct {
+	reader  io.Reader
+	entered chan int
+	reads   atomic.Int32
+}
+
+func newScanReadBarrier(reader io.Reader) *scanReadBarrier {
+	return &scanReadBarrier{reader: reader, entered: make(chan int, 8)}
+}
+
+func (r *scanReadBarrier) Read(p []byte) (int, error) {
+	read := int(r.reads.Add(1))
+	r.entered <- read
+	return r.reader.Read(p)
+}
+
+func waitForScannerRead(t *testing.T, reader *scanReadBarrier, want int) {
+	t.Helper()
+	for {
+		select {
+		case got := <-reader.entered:
+			if got >= want {
+				return
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("scanner did not enter read %d", want)
+		}
+	}
+}
+
 func (c *replCancellationClient) ChatStream(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	c.calls.Add(1)
 	return openrouter.ChatResponse{}, nil
@@ -65,6 +95,7 @@ func (h *recordingREPLHistory) Events(context.Context) ([]memory.Event, error) {
 func TestRunREPLContextDiscardsInputThatUnblocksScannerAfterCancellation(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer reader.Close()
+	barrier := newScanReadBarrier(reader)
 	client := &replCancellationClient{}
 	session := agent.New(client, "test", replCancellationHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "session",
@@ -73,12 +104,12 @@ func TestRunREPLContextDiscardsInputThatUnblocksScannerAfterCancellation(t *test
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runREPLContext(ctx, session, bufio.NewScanner(reader))
+		runREPLContext(ctx, session, bufio.NewScanner(barrier))
 	}()
 
 	// The REPL intentionally keeps one synchronous scanner. Cancellation does
 	// not add a competing reader; one final line releases the blocked Scan.
-	time.Sleep(20 * time.Millisecond)
+	waitForScannerRead(t, barrier, 1)
 	cancel()
 	if _, err := io.WriteString(writer, "late input\n"); err != nil {
 		t.Fatal(err)
@@ -100,17 +131,19 @@ func TestRunREPLContextDiscardsLateApprovalInputAfterCancellation(t *testing.T) 
 	}
 	reader, writer := io.Pipe()
 	defer reader.Close()
+	barrier := newScanReadBarrier(reader)
 	client := &replApprovalClient{called: make(chan struct{}), path: path}
 	history := &recordingREPLHistory{}
 	session := agent.New(client, "test", history, memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); runREPLContext(ctx, session, bufio.NewScanner(reader)) }()
+	go func() { defer close(done); runREPLContext(ctx, session, bufio.NewScanner(barrier)) }()
+	waitForScannerRead(t, barrier, 1)
 	if _, err := io.WriteString(writer, "edit it\n"); err != nil {
 		t.Fatal(err)
 	}
 	<-client.called
-	time.Sleep(20 * time.Millisecond)
+	waitForScannerRead(t, barrier, 2)
 	cancel()
 	if _, err := io.WriteString(writer, "yes\n"); err != nil {
 		t.Fatal(err)

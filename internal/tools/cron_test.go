@@ -43,19 +43,78 @@ import (
 
 func TestCronAddCancellationAfterMutationRollsBackRow(t *testing.T) {
 	db := newCronDB(t)
-	original := installJob
-	t.Cleanup(func() { installJob = original })
+	originalInstall := installJob
+	originalUninstall := uninstallJob
+	t.Cleanup(func() {
+		installJob = originalInstall
+		uninstallJob = originalUninstall
+	})
 	ctx, cancel := context.WithCancel(context.Background())
+	installStarted := make(chan struct{})
 	installJob = func(ctx context.Context, _, _ string, _ []byte) error {
-		cancel()
+		close(installStarted)
+		<-ctx.Done()
 		return ctx.Err()
 	}
-	_, err := cronAdd(ctx, `{"name":"cancel-add","schedule":"0 9 * * *","command":"echo hi"}`)
+	uninstalled := make(chan struct{})
+	uninstallJob = func(ctx context.Context, _, _ string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		close(uninstalled)
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := cronAdd(ctx, `{"name":"cancel-add","schedule":"0 9 * * *","command":"echo hi"}`)
+		result <- err
+	}()
+	<-installStarted
+	cancel()
+	err := <-result
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cronAdd error = %v, want context.Canceled", err)
 	}
+	select {
+	case <-uninstalled:
+	default:
+		t.Fatal("cronAdd did not reconcile launchd after effect-started cancellation")
+	}
 	if got := jobCount(t, db); got != 0 {
 		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
+
+func TestCronAddCancellationPreservesRowWhenLaunchdReconciliationFails(t *testing.T) {
+	db := newCronDB(t)
+	originalInstall := installJob
+	originalUninstall := uninstallJob
+	t.Cleanup(func() {
+		installJob = originalInstall
+		uninstallJob = originalUninstall
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	installStarted := make(chan struct{})
+	installJob = func(ctx context.Context, _, _ string, _ []byte) error {
+		close(installStarted)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	reconcileErr := errors.New("launchd reconciliation failed")
+	uninstallJob = func(context.Context, string, string) error { return reconcileErr }
+	result := make(chan error, 1)
+	go func() {
+		_, err := cronAdd(ctx, `{"name":"uncertain-add","schedule":"0 9 * * *","command":"echo hi"}`)
+		result <- err
+	}()
+	<-installStarted
+	cancel()
+	err := <-result
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, reconcileErr) {
+		t.Fatalf("cronAdd error = %v, want cancellation joined with reconciliation failure", err)
+	}
+	if got := jobCount(t, db); got != 1 {
+		t.Fatalf("jobs after uncertain launchd state = %d, want durable correlation preserved", got)
 	}
 }
 
@@ -74,6 +133,25 @@ func TestCronRemoveCancellationAfterMutationCompletesConsistencyCleanup(t *testi
 	}
 	if got := jobCount(t, db); got != 0 {
 		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
+
+func TestCronRemoveFailingUninstallPreservesRow(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	original := uninstallJob
+	t.Cleanup(func() { uninstallJob = original })
+	uninstallErr := errors.New("launchd still active")
+	uninstallJob = func(context.Context, string, string) error { return uninstallErr }
+
+	_, err := cronRemove(context.Background(), `{"name":"uncertain-remove"}`)
+	if !errors.Is(err, uninstallErr) {
+		t.Fatalf("cronRemove error = %v, want uninstall failure", err)
+	}
+	if got := jobCount(t, db); got != 1 {
+		t.Fatalf("jobs after failed uninstall = %d, want durable correlation preserved", got)
 	}
 }
 

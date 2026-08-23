@@ -309,15 +309,18 @@ var installJob = func(ctx context.Context, label, plistPath string, plist []byte
 	return nil
 }
 
-// uninstallJob unloads a job from launchd and deletes its plist. All
-// errors tolerated — removing something already gone is success.
+// uninstallJob unloads a job from launchd and deletes its plist. A missing
+// launchd job or plist remains success; context and other plist-removal errors
+// are returned so cancellation compensation can preserve the database row.
 var uninstallJob = func(ctx context.Context, label, plistPath string) error {
 	uid := strconv.Itoa(os.Getuid())
 	_ = exec.CommandContext(ctx, "launchctl", "bootout", "gui/"+uid+"/"+label).Run()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	_ = os.Remove(plistPath)
+	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove plist: %w", err)
+	}
 	return nil
 }
 
@@ -425,9 +428,7 @@ func cronAdd(ctx context.Context, args string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("job id: %w", err)
 	}
-	cleanupRow := func(primary error) error {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	cleanupRow := func(cleanupCtx context.Context, primary error) error {
 		if _, delErr := db.ExecContext(cleanupCtx, `DELETE FROM jobs WHERE id = ?`, id); delErr != nil {
 			return errors.Join(primary, fmt.Errorf(
 				"could not roll back job row %d (%q) — it is in the database but NOT scheduled; retry cron_remove %s: %w",
@@ -435,21 +436,37 @@ func cronAdd(ctx context.Context, args string) (string, error) {
 		}
 		return primary
 	}
+	cleanupRowBounded := func(primary error) error {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return cleanupRow(cleanupCtx, primary)
+	}
 	if err := ctx.Err(); err != nil {
-		return "", cleanupRow(err)
+		return "", cleanupRowBounded(err)
 	}
 
-	// No half-registered jobs: if launchd registration fails, the row
-	// goes too (plist cleanup is installJob's own responsibility). If the
-	// rollback ALSO fails, the db now holds a job that will never fire,
-	// and the model is the only one who can tell David — so both errors
-	// travel together rather than the delete failing silently.
+	// No half-registered jobs: after a launchd registration failure, reconcile
+	// the possibly-applied effect before removing the row. If reconciliation or
+	// row rollback also fails, preserve the durable correlation and carry every
+	// error so David can recover it explicitly.
 	if err := installJob(ctx, cronLabel(params.Name), plistPath, plistFor(cronLabel(params.Name), id, binPath, dicts)); err != nil {
+		primary := fmt.Errorf("register with launchd: %w", err)
 		if ctx.Err() != nil {
-			return "", cleanupRow(ctx.Err())
+			primary = ctx.Err()
 		}
-		err = fmt.Errorf("register with launchd: %w", err)
-		return "", cleanupRow(err)
+
+		// Bootstrap may have taken effect before returning an error or parent
+		// cancellation. Reconcile launchd under the approved cleanup bound
+		// before deleting the row. If reconciliation fails, retain the row as
+		// the only durable correlation to a potentially live launchd job.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if uninstallErr := uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath); uninstallErr != nil {
+			return "", errors.Join(primary, fmt.Errorf(
+				"could not reconcile launchd job %q; database row %d was preserved: %w",
+				params.Name, id, uninstallErr))
+		}
+		return "", cleanupRow(cleanupCtx, primary)
 	}
 
 	return fmt.Sprintf("Scheduled %q (%s): %s\nPlist: %s\n", params.Name, params.Schedule, params.Command, plistPath), nil
@@ -577,7 +594,16 @@ func cronRemove(ctx context.Context, args string) (string, error) {
 	// context even if the parent is cancelled in between.
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_ = uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath)
+	uninstallErr := uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath)
+	if uninstallErr != nil {
+		cleanupErr := fmt.Errorf(
+			"could not reconcile launchd job %q; database row %d was preserved: %w",
+			params.Name, id, uninstallErr)
+		if ctx.Err() != nil {
+			return "", errors.Join(ctx.Err(), cleanupErr)
+		}
+		return "", cleanupErr
+	}
 	_, deleteErr := db.ExecContext(cleanupCtx, `DELETE FROM jobs WHERE id = ?`, id)
 	if ctx.Err() != nil {
 		if deleteErr != nil {

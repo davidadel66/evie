@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -204,5 +205,53 @@ func TestDisconnectClaimsBeforeApprovalPOST(t *testing.T) {
 	}
 	if res := postApprove(t, h, id, true); res.Code != http.StatusNotFound {
 		t.Fatalf("late approval status = %d, want 404", res.Code)
+	}
+}
+
+func TestLifecycleCancellationExpiresPendingApprovalBeforeObservationOrExecution(t *testing.T) {
+	srv, h := newTestServerFull(&fakeClient{})
+	rec := httptest.NewRecorder()
+	ev, err := newSSEEvents(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycleCtx, cancelLifecycle := context.WithCancel(context.Background())
+	executed := false
+	observed := false
+	tool := tools.Tool{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "gated", Parameters: openrouter.Parameter{Type: "object"},
+		}},
+		NeedsApproval: true,
+		Execute: func(context.Context, string) (string, error) {
+			executed = true
+			return "ran", nil
+		},
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, _, err := tools.ExecuteWithApproval(
+			lifecycleCtx,
+			[]tools.Tool{tool},
+			openrouter.ToolCall{ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: "gated", Arguments: `{}`}},
+			srv.approver(context.Background(), ev),
+			func(context.Context, tools.Decision) error {
+				observed = true
+				return nil
+			},
+		)
+		result <- err
+	}()
+
+	id := pendingID(t, srv)
+	cancelLifecycle()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("lifecycle error = %v, want context.Canceled", err)
+	}
+	if observed || executed {
+		t.Fatalf("observed=%v executed=%v after lifecycle cancellation", observed, executed)
+	}
+	if res := postApprove(t, h, id, true); res.Code != http.StatusNotFound {
+		t.Fatalf("late approval status = %d, want 404 after lifecycle cancellation", res.Code)
 	}
 }

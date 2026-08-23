@@ -131,7 +131,25 @@ func openDBAt(path string) (*sql.DB, error) {
 	return openDBAtContext(context.Background(), path)
 }
 
+var hardenWritableDBFile = func(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
 func openDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := hardenWritableDBFile(path); err != nil {
+		return nil, fmt.Errorf("secure db: %w", err)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -146,10 +164,6 @@ func openDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
 	if err := ctx.Err(); err != nil {
 		db.Close()
 		return nil, err
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("secure db: %w", err)
 	}
 	return db, nil
 }

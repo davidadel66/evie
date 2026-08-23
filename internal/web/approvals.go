@@ -46,8 +46,8 @@ func (s *Server) expirePending(id string) bool {
 // approver builds the per-turn gate handed to Send: emit the request on
 // this turn's stream, then block until the browser answers or the
 // request dies. This is the pause the REPL gets from scanner.Scan().
-func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
-	return func(_ context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
+func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Approver {
+	return func(lifecycleCtx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
 
 		ev.ApprovalRequest(id, name, args, preview)
@@ -58,12 +58,24 @@ func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
 				return tools.Approved
 			}
 			return tools.Declined
-		case <-ctx.Done():
+		case <-visibilityCtx.Done():
 			if s.expirePending(id) {
 				return tools.Expired
 			}
 			// A POST removed the entry first under the same lock. Honor that
 			// already-claimed decision even though the disconnect is now visible.
+			approved := <-ch
+			if approved {
+				return tools.Approved
+			}
+			return tools.Declined
+		case <-lifecycleCtx.Done():
+			if s.expirePending(id) {
+				return tools.Expired
+			}
+			// A POST claimed the approval first. Return its decision; the
+			// dispatcher resamples lifecycleCtx and still reports cancellation
+			// before observation or execution.
 			approved := <-ch
 			if approved {
 				return tools.Approved
