@@ -33,14 +33,17 @@ func (s *Server) newPending() (string, chan bool) {
 	return id, ch
 }
 
-func (s *Server) expirePending(id string) bool {
+// claimPending is the single first-claimant transition shared by approval POST,
+// visibility loss, and lifecycle cancellation.
+func (s *Server) claimPending(id string) (chan bool, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.pending[id]; !ok {
-		return false
+	ch, ok := s.pending[id]
+	if !ok {
+		return nil, false
 	}
 	delete(s.pending, id)
-	return true
+	return ch, true
 }
 
 // approver builds the per-turn gate handed to Send: emit the request on
@@ -59,7 +62,7 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 			}
 			return tools.Declined
 		case <-visibilityCtx.Done():
-			if s.expirePending(id) {
+			if _, ok := s.claimPending(id); ok {
 				return tools.Expired
 			}
 			// A POST removed the entry first under the same lock. Honor that
@@ -70,7 +73,7 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 			}
 			return tools.Declined
 		case <-lifecycleCtx.Done():
-			if s.expirePending(id) {
+			if _, ok := s.claimPending(id); ok {
 				return tools.Expired
 			}
 			// A POST claimed the approval first. Return its decision; the
@@ -99,12 +102,7 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	ch, ok := s.pending[req.ID]
-	if ok {
-		delete(s.pending, req.ID)
-	}
-	s.mu.Unlock()
+	ch, ok := s.claimPending(req.ID)
 
 	if !ok {
 		jsonError(w, http.StatusNotFound, "unknown or expired approval id")

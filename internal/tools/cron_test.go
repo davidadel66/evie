@@ -136,7 +136,30 @@ func TestCronRemoveCancellationAfterMutationCompletesConsistencyCleanup(t *testi
 	}
 }
 
-func TestCronRemoveFailingUninstallPreservesRow(t *testing.T) {
+func TestCronRemoveCancellationPreservesRowWhenUninstallFails(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('cancel-uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	original := uninstallJob
+	t.Cleanup(func() { uninstallJob = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	uninstallErr := errors.New("launchd reconciliation failed")
+	uninstallJob = func(context.Context, string, string) error {
+		cancel()
+		return uninstallErr
+	}
+
+	_, err := cronRemove(ctx, `{"name":"cancel-uncertain-remove"}`)
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, uninstallErr) {
+		t.Fatalf("cronRemove error = %v, want cancellation joined with uninstall failure", err)
+	}
+	if got := jobCount(t, db); got != 1 {
+		t.Fatalf("jobs after cancellation cleanup failure = %d, want durable correlation preserved", got)
+	}
+}
+
+func TestCronRemoveOrdinaryUninstallFailureStillDeletesRow(t *testing.T) {
 	db := newCronDB(t)
 	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
 		t.Fatal(err)
@@ -147,11 +170,34 @@ func TestCronRemoveFailingUninstallPreservesRow(t *testing.T) {
 	uninstallJob = func(context.Context, string, string) error { return uninstallErr }
 
 	_, err := cronRemove(context.Background(), `{"name":"uncertain-remove"}`)
-	if !errors.Is(err, uninstallErr) {
-		t.Fatalf("cronRemove error = %v, want uninstall failure", err)
+	if err != nil {
+		t.Fatalf("cronRemove ordinary uninstall error = %v, want ignored", err)
 	}
-	if got := jobCount(t, db); got != 1 {
-		t.Fatalf("jobs after failed uninstall = %d, want durable correlation preserved", got)
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after ordinary failed uninstall = %d, want row deleted", got)
+	}
+}
+
+func TestCronCleanupContextIsIndependentAndBounded(t *testing.T) {
+	type parentKey struct{}
+	parent, cancelParent := context.WithCancel(context.WithValue(context.Background(), parentKey{}, "parent"))
+	cancelParent()
+
+	cleanupCtx, cancelCleanup := newCronCleanupContext(parent)
+	defer cancelCleanup()
+	deadline, ok := cleanupCtx.Deadline()
+	if !ok {
+		t.Fatal("cleanup context has no deadline")
+	}
+	if err := cleanupCtx.Err(); err != nil {
+		t.Fatalf("cleanup context inherited parent cancellation: %v", err)
+	}
+	if got := cleanupCtx.Value(parentKey{}); got != nil {
+		t.Fatalf("cleanup context inherited parent value %v", got)
+	}
+	remaining := time.Until(deadline)
+	if remaining <= cronCleanupTimeout-time.Second || remaining > cronCleanupTimeout {
+		t.Fatalf("cleanup deadline remaining = %s, want approximately %s", remaining, cronCleanupTimeout)
 	}
 }
 
@@ -694,10 +740,19 @@ func TestCronAdd(t *testing.T) {
 	t.Run("an install failure rolls the row back", func(t *testing.T) {
 		db := newCronDB(t)
 		original := installJob
+		originalUninstall := uninstallJob
 		installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 			return &installBootError{}
 		}
-		t.Cleanup(func() { installJob = original })
+		uninstallCalls := 0
+		uninstallJob = func(context.Context, string, string) error {
+			uninstallCalls++
+			return nil
+		}
+		t.Cleanup(func() {
+			installJob = original
+			uninstallJob = originalUninstall
+		})
 
 		out, err := runCronTool(t, "cron_add", map[string]any{
 			"name": "doomed", "schedule": "0 9 * * *", "command": "true",
@@ -711,6 +766,9 @@ func TestCronAdd(t *testing.T) {
 		// No half-registered jobs: the row must be deleted again.
 		if n := jobCount(t, db); n != 0 {
 			t.Errorf("%d rows survived a failed install, want 0", n)
+		}
+		if uninstallCalls != 0 {
+			t.Fatalf("ordinary install failure invoked reconciliation %d times", uninstallCalls)
 		}
 	})
 

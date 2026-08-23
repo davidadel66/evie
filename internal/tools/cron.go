@@ -27,6 +27,16 @@ import (
 // simplify the expression instead.
 const maxCalendarDicts = 100
 
+const cronCleanupTimeout = 10 * time.Second
+
+// newCronCleanupContext deliberately detaches from the turn. Once a cron
+// consistency sequence has mutated state, it gets one bounded chance to finish
+// even if the parent is cancelled. The parent parameter documents that
+// detachment at each call site.
+func newCronCleanupContext(context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), cronCleanupTimeout)
+}
+
 // calendarDict is one StartCalendarInterval entry. Nil means the field
 // was "*" — omitted from the plist, which launchd treats as a wildcard
 // ("Missing arguments are considered to be wildcard", launchd.plist(5)).
@@ -309,18 +319,16 @@ var installJob = func(ctx context.Context, label, plistPath string, plist []byte
 	return nil
 }
 
-// uninstallJob unloads a job from launchd and deletes its plist. A missing
-// launchd job or plist remains success; context and other plist-removal errors
-// are returned so cancellation compensation can preserve the database row.
+// uninstallJob unloads a job from launchd and deletes its plist. All errors are
+// tolerated, preserving the completed cron contract; injected test seams can
+// still return errors so cancellation cleanup can expose uncertainty.
 var uninstallJob = func(ctx context.Context, label, plistPath string) error {
 	uid := strconv.Itoa(os.Getuid())
 	_ = exec.CommandContext(ctx, "launchctl", "bootout", "gui/"+uid+"/"+label).Run()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove plist: %w", err)
-	}
+	_ = os.Remove(plistPath)
 	return nil
 }
 
@@ -437,7 +445,7 @@ func cronAdd(ctx context.Context, args string) (string, error) {
 		return primary
 	}
 	cleanupRowBounded := func(primary error) error {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := newCronCleanupContext(ctx)
 		defer cancel()
 		return cleanupRow(cleanupCtx, primary)
 	}
@@ -445,21 +453,23 @@ func cronAdd(ctx context.Context, args string) (string, error) {
 		return "", cleanupRowBounded(err)
 	}
 
-	// No half-registered jobs: after a launchd registration failure, reconcile
-	// the possibly-applied effect before removing the row. If reconciliation or
-	// row rollback also fails, preserve the durable correlation and carry every
-	// error so David can recover it explicitly.
+	// No half-registered jobs: ordinary install failure keeps the completed cron
+	// behavior — installJob owns plist cleanup and this function rolls back the
+	// row. Parent cancellation is different because bootstrap may have applied
+	// before CommandContext reported cancellation, so that path reconciles under
+	// the approved independent cleanup bound.
 	if err := installJob(ctx, cronLabel(params.Name), plistPath, plistFor(cronLabel(params.Name), id, binPath, dicts)); err != nil {
 		primary := fmt.Errorf("register with launchd: %w", err)
-		if ctx.Err() != nil {
-			primary = ctx.Err()
+		if ctx.Err() == nil {
+			return "", cleanupRow(ctx, primary)
 		}
+		primary = ctx.Err()
 
 		// Bootstrap may have taken effect before returning an error or parent
 		// cancellation. Reconcile launchd under the approved cleanup bound
 		// before deleting the row. If reconciliation fails, retain the row as
 		// the only durable correlation to a potentially live launchd job.
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := newCronCleanupContext(ctx)
 		defer cancel()
 		if uninstallErr := uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath); uninstallErr != nil {
 			return "", errors.Join(primary, fmt.Errorf(
@@ -592,19 +602,22 @@ func cronRemove(ctx context.Context, args string) (string, error) {
 	// Unloading and deleting are one existing consistency sequence. Once the
 	// first mutation starts, finish both under the approved bounded cleanup
 	// context even if the parent is cancelled in between.
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	cleanupCtx, cancel := newCronCleanupContext(ctx)
 	defer cancel()
 	uninstallErr := uninstallJob(cleanupCtx, cronLabel(params.Name), plistPath)
-	if uninstallErr != nil {
+	if uninstallErr != nil && ctx.Err() != nil {
 		cleanupErr := fmt.Errorf(
 			"could not reconcile launchd job %q; database row %d was preserved: %w",
 			params.Name, id, uninstallErr)
-		if ctx.Err() != nil {
-			return "", errors.Join(ctx.Err(), cleanupErr)
-		}
-		return "", cleanupErr
+		return "", errors.Join(ctx.Err(), cleanupErr)
 	}
-	_, deleteErr := db.ExecContext(cleanupCtx, `DELETE FROM jobs WHERE id = ?`, id)
+	deleteCtx := cleanupCtx
+	if ctx.Err() == nil {
+		// Preserve the completed cron behavior for an ordinary remove: ignore
+		// uninstall errors and delete the row under the still-live caller.
+		deleteCtx = ctx
+	}
+	_, deleteErr := db.ExecContext(deleteCtx, `DELETE FROM jobs WHERE id = ?`, id)
 	if ctx.Err() != nil {
 		if deleteErr != nil {
 			return "", errors.Join(ctx.Err(), fmt.Errorf("delete job during cancellation cleanup: %w", deleteErr))
