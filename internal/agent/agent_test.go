@@ -36,6 +36,9 @@ type fakeHistory struct {
 	appendAttempts int
 	appendErrAt    int
 	appendErr      error
+	eventsErr      error
+	afterAppend    func(memory.EventInput)
+	onEvents       func()
 }
 
 func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
@@ -56,11 +59,17 @@ func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory
 		FormatVersion: 1,
 	}
 	f.events = append(f.events, event)
+	if f.afterAppend != nil {
+		f.afterAppend(input)
+	}
 	return event, nil
 }
 
 func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
-	return append([]memory.Event(nil), f.events...), nil
+	if f.onEvents != nil {
+		f.onEvents()
+	}
+	return append([]memory.Event(nil), f.events...), f.eventsErr
 }
 
 func newTestSession(client Client, model string) *Session {
@@ -143,7 +152,7 @@ func TestSendPersistsAssistantBeforeToolExecution(t *testing.T) {
 	history := &fakeHistory{}
 	intentWasDurable := false
 	tool := echoTool("echo", false, nil)
-	tool.Execute = func(args string) (string, error) {
+	tool.Execute = func(_ context.Context, args string) (string, error) {
 		if len(history.events) != 3 || history.events[1].Type != memory.EventAssistantMessage ||
 			history.events[2].Type != memory.EventToolIntent ||
 			history.events[2].ParentID != history.events[1].ID || history.events[2].ExecutionID == "" {
@@ -233,6 +242,215 @@ func TestSendStopsWhenToolIntentAppendFails(t *testing.T) {
 	}
 }
 
+func TestSendParentCancellationDuringToolStopsLaterToolsAndProviderIterations(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	first := echoTool("cancel-turn", false, nil)
+	first.Execute = func(ctx context.Context, _ string) (string, error) {
+		cancel()
+		return "", ctx.Err()
+	}
+	secondRan := false
+	second := echoTool("must-not-run", false, &secondRan)
+	c := &fakeClient{steps: []step{
+		assistantStep("", nil,
+			toolCall("call-1", "cancel-turn", `{}`),
+			toolCall("call-2", "must-not-run", `{}`)),
+		assistantStep("must not be requested", nil),
+	}}
+	s := newTestSession(c, "test-model")
+
+	err := s.Send(ctx, "go", &recorder{}, nil, first, second)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled", err)
+	}
+	if secondRan {
+		t.Fatal("later tool executed after parent cancellation")
+	}
+	if len(c.reqs) != 1 {
+		t.Fatalf("provider requests = %d, want exactly the initial iteration", len(c.reqs))
+	}
+}
+
+func TestSendParentCancellationDuringProviderDiscardsResponse(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ran := false
+	c := &fakeClient{steps: []step{
+		assistantStep("late", nil, toolCall("call-1", "must-not-run", `{}`)),
+	}}
+	c.onCall = cancel
+	s := newTestSession(c, "test-model")
+
+	err := s.Send(ctx, "go", &recorder{}, nil, echoTool("must-not-run", false, &ran))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled", err)
+	}
+	if ran {
+		t.Fatal("tool executed from provider response returned after cancellation")
+	}
+}
+
+func TestSendCancellationDuringHistoryLoadPreventsProvider(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	history := &fakeHistory{
+		eventsErr: errors.New("competing history error"),
+		onEvents:  cancel,
+	}
+	client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
+	s := New(client, "test-model", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	})
+
+	err := s.Send(ctx, "go", &recorder{}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled", err)
+	}
+	if len(client.reqs) != 0 {
+		t.Fatalf("provider requests = %d after history cancellation", len(client.reqs))
+	}
+}
+
+func TestSendParentCancellationWinsOverCompetingProviderError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &fakeClient{
+		steps:  []step{{err: errors.New("competing provider error")}},
+		onCall: cancel,
+	}
+	s := newTestSession(client, "test-model")
+
+	err := s.Send(ctx, "go", &recorder{}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error = %v, want context.Canceled instead of provider error", err)
+	}
+}
+
+func TestSendCancellationAtFinalAssistantBoundariesCannotReportSuccess(t *testing.T) {
+	t.Run("assistant append", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		history := &fakeHistory{afterAppend: func(input memory.EventInput) {
+			if input.Type == memory.EventAssistantMessage {
+				cancel()
+			}
+		}}
+		client := &fakeClient{steps: []step{assistantStep("late final", nil)}}
+		events := &recorder{}
+		s := New(client, "test-model", history, memory.ScopeContext{
+			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+		})
+
+		err := s.Send(ctx, "go", events, nil)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Send error = %v, want context.Canceled", err)
+		}
+		if len(events.events) != 0 {
+			t.Fatalf("events after cancellation during assistant append = %v", events.events)
+		}
+	})
+
+	t.Run("AssistantDone callback", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &fakeClient{steps: []step{assistantStep("late final", nil)}}
+		events := &recorder{onAssistantDone: cancel}
+		s := newTestSession(client, "test-model")
+
+		err := s.Send(ctx, "go", events, nil)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Send error = %v, want context.Canceled", err)
+		}
+		if len(client.reqs) != 1 {
+			t.Fatalf("provider requests = %d, want one", len(client.reqs))
+		}
+	})
+}
+
+func TestSendCancellationAtToolIntentAndOutcomeBoundariesStopsLaterPhases(t *testing.T) {
+	t.Run("intent append", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		history := &fakeHistory{afterAppend: func(input memory.EventInput) {
+			if input.Type == memory.EventToolIntent {
+				cancel()
+			}
+		}}
+		client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("call-1", "echo", `{}`))}}
+		ran := false
+		events := &recorder{}
+		s := New(client, "test-model", history, memory.ScopeContext{
+			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+		})
+
+		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, &ran))
+		if !errors.Is(err, context.Canceled) || ran {
+			t.Fatalf("Send error = %v, tool ran = %v", err, ran)
+		}
+		for _, event := range events.events {
+			if strings.HasPrefix(event, "call:") {
+				t.Fatalf("ToolCall emitted after intent cancellation: %v", events.events)
+			}
+		}
+	})
+
+	t.Run("ToolCall callback", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("call-1", "echo", `{}`))}}
+		ran := false
+		events := &recorder{onToolCall: cancel}
+		s := newTestSession(client, "test-model")
+
+		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, &ran))
+		if !errors.Is(err, context.Canceled) || ran {
+			t.Fatalf("Send error = %v, tool ran = %v", err, ran)
+		}
+	})
+
+	t.Run("outcome append", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		history := &fakeHistory{afterAppend: func(input memory.EventInput) {
+			if input.Type == memory.EventToolSucceeded {
+				cancel()
+			}
+		}}
+		client := &fakeClient{steps: []step{
+			assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
+			assistantStep("must not run", nil),
+		}}
+		ran := false
+		events := &recorder{}
+		s := New(client, "test-model", history, memory.ScopeContext{
+			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+		})
+
+		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, &ran))
+		if !errors.Is(err, context.Canceled) || !ran {
+			t.Fatalf("Send error = %v, tool ran = %v", err, ran)
+		}
+		if len(client.reqs) != 1 {
+			t.Fatalf("provider requests = %d after outcome cancellation", len(client.reqs))
+		}
+		for _, event := range events.events {
+			if strings.HasPrefix(event, "result:") {
+				t.Fatalf("ToolResult emitted after outcome cancellation: %v", events.events)
+			}
+		}
+	})
+
+	t.Run("ToolResult callback", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &fakeClient{steps: []step{
+			assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
+			assistantStep("must not run", nil),
+		}}
+		events := &recorder{onToolResult: cancel}
+		s := newTestSession(client, "test-model")
+
+		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, nil))
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Send error = %v, want context.Canceled", err)
+		}
+		if len(client.reqs) != 1 {
+			t.Fatalf("provider requests = %d after ToolResult cancellation", len(client.reqs))
+		}
+	})
+}
+
 func TestSendStopsWhenToolOutcomeAppendFails(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 4, appendErr: errors.New("disk full")}
 	ran := false
@@ -260,7 +478,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 	history := &fakeHistory{}
 	approvalWasDurable := false
 	tool := echoTool("dangerous", true, nil)
-	tool.Execute = func(args string) (string, error) {
+	tool.Execute = func(_ context.Context, args string) (string, error) {
 		if len(history.events) != 4 {
 			return "ran", nil
 		}
@@ -286,7 +504,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
 
@@ -308,7 +526,7 @@ func TestSendStopsWhenApprovalAppendFails(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
 
@@ -335,7 +553,7 @@ func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	})
-	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	deny := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Declined
 	}
 
@@ -369,18 +587,32 @@ func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
 // recorder flattens the event stream into strings so a test asserts order
 // and payload with one slice comparison.
 type recorder struct {
-	events []string
+	events          []string
+	onAssistantDone func()
+	onToolCall      func()
+	onToolResult    func()
 }
 
-func (r *recorder) Delta(text string)            { r.events = append(r.events, "delta:"+text) }
-func (r *recorder) Reasoning(text string)        { r.events = append(r.events, "reasoning:"+text) }
-func (r *recorder) ReasoningDone()               { r.events = append(r.events, "reasoningdone") }
-func (r *recorder) AssistantDone(content string) { r.events = append(r.events, "done:"+content) }
+func (r *recorder) Delta(text string)     { r.events = append(r.events, "delta:"+text) }
+func (r *recorder) Reasoning(text string) { r.events = append(r.events, "reasoning:"+text) }
+func (r *recorder) ReasoningDone()        { r.events = append(r.events, "reasoningdone") }
+func (r *recorder) AssistantDone(content string) {
+	r.events = append(r.events, "done:"+content)
+	if r.onAssistantDone != nil {
+		r.onAssistantDone()
+	}
+}
 func (r *recorder) ToolCall(id, name, args string) {
 	r.events = append(r.events, fmt.Sprintf("call:%s:%s:%s", id, name, args))
+	if r.onToolCall != nil {
+		r.onToolCall()
+	}
 }
 func (r *recorder) ToolResult(id, content string, isErr bool) {
 	r.events = append(r.events, fmt.Sprintf("result:%s:%v:%s", id, isErr, content))
+	if r.onToolResult != nil {
+		r.onToolResult()
+	}
 }
 
 func assistantStep(content string, deltas []string, calls ...openrouter.ToolCall) step {
@@ -412,7 +644,7 @@ func echoTool(name string, gated bool, ran *bool) tools.Tool {
 			Type:     "function",
 			Function: openrouter.Function{Name: name, Parameters: openrouter.Parameter{Type: "object"}},
 		},
-		Execute: func(args string) (string, error) {
+		Execute: func(_ context.Context, args string) (string, error) {
 			if ran != nil {
 				*ran = true
 			}
@@ -563,7 +795,9 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 		assistantStep("ok", nil),
 	}}
 	s := newTestSession(c, "test-model")
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Approved }
+	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Approved
+	}
 
 	if err := s.Send(context.Background(), "go", &recorder{}, approve, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -580,7 +814,9 @@ func TestGatedExtraApprovedAndDeclined(t *testing.T) {
 	}}
 	s = newTestSession(c, "test-model")
 	rec := &recorder{}
-	deny := func(name, args string, _ *tools.FileChangePreview) tools.Decision { return tools.Declined }
+	deny := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
+		return tools.Declined
+	}
 
 	if err := s.Send(context.Background(), "go", rec, deny, echoTool("danger", true, &ran)); err != nil {
 		t.Fatalf("Send: %v", err)

@@ -26,7 +26,7 @@ type youtubeService interface {
 }
 
 var (
-	openYouTubeDB     = youtube.OpenDB
+	openYouTubeDB     = youtube.OpenDBContext
 	newYouTubeService = func(db *sql.DB) youtubeService {
 		return youtube.NewService(db, youtube.NewClient(nil))
 	}
@@ -70,7 +70,7 @@ var youtubeScrapeChannelTool = openrouter.Tool{
 	},
 }
 
-func youtubeTranscript(args string) (string, error) {
+func youtubeTranscript(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Video    string `json:"video"`
 		Language string `json:"language"`
@@ -86,12 +86,12 @@ func youtubeTranscript(args string) (string, error) {
 		params.Language = "en"
 	}
 
-	db, err := openYouTubeDB()
+	db, err := openYouTubeDB(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open transcript database: %w", err)
 	}
 	defer db.Close()
-	result, err := newYouTubeService(db).Fetch(context.Background(), params.Video, params.Language, params.Refresh)
+	result, err := newYouTubeService(db).Fetch(ctx, params.Video, params.Language, params.Refresh)
 	if err != nil {
 		return "", err
 	}
@@ -105,10 +105,10 @@ func youtubeTranscript(args string) (string, error) {
 		result.ChannelID, result.ChannelName, result.ChannelHandle, result.ChannelURL,
 		result.LanguageCode, result.LanguageName, result.TranscriptSource, result.WordCount,
 		result.RetrievedAt, result.Text)
-	return renderYouTubeToolOutput(payload, true), nil
+	return renderYouTubeToolOutput(ctx, payload, true)
 }
 
-func youtubeScrapeChannel(args string) (string, error) {
+func youtubeScrapeChannel(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Channel  string `json:"channel"`
 		Language string `json:"language"`
@@ -128,12 +128,12 @@ func youtubeScrapeChannel(args string) (string, error) {
 		limit = max(1, min(*params.Limit, 50))
 	}
 
-	db, err := openYouTubeDB()
+	db, err := openYouTubeDB(ctx)
 	if err != nil {
 		return "", fmt.Errorf("open transcript database: %w", err)
 	}
 	defer db.Close()
-	result, err := newYouTubeService(db).Scrape(context.Background(), params.Channel, youtube.ScrapeOptions{
+	result, err := newYouTubeService(db).Scrape(ctx, params.Channel, youtube.ScrapeOptions{
 		Language: params.Language,
 		Limit:    limit,
 		Delay:    1500 * time.Millisecond,
@@ -149,18 +149,21 @@ func youtubeScrapeChannel(args string) (string, error) {
 	for _, failure := range result.Failures {
 		fmt.Fprintf(&payload, "Failure: %s | %s | %v\n", failure.VideoID, failure.Title, failure.Err)
 	}
-	return renderYouTubeToolOutput(strings.TrimSuffix(payload.String(), "\n"), false), nil
+	return renderYouTubeToolOutput(ctx, strings.TrimSuffix(payload.String(), "\n"), false)
 }
 
-func renderYouTubeToolOutput(payload string, capOutput bool) string {
+func renderYouTubeToolOutput(ctx context.Context, payload string, capOutput bool) (string, error) {
 	escaped := escapeFrameDelimiters(payload, youtubeFrameBegin, youtubeFrameEnd)
 	begin, end := collisionSafeFrame(escaped, youtubeFrameBegin, youtubeFrameEnd)
 	full := begin + "\n" + escaped + "\n" + end
 	if !capOutput || len(full) <= maxYouTubeToolOutput {
-		return full
+		return full, nil
 	}
 
 	note := "\n\n[output trimmed; narrow the request]"
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if file, err := os.CreateTemp("", "evie-youtube-transcript-*.txt"); err == nil {
 		name := file.Name()
 		writeErr := file.Chmod(0o600)
@@ -180,7 +183,7 @@ func renderYouTubeToolOutput(payload string, capOutput bool) string {
 		budget = 0
 	}
 	cut := utf8SafeCut(escaped, budget)
-	return begin + "\n" + escaped[:cut] + note + "\n" + end
+	return begin + "\n" + escaped[:cut] + note + "\n" + end, nil
 }
 
 func escapeFrameDelimiters(data string, begin, end string) string {

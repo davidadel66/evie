@@ -1,18 +1,21 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunBash(t *testing.T) {
 	call := func(params map[string]any) (string, error) {
 		args, _ := json.Marshal(params)
-		return runBash(string(args))
+		return runBash(context.Background(), string(args))
 	}
 
 	t.Run("returns stdout and a zero exit status", func(t *testing.T) {
@@ -214,10 +217,52 @@ func TestRunBash(t *testing.T) {
 	})
 
 	t.Run("malformed arguments error", func(t *testing.T) {
-		if _, err := runBash("not json"); err == nil {
+		if _, err := runBash(context.Background(), "not json"); err == nil {
 			t.Fatal("runBash succeeded on malformed arguments")
 		}
 	})
+}
+
+func TestRunBashParentCancellationKillsCommand(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sentinel := filepath.Join(t.TempDir(), "started")
+	args, err := json.Marshal(map[string]any{
+		"command":         fmt.Sprintf("printf started > %s; sleep 30", shellQuote(sentinel)),
+		"timeout_seconds": 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := runBash(ctx, string(args))
+		done <- err
+	}()
+	deadline := time.Now().Add(4 * time.Second)
+	for {
+		if _, err := os.Stat(sentinel); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat child sentinel: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("bash child did not create its start sentinel")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	started := time.Now()
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("error = %v, want context.Canceled", err)
+		}
+		if time.Since(started) > 3*time.Second {
+			t.Fatalf("cancellation took %s", time.Since(started))
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("bash command did not stop after parent cancellation")
+	}
 }
 
 // resetSessionCwd clears the persistent working directory so a subtest

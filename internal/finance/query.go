@@ -1,6 +1,7 @@
 package finance
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -9,8 +10,8 @@ import (
 // names plus rows of stringified values. Shape is discovered at
 // runtime because callers write free-form SQL — aggregates and joins
 // don't map to any fixed struct.
-func Query(db *sql.DB, query string) (columns []string, rows [][]string, err error) {
-	res, err := db.Query(query)
+func Query(ctx context.Context, db *sql.DB, query string) (columns []string, rows [][]string, err error) {
+	res, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, fmt.Errorf("run query: %w", err)
 	}

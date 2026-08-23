@@ -178,6 +178,9 @@ func (s *Service) Scrape(ctx context.Context, input string, opts ScrapeOptions) 
 		attempts++
 		_, err := s.fetchRemote(ctx, video.VideoID, language, false, false)
 		if err != nil {
+			if ctx.Err() != nil {
+				return result, fmt.Errorf("scrape YouTube channel: %w", ctx.Err())
+			}
 			var databaseErr *serviceDatabaseError
 			if errors.As(err, &databaseErr) {
 				return result, err
@@ -375,6 +378,9 @@ func (s *Service) saveListing(ctx context.Context, page channelPage) error {
 			listed.VideoID, channelID, listed.Title, canonicalVideoURL(listed.VideoID), now, now); err != nil {
 			return databaseError("upsert listed YouTube video "+listed.VideoID, err)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return databaseError("commit YouTube channel listing save", err)

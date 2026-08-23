@@ -127,7 +127,7 @@ func startDir(explicit string) (string, error) {
 // itself, and returning an error would bury both behind the dispatcher's
 // wrapper. Go errors are reserved for "could not run it at all" — bad
 // arguments, an unusable cwd, or a timeout.
-func runBash(args string) (string, error) {
+func runBash(parent context.Context, args string) (string, error) {
 	var params struct {
 		Command string `json:"command"`
 		Cwd     string `json:"cwd"`
@@ -153,6 +153,9 @@ func runBash(args string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
 
 	// The shell reports where it ended up through a temp file rather than
 	// through stdout, so a `cd` is observable without polluting the output
@@ -170,7 +173,7 @@ func runBash(args string) (string, error) {
 	// status is captured first and re-raised last, so recording the
 	// directory never changes what the model sees.
 	var script strings.Builder
-	if snap := snapshot(); snap != "" {
+	if snap := snapshot(parent); snap != "" {
 		// `|| true` so a snapshot deleted mid-session degrades to a plain
 		// shell instead of failing the command.
 		fmt.Fprintf(&script, "source %s 2>/dev/null || true\n", shellQuote(snap))
@@ -184,7 +187,10 @@ func runBash(args string) (string, error) {
 	fmt.Fprintf(&script, "__evie_status=$?\npwd -P > %s 2>/dev/null\nexit $__evie_status\n",
 		shellQuote(pwdPath))
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, shellPath(), "-l", "-c", script.String())
@@ -202,10 +208,14 @@ func runBash(args string) (string, error) {
 	// streams would put every error after every line of normal output.
 	out, err := cmd.CombinedOutput()
 
-	rememberCwd(pwdPath)
-
 	// Checked before the error: a timed-out command still produced whatever
 	// it wrote before the kill, and that output is usually the diagnosis.
+	if parent.Err() != nil {
+		return "", parent.Err()
+	}
+
+	rememberCwd(pwdPath)
+
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("command timed out after %s and was killed. Partial output:\n%s", timeout, out)
 	}

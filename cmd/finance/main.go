@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -53,7 +54,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		res, err := finance.Sync(db)
+		res, err := finance.Sync(context.Background(), db)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -84,7 +85,7 @@ func main() {
 			log.Fatal(err)
 		}
 		rulesPath := filepath.Join(home, ".finance", "merchantLookup.json")
-		if err := finance.RulesSeed(db, rulesPath); err != nil {
+		if err := finance.RulesSeed(context.Background(), db, rulesPath); err != nil {
 			log.Fatal(err)
 		}
 		fmt.Printf("Seeded rules from %s\n", rulesPath)
@@ -94,7 +95,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer db.Close()
-		matched, unmatched, err := finance.Categorize(db)
+		matched, unmatched, err := finance.Categorize(context.Background(), db)
 		if err != nil {
 			log.Fatal(err)
 		}

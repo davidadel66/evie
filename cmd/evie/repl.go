@@ -303,13 +303,20 @@ func (r *replEvents) ToolResult(id, content string, isErr bool) {}
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
 // print and return to the prompt rather than killing the session.
 func runREPL(session *agent.Session, scanner *bufio.Scanner) {
+	runREPLContext(context.Background(), session, scanner)
+}
+
+func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.Scanner) {
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
-	approve := func(name, args string, _ *tools.FileChangePreview) tools.Decision {
+	approve := func(approvalCtx context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		fmt.Printf("\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
 		if !scanner.Scan() {
 			return tools.Declined
+		}
+		if approvalCtx.Err() != nil {
+			return tools.Expired
 		}
 		answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
 		if answer == "y" || answer == "yes" {
@@ -320,11 +327,17 @@ func runREPL(session *agent.Session, scanner *bufio.Scanner) {
 
 	ev := &replEvents{}
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		fmt.Print("< ")
 		if !scanner.Scan() {
 			break
 		}
-		if err := session.Send(context.Background(), scanner.Text(), ev, approve); err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := session.Send(ctx, scanner.Text(), ev, approve); err != nil {
 			fmt.Printf("request failed: %v\n", err)
 		}
 	}

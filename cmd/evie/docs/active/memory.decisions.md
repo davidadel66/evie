@@ -231,6 +231,17 @@
   continue. A stronger recovery policy is deferred until observed workflows show
   that it is necessary.
 
+- **2026-08-23 - uncertain cron cancellation cleanup preserves the jobs row.**
+  When parent cancellation is observed after a cron mutation starts, cleanup gets
+  one independent 10-second attempt. If cleanup cannot establish both that
+  launchd accepted the bootout and that the plist is absent, EVIE preserves the
+  `jobs` row as the durable recovery handle and returns parent cancellation joined
+  with the cleanup error. `cron_list` therefore continues to expose the uncertain
+  job, and a later ordinary `cron_remove` retries cleanup and then removes the row.
+  This is a cancellation-only exception to the completed cron contract; ordinary
+  add failures still roll back their row, and ordinary remove still ignores
+  uninstall errors and deletes its row.
+
 - **Open - extraction and embedding implementations.**
   Stage 4 must select a local extraction model and structured-output protocol.
   Stage 5 must select the embedding model and vector index from measured spikes.

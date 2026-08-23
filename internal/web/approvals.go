@@ -33,19 +33,25 @@ func (s *Server) newPending() (string, chan bool) {
 	return id, ch
 }
 
-func (s *Server) dropPending(id string) {
+// claimPending is the single first-claimant transition shared by approval POST,
+// visibility loss, and lifecycle cancellation.
+func (s *Server) claimPending(id string) (chan bool, bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	ch, ok := s.pending[id]
+	if !ok {
+		return nil, false
+	}
 	delete(s.pending, id)
-	s.mu.Unlock()
+	return ch, true
 }
 
 // approver builds the per-turn gate handed to Send: emit the request on
 // this turn's stream, then block until the browser answers or the
 // request dies. This is the pause the REPL gets from scanner.Scan().
-func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
-	return func(name, args string, preview *tools.FileChangePreview) tools.Decision {
+func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Approver {
+	return func(lifecycleCtx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
 		id, ch := s.newPending()
-		defer s.dropPending(id)
 
 		ev.ApprovalRequest(id, name, args, preview)
 
@@ -55,8 +61,29 @@ func (s *Server) approver(ctx context.Context, ev *sseEvents) tools.Approver {
 				return tools.Approved
 			}
 			return tools.Declined
-		case <-ctx.Done():
-			return tools.Expired
+		case <-visibilityCtx.Done():
+			if _, ok := s.claimPending(id); ok {
+				return tools.Expired
+			}
+			// A POST removed the entry first under the same lock. Honor that
+			// already-claimed decision even though the disconnect is now visible.
+			approved := <-ch
+			if approved {
+				return tools.Approved
+			}
+			return tools.Declined
+		case <-lifecycleCtx.Done():
+			if _, ok := s.claimPending(id); ok {
+				return tools.Expired
+			}
+			// A POST claimed the approval first. Return its decision; the
+			// dispatcher resamples lifecycleCtx and still reports cancellation
+			// before observation or execution.
+			approved := <-ch
+			if approved {
+				return tools.Approved
+			}
+			return tools.Declined
 		}
 	}
 }
@@ -75,12 +102,7 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	ch, ok := s.pending[req.ID]
-	if ok {
-		delete(s.pending, req.ID)
-	}
-	s.mu.Unlock()
+	ch, ok := s.claimPending(req.ID)
 
 	if !ok {
 		jsonError(w, http.StatusNotFound, "unknown or expired approval id")

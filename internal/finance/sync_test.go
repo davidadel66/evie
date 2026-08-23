@@ -3,14 +3,69 @@ package finance
 // Tests for applySyncPage, written from SPEC.md before the implementation
 // exists (red -> green). Contract under test:
 //
-//	func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error
+//	func applySyncPage(context.Background(), db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error
 //	func openDBAt(path string) (*sql.DB, error)
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/plaid/plaid-go/v43/plaid"
 )
+
+func TestSyncParentCancellationStopsLaterBanksAndRetries(t *testing.T) {
+	db := newTestDB(t)
+	for _, id := range []string{"item-1", "item-2"} {
+		if _, err := db.Exec(`INSERT INTO items (item_id, access_token, cursor, institution, linked_at) VALUES (?, 'token', '', 'Bank', 'now')`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PLAID_CLIENT_ID", "test")
+	t.Setenv("PLAID_SECRET", "test")
+	original := runSyncItem
+	t.Cleanup(func() { runSyncItem = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	runSyncItem = func(context.Context, *plaid.APIClient, *sql.DB, syncItem) (int, int, int, error) {
+		calls++
+		cancel()
+		return 0, 0, 0, context.Canceled
+	}
+	_, err := Sync(ctx, db)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Sync error = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Fatalf("bank attempts = %d, cancellation must stop later banks and retry", calls)
+	}
+}
+
+func TestOpenDBAtContextCancellationAfterFileCreationLeavesMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled-after-create.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	original := hardenWritableDBFile
+	hardenWritableDBFile = func(path string) error {
+		err := original(path)
+		cancel()
+		return err
+	}
+	t.Cleanup(func() { hardenWritableDBFile = original })
+
+	if _, err := openDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("openDBAtContext error = %v, want context.Canceled", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("cancelled finance database mode = %04o, want 0600", got)
+	}
+}
 
 // newTestDB opens a fresh temp database and registers cleanup.
 func newTestDB(t *testing.T) *sql.DB {
@@ -89,7 +144,7 @@ func TestApplySyncPage_AddedCentsConversion(t *testing.T) {
 	for i, c := range cases {
 		added[i] = txn("txn-cents-"+c.name, c.dollars)
 	}
-	if err := applySyncPage(db, "item-1", added, nil, nil, "cursor-1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", added, nil, nil, "cursor-1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 
@@ -125,7 +180,7 @@ func TestApplySyncPage_AddedInsertsFields(t *testing.T) {
 		Category:      "GROCERIES",
 		Pending:       false,
 	}
-	if err := applySyncPage(db, "item-1", []SyncTxn{in}, nil, nil, "cursor-1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{in}, nil, nil, "cursor-1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 
@@ -171,7 +226,7 @@ func TestApplySyncPage_ModifiedUpserts(t *testing.T) {
 
 	orig := txn("txn-mod", 10.00)
 	orig.Pending = true
-	if err := applySyncPage(db, "item-1", []SyncTxn{orig}, nil, nil, "cursor-1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{orig}, nil, nil, "cursor-1"); err != nil {
 		t.Fatalf("applySyncPage (added): %v", err)
 	}
 
@@ -180,7 +235,7 @@ func TestApplySyncPage_ModifiedUpserts(t *testing.T) {
 	changed.Name = "Coffee Shop (posted)"
 	changed.Category = "FOOD_AND_DRINK_COFFEE"
 	changed.Pending = false
-	if err := applySyncPage(db, "item-1", nil, []SyncTxn{changed}, nil, "cursor-2"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, []SyncTxn{changed}, nil, "cursor-2"); err != nil {
 		t.Fatalf("applySyncPage (modified): %v", err)
 	}
 
@@ -220,11 +275,11 @@ func TestApplySyncPage_Removed(t *testing.T) {
 	insertItem(t, db, "item-1")
 
 	added := []SyncTxn{txn("txn-keep", 1.00), txn("txn-drop", 2.00)}
-	if err := applySyncPage(db, "item-1", added, nil, nil, "cursor-1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", added, nil, nil, "cursor-1"); err != nil {
 		t.Fatalf("applySyncPage (added): %v", err)
 	}
 
-	if err := applySyncPage(db, "item-1", nil, nil, []string{"txn-drop", "txn-never-existed"}, "cursor-2"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, nil, []string{"txn-drop", "txn-never-existed"}, "cursor-2"); err != nil {
 		t.Fatalf("applySyncPage (removed) returned error, want nil even with nonexistent ID: %v", err)
 	}
 
@@ -250,7 +305,7 @@ func TestApplySyncPage_CursorPersisted(t *testing.T) {
 	insertItem(t, db, "item-1")
 	insertItem(t, db, "item-2")
 
-	if err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-c1", 5.00)}, nil, nil, "cursor-abc"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-c1", 5.00)}, nil, nil, "cursor-abc"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 	if got := getCursor(t, db, "item-1"); got != "cursor-abc" {
@@ -261,7 +316,7 @@ func TestApplySyncPage_CursorPersisted(t *testing.T) {
 	}
 
 	// Empty page still advances the cursor.
-	if err := applySyncPage(db, "item-1", nil, nil, nil, "cursor-def"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, nil, nil, "cursor-def"); err != nil {
 		t.Fatalf("applySyncPage (empty page): %v", err)
 	}
 	if got := getCursor(t, db, "item-1"); got != "cursor-def" {
@@ -280,7 +335,7 @@ func TestApplySyncPage_AtomicOnFailure(t *testing.T) {
 	insertItem(t, db, "item-1")
 
 	// Commit one good page so there is known state to preserve.
-	if err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-committed", 3.00)}, nil, nil, "cursor-committed"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-committed", 3.00)}, nil, nil, "cursor-committed"); err != nil {
 		t.Fatalf("applySyncPage (good page): %v", err)
 	}
 
@@ -291,7 +346,7 @@ BEGIN SELECT RAISE(ABORT, 'boom'); END;`); err != nil {
 	}
 
 	// The failing page: a valid insert plus a delete the trigger aborts.
-	err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-lost", 4.00)}, nil, []string{"txn-committed"}, "cursor-lost")
+	err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-lost", 4.00)}, nil, []string{"txn-committed"}, "cursor-lost")
 	if err == nil {
 		t.Fatal("applySyncPage returned nil, want error from aborted DELETE")
 	}
@@ -320,7 +375,7 @@ BEGIN SELECT RAISE(ABORT, 'boom'); END;`); err != nil {
 func TestApplySyncPage_MissingItemCursorErrors(t *testing.T) {
 	db := newTestDB(t)
 	// No item inserted; the page is txn-free so only the cursor UPDATE runs.
-	err := applySyncPage(db, "no-such-item", nil, nil, nil, "cursor-x")
+	err := applySyncPage(context.Background(), db, "no-such-item", nil, nil, nil, "cursor-x")
 	if err == nil {
 		t.Fatal("applySyncPage with unknown itemID returned nil, want error (cursor update matched 0 rows)")
 	}
@@ -337,7 +392,7 @@ func TestApplySyncPage_PendingRoundTrip(t *testing.T) {
 	postedTxn := txn("txn-posted", 2.00)
 	postedTxn.Pending = false
 
-	if err := applySyncPage(db, "item-1", []SyncTxn{pendingTxn, postedTxn}, nil, nil, "cursor-1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{pendingTxn, postedTxn}, nil, nil, "cursor-1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 

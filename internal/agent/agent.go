@@ -52,6 +52,9 @@ func (s *Session) requestMessages(
 	ctx context.Context,
 ) ([]openrouter.Message, error) {
 	events, err := s.history.Events(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load durable history: %w", err)
 	}
@@ -67,6 +70,9 @@ func (s *Session) requestMessages(
 		Content: systemPrompt,
 	})
 	messages = append(messages, conversation...)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	return messages, nil
 }
@@ -82,17 +88,30 @@ func (s *Session) Send(
 		return ErrBusy
 	}
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
-	if _, err := s.history.Append(ctx, memory.EventInput{
+	_, err := s.history.Append(ctx, memory.EventInput{
 		Type:    memory.EventUserMessage,
 		Role:    memory.RoleUser,
 		Content: input,
-	}); err != nil {
+	})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if err != nil {
 		return fmt.Errorf("persist user message: %w", err)
 	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		messages, err := s.requestMessages(ctx)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return err
 		}
@@ -106,19 +125,34 @@ func (s *Session) Send(
 		thinking := false
 		h := openrouter.StreamHandlers{
 			OnReasoning: func(text string) {
+				if ctx.Err() != nil {
+					return
+				}
 				thinking = true
 				ev.Reasoning(text)
 			},
 			OnContent: func(text string) {
+				if ctx.Err() != nil {
+					return
+				}
 				if thinking {
 					thinking = false
 					ev.ReasoningDone()
+					if ctx.Err() != nil {
+						return
+					}
 				}
 				ev.Delta(text)
 			},
 		}
 
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		res, err := s.client.ChatStream(ctx, req, h)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return fmt.Errorf("chat request failed: %w", err)
 		}
@@ -131,25 +165,49 @@ func (s *Session) Send(
 		if err != nil {
 			return err
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
 		assistantEvent, err := s.history.Append(
 			ctx,
 			assistantInput,
 		)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return fmt.Errorf("persist assistant message: %w", err)
 		}
 
 		if thinking {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			ev.ReasoningDone()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		ev.AssistantDone(msg.Content)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
 		if len(msg.ToolCalls) == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			return nil
 		}
 
 		for _, call := range msg.ToolCalls {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			executionUUID, err := uuid.NewRandom()
 			if err != nil {
 				return fmt.Errorf("generate execution ID: %w", err)
@@ -159,16 +217,31 @@ func (s *Session) Send(
 			if err != nil {
 				return err
 			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			intentEvent, err := s.history.Append(ctx, intentInput)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
 			if err != nil {
 				return fmt.Errorf("persist tool intent: %w", err)
 			}
 
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			ev.ToolCall(call.ID, call.Function.Name, call.Function.Arguments)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			var approvalEventID memory.EventID
 			var approvalDecision tools.Decision
 
-			observeApproval := func(decision tools.Decision) error {
+			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
+				if err := observeCtx.Err(); err != nil {
+					return err
+				}
 				input, err := approvalEventInput(
 					intentEvent.ID,
 					executionID,
@@ -177,7 +250,10 @@ func (s *Session) Send(
 				if err != nil {
 					return err
 				}
-				approvalEvent, err := s.history.Append(ctx, input)
+				approvalEvent, err := s.history.Append(observeCtx, input)
+				if ctxErr := observeCtx.Err(); ctxErr != nil {
+					return ctxErr
+				}
 				if err != nil {
 					return fmt.Errorf("persist approval: %w", err)
 				}
@@ -188,11 +264,15 @@ func (s *Session) Send(
 			}
 
 			result, isErr, err := tools.ExecuteWithApproval(
+				ctx,
 				extra,
 				call,
 				approve,
 				observeApproval,
 			)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
 			if err != nil {
 				return fmt.Errorf("execute tool lifecycle: %w", err)
 			}
@@ -218,10 +298,23 @@ func (s *Session) Send(
 			if err != nil {
 				return err
 			}
-			if _, err := s.history.Append(ctx, outcomeInput); err != nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			_, err = s.history.Append(ctx, outcomeInput)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			if err != nil {
 				return fmt.Errorf("persist tool outcome: %w", err)
 			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			ev.ToolResult(call.ID, result.Content, isErr)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 		}
 	}
 }

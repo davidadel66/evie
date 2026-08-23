@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestQueryDBEvieAllowsOnlyPublicTables(t *testing.T) {
 		t.Fatalf("seed public job: %v", err)
 	}
 
-	out, err := queryDB(evieQueryArgs(t, `SELECT name FROM jobs`))
+	out, err := queryDB(context.Background(), evieQueryArgs(t, `SELECT name FROM jobs`))
 	if err != nil {
 		t.Fatalf("query public jobs table: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestQueryDBEvieAllowsOnlyPublicTables(t *testing.T) {
 		t.Fatalf("public jobs query output = %q, want seeded job", out)
 	}
 
-	out, err = queryDB(evieQueryArgs(t, `
+	out, err = queryDB(context.Background(), evieQueryArgs(t, `
 		SELECT jobs.name
 		FROM jobs
 		LEFT JOIN job_runs ON job_runs.job_id = jobs.id
@@ -88,7 +89,7 @@ func TestQueryDBEvieAllowsOnlyPublicTables(t *testing.T) {
 
 	for _, tt := range privateQueries {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := queryDB(evieQueryArgs(t, tt.query))
+			out, err := queryDB(context.Background(), evieQueryArgs(t, tt.query))
 			if err == nil {
 				t.Fatalf("private query succeeded with output %q", out)
 			}

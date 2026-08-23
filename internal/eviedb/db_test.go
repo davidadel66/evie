@@ -17,12 +17,48 @@ package eviedb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestOpenDBAtContextCanceledBeforeSetupCreatesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := OpenDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("OpenDBAtContext error = %v, want context.Canceled", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("cancelled setup created database: %v", err)
+	}
+}
+
+func TestOpenDBAtContextCancellationAfterFileCreationLeavesMode0600(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cancelled-after-create.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	original := hardenWritableDBFile
+	hardenWritableDBFile = func(path string) error {
+		err := original(path)
+		cancel()
+		return err
+	}
+	t.Cleanup(func() { hardenWritableDBFile = original })
+
+	if _, err := OpenDBAtContext(ctx, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("OpenDBAtContext error = %v, want context.Canceled", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("cancelled database mode = %04o, want 0600", got)
+	}
+}
 
 // Pin the exported signatures without touching the home directory.
 var (

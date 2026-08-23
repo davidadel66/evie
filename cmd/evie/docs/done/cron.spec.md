@@ -203,6 +203,16 @@ cron_remove(name) — look up by name; call uninstallJob (errors
     outlives the job (the whole point of the table). Unknown name =
     error listing existing job names.
 
+Cancellation exception (approved 2026-08-23 in
+    `../active/memory.decisions.md`) — after a
+    cron mutation starts, cleanup may continue under one independent 10-second
+    context. If that cleanup cannot establish that launchd accepted the bootout
+    and the plist is absent, preserve the jobs row as the durable recovery handle
+    and return parent cancellation joined with the cleanup error. `cron_list`
+    continues to expose the uncertain job, and a later ordinary `cron_remove`
+    retries cleanup. Ordinary, non-cancelled add/remove behavior above is
+    unchanged.
+
 ### The launchctl seam (test injection point)
 
 Package-level vars in cron.go, replaced by tests — same seam pattern as

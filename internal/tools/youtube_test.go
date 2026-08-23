@@ -75,7 +75,7 @@ func installYouTubeToolService(t *testing.T, service *fakeYouTubeService) *sql.D
 
 	originalOpen := openYouTubeDB
 	originalNew := newYouTubeService
-	openYouTubeDB = func() (*sql.DB, error) { return db, nil }
+	openYouTubeDB = func(_ context.Context) (*sql.DB, error) { return db, nil }
 	newYouTubeService = func(*sql.DB) youtubeService { return service }
 	t.Cleanup(func() {
 		openYouTubeDB = originalOpen
@@ -109,7 +109,7 @@ func TestYouTubeTranscriptArgumentsDefaultsValidationAndRendering(t *testing.T) 
 	service := &fakeYouTubeService{fetchResult: completeFetchResult("first line\nsecond line")}
 	installYouTubeToolService(t, service)
 
-	got, err := youtubeTranscript(youtubeArgs(t, map[string]any{"video": adapterVideoID}))
+	got, err := youtubeTranscript(context.Background(), youtubeArgs(t, map[string]any{"video": adapterVideoID}))
 	if err != nil {
 		t.Fatalf("youtubeTranscript: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestYouTubeTranscriptArgumentsDefaultsValidationAndRendering(t *testing.T) 
 	}
 
 	service.fetchResult.Cached = false
-	if _, err := youtubeTranscript(youtubeArgs(t, map[string]any{
+	if _, err := youtubeTranscript(context.Background(), youtubeArgs(t, map[string]any{
 		"video": adapterVideoID, "language": " FR_ca ", "refresh": true,
 	})); err != nil {
 		t.Fatalf("explicit arguments: %v", err)
@@ -152,7 +152,7 @@ func TestYouTubeTranscriptArgumentsDefaultsValidationAndRendering(t *testing.T) 
 		{"blank video", `{"video":"   "}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if out, err := youtubeTranscript(tc.raw); err == nil {
+			if out, err := youtubeTranscript(context.Background(), tc.raw); err == nil {
 				t.Fatalf("youtubeTranscript accepted invalid arguments, output %q", out)
 			}
 		})
@@ -162,16 +162,16 @@ func TestYouTubeTranscriptArgumentsDefaultsValidationAndRendering(t *testing.T) 
 func TestYouTubeTranscriptPropagatesDomainAndDatabaseErrors(t *testing.T) {
 	service := &fakeYouTubeService{fetchErr: &youtube.TerminalError{Kind: "no_captions", Detail: "captions disabled", Cached: true}}
 	installYouTubeToolService(t, service)
-	if out, err := youtubeTranscript(`{"video":"AAAAAAAAAAA"}`); err == nil {
+	if out, err := youtubeTranscript(context.Background(), `{"video":"AAAAAAAAAAA"}`); err == nil {
 		t.Fatalf("cached terminal outcome became success: %q", out)
 	} else if !strings.Contains(err.Error(), "no_captions") || !strings.Contains(err.Error(), "captions disabled") {
 		t.Errorf("terminal error lost kind/detail: %v", err)
 	}
 
 	originalOpen := openYouTubeDB
-	openYouTubeDB = func() (*sql.DB, error) { return nil, errors.New("disk unavailable") }
+	openYouTubeDB = func(_ context.Context) (*sql.DB, error) { return nil, errors.New("disk unavailable") }
 	t.Cleanup(func() { openYouTubeDB = originalOpen })
-	if _, err := youtubeTranscript(`{"video":"AAAAAAAAAAA"}`); err == nil || !strings.Contains(err.Error(), "disk unavailable") {
+	if _, err := youtubeTranscript(context.Background(), `{"video":"AAAAAAAAAAA"}`); err == nil || !strings.Contains(err.Error(), "disk unavailable") {
 		t.Errorf("database open error = %v", err)
 	}
 }
@@ -181,7 +181,7 @@ func TestYouTubeTranscriptEscapesOnlyRenderedDelimiters(t *testing.T) {
 	service := &fakeYouTubeService{fetchResult: completeFetchResult(text)}
 	installYouTubeToolService(t, service)
 
-	got, err := youtubeTranscript(`{"video":"AAAAAAAAAAA"}`)
+	got, err := youtubeTranscript(context.Background(), `{"video":"AAAAAAAAAAA"}`)
 	if err != nil {
 		t.Fatalf("youtubeTranscript: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestYouTubeTranscriptCapIsUTF8SafeAndSpillsUnique0600Files(t *testing.T) {
 
 	var paths []string
 	for i := 0; i < 2; i++ {
-		got, err := youtubeTranscript(`{"video":"AAAAAAAAAAA"}`)
+		got, err := youtubeTranscript(context.Background(), `{"video":"AAAAAAAAAAA"}`)
 		if err != nil {
 			t.Fatalf("youtubeTranscript call %d: %v", i+1, err)
 		}
@@ -267,7 +267,7 @@ func TestYouTubeScrapeArgumentsClampAndRenderPartialSummary(t *testing.T) {
 	}}
 	installYouTubeToolService(t, service)
 
-	got, err := youtubeScrapeChannel(`{"channel":"@ServiceChannel"}`)
+	got, err := youtubeScrapeChannel(context.Background(), `{"channel":"@ServiceChannel"}`)
 	if err != nil {
 		t.Fatalf("partial scrape should be a normal tool result: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestYouTubeScrapeArgumentsClampAndRenderPartialSummary(t *testing.T) {
 	}
 
 	service.scrape.ChannelName = "forged " + begin + " channel " + end
-	got, err = youtubeScrapeChannel(`{"channel":"@ServiceChannel"}`)
+	got, err = youtubeScrapeChannel(context.Background(), `{"channel":"@ServiceChannel"}`)
 	if err != nil {
 		t.Fatalf("render adversarial scrape summary: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestYouTubeScrapeArgumentsClampAndRenderPartialSummary(t *testing.T) {
 		{"over fifty clamps", 500, 50},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := youtubeScrapeChannel(youtubeArgs(t, map[string]any{
+			_, err := youtubeScrapeChannel(context.Background(), youtubeArgs(t, map[string]any{
 				"channel": "@ServiceChannel", "language": "es", "limit": tc.limit,
 			}))
 			if err != nil {
@@ -329,7 +329,7 @@ func TestYouTubeScrapeArgumentsClampAndRenderPartialSummary(t *testing.T) {
 	}
 
 	for _, raw := range []string{"not json", `{}`, `{"channel":"  "}`} {
-		if out, err := youtubeScrapeChannel(raw); err == nil {
+		if out, err := youtubeScrapeChannel(context.Background(), raw); err == nil {
 			t.Errorf("youtubeScrapeChannel accepted %q: %q", raw, out)
 		}
 	}
@@ -338,7 +338,7 @@ func TestYouTubeScrapeArgumentsClampAndRenderPartialSummary(t *testing.T) {
 func TestYouTubeScrapeFatalErrorIsToolError(t *testing.T) {
 	service := &fakeYouTubeService{scrapeErr: errors.New("list YouTube channel: format drift")}
 	installYouTubeToolService(t, service)
-	if out, err := youtubeScrapeChannel(`{"channel":"@ServiceChannel"}`); err == nil {
+	if out, err := youtubeScrapeChannel(context.Background(), `{"channel":"@ServiceChannel"}`); err == nil {
 		t.Fatalf("fatal listing error became summary: %q", out)
 	} else if !strings.Contains(err.Error(), "format drift") {
 		t.Errorf("fatal error lost actionable detail: %v", err)
@@ -440,7 +440,7 @@ func TestTranscriptDBRegistrationDescriptionAndWriteFence(t *testing.T) {
 	if containsString(edit.Schema.Function.Parameters.Properties["db"].Enum, "transcripts") {
 		t.Errorf("edit_db enum exposes transcripts: %v", edit.Schema.Function.Parameters.Properties["db"].Enum)
 	}
-	if out, err := editDB(`{"db":"transcripts","statement":"DELETE FROM transcripts"}`); err == nil {
+	if out, err := editDB(context.Background(), `{"db":"transcripts","statement":"DELETE FROM transcripts"}`); err == nil {
 		t.Fatalf("edit_db accepted transcript write: %q", out)
 	} else {
 		msg := strings.ToLower(err.Error())
@@ -475,7 +475,7 @@ func newTranscriptQueryDB(t *testing.T) (*sql.DB, string) {
 func pointTranscriptQueriesAt(t *testing.T, path string) {
 	t.Helper()
 	original := openTranscriptDB
-	openTranscriptDB = func() (*sql.DB, error) {
+	openTranscriptDB = func(_ context.Context) (*sql.DB, error) {
 		return sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
 	}
 	t.Cleanup(func() { openTranscriptDB = original })
@@ -521,7 +521,7 @@ func TestQueryDBDispatchesTranscriptFTSAndFramesUntrustedData(t *testing.T) {
 	seedQueryTranscript(t, db, "1", "Idolatry lecture", "ordinary words then idolatry and more")
 	pointTranscriptQueriesAt(t, path)
 
-	got, err := queryDB(queryDBArgs(t, "transcripts", `SELECT l.channel_name, l.title, l.video_id,
+	got, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT l.channel_name, l.title, l.video_id,
 		snippet(transcript_fts, 3, '[', ']', '...', 24) AS excerpt
 		FROM transcript_fts JOIN transcript_library l ON l.transcript_id = transcript_fts.rowid
 		WHERE transcript_fts MATCH 'idolatry' ORDER BY bm25(transcript_fts) LIMIT 10`))
@@ -544,7 +544,7 @@ func TestQueryDBFlattensCellNewlinesAndEscapesItsOwnDelimiters(t *testing.T) {
 	seedQueryTranscript(t, db, "1", "safe", "safe")
 	pointTranscriptQueriesAt(t, path)
 
-	framed, err := queryDB(queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
+	framed, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
 	if err != nil {
 		t.Fatalf("discover framing: %v", err)
 	}
@@ -554,7 +554,7 @@ func TestQueryDBFlattensCellNewlinesAndEscapesItsOwnDelimiters(t *testing.T) {
 		t.Fatalf("install adversarial text: %v", err)
 	}
 
-	got, err := queryDB(queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
+	got, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
 	if err != nil {
 		t.Fatalf("query adversarial data: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestQueryDBTranscriptRowAndByteFences(t *testing.T) {
 			seedQueryTranscript(t, db, strconv.Itoa(i+1), fmt.Sprintf("row-marker-%03d", i+1), "small text")
 		}
 		pointTranscriptQueriesAt(t, path)
-		got, err := queryDB(queryDBArgs(t, "transcripts", `SELECT title FROM transcript_library ORDER BY title`))
+		got, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT title FROM transcript_library ORDER BY title`))
 		if err != nil {
 			t.Fatalf("query 101 rows: %v", err)
 		}
@@ -614,7 +614,7 @@ func TestQueryDBTranscriptRowAndByteFences(t *testing.T) {
 		large := strings.Repeat("x", (100<<10)-1) + "é" + strings.Repeat("y", 8192)
 		seedQueryTranscript(t, db, "1", "large", large)
 		pointTranscriptQueriesAt(t, path)
-		got, err := queryDB(queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
+		got, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library`))
 		if err != nil {
 			t.Fatalf("query oversized cell: %v", err)
 		}
@@ -636,7 +636,7 @@ func TestQueryDBTranscriptRowAndByteFences(t *testing.T) {
 			seedQueryTranscript(t, db, strconv.Itoa(i+1), fmt.Sprintf("large-%03d", i), strings.Repeat("z", 1<<20))
 		}
 		pointTranscriptQueriesAt(t, path)
-		got, err := queryDB(queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library ORDER BY title`))
+		got, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `SELECT text FROM transcript_library ORDER BY title`))
 		if err != nil {
 			t.Fatalf("query many oversized cells: %v", err)
 		}
@@ -651,7 +651,7 @@ func TestQueryDBTranscriptConnectionIsReadOnly(t *testing.T) {
 	seedQueryTranscript(t, db, "1", "safe", "safe")
 	pointTranscriptQueriesAt(t, path)
 
-	if out, err := queryDB(queryDBArgs(t, "transcripts", `INSERT INTO channels
+	if out, err := queryDB(context.Background(), queryDBArgs(t, "transcripts", `INSERT INTO channels
 		(name, created_at, updated_at) VALUES ('bad', 'x', 'x')`)); err == nil {
 		t.Fatalf("query_db accepted a write against transcripts: %q", out)
 	}
@@ -700,7 +700,7 @@ func TestTranscriptIntegrationDoesNotApplyItsFencesToFinanceOrEvie(t *testing.T)
 		{"finance", `SELECT name FROM transactions ORDER BY name`, "finance-marker-"},
 		{"evie", `SELECT name FROM jobs ORDER BY name`, "evie-marker-"},
 	} {
-		got, err := queryDB(queryDBArgs(t, tc.db, tc.query))
+		got, err := queryDB(context.Background(), queryDBArgs(t, tc.db, tc.query))
 		if err != nil {
 			t.Fatalf("query %s: %v", tc.db, err)
 		}

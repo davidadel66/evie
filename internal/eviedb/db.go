@@ -1,6 +1,7 @@
 package eviedb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -133,6 +134,13 @@ const (
 )
 
 func OpenDB() (*sql.DB, error) {
+	return OpenDBContext(context.Background())
+}
+
+func OpenDBContext(ctx context.Context) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -141,10 +149,17 @@ func OpenDB() (*sql.DB, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("make dir: %w", err)
 	}
-	return OpenDBAt(filepath.Join(dir, "evie.db"))
+	return OpenDBAtContext(ctx, filepath.Join(dir, "evie.db"))
 }
 
 func OpenDBReadOnly() (*sql.DB, error) {
+	return OpenDBReadOnlyContext(context.Background())
+}
+
+func OpenDBReadOnlyContext(ctx context.Context) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -156,21 +171,50 @@ func OpenDBReadOnly() (*sql.DB, error) {
 		return nil, fmt.Errorf("open db readonly: %w", err)
 	}
 
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open db readonly: %w", err)
+	}
 	return db, nil
 }
 
 func OpenDBAt(path string) (*sql.DB, error) {
+	return OpenDBAtContext(context.Background(), path)
+}
+
+var hardenWritableDBFile = func(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+func OpenDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := hardenWritableDBFile(path); err != nil {
+		return nil, fmt.Errorf("secure db: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", path+dsnPragmas)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := ctx.Err(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("secure db: %w", err)
+		return nil, err
 	}
 	return db, nil
 }

@@ -138,7 +138,7 @@ Result titles and snippets are untrusted third-party text, delimited as such —
 // (the model reads and acts on them); zero results is the one empty case
 // that comes back as a normal result, because it taught the model
 // something real.
-func webSearch(args string) (string, error) {
+func webSearch(parent context.Context, args string) (string, error) {
 	var params struct {
 		Query string `json:"query"`
 		Count int    `json:"count"`
@@ -171,7 +171,10 @@ func webSearch(args string) (string, error) {
 	q.Set("q", query)
 	q.Set("count", strconv.Itoa(count))
 
-	ctx, cancel := context.WithTimeout(context.Background(), searchTimeout)
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(parent, searchTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, braveSearchURL+"?"+q.Encode(), nil)
@@ -183,6 +186,9 @@ func webSearch(args string) (string, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if parent.Err() != nil {
+			return "", parent.Err()
+		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("search timed out after %s", searchTimeout)
 		}

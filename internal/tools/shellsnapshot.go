@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,19 +24,32 @@ const snapshotTimeout = 10 * time.Second
 // command would be slow and noisy, so instead we run one once, dump what it
 // defined into a file, and source that file before every command.
 //
-// snapshotOnce makes the capture happen exactly once even if Warm and a
-// tool call race; a command that arrives mid-capture simply waits for it.
+// snapshotCapture keeps at most one capture active even if Warm and tool calls
+// race. Waiters cancel independently; when the final waiter leaves, the lazy
+// capture is cancelled and remains retryable. Ordinary capture failures retain
+// the prior sticky one-attempt policy.
 var (
-	snapshotOnce sync.Once
-	snapshotPath string
+	snapshotMu        sync.Mutex
+	snapshotPath      string
+	snapshotAttempted bool
+	snapshotCapture   *shellCapture
+	captureShellFunc  = captureShell
 )
+
+type shellCapture struct {
+	done    chan struct{}
+	cancel  context.CancelFunc
+	waiters int
+	path    string
+	err     error
+}
 
 // Warm captures the user's shell environment ahead of the first command.
 // Called from main at startup so the cost lands during boot rather than in
 // the middle of the model's first bash call; everything still works if it
 // is never called, because runBash triggers the same capture lazily.
 func Warm() {
-	go snapshot()
+	go snapshot(context.Background())
 }
 
 // snapshot returns the path to a sourceable file holding the user's shell
@@ -43,22 +57,77 @@ func Warm() {
 // case commands run under a plain login shell and lose only the
 // interactive-rc pieces. Failure is never surfaced to the model: a missing
 // alias is a degraded shell, not a broken tool.
-func snapshot() string {
-	snapshotOnce.Do(func() {
-		path, err := captureShell(shellPath())
-		if err != nil {
-			return
+func snapshot(ctx context.Context) string {
+	if ctx.Err() != nil {
+		return ""
+	}
+	snapshotMu.Lock()
+	if snapshotPath != "" {
+		path := snapshotPath
+		snapshotMu.Unlock()
+		return path
+	}
+	if snapshotAttempted {
+		snapshotMu.Unlock()
+		return ""
+	}
+	capture := snapshotCapture
+	if capture == nil {
+		captureCtx, cancel := context.WithCancel(context.Background())
+		capture = &shellCapture{done: make(chan struct{}), cancel: cancel}
+		snapshotCapture = capture
+		go func(c *shellCapture) {
+			path, err := captureShellFunc(captureCtx, shellPath())
+			snapshotMu.Lock()
+			if cancelErr := captureCtx.Err(); cancelErr != nil {
+				if path != "" {
+					_ = os.Remove(path)
+				}
+				path = ""
+				err = cancelErr
+			} else {
+				snapshotAttempted = true
+			}
+			if err == nil && path != "" {
+				snapshotPath = path
+				c.path = path
+			}
+			c.err = err
+			if snapshotCapture == c {
+				snapshotCapture = nil
+			}
+			close(c.done)
+			snapshotMu.Unlock()
+		}(capture)
+	}
+	capture.waiters++
+	snapshotMu.Unlock()
+
+	select {
+	case <-capture.done:
+		if errors.Is(capture.err, context.Canceled) && ctx.Err() == nil {
+			return snapshot(ctx)
 		}
-		snapshotPath = path
-	})
-	return snapshotPath
+		return capture.path
+	case <-ctx.Done():
+		snapshotMu.Lock()
+		capture.waiters--
+		if capture.waiters == 0 {
+			capture.cancel()
+		}
+		snapshotMu.Unlock()
+		return ""
+	}
 }
 
 // captureShell runs one interactive login shell and has it write its own
 // definitions to a file. Interactive is the point — it is the only mode
 // that reads .zshrc / .bashrc — and also why stderr is discarded: prompt
 // setup and job-control warnings are normal noise in that mode.
-func captureShell(shell string) (string, error) {
+func captureShell(parent context.Context, shell string) (string, error) {
+	if err := parent.Err(); err != nil {
+		return "", err
+	}
 	out, err := os.CreateTemp("", "evie-shell-*.sh")
 	if err != nil {
 		return "", fmt.Errorf("create snapshot file: %w", err)
@@ -66,7 +135,7 @@ func captureShell(shell string) (string, error) {
 	path := out.Name()
 	out.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), snapshotTimeout)
+	ctx, cancel := context.WithTimeout(parent, snapshotTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, shell, "-i", "-l", "-c", dumpScript(shell, path))

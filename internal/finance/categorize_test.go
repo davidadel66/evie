@@ -5,10 +5,11 @@ package finance
 // a categorized transaction could not be deleted when Plaid removed it.
 // Contract under test:
 //
-//	func Categorize(db *sql.DB) (matched, unmatched int, err error)
-//	func applySyncPage(db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error
+//	func Categorize(context.Background(), db *sql.DB) (matched, unmatched int, err error)
+//	func applySyncPage(context.Background(), db *sql.DB, itemID string, added, modified []SyncTxn, removed []string, nextCursor string) error
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 )
@@ -42,11 +43,11 @@ func TestCategorizeMatchesPostedTransactions(t *testing.T) {
 	insertItem(t, db, "item-1")
 	insertRule(t, db, "Coffee Shop Inc", "Coffee")
 
-	if err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-posted", 3.50)}, nil, nil, "c1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-posted", 3.50)}, nil, nil, "c1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 
-	matched, _, err := Categorize(db)
+	matched, _, err := Categorize(context.Background(), db)
 	if err != nil {
 		t.Fatalf("Categorize: %v", err)
 	}
@@ -81,11 +82,11 @@ func TestCategorizeSkipsPendingTransactions(t *testing.T) {
 
 	pending := txn("txn-pending", 5.00)
 	pending.Pending = true
-	if err := applySyncPage(db, "item-1", []SyncTxn{pending}, nil, nil, "c1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{pending}, nil, nil, "c1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 
-	matched, _, err := Categorize(db)
+	matched, _, err := Categorize(context.Background(), db)
 	if err != nil {
 		t.Fatalf("Categorize: %v", err)
 	}
@@ -99,11 +100,11 @@ func TestCategorizeSkipsPendingTransactions(t *testing.T) {
 	// Once it posts, the same rule categorizes it at the settled amount.
 	posted := txn("txn-pending", 5.75)
 	posted.Pending = false
-	if err := applySyncPage(db, "item-1", nil, []SyncTxn{posted}, nil, "c2"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, []SyncTxn{posted}, nil, "c2"); err != nil {
 		t.Fatalf("applySyncPage (posted): %v", err)
 	}
 
-	if _, _, err := Categorize(db); err != nil {
+	if _, _, err := Categorize(context.Background(), db); err != nil {
 		t.Fatalf("Categorize after posting: %v", err)
 	}
 	var cents int64
@@ -124,11 +125,11 @@ func TestCategorizeIsIdempotent(t *testing.T) {
 	insertItem(t, db, "item-1")
 	insertRule(t, db, "Coffee Shop Inc", "Coffee")
 
-	if err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-1", 1.00)}, nil, nil, "c1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-1", 1.00)}, nil, nil, "c1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
 	for i := range 2 {
-		if _, _, err := Categorize(db); err != nil {
+		if _, _, err := Categorize(context.Background(), db); err != nil {
 			t.Fatalf("Categorize run %d: %v", i+1, err)
 		}
 	}
@@ -148,17 +149,17 @@ func TestApplySyncPageRemovesCategorizedTransaction(t *testing.T) {
 	insertItem(t, db, "item-1")
 	insertRule(t, db, "Coffee Shop Inc", "Coffee")
 
-	if err := applySyncPage(db, "item-1", []SyncTxn{txn("txn-doomed", 2.00)}, nil, nil, "c1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", []SyncTxn{txn("txn-doomed", 2.00)}, nil, nil, "c1"); err != nil {
 		t.Fatalf("applySyncPage (added): %v", err)
 	}
-	if _, _, err := Categorize(db); err != nil {
+	if _, _, err := Categorize(context.Background(), db); err != nil {
 		t.Fatalf("Categorize: %v", err)
 	}
 	if n := entryCount(t, db, "txn-doomed"); n != 1 {
 		t.Fatalf("setup: %d entries, want 1 — the test needs a categorized transaction", n)
 	}
 
-	if err := applySyncPage(db, "item-1", nil, nil, []string{"txn-doomed"}, "c2"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, nil, []string{"txn-doomed"}, "c2"); err != nil {
 		t.Fatalf("removing a categorized transaction: %v", err)
 	}
 
@@ -181,14 +182,14 @@ func TestApplySyncPageRemovalSparesOtherEntries(t *testing.T) {
 	insertRule(t, db, "Coffee Shop Inc", "Coffee")
 
 	added := []SyncTxn{txn("txn-drop", 1.00), txn("txn-keep", 2.00)}
-	if err := applySyncPage(db, "item-1", added, nil, nil, "c1"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", added, nil, nil, "c1"); err != nil {
 		t.Fatalf("applySyncPage: %v", err)
 	}
-	if _, _, err := Categorize(db); err != nil {
+	if _, _, err := Categorize(context.Background(), db); err != nil {
 		t.Fatalf("Categorize: %v", err)
 	}
 
-	if err := applySyncPage(db, "item-1", nil, nil, []string{"txn-drop"}, "c2"); err != nil {
+	if err := applySyncPage(context.Background(), db, "item-1", nil, nil, []string{"txn-drop"}, "c2"); err != nil {
 		t.Fatalf("applySyncPage (removed): %v", err)
 	}
 

@@ -11,10 +11,10 @@ package tools
 //	    // names no entry point. Tests never assume calendarDict's shape —
 //	    // dict contents are asserted through plistFor's rendering.
 //	func plistFor(label string, id int64, binPath string, dicts []calendarDict) []byte
-//	var installJob func(label, plistPath string, plist []byte) error
-//	var uninstallJob func(label, plistPath string) error
+//	var installJob func(_ context.Context, label, plistPath string, plist []byte) error
+//	var uninstallJob func(_ context.Context, label, plistPath string) error
 //	var openCronDB = eviedb.OpenDB
-//	    // db seam, type func() (*sql.DB, error): the spec gives eviedb
+//	    // db seam, type func(_ context.Context) (*sql.DB, error): the spec gives eviedb
 //	    // an openDBAt temp-path seam but names none for the tools layer;
 //	    // this follows the fetchTimeout/braveSearchURL/installJob var
 //	    // pattern. Tests replace it with an opener for a temp file.
@@ -25,8 +25,10 @@ package tools
 // implementer's choice.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,6 +40,242 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+func TestCronAddCancellationAfterMutationRollsBackRow(t *testing.T) {
+	db := newCronDB(t)
+	originalInstall := installJob
+	originalUninstall := uninstallJob
+	t.Cleanup(func() {
+		installJob = originalInstall
+		uninstallJob = originalUninstall
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	installStarted := make(chan struct{})
+	installJob = func(ctx context.Context, _, _ string, _ []byte) error {
+		close(installStarted)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	uninstalled := make(chan struct{})
+	uninstallJob = func(ctx context.Context, _, _ string) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		close(uninstalled)
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := cronAdd(ctx, `{"name":"cancel-add","schedule":"0 9 * * *","command":"echo hi"}`)
+		result <- err
+	}()
+	<-installStarted
+	cancel()
+	err := <-result
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cronAdd error = %v, want context.Canceled", err)
+	}
+	select {
+	case <-uninstalled:
+	default:
+		t.Fatal("cronAdd did not reconcile launchd after effect-started cancellation")
+	}
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
+
+func TestCronAddCancellationPreservesRowWhenLaunchdReconciliationFails(t *testing.T) {
+	db := newCronDB(t)
+	originalInstall := installJob
+	originalUninstall := uninstallJob
+	originalRun := runCronLaunchctl
+	originalRemove := removeCronPlist
+	t.Cleanup(func() {
+		installJob = originalInstall
+		uninstallJob = originalUninstall
+		runCronLaunchctl = originalRun
+		removeCronPlist = originalRemove
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	installStarted := make(chan struct{})
+	installJob = func(ctx context.Context, _, _ string, _ []byte) error {
+		close(installStarted)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	reconcileErr := errors.New("launchd reconciliation failed")
+	uninstallJob = reconcileCronJob
+	runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
+		return []byte("launchd state unavailable"), reconcileErr
+	}
+	plistRemoved := make(chan struct{}, 1)
+	removeCronPlist = func(string) error {
+		plistRemoved <- struct{}{}
+		return nil
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := cronAdd(ctx, `{"name":"uncertain-add","schedule":"0 9 * * *","command":"echo hi"}`)
+		result <- err
+	}()
+	<-installStarted
+	cancel()
+	err := <-result
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, reconcileErr) {
+		t.Fatalf("cronAdd error = %v, want cancellation joined with reconciliation failure", err)
+	}
+	if got := jobCount(t, db); got != 1 {
+		t.Fatalf("jobs after uncertain launchd state = %d, want durable correlation preserved", got)
+	}
+	select {
+	case <-plistRemoved:
+		t.Fatal("plist removal ran without a successful bootout")
+	default:
+	}
+}
+
+func TestCronRemoveCancellationAfterMutationCompletesConsistencyCleanup(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('cancel-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	original := uninstallJob
+	t.Cleanup(func() { uninstallJob = original })
+	ctx, cancel := context.WithCancel(context.Background())
+	uninstallJob = func(context.Context, string, string) error { cancel(); return nil }
+	_, err := cronRemove(ctx, `{"name":"cancel-remove"}`)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cronRemove error = %v, want context.Canceled", err)
+	}
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after cancellation cleanup = %d, want 0", got)
+	}
+}
+
+func TestCronRemoveCancellationPreservesRowWhenUninstallFails(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('cancel-uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	originalUninstall := uninstallJob
+	originalRun := runCronLaunchctl
+	t.Cleanup(func() {
+		uninstallJob = originalUninstall
+		runCronLaunchctl = originalRun
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	uninstallErr := errors.New("launchd reconciliation failed")
+	uninstallJob = reconcileCronJob
+	runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
+		cancel()
+		return []byte("launchd state unavailable"), uninstallErr
+	}
+
+	_, err := cronRemove(ctx, `{"name":"cancel-uncertain-remove"}`)
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, uninstallErr) {
+		t.Fatalf("cronRemove error = %v, want cancellation joined with uninstall failure", err)
+	}
+	if got := jobCount(t, db); got != 1 {
+		t.Fatalf("jobs after cancellation cleanup failure = %d, want durable correlation preserved", got)
+	}
+}
+
+func TestCronRemoveOrdinaryUninstallFailureStillDeletesRow(t *testing.T) {
+	db := newCronDB(t)
+	if _, err := db.Exec(`INSERT INTO jobs (name, schedule, command, created_at) VALUES ('uncertain-remove', '0 9 * * *', 'echo hi', 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	originalUninstall := uninstallJob
+	originalRemove := removeCronPlist
+	t.Cleanup(func() {
+		uninstallJob = originalUninstall
+		removeCronPlist = originalRemove
+	})
+	uninstallErr := errors.New("launchd still active")
+	uninstallJob = func(context.Context, string, string) error { return uninstallErr }
+	plistRemovalAttempted := false
+	removeCronPlist = func(string) error { plistRemovalAttempted = true; return nil }
+
+	_, err := cronRemove(context.Background(), `{"name":"uncertain-remove"}`)
+	if err != nil {
+		t.Fatalf("cronRemove ordinary uninstall error = %v, want ignored", err)
+	}
+	if got := jobCount(t, db); got != 0 {
+		t.Fatalf("jobs after ordinary failed uninstall = %d, want row deleted", got)
+	}
+	if !plistRemovalAttempted {
+		t.Fatal("ordinary remove did not attempt plist cleanup after bootout error")
+	}
+}
+
+func TestCronCleanupContextIsIndependentAndBounded(t *testing.T) {
+	type parentKey struct{}
+	parent, cancelParent := context.WithCancel(context.WithValue(context.Background(), parentKey{}, "parent"))
+	cancelParent()
+
+	cleanupCtx, cancelCleanup := newCronCleanupContext(parent)
+	defer cancelCleanup()
+	deadline, ok := cleanupCtx.Deadline()
+	if !ok {
+		t.Fatal("cleanup context has no deadline")
+	}
+	if err := cleanupCtx.Err(); err != nil {
+		t.Fatalf("cleanup context inherited parent cancellation: %v", err)
+	}
+	if got := cleanupCtx.Value(parentKey{}); got != nil {
+		t.Fatalf("cleanup context inherited parent value %v", got)
+	}
+	remaining := time.Until(deadline)
+	if remaining <= cronCleanupTimeout-time.Second || remaining > cronCleanupTimeout {
+		t.Fatalf("cleanup deadline remaining = %s, want approximately %s", remaining, cronCleanupTimeout)
+	}
+}
+
+func TestReconcileCronJobSurfacesBootoutAndPlistFailures(t *testing.T) {
+	originalRun := runCronLaunchctl
+	originalRemove := removeCronPlist
+	t.Cleanup(func() {
+		runCronLaunchctl = originalRun
+		removeCronPlist = originalRemove
+	})
+
+	t.Run("bootout failure", func(t *testing.T) {
+		bootoutErr := errors.New("launchctl unavailable")
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) {
+			return []byte("permission denied"), bootoutErr
+		}
+		removed := false
+		removeCronPlist = func(string) error { removed = true; return nil }
+
+		err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist")
+		if !errors.Is(err, bootoutErr) || !strings.Contains(err.Error(), "permission denied") {
+			t.Fatalf("reconcileCronJob error = %v, want bootout failure and output", err)
+		}
+		if removed {
+			t.Fatal("plist was removed before launchd absence was established")
+		}
+	})
+
+	t.Run("plist removal failure", func(t *testing.T) {
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) { return nil, nil }
+		removeErr := errors.New("read-only filesystem")
+		removeCronPlist = func(string) error { return removeErr }
+
+		err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist")
+		if !errors.Is(err, removeErr) {
+			t.Fatalf("reconcileCronJob error = %v, want plist removal failure", err)
+		}
+	})
+
+	t.Run("missing plist is already reconciled", func(t *testing.T) {
+		runCronLaunchctl = func(context.Context, ...string) ([]byte, error) { return nil, nil }
+		removeCronPlist = func(string) error { return os.ErrNotExist }
+		if err := reconcileCronJob(context.Background(), "com.evie.cron.test", "/tmp/test.plist"); err != nil {
+			t.Fatalf("reconcileCronJob missing plist: %v", err)
+		}
+	})
+}
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -66,7 +304,7 @@ func newCronDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { db.Close() })
 
 	original := openCronDB
-	openCronDB = func() (*sql.DB, error) { return eviedb.OpenDBAt(path) }
+	openCronDB = func(_ context.Context) (*sql.DB, error) { return eviedb.OpenDBAt(path) }
 	t.Cleanup(func() { openCronDB = original })
 	return db
 }
@@ -85,7 +323,7 @@ func captureInstalls(t *testing.T) *[]installCall {
 	t.Helper()
 	var calls []installCall
 	original := installJob
-	installJob = func(label, plistPath string, plist []byte) error {
+	installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 		calls = append(calls, installCall{label: label, plistPath: plistPath, plist: plist})
 		return nil
 	}
@@ -103,7 +341,7 @@ func captureUninstalls(t *testing.T) *[]uninstallCall {
 	t.Helper()
 	var calls []uninstallCall
 	original := uninstallJob
-	uninstallJob = func(label, plistPath string) error {
+	uninstallJob = func(_ context.Context, label, plistPath string) error {
 		calls = append(calls, uninstallCall{label: label, plistPath: plistPath})
 		return nil
 	}
@@ -122,7 +360,7 @@ func runCronTool(t *testing.T, name string, params map[string]any) (string, erro
 	}
 	for _, tool := range all {
 		if tool.Schema.Function.Name == name {
-			return tool.Execute(string(raw))
+			return tool.Execute(context.Background(), string(raw))
 		}
 	}
 	t.Fatalf("%s is not in the tool registry", name)
@@ -578,10 +816,19 @@ func TestCronAdd(t *testing.T) {
 	t.Run("an install failure rolls the row back", func(t *testing.T) {
 		db := newCronDB(t)
 		original := installJob
-		installJob = func(label, plistPath string, plist []byte) error {
+		originalUninstall := uninstallJob
+		installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 			return &installBootError{}
 		}
-		t.Cleanup(func() { installJob = original })
+		uninstallCalls := 0
+		uninstallJob = func(context.Context, string, string) error {
+			uninstallCalls++
+			return nil
+		}
+		t.Cleanup(func() {
+			installJob = original
+			uninstallJob = originalUninstall
+		})
 
 		out, err := runCronTool(t, "cron_add", map[string]any{
 			"name": "doomed", "schedule": "0 9 * * *", "command": "true",
@@ -595,6 +842,9 @@ func TestCronAdd(t *testing.T) {
 		// No half-registered jobs: the row must be deleted again.
 		if n := jobCount(t, db); n != 0 {
 			t.Errorf("%d rows survived a failed install, want 0", n)
+		}
+		if uninstallCalls != 0 {
+			t.Fatalf("ordinary install failure invoked reconciliation %d times", uninstallCalls)
 		}
 	})
 
@@ -610,15 +860,15 @@ func TestCronAdd(t *testing.T) {
 		// closing it turns the rollback DELETE into an error.
 		var handedOut *sql.DB
 		originalOpen := openCronDB
-		openCronDB = func() (*sql.DB, error) {
-			db, err := originalOpen()
+		openCronDB = func(_ context.Context) (*sql.DB, error) {
+			db, err := originalOpen(context.Background())
 			handedOut = db
 			return db, err
 		}
 		t.Cleanup(func() { openCronDB = originalOpen })
 
 		originalInstall := installJob
-		installJob = func(label, plistPath string, plist []byte) error {
+		installJob = func(_ context.Context, label, plistPath string, plist []byte) error {
 			handedOut.Close()
 			return &installBootError{}
 		}
@@ -1052,7 +1302,7 @@ func TestEvieDBRegistration(t *testing.T) {
 	})
 
 	t.Run("edit_db on evie points at the cron tools", func(t *testing.T) {
-		out, err := editDB(`{"db":"evie","statement":"DELETE FROM jobs"}`)
+		out, err := editDB(context.Background(), `{"db":"evie","statement":"DELETE FROM jobs"}`)
 		if err == nil {
 			t.Fatalf("edit_db accepted a evie write: %q", out)
 		}
@@ -1065,7 +1315,7 @@ func TestEvieDBRegistration(t *testing.T) {
 	})
 
 	t.Run("unknown-db errors list both databases", func(t *testing.T) {
-		if _, err := editDB(`{"db":"bogus","statement":"DELETE FROM x"}`); err == nil {
+		if _, err := editDB(context.Background(), `{"db":"bogus","statement":"DELETE FROM x"}`); err == nil {
 			t.Fatal("edit_db accepted an unknown db")
 		} else {
 			for _, want := range []string{"finance", "evie"} {
@@ -1075,7 +1325,7 @@ func TestEvieDBRegistration(t *testing.T) {
 			}
 		}
 
-		if _, err := queryDB(`{"db":"bogus","query":"SELECT 1"}`); err == nil {
+		if _, err := queryDB(context.Background(), `{"db":"bogus","query":"SELECT 1"}`); err == nil {
 			t.Fatal("query_db accepted an unknown db")
 		} else {
 			for _, want := range []string{"finance", "evie"} {

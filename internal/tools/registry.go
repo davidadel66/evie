@@ -7,6 +7,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -22,19 +23,19 @@ const (
 
 type Tool struct {
 	Schema        openrouter.Tool
-	Execute       func(args string) (string, error)
-	Prepare       func(args string) (PreparedTool, error)
+	Execute       func(ctx context.Context, args string) (string, error)
+	Prepare       func(ctx context.Context, args string) (PreparedTool, error)
 	NeedsApproval bool
 }
 
-type ApprovalObserver func(decision Decision) error
+type ApprovalObserver func(ctx context.Context, decision Decision) error
 
 type PreparedTool struct {
 	Preview *FileChangePreview
-	Execute func() (string, error)
+	Execute func(ctx context.Context) (string, error)
 }
 
-type Approver func(name, args string, preview *FileChangePreview) Decision
+type Approver func(ctx context.Context, name, args string, preview *FileChangePreview) Decision
 
 var all = []Tool{
 	{Schema: getTimeTool, Execute: getTime},
@@ -73,26 +74,30 @@ func SchemasWith(extra []Tool) []openrouter.Tool {
 	return schemas
 }
 
-func Execute(call openrouter.ToolCall, approve Approver) openrouter.Message {
-	msg, _ := ExecuteWith(nil, call, approve)
-	return msg
+func Execute(ctx context.Context, call openrouter.ToolCall, approve Approver) (openrouter.Message, error) {
+	msg, _, err := ExecuteWith(ctx, nil, call, approve)
+	return msg, err
 }
 
 func ExecuteWith(
+	ctx context.Context,
 	extra []Tool,
 	call openrouter.ToolCall,
 	approve Approver,
-) (openrouter.Message, bool) {
-	msg, isErr, _ := ExecuteWithApproval(extra, call, approve, nil)
-	return msg, isErr
+) (openrouter.Message, bool, error) {
+	return ExecuteWithApproval(ctx, extra, call, approve, nil)
 }
 
 func ExecuteWithApproval(
+	ctx context.Context,
 	extra []Tool,
 	call openrouter.ToolCall,
 	approve Approver,
 	observe ApprovalObserver,
 ) (openrouter.Message, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return openrouter.Message{}, false, err
+	}
 	for _, list := range [][]Tool{all, extra} {
 		for _, tool := range list {
 			if tool.Schema.Function.Name != call.Function.Name {
@@ -104,8 +109,14 @@ func ExecuteWithApproval(
 				decision := Declined
 				if approve != nil {
 					if tool.Prepare != nil {
-						p, err := tool.Prepare(call.Function.Arguments)
+						if err := ctx.Err(); err != nil {
+							return openrouter.Message{}, false, err
+						}
+						p, err := tool.Prepare(ctx, call.Function.Arguments)
 						if err != nil {
+							if ctx.Err() != nil {
+								return openrouter.Message{}, false, ctx.Err()
+							}
 							msg, isErr := toolError(call.ID, err)
 							return msg, isErr, nil
 						}
@@ -117,17 +128,33 @@ func ExecuteWithApproval(
 						preview = prepared.Preview
 					}
 
+					if err := ctx.Err(); err != nil {
+						return openrouter.Message{}, false, err
+					}
 					decision = approve(
+						ctx,
 						call.Function.Name,
 						call.Function.Arguments,
 						preview,
 					)
+					if err := ctx.Err(); err != nil {
+						return openrouter.Message{}, false, err
+					}
 				}
 
 				if observe != nil {
-					if err := observe(decision); err != nil {
+					if err := ctx.Err(); err != nil {
+						return openrouter.Message{}, false, err
+					}
+					if err := observe(ctx, decision); err != nil {
+						if ctx.Err() != nil {
+							return openrouter.Message{}, false, ctx.Err()
+						}
 						return openrouter.Message{}, false, fmt.Errorf("observe approval: %w", err)
 					}
+				}
+				if err := ctx.Err(); err != nil {
+					return openrouter.Message{}, false, err
 				}
 
 				switch decision {
@@ -150,10 +177,16 @@ func ExecuteWithApproval(
 
 			var response string
 			var err error
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return openrouter.Message{}, false, ctxErr
+			}
 			if prepared != nil {
-				response, err = prepared.Execute()
+				response, err = prepared.Execute(ctx)
 			} else {
-				response, err = tool.Execute(call.Function.Arguments)
+				response, err = tool.Execute(ctx, call.Function.Arguments)
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return openrouter.Message{}, false, ctxErr
 			}
 			if err != nil {
 				msg, isErr := toolError(call.ID, err)
