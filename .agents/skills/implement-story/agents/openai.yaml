@@ -1,4 +1,4 @@
 interface:
   display_name: "Implement Story"
   short_description: "Implement one story in an isolated worktree"
-  default_prompt: "Use $implement-story to implement one ready story in an isolated worktree, verify it, run the contract/correctness/maintainability review, and open a draft pull request."
+  default_prompt: "Use $implement-story to implement exactly one ready story in an isolated worktree, verify it, and return a clean committed candidate for independent review."

@@ -1,4 +1,4 @@
 interface:
   display_name: "Plan Request"
-  short_description: "Plan work and ready one selected story"
-  default_prompt: "Use $plan-request to plan this request or prepare one explicitly selected story as a ready GitHub execution-contract issue."
+  short_description: "Plan, audit, and ready one selected story"
+  default_prompt: "Use $plan-request to interactively plan this request or audit and refine one selected backlog story until its execution contract is ready."

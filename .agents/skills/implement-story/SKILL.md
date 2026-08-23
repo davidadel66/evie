@@ -86,6 +86,22 @@ Exit the loop when all acceptance criteria pass, or stop with evidence when:
 - the needed change exceeds the story boundary; or
 - a new product decision is required.
 
+Classify issues discovered while implementing instead of absorbing adjacent
+work into the story:
+
+- If the candidate introduced the issue or acceptance requires its resolution,
+  fix it in this story or stop honestly.
+- If an approved source leaves a material choice undefined, return
+  `DECISION_REQUIRED`.
+- If the issue is pre-existing, material, independently actionable, and outside
+  the story contract, return it as a structured `backlog_candidate` without
+  fixing it.
+- Discard speculative future work, subjective cleanup, and style preferences.
+
+Do not edit `docs/BACKLOG.md` from the story worktree. Durable backlog recording
+belongs to the delivery coordinator so it cannot widen or invalidate this
+candidate.
+
 ### Pre-review safety audit
 
 When the change touches authorization, persistence, concurrency, time,
@@ -137,6 +153,11 @@ Return `CANDIDATE_READY` only for a clean committed candidate whose reported
 identity and checks you observed directly. Map every acceptance criterion to
 code and test evidence. For the initial implementation, return an empty
 `finding_dispositions` array.
+
+For every `backlog_candidate`, include concrete evidence, current impact, why it
+is outside this story, and a deterministic way to verify a later fix. Do not use
+`known_gaps` as a substitute for structured candidates; reserve `known_gaps` for
+limitations of the current story or its evidence.
 
 Return `DECISION_REQUIRED` when an authoritative choice is needed, including
 the exact question, context, and known options. Return

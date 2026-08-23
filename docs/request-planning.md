@@ -1,6 +1,6 @@
 # Request planning workflow
 
-Status: manual v1
+Status: manual v2
 
 ## Purpose
 
@@ -36,13 +36,15 @@ one story.
    reviewed independently.
 7. Order stories by dependency and risk. Prefer proving uncertain foundations
    before building consumers on top of them.
-8. Review the proposed breakdown with David and revise it.
+8. Review the proposed breakdown with David and revise it interactively.
 9. Freeze the approved initiative and epic breakdown.
 10. Select exactly one dependency-ready story for implementation.
-11. Expand that selected story into its full execution contract and check it
-    against the definition of ready.
-12. Create or reuse its GitHub issue, then hand the issue to the implementation
-    workflow.
+11. Expand that selected story into its full execution contract and complete the
+    story-refinement audit below against current code and approved sources.
+12. Resolve material questions with David and obtain approval for the resulting
+    contract.
+13. Create or update its GitHub issue, then hand the ready issue to the
+    implementation workflow.
 
 Planning approval does not itself authorize code changes. Implementation begins
 only when David selects a story.
@@ -64,6 +66,66 @@ If a story cannot be verified independently, either split it differently or
 explain why it is a necessary foundation and how that foundation will be
 demonstrated.
 
+## Interactive story refinement
+
+Run this refinement before declaring a selected new or existing story ready.
+This is a planning activity outside implementation and delivery loops. Inspect
+only enough current code to forecast honest boundaries; do not implement or use
+the proposed code shape as authority for missing behavior.
+
+Build an acceptance-to-boundary matrix containing:
+
+| Acceptance criterion | Approved behavior source | Expected code seams | Deterministic evidence | Inside PR boundary? |
+|---|---|---|---|---|
+
+Then challenge the draft contract for:
+
+- an acceptance criterion whose expected seam falls outside the stated PR
+  boundary;
+- more than one independently deliverable behavioral outcome;
+- a cross-cutting interface change whose consumers make the proposed boundary
+  materially larger than described;
+- persistence schema, failure content, redaction, recovery, cancellation,
+  concurrency, authorization, or public-interface behavior not fixed by an
+  approved source;
+- dependencies that are incomplete or whose decisions are not incorporated;
+- acceptance criteria without deterministic evidence; and
+- later-story behavior required to verify the selected story.
+
+Also record a change-surface forecast: the expected production packages,
+interfaces, consumers, persistence objects, entry points, and tests. It is a
+reviewability forecast, not a promised file list. Unexpected subsystem breadth
+requires a split or an explicit boundary revision; it must not be hidden behind
+"smallest change necessary."
+
+When a material choice remains, ask David one focused question at a time. State
+the recommended option and the effect of each credible alternative. Do not
+create or update the issue until he approves the resolved contract.
+
+After drafting the resolved contract, obtain one fresh read-only contract
+challenge when independent agent contexts are available. Give that reviewer
+the approved sources, current code seams, proposed contract, matrix, forecast,
+and base commit, but not the planner's readiness conclusion. The planner must
+validate and synthesize its evidence; a reviewer does not decide product
+behavior. If an independent context is unavailable, report that missing
+evidence and do not claim that the challenge ran.
+
+Return one readiness outcome:
+
+- **STORY_READY:** the contract passes the definition of ready and David has
+  approved it.
+- **REVISION_REQUIRED:** the boundary, decomposition, acceptance criteria, or
+  verification must change.
+- **DECISION_REQUIRED:** an authoritative product or engineering choice is
+  missing.
+- **DEPENDENCY_BLOCKED:** a named prerequisite is incomplete or not
+  incorporated.
+
+For an existing GitHub story, begin read-only and propose the exact replacement
+contract or split. Updating, closing, or replacing that issue requires explicit
+approval. Never preserve a misleading "ready" status merely because work was
+previously queued.
+
 ## Definition of ready
 
 A story is ready for implementation when:
@@ -75,6 +137,11 @@ A story is ready for implementation when:
 - its verification commands or checks are known;
 - its dependencies are complete or explicitly selected with it;
 - its proposed pull-request boundary is reviewable;
+- every acceptance criterion fits that boundary according to the
+  acceptance-to-boundary matrix;
+- its change-surface forecast matches the described scope;
+- a fresh contract challenge has no unresolved material finding when an
+  independent context is available;
 - David has selected it as the next story.
 
 ## Planning artifacts
@@ -187,7 +254,9 @@ An approved story issue contains:
 - deterministic verification;
 - manual demonstration when applicable;
 - risks, approved decisions, and known exclusions;
-- the intended one-PR boundary.
+- the intended one-PR boundary; and
+- readiness evidence containing the reviewed base commit, expected change
+  surface, boundary rationale, and resolved decisions.
 
 Use this issue shape unless the repository defines a stricter template:
 
@@ -213,12 +282,21 @@ Use this issue shape unless the repository defines a stricter template:
 ## Risks and approved decisions
 
 ## One-PR boundary
+
+## Readiness evidence
+
+- Reviewed base commit:
+- Expected change surface:
+- Boundary rationale:
+- Resolved decisions:
+- Independent contract challenge:
 ```
 
 Before creation, search open and closed issues for the story ID and outcome. If
-an existing issue already owns the story, return it instead of creating a
-duplicate. If the contract fails the definition of ready, report the missing
-decision or evidence and do not create the issue.
+an existing issue already owns the story, audit it and return it unchanged when
+ready; propose an approved update rather than creating a duplicate when it is
+not. If the contract fails the definition of ready, report the applicable
+readiness outcome and do not create or update the issue.
 
 Creating the issue authorizes planning state only. It does not authorize a
 branch, worktree, product-code change, commit, push, pull request, or merge.

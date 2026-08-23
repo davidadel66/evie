@@ -11,6 +11,7 @@
     "acceptance_coverage",
     "checks",
     "finding_dispositions",
+    "backlog_candidates",
     "known_gaps",
     "best_files",
     "summary",
@@ -118,6 +119,10 @@
         }
       }
     },
+    "backlog_candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/backlogCandidate" }
+    },
     "known_gaps": {
       "type": "array",
       "items": { "type": "string" }
@@ -188,5 +193,27 @@
         }
       }
     }
-  ]
+  ],
+  "$defs": {
+    "backlogCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "evidence",
+        "impact",
+        "why_deferred",
+        "verification"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "why_deferred": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
 }

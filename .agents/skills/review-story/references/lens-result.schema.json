@@ -9,6 +9,7 @@
     "status",
     "candidate",
     "findings",
+    "backlog_candidates",
     "observations",
     "residual_risks",
     "summary"
@@ -39,6 +40,12 @@
         "$ref": "review-result.schema.json#/$defs/finding"
       }
     },
+    "backlog_candidates": {
+      "type": "array",
+      "items": {
+        "$ref": "review-result.schema.json#/$defs/backlogCandidate"
+      }
+    },
     "observations": {
       "type": "array",
       "items": { "type": "string" }
@@ -57,7 +64,8 @@
       },
       "then": {
         "properties": {
-          "findings": { "maxItems": 0 }
+          "findings": { "maxItems": 0 },
+          "backlog_candidates": { "maxItems": 0 }
         }
       }
     }

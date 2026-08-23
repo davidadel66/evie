@@ -11,6 +11,8 @@
     "delivery",
     "final_review",
     "review_history",
+    "backlog_candidates",
+    "backlog_record",
     "blocker",
     "known_gaps",
     "residual_risks",
@@ -128,6 +130,24 @@
         }
       }
     },
+    "backlog_candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/backlogCandidate" }
+    },
+    "backlog_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "path", "candidate_ids", "evidence"],
+      "properties": {
+        "status": { "enum": ["NOT_NEEDED", "RECORDED", "FAILED"] },
+        "path": { "type": "string" },
+        "candidate_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence": { "type": "string" }
+      }
+    },
     "blocker": {
       "type": "object",
       "additionalProperties": false,
@@ -139,6 +159,7 @@
             "IMPLEMENTATION",
             "REVIEW",
             "REPAIR",
+            "BACKLOG",
             "DELIVERY",
             "DECISION"
           ]
@@ -208,6 +229,11 @@
             }
           },
           "review_history": { "minItems": 1 },
+          "backlog_record": {
+            "properties": {
+              "status": { "enum": ["NOT_NEEDED", "RECORDED"] }
+            }
+          },
           "blocker": {
             "properties": {
               "phase": { "const": "NONE" },
@@ -249,9 +275,63 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "backlog_candidates": { "minItems": 1 } },
+        "required": ["backlog_candidates"]
+      },
+      "then": {
+        "properties": {
+          "backlog_record": {
+            "properties": {
+              "status": { "enum": ["RECORDED", "FAILED"] },
+              "path": { "minLength": 1 },
+              "candidate_ids": { "minItems": 1 },
+              "evidence": { "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "backlog_candidates": { "maxItems": 0 } },
+        "required": ["backlog_candidates"]
+      },
+      "then": {
+        "properties": {
+          "backlog_record": {
+            "properties": {
+              "status": { "const": "NOT_NEEDED" },
+              "candidate_ids": { "maxItems": 0 }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
+    "backlogCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "evidence",
+        "impact",
+        "why_deferred",
+        "verification"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "why_deferred": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string", "minLength": 1 }
+      }
+    },
     "findingDisposition": {
       "type": "object",
       "additionalProperties": false,

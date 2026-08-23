@@ -5,9 +5,10 @@ description: Deliver one approved engineering story through initial implementati
 
 # Deliver a Story
 
-Coordinate execution; do not edit product files yourself. Keep implementation
-and review in separate agent contexts, preserve one exact candidate identity at
-each review pass, and never merge a pull request.
+Coordinate execution; do not edit product files yourself. The only coordinator
+file edit permitted by this workflow is the validated backlog handoff described
+below. Keep implementation and review in separate agent contexts, preserve one
+exact candidate identity at each review pass, and never merge a pull request.
 
 Read `references/delivery-result.schema.json` before beginning. Every exit from
 this skill must return exactly one JSON object that validates against it, with
@@ -16,8 +17,10 @@ empty strings, arrays, or `null` only where the schema permits them.
 
 Explicit invocation of `$deliver-story` authorizes one non-force push of the
 reviewed story branch and creation of one draft pull request for that story. It
-does not authorize force-pushes, edits to an existing pull request, comments,
-review submission, approval, readiness changes, or merge.
+also authorizes appending validated deferred findings to `docs/BACKLOG.md` in
+the checkout that launched the workflow. It does not authorize force-pushes,
+edits to an existing pull request, comments, review submission, approval,
+readiness changes, merge, or any other launch-checkout edit.
 
 ## Own the agent topology
 
@@ -52,6 +55,9 @@ Reject a candidate whose worktree is dirty, whose reported head is not the
 actual full `HEAD`, or whose branch and base do not match the prepared story
 workspace. Do not repair or reinterpret an invalid handoff on the worker's
 behalf.
+
+Collect any structured `backlog_candidates`; do not route them to repair unless
+later review establishes they are in scope.
 
 ## Review and route the verdict
 
@@ -121,6 +127,45 @@ If the third review pass still returns `CHANGES_REQUIRED`, stop with the exact
 candidate, remaining findings, completed checks, and repair history for human
 direction.
 
+## Record validated deferred findings
+
+After the final `READY_FOR_HUMAN_REVIEW` verdict and before pushing, combine the
+implementer's and all review passes' `backlog_candidates`. Revalidate each one:
+
+- it describes a pre-existing issue rather than a regression introduced by the
+  candidate;
+- it is not required to satisfy the story's acceptance criteria;
+- it is material and independently actionable;
+- its evidence and impact are concrete; and
+- its proposed verification can establish a later fix.
+
+Discard invalid candidates and deduplicate valid candidates against each other
+and existing `docs/BACKLOG.md` entries by underlying behavior and failure
+scenario, not wording. Re-check candidates after repairs and record only those
+that remain true at the final reviewed head.
+
+Append new entries under `## Discovered issues` in `docs/BACKLOG.md` in the
+checkout that launched this skill, never in the story worktree. Preserve all
+existing content and user changes. Create the section at the end only if it is
+absent. Use this form:
+
+```md
+- [ ] <title>
+  - ID: `<id>`
+  - Discovered during: <story ref and final candidate commit>
+  - Evidence: <specific source/code/runtime evidence>
+  - Impact: <current user or operational impact>
+  - Why deferred: <why it is outside this story>
+  - Verification: <deterministic evidence expected from a later fix>
+```
+
+Do not create a GitHub issue, change an approved specification, or commit or
+push the launch checkout. If the backlog path is unavailable, its existing
+structure is ambiguous, or it cannot be updated without overwriting concurrent
+changes, stop before delivery with `DELIVERY_INCOMPLETE`, blocker phase
+`BACKLOG`, and the candidates preserved in the result. Backlog recording does
+not change the reviewed candidate identity.
+
 ## Deliver the exact reviewed candidate
 
 Proceed only on `READY_FOR_HUMAN_REVIEW`. Immediately before delivery, verify
@@ -139,8 +184,9 @@ not match, stop without updating it. Otherwise:
    pull-request base is unavailable.
 3. Create one draft pull request against the recorded pull-request base.
 4. Include the story reference and outcome, exact base and head commits,
-   acceptance coverage, deterministic checks, review-pass history, resolved and
-   deferred findings, residual risks, and the best files to inspect first.
+   acceptance coverage, deterministic checks, review-pass history, resolved
+   findings, recorded backlog candidate IDs, residual risks, and the best files
+   to inspect first.
 5. Confirm the returned pull-request URL and that its remote head commit equals
    the reviewed head. Do not modify the candidate after delivery.
 
@@ -150,7 +196,8 @@ Never convert the draft to ready, submit a GitHub review, approve, or merge.
 
 Return `DELIVERED` only with a verified pull-request URL whose remote head is the
 exact reviewed candidate. Embed the final review result and include every
-review and repair pass in `review_history`.
+review and repair pass in `review_history`. Report the backlog path, recording
+status, and every validated candidate ID in `backlog_record`.
 
 Return `DECISION_REQUIRED` only for an authoritative product choice and identify
 the decision phase and question in the blocker. Return `DELIVERY_INCOMPLETE` for

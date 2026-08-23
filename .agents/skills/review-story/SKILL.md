@@ -154,6 +154,20 @@ Repeated syntax is not a maintainability finding by itself. Require a concrete
 duplicate rule, existing reusable seam, inconsistency risk, or testability cost.
 Do not reward abstraction for its own sake.
 
+Each lens must classify adjacent discoveries separately from findings:
+
+- Candidate-introduced issues and anything required by acceptance remain
+  findings and can block the verdict.
+- Material ambiguity in an approved source remains a potential
+  `DECISION_REQUIRED` finding.
+- A pre-existing issue may be a `backlog_candidate` only when it is material,
+  independently actionable, supported by concrete evidence, and outside the
+  story contract.
+- Speculative future work, subjective cleanup, and style preferences are not
+  backlog candidates.
+
+Lens reviewers remain read-only and must never edit `docs/BACKLOG.md`.
+
 ## Gate 4: Validate and synthesize findings
 
 Validate each lens result before considering its findings. Treat malformed
@@ -163,7 +177,15 @@ prevent a clean verdict. Do not repair or reinterpret reviewer output.
 Treat subagent output as leads, not votes. Check every material finding against
 the diff, source authority, and surrounding code. Deduplicate overlapping
 findings without weakening their impact. Discard style preferences, speculative
-future work, and unrelated pre-existing issues.
+future work, and unrelated pre-existing issues that do not satisfy the backlog
+candidate rule.
+
+Validate every proposed backlog candidate against the same source and code
+evidence. Reclassify it as a finding when the candidate introduced it or the
+story must resolve it. Deduplicate candidates by violated behavior and failure
+scenario rather than wording. Return validated candidates separately; they do
+not block an otherwise clean verdict and are not authorization to implement
+them or create GitHub issues.
 
 Each retained finding must include:
 
@@ -194,7 +216,7 @@ The result must contain:
 - exact deterministic checks and results;
 - skipped lenses, checks, and residual risks;
 - candidate identity: PR URL when present, base commit, and head commit or diff;
-  and
+- validated, deduplicated `backlog_candidates` for durable handoff; and
 - one verdict.
 
 Use exactly one verdict:

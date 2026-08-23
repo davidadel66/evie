@@ -1,22 +1,21 @@
 # Backlog
 
-Status board for this project, updated by `/wrap` at session end. One line per
-story; details live in active plans/specs and completed feature records.
+Status board for this project, updated by `/wrap` at session end. Keep planned
+stories to one line; delivery-discovered issues use the structured form below.
+Details live in active plans/specs and completed feature records.
 
 ## Next session
-- Last session: the memory initiative was audited into 50 complete GitHub
-  execution-contract issues; MEM-1.1 is [issue #2](https://github.com/davidadel66/evie/issues/2).
-- Mid-flight: MEM-1 is in progress. Its event/session foundation is implemented;
-  explicit scope selection, durable leases, safe resume, unknown-execution
-  recovery, provider replay policy, and usage capture remain.
-- Start with: deliver [MEM-1.1](https://github.com/davidadel66/evie/issues/2)
-  through `$implement-story`; MEM-1.R0's independent research contract is
-  [issue #1](https://github.com/davidadel66/evie/issues/1) and must close before
-  MEM-1 completes.
+- Last session: the generated memory epic/story breakdown was removed after its
+  boundaries proved too speculative and cross-cutting.
+- Mid-flight: the event/session foundation, explicit scope selection, and durable
+  lease storage remain implemented. The approved memory specification and
+  decisions remain the planning source; there is no active memory epic or story.
+- Start with: review the retained memory specification with David and plan only
+  the next small, independently verifiable outcome.
 
 ## In progress
-- memory — [approved delivery initiative](../cmd/evie/docs/active/memory/README.md);
-  MEM-1 in progress, MEM-1.1 selected as the next implementation story
+- memory — [approved specification](../cmd/evie/docs/active/memory.spec.md);
+  delivery planning reset, with no story currently selected
 
 ## Next (ordered tool roadmap, decided 2026-07-29)
 - budget analysis verdict — ask evie "how am I tracking against budget?"; transcript decides if step 5 needs a dedicated tool
@@ -39,6 +38,14 @@ story; details live in active plans/specs and completed feature records.
 - HTML budget report — monthly/on-demand visual; rides the web frontend arc
 - self-hosted model (ollama sibling package) — the day the neutral-types refactor earns itself
 - TUI polish (bubbletea + glamour) — markdown/spinners; only if terminal remains primary surface
+
+## Discovered issues
+<!--
+Validated, pre-existing issues discovered during story delivery. Add only
+material, independently actionable work that is outside the delivered story.
+Do not use this section for speculative ideas, style cleanup, or work required
+by the current story's acceptance criteria.
+-->
 
 ## Recently done
 <!-- newest first, max 10; older entries are deleted — git history is the archive -->

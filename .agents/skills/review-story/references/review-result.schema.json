@@ -8,6 +8,7 @@
     "verdict",
     "candidate",
     "findings",
+    "backlog_candidates",
     "acceptance_coverage",
     "checks",
     "lenses",
@@ -52,6 +53,10 @@
     "findings": {
       "type": "array",
       "items": { "$ref": "#/$defs/finding" }
+    },
+    "backlog_candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/backlogCandidate" }
     },
     "acceptance_coverage": {
       "type": "array",
@@ -177,6 +182,26 @@
     }
   ],
   "$defs": {
+    "backlogCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "evidence",
+        "impact",
+        "why_deferred",
+        "verification"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "why_deferred": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string", "minLength": 1 }
+      }
+    },
     "finding": {
       "type": "object",
       "additionalProperties": false,

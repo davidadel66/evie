@@ -1,6 +1,6 @@
 ---
 name: plan-request
-description: Convert a product or engineering request or large active spec into PR-sized delivery work, write approved initiative or epic plans, and materialize one selected story as a ready GitHub execution-contract issue. Use when asked to plan, decompose, scope, stage, select, or prepare work for implementation. Do not use for implementation or pull-request review.
+description: Interactively plan, decompose, scope, audit, refine, or repair product and engineering work into PR-sized delivery stories, write approved initiative or epic plans, and materialize one selected story as a ready GitHub execution-contract issue. Use for new requests and existing backlog stories that must be validated before implementation. Do not use for implementation or pull-request review.
 ---
 
 # Plan a Request
@@ -33,22 +33,39 @@ to create or update its planning files.
 - Run documentation verification and report the files written.
 - Stop after the planning artifacts are complete.
 
-### Gate 3: Select one story and create its execution contract
+### Gate 3: Interactively refine one selected story
 
-Enter this gate only when the user explicitly selects exactly one story from an
-approved plan and authorizes creation of its GitHub issue.
+Enter this gate when the user selects exactly one proposed or existing story for
+readiness work. Existing issues begin read-only.
 
 - Read the approved story summary, applicable specification and decisions,
   dependencies, current code seams, and existing GitHub issues.
-- Refuse a duplicate issue. Return the existing issue when it already represents
-  the selected story.
-- Expand the summary into the complete contract defined by
+- Expand or audit the full contract using the interactive story-refinement
+  method in `docs/request-planning.md`.
+- Build the acceptance-to-boundary matrix and change-surface forecast from
+  approved behavior and current code.
+- Ask one focused material question at a time, lead with a recommendation, and
+  revise the proposal from the user's answers.
+- Use a fresh read-only contract challenger after the draft is resolved when
+  independent contexts are available. Validate its evidence yourself.
+- Return `STORY_READY`, `REVISION_REQUIRED`, `DECISION_REQUIRED`, or
+  `DEPENDENCY_BLOCKED`. Do not create or update an issue in this gate.
+
+### Gate 4: Materialize one approved ready story
+
+Enter this gate only after the user explicitly approves the refined contract
+and authorizes creating or updating exactly one GitHub issue.
+
+- Refuse a duplicate issue. Audit and reuse the existing issue when it owns the
+  selected story.
+- Record the complete approved contract and readiness evidence defined by
   `docs/request-planning.md`; do not add behavior absent from approved sources.
-- Check the contract against the definition of ready before creating the issue.
-- Stop without creating an issue when a missing choice materially affects
-  behavior, security, persistence, recovery, concurrency, or a public interface.
-- Create one GitHub issue only after the story is ready. Do not assume labels,
-  milestones, or project-board fields that the repository does not define.
+- Reconfirm that no source, dependency, code seam, or base commit changed since
+  refinement. Return to Gate 3 when readiness evidence is stale.
+- Create or update one issue only after the story is `STORY_READY`. Do not close,
+  replace, or split an existing issue without explicit approval.
+- Do not assume labels, milestones, or project-board fields that the repository
+  does not define.
 - Return the issue URL and readiness evidence, then stop before implementation.
 
 In all gates:
@@ -61,6 +78,7 @@ In all gates:
 - Treat working-tree changes as user-owned and preserve them.
 - Ask only about unresolved choices that materially affect behavior, security,
   persistence, recovery, concurrency, public interfaces, or story boundaries.
+  Ask one focused question per turn unless the user requests a batch.
 
 ## Workflow
 
@@ -81,15 +99,18 @@ In all gates:
    behavior in delivery artifacts.
 7. Order work by dependency and risk, accounting for work already present in the
    repository.
-8. Check every proposed story against the repository's definition of ready.
+8. Check every proposed story provisionally against the repository's definition
+   of ready.
 9. Present the proposal for approval and recommend the smallest useful first
    story.
 10. If the user explicitly approves writing the planning artifacts, create only
     the approved initiative and epic files, verify them, and stop.
-11. When the user later selects exactly one approved story and authorizes its
-    GitHub issue, build and validate its full execution contract.
-12. Create or return that one issue and stop. Implementation belongs to
-    `$implement-story`.
+11. When the user later selects one proposed or existing story, run the
+    interactive refinement audit and obtain a fresh contract challenge.
+12. Resolve decisions and revisions with the user until the selected story is
+    `STORY_READY` or honestly blocked.
+13. Only after separate approval to materialize it, create, update, or return
+    that one issue and stop. Implementation belongs to `$implement-story`.
 
 ## Output
 
@@ -112,8 +133,18 @@ results, and any approved items that could not be recorded.
 
 In Gate 3, return:
 
+- the readiness outcome and reasons;
+- the acceptance-to-boundary matrix and change-surface forecast;
+- blocking questions, proposed revisions or split, and a recommended choice;
+- dependency, decision, and independent-challenge evidence; and
+- the exact proposed GitHub contract when ready.
+
+In Gate 4, return:
+
 - the selected story and authoritative sources;
 - the GitHub issue URL, or the readiness blocker;
 - the outcome, non-goals, acceptance criteria, verification, dependencies, and
-  one-PR boundary recorded in the issue; and
+  one-PR boundary recorded in the issue;
+- its reviewed base commit, change-surface forecast, boundary rationale,
+  resolved decisions, and contract-challenge evidence; and
 - the exact `$implement-story` invocation to use next when the issue is ready.
