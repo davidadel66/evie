@@ -114,7 +114,7 @@ func (s *Session) Send(
 	stopHeartbeat := s.startHeartbeat(ctx, coordinator, lease)
 	defer func() {
 		stopHeartbeat()
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timing.cleanupTimeout)
+		cleanupCtx, cancel := s.timing.newCleanupContext(ctx, s.timing.cleanupTimeout)
 		defer cancel()
 		if releaseErr := s.owner.Release(cleanupCtx, lease); releaseErr != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("release turn lease: %w", releaseErr))
@@ -162,7 +162,7 @@ func (s *Session) Send(
 
 	stopHeartbeat()
 	if rootEvent.ID != "" && causeHasDurableTerminal(cause.kind) {
-		terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timing.cleanupTimeout)
+		terminalCtx, cancel := s.timing.newCleanupContext(ctx, s.timing.cleanupTimeout)
 		terminalErr := s.appendTerminal(terminalCtx, lease, rootEvent.ID, progress.requestParentID, cause)
 		cancel()
 		if terminalErr != nil {

@@ -170,6 +170,10 @@ func (s *Session) runOwnedTurn(
 				callbackLifetime.invoke(func() {
 					coordinator.emitIfActive(func() {
 						rendered.mu.Lock()
+						if rendered.content {
+							rendered.mu.Unlock()
+							return
+						}
 						rendered.reasoning = true
 						rendered.reasoningOpen = true
 						rendered.mu.Unlock()
@@ -260,12 +264,18 @@ func (s *Session) runOwnedTurn(
 		rendered.mu.Unlock()
 
 		if len(msg.ToolCalls) == 0 {
-			s.emitAssistantAccepted(coordinator, ev, rendered, msg.Content, true)
+			s.emitCommittedAssistant(ev, rendered, msg.Content)
 			return nil
 		}
 
-		if !s.emitAssistantAccepted(coordinator, ev, rendered, msg.Content, false) {
-			return s.observeTurnContext(coordinator)
+		// This is an exactly-once durable acceptance notification, not a live
+		// provider/tool callback. Once the append commits it is delivered even
+		// when a terminal cause was reserved at the commit boundary. The call is
+		// synchronous after provider callback lifetime closure, so it completes
+		// before Send returns and before any frontend error/turn_done wrapper.
+		s.emitCommittedAssistant(ev, rendered, msg.Content)
+		if err := s.observeTurnContext(coordinator); err != nil {
+			return err
 		}
 
 		var lastOutcomeID memory.EventID
@@ -417,28 +427,19 @@ func admitApproval(
 	return decision
 }
 
-func (s *Session) emitAssistantAccepted(
-	coordinator *turnCoordinator,
+func (s *Session) emitCommittedAssistant(
 	ev Events,
 	rendered *renderedOutput,
 	content string,
-	committedFinal bool,
-) bool {
-	emit := func() {
-		rendered.mu.Lock()
-		closeReasoning := rendered.reasoningOpen
-		rendered.reasoningOpen = false
-		rendered.mu.Unlock()
-		if closeReasoning {
-			ev.ReasoningDone()
-		}
-		ev.AssistantDone(content)
+) {
+	rendered.mu.Lock()
+	closeReasoning := rendered.reasoningOpen
+	rendered.reasoningOpen = false
+	rendered.mu.Unlock()
+	if closeReasoning {
+		ev.ReasoningDone()
 	}
-	if committedFinal {
-		emit()
-		return true
-	}
-	return coordinator.emitIfActive(emit)
+	ev.AssistantDone(content)
 }
 
 func (s *Session) observeTurnContext(coordinator *turnCoordinator) error {

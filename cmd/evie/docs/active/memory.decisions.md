@@ -196,7 +196,12 @@
   - `assistant_commit` begins before assistant-event construction and covers its
     fenced append. A committed no-tool assistant ends the turn successfully
     before frontend callbacks; a committed tool-calling assistant transitions
-    immediately to `tool_prepare` before any post-commit callback.
+    immediately to `tool_prepare` before any post-commit callback. Every
+    committed assistant then emits exactly one authoritative `AssistantDone`
+    durable-acceptance notification, even when cancellation or lease loss was
+    reserved as its append committed. That notification is not live provider or
+    tool work; it completes before the selected error is returned, while every
+    later tool/provider callback and start remains suppressed.
   - `tool_prepare` covers the post-assistant callback, execution-ID and intent
     construction, intent append, tool-call callback, durable preparation
     authorization, and optional preparation. It ends before approval begins for
@@ -248,6 +253,16 @@
   but its assistant event did not commit, the REPL and web stream emit a local
   `response_discarded` notification stating that the interrupted response was
   not saved. The marker is presentation state, not durable history.
+
+- **2026-08-24 - committed assistant acceptance is always presented once.**
+  A successful fenced assistant append owns one authoritative
+  `AssistantDone(content)` notification. Cancellation or lease loss reserved at
+  that commit boundary does not suppress the notification, because it presents
+  accepted durable state rather than starting live work. For a tool-calling
+  assistant it precedes the selected local error; tool intents, tool callbacks,
+  execution, and later provider work remain suppressed. Provider reasoning is a
+  monotonic presentation phase: same-chunk reasoning precedes content, and any
+  adversarial reasoning callback after content begins is not rendered.
 
 - **2026-08-23 - every provider and tool start has a current durable fence.**
   Acquisition and heartbeat begin before the user event. Every provider

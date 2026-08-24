@@ -104,6 +104,35 @@ func TestChatStreamAssemblesReasoning(t *testing.T) {
 	}
 }
 
+func TestChatStreamEmitsSameChunkReasoningBeforeContent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"reasoning\":\"think\",\"content\":\"answer\"}}]}\n\n" +
+			"data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient("test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.baseURL = srv.URL
+	var callbacks []string
+	res, err := c.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{
+		OnReasoning: func(text string) { callbacks = append(callbacks, "reasoning:"+text) },
+		OnContent:   func(text string) { callbacks = append(callbacks, "content:"+text) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"reasoning:think", "content:answer"}
+	if fmt.Sprint(callbacks) != fmt.Sprint(want) {
+		t.Fatalf("callbacks=%v, want %v", callbacks, want)
+	}
+	if msg := res.Choices[0].Message; msg.Reasoning != "think" || msg.Content != "answer" {
+		t.Fatalf("assembled message=%+v", msg)
+	}
+}
+
 func TestChatStreamWithoutReasoning(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

@@ -84,7 +84,14 @@ func (s *Session) Send(input string, ev Events, approve func(name, args string) 
 Model string: default lives in `internal/agent` (`moonshotai/kimi-k3` today),
 overridable via `EVIE_MODEL`. main.go stops hardcoding it.
 
-Event order within a turn is deterministic and sequential:
+Event order within a turn is deterministic and sequential. `AssistantDone`
+contains the authoritative committed content and fires exactly once after every
+successful assistant append. It still fires for a committed tool-calling
+assistant when cancellation or lease loss is selected at that commit boundary,
+before the request error and `turn_done`; no later tool/provider work starts.
+Reasoning is a one-way phase before content: same-chunk reasoning is emitted
+first and reasoning received after content begins is not rendered.
+
 `Delta*, AssistantDone, (ToolCall, [approval_request], ToolResult)*` repeating
 until an AssistantDone with no tool calls ends the turn. Tool events are keyed
 by the provider's tool-call id; the client reducer needs no other message ids.
@@ -177,6 +184,11 @@ did not commit. If reasoning is open, ordering is `reasoning_done`,
 `response_discarded`, `error`, `turn_done`. A final committed no-tool assistant
 event is durable success and never gets a discarded marker even if its later
 frontend callback is cancelled.
+
+A committed tool-calling assistant also always emits its authoritative
+`assistant_done` once. If cancellation or lease loss was selected as the append
+committed, ordering is `assistant_done`, `error`, `turn_done`; tool-call and all
+later live events are suppressed.
 
 The browser flushes buffered deltas before reducing `response_discarded`. It
 keeps partial assistant text visible and renders the fixed message inline below

@@ -37,11 +37,16 @@ type fakeHistory struct {
 	events      []memory.Event
 	appendErrAt int
 	appendCalls int
+	appendErr   error
+	afterAppend func(memory.EventInput)
 }
 
 func (f *fakeHistory) Append(_ context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
 	f.appendCalls++
 	if f.appendErrAt == f.appendCalls {
+		if f.appendErr != nil {
+			return memory.Event{}, f.appendErr
+		}
 		return memory.Event{}, errors.New("assistant persistence failed")
 	}
 	event := memory.Event{
@@ -57,6 +62,9 @@ func (f *fakeHistory) Append(_ context.Context, _ memory.TurnLease, input memory
 		FormatVersion: 1,
 	}
 	f.events = append(f.events, event)
+	if f.afterAppend != nil {
+		f.afterAppend(input)
+	}
 	return event, nil
 }
 
@@ -110,6 +118,7 @@ func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
 type webTestTurnOwner struct {
 	acquireErr error
 	conflict   bool
+	leaseLost  bool
 }
 
 func (o webTestTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
@@ -124,7 +133,7 @@ func (webTestTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Durati
 func (webTestTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
 func (webTestTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
 func (o webTestTurnOwner) IsConflict(error) bool                           { return o.conflict }
-func (webTestTurnOwner) IsLeaseLost(error) bool                            { return false }
+func (o webTestTurnOwner) IsLeaseLost(error) bool                          { return o.leaseLost }
 
 // chatRequest builds a well-formed same-origin chat POST; individual
 // tests then break one property at a time.
@@ -366,6 +375,101 @@ func TestChatStreamsReasoningBeforeContent(t *testing.T) {
 	if !(firstReasoning < done && done < firstDelta) {
 		t.Fatalf("order = reasoning@%d done@%d delta@%d, want reasoning < done < delta:\n%s",
 			firstReasoning, done, firstDelta, body)
+	}
+}
+
+type contentFirstWebClient struct{}
+
+func (contentFirstWebClient) ChatStream(
+	_ context.Context,
+	_ openrouter.ChatRequest,
+	h openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	h.OnContent("answer")
+	h.OnReasoning("late reasoning")
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "answer", Reasoning: "late reasoning",
+	}}}}, nil
+}
+
+func TestChatSuppressesReasoningThatArrivesAfterContent(t *testing.T) {
+	session := agent.New(contentFirstWebClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	if strings.Contains(body, "event: reasoning") {
+		t.Fatalf("late reasoning reopened presentation:\n%s", body)
+	}
+	assertSSEOrder(t, body,
+		"event: delta\ndata: {\"text\":\"answer\"}",
+		"event: assistant_done\ndata: {\"content\":\"answer\"}",
+		"event: turn_done\ndata: {}",
+	)
+}
+
+func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *testing.T) {
+	for _, presentation := range []struct {
+		name   string
+		deltas []string
+	}{
+		{name: "zero delta"},
+		{name: "matching prefix", deltas: []string{"committed"}},
+		{name: "divergent content", deltas: []string{"speculative"}},
+	} {
+		for _, cause := range []string{"caller cancellation", "lease loss"} {
+			t.Run(presentation.name+"_"+cause, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				history := &fakeHistory{}
+				owner := webTestTurnOwner{}
+				if cause == "caller cancellation" {
+					history.afterAppend = func(input memory.EventInput) {
+						if input.Type == memory.EventAssistantMessage {
+							cancel()
+						}
+					}
+				} else {
+					history.appendErrAt = 3 // intent append, before ToolCall presentation
+					history.appendErr = errors.New("lease fence lost")
+					owner.leaseLost = true
+				}
+				client := &fakeClient{steps: []fakeStep{{
+					deltas:  presentation.deltas,
+					content: "committed",
+					toolCalls: []openrouter.ToolCall{{
+						ID: "call", Type: "function",
+						Function: openrouter.FunctionCall{Name: "missing", Arguments: `{}`},
+					}},
+				}}}
+				session := agent.New(client, "test", history, memory.ScopeContext{
+					OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+				}, owner)
+				recorder := httptest.NewRecorder()
+				events, err := newSSEEvents(recorder)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sendErr := session.Send(ctx, "go", events, nil)
+				if sendErr == nil {
+					t.Fatal("Send succeeded after selected terminal cause")
+				}
+				events.Error(sendErr.Error())
+				events.TurnDone()
+				body := recorder.Body.String()
+				if strings.Count(body, "event: assistant_done\n") != 1 ||
+					strings.Contains(body, "event: tool_call\n") ||
+					strings.Contains(body, "event: response_discarded\n") {
+					t.Fatalf("terminal SSE contract violated:\n%s", body)
+				}
+				assertSSEOrder(t, body,
+					"event: assistant_done\ndata: {\"content\":\"committed\"}",
+					"event: error",
+					"event: turn_done",
+				)
+			})
+		}
 	}
 }
 

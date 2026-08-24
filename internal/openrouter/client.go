@@ -145,17 +145,20 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		gotChunk = true
 		choice := chunk.Choices[0]
 
-		if choice.Delta.Content != "" {
-			msg.Content += choice.Delta.Content
-			if h.OnContent != nil {
-				h.OnContent(choice.Delta.Content)
-			}
-		}
-
 		if choice.Delta.Reasoning != "" {
 			msg.Reasoning += choice.Delta.Reasoning
 			if h.OnReasoning != nil {
 				h.OnReasoning(choice.Delta.Reasoning)
+			}
+		}
+
+		// A provider may place the last reasoning fragment and first content
+		// fragment in one chunk. Render reasoning first so consumers observe a
+		// single monotonic reasoning -> content transition.
+		if choice.Delta.Content != "" {
+			msg.Content += choice.Delta.Content
+			if h.OnContent != nil {
+				h.OnContent(choice.Delta.Content)
 			}
 		}
 

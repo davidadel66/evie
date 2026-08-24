@@ -271,6 +271,11 @@ describe("reduce", () => {
       text: "Compute 17*23",
       streaming: false,
     });
+    expect(items[1]).toMatchObject({
+      kind: "assistant",
+      text: "391",
+      streaming: false,
+    });
   });
 
   it("measures the thought duration client-side", () => {

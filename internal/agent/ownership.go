@@ -46,6 +46,7 @@ type turnTiming struct {
 	heartbeatInterval           time.Duration
 	cleanupTimeout              time.Duration
 	newTicker                   func(time.Duration) heartbeatTicker
+	newCleanupContext           func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 	beforeAssistantConstruction func()
 	beforeApprovalInvocation    func()
 	// beforeToolResultHandoff is a deterministic test seam at the zero-work
@@ -59,6 +60,9 @@ var defaultTurnTiming = turnTiming{
 	cleanupTimeout:    5 * time.Second,
 	newTicker: func(interval time.Duration) heartbeatTicker {
 		return realHeartbeatTicker{Ticker: time.NewTicker(interval)}
+	},
+	newCleanupContext: func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.WithoutCancel(parent), timeout)
 	},
 }
 

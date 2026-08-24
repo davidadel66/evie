@@ -38,6 +38,9 @@ type fakeHistory struct {
 	appendErrAt    int
 	appendBlockAt  int
 	appendEntered  chan struct{}
+	appendWaitAt   int
+	appendContext  chan<- context.Context
+	appendWait     <-chan struct{}
 	appendErr      error
 	eventsErr      error
 	afterAppend    func(memory.EventInput)
@@ -52,6 +55,15 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 		}
 		<-ctx.Done()
 		return memory.Event{}, ctx.Err()
+	}
+	if f.appendWaitAt == f.appendAttempts {
+		if f.appendContext != nil {
+			f.appendContext <- ctx
+		}
+		if f.appendWait != nil {
+			<-f.appendWait
+		}
+		return memory.Event{}, f.appendErr
 	}
 	if f.appendErr != nil && (f.appendErrAt == 0 || f.appendAttempts == f.appendErrAt) {
 		return memory.Event{}, f.appendErr
@@ -774,6 +786,33 @@ func TestReasoningStreamsThenContent(t *testing.T) {
 	}
 	if fmt.Sprint(rec.events) != fmt.Sprint(want) {
 		t.Fatalf("events = %v, want %v", rec.events, want)
+	}
+}
+
+type contentFirstReasoningClient struct{}
+
+func (contentFirstReasoningClient) ChatStream(
+	_ context.Context,
+	_ openrouter.ChatRequest,
+	h openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	h.OnContent("answer")
+	h.OnReasoning("late reasoning")
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "answer", Reasoning: "late reasoning",
+	}}}}, nil
+}
+
+func TestReasoningAfterContentIsAssembledButNotRendered(t *testing.T) {
+	rec := &recorder{}
+	if err := newTestSession(contentFirstReasoningClient{}, "test-model").Send(
+		context.Background(), "go", rec, nil,
+	); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"delta:answer", "done:answer"}
+	if fmt.Sprint(rec.events) != fmt.Sprint(want) {
+		t.Fatalf("events=%v, want monotonic content presentation %v", rec.events, want)
 	}
 }
 

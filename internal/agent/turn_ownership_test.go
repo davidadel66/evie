@@ -29,6 +29,8 @@ type scriptedOwner struct {
 	authorizeErr   error
 	releaseErr     error
 	releaseBlock   bool
+	releaseContext chan<- context.Context
+	releaseWait    <-chan struct{}
 	heartbeatBlock bool
 	heartbeatStart chan struct{}
 	heartbeatWait  <-chan struct{}
@@ -113,7 +115,16 @@ func (o *scriptedOwner) Release(ctx context.Context, _ memory.TurnLease) error {
 	o.releases++
 	err := o.releaseErr
 	block := o.releaseBlock
+	contextOut := o.releaseContext
+	wait := o.releaseWait
 	o.mu.Unlock()
+	if contextOut != nil {
+		contextOut <- ctx
+	}
+	if wait != nil {
+		<-wait
+		return err
+	}
 	if block {
 		<-ctx.Done()
 		return ctx.Err()
@@ -140,7 +151,7 @@ func TestTurnOwnershipUsesFixedTimingAndExpectedHeartbeatShutdownIsNormal(t *tes
 	if defaultTurnTiming.leaseDuration != 30*time.Second ||
 		defaultTurnTiming.heartbeatInterval != 10*time.Second ||
 		defaultTurnTiming.cleanupTimeout != 5*time.Second ||
-		defaultTurnTiming.newTicker == nil {
+		defaultTurnTiming.newTicker == nil || defaultTurnTiming.newCleanupContext == nil {
 		t.Fatalf("turn timing=%+v", defaultTurnTiming)
 	}
 	owner := &scriptedOwner{}
@@ -267,7 +278,7 @@ func TestTurnCoordinatorAtomicallySelectsOneFirstCause(t *testing.T) {
 }
 
 func TestCallbackAdmissionGateSerializesEveryLiveCallbackWithCauseSelection(t *testing.T) {
-	callbackNames := []string{"reasoning", "content", "assistant_done", "tool_call", "tool_result", "approval"}
+	callbackNames := []string{"reasoning", "content", "tool_call", "tool_result", "approval"}
 	causes := []struct {
 		name string
 		kind causeKind
@@ -588,10 +599,38 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 
 	t.Run("terminal timeout", func(t *testing.T) {
 		providerErr := errors.New("provider unavailable")
-		history := &fakeHistory{appendBlockAt: 2}
+		appendContext := make(chan context.Context, 1)
+		releaseAppend := make(chan struct{})
+		history := &fakeHistory{
+			appendWaitAt: 2, appendContext: appendContext, appendWait: releaseAppend,
+			appendErrAt: 2, appendErr: context.DeadlineExceeded,
+		}
 		s := ownedSession(&fakeClient{steps: []step{{err: providerErr}}}, history, &scriptedOwner{})
-		s.timing.cleanupTimeout = 5 * time.Millisecond
-		err := s.Send(context.Background(), "go", &recorder{}, nil)
+		fixedDeadline := time.Now().Add(time.Hour)
+		s.timing.newCleanupContext = func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+			if timeout != 5*time.Second {
+				panic(fmt.Sprintf("cleanup timeout=%v", timeout))
+			}
+			return context.WithDeadline(context.WithoutCancel(parent), fixedDeadline)
+		}
+		done := make(chan error, 1)
+		go func() { done <- s.Send(context.Background(), "go", &recorder{}, nil) }()
+		var terminalCtx context.Context
+		select {
+		case terminalCtx = <-appendContext:
+		case <-time.After(5 * time.Second):
+			t.Fatal("terminal cleanup did not reach append boundary")
+		}
+		if deadline, ok := terminalCtx.Deadline(); !ok || !deadline.Equal(fixedDeadline) {
+			t.Fatalf("terminal deadline=%v present=%v, want %v", deadline, ok, fixedDeadline)
+		}
+		close(releaseAppend)
+		var err error
+		select {
+		case err = <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("terminal cleanup did not finish after scripted deadline error")
+		}
 		if !errors.Is(err, providerErr) || !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("Send error=%v, want provider and terminal deadline errors", err)
 		}
@@ -601,10 +640,37 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 	})
 
 	t.Run("release timeout", func(t *testing.T) {
-		owner := &scriptedOwner{releaseBlock: true}
+		releaseContext := make(chan context.Context, 1)
+		releaseOwner := make(chan struct{})
+		owner := &scriptedOwner{
+			releaseErr: context.DeadlineExceeded, releaseContext: releaseContext, releaseWait: releaseOwner,
+		}
 		s := ownedSession(&fakeClient{steps: []step{assistantStep("done", nil)}}, &fakeHistory{}, owner)
-		s.timing.cleanupTimeout = 5 * time.Millisecond
-		err := s.Send(context.Background(), "go", &recorder{}, nil)
+		fixedDeadline := time.Now().Add(time.Hour)
+		s.timing.newCleanupContext = func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+			if timeout != 5*time.Second {
+				panic(fmt.Sprintf("cleanup timeout=%v", timeout))
+			}
+			return context.WithDeadline(context.WithoutCancel(parent), fixedDeadline)
+		}
+		done := make(chan error, 1)
+		go func() { done <- s.Send(context.Background(), "go", &recorder{}, nil) }()
+		var releaseCtx context.Context
+		select {
+		case releaseCtx = <-releaseContext:
+		case <-time.After(5 * time.Second):
+			t.Fatal("release cleanup did not reach release boundary")
+		}
+		if deadline, ok := releaseCtx.Deadline(); !ok || !deadline.Equal(fixedDeadline) {
+			t.Fatalf("release deadline=%v present=%v, want %v", deadline, ok, fixedDeadline)
+		}
+		close(releaseOwner)
+		var err error
+		select {
+		case err = <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("release cleanup did not finish after scripted deadline error")
+		}
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("Send error=%v, want release deadline", err)
 		}
@@ -861,11 +927,59 @@ func TestProviderCycleParentageUsesLatestDurableTriggerAndRootTurnID(t *testing.
 	}
 }
 
+type scriptedDeadlineContext struct {
+	context.Context
+	deadline time.Time
+	done     chan struct{}
+	expired  bool
+	mu       sync.Mutex
+	once     sync.Once
+}
+
+func newScriptedDeadlineContext() *scriptedDeadlineContext {
+	return &scriptedDeadlineContext{
+		Context: context.Background(), deadline: time.Now().Add(time.Hour), done: make(chan struct{}),
+	}
+}
+
+func (c *scriptedDeadlineContext) Deadline() (time.Time, bool) { return c.deadline, true }
+func (c *scriptedDeadlineContext) Done() <-chan struct{}       { return c.done }
+func (c *scriptedDeadlineContext) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.expired {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func (c *scriptedDeadlineContext) expire() {
+	c.mu.Lock()
+	c.expired = true
+	c.mu.Unlock()
+	c.once.Do(func() { close(c.done) })
+}
+
 func TestCallerDeadlinePersistsInterruptedClassification(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
+	ctx := newScriptedDeadlineContext()
+	providerEntered := make(chan struct{})
 	history := &fakeHistory{}
-	err := ownedSession(cancelAwareClient{}, history, &scriptedOwner{}).Send(ctx, "go", &recorder{}, nil)
+	done := make(chan error, 1)
+	go func() {
+		done <- ownedSession(cancelAwareClient{streamed: providerEntered}, history, &scriptedOwner{}).
+			Send(ctx, "go", &recorder{}, nil)
+	}()
+	select {
+	case <-providerEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider did not enter before scripted deadline")
+	}
+	ctx.expire()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("caller deadline turn did not finish")
+	}
 	if !errors.Is(err, context.DeadlineExceeded) || len(history.events) != 2 {
 		t.Fatalf("Send error=%v events=%+v", err, history.events)
 	}
@@ -1029,7 +1143,7 @@ func TestAssistantCommitInterruptionPersistsExactEvidenceAndSuppressesLaterWork(
 	}
 }
 
-func TestToolCallingAssistantCallbackSuppressedWhenAppendReturnsAfterCancellation(t *testing.T) {
+func TestCommittedToolCallingAssistantNotifiedBeforePostCommitCancellationStopsTools(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	history := &fakeHistory{}
 	history.afterAppend = func(input memory.EventInput) {
@@ -1043,9 +1157,12 @@ func TestToolCallingAssistantCallbackSuppressedWhenAppendReturnsAfterCancellatio
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Send error=%v, want context.Canceled", err)
 	}
+	if strings.Count(strings.Join(events.events, "\n"), "done:calling") != 1 {
+		t.Fatalf("committed assistant notification=%v, want exactly one", events.events)
+	}
 	for _, event := range events.events {
-		if strings.HasPrefix(event, "done:") || strings.HasPrefix(event, "call:") || strings.HasPrefix(event, "result:") {
-			t.Fatalf("stale callback emitted after cancellation: %v", events.events)
+		if strings.HasPrefix(event, "call:") || strings.HasPrefix(event, "result:") || strings.HasPrefix(event, "discarded:") {
+			t.Fatalf("later callback emitted after cancellation: %v", events.events)
 		}
 	}
 	if len(history.events) != 3 || history.events[1].Type != memory.EventAssistantMessage ||
@@ -1884,6 +2001,76 @@ func assertOrderedCallbacks(t *testing.T, got []string, want ...string) {
 }
 
 func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
+	for _, presentation := range []struct {
+		name   string
+		deltas []string
+		want   []string
+	}{
+		{name: "zero delta", want: []string{"done:calling"}},
+		{name: "matching prefix", deltas: []string{"calling"}, want: []string{"delta:calling", "done:calling"}},
+		{name: "divergent content", deltas: []string{"speculative"}, want: []string{"delta:speculative", "done:calling"}},
+	} {
+		for _, cause := range postCommitCauses {
+			t.Run(presentation.name+"_"+cause.name, func(t *testing.T) {
+				owner := &scriptedOwner{}
+				if cause.heartbeat {
+					owner.heartbeatErr = errFakeLeaseLost
+				}
+				coordinator := newTurnCoordinator(context.Background())
+				coordinator.setStage(memory.StageTurnStart)
+				history := &fakeHistory{events: []memory.Event{{
+					ID: "root", SessionID: "test-session", Sequence: 1,
+					Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
+				}}}
+				client := &fakeClient{steps: []step{assistantStep("calling", presentation.deltas,
+					toolCall("call", "echo", `{}`),
+				)}}
+				s := ownedSession(client, history, owner)
+				ticks := useManualHeartbeatTicker(s)
+				triggered := false
+				history.afterAppend = func(input memory.EventInput) {
+					if input.Type == memory.EventAssistantMessage && !triggered {
+						triggered = true
+						triggerPostCommitCause(t, coordinator, ticks, cause)
+					}
+				}
+				lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
+				stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
+				defer stopHeartbeat()
+				ran := false
+				events := &recorder{}
+				err := s.runOwnedTurn(
+					coordinator,
+					lease,
+					events,
+					nil,
+					&turnProgress{requestParentID: "root"},
+					[]tools.Tool{echoTool("echo", false, &ran)},
+				)
+				if !errors.Is(err, cause.err) || ran {
+					t.Fatalf("runOwnedTurn error=%v tool ran=%v", err, ran)
+				}
+				if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageToolPrepare {
+					t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageToolPrepare)
+				}
+				_, heartbeats, authorizations, _ := owner.counts()
+				wantHeartbeats := 0
+				if cause.heartbeat {
+					wantHeartbeats = 1
+				}
+				if !triggered || len(history.events) != 2 ||
+					fmt.Sprint(events.events) != fmt.Sprint(presentation.want) ||
+					len(client.reqs) != 1 || heartbeats != wantHeartbeats || authorizations != 1 {
+					t.Fatalf("triggered=%v durable=%+v callbacks=%v", triggered, history.events, events.events)
+				}
+				events.events = append(events.events, "error", "turn_done")
+				assertOrderedCallbacks(t, events.events, "done:calling", "error", "turn_done")
+			})
+		}
+	}
+}
+
+func TestCommittedAssistantNotificationMayBlockAfterCauseWithoutReopeningWork(t *testing.T) {
 	for _, cause := range postCommitCauses {
 		t.Run(cause.name, func(t *testing.T) {
 			owner := &scriptedOwner{}
@@ -1901,40 +2088,50 @@ func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
 			)}}
 			s := ownedSession(client, history, owner)
 			ticks := useManualHeartbeatTicker(s)
-			triggered := false
 			history.afterAppend = func(input memory.EventInput) {
-				if input.Type == memory.EventAssistantMessage && !triggered {
-					triggered = true
+				if input.Type == memory.EventAssistantMessage {
 					triggerPostCommitCause(t, coordinator, ticks, cause)
 				}
 			}
+			callbackStarted := make(chan struct{})
+			releaseCallback := make(chan struct{})
+			events := &recorder{onAssistantDone: func() {
+				close(callbackStarted)
+				<-releaseCallback
+			}}
+			ran := false
 			lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
 			stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
 			defer stopHeartbeat()
-			ran := false
-			events := &recorder{}
-			err := s.runOwnedTurn(
-				coordinator,
-				lease,
-				events,
-				nil,
-				&turnProgress{requestParentID: "root"},
-				[]tools.Tool{echoTool("echo", false, &ran)},
-			)
-			if !errors.Is(err, cause.err) || ran {
-				t.Fatalf("runOwnedTurn error=%v tool ran=%v", err, ran)
+			done := make(chan error, 1)
+			go func() {
+				done <- s.runOwnedTurn(
+					coordinator, lease, events, nil,
+					&turnProgress{requestParentID: "root"},
+					[]tools.Tool{echoTool("echo", false, &ran)},
+				)
+			}()
+			select {
+			case <-callbackStarted:
+			case <-time.After(5 * time.Second):
+				t.Fatal("committed notification did not start")
 			}
-			if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageToolPrepare {
-				t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageToolPrepare)
+			select {
+			case err := <-done:
+				t.Fatalf("turn returned before committed notification completed: %v", err)
+			default:
 			}
-			_, heartbeats, authorizations, _ := owner.counts()
-			wantHeartbeats := 0
-			if cause.heartbeat {
-				wantHeartbeats = 1
+			if ran || len(history.events) != 2 || len(client.reqs) != 1 {
+				t.Fatalf("tool/provider work escaped while notification blocked: ran=%v durable=%+v provider=%d", ran, history.events, len(client.reqs))
 			}
-			if !triggered || len(history.events) != 2 || len(events.events) != 0 ||
-				len(client.reqs) != 1 || heartbeats != wantHeartbeats || authorizations != 1 {
-				t.Fatalf("triggered=%v durable=%+v callbacks=%v", triggered, history.events, events.events)
+			close(releaseCallback)
+			select {
+			case err := <-done:
+				if !errors.Is(err, cause.err) {
+					t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("turn did not finish after committed notification")
 			}
 		})
 	}
