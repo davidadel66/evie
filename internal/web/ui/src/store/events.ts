@@ -8,6 +8,15 @@ export type FilePreview = {
   isNew: boolean;
 };
 
+export type DiscardReason =
+  | "provider_error"
+  | "provider_response_invalid"
+  | "caller_cancelled"
+  | "caller_deadline_exceeded"
+  | "lease_lost"
+  | "lease_heartbeat_failed"
+  | "assistant_persistence_failed";
+
 export type ServerEvent =
   | { type: "delta"; text: string }
   | { type: "reasoning"; text: string }
@@ -22,6 +31,7 @@ export type ServerEvent =
       args: string;
       preview?: FilePreview;
     }
+  | { type: "response_discarded"; reason: DiscardReason; message: string }
   | { type: "error"; message: string }
   | { type: "turn_done" };
 
@@ -36,6 +46,7 @@ const KNOWN = new Set([
   "tool_call",
   "tool_result",
   "approval_request",
+  "response_discarded",
   "error",
   "turn_done",
 ]);

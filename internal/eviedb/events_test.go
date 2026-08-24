@@ -3,6 +3,7 @@ package eviedb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -160,5 +161,84 @@ func TestEventStoreRejectsInvalidOrUnavailableAppends(t *testing.T) {
 		Role: memory.RoleUser,
 	}); err == nil {
 		t.Fatalf("append to closed session returned event %+v", event)
+	}
+}
+
+func TestFencedEventAppendRejectsStaleLeaseAndRollsBackAtFinalFence(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	setTurnLeaseTime(store, now)
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "holder", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken+1, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "stale",
+	}); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Fatalf("stale append error = %v, want ErrTurnLeaseLost", err)
+	}
+
+	samples := 0
+	store.now = func() time.Time {
+		samples++
+		if samples == 1 {
+			return now
+		}
+		return lease.ExpiresAt
+	}
+	if _, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "crossed expiry",
+	}); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Fatalf("final-fence append error = %v, want ErrTurnLeaseLost", err)
+	}
+	events, err := store.LoadEvents(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("rolled-back fenced appends = %+v", events)
+	}
+}
+
+func TestTerminalEventStorageRejectsUnsafeOrOpenPayloads(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "holder", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := memory.TurnTerminalPayload{
+		TurnID: "root", Classification: memory.ClassificationProviderError, Stage: memory.StageProvider,
+	}
+	valid, _ := json.Marshal(base)
+	tests := []struct {
+		name    string
+		content string
+		payload json.RawMessage
+	}{
+		{name: "raw error content", content: "provider URL and body", payload: valid},
+		{name: "unknown payload field", content: base.SafeContent(), payload: json.RawMessage(`{"turn_id":"root","classification":"provider_error","stage":"provider","raw_body":"secret"}`)},
+		{name: "unknown stage", content: base.SafeContent(), payload: json.RawMessage(`{"turn_id":"root","classification":"provider_error","stage":"future"}`)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if event, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{
+				ParentID: "root", Type: memory.EventTurnFailed, Content: tt.content, Payload: tt.payload,
+			}); err == nil {
+				t.Fatalf("unsafe terminal event appended: %+v", event)
+			}
+		})
 	}
 }

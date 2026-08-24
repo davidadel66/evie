@@ -3,6 +3,7 @@ package eviedb
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 )
@@ -22,7 +23,11 @@ func TestSessionHistoryBindsAppendsAndReadsToOneSession(t *testing.T) {
 	}
 
 	history := store.BindHistory(firstSession.ID)
-	firstEvent, err := history.Append(ctx, memory.EventInput{
+	lease, err := store.AcquireTurnLease(ctx, firstSession.ID, "worker", time.Minute)
+	if err != nil {
+		t.Fatalf("acquire first-session lease: %v", err)
+	}
+	firstEvent, err := history.Append(ctx, lease, memory.EventInput{
 		Type:    memory.EventUserMessage,
 		Role:    memory.RoleUser,
 		Content: "first session",
@@ -56,7 +61,9 @@ func TestSessionHistoryCannotAppendToMissingSession(t *testing.T) {
 	db := newTestDB(t)
 	history := NewStore(db).BindHistory(memory.SessionID("missing"))
 
-	if event, err := history.Append(context.Background(), memory.EventInput{
+	if event, err := history.Append(context.Background(), memory.TurnLease{
+		SessionID: "missing", HolderID: "worker", FencingToken: 1,
+	}, memory.EventInput{
 		Type: memory.EventUserMessage,
 		Role: memory.RoleUser,
 	}); err == nil {

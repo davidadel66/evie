@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/memory"
@@ -32,10 +33,16 @@ type fakeStep struct {
 }
 
 type fakeHistory struct {
-	events []memory.Event
+	events      []memory.Event
+	appendErrAt int
+	appendCalls int
 }
 
-func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+func (f *fakeHistory) Append(_ context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
+	f.appendCalls++
+	if f.appendErrAt == f.appendCalls {
+		return memory.Event{}, errors.New("assistant persistence failed")
+	}
 	event := memory.Event{
 		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
 		SessionID:     "test-session",
@@ -95,9 +102,28 @@ func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
 	srv := NewServer(agent.New(c, "test-model", &fakeHistory{}, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	}))
+	}, webTestTurnOwner{}))
 	return srv, srv.Handler()
 }
+
+type webTestTurnOwner struct {
+	acquireErr error
+	conflict   bool
+}
+
+func (o webTestTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
+	if o.acquireErr != nil {
+		return memory.TurnLease{}, o.acquireErr
+	}
+	return memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (webTestTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration) (memory.TurnLease, error) {
+	return memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (webTestTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
+func (webTestTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
+func (o webTestTurnOwner) IsConflict(error) bool                           { return o.conflict }
+func (webTestTurnOwner) IsLeaseLost(error) bool                            { return false }
 
 // chatRequest builds a well-formed same-origin chat POST; individual
 // tests then break one property at a time.
@@ -165,6 +191,68 @@ func TestChatStreamsReasoningBeforeContent(t *testing.T) {
 	if !(firstReasoning < done && done < firstDelta) {
 		t.Fatalf("order = reasoning@%d done@%d delta@%d, want reasoning < done < delta:\n%s",
 			firstReasoning, done, firstDelta, body)
+	}
+}
+
+func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2}
+	client := &fakeClient{steps: []fakeStep{{deltas: []string{"partial"}, content: "partial"}}}
+	session := agent.New(client, "test", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	assertSSEOrder(t, body,
+		"event: delta\ndata: {\"text\":\"partial\"}",
+		"event: response_discarded\ndata: {\"reason\":\"assistant_persistence_failed\",\"message\":\"Response interrupted; streamed text was not saved.\"}",
+		"event: error",
+		"event: turn_done",
+	)
+}
+
+func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2}
+	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}}}}
+	session := agent.New(client, "test", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	assertSSEOrder(t, body,
+		"event: reasoning\ndata: {\"text\":\"thinking\"}",
+		"event: reasoning_done\ndata: {}",
+		"event: response_discarded\ndata: {\"reason\":\"assistant_persistence_failed\",\"message\":\"Response interrupted; streamed text was not saved.\"}",
+		"event: error",
+		"event: turn_done",
+	)
+}
+
+func TestDurableLeaseConflictUsesPreStream409JSON(t *testing.T) {
+	conflictErr := errors.New("lease held elsewhere")
+	session := agent.New(&fakeClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{acquireErr: conflictErr, conflict: true})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	if recorder.Code != http.StatusConflict || recorder.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("status=%d content-type=%q body=%s", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "event:") || !strings.Contains(recorder.Body.String(), `"error"`) {
+		t.Fatalf("conflict response=%s", recorder.Body.String())
+	}
+}
+
+func assertSSEOrder(t *testing.T, body string, values ...string) {
+	t.Helper()
+	last := -1
+	for _, value := range values {
+		index := strings.Index(body, value)
+		if index <= last {
+			t.Fatalf("SSE value %q missing or out of order in:\n%s", value, body)
+		}
+		last = index
 	}
 }
 

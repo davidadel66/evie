@@ -163,6 +163,47 @@ describe("reduce", () => {
     expect(items[0]).toMatchObject({ streaming: false, text: "cut off" });
   });
 
+  it("preserves partial text with an inline discarded warning through turn_done", () => {
+    const items = fold([
+      { type: "delta", text: "partial answer" },
+      {
+        type: "response_discarded",
+        reason: "lease_lost",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "partial answer",
+      streaming: false,
+      discarded: {
+        reason: "lease_lost",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+    });
+  });
+
+  it("adds a standalone discarded warning for reasoning-only output", () => {
+    const items = fold([
+      { type: "reasoning", text: "unfinished thought" },
+      { type: "reasoning_done" },
+      {
+        type: "response_discarded",
+        reason: "assistant_persistence_failed",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+      { type: "turn_done" },
+    ]);
+    expect(items.map((item) => item.kind)).toEqual(["reasoning", "notice"]);
+    expect(items[1]).toMatchObject({
+      kind: "notice",
+      reason: "assistant_persistence_failed",
+      text: "Response interrupted; streamed text was not saved.",
+    });
+  });
+
   it("streams reasoning fragments into one item, in wire order", () => {
     const items = fold([
       { type: "reasoning", text: "Compute " },
@@ -267,6 +308,19 @@ describe("parseEvent", () => {
     });
     expect(parseEvent("reasoning_done", "{}")).toEqual({
       type: "reasoning_done",
+    });
+  });
+
+  it("parses response_discarded as a known event", () => {
+    expect(
+      parseEvent(
+        "response_discarded",
+        '{"reason":"provider_response_invalid","message":"Response interrupted; streamed text was not saved."}',
+      ),
+    ).toEqual({
+      type: "response_discarded",
+      reason: "provider_response_invalid",
+      message: "Response interrupted; streamed text was not saved.",
     });
   });
 

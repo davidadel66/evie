@@ -30,6 +30,15 @@ type Tool struct {
 
 type ApprovalObserver func(ctx context.Context, decision Decision) error
 
+type AuthorizationBoundary int
+
+const (
+	AuthorizePreparation AuthorizationBoundary = iota + 1
+	AuthorizeExecution
+)
+
+type LifecycleAuthorizer func(context.Context, AuthorizationBoundary) error
+
 type PreparedTool struct {
 	Preview *FileChangePreview
 	Execute func(ctx context.Context) (string, error)
@@ -95,6 +104,17 @@ func ExecuteWithApproval(
 	approve Approver,
 	observe ApprovalObserver,
 ) (openrouter.Message, bool, error) {
+	return ExecuteWithApprovalAuthorized(ctx, extra, call, approve, observe, nil)
+}
+
+func ExecuteWithApprovalAuthorized(
+	ctx context.Context,
+	extra []Tool,
+	call openrouter.ToolCall,
+	approve Approver,
+	observe ApprovalObserver,
+	authorize LifecycleAuthorizer,
+) (openrouter.Message, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return openrouter.Message{}, false, err
 	}
@@ -106,6 +126,11 @@ func ExecuteWithApproval(
 
 			var prepared *PreparedTool
 			if tool.NeedsApproval {
+				if authorize != nil {
+					if err := authorize(ctx, AuthorizePreparation); err != nil {
+						return openrouter.Message{}, false, fmt.Errorf("authorize tool preparation: %w", err)
+					}
+				}
 				decision := Declined
 				if approve != nil {
 					if tool.Prepare != nil {
@@ -159,7 +184,11 @@ func ExecuteWithApproval(
 
 				switch decision {
 				case Approved:
-					// Continue to execution.
+					if authorize != nil {
+						if err := authorize(ctx, AuthorizeExecution); err != nil {
+							return openrouter.Message{}, false, fmt.Errorf("authorize tool execution: %w", err)
+						}
+					}
 				case Expired:
 					return openrouter.Message{
 						Role:       "tool",
@@ -172,6 +201,11 @@ func ExecuteWithApproval(
 						Content:    "David declined this tool call. Do not retry it unless he asks for something different.",
 						ToolCallID: call.ID,
 					}, false, nil
+				}
+			}
+			if !tool.NeedsApproval && authorize != nil {
+				if err := authorize(ctx, AuthorizeExecution); err != nil {
+					return openrouter.Message{}, false, fmt.Errorf("authorize tool execution: %w", err)
 				}
 			}
 

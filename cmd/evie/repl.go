@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -212,6 +213,10 @@ func createGlobalREPLSession(ctx context.Context, store replSessionStore) (memor
 // lagging. Call the returned onDelta from the stream, then done() to
 // flush the tail and stop the printer.
 func smoothPrinter() (onDelta func(string), done func()) {
+	return smoothPrinterTo(os.Stdout)
+}
+
+func smoothPrinterTo(out io.Writer) (onDelta func(string), done func()) {
 	ch := make(chan string, 64)
 	finished := make(chan struct{})
 
@@ -224,7 +229,7 @@ func smoothPrinter() (onDelta func(string), done func()) {
 			select {
 			case s, ok := <-ch:
 				if !ok {
-					fmt.Print(string(buf))
+					_, _ = fmt.Fprint(out, string(buf))
 					return
 				}
 				buf = append(buf, []rune(s)...)
@@ -236,7 +241,7 @@ func smoothPrinter() (onDelta func(string), done func()) {
 				if n > len(buf) {
 					n = len(buf)
 				}
-				fmt.Print(string(buf[:n]))
+				_, _ = fmt.Fprint(out, string(buf[:n]))
 				buf = buf[n:]
 			}
 		}
@@ -252,11 +257,19 @@ func smoothPrinter() (onDelta func(string), done func()) {
 type replEvents struct {
 	deltaIn func(string)
 	flush   func()
+	out     io.Writer
+}
+
+func (r *replEvents) writer() io.Writer {
+	if r.out != nil {
+		return r.out
+	}
+	return os.Stdout
 }
 
 func (r *replEvents) Delta(text string) {
 	if r.deltaIn == nil {
-		r.deltaIn, r.flush = smoothPrinter()
+		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 	}
 	r.deltaIn(text)
 }
@@ -268,7 +281,7 @@ func (r *replEvents) Delta(text string) {
 // before whatever comes next.
 func (r *replEvents) Reasoning(text string) {
 	if r.deltaIn == nil {
-		r.deltaIn, r.flush = smoothPrinter()
+		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 		r.deltaIn("\x1b[90mthinking…\n")
 	}
 	r.deltaIn(text)
@@ -281,7 +294,7 @@ func (r *replEvents) ReasoningDone() {
 	r.deltaIn("\x1b[0m")
 	r.flush()
 	r.deltaIn, r.flush = nil, nil
-	fmt.Print("\n\n")
+	_, _ = fmt.Fprint(r.writer(), "\n\n")
 }
 
 func (r *replEvents) AssistantDone(content string) {
@@ -290,15 +303,24 @@ func (r *replEvents) AssistantDone(content string) {
 		r.deltaIn, r.flush = nil, nil
 	}
 	if content != "" {
-		fmt.Println()
+		_, _ = fmt.Fprintln(r.writer())
 	}
 }
 
 func (r *replEvents) ToolCall(id, name, args string) {
-	fmt.Printf("[calling %s]\n", name)
+	_, _ = fmt.Fprintf(r.writer(), "[calling %s]\n", name)
 }
 
 func (r *replEvents) ToolResult(id, content string, isErr bool) {}
+
+func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
+	if r.deltaIn != nil {
+		r.flush()
+		r.deltaIn, r.flush = nil, nil
+		_, _ = fmt.Fprintln(r.writer())
+	}
+	_, _ = fmt.Fprintln(r.writer(), message)
+}
 
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
 // print and return to the prompt rather than killing the session.
@@ -325,7 +347,7 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 		return tools.Declined
 	}
 
-	ev := &replEvents{}
+	ev := &replEvents{out: os.Stdout}
 	for {
 		if ctx.Err() != nil {
 			return

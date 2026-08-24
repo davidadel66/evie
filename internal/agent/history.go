@@ -12,6 +12,7 @@ import (
 type History interface {
 	Append(
 		ctx context.Context,
+		lease memory.TurnLease,
 		input memory.EventInput,
 	) (memory.Event, error)
 	Events(ctx context.Context) ([]memory.Event, error)
@@ -19,8 +20,15 @@ type History interface {
 
 func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 	var messages []openrouter.Message
+	omit, err := incompleteToolGroupEvents(events)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, event := range events {
+	for i, event := range events {
+		if omit[i] {
+			continue
+		}
 		switch event.Type {
 		case memory.EventUserMessage:
 			if event.Role != memory.RoleUser {
@@ -86,7 +94,8 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 		case memory.EventToolIntent,
 			memory.EventApproval,
 			memory.EventExecutionResolved,
-			memory.EventTurnFailed:
+			memory.EventTurnFailed,
+			memory.EventTurnInterrupted:
 			continue
 
 		default:
@@ -95,6 +104,75 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 		}
 	}
 	return messages, nil
+}
+
+func incompleteToolGroupEvents(events []memory.Event) (map[int]bool, error) {
+	omit := make(map[int]bool)
+	for i, event := range events {
+		if event.Type != memory.EventAssistantMessage {
+			continue
+		}
+		var payload memory.AssistantMessagePayload
+		if err := decodeEventPayload(event, &payload); err != nil {
+			return nil, err
+		}
+		if len(payload.ToolCalls) == 0 {
+			continue
+		}
+
+		requested := make(map[string]bool, len(payload.ToolCalls))
+		for _, call := range payload.ToolCalls {
+			if call.ID == "" || call.Name == "" {
+				return nil, fmt.Errorf("assistant event %q contains an incomplete tool call", event.ID)
+			}
+			if _, exists := requested[call.ID]; exists {
+				return nil, fmt.Errorf("assistant event %q repeats tool call ID %q", event.ID, call.ID)
+			}
+			requested[call.ID] = false
+		}
+		groupEnd := len(events)
+		for j := i + 1; j < len(events); j++ {
+			if events[j].Type == memory.EventAssistantMessage || events[j].Type == memory.EventUserMessage {
+				groupEnd = j
+				break
+			}
+			if events[j].Type != memory.EventToolSucceeded &&
+				events[j].Type != memory.EventToolFailed &&
+				events[j].Type != memory.EventToolCancelled {
+				continue
+			}
+			var result memory.ToolResultPayload
+			if err := decodeEventPayload(events[j], &result); err != nil {
+				return nil, err
+			}
+			if _, ok := requested[result.ToolCallID]; ok {
+				requested[result.ToolCallID] = true
+			}
+		}
+		complete := true
+		for _, terminal := range requested {
+			complete = complete && terminal
+		}
+		if complete {
+			continue
+		}
+		omit[i] = true
+		for j := i + 1; j < groupEnd; j++ {
+			if events[j].Type != memory.EventToolSucceeded &&
+				events[j].Type != memory.EventToolFailed &&
+				events[j].Type != memory.EventToolCancelled {
+				continue
+			}
+			var result memory.ToolResultPayload
+			if err := decodeEventPayload(events[j], &result); err != nil {
+				return nil, err
+			}
+			if _, ok := requested[result.ToolCallID]; ok {
+				omit[j] = true
+			}
+		}
+	}
+	return omit, nil
 }
 
 func decodeEventPayload(event memory.Event, destination any) error {

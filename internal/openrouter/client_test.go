@@ -1,6 +1,7 @@
 package openrouter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,23 @@ import (
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type failingReadCloser struct {
+	reader *bytes.Reader
+	err    error
+}
+
+func (r *failingReadCloser) Read(p []byte) (int, error) {
+	if r.reader.Len() > 0 {
+		return r.reader.Read(p)
+	}
+	return 0, r.err
+}
+func (*failingReadCloser) Close() error { return nil }
 
 // serveFixture builds a local SSE server replaying one captured stream,
 // and a Client pointed at it.
@@ -165,5 +183,102 @@ func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
 	close(release)
 	if !errors.Is(gotErr, context.Canceled) {
 		t.Fatalf("ChatStream error = %v, want context.Canceled", gotErr)
+	}
+}
+
+func TestChatStreamClassifiesProviderAndInvalidResponseFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantKind   StreamErrorKind
+		wantStatus int
+	}{
+		{name: "non-2xx", status: http.StatusBadGateway, body: "raw provider body", wantKind: StreamProviderError, wantStatus: http.StatusBadGateway},
+		{name: "2xx with no usable choice", status: http.StatusNoContent, wantKind: StreamProviderResponseInvalid},
+		{name: "malformed streamed JSON", status: http.StatusOK, body: "data: {not-json}\n", wantKind: StreamProviderResponseInvalid},
+		{name: "no chunks", status: http.StatusOK, body: ": keepalive\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = srv.URL
+			_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			var streamErr *StreamError
+			if !errors.As(err, &streamErr) || streamErr.Kind != tt.wantKind || streamErr.HTTPStatus != tt.wantStatus {
+				t.Fatalf("error=%v typed=%+v want kind=%q status=%d", err, streamErr, tt.wantKind, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestChatStreamClassifiesRequestConstructionFailure(t *testing.T) {
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = "://invalid-url"
+	_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+	var streamErr *StreamError
+	if !errors.As(err, &streamErr) || streamErr.Kind != StreamProviderError {
+		t.Fatalf("error=%v typed=%+v", err, streamErr)
+	}
+}
+
+func TestChatStreamClassifiesTransportAndBodyIOAsProviderErrors(t *testing.T) {
+	original := http.DefaultClient
+	defer func() { http.DefaultClient = original }()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = "http://provider.test"
+
+	for _, tt := range []struct {
+		name      string
+		transport roundTripFunc
+		status    int
+	}{
+		{
+			name: "transport",
+			transport: func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("dial failed")
+			},
+		},
+		{
+			name: "stream scanner IO",
+			transport: func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: &failingReadCloser{
+					reader: bytes.NewReader([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n")),
+					err:    errors.New("scanner read failed"),
+				}}, nil
+			},
+		},
+		{
+			name: "non-2xx body IO",
+			transport: func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: &failingReadCloser{
+					reader: bytes.NewReader(nil), err: errors.New("body read failed"),
+				}}, nil
+			},
+			status: http.StatusServiceUnavailable,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			http.DefaultClient = &http.Client{Transport: tt.transport}
+			_, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			var streamErr *StreamError
+			if !errors.As(err, &streamErr) || streamErr.Kind != StreamProviderError || streamErr.HTTPStatus != tt.status {
+				t.Fatalf("error=%v typed=%+v", err, streamErr)
+			}
+		})
 	}
 }

@@ -139,7 +139,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	sendErr := s.session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
 
-	if errors.Is(sendErr, agent.ErrBusy) && !ev.wrote {
+	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")
 		return
 	}

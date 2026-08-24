@@ -105,3 +105,77 @@ func TestMessagesFromEventsRejectsInvalidConversationData(t *testing.T) {
 		})
 	}
 }
+
+func TestMessagesFromEventsOmitsIncompleteToolGroupsWhole(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		calls    []memory.ToolCall
+		outcomes []memory.ToolCall
+	}{
+		{
+			name:  "single missing outcome",
+			calls: []memory.ToolCall{{ID: "c1", Name: "one", Arguments: `{}`}},
+		},
+		{
+			name: "multi partial outcome",
+			calls: []memory.ToolCall{
+				{ID: "c1", Name: "one", Arguments: `{}`},
+				{ID: "c2", Name: "two", Arguments: `{}`},
+			},
+			outcomes: []memory.ToolCall{{ID: "c1", Name: "one"}},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			events := []memory.Event{
+				{ID: "u1", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "first"},
+				{ID: "a1", Sequence: 2, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: tt.calls})},
+			}
+			for i, outcome := range tt.outcomes {
+				events = append(events, memory.Event{
+					ID: memory.EventID("result-" + outcome.ID), Sequence: int64(3 + i),
+					Type: memory.EventToolSucceeded, Role: memory.RoleTool, Content: "partial result",
+					Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: outcome.ID}),
+				})
+			}
+			events = append(events,
+				memory.Event{ID: "u2", Sequence: 10, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "continue"},
+				memory.Event{ID: "a2", Sequence: 11, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "continued", Payload: json.RawMessage(`{}`)},
+			)
+			messages, err := messagesFromEvents(events)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []openrouter.Message{
+				{Role: "user", Content: "first"},
+				{Role: "user", Content: "continue"},
+				{Role: "assistant", Content: "continued"},
+			}
+			if !reflect.DeepEqual(messages, want) {
+				t.Fatalf("messages=%#v want=%#v", messages, want)
+			}
+		})
+	}
+}
+
+func TestMessagesFromEventsRetainsCompleteMultiToolGroupInDurableOrder(t *testing.T) {
+	calls := []memory.ToolCall{
+		{ID: "c1", Name: "one", Arguments: `{"n":1}`},
+		{ID: "c2", Name: "two", Arguments: `{"n":2}`},
+	}
+	events := []memory.Event{
+		{ID: "u1", Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run both"},
+		{ID: "a1", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: calls})},
+		{ID: "r1", Type: memory.EventToolSucceeded, Role: memory.RoleTool, Content: "one result", Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: "c1"})},
+		{ID: "r2", Type: memory.EventToolFailed, Role: memory.RoleTool, Content: "two result", Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: "c2", IsError: true})},
+	}
+	messages, err := messagesFromEvents(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roles := rolesOf(messages); roles != "user,assistant,tool,tool" {
+		t.Fatalf("roles=%s messages=%+v", roles, messages)
+	}
+	if messages[2].ToolCallID != "c1" || messages[3].ToolCallID != "c2" {
+		t.Fatalf("tool order=%+v", messages[2:])
+	}
+}

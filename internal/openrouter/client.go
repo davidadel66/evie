@@ -19,6 +19,29 @@ import (
 	"strings"
 )
 
+type StreamErrorKind string
+
+const (
+	StreamProviderError           StreamErrorKind = "provider_error"
+	StreamProviderResponseInvalid StreamErrorKind = "provider_response_invalid"
+)
+
+// StreamError exposes only stable structural classification to the harness.
+// Err remains local diagnostic detail and must never be copied into durable
+// terminal evidence.
+type StreamError struct {
+	Kind       StreamErrorKind
+	HTTPStatus int
+	Err        error
+}
+
+func (e *StreamError) Error() string { return e.Err.Error() }
+func (e *StreamError) Unwrap() error { return e.Err }
+
+func streamError(kind StreamErrorKind, err error) error {
+	return &StreamError{Kind: kind, Err: err}
+}
+
 // NewClient is the only way to build a Client: it rejects an empty API key
 // up front so a misconfigured environment fails at startup with a clear
 // message instead of failing weirdly at the first request.
@@ -49,7 +72,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to marshal json: %w", err))
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -59,7 +82,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		bytes.NewReader(jsonBody),
 	)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to build request: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to build request: %w", err))
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
@@ -67,13 +90,22 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to get response: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to get response: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return ChatResponse{}, fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return ChatResponse{}, &StreamError{
+				Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
+				Err: fmt.Errorf("api returned status %d and response body could not be read: %w", resp.StatusCode, readErr),
+			}
+		}
+		return ChatResponse{}, &StreamError{
+			Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
+			Err: fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes),
+		}
 	}
 
 	var (
@@ -98,7 +130,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			return ChatResponse{}, fmt.Errorf("failed to parse stream chunk: %w", err)
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to parse stream chunk: %w", err))
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -144,16 +176,16 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to read stream: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to read stream: %w", err))
 	}
 	if !gotChunk {
-		return ChatResponse{}, errors.New("stream contained no chunks")
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream contained no chunks"))
 	}
 
 	if len(details) > 0 {
 		msg.ReasoningDetails, err = json.Marshal(details)
 		if err != nil {
-			return ChatResponse{}, fmt.Errorf("failed to marshal reasoning details: %w", err)
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to marshal reasoning details: %w", err))
 		}
 	}
 

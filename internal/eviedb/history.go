@@ -20,9 +20,16 @@ func (s *Store) BindHistory(sessionID memory.SessionID) *SessionHistory {
 
 func (h *SessionHistory) Append(
 	ctx context.Context,
+	lease memory.TurnLease,
 	input memory.EventInput,
 ) (memory.Event, error) {
-	return h.store.AppendEvent(ctx, h.sessionID, input)
+	return h.store.AppendEventWithLease(
+		ctx,
+		h.sessionID,
+		lease.HolderID,
+		lease.FencingToken,
+		input,
+	)
 }
 
 func (h *SessionHistory) Events(ctx context.Context) ([]memory.Event, error) {

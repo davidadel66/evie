@@ -1,6 +1,7 @@
 package eviedb
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -31,12 +32,70 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 		return memory.EventInput{}, errors.New("event payload must be valid JSON")
 	}
 
+	if input.Type == memory.EventTurnFailed || input.Type == memory.EventTurnInterrupted {
+		var terminal memory.TurnTerminalPayload
+		decoder := json.NewDecoder(bytes.NewReader(input.Payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&terminal); err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode terminal payload: %w", err)
+		}
+		if err := terminal.Validate(input.Type); err != nil {
+			return memory.EventInput{}, err
+		}
+		if input.Content != terminal.SafeContent() {
+			return memory.EventInput{}, errors.New("terminal content must use the safe classification message")
+		}
+		if input.Role != "" || input.ExecutionID != "" {
+			return memory.EventInput{}, errors.New("terminal events cannot carry a role or execution ID")
+		}
+	}
+
 	input.Payload = append(json.RawMessage(nil), input.Payload...)
 	return input, nil
 }
 
 func (s *Store) AppendEvent(
 	ctx context.Context,
+	sessionID memory.SessionID,
+	input memory.EventInput,
+) (memory.Event, error) {
+	return s.appendEvent(ctx, dbEventExecutor{db: s.db}, sessionID, input)
+}
+
+// AppendEventWithLease performs the event mutation and both ownership fences in
+// one BEGIN IMMEDIATE transaction. The executor cannot outlive the transaction
+// or expose arbitrary SQL outside this package.
+func (s *Store) AppendEventWithLease(
+	ctx context.Context,
+	sessionID memory.SessionID,
+	holderID memory.LeaseHolderID,
+	token memory.FencingToken,
+	input memory.EventInput,
+) (event memory.Event, err error) {
+	err = s.withTurnLeaseWrite(ctx, sessionID, holderID, token, func(writer turnLeaseWriteExecutor) error {
+		var appendErr error
+		event, appendErr = s.appendEvent(ctx, writer, sessionID, input)
+		return appendErr
+	})
+	if err != nil {
+		return memory.Event{}, err
+	}
+	return event, nil
+}
+
+type eventQueryExecutor interface {
+	queryRowContext(context.Context, string, ...any) rowScanner
+}
+
+type dbEventExecutor struct{ db *sql.DB }
+
+func (e dbEventExecutor) queryRowContext(ctx context.Context, query string, args ...any) rowScanner {
+	return e.db.QueryRowContext(ctx, query, args...)
+}
+
+func (s *Store) appendEvent(
+	ctx context.Context,
+	executor eventQueryExecutor,
 	sessionID memory.SessionID,
 	input memory.EventInput,
 ) (memory.Event, error) {
@@ -65,7 +124,7 @@ func (s *Store) AppendEvent(
 	}
 
 	var projectID sql.NullString
-	err = s.db.QueryRowContext(ctx, `
+	err = executor.queryRowContext(ctx, `
 		INSERT INTO events (
 		id, session_id, sequence, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version
 		)
