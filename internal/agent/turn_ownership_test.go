@@ -28,6 +28,8 @@ type scriptedOwner struct {
 	authorizeErr   error
 	releaseErr     error
 	releaseBlock   bool
+	heartbeatBlock bool
+	heartbeatStart chan struct{}
 	afterAcquire   func()
 	acquires       int
 	heartbeats     int
@@ -50,11 +52,21 @@ func (o *scriptedOwner) Acquire(context.Context, time.Duration) (memory.TurnLeas
 	return memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}, nil
 }
 
-func (o *scriptedOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration) (memory.TurnLease, error) {
+func (o *scriptedOwner) Heartbeat(ctx context.Context, _ memory.TurnLease, _ time.Duration) (memory.TurnLease, error) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	o.heartbeats++
-	return memory.TurnLease{}, o.heartbeatErr
+	err := o.heartbeatErr
+	block := o.heartbeatBlock
+	started := o.heartbeatStart
+	o.mu.Unlock()
+	if started != nil {
+		close(started)
+	}
+	if block {
+		<-ctx.Done()
+		return memory.TurnLease{}, ctx.Err()
+	}
+	return memory.TurnLease{}, err
 }
 
 func (o *scriptedOwner) Authorize(context.Context, memory.TurnLease) error {
@@ -110,6 +122,56 @@ func TestTurnOwnershipUsesFixedTimingAndExpectedHeartbeatShutdownIsNormal(t *tes
 	_, heartbeats, _, releases := owner.counts()
 	if heartbeats != 0 || releases != 1 {
 		t.Fatalf("heartbeats=%d releases=%d", heartbeats, releases)
+	}
+}
+
+type waitForHeartbeatClient struct {
+	started <-chan struct{}
+}
+
+func (c waitForHeartbeatClient) ChatStream(ctx context.Context, _ openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	select {
+	case <-c.started:
+	case <-ctx.Done():
+		return openrouter.ChatResponse{}, ctx.Err()
+	case <-time.After(time.Second):
+		return openrouter.ChatResponse{}, errors.New("heartbeat did not start")
+	}
+	return assistantStep("done", nil).res, nil
+}
+
+func TestSuccessfulTurnCancelsInflightHeartbeatBeforeBoundedRelease(t *testing.T) {
+	started := make(chan struct{})
+	owner := &scriptedOwner{heartbeatBlock: true, heartbeatStart: started}
+	s := ownedSession(waitForHeartbeatClient{started: started}, &fakeHistory{}, owner)
+	s.timing.heartbeatInterval = time.Millisecond
+	start := time.Now()
+	if err := s.Send(context.Background(), "hello", &recorder{}, nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("Send waited %v for in-flight heartbeat shutdown", elapsed)
+	}
+	_, heartbeats, _, releases := owner.counts()
+	if heartbeats != 1 || releases != 1 {
+		t.Fatalf("heartbeats=%d releases=%d, want one each", heartbeats, releases)
+	}
+}
+
+func TestAlreadyCancelledSendPerformsZeroTurnWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	owner := &scriptedOwner{}
+	history := &fakeHistory{}
+	client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
+	err := ownedSession(client, history, owner).Send(ctx, "hello", &recorder{}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error=%v, want context.Canceled", err)
+	}
+	acquires, heartbeats, authorizes, releases := owner.counts()
+	if acquires != 0 || heartbeats != 0 || authorizes != 0 || releases != 0 ||
+		history.appendAttempts != 0 || len(client.reqs) != 0 {
+		t.Fatalf("acquire=%d heartbeat=%d authorize=%d release=%d appends=%d provider=%d", acquires, heartbeats, authorizes, releases, history.appendAttempts, len(client.reqs))
 	}
 }
 
@@ -395,7 +457,7 @@ func TestAssistantPersistenceFailureIsLocalAndMarksRenderedOutput(t *testing.T) 
 		step step
 	}{
 		{name: "content", step: assistantStep("partial", []string{"partial"})},
-		{name: "reasoning only", step: reasoningStep("", []string{"thinking"}, nil)},
+		{name: "reasoning only", step: reasoningStep("unrendered final", []string{"thinking"}, nil)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			history := &fakeHistory{appendErrAt: 2, appendErr: errors.New("assistant write failed")}
@@ -485,6 +547,7 @@ func TestStructurallyInvalidProviderResponsesPersistInvalidClassification(t *tes
 		res  openrouter.ChatResponse
 	}{
 		{name: "no choices", res: openrouter.ChatResponse{}},
+		{name: "empty choice", res: openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant"}}}}},
 		{name: "empty call ID", res: assistantStep("", nil, toolCall("", "echo", `{}`)).res},
 		{name: "duplicate call ID", res: assistantStep("", nil, toolCall("same", "one", `{}`), toolCall("same", "two", `{}`)).res},
 		{name: "wrong call type", res: assistantStep("", nil, openrouter.ToolCall{ID: "call", Type: "custom", Function: openrouter.FunctionCall{Name: "echo"}}).res},
@@ -505,6 +568,132 @@ func TestStructurallyInvalidProviderResponsesPersistInvalidClassification(t *tes
 				t.Fatalf("payload=%+v", payload)
 			}
 		})
+	}
+}
+
+func TestInvalidStreamCompletionAndToolIndexPersistInvalidEvidence(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		deltas     []string
+		wantMarker bool
+	}{
+		{name: "missing completion sentinel", deltas: []string{"partial"}, wantMarker: true},
+		{name: "unsafe tool index"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			history := &fakeHistory{}
+			events := &recorder{}
+			err := ownedSession(&fakeClient{steps: []step{{
+				deltas: tt.deltas,
+				err: &openrouter.StreamError{
+					Kind: openrouter.StreamProviderResponseInvalid,
+					Err:  errors.New(tt.name),
+				},
+			}}}, history, &scriptedOwner{}).Send(context.Background(), "go", events, nil)
+			if err == nil || len(history.events) != 2 {
+				t.Fatalf("Send error=%v events=%+v", err, history.events)
+			}
+			var payload memory.TurnTerminalPayload
+			if decodeErr := json.Unmarshal(history.events[1].Payload, &payload); decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			if payload.Classification != memory.ClassificationProviderResponseInvalid ||
+				payload.Stage != memory.StageProvider {
+				t.Fatalf("payload=%+v", payload)
+			}
+			marker := "discarded:provider_response_invalid:" + DiscardedResponseMessage
+			if containsString(events.events, marker) != tt.wantMarker {
+				t.Fatalf("events=%v marker wanted=%v", events.events, tt.wantMarker)
+			}
+		})
+	}
+}
+
+func TestAssistantCommitInterruptionPersistsExactEvidenceAndSuppressesLaterWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	history := &fakeHistory{appendBlockAt: 2, appendEntered: make(chan struct{})}
+	events := &recorder{}
+	owner := &scriptedOwner{}
+	client := &fakeClient{steps: []step{assistantStep("final", []string{"partial"})}}
+	s := ownedSession(client, history, owner)
+	done := make(chan error, 1)
+	go func() { done <- s.Send(ctx, "go", events, nil) }()
+	select {
+	case <-history.appendEntered:
+	case <-time.After(time.Second):
+		t.Fatal("assistant append did not start")
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error=%v, want context.Canceled", err)
+	}
+	if len(history.events) != 2 || history.events[0].Type != memory.EventUserMessage ||
+		history.events[1].Type != memory.EventTurnInterrupted {
+		t.Fatalf("events=%+v", history.events)
+	}
+	root, terminal := history.events[0], history.events[1]
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.ParentID != root.ID || payload.TurnID != root.ID ||
+		payload.Classification != memory.ClassificationCallerCancelled ||
+		payload.Stage != memory.StageAssistantCommit {
+		t.Fatalf("root=%+v terminal=%+v payload=%+v", root, terminal, payload)
+	}
+	if containsString(events.events, "done:final") ||
+		!containsString(events.events, "discarded:caller_cancelled:"+DiscardedResponseMessage) {
+		t.Fatalf("callbacks=%v", events.events)
+	}
+	_, _, authorizes, releases := owner.counts()
+	if len(client.reqs) != 1 || authorizes != 1 || releases != 1 {
+		t.Fatalf("provider=%d authorizes=%d releases=%d", len(client.reqs), authorizes, releases)
+	}
+}
+
+func TestToolCallingAssistantCallbackSuppressedWhenAppendReturnsAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	history := &fakeHistory{}
+	history.afterAppend = func(input memory.EventInput) {
+		if input.Type == memory.EventAssistantMessage {
+			cancel()
+		}
+	}
+	events := &recorder{}
+	client := &fakeClient{steps: []step{assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))}}
+	err := ownedSession(client, history, &scriptedOwner{}).Send(ctx, "go", events, nil, echoTool("echo", false, nil))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error=%v, want context.Canceled", err)
+	}
+	for _, event := range events.events {
+		if strings.HasPrefix(event, "done:") || strings.HasPrefix(event, "call:") || strings.HasPrefix(event, "result:") {
+			t.Fatalf("stale callback emitted after cancellation: %v", events.events)
+		}
+	}
+	if len(history.events) != 3 || history.events[1].Type != memory.EventAssistantMessage ||
+		history.events[2].Type != memory.EventTurnInterrupted {
+		t.Fatalf("durable events=%+v", history.events)
+	}
+}
+
+func TestToolCallingAssistantCallbacksSuppressedWhenAppendLosesLease(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2, appendErr: errFakeLeaseLost}
+	events := &recorder{}
+	client := &fakeClient{steps: []step{assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))}}
+	err := ownedSession(client, history, &scriptedOwner{}).Send(
+		context.Background(), "go", events, nil, echoTool("echo", false, nil),
+	)
+	if !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("Send error=%v, want ErrLeaseLost", err)
+	}
+	for _, event := range events.events {
+		if strings.HasPrefix(event, "done:") || strings.HasPrefix(event, "call:") || strings.HasPrefix(event, "result:") {
+			t.Fatalf("stale callback emitted after lease loss: %v", events.events)
+		}
+	}
+	if !containsString(events.events, "discarded:lease_lost:"+DiscardedResponseMessage) ||
+		len(history.events) != 1 {
+		t.Fatalf("callbacks=%v durable events=%+v", events.events, history.events)
 	}
 }
 
@@ -530,6 +719,28 @@ func TestCallerInterruptionCapturesExactLifecycleStage(t *testing.T) {
 			run: func(ctx context.Context, cancel context.CancelFunc, history *fakeHistory, events *recorder) error {
 				history.onEvents = cancel
 				return ownedSession(&fakeClient{}, history, &scriptedOwner{}).Send(ctx, "go", events, nil)
+			},
+		},
+		{
+			name: "assistant commit", stage: memory.StageAssistantCommit,
+			run: func(ctx context.Context, cancel context.CancelFunc, history *fakeHistory, events *recorder) error {
+				history.appendBlockAt = 2
+				history.appendEntered = make(chan struct{})
+				done := make(chan error, 1)
+				go func() {
+					done <- ownedSession(
+						&fakeClient{steps: []step{assistantStep("final", []string{"partial"})}},
+						history,
+						&scriptedOwner{},
+					).Send(ctx, "go", events, nil)
+				}()
+				select {
+				case <-history.appendEntered:
+					cancel()
+				case <-time.After(time.Second):
+					return errors.New("assistant append did not start")
+				}
+				return <-done
 			},
 		},
 		{
@@ -580,6 +791,7 @@ func TestCallerInterruptionCapturesExactLifecycleStage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			history := &fakeHistory{}
 			err := tt.run(ctx, cancel, history, &recorder{})
 			if !errors.Is(err, context.Canceled) {
@@ -598,7 +810,8 @@ func TestCallerInterruptionCapturesExactLifecycleStage(t *testing.T) {
 			if decodeErr := json.Unmarshal(terminal.Payload, &payload); decodeErr != nil {
 				t.Fatal(decodeErr)
 			}
-			if payload.Stage != tt.stage || payload.Classification != memory.ClassificationCallerCancelled {
+			if payload.Stage != tt.stage || payload.Classification != memory.ClassificationCallerCancelled ||
+				payload.TurnID != history.events[0].ID || terminal.ParentID != history.events[0].ID {
 				t.Fatalf("payload=%+v want stage=%q", payload, tt.stage)
 			}
 		})

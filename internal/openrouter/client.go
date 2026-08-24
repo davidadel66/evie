@@ -68,6 +68,8 @@ type StreamHandlers struct {
 	OnReasoning func(string)
 }
 
+const maxStreamToolCalls = 128
+
 func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers) (ChatResponse, error) {
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
@@ -113,6 +115,8 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		details      []json.RawMessage
 		finishReason string
 		gotChunk     bool
+		completed    bool
+		toolCalls    = make(map[int]*ToolCall)
 	)
 	msg.Role = "assistant"
 
@@ -125,6 +129,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
+			completed = true
 			break
 		}
 
@@ -156,10 +161,17 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 			details = append(details, choice.Delta.ReasoningDetails...)
 		}
 		for _, tcd := range choice.Delta.ToolCalls {
-			for len(msg.ToolCalls) <= tcd.Index {
-				msg.ToolCalls = append(msg.ToolCalls, ToolCall{})
+			if tcd.Index < 0 || tcd.Index >= maxStreamToolCalls {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					fmt.Errorf("provider tool call index %d is outside the safe range", tcd.Index),
+				)
 			}
-			tc := &msg.ToolCalls[tcd.Index]
+			tc := toolCalls[tcd.Index]
+			if tc == nil {
+				tc = &ToolCall{}
+				toolCalls[tcd.Index] = tc
+			}
 			if tcd.ID != "" {
 				tc.ID = tcd.ID
 			}
@@ -178,8 +190,27 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	if err := scanner.Err(); err != nil {
 		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to read stream: %w", err))
 	}
+	if !completed {
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream ended before [DONE]"))
+	}
 	if !gotChunk {
 		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream contained no chunks"))
+	}
+	if len(toolCalls) > 0 {
+		msg.ToolCalls = make([]ToolCall, len(toolCalls))
+		for i := range msg.ToolCalls {
+			call := toolCalls[i]
+			if call == nil {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					fmt.Errorf("provider tool call indices are not contiguous at index %d", i),
+				)
+			}
+			msg.ToolCalls[i] = *call
+		}
+	}
+	if err := validateStreamAssistantChoice(msg); err != nil {
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, err)
 	}
 
 	if len(details) > 0 {
@@ -190,6 +221,23 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	}
 
 	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}}, nil
+}
+
+func validateStreamAssistantChoice(msg Message) error {
+	if msg.Content == "" && len(msg.ToolCalls) == 0 {
+		return errors.New("provider stream contained no usable assistant choice")
+	}
+	seen := make(map[string]struct{}, len(msg.ToolCalls))
+	for i, call := range msg.ToolCalls {
+		if call.ID == "" || call.Type != "function" || call.Function.Name == "" {
+			return fmt.Errorf("provider tool call %d is structurally incomplete", i)
+		}
+		if _, exists := seen[call.ID]; exists {
+			return fmt.Errorf("provider tool call ID %q is duplicated", call.ID)
+		}
+		seen[call.ID] = struct{}{}
+	}
+	return nil
 }
 
 // Chat sends one chat-completions request and returns the parsed response.

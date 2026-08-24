@@ -37,6 +37,7 @@ type fakeHistory struct {
 	appendAttempts int
 	appendErrAt    int
 	appendBlockAt  int
+	appendEntered  chan struct{}
 	appendErr      error
 	eventsErr      error
 	afterAppend    func(memory.EventInput)
@@ -46,6 +47,9 @@ type fakeHistory struct {
 func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
 	f.appendAttempts++
 	if f.appendBlockAt == f.appendAttempts {
+		if f.appendEntered != nil {
+			close(f.appendEntered)
+		}
 		<-ctx.Done()
 		return memory.Event{}, ctx.Err()
 	}

@@ -213,7 +213,7 @@ func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
 
 func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 2}
-	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}}}}
+	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}, content: "unrendered final"}}}
 	session := agent.New(client, "test", history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})

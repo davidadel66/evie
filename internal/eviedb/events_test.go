@@ -2,6 +2,7 @@ package eviedb
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -9,6 +10,20 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 )
+
+type testEventExecutor struct{ db *sql.DB }
+
+func (e testEventExecutor) queryRowContext(ctx context.Context, query string, args ...any) rowScanner {
+	return e.db.QueryRowContext(ctx, query, args...)
+}
+
+func (s *Store) appendEventForTest(
+	ctx context.Context,
+	sessionID memory.SessionID,
+	input memory.EventInput,
+) (memory.Event, error) {
+	return s.appendEvent(ctx, testEventExecutor{db: s.db}, sessionID, input)
+}
 
 func TestEventStoreAppendsBoundEventsAndLoadsInOrder(t *testing.T) {
 	db := newTestDB(t)
@@ -20,7 +35,7 @@ func TestEventStoreAppendsBoundEventsAndLoadsInOrder(t *testing.T) {
 		t.Fatalf("create global session: %v", err)
 	}
 
-	first, err := store.AppendEvent(ctx, session.ID, memory.EventInput{
+	first, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
 		Type:    memory.EventUserMessage,
 		Role:    memory.RoleUser,
 		Content: "hello",
@@ -37,7 +52,7 @@ func TestEventStoreAppendsBoundEventsAndLoadsInOrder(t *testing.T) {
 	}
 
 	inputPayload := json.RawMessage(`{"tool":"time"}`)
-	second, err := store.AppendEvent(ctx, session.ID, memory.EventInput{
+	second, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
 		ParentID:    first.ID,
 		Type:        memory.EventToolIntent,
 		ExecutionID: memory.ExecutionID("execution-1"),
@@ -76,7 +91,7 @@ func TestEventStoreAppendsBoundEventsAndLoadsInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project session: %v", err)
 	}
-	projectEvent, err := store.AppendEvent(ctx, projectSession.ID, memory.EventInput{
+	projectEvent, err := store.appendEventForTest(ctx, projectSession.ID, memory.EventInput{
 		Type:    memory.EventAssistantMessage,
 		Role:    memory.RoleAssistant,
 		Content: "project-bound",
@@ -102,7 +117,7 @@ func TestEventStoreRejectsInvalidOrUnavailableAppends(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create other session: %v", err)
 	}
-	otherEvent, err := store.AppendEvent(ctx, otherSession.ID, memory.EventInput{
+	otherEvent, err := store.appendEventForTest(ctx, otherSession.ID, memory.EventInput{
 		Type: memory.EventUserMessage,
 		Role: memory.RoleUser,
 	})
@@ -147,7 +162,7 @@ func TestEventStoreRejectsInvalidOrUnavailableAppends(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if event, err := store.AppendEvent(ctx, tt.sessionID, tt.input); err == nil {
+			if event, err := store.appendEventForTest(ctx, tt.sessionID, tt.input); err == nil {
 				t.Fatalf("invalid append returned event %+v", event)
 			}
 		})
@@ -156,7 +171,7 @@ func TestEventStoreRejectsInvalidOrUnavailableAppends(t *testing.T) {
 	if _, err := db.Exec(`UPDATE sessions SET status = 'closed' WHERE id = ?`, session.ID); err != nil {
 		t.Fatalf("close session fixture: %v", err)
 	}
-	if event, err := store.AppendEvent(ctx, session.ID, memory.EventInput{
+	if event, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
 		Type: memory.EventUserMessage,
 		Role: memory.RoleUser,
 	}); err == nil {

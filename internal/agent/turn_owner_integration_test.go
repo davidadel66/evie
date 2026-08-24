@@ -67,7 +67,7 @@ func TestTwoStoresAllowOnlyOneLiveAgentTurnForSession(t *testing.T) {
 	clientA := &blockingAgentClient{entered: make(chan struct{}), release: make(chan struct{})}
 	clientB := &blockingAgentClient{}
 	newSession := func(store *eviedb.Store, holder memory.LeaseHolderID, client agent.Client) *agent.Session {
-		return agent.New(client, "test", store.BindHistory(storedSession.ID), storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, holder))
+		return agent.New(client, "test", store.BindHistory(storedSession.ID, holder), storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, holder))
 	}
 	sessionA := newSession(storeA, "holder-a", clientA)
 	sessionB := newSession(storeB, "holder-b", clientB)

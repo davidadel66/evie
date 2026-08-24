@@ -147,6 +147,32 @@ func TestChatStreamWithoutReasoning(t *testing.T) {
 	}
 }
 
+func TestChatStreamSafelyAssemblesContiguousToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(
+			"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"echo\",\"arguments\":\"{\\\"x\\\":\"}}]}}]}\n\n" +
+				"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"1}\"}}]}}]}\n\n" +
+				"data: [DONE]\n",
+		))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := response.Choices[0].Message.ToolCalls
+	if len(calls) != 1 || calls[0].ID != "call-1" || calls[0].Type != "function" ||
+		calls[0].Function.Name != "echo" || calls[0].Function.Arguments != `{"x":1}` {
+		t.Fatalf("tool calls=%+v", calls)
+	}
+}
+
 func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -198,6 +224,11 @@ func TestChatStreamClassifiesProviderAndInvalidResponseFailures(t *testing.T) {
 		{name: "2xx with no usable choice", status: http.StatusNoContent, wantKind: StreamProviderResponseInvalid},
 		{name: "malformed streamed JSON", status: http.StatusOK, body: "data: {not-json}\n", wantKind: StreamProviderResponseInvalid},
 		{name: "no chunks", status: http.StatusOK, body: ": keepalive\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "empty choice", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "missing completion sentinel", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n", wantKind: StreamProviderResponseInvalid},
+		{name: "negative tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":-1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "sparse tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "extreme tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1000000000,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

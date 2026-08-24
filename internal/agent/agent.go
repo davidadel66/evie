@@ -140,8 +140,8 @@ func (s *Session) Send(
 		coordinator.selectCause(causeStorage, err, 0)
 		return fmt.Errorf("persist user message: %w", err)
 	}
-	rendered := &renderedOutput{}
-	turnErr := s.runOwnedTurn(coordinator, lease, rootEvent, ev, approve, rendered, extra)
+	progress := &turnProgress{requestParentID: rootEvent.ID}
+	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress, extra)
 	if turnErr != nil && coordinator.result().kind == causeNone {
 		coordinator.selectCause(causeStorage, turnErr, 0)
 	}
@@ -157,13 +157,13 @@ func (s *Session) Send(
 	stopHeartbeat()
 	if rootEvent.ID != "" && causeHasDurableTerminal(cause.kind) {
 		terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timing.cleanupTimeout)
-		terminalErr := s.appendTerminal(terminalCtx, lease, rootEvent.ID, rendered.parentID, cause)
+		terminalErr := s.appendTerminal(terminalCtx, lease, rootEvent.ID, progress.requestParentID, cause)
 		cancel()
 		if terminalErr != nil {
 			turnErr = errors.Join(turnErr, fmt.Errorf("persist terminal event: %w", terminalErr))
 		}
 	}
-	wasRendered, reasoningOpen, assistantCommitted := rendered.discardState()
+	wasRendered, reasoningOpen, assistantCommitted := progress.rendered.discardState()
 	if wasRendered && !assistantCommitted {
 		if reason := cause.discardReason(); reason != "" {
 			if reasoningOpen {

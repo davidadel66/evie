@@ -54,14 +54,6 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 	return input, nil
 }
 
-func (s *Store) AppendEvent(
-	ctx context.Context,
-	sessionID memory.SessionID,
-	input memory.EventInput,
-) (memory.Event, error) {
-	return s.appendEvent(ctx, dbEventExecutor{db: s.db}, sessionID, input)
-}
-
 // AppendEventWithLease performs the event mutation and both ownership fences in
 // one BEGIN IMMEDIATE transaction. The executor cannot outlive the transaction
 // or expose arbitrary SQL outside this package.
@@ -85,12 +77,6 @@ func (s *Store) AppendEventWithLease(
 
 type eventQueryExecutor interface {
 	queryRowContext(context.Context, string, ...any) rowScanner
-}
-
-type dbEventExecutor struct{ db *sql.DB }
-
-func (e dbEventExecutor) queryRowContext(ctx context.Context, query string, args ...any) rowScanner {
-	return e.db.QueryRowContext(ctx, query, args...)
 }
 
 func (s *Store) appendEvent(

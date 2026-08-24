@@ -68,12 +68,13 @@ func main() {
 			log.Fatalf("failed to create turn lease holder: %v", err)
 		}
 
+		holderID := memory.LeaseHolderID(holderUUID.String())
 		return agent.New(
 			client,
 			"",
-			store.BindHistory(storedSession.ID),
+			store.BindHistory(storedSession.ID, holderID),
 			storedSession.ScopeContext(),
-			store.BindTurnOwner(storedSession.ID, memory.LeaseHolderID(holderUUID.String())),
+			store.BindTurnOwner(storedSession.ID, holderID),
 		)
 	}
 

@@ -20,7 +20,11 @@ type renderedOutput struct {
 	reasoning          bool
 	reasoningOpen      bool
 	assistantCommitted bool
-	parentID           memory.EventID
+}
+
+type turnProgress struct {
+	rendered        renderedOutput
+	requestParentID memory.EventID
 }
 
 func (r *renderedOutput) discardState() (rendered, reasoningOpen, assistantCommitted bool) {
@@ -29,14 +33,13 @@ func (r *renderedOutput) discardState() (rendered, reasoningOpen, assistantCommi
 	return r.content || r.reasoning, r.reasoningOpen, r.assistantCommitted
 }
 
-func (r *renderedOutput) begin(parentID memory.EventID) {
+func (r *renderedOutput) begin() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.content = false
 	r.reasoning = false
 	r.reasoningOpen = false
 	r.assistantCommitted = false
-	r.parentID = parentID
 }
 
 func (s *Session) startHeartbeat(
@@ -44,6 +47,7 @@ func (s *Session) startHeartbeat(
 	coordinator *turnCoordinator,
 	lease memory.TurnLease,
 ) func() {
+	heartbeatCtx, cancelHeartbeat := context.WithCancel(coordinator.ctx)
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
@@ -58,9 +62,15 @@ func (s *Session) startHeartbeat(
 				coordinator.selectCause(callerCause(caller.Err()), caller.Err(), 0)
 				return
 			case <-ticker.C:
-				_, err := s.owner.Heartbeat(coordinator.ctx, lease, s.timing.leaseDuration)
+				_, err := s.owner.Heartbeat(heartbeatCtx, lease, s.timing.leaseDuration)
 				if err == nil {
 					continue
+				}
+				if heartbeatCtx.Err() != nil {
+					if caller.Err() != nil && coordinator.result().kind == causeNone {
+						coordinator.selectCause(callerCause(caller.Err()), caller.Err(), 0)
+					}
+					return
 				}
 				if coordinator.result().kind != causeNone {
 					return
@@ -80,6 +90,7 @@ func (s *Session) startHeartbeat(
 	var once sync.Once
 	return func() {
 		once.Do(func() {
+			cancelHeartbeat()
 			close(stop)
 			<-done
 		})
@@ -89,19 +100,20 @@ func (s *Session) startHeartbeat(
 func (s *Session) runOwnedTurn(
 	coordinator *turnCoordinator,
 	lease memory.TurnLease,
-	rootEvent memory.Event,
 	ev Events,
 	approve tools.Approver,
-	rendered *renderedOutput,
+	progress *turnProgress,
 	extra []tools.Tool,
 ) error {
-	requestParentID := rootEvent.ID
+	requestParentID := progress.requestParentID
+	rendered := &progress.rendered
 	for {
 		if err := s.observeTurnContext(coordinator); err != nil {
 			return err
 		}
 		coordinator.setStage(memory.StageProvider)
-		rendered.begin(requestParentID)
+		progress.requestParentID = requestParentID
+		rendered.begin()
 
 		messages, err := s.requestMessages(coordinator.ctx)
 		if err != nil {
@@ -180,6 +192,10 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			if coordinator.result().kind != causeNone {
 				return coordinator.result().err
+			}
+			if ctxErr := coordinator.ctx.Err(); ctxErr != nil {
+				coordinator.selectCause(callerCause(ctxErr), ctxErr, 0)
+				return ctxErr
 			}
 			if s.owner.IsLeaseLost(err) {
 				wrapped := fmt.Errorf("%w: %v", ErrLeaseLost, err)
@@ -315,6 +331,7 @@ func (s *Session) runOwnedTurn(
 			}
 		}
 		requestParentID = lastOutcomeID
+		progress.requestParentID = requestParentID
 	}
 }
 
@@ -331,6 +348,9 @@ func (s *Session) emitAssistantAccepted(
 	content string,
 	committedFinal bool,
 ) bool {
+	if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
+		return false
+	}
 	rendered.mu.Lock()
 	closeReasoning := rendered.reasoningOpen
 	rendered.reasoningOpen = false
@@ -340,6 +360,9 @@ func (s *Session) emitAssistantAccepted(
 		if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
 			return false
 		}
+	}
+	if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
+		return false
 	}
 	ev.AssistantDone(content)
 	return committedFinal || (coordinator.active() && coordinator.ctx.Err() == nil)
@@ -397,6 +420,9 @@ func (s *Session) classifyProviderError(coordinator *turnCoordinator, err error)
 }
 
 func validateAssistantResponse(msg openrouter.Message) error {
+	if msg.Content == "" && len(msg.ToolCalls) == 0 {
+		return errors.New("agent: provider returned no usable assistant choice")
+	}
 	seen := make(map[string]struct{}, len(msg.ToolCalls))
 	for i, call := range msg.ToolCalls {
 		if call.ID == "" {
