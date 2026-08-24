@@ -2,6 +2,8 @@ package eviedb
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,6 +91,84 @@ func TestCreateProjectSessionRejectsUnavailableProject(t *testing.T) {
 	}
 	if _, err := store.CreateProjectSession(ctx, project.ID); err == nil {
 		t.Error("session creation for archived project succeeded")
+	}
+}
+
+func TestChooserProjectCreationRejectsRenderedRootOrCWDOwnerChangesAtomically(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	selected, err := store.RegisterProject(ctx, "Selected", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderedRoot := selected.CanonicalRoot
+	cwd := t.TempDir()
+	if _, err := store.RelocateProject(ctx, selected.ID, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProjectSessionForChooser(ctx, selected.ID, renderedRoot, cwd, ""); !errors.Is(err, ErrChooserStateChanged) {
+		t.Fatalf("relocated project create error=%v", err)
+	}
+	assertSessionCount(t, db, 0)
+
+	registered, err := store.RegisterProject(ctx, "Registered", cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RelocateProject(ctx, registered.ID, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProjectSessionForChooser(
+		ctx, registered.ID, registered.CanonicalRoot, cwd, registered.ID,
+	); !errors.Is(err, ErrChooserStateChanged) {
+		t.Fatalf("registration relocation create error=%v", err)
+	}
+	assertSessionCount(t, db, 0)
+}
+
+func TestChooserActionsRejectNewCWDOwnerAtAtomicBoundary(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	project, err := store.RegisterProject(ctx, "Other", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing, err := store.CreateProjectSession(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	concurrent, err := store.RegisterProject(ctx, "Concurrent", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd := concurrent.CanonicalRoot
+	baseline := 1
+	if _, err := store.CreateProjectSessionForChooser(
+		ctx, project.ID, project.CanonicalRoot, cwd, "",
+	); !errors.Is(err, ErrChooserStateChanged) {
+		t.Fatalf("project-new cwd guard error=%v", err)
+	}
+	assertSessionCount(t, db, baseline)
+	if _, err := store.CreateGlobalSessionForChooser(ctx, cwd, ""); !errors.Is(err, ErrChooserStateChanged) {
+		t.Fatalf("global-new cwd guard error=%v", err)
+	}
+	assertSessionCount(t, db, baseline)
+	if _, err := store.GetActiveSessionForChooser(ctx, existing.ID, cwd, ""); !errors.Is(err, ErrChooserStateChanged) {
+		t.Fatalf("resume cwd guard error=%v", err)
+	}
+	assertSessionCount(t, db, baseline)
+}
+
+func assertSessionCount(t *testing.T, db *sql.DB, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("sessions=%d, want %d", got, want)
 	}
 }
 

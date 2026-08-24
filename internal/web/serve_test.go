@@ -116,9 +116,10 @@ func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
 }
 
 type webTestTurnOwner struct {
-	acquireErr error
-	conflict   bool
-	leaseLost  bool
+	acquireErr      error
+	conflict        bool
+	sessionInactive bool
+	leaseLost       bool
 }
 
 func (o webTestTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
@@ -133,6 +134,7 @@ func (webTestTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Durati
 func (webTestTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
 func (webTestTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
 func (o webTestTurnOwner) IsConflict(error) bool                           { return o.conflict }
+func (o webTestTurnOwner) IsSessionInactive(error) bool                    { return o.sessionInactive }
 func (o webTestTurnOwner) IsLeaseLost(error) bool                          { return o.leaseLost }
 
 // chatRequest builds a well-formed same-origin chat POST; individual
@@ -520,6 +522,26 @@ func TestDurableLeaseConflictUsesPreStream409JSON(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "event:") || !strings.Contains(recorder.Body.String(), `"error"`) {
 		t.Fatalf("conflict response=%s", recorder.Body.String())
+	}
+}
+
+func TestInactiveSessionPreservesWebSSEErrorPayload(t *testing.T) {
+	acquireErr := errors.New(`eviedb: turn lease session is missing or inactive: session "test-session"`)
+	session := agent.New(&fakeClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{acquireErr: acquireErr, sessionInactive: true})
+	recorder := httptest.NewRecorder()
+
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("status=%d content-type=%q, want base-compatible 200 SSE", recorder.Code, recorder.Header().Get("Content-Type"))
+	}
+	const want = "event: error\n" +
+		`data: {"message":"acquire turn lease: eviedb: turn lease session is missing or inactive: session \"test-session\""}` + "\n\n" +
+		"event: turn_done\ndata: {}\n\n"
+	if got := recorder.Body.String(); got != want {
+		t.Fatalf("inactive-session stream = %q, want exact base-compatible payload %q", got, want)
 	}
 }
 

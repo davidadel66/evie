@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -19,10 +18,6 @@ type rowScanner interface {
 }
 
 func (s *Store) RegisterProject(ctx context.Context, displayName, root string) (memory.Project, error) {
-	if strings.TrimSpace(displayName) == "" {
-		return memory.Project{}, errors.New("project display name must not be empty")
-	}
-
 	canonicalRoot, err := memory.CanonicalProjectRoot(root)
 	if err != nil {
 		return memory.Project{}, err
@@ -33,7 +28,10 @@ func (s *Store) RegisterProject(ctx context.Context, displayName, root string) (
 		return memory.Project{}, fmt.Errorf("generate project ID: %w", err)
 	}
 
-	now := time.Now().UTC()
+	now := s.now().UTC()
+	if memory.TerminalSafeLine(displayName) == "" {
+		displayName = memory.ProjectDisplayLabel(displayName, now)
+	}
 	project := memory.Project{
 		ID:            memory.ProjectID(id.String()),
 		DisplayName:   displayName,

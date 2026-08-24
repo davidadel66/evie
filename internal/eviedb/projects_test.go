@@ -65,6 +65,47 @@ func TestProjectRegistryRegisterListAndRelocate(t *testing.T) {
 	}
 }
 
+func TestProjectRegistryPersistsTimestampedFallbackFromOneCreationSampleAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(db)
+	fixed := time.Date(2026, 8, 24, 16, 5, 6, 123456789, time.FixedZone("test", -4*60*60))
+	samples := 0
+	store.now = func() time.Time {
+		samples++
+		return fixed
+	}
+
+	project, err := store.RegisterProject(context.Background(), "\x1b\u200b", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const wantName = "Untitled project — 2026-08-24T20:05:06.123456789Z"
+	if samples != 1 || project.DisplayName != wantName || !project.CreatedAt.Equal(fixed) ||
+		project.CreatedAt.Location() != time.UTC || project.UpdatedAt != project.CreatedAt {
+		t.Fatalf("registered fallback=%+v samples=%d, want name=%q one UTC timestamp", project, samples, wantName)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	restarted, err := NewStore(db).FindProjectByRoot(context.Background(), project.CanonicalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.DisplayName != wantName || restarted.CreatedAt != project.CreatedAt || restarted.UpdatedAt != project.UpdatedAt {
+		t.Fatalf("restarted project=%+v, want persisted %+v", restarted, project)
+	}
+}
+
 func TestProjectRegistryListExcludesArchivedByDefault(t *testing.T) {
 	db := newTestDB(t)
 	store := NewStore(db)

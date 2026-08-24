@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     project_id            TEXT REFERENCES projects(id),
     project_root_snapshot TEXT,
     parent_session_id     TEXT REFERENCES sessions(id),
+    title                 TEXT,
     status                TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
     created_at            TEXT NOT NULL,
     updated_at            TEXT NOT NULL,
@@ -182,6 +183,11 @@ func OpenDBAt(path string) (*sql.DB, error) {
 	return OpenDBAtContext(context.Background(), path)
 }
 
+type openDBAtHooks struct {
+	afterSchema         func()
+	sessionTitleUpgrade sessionTitleUpgradeHooks
+}
+
 var hardenWritableDBFile = func(path string) error {
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
@@ -195,6 +201,10 @@ var hardenWritableDBFile = func(path string) error {
 }
 
 func OpenDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
+	return openDBAtContextWithHooks(ctx, path, openDBAtHooks{})
+}
+
+func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHooks) (*sql.DB, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -211,6 +221,17 @@ func OpenDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
+	}
+	if hooks.afterSchema != nil {
+		hooks.afterSchema()
+	}
+	if err := ctx.Err(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := ensureSessionTitlesWithHooks(ctx, db, hooks.sessionTitleUpgrade); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade session titles: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		db.Close()

@@ -26,9 +26,14 @@ type (
 		ProjectID           ProjectID
 		ProjectRootSnapshot string
 		ParentSessionID     SessionID
+		Title               string
 		Status              SessionStatus
 		CreatedAt           time.Time
 		UpdatedAt           time.Time
+	}
+	SessionListing struct {
+		Session
+		ActivityAt time.Time
 	}
 	ScopeContext struct {
 		OwnerID         OwnerID

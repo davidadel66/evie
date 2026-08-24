@@ -25,6 +25,7 @@ const (
 
 var (
 	ErrLeaseConflict        = errors.New("agent: session turn lease is held")
+	ErrSessionUnavailable   = errors.New("agent: session is unavailable")
 	ErrLeaseLost            = errors.New("agent: session turn lease was lost")
 	ErrLeaseHeartbeatFailed = errors.New("agent: session turn lease heartbeat failed")
 )
@@ -38,6 +39,7 @@ type TurnOwnership interface {
 	Authorize(context.Context, memory.TurnLease) error
 	Release(context.Context, memory.TurnLease) error
 	IsConflict(error) bool
+	IsSessionInactive(error) bool
 	IsLeaseLost(error) bool
 }
 

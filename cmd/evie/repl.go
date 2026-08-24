@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,16 +23,28 @@ import (
 )
 
 type replSessionStore interface {
+	ListProjects(context.Context, bool) ([]memory.Project, error)
+	ListActiveSessions(context.Context) ([]memory.SessionListing, error)
 	FindProjectByRoot(context.Context, string) (memory.Project, error)
 	RegisterProject(context.Context, string, string) (memory.Project, error)
-	CreateProjectSession(context.Context, memory.ProjectID) (memory.Session, error)
-	CreateGlobalSession(context.Context) (memory.Session, error)
+	CreateProjectSessionForChooser(context.Context, memory.ProjectID, string, string, memory.ProjectID) (memory.Session, error)
+	CreateGlobalSessionForChooser(context.Context, string, memory.ProjectID) (memory.Session, error)
+	GetActiveSessionForChooser(context.Context, memory.SessionID, string, memory.ProjectID) (memory.Session, error)
+}
+
+type replChooserAction struct {
+	kind        string
+	projectID   memory.ProjectID
+	projectRoot string
+	sessionID   memory.SessionID
 }
 
 const (
-	projectScopeChoice  = "project"
-	registerScopeChoice = "register"
-	globalScopeChoice   = "global"
+	replActionNewProject = "new-project"
+	replActionNewGlobal  = "new-global"
+	replActionResume     = "resume"
+	replActionRegister   = "register"
+	replStateChanged     = "Session choices changed; refreshing."
 )
 
 func selectREPLSession(
@@ -44,148 +58,255 @@ func selectREPLSession(
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("canonicalize launch directory: %w", err)
 	}
+	for {
+		projects, err := store.ListProjects(ctx, true)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("list projects: %w", err)
+		}
+		sessions, err := store.ListActiveSessions(ctx)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("list active sessions: %w", err)
+		}
+		renderedCWDProjectID := projectOwningRoot(projects, canonicalRoot)
+		actions, err := renderREPLChooser(out, canonicalRoot, projects, sessions)
+		if err != nil {
+			return memory.Session{}, err
+		}
 
-	project, err := store.FindProjectByRoot(ctx, canonicalRoot)
-	if err == nil {
-		return selectKnownREPLProject(ctx, store, canonicalRoot, project, scanner, out)
+		if _, err := fmt.Fprint(out, "Select session: "); err != nil {
+			return memory.Session{}, fmt.Errorf("write chooser prompt: %w", err)
+		}
+		line, err := scanREPLLine(scanner)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("choose startup session: %w", err)
+		}
+		choice, err := strconv.Atoi(strings.TrimSpace(line))
+		if err != nil || choice < 1 || choice > len(actions) {
+			if _, err := fmt.Fprintln(out, "Please enter a listed number."); err != nil {
+				return memory.Session{}, fmt.Errorf("write invalid chooser choice: %w", err)
+			}
+			continue
+		}
+
+		action := actions[choice-1]
+		switch action.kind {
+		case replActionResume:
+			session, err := store.GetActiveSessionForChooser(ctx, action.sessionID, canonicalRoot, renderedCWDProjectID)
+			if errors.Is(err, eviedb.ErrSessionNotActive) || errors.Is(err, eviedb.ErrChooserStateChanged) {
+				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write stale session notice: %w", writeErr)
+				}
+				continue
+			}
+			if err != nil {
+				return memory.Session{}, fmt.Errorf("resume session: %w", err)
+			}
+			return session, nil
+		case replActionNewProject:
+			session, err := store.CreateProjectSessionForChooser(
+				ctx, action.projectID, action.projectRoot, canonicalRoot, renderedCWDProjectID,
+			)
+			if errors.Is(err, eviedb.ErrChooserStateChanged) {
+				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write stale project notice: %w", writeErr)
+				}
+				continue
+			}
+			if err != nil {
+				return memory.Session{}, fmt.Errorf("create project session: %w", err)
+			}
+			return session, nil
+		case replActionNewGlobal:
+			session, err := createGlobalREPLSession(ctx, store, canonicalRoot, renderedCWDProjectID)
+			if errors.Is(err, eviedb.ErrChooserStateChanged) {
+				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write stale cwd notice: %w", writeErr)
+				}
+				continue
+			}
+			return session, err
+		case replActionRegister:
+			session, retry, err := registerREPLProject(ctx, store, canonicalRoot, scanner, out)
+			if err != nil {
+				return memory.Session{}, err
+			}
+			if retry {
+				continue
+			}
+			return session, nil
+		}
 	}
-	if !errors.Is(err, eviedb.ErrProjectNotFound) {
-		return memory.Session{}, fmt.Errorf("discover project for launch directory: %w", err)
+}
+
+func renderREPLChooser(
+	out io.Writer,
+	canonicalRoot string,
+	projects []memory.Project,
+	sessions []memory.SessionListing,
+) ([]replChooserAction, error) {
+	byProject := make(map[memory.ProjectID][]memory.SessionListing)
+	var globals []memory.SessionListing
+	for _, session := range sessions {
+		if session.ProjectID == "" {
+			globals = append(globals, session)
+			continue
+		}
+		byProject[session.ProjectID] = append(byProject[session.ProjectID], session)
 	}
 
-	if _, err := fmt.Fprintf(out, "No active project is registered for %q.\n", canonicalRoot); err != nil {
-		return memory.Session{}, fmt.Errorf("write unregistered directory notice: %w", err)
+	sort.Slice(projects, func(i, j int) bool {
+		if projects[i].Archived != projects[j].Archived {
+			return !projects[i].Archived
+		}
+		leftName, rightName := replProjectLabel(projects[i]), replProjectLabel(projects[j])
+		if leftName != rightName {
+			return leftName < rightName
+		}
+		leftRoot, rightRoot := escapedREPLPath(projects[i].CanonicalRoot), escapedREPLPath(projects[j].CanonicalRoot)
+		if leftRoot != rightRoot {
+			return leftRoot < rightRoot
+		}
+		return projects[i].ID < projects[j].ID
+	})
+
+	if _, err := fmt.Fprintln(out, "Sessions"); err != nil {
+		return nil, fmt.Errorf("write chooser heading: %w", err)
 	}
-	choice, err := readREPLChoice(
-		scanner,
-		out,
-		"[r]egister this directory or use [g]lobal scope? ",
-		"Please enter r or g.\n",
-		map[string]string{
-			"r":        registerScopeChoice,
-			"register": registerScopeChoice,
-			"g":        globalScopeChoice,
-			"global":   globalScopeChoice,
-		},
-	)
-	if err != nil {
-		return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
-	}
-	if choice == globalScopeChoice {
-		return createGlobalREPLSession(ctx, store)
+	ownedCWD := false
+	actions := make([]replChooserAction, 0, len(sessions)+len(projects)+2)
+	for _, project := range projects {
+		projectSessions := byProject[project.ID]
+		if project.CanonicalRoot == canonicalRoot {
+			ownedCWD = true
+		}
+		if project.Archived && len(projectSessions) == 0 {
+			continue
+		}
+		name := replProjectLabel(project)
+		archived := ""
+		if project.Archived {
+			archived = " (archived)"
+		}
+		current := ""
+		if !project.Archived && project.CanonicalRoot == canonicalRoot {
+			current = " (current directory)"
+		}
+		if _, err := fmt.Fprintf(out, "%s — %s%s%s\n", name, escapedREPLPath(project.CanonicalRoot), archived, current); err != nil {
+			return nil, fmt.Errorf("write project heading: %w", err)
+		}
+		if !project.Archived {
+			actions = append(actions, replChooserAction{
+				kind: replActionNewProject, projectID: project.ID, projectRoot: project.CanonicalRoot,
+			})
+			if _, err := fmt.Fprintf(out, "  %d. New session\n", len(actions)); err != nil {
+				return nil, fmt.Errorf("write project new-session action: %w", err)
+			}
+		}
+		for _, session := range projectSessions {
+			actions = append(actions, replChooserAction{kind: replActionResume, sessionID: session.ID})
+			if _, err := fmt.Fprintf(out, "  %d. %s%s\n", len(actions), replSessionLabel(session.Session), relocatedRootLabel(project, session.Session)); err != nil {
+				return nil, fmt.Errorf("write project session action: %w", err)
+			}
+		}
 	}
 
-	defaultName := filepath.Base(canonicalRoot)
-	if _, err := fmt.Fprintf(out, "Project name [%s]: ", defaultName); err != nil {
-		return memory.Session{}, fmt.Errorf("write project-name prompt: %w", err)
+	if _, err := fmt.Fprintln(out, "Global"); err != nil {
+		return nil, fmt.Errorf("write global heading: %w", err)
+	}
+	actions = append(actions, replChooserAction{kind: replActionNewGlobal})
+	if _, err := fmt.Fprintf(out, "  %d. New session\n", len(actions)); err != nil {
+		return nil, fmt.Errorf("write global new-session action: %w", err)
+	}
+	for _, session := range globals {
+		actions = append(actions, replChooserAction{kind: replActionResume, sessionID: session.ID})
+		if _, err := fmt.Fprintf(out, "  %d. %s\n", len(actions), replSessionLabel(session.Session)); err != nil {
+			return nil, fmt.Errorf("write global session action: %w", err)
+		}
+	}
+	if !ownedCWD {
+		actions = append(actions, replChooserAction{kind: replActionRegister})
+		if _, err := fmt.Fprintf(out, "  %d. Register current directory — %s\n", len(actions), escapedREPLPath(canonicalRoot)); err != nil {
+			return nil, fmt.Errorf("write registration action: %w", err)
+		}
+	}
+	return actions, nil
+}
+
+func replProjectLabel(project memory.Project) string {
+	return memory.ProjectDisplayLabel(project.DisplayName, project.CreatedAt)
+}
+
+func projectOwningRoot(projects []memory.Project, root string) memory.ProjectID {
+	for _, project := range projects {
+		if project.CanonicalRoot == root {
+			return project.ID
+		}
+	}
+	return ""
+}
+
+func replSessionLabel(session memory.Session) string {
+	if title := memory.TerminalSafeLine(session.Title); title != "" {
+		return title
+	}
+	return "Untitled — " + session.CreatedAt.Format(time.RFC3339Nano)
+}
+
+func relocatedRootLabel(project memory.Project, session memory.Session) string {
+	if session.ProjectRootSnapshot == "" || session.ProjectRootSnapshot == project.CanonicalRoot {
+		return ""
+	}
+	return " (stored root: " + escapedREPLPath(session.ProjectRootSnapshot) + ")"
+}
+
+func escapedREPLPath(path string) string { return strconv.Quote(path) }
+
+func registerREPLProject(
+	ctx context.Context,
+	store replSessionStore,
+	canonicalRoot string,
+	scanner *bufio.Scanner,
+	out io.Writer,
+) (memory.Session, bool, error) {
+	defaultName := memory.TerminalSafeLine(filepath.Base(canonicalRoot))
+	prompt := "Project name: "
+	if defaultName != "" {
+		prompt = fmt.Sprintf("Project name [%s]: ", defaultName)
+	}
+	if _, err := fmt.Fprint(out, prompt); err != nil {
+		return memory.Session{}, false, fmt.Errorf("write project-name prompt: %w", err)
 	}
 	displayName, err := scanREPLLine(scanner)
 	if err != nil {
-		return memory.Session{}, fmt.Errorf("read project name: %w", err)
+		return memory.Session{}, false, fmt.Errorf("read project name: %w", err)
 	}
 	displayName = strings.TrimSpace(displayName)
 	if displayName == "" {
 		displayName = defaultName
 	}
-
-	project, err = store.RegisterProject(ctx, displayName, canonicalRoot)
+	project, err := store.RegisterProject(ctx, displayName, canonicalRoot)
 	if err != nil {
-		concurrentProject, lookupErr := store.FindProjectByRoot(ctx, canonicalRoot)
-		if lookupErr == nil {
-			return selectKnownREPLProject(ctx, store, canonicalRoot, concurrentProject, scanner, out)
+		if _, lookupErr := store.FindProjectByRoot(ctx, canonicalRoot); lookupErr == nil {
+			if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+				return memory.Session{}, false, fmt.Errorf("write concurrent registration notice: %w", writeErr)
+			}
+			return memory.Session{}, true, nil
 		}
-		return memory.Session{}, fmt.Errorf("register launch directory: %w", err)
+		return memory.Session{}, false, fmt.Errorf("register launch directory: %w", err)
 	}
-	session, err := store.CreateProjectSession(ctx, project.ID)
-	if err != nil {
-		return memory.Session{}, fmt.Errorf("create registered project session: %w", err)
-	}
-	return session, nil
-}
-
-func selectKnownREPLProject(
-	ctx context.Context,
-	store replSessionStore,
-	canonicalRoot string,
-	project memory.Project,
-	scanner *bufio.Scanner,
-	out io.Writer,
-) (memory.Session, error) {
-	if project.Archived {
-		if _, err := fmt.Fprintf(
-			out,
-			"Launch directory %q belongs to archived project %q; archived projects cannot start sessions.\n",
-			canonicalRoot,
-			project.DisplayName,
-		); err != nil {
-			return memory.Session{}, fmt.Errorf("write archived project notice: %w", err)
-		}
-		_, err := readREPLChoice(
-			scanner,
-			out,
-			"Start a new session with [g]lobal scope? ",
-			"Please enter g.\n",
-			map[string]string{
-				"g":      globalScopeChoice,
-				"global": globalScopeChoice,
-			},
-		)
-		if err != nil {
-			return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
-		}
-		return createGlobalREPLSession(ctx, store)
-	}
-
-	if _, err := fmt.Fprintf(out, "Launch directory %q matches active project %q.\n", canonicalRoot, project.DisplayName); err != nil {
-		return memory.Session{}, fmt.Errorf("write project suggestion: %w", err)
-	}
-	choice, err := readREPLChoice(
-		scanner,
-		out,
-		"Start a new session with [p]roject or [g]lobal scope? ",
-		"Please enter p or g.\n",
-		map[string]string{
-			"p":       projectScopeChoice,
-			"project": projectScopeChoice,
-			"g":       globalScopeChoice,
-			"global":  globalScopeChoice,
-		},
+	session, err := store.CreateProjectSessionForChooser(
+		ctx, project.ID, project.CanonicalRoot, canonicalRoot, project.ID,
 	)
+	if errors.Is(err, eviedb.ErrChooserStateChanged) {
+		if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+			return memory.Session{}, false, fmt.Errorf("write stale registered project notice: %w", writeErr)
+		}
+		return memory.Session{}, true, nil
+	}
 	if err != nil {
-		return memory.Session{}, fmt.Errorf("choose startup scope: %w", err)
+		return memory.Session{}, false, fmt.Errorf("create registered project session: %w", err)
 	}
-	if choice == projectScopeChoice {
-		session, err := store.CreateProjectSession(ctx, project.ID)
-		if err != nil {
-			return memory.Session{}, fmt.Errorf("create project-scoped session: %w", err)
-		}
-		return session, nil
-	}
-	return createGlobalREPLSession(ctx, store)
-}
-
-func readREPLChoice(
-	scanner *bufio.Scanner,
-	out io.Writer,
-	prompt string,
-	invalidMessage string,
-	choices map[string]string,
-) (string, error) {
-	for {
-		if _, err := fmt.Fprint(out, prompt); err != nil {
-			return "", fmt.Errorf("write prompt: %w", err)
-		}
-		line, err := scanREPLLine(scanner)
-		if err != nil {
-			return "", err
-		}
-		if choice, ok := choices[strings.ToLower(strings.TrimSpace(line))]; ok {
-			return choice, nil
-		}
-		if _, err := fmt.Fprint(out, invalidMessage); err != nil {
-			return "", fmt.Errorf("write invalid-choice message: %w", err)
-		}
-	}
+	return session, false, nil
 }
 
 func scanREPLLine(scanner *bufio.Scanner) (string, error) {
@@ -198,8 +319,13 @@ func scanREPLLine(scanner *bufio.Scanner) (string, error) {
 	return "", io.EOF
 }
 
-func createGlobalREPLSession(ctx context.Context, store replSessionStore) (memory.Session, error) {
-	session, err := store.CreateGlobalSession(ctx)
+func createGlobalREPLSession(
+	ctx context.Context,
+	store replSessionStore,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	session, err := store.CreateGlobalSessionForChooser(ctx, cwdRoot, expectedCWDProjectID)
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("create global session: %w", err)
 	}
@@ -364,11 +490,15 @@ func runREPL(session *agent.Session, scanner *bufio.Scanner) {
 }
 
 func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.Scanner) {
+	runREPLContextIO(ctx, session, scanner, os.Stdout)
+}
+
+func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufio.Scanner, out io.Writer) {
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
 	approve := func(approvalCtx context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
-		fmt.Printf("\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
+		_, _ = fmt.Fprintf(out, "\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
 		if !scanner.Scan() {
 			return tools.Declined
 		}
@@ -382,12 +512,12 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 		return tools.Declined
 	}
 
-	ev := &replEvents{out: os.Stdout}
+	ev := &replEvents{out: out}
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		fmt.Print("< ")
+		_, _ = fmt.Fprint(out, "< ")
 		if !scanner.Scan() {
 			break
 		}
@@ -395,8 +525,13 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 			return
 		}
 		err := session.Send(ctx, scanner.Text(), ev, approve)
-		if err != nil {
-			fmt.Printf("request failed: %v\n", err)
+		switch {
+		case errors.Is(err, agent.ErrLeaseConflict):
+			_, _ = fmt.Fprintln(out, "Session busy; message not sent.")
+		case errors.Is(err, agent.ErrSessionUnavailable):
+			_, _ = fmt.Fprintln(out, "Session unavailable; message not sent.")
+		case err != nil:
+			_, _ = fmt.Fprintf(out, "request failed: %v\n", err)
 		}
 	}
 }
