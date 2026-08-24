@@ -23,6 +23,16 @@ const DefaultModel = "moonshotai/kimi-k3"
 
 var ErrBusy = errors.New("agent: a turn is already in progress")
 
+type sessionUnavailableError struct{ cause error }
+
+func (e sessionUnavailableError) Error() string {
+	return fmt.Sprintf("acquire turn lease: %v", e.cause)
+}
+
+func (e sessionUnavailableError) Unwrap() []error {
+	return []error{ErrSessionUnavailable, e.cause}
+}
+
 type Session struct {
 	mu        sync.Mutex
 	client    Client
@@ -106,7 +116,7 @@ func (s *Session) Send(
 			return fmt.Errorf("%w: %v", ErrLeaseConflict, err)
 		}
 		if s.owner.IsSessionInactive(err) {
-			return fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
+			return sessionUnavailableError{cause: err}
 		}
 		return fmt.Errorf("acquire turn lease: %w", err)
 	}
