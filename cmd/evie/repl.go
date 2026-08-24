@@ -27,15 +27,16 @@ type replSessionStore interface {
 	ListActiveSessions(context.Context) ([]memory.SessionListing, error)
 	FindProjectByRoot(context.Context, string) (memory.Project, error)
 	RegisterProject(context.Context, string, string) (memory.Project, error)
-	CreateProjectSession(context.Context, memory.ProjectID) (memory.Session, error)
-	CreateGlobalSession(context.Context) (memory.Session, error)
-	GetActiveSession(context.Context, memory.SessionID) (memory.Session, error)
+	CreateProjectSessionForChooser(context.Context, memory.ProjectID, string, string, memory.ProjectID) (memory.Session, error)
+	CreateGlobalSessionForChooser(context.Context, string, memory.ProjectID) (memory.Session, error)
+	GetActiveSessionForChooser(context.Context, memory.SessionID, string, memory.ProjectID) (memory.Session, error)
 }
 
 type replChooserAction struct {
-	kind      string
-	projectID memory.ProjectID
-	sessionID memory.SessionID
+	kind        string
+	projectID   memory.ProjectID
+	projectRoot string
+	sessionID   memory.SessionID
 }
 
 const (
@@ -66,6 +67,7 @@ func selectREPLSession(
 		if err != nil {
 			return memory.Session{}, fmt.Errorf("list active sessions: %w", err)
 		}
+		renderedCWDProjectID := projectOwningRoot(projects, canonicalRoot)
 		actions, err := renderREPLChooser(out, canonicalRoot, projects, sessions)
 		if err != nil {
 			return memory.Session{}, err
@@ -89,8 +91,8 @@ func selectREPLSession(
 		action := actions[choice-1]
 		switch action.kind {
 		case replActionResume:
-			session, err := store.GetActiveSession(ctx, action.sessionID)
-			if errors.Is(err, eviedb.ErrSessionNotActive) {
+			session, err := store.GetActiveSessionForChooser(ctx, action.sessionID, canonicalRoot, renderedCWDProjectID)
+			if errors.Is(err, eviedb.ErrSessionNotActive) || errors.Is(err, eviedb.ErrChooserStateChanged) {
 				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
 					return memory.Session{}, fmt.Errorf("write stale session notice: %w", writeErr)
 				}
@@ -101,8 +103,10 @@ func selectREPLSession(
 			}
 			return session, nil
 		case replActionNewProject:
-			session, err := store.CreateProjectSession(ctx, action.projectID)
-			if errors.Is(err, eviedb.ErrProjectNotActive) {
+			session, err := store.CreateProjectSessionForChooser(
+				ctx, action.projectID, action.projectRoot, canonicalRoot, renderedCWDProjectID,
+			)
+			if errors.Is(err, eviedb.ErrChooserStateChanged) {
 				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
 					return memory.Session{}, fmt.Errorf("write stale project notice: %w", writeErr)
 				}
@@ -113,7 +117,14 @@ func selectREPLSession(
 			}
 			return session, nil
 		case replActionNewGlobal:
-			return createGlobalREPLSession(ctx, store)
+			session, err := createGlobalREPLSession(ctx, store, canonicalRoot, renderedCWDProjectID)
+			if errors.Is(err, eviedb.ErrChooserStateChanged) {
+				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write stale cwd notice: %w", writeErr)
+				}
+				continue
+			}
+			return session, err
 		case replActionRegister:
 			session, retry, err := registerREPLProject(ctx, store, canonicalRoot, scanner, out)
 			if err != nil {
@@ -142,16 +153,12 @@ func renderREPLChooser(
 		}
 		byProject[session.ProjectID] = append(byProject[session.ProjectID], session)
 	}
-	for _, group := range byProject {
-		sortSessionListings(group)
-	}
-	sortSessionListings(globals)
 
 	sort.Slice(projects, func(i, j int) bool {
 		if projects[i].Archived != projects[j].Archived {
 			return !projects[i].Archived
 		}
-		leftName, rightName := memory.TerminalSafeLine(projects[i].DisplayName), memory.TerminalSafeLine(projects[j].DisplayName)
+		leftName, rightName := replProjectLabel(projects[i]), replProjectLabel(projects[j])
 		if leftName != rightName {
 			return leftName < rightName
 		}
@@ -175,10 +182,7 @@ func renderREPLChooser(
 		if project.Archived && len(projectSessions) == 0 {
 			continue
 		}
-		name := memory.TerminalSafeLine(project.DisplayName)
-		if name == "" {
-			name = "Untitled project"
-		}
+		name := replProjectLabel(project)
 		archived := ""
 		if project.Archived {
 			archived = " (archived)"
@@ -191,7 +195,9 @@ func renderREPLChooser(
 			return nil, fmt.Errorf("write project heading: %w", err)
 		}
 		if !project.Archived {
-			actions = append(actions, replChooserAction{kind: replActionNewProject, projectID: project.ID})
+			actions = append(actions, replChooserAction{
+				kind: replActionNewProject, projectID: project.ID, projectRoot: project.CanonicalRoot,
+			})
 			if _, err := fmt.Fprintf(out, "  %d. New session\n", len(actions)); err != nil {
 				return nil, fmt.Errorf("write project new-session action: %w", err)
 			}
@@ -226,13 +232,20 @@ func renderREPLChooser(
 	return actions, nil
 }
 
-func sortSessionListings(sessions []memory.SessionListing) {
-	sort.Slice(sessions, func(i, j int) bool {
-		if !sessions[i].ActivityAt.Equal(sessions[j].ActivityAt) {
-			return sessions[i].ActivityAt.After(sessions[j].ActivityAt)
+func replProjectLabel(project memory.Project) string {
+	if label := memory.TerminalSafeLine(project.DisplayName); label != "" {
+		return label
+	}
+	return "Untitled project"
+}
+
+func projectOwningRoot(projects []memory.Project, root string) memory.ProjectID {
+	for _, project := range projects {
+		if project.CanonicalRoot == root {
+			return project.ID
 		}
-		return sessions[i].ID < sessions[j].ID
-	})
+	}
+	return ""
 }
 
 func replSessionLabel(session memory.Session) string {
@@ -283,8 +296,10 @@ func registerREPLProject(
 		}
 		return memory.Session{}, false, fmt.Errorf("register launch directory: %w", err)
 	}
-	session, err := store.CreateProjectSession(ctx, project.ID)
-	if errors.Is(err, eviedb.ErrProjectNotActive) {
+	session, err := store.CreateProjectSessionForChooser(
+		ctx, project.ID, project.CanonicalRoot, canonicalRoot, project.ID,
+	)
+	if errors.Is(err, eviedb.ErrChooserStateChanged) {
 		if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
 			return memory.Session{}, false, fmt.Errorf("write stale registered project notice: %w", writeErr)
 		}
@@ -306,8 +321,13 @@ func scanREPLLine(scanner *bufio.Scanner) (string, error) {
 	return "", io.EOF
 }
 
-func createGlobalREPLSession(ctx context.Context, store replSessionStore) (memory.Session, error) {
-	session, err := store.CreateGlobalSession(ctx)
+func createGlobalREPLSession(
+	ctx context.Context,
+	store replSessionStore,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	session, err := store.CreateGlobalSessionForChooser(ctx, cwdRoot, expectedCWDProjectID)
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("create global session: %w", err)
 	}

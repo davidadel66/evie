@@ -221,16 +221,14 @@ func (s *Store) appendEvent(
 	if err != nil {
 		return memory.Event{}, fmt.Errorf("append event: %w", err)
 	}
-	if input.Type == memory.EventUserMessage && input.Role == memory.RoleUser && input.ParentID == "" {
-		if title := memory.NormalizeSessionTitle(input.Content); title != "" {
-			if err := executor.queryRowContext(ctx, `
+	if title := memory.SessionTitleCandidate(input.Type, input.Role, input.ParentID, input.Content); title != "" {
+		if err := executor.queryRowContext(ctx, `
 				UPDATE sessions
 				SET title = ?
 				WHERE id = ? AND title IS NULL
 				RETURNING id
 			`, title, sessionID).Scan(new(string)); err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return memory.Event{}, fmt.Errorf("initialize session title: %w", err)
-			}
+			return memory.Event{}, fmt.Errorf("initialize session title: %w", err)
 		}
 	}
 

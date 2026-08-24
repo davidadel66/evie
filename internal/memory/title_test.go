@@ -44,3 +44,27 @@ func TestNormalizeSessionTitleRuneLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionTitleCandidateEligibility(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventType EventType
+		role      EventRole
+		parentID  EventID
+		content   string
+		want      string
+	}{
+		{name: "qualifying root user", eventType: EventUserMessage, role: RoleUser, content: " first\n title ", want: "first title"},
+		{name: "blank root user", eventType: EventUserMessage, role: RoleUser, content: " \t\n"},
+		{name: "assistant event", eventType: EventAssistantMessage, role: RoleAssistant, content: "assistant"},
+		{name: "wrong user role", eventType: EventUserMessage, role: RoleAssistant, content: "wrong role"},
+		{name: "child user event", eventType: EventUserMessage, role: RoleUser, parentID: "parent", content: "child"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SessionTitleCandidate(tt.eventType, tt.role, tt.parentID, tt.content); got != tt.want {
+				t.Fatalf("candidate=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}

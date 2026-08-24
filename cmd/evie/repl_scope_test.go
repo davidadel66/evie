@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,106 @@ type fakeREPLSessionStore struct {
 	createHook     func(memory.ProjectID) (memory.Session, error)
 	getHook        func(memory.SessionID) (memory.Session, error)
 	listHook       func() ([]memory.Project, []memory.SessionListing)
+}
+
+type relocatingREPLStore struct {
+	*eviedb.Store
+	db               *sql.DB
+	newRoot          string
+	relocateNext     bool
+	relocatedRoot    string
+	sessionsAtReject int
+}
+
+func (s *relocatingREPLStore) CreateProjectSessionForChooser(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	if s.relocateNext {
+		s.relocateNext = false
+		relocated, err := s.RelocateProject(ctx, projectID, s.newRoot)
+		if err != nil {
+			return memory.Session{}, err
+		}
+		s.relocatedRoot = relocated.CanonicalRoot
+	}
+	session, err := s.Store.CreateProjectSessionForChooser(
+		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID,
+	)
+	if errors.Is(err, eviedb.ErrChooserStateChanged) {
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&s.sessionsAtReject)
+	}
+	return session, err
+}
+
+type concurrentCWDREPLStore struct {
+	*eviedb.Store
+	db               *sql.DB
+	cwd              string
+	triggerNext      bool
+	sessionsAtReject int
+}
+
+func (s *concurrentCWDREPLStore) registerBeforeAction(ctx context.Context) error {
+	if !s.triggerNext {
+		return nil
+	}
+	s.triggerNext = false
+	_, err := s.RegisterProject(ctx, "Current", s.cwd)
+	return err
+}
+
+func (s *concurrentCWDREPLStore) recordRejection(err error) {
+	if errors.Is(err, eviedb.ErrChooserStateChanged) {
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&s.sessionsAtReject)
+	}
+}
+
+func (s *concurrentCWDREPLStore) CreateProjectSessionForChooser(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	if err := s.registerBeforeAction(ctx); err != nil {
+		return memory.Session{}, err
+	}
+	session, err := s.Store.CreateProjectSessionForChooser(
+		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID,
+	)
+	s.recordRejection(err)
+	return session, err
+}
+
+func (s *concurrentCWDREPLStore) CreateGlobalSessionForChooser(
+	ctx context.Context,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	if err := s.registerBeforeAction(ctx); err != nil {
+		return memory.Session{}, err
+	}
+	session, err := s.Store.CreateGlobalSessionForChooser(ctx, cwdRoot, expectedCWDProjectID)
+	s.recordRejection(err)
+	return session, err
+}
+
+func (s *concurrentCWDREPLStore) GetActiveSessionForChooser(
+	ctx context.Context,
+	sessionID memory.SessionID,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	if err := s.registerBeforeAction(ctx); err != nil {
+		return memory.Session{}, err
+	}
+	session, err := s.Store.GetActiveSessionForChooser(ctx, sessionID, cwdRoot, expectedCWDProjectID)
+	s.recordRejection(err)
+	return session, err
 }
 
 func (f *fakeREPLSessionStore) ListProjects(context.Context, bool) ([]memory.Project, error) {
@@ -59,7 +160,13 @@ func (f *fakeREPLSessionStore) RegisterProject(_ context.Context, displayName, r
 	return memory.Project{ID: "registered", DisplayName: displayName, CanonicalRoot: root}, nil
 }
 
-func (f *fakeREPLSessionStore) CreateProjectSession(_ context.Context, id memory.ProjectID) (memory.Session, error) {
+func (f *fakeREPLSessionStore) CreateProjectSessionForChooser(
+	_ context.Context,
+	id memory.ProjectID,
+	_ string,
+	_ string,
+	_ memory.ProjectID,
+) (memory.Session, error) {
 	f.createdProject = append(f.createdProject, id)
 	if f.createHook != nil {
 		return f.createHook(id)
@@ -67,12 +174,17 @@ func (f *fakeREPLSessionStore) CreateProjectSession(_ context.Context, id memory
 	return memory.Session{ID: "new-project", ProjectID: id, Status: memory.SessionActive}, nil
 }
 
-func (f *fakeREPLSessionStore) CreateGlobalSession(context.Context) (memory.Session, error) {
+func (f *fakeREPLSessionStore) CreateGlobalSessionForChooser(context.Context, string, memory.ProjectID) (memory.Session, error) {
 	f.createdGlobal++
 	return memory.Session{ID: "new-global", Status: memory.SessionActive}, nil
 }
 
-func (f *fakeREPLSessionStore) GetActiveSession(_ context.Context, id memory.SessionID) (memory.Session, error) {
+func (f *fakeREPLSessionStore) GetActiveSessionForChooser(
+	_ context.Context,
+	id memory.SessionID,
+	_ string,
+	_ memory.ProjectID,
+) (memory.Session, error) {
 	f.activeGets = append(f.activeGets, id)
 	if f.getHook != nil {
 		return f.getHook(id)
@@ -88,6 +200,8 @@ func (f *fakeREPLSessionStore) GetActiveSession(_ context.Context, id memory.Ses
 func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 	projects := []memory.Project{
+		{ID: "alpha", DisplayName: "Alpha", CanonicalRoot: "/alpha"},
+		{ID: "fallback", DisplayName: "\x1b\u200b", CanonicalRoot: "/fallback"},
 		{ID: "z", DisplayName: "Same\x1b[31m", CanonicalRoot: "/z\nroot"},
 		{ID: "a", DisplayName: "Same\u200b", CanonicalRoot: "/a\troot"},
 		{ID: "empty", DisplayName: "Empty", CanonicalRoot: "/empty"},
@@ -95,8 +209,8 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 		{ID: "archived-empty", DisplayName: "Hidden", CanonicalRoot: "/hidden", Archived: true},
 	}
 	sessions := []memory.SessionListing{
-		{Session: memory.Session{ID: "a-old", ProjectID: "a", ProjectRootSnapshot: "/moved\x1b", Title: "older", CreatedAt: now}, ActivityAt: now},
 		{Session: memory.Session{ID: "a-new", ProjectID: "a", ProjectRootSnapshot: "/a\troot", Title: "new\n\x1btitle", CreatedAt: now}, ActivityAt: now.Add(time.Minute)},
+		{Session: memory.Session{ID: "a-old", ProjectID: "a", ProjectRootSnapshot: "/moved\x1b", Title: "older", CreatedAt: now}, ActivityAt: now},
 		{Session: memory.Session{ID: "archived-session", ProjectID: "archived", ProjectRootSnapshot: "/old", CreatedAt: now}, ActivityAt: now},
 		{Session: memory.Session{ID: "global", Title: "global", CreatedAt: now}, ActivityAt: now},
 	}
@@ -109,6 +223,7 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"Empty — \"/empty\"",
+		"Untitled project — \"/fallback\"",
 		"Same — \"/a\\troot\" (current directory)",
 		"newtitle",
 		"stored root: \"/moved\\x1b\"",
@@ -126,11 +241,33 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	if strings.Index(got, "Empty") > strings.Index(got, "Old") || strings.Index(got, "Old") > strings.Index(got, "Global") {
 		t.Fatalf("project/archive/global ordering is wrong: %q", got)
 	}
+	if strings.Index(got, "Alpha") > strings.Index(got, "Untitled project") {
+		t.Fatalf("project fallback was not used as the sort label: %q", got)
+	}
 	if gotNew := strings.Index(got, "newtitle"); gotNew > strings.Index(got, "older") {
 		t.Fatalf("session activity ordering is wrong: %q", got)
 	}
-	if len(actions) != 8 {
-		t.Fatalf("actions = %d, want 8", len(actions))
+	if len(actions) != 10 {
+		t.Fatalf("actions = %d, want 10", len(actions))
+	}
+}
+
+func TestRenderREPLChooserPreservesStorageSessionOrderWhilePartitioning(t *testing.T) {
+	project := memory.Project{ID: "project", DisplayName: "Project", CanonicalRoot: "/project"}
+	sessions := []memory.SessionListing{
+		{Session: memory.Session{ID: "project-first", ProjectID: project.ID, Title: "project first"}, ActivityAt: time.Unix(1, 0)},
+		{Session: memory.Session{ID: "global-first", Title: "global first"}, ActivityAt: time.Unix(1, 0)},
+		{Session: memory.Session{ID: "project-second", ProjectID: project.ID, Title: "project second"}, ActivityAt: time.Unix(2, 0)},
+		{Session: memory.Session{ID: "global-second", Title: "global second"}, ActivityAt: time.Unix(2, 0)},
+	}
+	var out bytes.Buffer
+	if _, err := renderREPLChooser(&out, "/other", []memory.Project{project}, sessions); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if strings.Index(got, "project first") > strings.Index(got, "project second") ||
+		strings.Index(got, "global first") > strings.Index(got, "global second") {
+		t.Fatalf("REPL re-sorted storage-owned session order: %q", got)
 	}
 }
 
@@ -222,7 +359,7 @@ func TestSelectREPLSessionRefreshesArchiveBetweenRenderAndCreate(t *testing.T) {
 	}
 	store.createHook = func(memory.ProjectID) (memory.Session, error) {
 		archived = true
-		return memory.Session{}, eviedb.ErrProjectNotActive
+		return memory.Session{}, eviedb.ErrChooserStateChanged
 	}
 	var out bytes.Buffer
 	session, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("1\n1\n")), &out)
@@ -234,6 +371,101 @@ func TestSelectREPLSessionRefreshesArchiveBetweenRenderAndCreate(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), replStateChanged) {
 		t.Fatalf("archive race notice missing: %q", out.String())
+	}
+}
+
+func TestSelectREPLSessionRefreshesRelocationBeforeProjectCreation(t *testing.T) {
+	tests := []struct {
+		name       string
+		registered bool
+		input      string
+	}{
+		{name: "rendered existing project", registered: true, input: "1\n1\n"},
+		{name: "registration to creation", input: "2\nRegistered\n1\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+			base := eviedb.NewStore(db)
+			launchRoot := t.TempDir()
+			if tt.registered {
+				if _, err := base.RegisterProject(context.Background(), "Existing", launchRoot); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := &relocatingREPLStore{
+				Store: base, db: db, newRoot: t.TempDir(), relocateNext: true,
+			}
+			var out bytes.Buffer
+			session, err := selectREPLSession(
+				context.Background(), store, launchRoot,
+				bufio.NewScanner(strings.NewReader(tt.input)), &out,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if store.sessionsAtReject != 0 {
+				t.Fatalf("relocation created %d sessions before reselection", store.sessionsAtReject)
+			}
+			if session.ProjectRootSnapshot != store.relocatedRoot {
+				t.Fatalf("selected root=%q, want refreshed root=%q", session.ProjectRootSnapshot, store.relocatedRoot)
+			}
+			if !strings.Contains(out.String(), replStateChanged) ||
+				!strings.Contains(out.String(), escapedREPLPath(store.relocatedRoot)) ||
+				strings.Count(out.String(), "Select session:") != 2 {
+				t.Fatalf("relocation did not refresh with new root and explicit reselection: %q", out.String())
+			}
+		})
+	}
+}
+
+func TestSelectREPLSessionRefreshesNewCWDOwnerBeforeEveryAction(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "project new", input: "1\n4\n"},
+		{name: "global new", input: "3\n4\n"},
+		{name: "existing session", input: "2\n4\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+			base := eviedb.NewStore(db)
+			project, err := base.RegisterProject(context.Background(), "Other", t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := base.CreateProjectSession(context.Background(), project.ID); err != nil {
+				t.Fatal(err)
+			}
+			cwd := t.TempDir()
+			store := &concurrentCWDREPLStore{Store: base, db: db, cwd: cwd, triggerNext: true}
+			var out bytes.Buffer
+			selected, err := selectREPLSession(
+				context.Background(), store, cwd,
+				bufio.NewScanner(strings.NewReader(tt.input)), &out,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selected.ProjectID != "" || store.sessionsAtReject != 1 {
+				t.Fatalf("stale action granted scope: selected=%+v sessions-at-reject=%d", selected, store.sessionsAtReject)
+			}
+			if !strings.Contains(out.String(), replStateChanged) ||
+				!strings.Contains(out.String(), "(current directory)") ||
+				strings.Count(out.String(), "Select session:") != 2 {
+				t.Fatalf("new cwd owner did not force refresh: %q", out.String())
+			}
+		})
 	}
 }
 

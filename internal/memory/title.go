@@ -7,6 +7,15 @@ import (
 
 const SessionTitleRuneLimit = 80
 
+// SessionTitleCandidate returns normalized title evidence only for an accepted
+// root user event. Live appends and legacy backfill share this eligibility rule.
+func SessionTitleCandidate(eventType EventType, role EventRole, parentID EventID, content string) string {
+	if eventType != EventUserMessage || role != RoleUser || parentID != "" {
+		return ""
+	}
+	return NormalizeSessionTitle(content)
+}
+
 // NormalizeSessionTitle turns accepted user evidence into deterministic,
 // terminal-safe single-line metadata. An empty result means no title evidence.
 func NormalizeSessionTitle(input string) string {

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -74,45 +74,77 @@ func TestTwoConcurrentLegacyOpensSerializeTitleUpgrade(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
 	createLegacyTitleDatabase(t, path)
 
-	start := make(chan struct{})
-	results := make(chan error, 2)
-	var opened sync.WaitGroup
-	opened.Add(2)
-	for range 2 {
-		go func() {
-			defer opened.Done()
-			<-start
-			db, err := OpenDBAt(path)
-			if err == nil {
-				err = db.Close()
-			}
-			results <- err
-		}()
-	}
-	close(start)
-	opened.Wait()
-	close(results)
-	for err := range results {
-		if err != nil {
-			t.Fatalf("concurrent open: %v", err)
-		}
-	}
-
-	db, err := OpenDBAt(path)
+	dbA, err := sql.Open("sqlite", path+dsnPragmas)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() { _ = dbA.Close() })
+	dbB, err := sql.Open("sqlite", path+dsnPragmas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbB.Close() })
+
+	firstOwned := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondAttempting := make(chan struct{})
+	firstDone := make(chan error, 1)
+	secondDone := make(chan error, 1)
+	var backfills atomic.Int32
+	go func() {
+		firstDone <- ensureSessionTitlesWithHooks(context.Background(), dbA, sessionTitleUpgradeHooks{
+			afterTransactionOwned: func() {
+				close(firstOwned)
+				<-releaseFirst
+			},
+			beforeBackfill: func() { backfills.Add(1) },
+		})
+	}()
+	<-firstOwned
+	go func() {
+		secondDone <- ensureSessionTitlesWithHooks(context.Background(), dbB, sessionTitleUpgradeHooks{
+			afterFastMissingCheck: func() { close(secondAttempting) },
+			beforeBackfill:        func() { backfills.Add(1) },
+		})
+	}()
+	<-secondAttempting
+	select {
+	case err := <-secondDone:
+		t.Fatalf("competing migration returned before owner released: %v", err)
+	default:
+	}
+	close(releaseFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first migration: %v", err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second migration: %v", err)
+	}
+
 	var columns int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'title'`).Scan(&columns); err != nil {
+	if err := dbA.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'title'`).Scan(&columns); err != nil {
 		t.Fatal(err)
 	}
-	var title string
-	if err := db.QueryRow(`SELECT title FROM sessions WHERE id = 'legacy'`).Scan(&title); err != nil {
+	var title, updatedAt string
+	if err := dbA.QueryRow(`SELECT title, updated_at FROM sessions WHERE id = 'legacy'`).Scan(&title, &updatedAt); err != nil {
 		t.Fatal(err)
 	}
-	if columns != 1 || title != "first title" {
-		t.Fatalf("concurrent migration columns=%d title=%q", columns, title)
+	if columns != 1 || title != "first title" || updatedAt != "2026-08-24T10:00:00Z" || backfills.Load() != 1 {
+		t.Fatalf("concurrent migration columns=%d title=%q updated_at=%q backfills=%d", columns, title, updatedAt, backfills.Load())
+	}
+}
+
+func TestCurrentSchemaTitleUpgradeFastPathSkipsWriterAndBackfill(t *testing.T) {
+	db := newTestDB(t)
+	transactionOwned, backfill := false, false
+	if err := ensureSessionTitlesWithHooks(context.Background(), db, sessionTitleUpgradeHooks{
+		afterTransactionOwned: func() { transactionOwned = true },
+		beforeBackfill:        func() { backfill = true },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if transactionOwned || backfill {
+		t.Fatalf("current-schema reopen entered migration path: transaction=%t backfill=%t", transactionOwned, backfill)
 	}
 }
 
@@ -267,9 +299,13 @@ func createLegacyTitleDatabase(t *testing.T, path string) {
 		VALUES ('legacy', 'active', '2026-08-24T09:00:00Z', '2026-08-24T10:00:00Z');
 		INSERT INTO events (id, session_id, sequence, event_type, role, content, recorded_at)
 		VALUES
-			('blank', 'legacy', 1, 'user_message', 'user', '  ' || char(10) || char(9), '2026-08-24T09:01:00Z'),
-			('title', 'legacy', 2, 'user_message', 'user', ' first' || char(10) || ' title ', '2026-08-24T09:02:00Z'),
-			('later', 'legacy', 3, 'user_message', 'user', 'later', '2026-08-24T09:03:00Z');
+			('assistant', 'legacy', 1, 'assistant_message', 'assistant', 'not user evidence', '2026-08-24T09:00:10Z'),
+			('wrong-role', 'legacy', 2, 'user_message', 'assistant', 'wrong role', '2026-08-24T09:00:20Z'),
+			('child', 'legacy', 3, 'user_message', 'user', 'child evidence', '2026-08-24T09:00:30Z'),
+			('blank', 'legacy', 4, 'user_message', 'user', '  ' || char(10) || char(9), '2026-08-24T09:01:00Z'),
+			('title', 'legacy', 5, 'user_message', 'user', ' first' || char(10) || ' title ', '2026-08-24T09:02:00Z'),
+			('later', 'legacy', 6, 'user_message', 'user', 'later', '2026-08-24T09:03:00Z');
+		UPDATE events SET parent_id = 'assistant' WHERE id = 'child';
 	`
 	if _, err := db.Exec(legacy); err != nil {
 		_ = db.Close()

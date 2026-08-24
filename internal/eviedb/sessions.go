@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	ErrProjectNotActive = errors.New("eviedb: project is missing or archived")
-	ErrSessionNotActive = errors.New("eviedb: session is missing or inactive")
+	ErrChooserStateChanged = errors.New("eviedb: chooser state changed")
+	ErrProjectNotActive    = errors.New("eviedb: project is missing or archived")
+	ErrSessionNotActive    = errors.New("eviedb: session is missing or inactive")
 )
 
 func (s *Store) GetSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
@@ -46,9 +47,45 @@ func (s *Store) GetActiveSession(ctx context.Context, id memory.SessionID) (memo
 	return session, nil
 }
 
+// GetActiveSessionForChooser serializes the rendered cwd-owner expectation
+// with the active-session read. Registration after this commit is later state,
+// not a scope silently adopted by this selection.
+func (s *Store) GetActiveSessionForChooser(
+	ctx context.Context,
+	id memory.SessionID,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	var session memory.Session
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		matches, err := projectRootOwnerMatches(ctx, conn, cwdRoot, expectedCWDProjectID)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			return ErrChooserStateChanged
+		}
+		session, err = scanSession(conn.QueryRowContext(ctx, `
+			SELECT id, project_id, project_root_snapshot, parent_session_id,
+			       COALESCE(title, ''), status, created_at, updated_at
+			FROM sessions
+			WHERE id = ? AND status = ?
+		`, id, memory.SessionActive))
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: session %q", ErrSessionNotActive, id)
+		}
+		if err != nil {
+			return fmt.Errorf("read active session: %w", err)
+		}
+		return nil
+	})
+	return session, err
+}
+
 // ListActiveSessions excludes closed sessions at the persistence boundary and
-// parses activity timestamps in Go. Activity is the timestamp attached to the
-// greatest accepted sequence, with creation time as the empty-history fallback.
+// returns one globally ordered stream for consumers to partition without
+// re-sorting. Activity is the parsed timestamp attached to the greatest accepted
+// sequence, with creation time as the empty-history fallback.
 func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT sessions.id, sessions.project_id, sessions.project_root_snapshot,
@@ -170,6 +207,29 @@ func sessionFromScanned(
 }
 
 func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.ProjectID) (memory.Session, error) {
+	return s.createProjectSession(ctx, projectID, "", "", "", false)
+}
+
+// CreateProjectSessionForChooser atomically requires the rendered project root,
+// active state, and rendered cwd owner before freezing the session scope.
+func (s *Store) CreateProjectSessionForChooser(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	return s.createProjectSession(ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, true)
+}
+
+func (s *Store) createProjectSession(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+	guarded bool,
+) (memory.Session, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("generate session ID: %w", err)
@@ -184,6 +244,10 @@ func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.Proje
 	}
 
 	var storedProjectID string
+	guard := 0
+	if guarded {
+		guard = 1
+	}
 	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO sessions (
 		id, project_id, project_root_snapshot, status, created_at, updated_at
@@ -191,6 +255,13 @@ func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.Proje
 		SELECT ?, id, canonical_root, ?, ?, ?
 		FROM projects
 		WHERE id = ? AND archived = 0
+		  AND (? = 0 OR canonical_root = ?)
+		  AND (
+		      ? = 0 OR COALESCE((
+		          SELECT cwd_project.id FROM projects AS cwd_project
+		          WHERE cwd_project.canonical_root = ?
+		      ), '') = ?
+		  )
 		RETURNING project_id, project_root_snapshot
 		`,
 		session.ID,
@@ -198,8 +269,16 @@ func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.Proje
 		session.CreatedAt.Format(time.RFC3339Nano),
 		session.UpdatedAt.Format(time.RFC3339Nano),
 		projectID,
+		guard,
+		expectedProjectRoot,
+		guard,
+		cwdRoot,
+		expectedCWDProjectID,
 	).Scan(&storedProjectID, &session.ProjectRootSnapshot)
 	if errors.Is(err, sql.ErrNoRows) {
+		if guarded {
+			return memory.Session{}, fmt.Errorf("%w: project %q", ErrChooserStateChanged, projectID)
+		}
 		return memory.Session{}, fmt.Errorf("%w: project %q", ErrProjectNotActive, projectID)
 	}
 
@@ -212,6 +291,23 @@ func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.Proje
 }
 
 func (s *Store) CreateGlobalSession(ctx context.Context) (memory.Session, error) {
+	return s.createGlobalSession(ctx, "", "", false)
+}
+
+func (s *Store) CreateGlobalSessionForChooser(
+	ctx context.Context,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	return s.createGlobalSession(ctx, cwdRoot, expectedCWDProjectID, true)
+}
+
+func (s *Store) createGlobalSession(
+	ctx context.Context,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+	guarded bool,
+) (memory.Session, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("generate session ID: %w", err)
@@ -225,16 +321,48 @@ func (s *Store) CreateGlobalSession(ctx context.Context) (memory.Session, error)
 		UpdatedAt: now,
 	}
 
-	if _, err := s.db.ExecContext(ctx, `
-		INSERT INTO sessions (id, status, created_at, updated_at) VALUES (?, ?, ?, ?)
+	guard := 0
+	if guarded {
+		guard = 1
+	}
+	var insertedID string
+	if err := s.db.QueryRowContext(ctx, `
+		INSERT INTO sessions (id, status, created_at, updated_at)
+		SELECT ?, ?, ?, ?
+		WHERE ? = 0 OR COALESCE((
+			SELECT projects.id FROM projects WHERE projects.canonical_root = ?
+		), '') = ?
+		RETURNING id
 		`,
 		session.ID,
 		session.Status,
 		session.CreatedAt.Format(time.RFC3339Nano),
 		session.UpdatedAt.Format(time.RFC3339Nano),
-	); err != nil {
+		guard,
+		cwdRoot,
+		expectedCWDProjectID,
+	).Scan(&insertedID); errors.Is(err, sql.ErrNoRows) {
+		return memory.Session{}, ErrChooserStateChanged
+	} else if err != nil {
 		return memory.Session{}, fmt.Errorf("insert global session: %w", err)
 	}
 
 	return session, nil
+}
+
+func projectRootOwnerMatches(
+	ctx context.Context,
+	conn *sql.Conn,
+	root string,
+	expectedProjectID memory.ProjectID,
+) (bool, error) {
+	var matches bool
+	if err := conn.QueryRowContext(ctx, `
+		SELECT COALESCE((
+			SELECT projects.id FROM projects WHERE projects.canonical_root = ?
+		), '') = ?
+	`, root, expectedProjectID).Scan(&matches); err != nil {
+		return false, fmt.Errorf("check chooser cwd ownership: %w", err)
+	}
+	return matches, nil
 }
