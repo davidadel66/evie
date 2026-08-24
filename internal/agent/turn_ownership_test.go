@@ -1529,6 +1529,136 @@ func TestProviderCallbackLifetimeRejectsCallbackStartingAfterReturn(t *testing.T
 	}
 }
 
+type concurrentProviderCallbacksClient struct {
+	reasoningEntered <-chan struct{}
+	contentStarted   chan struct{}
+	contentDone      chan struct{}
+	allowReturn      <-chan struct{}
+}
+
+func (c concurrentProviderCallbacksClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	go handlers.OnReasoning("thinking")
+	<-c.reasoningEntered
+	go func() {
+		close(c.contentStarted)
+		handlers.OnContent("answer")
+		close(c.contentDone)
+	}()
+	<-c.contentStarted
+	<-c.allowReturn
+	return assistantStep("complete", nil).res, nil
+}
+
+type serializedCallbackEvents struct {
+	mu                 sync.Mutex
+	active             int
+	maxActive          int
+	events             []string
+	reasoningEntered   chan struct{}
+	releaseReasoning   <-chan struct{}
+	reasoningEnterOnce sync.Once
+}
+
+func (e *serializedCallbackEvents) record(value string, block <-chan struct{}) {
+	e.mu.Lock()
+	e.active++
+	if e.active > e.maxActive {
+		e.maxActive = e.active
+	}
+	e.events = append(e.events, value)
+	e.mu.Unlock()
+	if value == "reasoning:thinking" {
+		e.reasoningEnterOnce.Do(func() { close(e.reasoningEntered) })
+	}
+	if block != nil {
+		<-block
+	}
+	e.mu.Lock()
+	e.active--
+	e.mu.Unlock()
+}
+
+func (e *serializedCallbackEvents) Delta(text string) { e.record("delta:"+text, nil) }
+func (e *serializedCallbackEvents) Reasoning(text string) {
+	e.record("reasoning:"+text, e.releaseReasoning)
+}
+func (e *serializedCallbackEvents) ReasoningDone() { e.record("reasoningdone", nil) }
+func (e *serializedCallbackEvents) AssistantDone(content string) {
+	e.record("done:"+content, nil)
+}
+func (e *serializedCallbackEvents) ToolCall(id, name, args string) {
+	e.record(fmt.Sprintf("call:%s:%s:%s", id, name, args), nil)
+}
+func (e *serializedCallbackEvents) ToolResult(id, content string, isErr bool) {
+	e.record(fmt.Sprintf("result:%s:%v:%s", id, isErr, content), nil)
+}
+func (e *serializedCallbackEvents) ResponseDiscarded(reason DiscardReason, message string) {
+	e.record(fmt.Sprintf("discarded:%s:%s", reason, message), nil)
+}
+
+func (e *serializedCallbackEvents) snapshot() ([]string, int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.events...), e.maxActive
+}
+
+func TestProviderCallbackLifetimeSerializesConcurrentReasoningAndContent(t *testing.T) {
+	reasoningEntered := make(chan struct{})
+	releaseReasoning := make(chan struct{})
+	contentStarted := make(chan struct{})
+	contentDone := make(chan struct{})
+	allowReturn := make(chan struct{})
+	events := &serializedCallbackEvents{
+		reasoningEntered: reasoningEntered,
+		releaseReasoning: releaseReasoning,
+	}
+	client := concurrentProviderCallbacksClient{
+		reasoningEntered: reasoningEntered,
+		contentStarted:   contentStarted,
+		contentDone:      contentDone,
+		allowReturn:      allowReturn,
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- ownedSession(client, &fakeHistory{}, &scriptedOwner{}).Send(context.Background(), "go", events, nil)
+	}()
+	select {
+	case <-contentStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent content callback did not start")
+	}
+	if got, maxActive := events.snapshot(); maxActive != 1 || len(got) != 1 || got[0] != "reasoning:thinking" {
+		t.Fatalf("callbacks=%v max concurrent entries=%d before release", got, maxActive)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("Send completed before concurrent callbacks joined: %v", err)
+	default:
+	}
+	close(releaseReasoning)
+	select {
+	case <-contentDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("serialized content callback did not finish")
+	}
+	close(allowReturn)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Send did not finish after concurrent callbacks were released")
+	}
+	got, maxActive := events.snapshot()
+	if maxActive != 1 {
+		t.Fatalf("callbacks=%v max concurrent entries=%d", got, maxActive)
+	}
+	assertOrderedCallbacks(t, got,
+		"reasoning:thinking", "reasoningdone", "delta:answer", "done:complete",
+	)
+}
+
 func assertOrderedCallbacks(t *testing.T, got []string, want ...string) {
 	t.Helper()
 	position := -1

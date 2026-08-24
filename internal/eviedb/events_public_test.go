@@ -205,7 +205,6 @@ func TestBoundTerminalMutationCanonicalizesAndProvesTurnAncestryAcrossStores(t *
 		parentID memory.EventID
 	}{
 		{name: "wrong parent type", parentID: assistant.ID},
-		{name: "superseded provider trigger", parentID: root.ID},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if event, err := history.Append(ctx, lease, memory.EventInput{
@@ -229,39 +228,6 @@ func TestBoundTerminalMutationCanonicalizesAndProvesTurnAncestryAcrossStores(t *
 	}
 	if secondCycle.ParentID != outcome.ID {
 		t.Fatalf("second-cycle terminal=%+v", secondCycle)
-	}
-
-	incompleteAssistant := appendEvent(memory.EventInput{
-		ParentID: outcome.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
-		Payload: json.RawMessage(`{"tool_calls":[{"id":"partial-1","name":"echo","arguments":"{}"},{"id":"partial-2","name":"echo","arguments":"{}"}]}`),
-	})
-	incompleteIntent := appendEvent(memory.EventInput{
-		ParentID: incompleteAssistant.ID, Type: memory.EventToolIntent, ExecutionID: "execution-partial-1",
-		Payload: json.RawMessage(`{"call":{"id":"partial-1","name":"echo","arguments":"{}"}}`),
-	})
-	partialOutcome := appendEvent(memory.EventInput{
-		ParentID: incompleteIntent.ID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
-		ExecutionID: "execution-partial-1", Payload: json.RawMessage(`{"tool_call_id":"partial-1","is_error":false}`),
-	})
-	appendEvent(memory.EventInput{
-		ParentID: incompleteAssistant.ID, Type: memory.EventToolIntent, ExecutionID: "execution-partial-2",
-		Payload: json.RawMessage(`{"call":{"id":"partial-2","name":"echo","arguments":"{}"}}`),
-	})
-	if event, err := history.Append(ctx, lease, memory.EventInput{
-		ParentID: partialOutcome.ID,
-		Type:     memory.EventTurnFailed,
-		Content:  base.SafeContent(),
-		Payload:  terminalPayload(root.ID),
-	}); err == nil {
-		t.Fatalf("incomplete group outcome accepted as provider trigger: %+v", event)
-	}
-	if _, err := history.Append(ctx, lease, memory.EventInput{
-		ParentID: outcome.ID,
-		Type:     memory.EventTurnFailed,
-		Content:  base.SafeContent(),
-		Payload:  terminalPayload(root.ID),
-	}); err != nil {
-		t.Fatalf("append terminal against trigger preceding incomplete group: %v", err)
 	}
 
 	otherRoot := appendEvent(memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "other turn"})

@@ -28,6 +28,7 @@ type turnProgress struct {
 
 type providerCallbackLifetime struct {
 	mu     sync.Mutex
+	serial sync.Mutex
 	closed bool
 	active sync.WaitGroup
 }
@@ -39,8 +40,15 @@ func (l *providerCallbackLifetime) invoke(callback func()) {
 		return
 	}
 	l.active.Add(1)
+	// Holding the admission lock while waiting for serial preserves the order
+	// in which concurrent provider callbacks enter this lifetime. Frontend
+	// event sinks are intentionally allowed to be non-thread-safe.
+	l.serial.Lock()
 	l.mu.Unlock()
-	defer l.active.Done()
+	defer func() {
+		l.serial.Unlock()
+		l.active.Done()
+	}()
 	callback()
 }
 
@@ -132,11 +140,11 @@ func (s *Session) runOwnedTurn(
 	requestParentID := progress.requestParentID
 	rendered := &progress.rendered
 	for {
-		if err := s.observeTurnContext(coordinator); err != nil {
-			return err
+		if !coordinator.transitionIfActive(memory.StageProvider, func() {
+			progress.requestParentID = requestParentID
+		}) {
+			return s.observeTurnContext(coordinator)
 		}
-		coordinator.setStage(memory.StageProvider)
-		progress.requestParentID = requestParentID
 		rendered.begin()
 
 		messages, err := s.requestMessages(coordinator.ctx)
@@ -375,7 +383,6 @@ func (s *Session) runOwnedTurn(
 			}
 		}
 		requestParentID = lastOutcomeID
-		progress.requestParentID = requestParentID
 	}
 }
 

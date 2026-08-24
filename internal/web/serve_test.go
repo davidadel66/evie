@@ -238,6 +238,101 @@ func TestChatWaitsForAdmittedProviderCallbackBeforeAssistantAndTurnDone(t *testi
 	)
 }
 
+type concurrentWebClient struct {
+	reasoningWriteStarted <-chan struct{}
+	contentStarted        chan struct{}
+	callbacksDone         chan struct{}
+	allowReturn           <-chan struct{}
+}
+
+func (c concurrentWebClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	go handlers.OnReasoning("thinking")
+	<-c.reasoningWriteStarted
+	go func() {
+		close(c.contentStarted)
+		handlers.OnContent("answer")
+		close(c.callbacksDone)
+	}()
+	<-c.contentStarted
+	<-c.allowReturn
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{
+		Message: openrouter.Message{Role: "assistant", Content: "complete"},
+	}}}, nil
+}
+
+type blockingReasoningWriter struct {
+	*httptest.ResponseRecorder
+	reasoningStarted chan struct{}
+	releaseReasoning <-chan struct{}
+	once             sync.Once
+}
+
+func (w *blockingReasoningWriter) Write(data []byte) (int, error) {
+	if strings.Contains(string(data), "event: reasoning\n") {
+		w.once.Do(func() { close(w.reasoningStarted) })
+		<-w.releaseReasoning
+	}
+	return w.ResponseRecorder.Write(data)
+}
+
+func (w *blockingReasoningWriter) Flush() {}
+
+func TestChatSerializesConcurrentProviderCallbacksBeforeTurnDone(t *testing.T) {
+	reasoningStarted := make(chan struct{})
+	releaseReasoning := make(chan struct{})
+	contentStarted := make(chan struct{})
+	callbacksDone := make(chan struct{})
+	allowReturn := make(chan struct{})
+	client := concurrentWebClient{
+		reasoningWriteStarted: reasoningStarted,
+		contentStarted:        contentStarted,
+		callbacksDone:         callbacksDone,
+		allowReturn:           allowReturn,
+	}
+	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	w := &blockingReasoningWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		reasoningStarted: reasoningStarted,
+		releaseReasoning: releaseReasoning,
+	}
+	done := make(chan struct{})
+	go func() {
+		NewServer(session).Handler().ServeHTTP(w, chatRequest(`{"message":"hi"}`))
+		close(done)
+	}()
+	select {
+	case <-contentStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent content callback did not start")
+	}
+	select {
+	case <-done:
+		t.Fatal("HTTP turn completed before concurrent callbacks joined")
+	default:
+	}
+	close(releaseReasoning)
+	select {
+	case <-callbacksDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("serialized SSE callbacks did not finish")
+	}
+	close(allowReturn)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP turn did not finish after concurrent callbacks were released")
+	}
+	assertSSEOrder(t, w.Body.String(),
+		"event: reasoning\ndata: {\"text\":\"thinking\"}",
+		"event: reasoning_done\ndata: {}",
+		"event: delta\ndata: {\"text\":\"answer\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: turn_done\ndata: {}",
+	)
+}
+
 func TestChatStreamsReasoningBeforeContent(t *testing.T) {
 	h := newTestServer(&fakeClient{steps: []fakeStep{{
 		reasoning: []string{"Compute ", "17*23"},

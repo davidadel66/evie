@@ -121,6 +121,26 @@ func (c *turnCoordinator) setStage(stage memory.TurnStage) {
 	}
 }
 
+// transitionIfActive changes lifecycle stage and its corresponding agent-owned
+// state as one boundary with terminal-cause finalization. A cause may reserve
+// and cancel concurrently, but it cannot capture the new stage without also
+// observing the completed state transition.
+func (c *turnCoordinator) transitionIfActive(stage memory.TurnStage, transition func()) bool {
+	c.callbackMu.RLock()
+	defer c.callbackMu.RUnlock()
+	c.mu.Lock()
+	active := c.cause.kind == causeNone && c.pending == nil && c.ctx.Err() == nil
+	if active {
+		c.stage = stage
+	}
+	c.mu.Unlock()
+	if !active {
+		return false
+	}
+	transition()
+	return true
+}
+
 func (c *turnCoordinator) selectCause(kind causeKind, err error, httpStatus int) bool {
 	c.mu.Lock()
 	if c.cause.kind != causeNone || c.pending != nil {
