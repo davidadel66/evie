@@ -9,7 +9,7 @@ import (
 
 func TestProjectDisplayLabelUsesSafeNameOrTimestampedUTCFallback(t *testing.T) {
 	createdAt := time.Date(2026, 8, 24, 16, 5, 6, 123456789, time.FixedZone("test", -4*60*60))
-	if got := ProjectDisplayLabel(" Pro\nject\u200b ", createdAt); got != "Project" {
+	if got := ProjectDisplayLabel(" Pro\nject\u200b ", createdAt); got != "Pro ject" {
 		t.Fatalf("safe project label = %q", got)
 	}
 	const want = "Untitled project — 2026-08-24T20:05:06.123456789Z"
@@ -27,7 +27,7 @@ func TestNormalizeSessionTitle(t *testing.T) {
 	}{
 		{name: "blank controls and format", input: " \t\n\x1b\u200b ", want: ""},
 		{name: "unicode whitespace", input: "  hello\u00a0\u2003world  ", want: "hello world"},
-		{name: "control and format removal", input: "safe\n\t\x1b[31m\u200btitle", want: "safe[31mtitle"},
+		{name: "control and format removal", input: "safe\n\t\x1b[31m\u200btitle", want: "safe [31mtitle"},
 		{name: "invalid UTF-8 replacement", input: invalid, want: "a\uFFFDb"},
 	}
 	for _, tt := range tests {

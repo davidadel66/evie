@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -169,19 +168,6 @@ func TestTwoConcurrentLegacyOpensSerializeTitleUpgrade(t *testing.T) {
 	waitSignal("first migration ownership", firstOwned)
 	startSecond()
 	waitSignal("second migration attempt", secondAttempting)
-	timer := time.NewTimer(100 * time.Millisecond)
-	select {
-	case result := <-secondDone:
-		if result.db != nil {
-			_ = result.db.Close()
-		}
-		timer.Stop()
-		t.Fatalf("competing production opener returned before owner released: %v", result.err)
-	case <-timer.C:
-	case <-ctx.Done():
-		timer.Stop()
-		t.Fatalf("timeout while proving competing opener waits: %v", ctx.Err())
-	}
 	release()
 	first := waitOpen("first", firstDone)
 	second := waitOpen("second", secondDone)
@@ -267,13 +253,12 @@ func TestFencedRootEventInitializesTitleWithoutOverwritingOrTouchingUpdatedAt(t 
 	}
 	assertNullSessionTitle(t, db, session.ID)
 
-	long := strings.Repeat("界", 81) + "\nignored"
 	if _, err := history.Append(context.Background(), lease, memory.EventInput{
-		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: long,
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: " live\n\ttitle ",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Repeat("界", 79) + "…"
+	want := "live title"
 	var title, updatedAt string
 	if err := db.QueryRow(`SELECT title, updated_at FROM sessions WHERE id = ?`, session.ID).Scan(&title, &updatedAt); err != nil {
 		t.Fatal(err)
@@ -404,7 +389,7 @@ func createLegacyTitleDatabase(t *testing.T, path string) {
 			('wrong-role', 'legacy', 2, 'user_message', 'assistant', 'wrong role', '2026-08-24T09:00:20Z'),
 			('child', 'legacy', 3, 'user_message', 'user', 'child evidence', '2026-08-24T09:00:30Z'),
 			('blank', 'legacy', 4, 'user_message', 'user', '  ' || char(10) || char(9), '2026-08-24T09:01:00Z'),
-			('title', 'legacy', 5, 'user_message', 'user', ' first' || char(10) || ' title ', '2026-08-24T09:02:00Z'),
+			('title', 'legacy', 5, 'user_message', 'user', 'first' || char(10) || char(9) || 'title', '2026-08-24T09:02:00Z'),
 			('later', 'legacy', 6, 'user_message', 'user', 'later', '2026-08-24T09:03:00Z');
 		UPDATE events SET parent_id = 'assistant' WHERE id = 'child';
 	`

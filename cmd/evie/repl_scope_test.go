@@ -257,7 +257,7 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 		"Empty — \"/empty\"",
 		"Untitled project — 2026-08-24T12:00:00Z — \"/fallback\"",
 		"Same — \"/a\\troot\" (current directory)",
-		"newtitle",
+		"new title",
 		"stored root: \"/moved\\x1b\"",
 		"Old — \"/old\" (archived)",
 		"Untitled — 2026-08-24T12:00:00Z",
@@ -276,7 +276,7 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	if strings.Index(got, "Alpha") > strings.Index(got, "Untitled project") {
 		t.Fatalf("project fallback was not used as the sort label: %q", got)
 	}
-	if gotNew := strings.Index(got, "newtitle"); gotNew > strings.Index(got, "older") {
+	if gotNew := strings.Index(got, "new title"); gotNew > strings.Index(got, "older") {
 		t.Fatalf("session activity ordering is wrong: %q", got)
 	}
 	if len(actions) != 10 {

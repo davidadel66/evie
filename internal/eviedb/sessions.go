@@ -58,13 +58,10 @@ func (s *Store) GetActiveSessionForChooser(
 ) (memory.Session, error) {
 	var session memory.Session
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		matches, err := projectRootOwnerMatches(ctx, conn, cwdRoot, expectedCWDProjectID)
-		if err != nil {
+		if err := requireChooserCWDProjectOwner(ctx, conn, cwdRoot, expectedCWDProjectID); err != nil {
 			return err
 		}
-		if !matches {
-			return ErrChooserStateChanged
-		}
+		var err error
 		session, err = scanSession(conn.QueryRowContext(ctx, `
 			SELECT id, project_id, project_root_snapshot, parent_session_id,
 			       COALESCE(title, ''), status, created_at, updated_at
@@ -243,25 +240,49 @@ func (s *Store) createProjectSession(
 		UpdatedAt: now,
 	}
 
-	var storedProjectID string
-	guard := 0
 	if guarded {
-		guard = 1
+		err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+			if err := requireChooserCWDProjectOwner(ctx, conn, cwdRoot, expectedCWDProjectID); err != nil {
+				return err
+			}
+			var storedProjectID string
+			if err := conn.QueryRowContext(ctx, `
+				INSERT INTO sessions (
+					id, project_id, project_root_snapshot, status, created_at, updated_at
+				)
+				SELECT ?, id, canonical_root, ?, ?, ?
+				FROM projects
+				WHERE id = ? AND archived = 0 AND canonical_root = ?
+				RETURNING project_id, project_root_snapshot
+			`,
+				session.ID,
+				session.Status,
+				session.CreatedAt.Format(time.RFC3339Nano),
+				session.UpdatedAt.Format(time.RFC3339Nano),
+				projectID,
+				expectedProjectRoot,
+			).Scan(&storedProjectID, &session.ProjectRootSnapshot); errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("%w: project %q", ErrChooserStateChanged, projectID)
+			} else if err != nil {
+				return fmt.Errorf("insert project session: %w", err)
+			}
+			session.ProjectID = memory.ProjectID(storedProjectID)
+			return nil
+		})
+		if err != nil {
+			return memory.Session{}, err
+		}
+		return session, nil
 	}
+
+	var storedProjectID string
 	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO sessions (
-		id, project_id, project_root_snapshot, status, created_at, updated_at
+			id, project_id, project_root_snapshot, status, created_at, updated_at
 		)
 		SELECT ?, id, canonical_root, ?, ?, ?
 		FROM projects
 		WHERE id = ? AND archived = 0
-		  AND (? = 0 OR canonical_root = ?)
-		  AND (
-		      ? = 0 OR COALESCE((
-		          SELECT cwd_project.id FROM projects AS cwd_project
-		          WHERE cwd_project.canonical_root = ?
-		      ), '') = ?
-		  )
 		RETURNING project_id, project_root_snapshot
 		`,
 		session.ID,
@@ -269,16 +290,8 @@ func (s *Store) createProjectSession(
 		session.CreatedAt.Format(time.RFC3339Nano),
 		session.UpdatedAt.Format(time.RFC3339Nano),
 		projectID,
-		guard,
-		expectedProjectRoot,
-		guard,
-		cwdRoot,
-		expectedCWDProjectID,
 	).Scan(&storedProjectID, &session.ProjectRootSnapshot)
 	if errors.Is(err, sql.ErrNoRows) {
-		if guarded {
-			return memory.Session{}, fmt.Errorf("%w: project %q", ErrChooserStateChanged, projectID)
-		}
 		return memory.Session{}, fmt.Errorf("%w: project %q", ErrProjectNotActive, projectID)
 	}
 
@@ -321,33 +334,60 @@ func (s *Store) createGlobalSession(
 		UpdatedAt: now,
 	}
 
-	guard := 0
 	if guarded {
-		guard = 1
+		err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+			if err := requireChooserCWDProjectOwner(ctx, conn, cwdRoot, expectedCWDProjectID); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, `
+				INSERT INTO sessions (id, status, created_at, updated_at)
+				VALUES (?, ?, ?, ?)
+			`,
+				session.ID,
+				session.Status,
+				session.CreatedAt.Format(time.RFC3339Nano),
+				session.UpdatedAt.Format(time.RFC3339Nano),
+			); err != nil {
+				return fmt.Errorf("insert global session: %w", err)
+			}
+			return nil
+		})
+		if err != nil {
+			return memory.Session{}, err
+		}
+		return session, nil
 	}
-	var insertedID string
-	if err := s.db.QueryRowContext(ctx, `
+	if _, err := s.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, status, created_at, updated_at)
-		SELECT ?, ?, ?, ?
-		WHERE ? = 0 OR COALESCE((
-			SELECT projects.id FROM projects WHERE projects.canonical_root = ?
-		), '') = ?
-		RETURNING id
+		VALUES (?, ?, ?, ?)
 		`,
 		session.ID,
 		session.Status,
 		session.CreatedAt.Format(time.RFC3339Nano),
 		session.UpdatedAt.Format(time.RFC3339Nano),
-		guard,
-		cwdRoot,
-		expectedCWDProjectID,
-	).Scan(&insertedID); errors.Is(err, sql.ErrNoRows) {
-		return memory.Session{}, ErrChooserStateChanged
-	} else if err != nil {
+	); err != nil {
 		return memory.Session{}, fmt.Errorf("insert global session: %w", err)
 	}
 
 	return session, nil
+}
+
+// requireChooserCWDProjectOwner is the authoritative transaction-backed check
+// for every action derived from a rendered chooser snapshot.
+func requireChooserCWDProjectOwner(
+	ctx context.Context,
+	conn *sql.Conn,
+	root string,
+	expectedProjectID memory.ProjectID,
+) error {
+	matches, err := projectRootOwnerMatches(ctx, conn, root, expectedProjectID)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return ErrChooserStateChanged
+	}
+	return nil
 }
 
 func projectRootOwnerMatches(

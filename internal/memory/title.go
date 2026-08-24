@@ -46,13 +46,13 @@ func TerminalSafeLine(input string) string {
 	runes := make([]rune, 0, len(input))
 	spacePending := false
 	for _, r := range input {
-		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
-			continue
-		}
 		if unicode.IsSpace(r) {
 			if len(runes) > 0 {
 				spacePending = true
 			}
+			continue
+		}
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
 			continue
 		}
 		if spacePending {
