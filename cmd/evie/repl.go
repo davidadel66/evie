@@ -259,6 +259,7 @@ type replEvents struct {
 	flush           func()
 	out             io.Writer
 	streamedContent strings.Builder
+	reasoningOpen   bool
 }
 
 const (
@@ -292,10 +293,12 @@ func (r *replEvents) Reasoning(text string) {
 		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 		r.deltaIn("\x1b[90mthinking…\n")
 	}
+	r.reasoningOpen = true
 	r.deltaIn(text)
 }
 
 func (r *replEvents) ReasoningDone() {
+	r.reasoningOpen = false
 	if r.deltaIn == nil {
 		return
 	}
@@ -306,6 +309,7 @@ func (r *replEvents) ReasoningDone() {
 }
 
 func (r *replEvents) AssistantDone(content string) {
+	r.reasoningOpen = false
 	if r.deltaIn != nil {
 		r.flush()
 		r.deltaIn, r.flush = nil, nil
@@ -340,6 +344,7 @@ func (r *replEvents) ToolCall(id, name, args string) {
 func (r *replEvents) ToolResult(id, content string, isErr bool) {}
 
 func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
+	r.reasoningOpen = false
 	if r.deltaIn != nil {
 		r.flush()
 		r.deltaIn, r.flush = nil, nil
@@ -347,6 +352,25 @@ func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
 	}
 	r.streamedContent.Reset()
 	_, _ = fmt.Fprintln(r.writer(), message)
+}
+
+// finishSend is the terminal consumer boundary for every Session.Send call.
+// A committed tool-calling assistant may suppress AssistantDone when ownership
+// ends immediately after its append; no discard marker is appropriate, but the
+// printer and per-message prefix state must not survive into the next turn.
+func (r *replEvents) finishSend() {
+	if r.deltaIn != nil {
+		if r.reasoningOpen {
+			r.deltaIn("\x1b[0m")
+		}
+		if r.flush != nil {
+			r.flush()
+		}
+		r.deltaIn, r.flush = nil, nil
+		_, _ = fmt.Fprintln(r.writer())
+	}
+	r.reasoningOpen = false
+	r.streamedContent.Reset()
 }
 
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
@@ -386,7 +410,9 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 		if ctx.Err() != nil {
 			return
 		}
-		if err := session.Send(ctx, scanner.Text(), ev, approve); err != nil {
+		err := session.Send(ctx, scanner.Text(), ev, approve)
+		ev.finishSend()
+		if err != nil {
 			fmt.Printf("request failed: %v\n", err)
 		}
 	}

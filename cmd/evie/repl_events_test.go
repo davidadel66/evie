@@ -75,3 +75,48 @@ func TestREPLAssistantDoneCorrectsStreamWhenCommittedContentIsEmpty(t *testing.T
 		t.Fatalf("REPL output=%q, want correction %q", got, want)
 	}
 }
+
+func TestREPLFinishSendAfterSuppressedCommittedAssistantDoesNotContaminateNextTurn(t *testing.T) {
+	for _, cause := range []string{"caller cancellation", "lease loss"} {
+		t.Run(cause, func(t *testing.T) {
+			var out bytes.Buffer
+			events := &replEvents{out: &out}
+
+			// The assistant content committed with tool calls, then the cause won
+			// before AssistantDone admission. Agent ownership tests establish this
+			// exact callback suppression for both causes.
+			events.Delta("committed tool preface")
+			events.finishSend()
+			if events.deltaIn != nil || events.flush != nil || events.reasoningOpen || events.streamedContent.Len() != 0 {
+				t.Fatalf("pending REPL state survived %s", cause)
+			}
+
+			events.Delta("next ")
+			events.AssistantDone("next answer")
+			events.finishSend()
+			want := "committed tool preface\nnext answer\n"
+			if got := out.String(); got != want {
+				t.Fatalf("REPL output after %s=%q, want %q", cause, got, want)
+			}
+			if strings.Contains(out.String(), replUnsavedStreamCorrection) {
+				t.Fatalf("committed output after %s received a false unsaved label", cause)
+			}
+		})
+	}
+}
+
+func TestREPLFinishSendClosesOpenReasoningOnceBeforeNextTurn(t *testing.T) {
+	var out bytes.Buffer
+	events := &replEvents{out: &out}
+	events.Reasoning("unfinished reasoning")
+	events.finishSend()
+	events.finishSend() // completed printers are not closed twice
+	events.Delta("next ")
+	events.AssistantDone("next answer")
+	events.finishSend()
+
+	want := "\x1b[90mthinking…\nunfinished reasoning\x1b[0m\nnext answer\n"
+	if got := out.String(); got != want {
+		t.Fatalf("REPL output=%q, want safely reset reasoning then next turn %q", got, want)
+	}
+}
