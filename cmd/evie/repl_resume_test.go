@@ -27,11 +27,11 @@ func (c *resumeCaptureClient) ChatStream(_ context.Context, request openrouter.C
 }
 
 func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHistory(t *testing.T) {
-	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
 	store := eviedb.NewStore(db)
 	oldRoot, newRoot := t.TempDir(), t.TempDir()
 	project, err := store.RegisterProject(context.Background(), "Project", oldRoot)
@@ -51,6 +51,16 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 	if _, err := store.RelocateProject(context.Background(), project.ID, newRoot); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seeding database before restart: %v", err)
+	}
+
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatalf("reopen database after restart: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store = eviedb.NewStore(db)
 
 	tests := []struct {
 		name      string

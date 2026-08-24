@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,18 +19,19 @@ import (
 )
 
 type fakeREPLSessionStore struct {
-	projects       []memory.Project
-	sessions       []memory.SessionListing
-	findProject    memory.Project
-	findErr        error
-	registerErr    error
-	registerCalls  int
-	createdProject []memory.ProjectID
-	createdGlobal  int
-	activeGets     []memory.SessionID
-	createHook     func(memory.ProjectID) (memory.Session, error)
-	getHook        func(memory.SessionID) (memory.Session, error)
-	listHook       func() ([]memory.Project, []memory.SessionListing)
+	projects        []memory.Project
+	sessions        []memory.SessionListing
+	findProject     memory.Project
+	findErr         error
+	registerErr     error
+	registerCalls   int
+	registeredNames []string
+	createdProject  []memory.ProjectID
+	createdGlobal   int
+	activeGets      []memory.SessionID
+	createHook      func(memory.ProjectID) (memory.Session, error)
+	getHook         func(memory.SessionID) (memory.Session, error)
+	listHook        func() ([]memory.Project, []memory.SessionListing)
 }
 
 type relocatingREPLStore struct {
@@ -71,6 +73,35 @@ type concurrentCWDREPLStore struct {
 	cwd              string
 	triggerNext      bool
 	sessionsAtReject int
+}
+
+type deletingProjectREPLStore struct {
+	*eviedb.Store
+	db               *sql.DB
+	deleteNext       bool
+	sessionsAtReject int
+}
+
+func (s *deletingProjectREPLStore) CreateProjectSessionForChooser(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+) (memory.Session, error) {
+	if s.deleteNext {
+		s.deleteNext = false
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id = ?`, projectID); err != nil {
+			return memory.Session{}, err
+		}
+	}
+	session, err := s.Store.CreateProjectSessionForChooser(
+		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID,
+	)
+	if errors.Is(err, eviedb.ErrChooserStateChanged) {
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&s.sessionsAtReject)
+	}
+	return session, err
 }
 
 func (s *concurrentCWDREPLStore) registerBeforeAction(ctx context.Context) error {
@@ -154,6 +185,7 @@ func (f *fakeREPLSessionStore) FindProjectByRoot(context.Context, string) (memor
 
 func (f *fakeREPLSessionStore) RegisterProject(_ context.Context, displayName, root string) (memory.Project, error) {
 	f.registerCalls++
+	f.registeredNames = append(f.registeredNames, displayName)
 	if f.registerErr != nil {
 		return memory.Project{}, f.registerErr
 	}
@@ -201,7 +233,7 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 	projects := []memory.Project{
 		{ID: "alpha", DisplayName: "Alpha", CanonicalRoot: "/alpha"},
-		{ID: "fallback", DisplayName: "\x1b\u200b", CanonicalRoot: "/fallback"},
+		{ID: "fallback", DisplayName: "\x1b\u200b", CanonicalRoot: "/fallback", CreatedAt: now},
 		{ID: "z", DisplayName: "Same\x1b[31m", CanonicalRoot: "/z\nroot"},
 		{ID: "a", DisplayName: "Same\u200b", CanonicalRoot: "/a\troot"},
 		{ID: "empty", DisplayName: "Empty", CanonicalRoot: "/empty"},
@@ -223,7 +255,7 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"Empty — \"/empty\"",
-		"Untitled project — \"/fallback\"",
+		"Untitled project — 2026-08-24T12:00:00Z — \"/fallback\"",
 		"Same — \"/a\\troot\" (current directory)",
 		"newtitle",
 		"stored root: \"/moved\\x1b\"",
@@ -249,6 +281,60 @@ func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
 	}
 	if len(actions) != 10 {
 		t.Fatalf("actions = %d, want 10", len(actions))
+	}
+}
+
+func TestRenderREPLChooserOrdersTimestampedProjectFallbackLabels(t *testing.T) {
+	earlier := time.Date(2026, 8, 24, 12, 0, 0, 1, time.FixedZone("east", 2*60*60))
+	later := earlier.Add(time.Nanosecond)
+	projects := []memory.Project{
+		{ID: "later", DisplayName: "\x1b", CanonicalRoot: "/a", CreatedAt: later},
+		{ID: "earlier", DisplayName: "\u200b", CanonicalRoot: "/z", CreatedAt: earlier},
+	}
+	var out bytes.Buffer
+	if _, err := renderREPLChooser(&out, "/other", projects, nil); err != nil {
+		t.Fatal(err)
+	}
+	earlierLabel := "Untitled project — 2026-08-24T10:00:00.000000001Z"
+	laterLabel := "Untitled project — 2026-08-24T10:00:00.000000002Z"
+	if strings.Index(out.String(), earlierLabel) >= strings.Index(out.String(), laterLabel) {
+		t.Fatalf("timestamp fallback sort order is wrong: %q", out.String())
+	}
+}
+
+func TestIdenticalSanitizedProjectNamesRemainRootDisambiguatedAndSelectable(t *testing.T) {
+	rootA, rootB := t.TempDir(), t.TempDir()
+	projects := []memory.Project{
+		{ID: "plain", DisplayName: "Same", CanonicalRoot: rootB},
+		{ID: "formatted", DisplayName: "Sa\u200bme", CanonicalRoot: rootA},
+	}
+	if replProjectLabel(projects[0]) != replProjectLabel(projects[1]) {
+		t.Fatalf("fixture labels differ: %q and %q", replProjectLabel(projects[0]), replProjectLabel(projects[1]))
+	}
+	var rendered bytes.Buffer
+	if _, err := renderREPLChooser(&rendered, t.TempDir(), projects, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(rendered.String(), "Same — ") != 2 ||
+		!strings.Contains(rendered.String(), escapedREPLPath(rootA)) ||
+		!strings.Contains(rendered.String(), escapedREPLPath(rootB)) {
+		t.Fatalf("identical labels were not root-disambiguated: %q", rendered.String())
+	}
+
+	wantID := memory.ProjectID("plain")
+	if rootA > rootB {
+		wantID = "formatted"
+	}
+	store := &fakeREPLSessionStore{projects: projects}
+	selected, err := selectREPLSession(
+		context.Background(), store, t.TempDir(),
+		bufio.NewScanner(strings.NewReader("2\n")), io.Discard,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ProjectID != wantID || len(store.createdProject) != 1 || store.createdProject[0] != wantID {
+		t.Fatalf("selected=%+v created=%v, want project %q", selected, store.createdProject, wantID)
 	}
 }
 
@@ -325,6 +411,38 @@ func TestSelectREPLSessionRegistrationIsExplicit(t *testing.T) {
 	}
 }
 
+func TestSelectREPLSessionPersistsTimestampedFallbackForUnsafeCWDBasename(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "\u200b")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := eviedb.NewStore(db)
+	var out bytes.Buffer
+	session, err := selectREPLSession(
+		context.Background(), store, root,
+		bufio.NewScanner(strings.NewReader("2\n\n")), &out,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := store.FindProjectByRoot(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := memory.ProjectDisplayLabel("", project.CreatedAt)
+	if session.ProjectID != project.ID || project.DisplayName != want || replProjectLabel(project) != want {
+		t.Fatalf("registered session=%+v project=%+v, want persisted label %q", session, project, want)
+	}
+	if !strings.Contains(out.String(), "Project name: ") || strings.Contains(out.String(), "Project name [Project]") {
+		t.Fatalf("unsafe basename used a timestamp-free prompt fallback: %q", out.String())
+	}
+}
+
 func TestSelectREPLSessionRefreshesConcurrentRegistrationWithoutScopeGrant(t *testing.T) {
 	root := t.TempDir()
 	project := memory.Project{ID: "concurrent", DisplayName: "Concurrent", CanonicalRoot: root}
@@ -371,6 +489,43 @@ func TestSelectREPLSessionRefreshesArchiveBetweenRenderAndCreate(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), replStateChanged) {
 		t.Fatalf("archive race notice missing: %q", out.String())
+	}
+}
+
+func TestSelectREPLSessionRefreshesMissingProjectBeforeCreate(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	base := eviedb.NewStore(db)
+	root := t.TempDir()
+	project, err := base.RegisterProject(context.Background(), "Vanishing", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &deletingProjectREPLStore{Store: base, db: db, deleteNext: true}
+	var out bytes.Buffer
+	selected, err := selectREPLSession(
+		context.Background(), store, root,
+		bufio.NewScanner(strings.NewReader("1\n1\n")), &out,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sessions int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&sessions); err != nil {
+		t.Fatal(err)
+	}
+	if store.sessionsAtReject != 0 || sessions != 1 || selected.ProjectID != "" {
+		t.Fatalf("missing-project race selected=%+v sessions-at-reject=%d final-sessions=%d", selected, store.sessionsAtReject, sessions)
+	}
+	if !strings.Contains(out.String(), replStateChanged) || strings.Count(out.String(), "Select session:") != 2 ||
+		strings.Count(out.String(), "Vanishing") != 1 {
+		t.Fatalf("missing project did not refresh and require reselection: %q", out.String())
+	}
+	if _, err := base.FindProjectByRoot(context.Background(), project.CanonicalRoot); !errors.Is(err, eviedb.ErrProjectNotFound) {
+		t.Fatalf("deleted project lookup error=%v, want ErrProjectNotFound", err)
 	}
 }
 

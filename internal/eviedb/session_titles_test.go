@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -74,64 +76,163 @@ func TestTwoConcurrentLegacyOpensSerializeTitleUpgrade(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
 	createLegacyTitleDatabase(t, path)
 
-	dbA, err := sql.Open("sqlite", path+dsnPragmas)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = dbA.Close() })
-	dbB, err := sql.Open("sqlite", path+dsnPragmas)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = dbB.Close() })
-
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
 	firstOwned := make(chan struct{})
 	releaseFirst := make(chan struct{})
 	secondAttempting := make(chan struct{})
-	firstDone := make(chan error, 1)
-	secondDone := make(chan error, 1)
-	var backfills atomic.Int32
-	go func() {
-		firstDone <- ensureSessionTitlesWithHooks(context.Background(), dbA, sessionTitleUpgradeHooks{
-			afterTransactionOwned: func() {
-				close(firstOwned)
-				<-releaseFirst
-			},
-			beforeBackfill: func() { backfills.Add(1) },
-		})
-	}()
-	<-firstOwned
-	go func() {
-		secondDone <- ensureSessionTitlesWithHooks(context.Background(), dbB, sessionTitleUpgradeHooks{
-			afterFastMissingCheck: func() { close(secondAttempting) },
-			beforeBackfill:        func() { backfills.Add(1) },
-		})
-	}()
-	<-secondAttempting
-	select {
-	case err := <-secondDone:
-		t.Fatalf("competing migration returned before owner released: %v", err)
-	default:
+	firstSchema := make(chan struct{})
+	secondSchema := make(chan struct{})
+	startFirstMigration := make(chan struct{})
+	startSecondMigration := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseFirst) }) }
+	t.Cleanup(release)
+	var startFirstOnce, startSecondOnce sync.Once
+	startFirst := func() { startFirstOnce.Do(func() { close(startFirstMigration) }) }
+	startSecond := func() { startSecondOnce.Do(func() { close(startSecondMigration) }) }
+	t.Cleanup(startSecond)
+	t.Cleanup(startFirst)
+	type openResult struct {
+		db  *sql.DB
+		err error
 	}
-	close(releaseFirst)
-	if err := <-firstDone; err != nil {
-		t.Fatalf("first migration: %v", err)
+	startOpen := func(hooks openDBAtHooks) <-chan openResult {
+		done := make(chan openResult)
+		go func() {
+			db, err := openDBAtContextWithHooks(ctx, path, hooks)
+			select {
+			case done <- openResult{db: db, err: err}:
+			case <-ctx.Done():
+				if db != nil {
+					_ = db.Close()
+				}
+			}
+		}()
+		return done
 	}
-	if err := <-secondDone; err != nil {
-		t.Fatalf("second migration: %v", err)
+	waitSignal := func(name string, signal <-chan struct{}) {
+		t.Helper()
+		select {
+		case <-signal:
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for %s: %v", name, ctx.Err())
+		}
+	}
+	waitOpen := func(name string, done <-chan openResult) openResult {
+		t.Helper()
+		select {
+		case result := <-done:
+			return result
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for %s opener: %v", name, ctx.Err())
+			return openResult{}
+		}
 	}
 
-	var columns int
+	var backfills atomic.Int32
+	firstDone := startOpen(openDBAtHooks{
+		afterSchema: func() {
+			close(firstSchema)
+			select {
+			case <-startFirstMigration:
+			case <-ctx.Done():
+			}
+		},
+		sessionTitleUpgrade: sessionTitleUpgradeHooks{
+			afterTransactionOwned: func() {
+				close(firstOwned)
+				select {
+				case <-releaseFirst:
+				case <-ctx.Done():
+				}
+			},
+			beforeBackfill: func() { backfills.Add(1) },
+		},
+	})
+	waitSignal("first schema setup", firstSchema)
+	secondDone := startOpen(openDBAtHooks{
+		afterSchema: func() {
+			close(secondSchema)
+			select {
+			case <-startSecondMigration:
+			case <-ctx.Done():
+			}
+		},
+		sessionTitleUpgrade: sessionTitleUpgradeHooks{
+			afterFastMissingCheck: func() { close(secondAttempting) },
+			beforeBackfill:        func() { backfills.Add(1) },
+		},
+	})
+	waitSignal("second schema setup", secondSchema)
+	startFirst()
+	waitSignal("first migration ownership", firstOwned)
+	startSecond()
+	waitSignal("second migration attempt", secondAttempting)
+	timer := time.NewTimer(100 * time.Millisecond)
+	select {
+	case result := <-secondDone:
+		if result.db != nil {
+			_ = result.db.Close()
+		}
+		timer.Stop()
+		t.Fatalf("competing production opener returned before owner released: %v", result.err)
+	case <-timer.C:
+	case <-ctx.Done():
+		timer.Stop()
+		t.Fatalf("timeout while proving competing opener waits: %v", ctx.Err())
+	}
+	release()
+	first := waitOpen("first", firstDone)
+	second := waitOpen("second", secondDone)
+	if first.err != nil || second.err != nil {
+		if first.db != nil {
+			_ = first.db.Close()
+		}
+		if second.db != nil {
+			_ = second.db.Close()
+		}
+		t.Fatalf("production opener errors: first=%v second=%v", first.err, second.err)
+	}
+	dbA, dbB := first.db, second.db
+	t.Cleanup(func() {
+		if dbA != nil {
+			_ = dbA.Close()
+		}
+		if dbB != nil {
+			_ = dbB.Close()
+		}
+	})
+	var columns, schemaTables int
 	if err := dbA.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'title'`).Scan(&columns); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbA.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'jobs'`).Scan(&schemaTables); err != nil {
 		t.Fatal(err)
 	}
 	var title, updatedAt string
 	if err := dbA.QueryRow(`SELECT title, updated_at FROM sessions WHERE id = 'legacy'`).Scan(&title, &updatedAt); err != nil {
 		t.Fatal(err)
 	}
-	if columns != 1 || title != "first title" || updatedAt != "2026-08-24T10:00:00Z" || backfills.Load() != 1 {
-		t.Fatalf("concurrent migration columns=%d title=%q updated_at=%q backfills=%d", columns, title, updatedAt, backfills.Load())
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if columns != 1 || schemaTables != 1 || title != "first title" || updatedAt != "2026-08-24T10:00:00Z" ||
+		backfills.Load() != 1 || info.Mode().Perm() != 0o600 {
+		t.Fatalf(
+			"concurrent opener columns=%d schema-tables=%d title=%q updated_at=%q backfills=%d mode=%04o",
+			columns, schemaTables, title, updatedAt, backfills.Load(), info.Mode().Perm(),
+		)
+	}
+	if err := dbA.Close(); err != nil {
+		t.Fatalf("close first production opener: %v", err)
+	}
+	dbA = nil
+	if err := dbB.Close(); err != nil {
+		t.Fatalf("close second production opener: %v", err)
+	}
+	dbB = nil
 }
 
 func TestCurrentSchemaTitleUpgradeFastPathSkipsWriterAndBackfill(t *testing.T) {

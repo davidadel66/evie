@@ -233,10 +233,7 @@ func renderREPLChooser(
 }
 
 func replProjectLabel(project memory.Project) string {
-	if label := memory.TerminalSafeLine(project.DisplayName); label != "" {
-		return label
-	}
-	return "Untitled project"
+	return memory.ProjectDisplayLabel(project.DisplayName, project.CreatedAt)
 }
 
 func projectOwningRoot(projects []memory.Project, root string) memory.ProjectID {
@@ -272,10 +269,11 @@ func registerREPLProject(
 	out io.Writer,
 ) (memory.Session, bool, error) {
 	defaultName := memory.TerminalSafeLine(filepath.Base(canonicalRoot))
-	if defaultName == "" {
-		defaultName = "Project"
+	prompt := "Project name: "
+	if defaultName != "" {
+		prompt = fmt.Sprintf("Project name [%s]: ", defaultName)
 	}
-	if _, err := fmt.Fprintf(out, "Project name [%s]: ", defaultName); err != nil {
+	if _, err := fmt.Fprint(out, prompt); err != nil {
 		return memory.Session{}, false, fmt.Errorf("write project-name prompt: %w", err)
 	}
 	displayName, err := scanREPLLine(scanner)

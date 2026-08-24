@@ -2,10 +2,22 @@ package memory
 
 import (
 	"strings"
+	"time"
 	"unicode"
 )
 
 const SessionTitleRuneLimit = 80
+
+// ProjectDisplayLabel returns the one public, terminal-safe project label used
+// for both chooser rendering and ordering. Projects whose stored display name
+// has no visible safe content remain distinguishable through their immutable
+// creation timestamp.
+func ProjectDisplayLabel(displayName string, createdAt time.Time) string {
+	if label := TerminalSafeLine(displayName); label != "" {
+		return label
+	}
+	return "Untitled project — " + createdAt.UTC().Format(time.RFC3339Nano)
+}
 
 // SessionTitleCandidate returns normalized title evidence only for an accepted
 // root user event. Live appends and legacy backfill share this eligibility rule.

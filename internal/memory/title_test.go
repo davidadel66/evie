@@ -3,8 +3,20 @@ package memory
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
+
+func TestProjectDisplayLabelUsesSafeNameOrTimestampedUTCFallback(t *testing.T) {
+	createdAt := time.Date(2026, 8, 24, 16, 5, 6, 123456789, time.FixedZone("test", -4*60*60))
+	if got := ProjectDisplayLabel(" Pro\nject\u200b ", createdAt); got != "Project" {
+		t.Fatalf("safe project label = %q", got)
+	}
+	const want = "Untitled project — 2026-08-24T20:05:06.123456789Z"
+	if got := ProjectDisplayLabel("\x1b\u200b", createdAt); got != want {
+		t.Fatalf("fallback project label = %q, want %q", got, want)
+	}
+}
 
 func TestNormalizeSessionTitle(t *testing.T) {
 	invalid := string([]byte{'a', 0xff, 'b'})

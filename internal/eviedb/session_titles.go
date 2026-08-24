@@ -14,13 +14,10 @@ type sessionTitleUpgradeHooks struct {
 	beforeBackfill        func()
 }
 
-// ensureSessionTitles avoids the global writer lock for current schemas. A
-// legacy opener that observes a missing column serializes the additive upgrade,
-// rechecks after acquiring ownership, and backfills exactly once.
-func ensureSessionTitles(ctx context.Context, db *sql.DB) error {
-	return ensureSessionTitlesWithHooks(ctx, db, sessionTitleUpgradeHooks{})
-}
-
+// ensureSessionTitlesWithHooks avoids the global writer lock for current
+// schemas. A legacy opener that observes a missing column serializes the
+// additive upgrade, rechecks after acquiring ownership, and backfills exactly
+// once. Hooks are private deterministic test coordination seams.
 func ensureSessionTitlesWithHooks(ctx context.Context, db *sql.DB, hooks sessionTitleUpgradeHooks) error {
 	hasTitle, err := sessionTableHasTitle(ctx, db)
 	if err != nil {
