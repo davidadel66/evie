@@ -1,5 +1,14 @@
 # serve — decisions
 
+- **2026-08-24 — committed assistant acceptance precedes terminal presentation.**
+  `assistant_done` is the exactly-once presentation of a successfully committed
+  assistant event, including tool-calling assistants whose append races with
+  caller cancellation or lease loss. It is delivered before `error` and
+  `turn_done`; it does not reopen tool calls, execution, provider work, or other
+  live callbacks. Reasoning presentation is monotonic: reasoning in the same
+  provider chunk precedes content, and reasoning arriving after content begins
+  is not rendered or reopened.
+
 - **2026-08-23 — discarded streamed responses have an explicit local wire event.**
   A lease-owned turn may stream reasoning or content before its assistant event
   commits. If that output cannot become accepted history, the server emits

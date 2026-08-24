@@ -19,6 +19,29 @@ import (
 	"strings"
 )
 
+type StreamErrorKind string
+
+const (
+	StreamProviderError           StreamErrorKind = "provider_error"
+	StreamProviderResponseInvalid StreamErrorKind = "provider_response_invalid"
+)
+
+// StreamError exposes only stable structural classification to the harness.
+// Err remains local diagnostic detail and must never be copied into durable
+// terminal evidence.
+type StreamError struct {
+	Kind       StreamErrorKind
+	HTTPStatus int
+	Err        error
+}
+
+func (e *StreamError) Error() string { return e.Err.Error() }
+func (e *StreamError) Unwrap() error { return e.Err }
+
+func streamError(kind StreamErrorKind, err error) error {
+	return &StreamError{Kind: kind, Err: err}
+}
+
 // NewClient is the only way to build a Client: it rejects an empty API key
 // up front so a misconfigured environment fails at startup with a clear
 // message instead of failing weirdly at the first request.
@@ -27,7 +50,11 @@ func NewClient(key string) (*Client, error) {
 		return nil, errors.New("API key is empty")
 	}
 
-	return &Client{apiKey: key, baseURL: "https://openrouter.ai/api/v1/chat/completions"}, nil
+	return &Client{
+		apiKey:     key,
+		baseURL:    "https://openrouter.ai/api/v1/chat/completions",
+		httpClient: &http.Client{},
+	}, nil
 }
 
 // ChatStream sends one chat-completions request with streaming enabled,
@@ -49,7 +76,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to marshal json: %w", err))
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -59,21 +86,30 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		bytes.NewReader(jsonBody),
 	)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to build request: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to build request: %w", err))
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to get response: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to get response: %w", err))
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return ChatResponse{}, fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return ChatResponse{}, &StreamError{
+				Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
+				Err: fmt.Errorf("api returned status %d and response body could not be read: %w", resp.StatusCode, readErr),
+			}
+		}
+		return ChatResponse{}, &StreamError{
+			Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
+			Err: fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes),
+		}
 	}
 
 	var (
@@ -81,6 +117,8 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		details      []json.RawMessage
 		finishReason string
 		gotChunk     bool
+		completed    bool
+		toolCalls    = make(map[int]*ToolCall)
 	)
 	msg.Role = "assistant"
 
@@ -93,25 +131,19 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
+			completed = true
 			break
 		}
 
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			return ChatResponse{}, fmt.Errorf("failed to parse stream chunk: %w", err)
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to parse stream chunk: %w", err))
 		}
 		if len(chunk.Choices) == 0 {
 			continue
 		}
 		gotChunk = true
 		choice := chunk.Choices[0]
-
-		if choice.Delta.Content != "" {
-			msg.Content += choice.Delta.Content
-			if h.OnContent != nil {
-				h.OnContent(choice.Delta.Content)
-			}
-		}
 
 		if choice.Delta.Reasoning != "" {
 			msg.Reasoning += choice.Delta.Reasoning
@@ -120,14 +152,38 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 			}
 		}
 
+		// A provider may place the last reasoning fragment and first content
+		// fragment in one chunk. Render reasoning first so consumers observe a
+		// single monotonic reasoning -> content transition.
+		if choice.Delta.Content != "" {
+			msg.Content += choice.Delta.Content
+			if h.OnContent != nil {
+				h.OnContent(choice.Delta.Content)
+			}
+		}
+
 		if len(choice.Delta.ReasoningDetails) != 0 {
 			details = append(details, choice.Delta.ReasoningDetails...)
 		}
 		for _, tcd := range choice.Delta.ToolCalls {
-			for len(msg.ToolCalls) <= tcd.Index {
-				msg.ToolCalls = append(msg.ToolCalls, ToolCall{})
+			if tcd.Index == nil {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					errors.New("provider tool call fragment is missing its index"),
+				)
 			}
-			tc := &msg.ToolCalls[tcd.Index]
+			index := *tcd.Index
+			if index < 0 {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					fmt.Errorf("provider tool call index %d is negative", index),
+				)
+			}
+			tc := toolCalls[index]
+			if tc == nil {
+				tc = &ToolCall{}
+				toolCalls[index] = tc
+			}
 			if tcd.ID != "" {
 				tc.ID = tcd.ID
 			}
@@ -144,16 +200,31 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return ChatResponse{}, fmt.Errorf("failed to read stream: %w", err)
+		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to read stream: %w", err))
+	}
+	if !completed {
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream ended before [DONE]"))
 	}
 	if !gotChunk {
-		return ChatResponse{}, errors.New("stream contained no chunks")
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream contained no chunks"))
 	}
-
+	if len(toolCalls) > 0 {
+		msg.ToolCalls = make([]ToolCall, len(toolCalls))
+		for i := range msg.ToolCalls {
+			call := toolCalls[i]
+			if call == nil {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					fmt.Errorf("provider tool call indices are not contiguous at index %d", i),
+				)
+			}
+			msg.ToolCalls[i] = *call
+		}
+	}
 	if len(details) > 0 {
 		msg.ReasoningDetails, err = json.Marshal(details)
 		if err != nil {
-			return ChatResponse{}, fmt.Errorf("failed to marshal reasoning details: %w", err)
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to marshal reasoning details: %w", err))
 		}
 	}
 
@@ -179,7 +250,7 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to get response: %w", err)
 	}

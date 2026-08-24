@@ -17,7 +17,6 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
-	"github.com/google/uuid"
 )
 
 const DefaultModel = "moonshotai/kimi-k3"
@@ -31,8 +30,13 @@ type Session struct {
 	reasoning *openrouter.ReasoningConfig
 	history   History
 	scope     memory.ScopeContext
+	owner     TurnOwnership
+	timing    turnTiming
 }
 type Client interface {
+	// ChatStream callbacks need not be synchronous with its return. Session
+	// owns a per-call lifetime gate that closes admission and joins admitted
+	// callbacks before it inspects the response or advances turn state.
 	ChatStream(
 		ctx context.Context,
 		req openrouter.ChatRequest,
@@ -43,9 +47,10 @@ type Events interface {
 	Delta(text string)                         // streaming assistant text
 	Reasoning(text string)                     // streaming thinking text
 	ReasoningDone()                            // thinking ended for this assistant message
-	AssistantDone(content string)              // every assistant message, even empty (tool-only)
+	AssistantDone(content string)              // authoritative committed content for every assistant message, even empty (tool-only)
 	ToolCall(id, name, args string)            // emitted immediately before executing
 	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
+	ResponseDiscarded(reason DiscardReason, message string)
 }
 
 func (s *Session) requestMessages(
@@ -83,7 +88,7 @@ func (s *Session) Send(
 	ev Events,
 	approve tools.Approver,
 	extra ...tools.Tool,
-) error {
+) (retErr error) {
 	if !s.mu.TryLock() {
 		return ErrBusy
 	}
@@ -91,232 +96,89 @@ func (s *Session) Send(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if s.owner == nil {
+		return errors.New("agent: turn ownership is not configured")
+	}
 
-	_, err := s.history.Append(ctx, memory.EventInput{
+	lease, err := s.owner.Acquire(ctx, s.timing.leaseDuration)
+	if err != nil {
+		if s.owner.IsConflict(err) {
+			return fmt.Errorf("%w: %v", ErrLeaseConflict, err)
+		}
+		return fmt.Errorf("acquire turn lease: %w", err)
+	}
+
+	coordinator := newTurnCoordinator(ctx)
+	coordinator.setStage(memory.StageTurnStart)
+	defer coordinator.cancel()
+	stopHeartbeat := s.startHeartbeat(ctx, coordinator, lease)
+	defer func() {
+		stopHeartbeat()
+		cleanupCtx, cancel := s.timing.newCleanupContext(ctx, s.timing.cleanupTimeout)
+		defer cancel()
+		if releaseErr := s.owner.Release(cleanupCtx, lease); releaseErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("release turn lease: %w", releaseErr))
+		}
+	}()
+
+	if err := ctx.Err(); err != nil {
+		coordinator.selectCause(callerCause(err), err, 0)
+		return err
+	}
+
+	rootEvent, err := s.history.Append(coordinator.ctx, lease, memory.EventInput{
 		Type:    memory.EventUserMessage,
 		Role:    memory.RoleUser,
 		Content: input,
 	})
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return ctxErr
-	}
 	if err != nil {
+		if cause := coordinator.result(); cause.kind != causeNone {
+			return cause.err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			coordinator.selectCause(callerCause(ctxErr), ctxErr, 0)
+			return ctxErr
+		}
+		if s.owner.IsLeaseLost(err) {
+			coordinator.selectCause(causeLeaseLost, err, 0)
+			return fmt.Errorf("%w: %v", ErrLeaseLost, err)
+		}
+		coordinator.selectCause(causeStorage, err, 0)
 		return fmt.Errorf("persist user message: %w", err)
 	}
+	progress := &turnProgress{requestParentID: rootEvent.ID}
+	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress, extra)
+	if turnErr != nil && coordinator.result().kind == causeNone {
+		coordinator.selectCause(causeStorage, turnErr, 0)
+	}
 
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		messages, err := s.requestMessages(ctx)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		if err != nil {
-			return err
-		}
+	cause := coordinator.result()
+	if cause.kind == causeSuccess {
+		return nil
+	}
+	if cause.err != nil {
+		turnErr = cause.err
+	}
 
-		req := openrouter.ChatRequest{
-			Model:     s.model,
-			Messages:  messages,
-			Tools:     tools.SchemasWith(extra),
-			Reasoning: s.reasoning,
-		}
-		thinking := false
-		h := openrouter.StreamHandlers{
-			OnReasoning: func(text string) {
-				if ctx.Err() != nil {
-					return
-				}
-				thinking = true
-				ev.Reasoning(text)
-			},
-			OnContent: func(text string) {
-				if ctx.Err() != nil {
-					return
-				}
-				if thinking {
-					thinking = false
-					ev.ReasoningDone()
-					if ctx.Err() != nil {
-						return
-					}
-				}
-				ev.Delta(text)
-			},
-		}
-
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		res, err := s.client.ChatStream(ctx, req, h)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		if err != nil {
-			return fmt.Errorf("chat request failed: %w", err)
-		}
-		if len(res.Choices) == 0 {
-			return errors.New("agent: provider returned no choices")
-		}
-
-		msg := res.Choices[0].Message
-		assistantInput, err := assistantEventInput(msg)
-		if err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		assistantEvent, err := s.history.Append(
-			ctx,
-			assistantInput,
-		)
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		if err != nil {
-			return fmt.Errorf("persist assistant message: %w", err)
-		}
-
-		if thinking {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			ev.ReasoningDone()
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		ev.AssistantDone(msg.Content)
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		if len(msg.ToolCalls) == 0 {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		for _, call := range msg.ToolCalls {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			executionUUID, err := uuid.NewRandom()
-			if err != nil {
-				return fmt.Errorf("generate execution ID: %w", err)
-			}
-			executionID := memory.ExecutionID(executionUUID.String())
-			intentInput, err := toolIntentInput(assistantEvent.ID, executionID, call)
-			if err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			intentEvent, err := s.history.Append(ctx, intentInput)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
-			}
-			if err != nil {
-				return fmt.Errorf("persist tool intent: %w", err)
-			}
-
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			ev.ToolCall(call.ID, call.Function.Name, call.Function.Arguments)
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			var approvalEventID memory.EventID
-			var approvalDecision tools.Decision
-
-			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
-				if err := observeCtx.Err(); err != nil {
-					return err
-				}
-				input, err := approvalEventInput(
-					intentEvent.ID,
-					executionID,
-					decision,
-				)
-				if err != nil {
-					return err
-				}
-				approvalEvent, err := s.history.Append(observeCtx, input)
-				if ctxErr := observeCtx.Err(); ctxErr != nil {
-					return ctxErr
-				}
-				if err != nil {
-					return fmt.Errorf("persist approval: %w", err)
-				}
-
-				approvalEventID = approvalEvent.ID
-				approvalDecision = decision
-				return nil
-			}
-
-			result, isErr, err := tools.ExecuteWithApproval(
-				ctx,
-				extra,
-				call,
-				approve,
-				observeApproval,
-			)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
-			}
-			if err != nil {
-				return fmt.Errorf("execute tool lifecycle: %w", err)
-			}
-
-			outcomeParentID := intentEvent.ID
-			outcomeType := memory.EventToolSucceeded
-			if isErr {
-				outcomeType = memory.EventToolFailed
-			}
-			if approvalEventID != "" {
-				outcomeParentID = approvalEventID
-				if approvalDecision != tools.Approved {
-					outcomeType = memory.EventToolCancelled
-				}
-			}
-
-			outcomeInput, err := toolOutcomeInput(
-				outcomeParentID,
-				executionID,
-				result,
-				outcomeType,
-			)
-			if err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			_, err = s.history.Append(ctx, outcomeInput)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
-			}
-			if err != nil {
-				return fmt.Errorf("persist tool outcome: %w", err)
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			ev.ToolResult(call.ID, result.Content, isErr)
-			if err := ctx.Err(); err != nil {
-				return err
-			}
+	stopHeartbeat()
+	if rootEvent.ID != "" && causeHasDurableTerminal(cause.kind) {
+		terminalCtx, cancel := s.timing.newCleanupContext(ctx, s.timing.cleanupTimeout)
+		terminalErr := s.appendTerminal(terminalCtx, lease, rootEvent.ID, progress.requestParentID, cause)
+		cancel()
+		if terminalErr != nil {
+			turnErr = errors.Join(turnErr, fmt.Errorf("persist terminal event: %w", terminalErr))
 		}
 	}
+	wasRendered, reasoningOpen, assistantCommitted := progress.rendered.discardState()
+	if wasRendered && !assistantCommitted {
+		if reason := cause.discardReason(); reason != "" {
+			if reasoningOpen {
+				ev.ReasoningDone()
+			}
+			ev.ResponseDiscarded(reason, DiscardedResponseMessage)
+		}
+	}
+	return turnErr
 }
 
 func resolveReasoning(v string) *openrouter.ReasoningConfig {
@@ -335,6 +197,7 @@ func New(
 	model string,
 	history History,
 	scope memory.ScopeContext,
+	owner TurnOwnership,
 ) *Session {
 	if model == "" {
 		model = os.Getenv("EVIE_MODEL")
@@ -350,6 +213,8 @@ func New(
 		),
 		scope:   scope,
 		history: history,
+		owner:   owner,
+		timing:  defaultTurnTiming,
 	}
 }
 

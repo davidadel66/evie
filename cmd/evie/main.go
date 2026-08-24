@@ -18,6 +18,7 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
+	"github.com/google/uuid"
 
 	"github.com/joho/godotenv"
 )
@@ -62,12 +63,18 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to create session: %v", err)
 		}
+		holderUUID, err := uuid.NewRandom()
+		if err != nil {
+			log.Fatalf("failed to create turn lease holder: %v", err)
+		}
 
+		holderID := memory.LeaseHolderID(holderUUID.String())
 		return agent.New(
 			client,
 			"",
-			store.BindHistory(storedSession.ID),
+			store.BindHistory(storedSession.ID, holderID),
 			storedSession.ScopeContext(),
+			store.BindTurnOwner(storedSession.ID, holderID),
 		)
 	}
 

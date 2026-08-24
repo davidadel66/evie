@@ -5,7 +5,7 @@
 // card resolving into the compact tool row — so the approval lives on the tool
 // item it gates.
 
-import type { FilePreview, ServerEvent } from "./events";
+import type { DiscardReason, FilePreview, ServerEvent } from "./events";
 
 export type ApprovalState = "pending" | "approved" | "declined" | "expired";
 
@@ -19,7 +19,20 @@ export type Approval = {
 
 export type Item =
   | { kind: "user"; key: string; text: string }
-  | { kind: "assistant"; key: string; text: string; streaming: boolean }
+  | {
+      kind: "assistant";
+      key: string;
+      text: string;
+      streaming: boolean;
+      discarded?: { reason: DiscardReason; message: string };
+    }
+  | {
+      kind: "notice";
+      key: string;
+      tone: "warning";
+      text: string;
+      reason: DiscardReason;
+    }
   | {
       kind: "reasoning";
       key: string;
@@ -116,12 +129,33 @@ export function reduce(
 
     case "assistant_done": {
       const last = items[items.length - 1];
-      if (last?.kind !== "assistant" || !last.streaming) return items;
       // AssistantDone fires for every assistant message, including the
       // tool-only ones that carry no text. The design has no empty bubbles,
       // so drop it rather than render a blank.
-      if (last.text === "") return items.slice(0, -1);
-      return replaceLast(items, { ...last, streaming: false });
+      if (ev.content === "") {
+        if (last?.kind === "assistant" && last.streaming) {
+          return items.slice(0, -1);
+        }
+        return items;
+      }
+      // Committed content is authoritative. An asynchronous provider may
+      // produce no admitted deltas or only a prefix before its lifetime closes.
+      if (last?.kind === "assistant" && last.streaming) {
+        return replaceLast(items, {
+          ...last,
+          text: ev.content,
+          streaming: false,
+        });
+      }
+      return [
+        ...items,
+        {
+          kind: "assistant",
+          key: nextKey("a"),
+          text: ev.content,
+          streaming: false,
+        },
+      ];
     }
 
     case "tool_call": {
@@ -182,6 +216,30 @@ export function reduce(
         isErr: ev.isError,
         ms: now() - tool.startedAt,
       });
+    }
+
+    case "response_discarded": {
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (item.kind === "assistant" && item.streaming) {
+          return replaceAt(items, i, {
+            ...item,
+            streaming: false,
+            discarded: { reason: ev.reason, message: ev.message },
+          });
+        }
+        if (item.kind === "user" || item.kind === "tool") break;
+      }
+      return [
+        ...items,
+        {
+          kind: "notice",
+          key: nextKey("n"),
+          tone: "warning",
+          text: ev.message,
+          reason: ev.reason,
+        },
+      ];
     }
 
     case "turn_done":

@@ -108,7 +108,7 @@ export function useSession(): Session {
       // turn_done is the last event of the turn; dump everything still
       // pooled (the REPL's done() flushes its tail the same way) so the
       // composer re-enables immediately.
-      if (ev.type === "turn_done") {
+      if (ev.type === "turn_done" || ev.type === "response_discarded") {
         if (timerRef.current !== null) clearTimeout(timerRef.current);
         flush(false);
         return;

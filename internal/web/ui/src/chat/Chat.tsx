@@ -4,7 +4,7 @@
 import { useEffect, useRef } from "react";
 import type { Item } from "../store/reducer";
 import { ApprovalCard } from "./ApprovalCard";
-import { AssistantMessage, UserMessage } from "./Message";
+import { AssistantMessage, DiscardWarning, UserMessage } from "./Message";
 import { Reasoning } from "./Reasoning";
 import { ToolCard } from "./ToolCard";
 import { Waiting } from "./Waiting";
@@ -47,8 +47,11 @@ export function Chat({ items, queued, streaming, onAnswer }: Props) {
                 key={item.key}
                 text={item.text}
                 streaming={item.streaming}
+                discarded={item.discarded}
               />
             );
+          case "notice":
+            return <DiscardWarning key={item.key} message={item.text} />;
           case "reasoning":
             return <Reasoning key={item.key} item={item} />;
           case "tool":

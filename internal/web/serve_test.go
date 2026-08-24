@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/memory"
@@ -32,10 +34,21 @@ type fakeStep struct {
 }
 
 type fakeHistory struct {
-	events []memory.Event
+	events      []memory.Event
+	appendErrAt int
+	appendCalls int
+	appendErr   error
+	afterAppend func(memory.EventInput)
 }
 
-func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+func (f *fakeHistory) Append(_ context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
+	f.appendCalls++
+	if f.appendErrAt == f.appendCalls {
+		if f.appendErr != nil {
+			return memory.Event{}, f.appendErr
+		}
+		return memory.Event{}, errors.New("assistant persistence failed")
+	}
 	event := memory.Event{
 		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
 		SessionID:     "test-session",
@@ -49,6 +62,9 @@ func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory
 		FormatVersion: 1,
 	}
 	f.events = append(f.events, event)
+	if f.afterAppend != nil {
+		f.afterAppend(input)
+	}
 	return event, nil
 }
 
@@ -95,9 +111,29 @@ func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
 	srv := NewServer(agent.New(c, "test-model", &fakeHistory{}, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	}))
+	}, webTestTurnOwner{}))
 	return srv, srv.Handler()
 }
+
+type webTestTurnOwner struct {
+	acquireErr error
+	conflict   bool
+	leaseLost  bool
+}
+
+func (o webTestTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
+	if o.acquireErr != nil {
+		return memory.TurnLease{}, o.acquireErr
+	}
+	return memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (webTestTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration) (memory.TurnLease, error) {
+	return memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (webTestTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
+func (webTestTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
+func (o webTestTurnOwner) IsConflict(error) bool                           { return o.conflict }
+func (o webTestTurnOwner) IsLeaseLost(error) bool                          { return o.leaseLost }
 
 // chatRequest builds a well-formed same-origin chat POST; individual
 // tests then break one property at a time.
@@ -130,6 +166,180 @@ func TestChatStreamsATurn(t *testing.T) {
 	if !strings.HasSuffix(body, "event: turn_done\ndata: {}\n\n") {
 		t.Fatalf("stream does not end with turn_done:\n%s", body)
 	}
+}
+
+type asyncWebClient struct {
+	deltaWriteStarted <-chan struct{}
+	callbackDone      chan<- struct{}
+}
+
+func (c asyncWebClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	go func() {
+		handlers.OnContent("async")
+		close(c.callbackDone)
+	}()
+	<-c.deltaWriteStarted
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{
+		Message: openrouter.Message{Role: "assistant", Content: "complete"},
+	}}}, nil
+}
+
+type blockingDeltaWriter struct {
+	*httptest.ResponseRecorder
+	deltaStarted chan struct{}
+	releaseDelta <-chan struct{}
+	once         sync.Once
+}
+
+func (w *blockingDeltaWriter) Write(data []byte) (int, error) {
+	if strings.Contains(string(data), "event: delta\n") {
+		w.once.Do(func() { close(w.deltaStarted) })
+		<-w.releaseDelta
+	}
+	return w.ResponseRecorder.Write(data)
+}
+
+func (w *blockingDeltaWriter) Flush() {}
+
+func TestChatWaitsForAdmittedProviderCallbackBeforeAssistantAndTurnDone(t *testing.T) {
+	deltaStarted := make(chan struct{})
+	releaseDelta := make(chan struct{})
+	callbackDone := make(chan struct{})
+	client := asyncWebClient{deltaWriteStarted: deltaStarted, callbackDone: callbackDone}
+	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	w := &blockingDeltaWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		deltaStarted:     deltaStarted,
+		releaseDelta:     releaseDelta,
+	}
+	done := make(chan struct{})
+	go func() {
+		NewServer(session).Handler().ServeHTTP(w, chatRequest(`{"message":"hi"}`))
+		close(done)
+	}()
+	select {
+	case <-deltaStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("asynchronous delta did not reach the SSE writer")
+	}
+	select {
+	case <-done:
+		t.Fatal("HTTP turn completed while asynchronous provider callback was active")
+	default:
+	}
+	close(releaseDelta)
+	select {
+	case <-callbackDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("asynchronous delta callback did not return")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP turn did not finish after asynchronous callback joined")
+	}
+	assertSSEOrder(t, w.Body.String(),
+		"event: delta\ndata: {\"text\":\"async\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: turn_done\ndata: {}",
+	)
+}
+
+type concurrentWebClient struct {
+	reasoningWriteStarted <-chan struct{}
+	contentStarted        chan struct{}
+	callbacksDone         chan struct{}
+	allowReturn           <-chan struct{}
+}
+
+func (c concurrentWebClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	go handlers.OnReasoning("thinking")
+	<-c.reasoningWriteStarted
+	go func() {
+		close(c.contentStarted)
+		handlers.OnContent("answer")
+		close(c.callbacksDone)
+	}()
+	<-c.contentStarted
+	<-c.allowReturn
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{
+		Message: openrouter.Message{Role: "assistant", Content: "complete"},
+	}}}, nil
+}
+
+type blockingReasoningWriter struct {
+	*httptest.ResponseRecorder
+	reasoningStarted chan struct{}
+	releaseReasoning <-chan struct{}
+	once             sync.Once
+}
+
+func (w *blockingReasoningWriter) Write(data []byte) (int, error) {
+	if strings.Contains(string(data), "event: reasoning\n") {
+		w.once.Do(func() { close(w.reasoningStarted) })
+		<-w.releaseReasoning
+	}
+	return w.ResponseRecorder.Write(data)
+}
+
+func (w *blockingReasoningWriter) Flush() {}
+
+func TestChatSerializesConcurrentProviderCallbacksBeforeTurnDone(t *testing.T) {
+	reasoningStarted := make(chan struct{})
+	releaseReasoning := make(chan struct{})
+	contentStarted := make(chan struct{})
+	callbacksDone := make(chan struct{})
+	allowReturn := make(chan struct{})
+	client := concurrentWebClient{
+		reasoningWriteStarted: reasoningStarted,
+		contentStarted:        contentStarted,
+		callbacksDone:         callbacksDone,
+		allowReturn:           allowReturn,
+	}
+	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	w := &blockingReasoningWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		reasoningStarted: reasoningStarted,
+		releaseReasoning: releaseReasoning,
+	}
+	done := make(chan struct{})
+	go func() {
+		NewServer(session).Handler().ServeHTTP(w, chatRequest(`{"message":"hi"}`))
+		close(done)
+	}()
+	select {
+	case <-contentStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent content callback did not start")
+	}
+	select {
+	case <-done:
+		t.Fatal("HTTP turn completed before concurrent callbacks joined")
+	default:
+	}
+	close(releaseReasoning)
+	select {
+	case <-callbacksDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("serialized SSE callbacks did not finish")
+	}
+	close(allowReturn)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP turn did not finish after concurrent callbacks were released")
+	}
+	assertSSEOrder(t, w.Body.String(),
+		"event: reasoning\ndata: {\"text\":\"thinking\"}",
+		"event: reasoning_done\ndata: {}",
+		"event: delta\ndata: {\"text\":\"answer\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: turn_done\ndata: {}",
+	)
 }
 
 func TestChatStreamsReasoningBeforeContent(t *testing.T) {
@@ -165,6 +375,163 @@ func TestChatStreamsReasoningBeforeContent(t *testing.T) {
 	if !(firstReasoning < done && done < firstDelta) {
 		t.Fatalf("order = reasoning@%d done@%d delta@%d, want reasoning < done < delta:\n%s",
 			firstReasoning, done, firstDelta, body)
+	}
+}
+
+type contentFirstWebClient struct{}
+
+func (contentFirstWebClient) ChatStream(
+	_ context.Context,
+	_ openrouter.ChatRequest,
+	h openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	h.OnContent("answer")
+	h.OnReasoning("late reasoning")
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "answer", Reasoning: "late reasoning",
+	}}}}, nil
+}
+
+func TestChatSuppressesReasoningThatArrivesAfterContent(t *testing.T) {
+	session := agent.New(contentFirstWebClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	if strings.Contains(body, "event: reasoning") {
+		t.Fatalf("late reasoning reopened presentation:\n%s", body)
+	}
+	assertSSEOrder(t, body,
+		"event: delta\ndata: {\"text\":\"answer\"}",
+		"event: assistant_done\ndata: {\"content\":\"answer\"}",
+		"event: turn_done\ndata: {}",
+	)
+}
+
+func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *testing.T) {
+	for _, presentation := range []struct {
+		name   string
+		deltas []string
+	}{
+		{name: "zero delta"},
+		{name: "matching prefix", deltas: []string{"committed"}},
+		{name: "divergent content", deltas: []string{"speculative"}},
+	} {
+		for _, cause := range []string{"caller cancellation", "lease loss"} {
+			t.Run(presentation.name+"_"+cause, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				history := &fakeHistory{}
+				owner := webTestTurnOwner{}
+				if cause == "caller cancellation" {
+					history.afterAppend = func(input memory.EventInput) {
+						if input.Type == memory.EventAssistantMessage {
+							cancel()
+						}
+					}
+				} else {
+					history.appendErrAt = 3 // intent append, before ToolCall presentation
+					history.appendErr = errors.New("lease fence lost")
+					owner.leaseLost = true
+				}
+				client := &fakeClient{steps: []fakeStep{{
+					deltas:  presentation.deltas,
+					content: "committed",
+					toolCalls: []openrouter.ToolCall{{
+						ID: "call", Type: "function",
+						Function: openrouter.FunctionCall{Name: "missing", Arguments: `{}`},
+					}},
+				}}}
+				session := agent.New(client, "test", history, memory.ScopeContext{
+					OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+				}, owner)
+				recorder := httptest.NewRecorder()
+				events, err := newSSEEvents(recorder)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sendErr := session.Send(ctx, "go", events, nil)
+				if sendErr == nil {
+					t.Fatal("Send succeeded after selected terminal cause")
+				}
+				events.Error(sendErr.Error())
+				events.TurnDone()
+				body := recorder.Body.String()
+				if strings.Count(body, "event: assistant_done\n") != 1 ||
+					strings.Contains(body, "event: tool_call\n") ||
+					strings.Contains(body, "event: response_discarded\n") {
+					t.Fatalf("terminal SSE contract violated:\n%s", body)
+				}
+				assertSSEOrder(t, body,
+					"event: assistant_done\ndata: {\"content\":\"committed\"}",
+					"event: error",
+					"event: turn_done",
+				)
+			})
+		}
+	}
+}
+
+func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2}
+	client := &fakeClient{steps: []fakeStep{{deltas: []string{"partial"}, content: "partial"}}}
+	session := agent.New(client, "test", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	assertSSEOrder(t, body,
+		"event: delta\ndata: {\"text\":\"partial\"}",
+		"event: response_discarded\ndata: {\"reason\":\"assistant_persistence_failed\",\"message\":\"Response interrupted; streamed text was not saved.\"}",
+		"event: error",
+		"event: turn_done",
+	)
+}
+
+func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
+	history := &fakeHistory{appendErrAt: 2}
+	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}, content: "unrendered final"}}}
+	session := agent.New(client, "test", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	body := recorder.Body.String()
+	assertSSEOrder(t, body,
+		"event: reasoning\ndata: {\"text\":\"thinking\"}",
+		"event: reasoning_done\ndata: {}",
+		"event: response_discarded\ndata: {\"reason\":\"assistant_persistence_failed\",\"message\":\"Response interrupted; streamed text was not saved.\"}",
+		"event: error",
+		"event: turn_done",
+	)
+}
+
+func TestDurableLeaseConflictUsesPreStream409JSON(t *testing.T) {
+	conflictErr := errors.New("lease held elsewhere")
+	session := agent.New(&fakeClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{acquireErr: conflictErr, conflict: true})
+	recorder := httptest.NewRecorder()
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"hi"}`))
+	if recorder.Code != http.StatusConflict || recorder.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("status=%d content-type=%q body=%s", recorder.Code, recorder.Header().Get("Content-Type"), recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "event:") || !strings.Contains(recorder.Body.String(), `"error"`) {
+		t.Fatalf("conflict response=%s", recorder.Body.String())
+	}
+}
+
+func assertSSEOrder(t *testing.T, body string, values ...string) {
+	t.Helper()
+	last := -1
+	for _, value := range values {
+		index := strings.Index(body, value)
+		if index <= last {
+			t.Fatalf("SSE value %q missing or out of order in:\n%s", value, body)
+		}
+		last = index
 	}
 }
 

@@ -55,4 +55,25 @@ describe("splitBatch", () => {
     ]);
     expect(rest).toEqual([{ type: "delta", text: "ok" }]);
   });
+
+  it("never lets a discarded marker overtake buffered text", () => {
+    const batch: ServerEvent[] = [
+      { type: "delta", text: "partial" },
+      {
+        type: "response_discarded",
+        reason: "provider_error",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+    ];
+    const [applied, rest] = splitBatch(batch, 3);
+    expect(applied).toEqual([{ type: "delta", text: "par" }]);
+    expect(rest).toEqual([
+      { type: "delta", text: "tial" },
+      {
+        type: "response_discarded",
+        reason: "provider_error",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+    ]);
+  });
 });

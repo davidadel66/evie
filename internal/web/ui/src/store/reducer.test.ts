@@ -29,6 +29,58 @@ describe("reduce", () => {
     expect(items[0]).toMatchObject({ streaming: false, text: "hi" });
   });
 
+  it("uses committed async-provider content when no delta was admitted", () => {
+    const items = fold([
+      { type: "reasoning", text: "thinking" },
+      { type: "reasoning_done" },
+      { type: "assistant_done", content: "complete answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(2);
+    expect(items[1]).toMatchObject({
+      kind: "assistant",
+      text: "complete answer",
+      streaming: false,
+    });
+  });
+
+  it("reconciles a partial async-provider delta to committed content", () => {
+    const items = fold([
+      { type: "delta", text: "complete " },
+      { type: "assistant_done", content: "complete answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "complete answer",
+      streaming: false,
+    });
+  });
+
+  it("replaces a divergent async-provider delta with committed content", () => {
+    const items = fold([
+      { type: "delta", text: "speculative answer" },
+      { type: "assistant_done", content: "committed answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "committed answer",
+      streaming: false,
+    });
+  });
+
+  it("removes streamed text when committed assistant content is empty", () => {
+    const items = fold([
+      { type: "delta", text: "speculative answer" },
+      { type: "assistant_done", content: "" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toEqual([]);
+  });
+
   it("drops the empty assistant message of a tool-only turn", () => {
     // The real sequence: no deltas, assistant_done with no content, then the
     // tool calls. An empty bubble must never reach the transcript.
@@ -163,6 +215,47 @@ describe("reduce", () => {
     expect(items[0]).toMatchObject({ streaming: false, text: "cut off" });
   });
 
+  it("preserves partial text with an inline discarded warning through turn_done", () => {
+    const items = fold([
+      { type: "delta", text: "partial answer" },
+      {
+        type: "response_discarded",
+        reason: "lease_lost",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "partial answer",
+      streaming: false,
+      discarded: {
+        reason: "lease_lost",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+    });
+  });
+
+  it("adds a standalone discarded warning for reasoning-only output", () => {
+    const items = fold([
+      { type: "reasoning", text: "unfinished thought" },
+      { type: "reasoning_done" },
+      {
+        type: "response_discarded",
+        reason: "assistant_persistence_failed",
+        message: "Response interrupted; streamed text was not saved.",
+      },
+      { type: "turn_done" },
+    ]);
+    expect(items.map((item) => item.kind)).toEqual(["reasoning", "notice"]);
+    expect(items[1]).toMatchObject({
+      kind: "notice",
+      reason: "assistant_persistence_failed",
+      text: "Response interrupted; streamed text was not saved.",
+    });
+  });
+
   it("streams reasoning fragments into one item, in wire order", () => {
     const items = fold([
       { type: "reasoning", text: "Compute " },
@@ -176,6 +269,11 @@ describe("reduce", () => {
     expect(items[0]).toMatchObject({
       kind: "reasoning",
       text: "Compute 17*23",
+      streaming: false,
+    });
+    expect(items[1]).toMatchObject({
+      kind: "assistant",
+      text: "391",
       streaming: false,
     });
   });
@@ -267,6 +365,19 @@ describe("parseEvent", () => {
     });
     expect(parseEvent("reasoning_done", "{}")).toEqual({
       type: "reasoning_done",
+    });
+  });
+
+  it("parses response_discarded as a known event", () => {
+    expect(
+      parseEvent(
+        "response_discarded",
+        '{"reason":"provider_response_invalid","message":"Response interrupted; streamed text was not saved."}',
+      ),
+    ).toEqual({
+      type: "response_discarded",
+      reason: "provider_response_invalid",
+      message: "Response interrupted; streamed text was not saved.",
     });
   });
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -212,6 +213,10 @@ func createGlobalREPLSession(ctx context.Context, store replSessionStore) (memor
 // lagging. Call the returned onDelta from the stream, then done() to
 // flush the tail and stop the printer.
 func smoothPrinter() (onDelta func(string), done func()) {
+	return smoothPrinterTo(os.Stdout)
+}
+
+func smoothPrinterTo(out io.Writer) (onDelta func(string), done func()) {
 	ch := make(chan string, 64)
 	finished := make(chan struct{})
 
@@ -224,7 +229,7 @@ func smoothPrinter() (onDelta func(string), done func()) {
 			select {
 			case s, ok := <-ch:
 				if !ok {
-					fmt.Print(string(buf))
+					_, _ = fmt.Fprint(out, string(buf))
 					return
 				}
 				buf = append(buf, []rune(s)...)
@@ -236,7 +241,7 @@ func smoothPrinter() (onDelta func(string), done func()) {
 				if n > len(buf) {
 					n = len(buf)
 				}
-				fmt.Print(string(buf[:n]))
+				_, _ = fmt.Fprint(out, string(buf[:n]))
 				buf = buf[n:]
 			}
 		}
@@ -250,14 +255,31 @@ func smoothPrinter() (onDelta func(string), done func()) {
 // lazily on the first delta of each assistant message and flushed when
 // the message completes, so pacing never leaks across messages.
 type replEvents struct {
-	deltaIn func(string)
-	flush   func()
+	deltaIn         func(string)
+	flush           func()
+	out             io.Writer
+	streamedContent strings.Builder
+	reasoningOpen   bool
+}
+
+const (
+	replUnsavedStreamCorrection = "[streamed response above was not saved]"
+	replCommittedResponseLabel  = "[committed response]"
+	replEmptyCommittedResponse  = "(empty response)"
+)
+
+func (r *replEvents) writer() io.Writer {
+	if r.out != nil {
+		return r.out
+	}
+	return os.Stdout
 }
 
 func (r *replEvents) Delta(text string) {
 	if r.deltaIn == nil {
-		r.deltaIn, r.flush = smoothPrinter()
+		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 	}
+	r.streamedContent.WriteString(text)
 	r.deltaIn(text)
 }
 
@@ -268,37 +290,72 @@ func (r *replEvents) Delta(text string) {
 // before whatever comes next.
 func (r *replEvents) Reasoning(text string) {
 	if r.deltaIn == nil {
-		r.deltaIn, r.flush = smoothPrinter()
+		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 		r.deltaIn("\x1b[90mthinking…\n")
 	}
+	r.reasoningOpen = true
 	r.deltaIn(text)
 }
 
 func (r *replEvents) ReasoningDone() {
+	r.reasoningOpen = false
 	if r.deltaIn == nil {
 		return
 	}
 	r.deltaIn("\x1b[0m")
 	r.flush()
 	r.deltaIn, r.flush = nil, nil
-	fmt.Print("\n\n")
+	_, _ = fmt.Fprint(r.writer(), "\n\n")
 }
 
 func (r *replEvents) AssistantDone(content string) {
+	r.reasoningOpen = false
 	if r.deltaIn != nil {
 		r.flush()
 		r.deltaIn, r.flush = nil, nil
 	}
-	if content != "" {
-		fmt.Println()
+	streamed := r.streamedContent.String()
+	matchesStream := strings.HasPrefix(content, streamed)
+	if matchesStream {
+		_, _ = fmt.Fprint(r.writer(), content[len(streamed):])
+	} else {
+		// Terminal output cannot retract divergent streamed bytes. Mark those
+		// bytes honestly and print the complete durable response separately;
+		// AssistantDone is successful committed content, not a discard event.
+		_, _ = fmt.Fprintln(r.writer())
+		_, _ = fmt.Fprintln(r.writer(), replUnsavedStreamCorrection)
+		_, _ = fmt.Fprintln(r.writer(), replCommittedResponseLabel)
+		if content == "" {
+			_, _ = fmt.Fprintln(r.writer(), replEmptyCommittedResponse)
+		} else {
+			_, _ = fmt.Fprintln(r.writer(), content)
+		}
+	}
+	r.streamedContent.Reset()
+	if content != "" && matchesStream {
+		_, _ = fmt.Fprintln(r.writer())
 	}
 }
 
 func (r *replEvents) ToolCall(id, name, args string) {
-	fmt.Printf("[calling %s]\n", name)
+	_, _ = fmt.Fprintf(r.writer(), "[calling %s]\n", name)
 }
 
 func (r *replEvents) ToolResult(id, content string, isErr bool) {}
+
+func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
+	if r.deltaIn != nil {
+		if r.reasoningOpen {
+			r.deltaIn("\x1b[0m")
+		}
+		r.flush()
+		r.deltaIn, r.flush = nil, nil
+		_, _ = fmt.Fprintln(r.writer())
+	}
+	r.reasoningOpen = false
+	r.streamedContent.Reset()
+	_, _ = fmt.Fprintln(r.writer(), message)
+}
 
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
 // print and return to the prompt rather than killing the session.
@@ -325,7 +382,7 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 		return tools.Declined
 	}
 
-	ev := &replEvents{}
+	ev := &replEvents{out: os.Stdout}
 	for {
 		if ctx.Err() != nil {
 			return
@@ -337,7 +394,8 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 		if ctx.Err() != nil {
 			return
 		}
-		if err := session.Send(ctx, scanner.Text(), ev, approve); err != nil {
+		err := session.Send(ctx, scanner.Text(), ev, approve)
+		if err != nil {
 			fmt.Printf("request failed: %v\n", err)
 		}
 	}

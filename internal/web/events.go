@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -92,6 +93,13 @@ func (e *sseEvents) ToolResult(id, content string, isErr bool) {
 		Content string `json:"content"`
 		IsError bool   `json:"isError"`
 	}{id, content, isErr})
+}
+
+func (e *sseEvents) ResponseDiscarded(reason agent.DiscardReason, message string) {
+	e.emit("response_discarded", struct {
+		Reason  agent.DiscardReason `json:"reason"`
+		Message string              `json:"message"`
+	}{reason, message})
 }
 
 // The three below aren't part of agent.Events — they're the server's own

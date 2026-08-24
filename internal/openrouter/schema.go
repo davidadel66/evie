@@ -1,6 +1,9 @@
 package openrouter
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 // Message is one entry in a conversation. The same struct covers all roles:
 // system and user messages fill Role and Content; an assistant turn that
@@ -26,8 +29,9 @@ type Choice struct {
 // purpose: construction goes through NewClient so an empty key can never
 // reach request time.
 type Client struct {
-	apiKey  string
-	baseURL string
+	apiKey     string
+	baseURL    string
+	httpClient *http.Client
 }
 
 // Tool is the wire format for advertising one tool to the model. Type is
@@ -125,7 +129,7 @@ type streamChunk struct {
 // the function name arrive on the first fragment, argument JSON drips
 // in across the rest.
 type toolCallDelta struct {
-	Index    int    `json:"index"`
+	Index    *int   `json:"index"`
 	ID       string `json:"id"`
 	Type     string `json:"type"`
 	Function struct {

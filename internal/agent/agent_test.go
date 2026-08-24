@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -35,14 +36,23 @@ type fakeHistory struct {
 	events         []memory.Event
 	appendAttempts int
 	appendErrAt    int
+	appendBlockAt  int
+	appendEntered  chan struct{}
 	appendErr      error
 	eventsErr      error
 	afterAppend    func(memory.EventInput)
 	onEvents       func()
 }
 
-func (f *fakeHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
 	f.appendAttempts++
+	if f.appendBlockAt == f.appendAttempts {
+		if f.appendEntered != nil {
+			close(f.appendEntered)
+		}
+		<-ctx.Done()
+		return memory.Event{}, ctx.Err()
+	}
 	if f.appendErr != nil && (f.appendErrAt == 0 || f.appendAttempts == f.appendErrAt) {
 		return memory.Event{}, f.appendErr
 	}
@@ -76,8 +86,30 @@ func newTestSession(client Client, model string) *Session {
 	return New(client, model, &fakeHistory{}, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: memory.SessionID("test-session"),
-	})
+	}, newFakeTurnOwner())
 }
+
+type fakeTurnOwner struct {
+	lease memory.TurnLease
+}
+
+func newFakeTurnOwner() *fakeTurnOwner {
+	return &fakeTurnOwner{lease: memory.TurnLease{
+		SessionID: "test-session", HolderID: "test-holder", FencingToken: 1,
+		Generation: 1, ExpiresAt: time.Now().Add(time.Minute),
+	}}
+}
+
+func (o *fakeTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
+	return o.lease, nil
+}
+func (o *fakeTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration) (memory.TurnLease, error) {
+	return o.lease, nil
+}
+func (o *fakeTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
+func (o *fakeTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
+func (o *fakeTurnOwner) IsConflict(error) bool                             { return false }
+func (o *fakeTurnOwner) IsLeaseLost(error) bool                            { return false }
 
 func (f *fakeClient) ChatStream(_ context.Context, req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	if f.onCall != nil {
@@ -121,7 +153,7 @@ func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	if err := s.Send(context.Background(), "hello", &recorder{}, nil); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -137,7 +169,7 @@ func TestSendStopsWhenUserEventAppendFails(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	err := s.Send(context.Background(), "hello", &recorder{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
@@ -173,7 +205,7 @@ func TestSendPersistsAssistantBeforeToolExecution(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	if err := s.Send(context.Background(), "go", &recorder{}, nil, tool); err != nil {
 		t.Fatalf("Send: %v", err)
@@ -211,7 +243,7 @@ func TestSendStopsWhenAssistantEventAppendFails(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
@@ -231,7 +263,7 @@ func TestSendStopsWhenToolIntentAppendFails(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
@@ -298,7 +330,7 @@ func TestSendCancellationDuringHistoryLoadPreventsProvider(t *testing.T) {
 	client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
 	s := New(client, "test-model", history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	err := s.Send(ctx, "go", &recorder{}, nil)
 	if !errors.Is(err, context.Canceled) {
@@ -323,7 +355,7 @@ func TestSendParentCancellationWinsOverCompetingProviderError(t *testing.T) {
 	}
 }
 
-func TestSendCancellationAtFinalAssistantBoundariesCannotReportSuccess(t *testing.T) {
+func TestCommittedFinalAssistantRemainsDurableSuccess(t *testing.T) {
 	t.Run("assistant append", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		history := &fakeHistory{afterAppend: func(input memory.EventInput) {
@@ -335,14 +367,14 @@ func TestSendCancellationAtFinalAssistantBoundariesCannotReportSuccess(t *testin
 		events := &recorder{}
 		s := New(client, "test-model", history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-		})
+		}, newFakeTurnOwner())
 
 		err := s.Send(ctx, "go", events, nil)
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Send error = %v, want context.Canceled", err)
+		if err != nil {
+			t.Fatalf("Send error = %v, want durable success", err)
 		}
-		if len(events.events) != 0 {
-			t.Fatalf("events after cancellation during assistant append = %v", events.events)
+		if len(events.events) != 1 || events.events[0] != "done:late final" {
+			t.Fatalf("events after committed assistant = %v", events.events)
 		}
 	})
 
@@ -353,8 +385,8 @@ func TestSendCancellationAtFinalAssistantBoundariesCannotReportSuccess(t *testin
 		s := newTestSession(client, "test-model")
 
 		err := s.Send(ctx, "go", events, nil)
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Send error = %v, want context.Canceled", err)
+		if err != nil {
+			t.Fatalf("Send error = %v, want durable success", err)
 		}
 		if len(client.reqs) != 1 {
 			t.Fatalf("provider requests = %d, want one", len(client.reqs))
@@ -375,7 +407,7 @@ func TestSendCancellationAtToolIntentAndOutcomeBoundariesStopsLaterPhases(t *tes
 		events := &recorder{}
 		s := New(client, "test-model", history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-		})
+		}, newFakeTurnOwner())
 
 		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, &ran))
 		if !errors.Is(err, context.Canceled) || ran {
@@ -416,7 +448,7 @@ func TestSendCancellationAtToolIntentAndOutcomeBoundariesStopsLaterPhases(t *tes
 		events := &recorder{}
 		s := New(client, "test-model", history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-		})
+		}, newFakeTurnOwner())
 
 		err := s.Send(ctx, "go", events, nil, echoTool("echo", false, &ran))
 		if !errors.Is(err, context.Canceled) || !ran {
@@ -460,7 +492,7 @@ func TestSendStopsWhenToolOutcomeAppendFails(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	err := s.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, &ran))
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
@@ -503,7 +535,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
@@ -525,7 +557,7 @@ func TestSendStopsWhenApprovalAppendFails(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 	approve := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Approved
 	}
@@ -552,7 +584,7 @@ func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 	deny := func(_ context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
 		return tools.Declined
 	}
@@ -613,6 +645,9 @@ func (r *recorder) ToolResult(id, content string, isErr bool) {
 	if r.onToolResult != nil {
 		r.onToolResult()
 	}
+}
+func (r *recorder) ResponseDiscarded(reason DiscardReason, message string) {
+	r.events = append(r.events, fmt.Sprintf("discarded:%s:%s", reason, message))
 }
 
 func assistantStep(content string, deltas []string, calls ...openrouter.ToolCall) step {
@@ -742,6 +777,33 @@ func TestReasoningStreamsThenContent(t *testing.T) {
 	}
 }
 
+type contentFirstReasoningClient struct{}
+
+func (contentFirstReasoningClient) ChatStream(
+	_ context.Context,
+	_ openrouter.ChatRequest,
+	h openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	h.OnContent("answer")
+	h.OnReasoning("late reasoning")
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "answer", Reasoning: "late reasoning",
+	}}}}, nil
+}
+
+func TestReasoningAfterContentIsAssembledButNotRendered(t *testing.T) {
+	rec := &recorder{}
+	if err := newTestSession(contentFirstReasoningClient{}, "test-model").Send(
+		context.Background(), "go", rec, nil,
+	); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"delta:answer", "done:answer"}
+	if fmt.Sprint(rec.events) != fmt.Sprint(want) {
+		t.Fatalf("events=%v, want monotonic content presentation %v", rec.events, want)
+	}
+}
+
 func TestReasoningDoneOncePerMessageAcrossToolRoundTrip(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		// Tool-only message: no content delta ever ends the thinking.
@@ -843,9 +905,12 @@ func TestProviderErrorAbortsTurn(t *testing.T) {
 	}
 	// The user event stays durable even though the provider failed.
 	history := s.history.(*fakeHistory)
-	if len(history.events) != 1 || history.events[0].Type != memory.EventUserMessage ||
+	if len(history.events) != 2 || history.events[0].Type != memory.EventUserMessage ||
 		history.events[0].Content != "hi" {
 		t.Fatalf("durable events = %+v", history.events)
+	}
+	if history.events[1].Type != memory.EventTurnFailed || history.events[1].ParentID != history.events[0].ID {
+		t.Fatalf("terminal event = %+v", history.events[1])
 	}
 }
 
@@ -858,7 +923,7 @@ func TestSendBuildsProviderRequestFromDurableHistory(t *testing.T) {
 	s := New(c, "test-model", history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
-	})
+	}, newFakeTurnOwner())
 
 	if err := s.Send(context.Background(), "new question", &recorder{}, nil); err != nil {
 		t.Fatalf("Send: %v", err)

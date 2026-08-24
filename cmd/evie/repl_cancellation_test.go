@@ -56,7 +56,7 @@ func (c *replCancellationClient) ChatStream(context.Context, openrouter.ChatRequ
 
 type replCancellationHistory struct{}
 
-func (replCancellationHistory) Append(context.Context, memory.EventInput) (memory.Event, error) {
+func (replCancellationHistory) Append(context.Context, memory.TurnLease, memory.EventInput) (memory.Event, error) {
 	return memory.Event{ID: "event", SessionID: "session", FormatVersion: 1}, nil
 }
 func (replCancellationHistory) Events(context.Context) ([]memory.Event, error) { return nil, nil }
@@ -79,7 +79,7 @@ type recordingREPLHistory struct {
 	events []memory.Event
 }
 
-func (h *recordingREPLHistory) Append(_ context.Context, input memory.EventInput) (memory.Event, error) {
+func (h *recordingREPLHistory) Append(_ context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	e := memory.Event{ID: memory.EventID(fmt.Sprintf("event-%d", len(h.events)+1)), SessionID: "session", Sequence: int64(len(h.events) + 1), Type: input.Type, Role: input.Role, ParentID: input.ParentID, ExecutionID: input.ExecutionID, Content: input.Content, Payload: input.Payload, FormatVersion: 1}
@@ -99,7 +99,7 @@ func TestRunREPLContextDiscardsInputThatUnblocksScannerAfterCancellation(t *test
 	client := &replCancellationClient{}
 	session := agent.New(client, "test", replCancellationHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "session",
-	})
+	}, testTurnOwner{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -134,7 +134,7 @@ func TestRunREPLContextDiscardsLateApprovalInputAfterCancellation(t *testing.T) 
 	barrier := newScanReadBarrier(reader)
 	client := &replApprovalClient{called: make(chan struct{}), path: path}
 	history := &recordingREPLHistory{}
-	session := agent.New(client, "test", history, memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"})
+	session := agent.New(client, "test", history, memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); runREPLContext(ctx, session, bufio.NewScanner(barrier)) }()
@@ -168,3 +168,16 @@ func TestRunREPLContextDiscardsLateApprovalInputAfterCancellation(t *testing.T) 
 		}
 	}
 }
+
+type testTurnOwner struct{}
+
+func (testTurnOwner) Acquire(context.Context, time.Duration) (memory.TurnLease, error) {
+	return memory.TurnLease{SessionID: "session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (testTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration) (memory.TurnLease, error) {
+	return memory.TurnLease{SessionID: "session", HolderID: "holder", FencingToken: 1}, nil
+}
+func (testTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
+func (testTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
+func (testTurnOwner) IsConflict(error) bool                             { return false }
+func (testTurnOwner) IsLeaseLost(error) bool                            { return false }

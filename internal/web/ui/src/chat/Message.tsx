@@ -3,6 +3,7 @@
 // so long answers read as a document rather than a chat balloon.
 
 import { Markdown } from "./Markdown";
+import type { DiscardReason } from "../store/events";
 
 export function UserMessage({ text }: { text: string }) {
   return (
@@ -15,14 +16,25 @@ export function UserMessage({ text }: { text: string }) {
 export function AssistantMessage({
   text,
   streaming,
+  discarded,
 }: {
   text: string;
   streaming: boolean;
+  discarded?: { reason: DiscardReason; message: string };
 }) {
   return (
     <div className="min-w-0 max-w-[min(720px,100%)] flex-none self-start">
       <Markdown text={text} streaming={streaming} />
       {streaming && <Caret />}
+      {discarded && <DiscardWarning message={discarded.message} />}
+    </div>
+  );
+}
+
+export function DiscardWarning({ message }: { message: string }) {
+  return (
+    <div className="mt-2 rounded border border-[#4a2a2e] bg-[#161113] px-3 py-2 text-xs text-[#d9a0a0]" role="status">
+      {message}
     </div>
   );
 }

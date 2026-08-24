@@ -26,6 +26,24 @@ var (
 // arbitrary caller-provided SQL never becomes an authorization surface.
 type turnLeaseWriteExecutor interface {
 	execContext(context.Context, string, ...any) (sql.Result, error)
+	queryRowContext(context.Context, string, ...any) rowScanner
+}
+
+type errorRow struct{ err error }
+
+func (r errorRow) Scan(...any) error { return r.err }
+
+func (w *turnLeaseWriter) queryRowContext(
+	ctx context.Context,
+	query string,
+	args ...any,
+) rowScanner {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.closed {
+		return errorRow{err: errTurnLeaseWriterClosed}
+	}
+	return w.conn.QueryRowContext(ctx, query, args...)
 }
 
 type turnLeaseWriter struct {
@@ -63,7 +81,7 @@ func (s *Store) AcquireTurnLease(
 	duration time.Duration,
 ) (memory.TurnLease, error) {
 	var lease memory.TurnLease
-	err := withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, s.now(), duration)
 		if err != nil {
 			return err
@@ -125,7 +143,7 @@ func (s *Store) HeartbeatTurnLease(
 	}
 
 	var lease memory.TurnLease
-	err := withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, s.now(), duration)
 		if err != nil {
 			return err
@@ -165,7 +183,7 @@ func (s *Store) ReleaseTurnLease(
 	holderID memory.LeaseHolderID,
 	token memory.FencingToken,
 ) error {
-	return withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
 		if err != nil {
 			return err
@@ -191,6 +209,19 @@ func (s *Store) ReleaseTurnLease(
 	})
 }
 
+// AuthorizeTurnLease performs a durable no-op write fence. It is the typed
+// authorization boundary used immediately before provider and tool starts.
+func (s *Store) AuthorizeTurnLease(
+	ctx context.Context,
+	sessionID memory.SessionID,
+	holderID memory.LeaseHolderID,
+	token memory.FencingToken,
+) error {
+	return s.withTurnLeaseWrite(ctx, sessionID, holderID, token, noOpLeaseMutation)
+}
+
+func noOpLeaseMutation(turnLeaseWriteExecutor) error { return nil }
+
 // withTurnLeaseWrite is the package-internal transaction boundary for typed
 // store mutations that require turn ownership. It keeps the lease fenced until
 // commit, skips write for stale leases, and rolls back if the lease expires
@@ -206,7 +237,7 @@ func (s *Store) withTurnLeaseWrite(
 		return errors.New("turn lease write must not be nil")
 	}
 
-	return withImmediateTransaction(ctx, s.db, func(conn *sql.Conn) error {
+	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
 		if err != nil {
 			return err

@@ -1,9 +1,11 @@
 package openrouter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +13,23 @@ import (
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type failingReadCloser struct {
+	reader *bytes.Reader
+	err    error
+}
+
+func (r *failingReadCloser) Read(p []byte) (int, error) {
+	if r.reader.Len() > 0 {
+		return r.reader.Read(p)
+	}
+	return 0, r.err
+}
+func (*failingReadCloser) Close() error { return nil }
 
 // serveFixture builds a local SSE server replaying one captured stream,
 // and a Client pointed at it.
@@ -85,6 +104,35 @@ func TestChatStreamAssemblesReasoning(t *testing.T) {
 	}
 }
 
+func TestChatStreamEmitsSameChunkReasoningBeforeContent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"reasoning\":\"think\",\"content\":\"answer\"}}]}\n\n" +
+			"data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient("test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.baseURL = srv.URL
+	var callbacks []string
+	res, err := c.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{
+		OnReasoning: func(text string) { callbacks = append(callbacks, "reasoning:"+text) },
+		OnContent:   func(text string) { callbacks = append(callbacks, "content:"+text) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"reasoning:think", "content:answer"}
+	if fmt.Sprint(callbacks) != fmt.Sprint(want) {
+		t.Fatalf("callbacks=%v, want %v", callbacks, want)
+	}
+	if msg := res.Choices[0].Message; msg.Reasoning != "think" || msg.Content != "answer" {
+		t.Fatalf("assembled message=%+v", msg)
+	}
+}
+
 func TestChatStreamWithoutReasoning(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -129,6 +177,94 @@ func TestChatStreamWithoutReasoning(t *testing.T) {
 	}
 }
 
+func TestChatStreamSafelyAssemblesContiguousToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(
+			"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"echo\",\"arguments\":\"{\\\"x\\\":\"}}]}}]}\n\n" +
+				"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"1}\"}}]}}]}\n\n" +
+				"data: [DONE]\n",
+		))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := response.Choices[0].Message.ToolCalls
+	if len(calls) != 1 || calls[0].ID != "call-1" || calls[0].Type != "function" ||
+		calls[0].Function.Name != "echo" || calls[0].Function.Arguments != `{"x":1}` {
+		t.Fatalf("tool calls=%+v", calls)
+	}
+}
+
+func TestChatStreamContiguousToolCallCountHasNoUnapprovedCap(t *testing.T) {
+	for _, count := range []int{127, 128, 129} {
+		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			toolCalls := make([]map[string]any, count)
+			for i := range toolCalls {
+				toolCalls[i] = map[string]any{
+					"index": i,
+					"id":    fmt.Sprintf("call-%d", i),
+					"type":  "function",
+					"function": map[string]any{
+						"name": "echo",
+					},
+				}
+			}
+			chunk, err := json.Marshal(map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{"tool_calls": toolCalls},
+				}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n", chunk)
+			}))
+			defer srv.Close()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = srv.URL
+			response, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(response.Choices[0].Message.ToolCalls); got != count {
+				t.Fatalf("tool calls=%d, want %d", got, count)
+			}
+		})
+	}
+}
+
+func TestChatStreamLeavesProviderNeutralValidityToAgent(t *testing.T) {
+	for _, body := range []string{
+		"data: {\"choices\":[{\"delta\":{}}]}\n\ndata: [DONE]\n",
+		"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"type\":\"custom\",\"function\":{}}]}}]}\n\ndata: [DONE]\n",
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		client, err := NewClient("key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.baseURL = srv.URL
+		if _, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{}); err != nil {
+			t.Fatalf("provider-neutral validity rejected in transport: %v", err)
+		}
+		srv.Close()
+	}
+}
+
 func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -165,5 +301,106 @@ func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
 	close(release)
 	if !errors.Is(gotErr, context.Canceled) {
 		t.Fatalf("ChatStream error = %v, want context.Canceled", gotErr)
+	}
+}
+
+func TestChatStreamClassifiesProviderAndInvalidResponseFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantKind   StreamErrorKind
+		wantStatus int
+	}{
+		{name: "non-2xx", status: http.StatusBadGateway, body: "raw provider body", wantKind: StreamProviderError, wantStatus: http.StatusBadGateway},
+		{name: "2xx with no usable choice", status: http.StatusNoContent, wantKind: StreamProviderResponseInvalid},
+		{name: "malformed streamed JSON", status: http.StatusOK, body: "data: {not-json}\n", wantKind: StreamProviderResponseInvalid},
+		{name: "no chunks", status: http.StatusOK, body: ": keepalive\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "missing completion sentinel", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n", wantKind: StreamProviderResponseInvalid},
+		{name: "missing tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "missing tool index on later fragment", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"arguments\":\"{}\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "negative tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":-1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "sparse tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+		{name: "extreme tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1000000000,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = srv.URL
+			_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			var streamErr *StreamError
+			if !errors.As(err, &streamErr) || streamErr.Kind != tt.wantKind || streamErr.HTTPStatus != tt.wantStatus {
+				t.Fatalf("error=%v typed=%+v want kind=%q status=%d", err, streamErr, tt.wantKind, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestChatStreamClassifiesRequestConstructionFailure(t *testing.T) {
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = "://invalid-url"
+	_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+	var streamErr *StreamError
+	if !errors.As(err, &streamErr) || streamErr.Kind != StreamProviderError {
+		t.Fatalf("error=%v typed=%+v", err, streamErr)
+	}
+}
+
+func TestChatStreamClassifiesTransportAndBodyIOAsProviderErrors(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		transport roundTripFunc
+		status    int
+	}{
+		{
+			name: "transport",
+			transport: func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("dial failed")
+			},
+		},
+		{
+			name: "stream scanner IO",
+			transport: func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: &failingReadCloser{
+					reader: bytes.NewReader([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n")),
+					err:    errors.New("scanner read failed"),
+				}}, nil
+			},
+		},
+		{
+			name: "non-2xx body IO",
+			transport: func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: &failingReadCloser{
+					reader: bytes.NewReader(nil), err: errors.New("body read failed"),
+				}}, nil
+			},
+			status: http.StatusServiceUnavailable,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = "http://provider.test"
+			client.httpClient = &http.Client{Transport: tt.transport}
+			_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			var streamErr *StreamError
+			if !errors.As(err, &streamErr) || streamErr.Kind != StreamProviderError || streamErr.HTTPStatus != tt.status {
+				t.Fatalf("error=%v typed=%+v", err, streamErr)
+			}
+		})
 	}
 }
