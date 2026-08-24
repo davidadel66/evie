@@ -355,9 +355,9 @@ func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
 }
 
 // finishSend is the terminal consumer boundary for every Session.Send call.
-// A committed tool-calling assistant may suppress AssistantDone when ownership
-// ends immediately after its append; no discard marker is appropriate, but the
-// printer and per-message prefix state must not survive into the next turn.
+// A transport or provider failure can end an incomplete, uncommitted stream
+// without the normal callbacks fully finalizing consumer state. Flush and reset
+// that per-message state so it cannot survive into the next turn.
 func (r *replEvents) finishSend() {
 	if r.deltaIn != nil {
 		if r.reasoningOpen {

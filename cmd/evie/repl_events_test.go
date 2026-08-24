@@ -81,30 +81,29 @@ func TestREPLAssistantDoneCorrectsStreamWhenCommittedContentIsEmpty(t *testing.T
 	}
 }
 
-func TestREPLFinishSendAfterSuppressedCommittedAssistantDoesNotContaminateNextTurn(t *testing.T) {
-	for _, cause := range []string{"caller cancellation", "lease loss"} {
-		t.Run(cause, func(t *testing.T) {
+func TestREPLFinishSendAfterIncompleteProviderStreamDoesNotContaminateNextTurn(t *testing.T) {
+	for _, failure := range []string{"transport failure", "provider stream failure"} {
+		t.Run(failure, func(t *testing.T) {
 			var out bytes.Buffer
 			events := &replEvents{out: &out}
 
-			// The assistant content committed with tool calls, then the cause won
-			// before AssistantDone admission. Agent ownership tests establish this
-			// exact callback suppression for both causes.
-			events.Delta("committed tool preface")
+			// The provider streamed partial speculative content, then failed before
+			// any assistant response committed or its normal callbacks finalized.
+			events.Delta("partial provider response")
 			events.finishSend()
 			if events.deltaIn != nil || events.flush != nil || events.reasoningOpen || events.streamedContent.Len() != 0 {
-				t.Fatalf("pending REPL state survived %s", cause)
+				t.Fatalf("pending REPL state survived %s", failure)
 			}
 
 			events.Delta("next ")
 			events.AssistantDone("next answer")
 			events.finishSend()
-			want := "committed tool preface\nnext answer\n"
+			want := "partial provider response\nnext answer\n"
 			if got := out.String(); got != want {
-				t.Fatalf("REPL output after %s=%q, want %q", cause, got, want)
+				t.Fatalf("REPL output after %s=%q, want %q", failure, got, want)
 			}
 			if strings.Contains(out.String(), replUnsavedStreamCorrection) {
-				t.Fatalf("committed output after %s received a false unsaved label", cause)
+				t.Fatalf("finishSend invented an authoritative-content correction after %s", failure)
 			}
 		})
 	}
