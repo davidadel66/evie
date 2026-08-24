@@ -30,6 +30,7 @@ type scriptedOwner struct {
 	releaseBlock   bool
 	heartbeatBlock bool
 	heartbeatStart chan struct{}
+	heartbeatWait  <-chan struct{}
 	afterAcquire   func()
 	acquires       int
 	heartbeats     int
@@ -58,6 +59,7 @@ func (o *scriptedOwner) Heartbeat(ctx context.Context, _ memory.TurnLease, _ tim
 	err := o.heartbeatErr
 	block := o.heartbeatBlock
 	started := o.heartbeatStart
+	wait := o.heartbeatWait
 	o.mu.Unlock()
 	if started != nil {
 		close(started)
@@ -65,6 +67,13 @@ func (o *scriptedOwner) Heartbeat(ctx context.Context, _ memory.TurnLease, _ tim
 	if block {
 		<-ctx.Done()
 		return memory.TurnLease{}, ctx.Err()
+	}
+	if wait != nil {
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return memory.TurnLease{}, ctx.Err()
+		}
 	}
 	return memory.TurnLease{}, err
 }
@@ -210,6 +219,61 @@ func TestTurnCoordinatorAtomicallySelectsOneFirstCause(t *testing.T) {
 	}
 }
 
+func TestCallbackAdmissionGateSerializesEveryLiveCallbackWithCauseSelection(t *testing.T) {
+	callbackNames := []string{"reasoning", "content", "assistant_done", "tool_call", "tool_result"}
+	causes := []struct {
+		name string
+		kind causeKind
+		err  error
+	}{
+		{name: "caller", kind: causeCallerCancelled, err: context.Canceled},
+		{name: "heartbeat", kind: causeHeartbeatFailed, err: ErrLeaseHeartbeatFailed},
+		{name: "lease", kind: causeLeaseLost, err: ErrLeaseLost},
+	}
+	for _, callbackName := range callbackNames {
+		for _, cause := range causes {
+			t.Run(callbackName+"_"+cause.name, func(t *testing.T) {
+				coordinator := newTurnCoordinator(context.Background())
+				coordinator.setStage(memory.StageProvider)
+				callbackStarted := make(chan struct{})
+				releaseCallback := make(chan struct{})
+				callbackDone := make(chan bool, 1)
+				go func() {
+					callbackDone <- coordinator.emitIfActive(func() {
+						close(callbackStarted)
+						<-releaseCallback
+					})
+				}()
+				<-callbackStarted
+
+				selectionStarted := make(chan struct{})
+				selectionDone := make(chan bool, 1)
+				go func() {
+					close(selectionStarted)
+					selectionDone <- coordinator.selectCause(cause.kind, cause.err, 0)
+				}()
+				<-selectionStarted
+				select {
+				case <-selectionDone:
+					t.Fatal("terminal cause selected while an admitted callback was still running")
+				case <-time.After(time.Millisecond):
+				}
+				close(releaseCallback)
+				if admitted := <-callbackDone; !admitted {
+					t.Fatal("first callback was not admitted")
+				}
+				if selected := <-selectionDone; !selected {
+					t.Fatal("terminal cause was not selected")
+				}
+				beganAfterSelection := false
+				if coordinator.emitIfActive(func() { beganAfterSelection = true }) || beganAfterSelection {
+					t.Fatal("callback began after terminal selection")
+				}
+			})
+		}
+	}
+}
+
 func TestLeaseAcquisitionConflictDoesNoTurnWorkOrRelease(t *testing.T) {
 	owner := &scriptedOwner{acquireErr: errFakeConflict}
 	history := &fakeHistory{}
@@ -265,6 +329,50 @@ func TestCancellationDuringRolledBackRootAppendReleasesWithoutLaterWork(t *testi
 	_, _, authorizations, releases := owner.counts()
 	if authorizations != 0 || releases != 1 || len(client.reqs) != 0 {
 		t.Fatalf("authorizations=%d releases=%d provider requests=%d", authorizations, releases, len(client.reqs))
+	}
+}
+
+func TestPreRootBlockedAppendReturnsSelectedHeartbeatOrCallerCause(t *testing.T) {
+	for _, tt := range []struct {
+		name              string
+		heartbeatErr      error
+		cancelCaller      bool
+		interval          time.Duration
+		want              error
+		wantHeartbeatRuns int
+	}{
+		{name: "definitive lease loss", heartbeatErr: errFakeLeaseLost, interval: time.Millisecond, want: ErrLeaseLost, wantHeartbeatRuns: 1},
+		{name: "heartbeat storage failure", heartbeatErr: errors.New("heartbeat disk failure"), interval: time.Millisecond, want: ErrLeaseHeartbeatFailed, wantHeartbeatRuns: 1},
+		{name: "caller wins before heartbeat", heartbeatErr: errors.New("later heartbeat failure"), cancelCaller: true, interval: time.Hour, want: context.Canceled},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			history := &fakeHistory{appendBlockAt: 1, appendEntered: make(chan struct{})}
+			owner := &scriptedOwner{heartbeatErr: tt.heartbeatErr}
+			client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
+			s := ownedSession(client, history, owner)
+			s.timing.heartbeatInterval = tt.interval
+			done := make(chan error, 1)
+			go func() { done <- s.Send(ctx, "go", &recorder{}, nil) }()
+			select {
+			case <-history.appendEntered:
+			case <-time.After(time.Second):
+				t.Fatal("root append did not block")
+			}
+			if tt.cancelCaller {
+				cancel()
+			}
+			err := <-done
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("Send error=%v, want %v", err, tt.want)
+			}
+			acquires, heartbeats, authorizes, releases := owner.counts()
+			if acquires != 1 || heartbeats != tt.wantHeartbeatRuns || authorizes != 0 || releases != 1 ||
+				history.appendAttempts != 1 || len(history.events) != 0 || len(client.reqs) != 0 {
+				t.Fatalf("acquire=%d heartbeat=%d authorize=%d release=%d appends=%d events=%d provider=%d", acquires, heartbeats, authorizes, releases, history.appendAttempts, len(history.events), len(client.reqs))
+			}
+		})
 	}
 }
 
@@ -339,6 +447,19 @@ type cancelAwareClient struct {
 	streamReasoning string
 }
 
+type callbacksAfterCoordinatorCancelClient struct{}
+
+func (callbacksAfterCoordinatorCancelClient) ChatStream(ctx context.Context, _ openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	<-ctx.Done()
+	if h.OnReasoning != nil {
+		h.OnReasoning("late reasoning")
+	}
+	if h.OnContent != nil {
+		h.OnContent("late content")
+	}
+	return openrouter.ChatResponse{}, ctx.Err()
+}
+
 func (c cancelAwareClient) ChatStream(ctx context.Context, _ openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	if c.streamReasoning != "" && h.OnReasoning != nil {
 		h.OnReasoning(c.streamReasoning)
@@ -384,6 +505,36 @@ func TestHeartbeatFailuresCancelAndNeverPersistTerminalEvidence(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReasoningAndContentCallbacksCannotBeginAfterCallerOrHeartbeatCause(t *testing.T) {
+	t.Run("caller", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := &fakeClient{
+			onCall: cancel,
+			steps: []step{{
+				reasoning: []string{"late reasoning"},
+				deltas:    []string{"late content"},
+				res:       assistantStep("late content", nil).res,
+			}},
+		}
+		events := &recorder{}
+		err := ownedSession(client, &fakeHistory{}, &scriptedOwner{}).Send(ctx, "go", events, nil)
+		if !errors.Is(err, context.Canceled) || len(events.events) != 0 {
+			t.Fatalf("Send error=%v callbacks=%v", err, events.events)
+		}
+	})
+
+	t.Run("heartbeat", func(t *testing.T) {
+		owner := &scriptedOwner{heartbeatErr: errFakeLeaseLost}
+		events := &recorder{}
+		s := ownedSession(callbacksAfterCoordinatorCancelClient{}, &fakeHistory{}, owner)
+		s.timing.heartbeatInterval = time.Millisecond
+		err := s.Send(context.Background(), "go", events, nil)
+		if !errors.Is(err, ErrLeaseLost) || len(events.events) != 0 {
+			t.Fatalf("Send error=%v callbacks=%v", err, events.events)
+		}
+	})
 }
 
 func TestProviderAndToolStartsUseDurableAuthorizationFences(t *testing.T) {
@@ -694,6 +845,137 @@ func TestToolCallingAssistantCallbacksSuppressedWhenAppendLosesLease(t *testing.
 	if !containsString(events.events, "discarded:lease_lost:"+DiscardedResponseMessage) ||
 		len(history.events) != 1 {
 		t.Fatalf("callbacks=%v durable events=%+v", events.events, history.events)
+	}
+}
+
+func TestMultiToolCallerCancellationAfterFirstResultTransitionsToToolPrepare(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	secondRan := false
+	history := &fakeHistory{}
+	events := &recorder{onToolResult: cancel}
+	client := &fakeClient{steps: []step{assistantStep("", nil,
+		toolCall("call-1", "first", `{}`),
+		toolCall("call-2", "second", `{}`),
+	)}}
+	err := ownedSession(client, history, &scriptedOwner{}).Send(
+		ctx,
+		"go",
+		events,
+		nil,
+		echoTool("first", false, nil),
+		echoTool("second", false, &secondRan),
+	)
+	if !errors.Is(err, context.Canceled) || secondRan {
+		t.Fatalf("Send error=%v second tool ran=%v", err, secondRan)
+	}
+	terminal := history.events[len(history.events)-1]
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Type != memory.EventTurnInterrupted || payload.Stage != memory.StageToolPrepare ||
+		payload.Classification != memory.ClassificationCallerCancelled {
+		t.Fatalf("terminal=%+v payload=%+v", terminal, payload)
+	}
+	if containsString(events.events, `call:call-2:second:{}`) {
+		t.Fatalf("second tool callback emitted: %v", events.events)
+	}
+}
+
+func TestFinalToolResultCallerCancellationRemainsAtToolCommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	history := &fakeHistory{}
+	events := &recorder{onToolResult: cancel}
+	client := &fakeClient{steps: []step{assistantStep("", nil,
+		toolCall("call-1", "only", `{}`),
+	)}}
+	err := ownedSession(client, history, &scriptedOwner{}).Send(
+		ctx,
+		"go",
+		events,
+		nil,
+		echoTool("only", false, nil),
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Send error=%v, want context.Canceled", err)
+	}
+	terminal := history.events[len(history.events)-1]
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Type != memory.EventTurnInterrupted || payload.Stage != memory.StageToolCommit ||
+		payload.Classification != memory.ClassificationCallerCancelled {
+		t.Fatalf("terminal=%+v payload=%+v", terminal, payload)
+	}
+}
+
+func TestMultiToolHeartbeatLossAfterFirstResultTransitionsToToolPrepare(t *testing.T) {
+	heartbeatStarted := make(chan struct{})
+	releaseHeartbeat := make(chan struct{})
+	owner := &scriptedOwner{
+		heartbeatErr:   errFakeLeaseLost,
+		heartbeatStart: heartbeatStarted,
+		heartbeatWait:  releaseHeartbeat,
+	}
+	history := &fakeHistory{events: []memory.Event{{
+		ID: "root", SessionID: "test-session", Sequence: 1,
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
+	}}}
+	secondRan := false
+	first := echoTool("first", false, nil)
+	first.Execute = func(context.Context, string) (string, error) {
+		select {
+		case <-heartbeatStarted:
+			return "first result", nil
+		case <-time.After(time.Second):
+			return "", errors.New("heartbeat did not start")
+		}
+	}
+	coordinator := newTurnCoordinator(context.Background())
+	coordinator.setStage(memory.StageTurnStart)
+	events := &recorder{onToolResult: func() {
+		close(releaseHeartbeat)
+		deadline := time.Now().Add(time.Second)
+		for {
+			coordinator.mu.Lock()
+			reserved := coordinator.pending != nil
+			coordinator.mu.Unlock()
+			if reserved {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Error("heartbeat cause was not reserved while callback was admitted")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}}
+	client := &fakeClient{steps: []step{assistantStep("", nil,
+		toolCall("call-1", "first", `{}`),
+		toolCall("call-2", "second", `{}`),
+	)}}
+	s := ownedSession(client, history, owner)
+	s.timing.heartbeatInterval = time.Millisecond
+	lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
+	stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
+	defer stopHeartbeat()
+	err := s.runOwnedTurn(
+		coordinator,
+		lease,
+		events,
+		nil,
+		&turnProgress{requestParentID: "root"},
+		[]tools.Tool{first, echoTool("second", false, &secondRan)},
+	)
+	if !errors.Is(err, ErrLeaseLost) || secondRan {
+		t.Fatalf("runOwnedTurn error=%v second tool ran=%v", err, secondRan)
+	}
+	if cause := coordinator.result(); cause.kind != causeLeaseLost || cause.stage != memory.StageToolPrepare {
+		t.Fatalf("cause=%+v", cause)
+	}
+	if containsString(events.events, `call:call-2:second:{}`) {
+		t.Fatalf("second tool callback emitted: %v", events.events)
 	}
 }
 

@@ -68,8 +68,6 @@ type StreamHandlers struct {
 	OnReasoning func(string)
 }
 
-const maxStreamToolCalls = 128
-
 func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers) (ChatResponse, error) {
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
@@ -161,10 +159,10 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 			details = append(details, choice.Delta.ReasoningDetails...)
 		}
 		for _, tcd := range choice.Delta.ToolCalls {
-			if tcd.Index < 0 || tcd.Index >= maxStreamToolCalls {
+			if tcd.Index < 0 {
 				return ChatResponse{}, streamError(
 					StreamProviderResponseInvalid,
-					fmt.Errorf("provider tool call index %d is outside the safe range", tcd.Index),
+					fmt.Errorf("provider tool call index %d is negative", tcd.Index),
 				)
 			}
 			tc := toolCalls[tcd.Index]
@@ -209,10 +207,6 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 			msg.ToolCalls[i] = *call
 		}
 	}
-	if err := validateStreamAssistantChoice(msg); err != nil {
-		return ChatResponse{}, streamError(StreamProviderResponseInvalid, err)
-	}
-
 	if len(details) > 0 {
 		msg.ReasoningDetails, err = json.Marshal(details)
 		if err != nil {
@@ -221,23 +215,6 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	}
 
 	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}}, nil
-}
-
-func validateStreamAssistantChoice(msg Message) error {
-	if msg.Content == "" && len(msg.ToolCalls) == 0 {
-		return errors.New("provider stream contained no usable assistant choice")
-	}
-	seen := make(map[string]struct{}, len(msg.ToolCalls))
-	for i, call := range msg.ToolCalls {
-		if call.ID == "" || call.Type != "function" || call.Function.Name == "" {
-			return fmt.Errorf("provider tool call %d is structurally incomplete", i)
-		}
-		if _, exists := seen[call.ID]; exists {
-			return fmt.Errorf("provider tool call ID %q is duplicated", call.ID)
-		}
-		seen[call.ID] = struct{}{}
-	}
-	return nil
 }
 
 // Chat sends one chat-completions request and returns the parsed response.

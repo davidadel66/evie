@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -173,6 +174,68 @@ func TestChatStreamSafelyAssemblesContiguousToolCalls(t *testing.T) {
 	}
 }
 
+func TestChatStreamContiguousToolCallCountHasNoUnapprovedCap(t *testing.T) {
+	for _, count := range []int{127, 128, 129} {
+		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			toolCalls := make([]map[string]any, count)
+			for i := range toolCalls {
+				toolCalls[i] = map[string]any{
+					"index": i,
+					"id":    fmt.Sprintf("call-%d", i),
+					"type":  "function",
+					"function": map[string]any{
+						"name": "echo",
+					},
+				}
+			}
+			chunk, err := json.Marshal(map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{"tool_calls": toolCalls},
+				}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n", chunk)
+			}))
+			defer srv.Close()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = srv.URL
+			response, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(response.Choices[0].Message.ToolCalls); got != count {
+				t.Fatalf("tool calls=%d, want %d", got, count)
+			}
+		})
+	}
+}
+
+func TestChatStreamLeavesProviderNeutralValidityToAgent(t *testing.T) {
+	for _, body := range []string{
+		"data: {\"choices\":[{\"delta\":{}}]}\n\ndata: [DONE]\n",
+		"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"type\":\"custom\",\"function\":{}}]}}]}\n\ndata: [DONE]\n",
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		client, err := NewClient("key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.baseURL = srv.URL
+		if _, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{}); err != nil {
+			t.Fatalf("provider-neutral validity rejected in transport: %v", err)
+		}
+		srv.Close()
+	}
+}
+
 func TestChatStreamCancellationStopsHTTPRequest(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -224,7 +287,6 @@ func TestChatStreamClassifiesProviderAndInvalidResponseFailures(t *testing.T) {
 		{name: "2xx with no usable choice", status: http.StatusNoContent, wantKind: StreamProviderResponseInvalid},
 		{name: "malformed streamed JSON", status: http.StatusOK, body: "data: {not-json}\n", wantKind: StreamProviderResponseInvalid},
 		{name: "no chunks", status: http.StatusOK, body: ": keepalive\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
-		{name: "empty choice", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
 		{name: "missing completion sentinel", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n", wantKind: StreamProviderResponseInvalid},
 		{name: "negative tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":-1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},
 		{name: "sparse tool index", status: http.StatusOK, body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call\",\"type\":\"function\",\"function\":{\"name\":\"echo\"}}]}}]}\n\ndata: [DONE]\n", wantKind: StreamProviderResponseInvalid},

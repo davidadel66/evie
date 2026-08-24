@@ -80,7 +80,7 @@ func (s *Session) startHeartbeat(
 				} else if s.owner.IsLeaseLost(err) {
 					coordinator.selectCause(causeLeaseLost, fmt.Errorf("%w: %v", ErrLeaseLost, err), 0)
 				} else {
-					coordinator.selectCause(causeHeartbeatFailed, fmt.Errorf("heartbeat turn lease: %w", err), 0)
+					coordinator.selectCause(causeHeartbeatFailed, fmt.Errorf("%w: %v", ErrLeaseHeartbeatFailed, err), 0)
 				}
 				return
 			}
@@ -134,31 +134,26 @@ func (s *Session) runOwnedTurn(
 
 		handlers := openrouter.StreamHandlers{
 			OnReasoning: func(text string) {
-				if !coordinator.active() || coordinator.ctx.Err() != nil {
-					return
-				}
-				rendered.mu.Lock()
-				rendered.reasoning = true
-				rendered.reasoningOpen = true
-				rendered.mu.Unlock()
-				ev.Reasoning(text)
+				coordinator.emitIfActive(func() {
+					rendered.mu.Lock()
+					rendered.reasoning = true
+					rendered.reasoningOpen = true
+					rendered.mu.Unlock()
+					ev.Reasoning(text)
+				})
 			},
 			OnContent: func(text string) {
-				if !coordinator.active() || coordinator.ctx.Err() != nil {
-					return
-				}
-				rendered.mu.Lock()
-				closeReasoning := rendered.reasoningOpen
-				rendered.reasoningOpen = false
-				rendered.content = true
-				rendered.mu.Unlock()
-				if closeReasoning {
-					ev.ReasoningDone()
-					if !coordinator.active() || coordinator.ctx.Err() != nil {
-						return
+				coordinator.emitIfActive(func() {
+					rendered.mu.Lock()
+					closeReasoning := rendered.reasoningOpen
+					rendered.reasoningOpen = false
+					rendered.content = true
+					rendered.mu.Unlock()
+					if closeReasoning {
+						ev.ReasoningDone()
 					}
-				}
-				ev.Delta(text)
+					ev.Delta(text)
+				})
 			},
 		}
 
@@ -224,7 +219,7 @@ func (s *Session) runOwnedTurn(
 		}
 
 		var lastOutcomeID memory.EventID
-		for _, call := range msg.ToolCalls {
+		for callIndex, call := range msg.ToolCalls {
 			coordinator.setStage(memory.StageToolPrepare)
 			if err := s.observeTurnContext(coordinator); err != nil {
 				return err
@@ -244,12 +239,10 @@ func (s *Session) runOwnedTurn(
 			if err != nil {
 				return s.classifyLocalError(coordinator, fmt.Errorf("persist tool intent: %w", err))
 			}
-			if err := s.observeTurnContext(coordinator); err != nil {
-				return err
-			}
-			ev.ToolCall(call.ID, call.Function.Name, call.Function.Arguments)
-			if err := s.observeTurnContext(coordinator); err != nil {
-				return err
+			if !coordinator.emitIfActive(func() {
+				ev.ToolCall(call.ID, call.Function.Name, call.Function.Arguments)
+			}) {
+				return s.observeTurnContext(coordinator)
 			}
 
 			var approvalEventID memory.EventID
@@ -322,10 +315,14 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("persist tool outcome: %w", err))
 			}
 			lastOutcomeID = outcomeEvent.ID
-			if err := s.observeTurnContext(coordinator); err != nil {
-				return err
+			if !coordinator.emitIfActive(func() {
+				ev.ToolResult(call.ID, result.Content, isErr)
+				if callIndex+1 < len(msg.ToolCalls) {
+					coordinator.setStage(memory.StageToolPrepare)
+				}
+			}) {
+				return s.observeTurnContext(coordinator)
 			}
-			ev.ToolResult(call.ID, result.Content, isErr)
 			if err := s.observeTurnContext(coordinator); err != nil {
 				return err
 			}
@@ -336,8 +333,11 @@ func (s *Session) runOwnedTurn(
 }
 
 func (c *turnCoordinator) commitSuccess() {
+	c.callbackMu.Lock()
+	defer c.callbackMu.Unlock()
 	c.mu.Lock()
 	c.cause = terminalCause{kind: causeSuccess, stage: c.stage}
+	c.pending = nil
 	c.mu.Unlock()
 }
 
@@ -348,24 +348,21 @@ func (s *Session) emitAssistantAccepted(
 	content string,
 	committedFinal bool,
 ) bool {
-	if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
-		return false
-	}
-	rendered.mu.Lock()
-	closeReasoning := rendered.reasoningOpen
-	rendered.reasoningOpen = false
-	rendered.mu.Unlock()
-	if closeReasoning {
-		ev.ReasoningDone()
-		if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
-			return false
+	emit := func() {
+		rendered.mu.Lock()
+		closeReasoning := rendered.reasoningOpen
+		rendered.reasoningOpen = false
+		rendered.mu.Unlock()
+		if closeReasoning {
+			ev.ReasoningDone()
 		}
+		ev.AssistantDone(content)
 	}
-	if !committedFinal && (!coordinator.active() || coordinator.ctx.Err() != nil) {
-		return false
+	if committedFinal {
+		emit()
+		return true
 	}
-	ev.AssistantDone(content)
-	return committedFinal || (coordinator.active() && coordinator.ctx.Err() == nil)
+	return coordinator.emitIfActive(emit)
 }
 
 func (s *Session) observeTurnContext(coordinator *turnCoordinator) error {
@@ -456,7 +453,6 @@ func (s *Session) appendTerminal(
 	switch cause.kind {
 	case causeProviderError:
 		input.Type = memory.EventTurnFailed
-		input.Content = "The provider request failed."
 		payload.Classification = memory.ClassificationProviderError
 		if cause.httpStatus != 0 {
 			status := cause.httpStatus
@@ -464,19 +460,17 @@ func (s *Session) appendTerminal(
 		}
 	case causeProviderInvalid:
 		input.Type = memory.EventTurnFailed
-		input.Content = "The provider response was invalid."
 		payload.Classification = memory.ClassificationProviderResponseInvalid
 	case causeCallerCancelled:
 		input.Type = memory.EventTurnInterrupted
-		input.Content = "The turn was cancelled by the caller."
 		payload.Classification = memory.ClassificationCallerCancelled
 	case causeCallerDeadline:
 		input.Type = memory.EventTurnInterrupted
-		input.Content = "The caller deadline was exceeded."
 		payload.Classification = memory.ClassificationCallerDeadlineExceeded
 	default:
 		return nil
 	}
+	input.Content = payload.SafeContent()
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode terminal payload: %w", err)

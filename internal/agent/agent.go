@@ -129,6 +129,9 @@ func (s *Session) Send(
 		Content: input,
 	})
 	if err != nil {
+		if cause := coordinator.result(); cause.kind != causeNone {
+			return cause.err
+		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			coordinator.selectCause(callerCause(ctxErr), ctxErr, 0)
 			return ctxErr

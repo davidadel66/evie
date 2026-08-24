@@ -2,8 +2,10 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +47,14 @@ func (noOpAgentEvents) AssistantDone(string)                          {}
 func (noOpAgentEvents) ToolCall(string, string, string)               {}
 func (noOpAgentEvents) ToolResult(string, string, bool)               {}
 func (noOpAgentEvents) ResponseDiscarded(agent.DiscardReason, string) {}
+
+type failingAgentClient struct {
+	err error
+}
+
+func (c failingAgentClient) ChatStream(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	return openrouter.ChatResponse{}, c.err
+}
 
 func TestTwoStoresAllowOnlyOneLiveAgentTurnForSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "evie.db")
@@ -97,5 +107,55 @@ func TestTwoStoresAllowOnlyOneLiveAgentTurnForSession(t *testing.T) {
 	}
 	if len(events) != 2 || events[0].Content != "first" || events[1].Type != memory.EventAssistantMessage {
 		t.Fatalf("accepted events=%+v", events)
+	}
+}
+
+func TestAgentTerminalSafeContentMatchesProductionStorageAuthority(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	storedSession, err := store.CreateGlobalSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder := memory.LeaseHolderID("holder")
+	providerErr := &openrouter.StreamError{
+		Kind:       openrouter.StreamProviderError,
+		HTTPStatus: 503,
+		Err:        errors.New("secret provider detail"),
+	}
+	session := agent.New(
+		failingAgentClient{err: providerErr},
+		"test",
+		store.BindHistory(storedSession.ID, holder),
+		storedSession.ScopeContext(),
+		store.BindTurnOwner(storedSession.ID, holder),
+	)
+
+	err = session.Send(context.Background(), "hello", noOpAgentEvents{}, nil)
+	if !errors.Is(err, providerErr) {
+		t.Fatalf("Send error=%v, want provider error", err)
+	}
+	events, err := store.LoadEvents(context.Background(), storedSession.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[1].Type != memory.EventTurnFailed {
+		t.Fatalf("events=%+v", events)
+	}
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(events[1].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if events[1].Content != payload.SafeContent() ||
+		payload.Classification != memory.ClassificationProviderError ||
+		payload.Stage != memory.StageProvider {
+		t.Fatalf("terminal=%+v payload=%+v", events[1], payload)
+	}
+	if strings.Contains(events[1].Content, "secret") || strings.Contains(string(events[1].Payload), "secret") {
+		t.Fatalf("terminal leaked provider detail: content=%q payload=%s", events[1].Content, events[1].Payload)
 	}
 }

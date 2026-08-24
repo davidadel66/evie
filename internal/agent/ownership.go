@@ -24,8 +24,9 @@ const (
 )
 
 var (
-	ErrLeaseConflict = errors.New("agent: session turn lease is held")
-	ErrLeaseLost     = errors.New("agent: session turn lease was lost")
+	ErrLeaseConflict        = errors.New("agent: session turn lease is held")
+	ErrLeaseLost            = errors.New("agent: session turn lease was lost")
+	ErrLeaseHeartbeatFailed = errors.New("agent: session turn lease heartbeat failed")
 )
 
 // TurnOwnership is owned by the agent consumer and implemented by a bound
@@ -78,9 +79,14 @@ type turnCoordinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu    sync.Mutex
-	stage memory.TurnStage
-	cause terminalCause
+	// callbackMu serializes live callback admission with terminal selection.
+	// A callback admitted before a cause may finish; after selection, no new
+	// live callback can begin.
+	callbackMu sync.RWMutex
+	mu         sync.Mutex
+	stage      memory.TurnStage
+	cause      terminalCause
+	pending    *terminalCause
 }
 
 func newTurnCoordinator(parent context.Context) *turnCoordinator {
@@ -98,36 +104,53 @@ func (c *turnCoordinator) setStage(stage memory.TurnStage) {
 
 func (c *turnCoordinator) selectCause(kind causeKind, err error, httpStatus int) bool {
 	c.mu.Lock()
-	if c.cause.kind != causeNone {
+	if c.cause.kind != causeNone || c.pending != nil {
 		c.mu.Unlock()
 		return false
 	}
-	c.cause = terminalCause{kind: kind, err: err, stage: c.stage, httpStatus: httpStatus}
+	pending := &terminalCause{kind: kind, err: err, httpStatus: httpStatus}
+	c.pending = pending
+	c.mu.Unlock()
+
+	c.callbackMu.Lock()
+	defer c.callbackMu.Unlock()
+	c.mu.Lock()
+	if c.cause.kind != causeNone || c.pending != pending {
+		c.mu.Unlock()
+		return false
+	}
+	pending.stage = c.stage
+	c.cause = *pending
+	c.pending = nil
 	c.mu.Unlock()
 	c.cancel()
 	return true
 }
 
-func (c *turnCoordinator) succeed() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.cause.kind != causeNone {
-		return false
-	}
-	c.cause = terminalCause{kind: causeSuccess, stage: c.stage}
-	return true
-}
-
 func (c *turnCoordinator) result() terminalCause {
+	c.callbackMu.RLock()
+	defer c.callbackMu.RUnlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.cause.kind == causeNone && c.pending != nil {
+		pending := *c.pending
+		pending.stage = c.stage
+		return pending
+	}
 	return c.cause
 }
 
-func (c *turnCoordinator) active() bool {
+func (c *turnCoordinator) emitIfActive(emit func()) bool {
+	c.callbackMu.RLock()
+	defer c.callbackMu.RUnlock()
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.cause.kind == causeNone
+	active := c.cause.kind == causeNone && c.pending == nil && c.ctx.Err() == nil
+	c.mu.Unlock()
+	if !active {
+		return false
+	}
+	emit()
+	return true
 }
 
 func callerCause(err error) causeKind {
