@@ -1,6 +1,6 @@
 # Story 1 - Cancellable tool lifecycle
 
-Status: refined; pending final execution-contract approval
+Status: delivered by issue #55 and merged in pull request #56 on 2026-08-23
 
 ## Outcome
 
@@ -86,10 +86,8 @@ add durable lease acquisition or fencing, event-format changes, unfinished-turn
 resume projection, whole-web-turn cancellation, provider usage, generic
 recovery/rollback, or Stage 2 behavior.
 
-## Readiness
+## Delivery record
 
-The current-code change surface and cancellation matrix have been audited, all
-material behavior decisions were approved by David, and two fresh read-only
-contract challenges were resolved. The story remains pending David's approval
-of the exact GitHub execution contract and separate authorization to materialize
-one issue.
+- Execution contract: [issue #55](https://github.com/davidadel66/evie/issues/55)
+- Merged implementation: [pull request #56](https://github.com/davidadel66/evie/pull/56)
+- Merged: 2026-08-23

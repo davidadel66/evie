@@ -151,6 +151,130 @@
   acquire, renew, or authorize writes; the matching unexpired holder may still
   release for cleanup.
 
+- **2026-08-23 - turn terminal evidence separates failures from interruptions.**
+  Request construction, transport, non-2xx HTTP, and response-body or scanner
+  I/O failures record `turn_failed` with classification `provider_error`.
+  Malformed streamed JSON, no chunks, no usable choice, response-assembly
+  failure, or a structurally incomplete provider tool call record `turn_failed`
+  with classification `provider_response_invalid`. A structurally valid tool
+  call has contiguous assembled indices, unique non-empty IDs, type `function`,
+  and a non-empty function name. Tool argument syntax and shape remain the
+  called tool's validation responsibility and produce an ordinary model-visible
+  tool failure. Caller cancellation records `turn_interrupted` as
+  `caller_cancelled`, and caller deadline expiry records it as
+  `caller_deadline_exceeded`. Tool failures remain tool events, a required
+  storage-write failure fails closed locally, and a final accepted assistant
+  event remains the success evidence without a separate `turn_succeeded` event.
+  If an ordinary non-lease assistant append fails after output was rendered, the
+  local presentation cause is `assistant_persistence_failed`; it produces no
+  durable terminal event. The first terminal cause observed among provider,
+  caller, heartbeat, lease, and assistant-persistence paths wins atomically.
+
+- **2026-08-23 - terminal payloads are allowlisted, redacted, and rooted in accepted evidence.**
+  Durable failure/interruption payloads contain only the root user-event ID as
+  `turn_id`, a stable classification, a stable lifecycle stage, and an optional
+  numeric provider HTTP status. Their content is a generic safe description.
+  Raw provider bodies, URLs, headers, prompts, partial output, tool arguments,
+  reasoning, continuation state, and Go error strings are never persisted in
+  terminal evidence; detailed errors may remain local. The root user-message
+  event ID identifies the turn without a schema column. Assistant and terminal
+  events parent to the latest durable event that triggered their provider
+  request, so a failure before assistant acceptance never points to an event
+  that did not commit. Existing execution IDs remain per tool call. The closed
+  lifecycle-stage vocabulary is `turn_start`, `provider`, `assistant_commit`,
+  `tool_prepare`, `tool_approval`, `tool_execute`, and `tool_commit`. The
+  coordinator sets the stage immediately before that phase starts and the
+  winning terminal cause captures it; unknown values are rejected. The complete
+  transition matrix is:
+
+  - `turn_start` begins when the root user event commits and ends immediately
+    before the first provider-cycle history load.
+  - `provider` begins immediately before history load for any provider cycle and
+    covers history projection, provider authorization and call, streaming,
+    response assembly, and structural validation. It ends when a structurally
+    valid response is available and before assistant-event construction.
+  - `assistant_commit` begins before assistant-event construction and covers its
+    fenced append. A committed no-tool assistant ends the turn successfully
+    before frontend callbacks; a committed tool-calling assistant transitions
+    immediately to `tool_prepare` before any post-commit callback.
+  - `tool_prepare` covers the post-assistant callback, execution-ID and intent
+    construction, intent append, tool-call callback, durable preparation
+    authorization, and optional preparation. It ends before approval begins for
+    a gated tool or before final execution authorization for an ungated tool.
+  - `tool_approval` begins immediately before invoking the approver and covers
+    approval waiting, observation, and the fenced approval-event append. An
+    approved decision transitions to `tool_execute`; a declined or expired
+    decision transitions to `tool_commit`.
+  - `tool_execute` begins immediately before the final durable execution
+    authorization and covers direct or prepared execution through its return.
+    It then transitions to `tool_commit`.
+  - `tool_commit` begins after execution returns, preparation returns an ordinary
+    tool failure, or a non-approved decision commits. It covers outcome
+    construction, fenced outcome append, and the tool-result callback. After a
+    callback, another call in the same assistant group transitions immediately
+    to `tool_prepare`; after the final call, the next provider cycle enters
+    `provider` immediately before history load.
+
+  `http_status` appears only for a non-2xx provider response and is otherwise
+  omitted.
+
+  Before acquisition succeeds, failure is local and no release or terminal
+  evidence is attempted. After acquisition but before the root user event
+  commits, cancellation or a rolled-back append permits release only because no
+  `turn_id` exists. Once the root event commits, its returned ID is retained even
+  when cancellation is observed immediately afterward and may authorize a
+  terminal-evidence attempt. Once a final no-tool assistant event commits, the
+  turn is durably successful; later callback cancellation creates neither an
+  interruption event nor a discarded-response marker.
+
+- **2026-08-23 - lease uncertainty fails closed with fixed v1 timing.**
+  V1 uses a 30-second turn lease and heartbeats every 10 seconds. Any heartbeat
+  error cancels the local turn immediately. A competing unexpired holder fails
+  fast with a typed conflict; callers do not wait, retry indefinitely, or force
+  takeover. Lease loss is a typed local cause, suppresses all later turn work,
+  and is never persisted by bypassing the stale fence. A stale owner appends no
+  substitute event and a later owner does not synthesize one. Expected heartbeat
+  goroutine shutdown after the coordinator has selected a terminal result is not
+  an error. Definitive ownership loss produces local `lease_lost`; any other
+  heartbeat/storage error produces local `lease_heartbeat_failed`. Neither
+  heartbeat classification becomes durable terminal evidence, before or after
+  the root event. Caller, heartbeat, and provider paths participate in the same
+  first-terminal-cause arbitration.
+
+- **2026-08-23 - live output is marked when it cannot become accepted history.**
+  Reasoning and content may stream while the lease-bound context remains live.
+  After cancellation or lease loss, later callbacks are suppressed and a late
+  response cannot append or start tools. If any response text was already shown
+  but its assistant event did not commit, the REPL and web stream emit a local
+  `response_discarded` notification stating that the interrupted response was
+  not saved. The marker is presentation state, not durable history.
+
+- **2026-08-23 - every provider and tool start has a current durable fence.**
+  Acquisition and heartbeat begin before the user event. Every provider
+  iteration is authorized immediately before it starts, every event append is
+  fenced in its write transaction, gated tools are authorized before preparation
+  and again after approval immediately before execution, and ungated tools are
+  authorized immediately before execution. Context checks complement but never
+  replace these durable fences.
+
+- **2026-08-23 - terminal and release cleanup is bounded and preserves accepted state.**
+  Provider failure or caller interruption gets one independent five-second
+  attempt to append terminal evidence through the current fence. Every
+  successfully acquired turn gets exactly one independent five-second release
+  attempt, including an attempt whose stale token is rejected by the ordinary
+  fence. An acquisition error or held-lease conflict makes no release call.
+  Terminal-append failure is joined with the original turn error; release failure
+  is reported without rolling back accepted events, and lease expiry remains the
+  recovery path. A definitively stale owner cannot append terminal evidence;
+  release may only succeed through the ordinary matching-token fence.
+
+- **2026-08-23 - incomplete tool-call groups remain evidence but are not replayed.**
+  Durable assistant, intent, approval, and partial outcome events are preserved.
+  If an assistant tool-call group lacks a terminal tool outcome for every call,
+  provider-history projection omits that entire assistant group and its partial
+  tool messages. EVIE neither synthesizes missing outcomes nor blocks later
+  turns. Complete groups retain their normal provider-neutral ordering.
+
 - **2026-08-14 - compiler and index coverage are generation-keyed.**
   Compiler runs, FTS, and vector indexes carry immutable configuration hashes and
   durable coverage checkpoints. A new extractor can process all source events

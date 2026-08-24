@@ -126,7 +126,8 @@ by the provider's tool-call id; the client reducer needs no other message ids.
 - [x] `POST /api/chat` `{"message": string}` → responds `text/event-stream`,
       streaming the turn's events (vocabulary below). `turn_done` always
       terminates the stream — after an `error` event too. If a turn is already
-      running → `409` `{"error": "..."}`.
+      running in this process, or its durable session lease is held by another
+      process before output begins → `409` `{"error": "..."}`.
 - [x] `POST /api/approve` `{"id": string, "approve": bool}` → resolves a
       pending approval. Unknown/expired id → `404` `{"error": "..."}`.
 - [x] Approval plumbing: the approver registers a pending approval (server-
@@ -152,6 +153,8 @@ follows the Events contract in Part 1.
 | type               | data                                    |
 |--------------------|-----------------------------------------|
 | `delta`            | `{"text": string}`                      |
+| `reasoning`        | `{"text": string}`                      |
+| `reasoning_done`   | `{}`                                    |
 | `assistant_done`   | `{"content": string}` (may be `""`)     |
 | `tool_call`        | `{"id", "name", "args"}`                |
 | `tool_result`      | `{"id", "content", "isError": bool}`    |
@@ -160,8 +163,28 @@ follows the Events contract in Part 1.
 | `board_delta`      | `{"id", "text"}`                        |
 | `board_end`        | `{"id"}`                                |
 | `critic_note`      | `{"boardId", "note"}`                   |
+| `response_discarded` | `{"reason", "message"}`              |
 | `error`            | `{"message": string}`                   |
 | `turn_done`        | `{}`                                    |
+
+`response_discarded.reason` is one of `provider_error`,
+`provider_response_invalid`, `caller_cancelled`, `caller_deadline_exceeded`,
+`lease_lost`, `lease_heartbeat_failed`, or `assistant_persistence_failed`; its
+message is exactly
+`Response interrupted; streamed text was not saved.` It is emitted only when
+reasoning or response content was rendered but the corresponding assistant event
+did not commit. If reasoning is open, ordering is `reasoning_done`,
+`response_discarded`, `error`, `turn_done`. A final committed no-tool assistant
+event is durable success and never gets a discarded marker even if its later
+frontend callback is cancelled.
+
+The browser flushes buffered deltas before reducing `response_discarded`. It
+keeps partial assistant text visible and renders the fixed message inline below
+that transcript item as an interrupted/not-saved warning. If only reasoning was
+visible, it closes the reasoning item and adds the same message as a standalone
+transcript warning. `turn_done` preserves this discarded state rather than
+marking it ordinarily complete; the later `error` event may also populate the
+existing banner.
 
 - [x] `httptest` tests: full turn streams the right event sequence (fake
       Client, incl. an empty tool-only assistant message); 409 when busy;

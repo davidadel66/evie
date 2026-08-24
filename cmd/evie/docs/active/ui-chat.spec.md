@@ -133,11 +133,18 @@ approval lives on the tool item it gates.
 ```ts
 type Item =
   | { kind: 'user'; key: string; text: string }
-  | { kind: 'assistant'; key: string; text: string; streaming: boolean }
+  | { kind: 'assistant'; key: string; text: string; streaming: boolean;
+      discarded?: { reason: DiscardReason; message: string } }
+  | { kind: 'notice'; key: string; tone: 'warning'; text: string;
+      reason: DiscardReason }
   | { kind: 'tool'; key: string; id: string; name: string; args: string;
       approval?: { reqId: string; state: 'pending' | 'approved' | 'declined' | 'expired' };
       result?: string; isErr?: boolean; startedAt: number; ms?: number }
 ```
+
+`DiscardReason` is the closed server vocabulary: `provider_error`,
+`provider_response_invalid`, `caller_cancelled`, `caller_deadline_exceeded`,
+`lease_lost`, `lease_heartbeat_failed`, or `assistant_persistence_failed`.
 
 Reducer rules (each one gets a test):
 
@@ -153,8 +160,14 @@ Reducer rules (each one gets a test):
 - `tool_result` → set `result`/`isErr`, `ms = now - startedAt`. Leaves the
   approval state alone: the client set it when the user clicked, and a still
   `pending` state here means the server resolved it without us (expiry).
+- `response_discarded` → first flush every buffered delta, then close any open
+  reasoning item. If a partial assistant item exists for the current provider
+  response, retain its text, set `streaming:false`, and attach the exact reason
+  and message as an inline warning. If only reasoning was visible, append a
+  standalone warning item. Never remove the partial text or represent it as an
+  ordinarily completed assistant message.
 - `turn_done` → any `streaming` assistant closes; any `pending` approval becomes
-  `expired`.
+  `expired`. A discarded assistant or warning remains discarded and unchanged.
 - `error` → status becomes `error` with the message; the item list is untouched
   (banner surface, per the design).
 
@@ -182,6 +195,12 @@ splitting on `\n\n`, then `event:` / `data:` per block — ~40 lines mirroring
   history endpoint there's nothing to reconnect *to*.
 - Unknown event names are ignored, not errors — feature 4 adds `board_*` and
   `critic_note` to the same stream.
+- `response_discarded` is known and must never follow the unknown-event path. Its
+  payload and ordering are defined by `serve.spec.md`. The partial assistant
+  text remains rendered with the fixed inline warning `Response interrupted;
+  streamed text was not saved.` below it. If no assistant text exists, the same
+  warning is rendered as a standalone transcript notice. The ordinary error
+  banner may also appear after the inline warning.
 
 ## The approval diff
 

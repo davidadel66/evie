@@ -961,8 +961,8 @@ claims, graph indexes, and procedural files.
 **Goal:** make the existing agent loop restart-safe and observable.
 
 **Progress (2026-08-23):** the durable event spine, explicit global/project REPL
-scope selection, and SQLite turn-lease primitives are integrated and tested.
-Context-aware tool cancellation, live agent lease integration,
+scope selection, SQLite turn-lease primitives, and context-aware tool
+cancellation are integrated and tested. Live agent lease integration,
 existing-session resume, and usage capture remain unfinished.
 
 **Tasks:**
@@ -977,9 +977,9 @@ existing-session resume, and usage capture remain unfinished.
 - [x] define a provider-neutral event envelope and format version;
 - [x] inject a durable `History` interface into `Session` and rebuild provider
   context from ordered events;
-- [ ] finish cancellation propagation through tool preparation, approval, and
-  execution; the agent and provider accept caller contexts, but the tool
-  lifecycle and blocking built-ins still create or retain background contexts;
+- [x] propagate caller cancellation through tool preparation, approval,
+  execution, and blocking built-in boundaries while preserving the approved
+  bounded-cleanup and non-turn exemptions;
 - [ ] inject immutable `ScopeContext` and lease-cancellable turn ownership into
   `Session`;
 - [x] persist user/assistant messages plus tool intent, approval, success,

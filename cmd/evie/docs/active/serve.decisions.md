@@ -1,5 +1,25 @@
 # serve — decisions
 
+- **2026-08-23 — discarded streamed responses have an explicit local wire event.**
+  A lease-owned turn may stream reasoning or content before its assistant event
+  commits. If that output cannot become accepted history, the server emits
+  `response_discarded` with a stable local cause and the fixed message
+  `Response interrupted; streamed text was not saved.` The allowed causes are
+  `provider_error`, `provider_response_invalid`, `caller_cancelled`,
+  `caller_deadline_exceeded`, `lease_lost`, and `lease_heartbeat_failed`. If a
+  non-lease assistant append fails, `assistant_persistence_failed` is the local
+  cause and no recursive terminal event is persisted. If a reasoning block is
+  open, `reasoning_done` comes first; `error` and
+  `turn_done` follow the discarded marker. The terminal REPL uses the same
+  message before its ordinary request error. The browser flushes buffered deltas
+  before applying the marker, preserves partial assistant text, and annotates
+  that transcript item inline as interrupted and not saved. If only reasoning
+  was visible, it appends a standalone inline warning. `turn_done` preserves the
+  discarded state instead of converting it to ordinary completion. This marker
+  is presentation state, not durable history. A durable lease conflict detected
+  before any stream event returns the existing HTTP 409 JSON shape rather than
+  opening a 200 SSE stream.
+
 - **2026-08-23 — approval visibility and turn cancellation stay separate.**
   The web chat request continues to launch the server-side turn from an
   independent root, so an SSE disconnect does not cancel provider or tool work.

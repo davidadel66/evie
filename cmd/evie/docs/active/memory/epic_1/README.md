@@ -24,6 +24,8 @@ The repository already provides:
 - explicit confirmation before a new global or project REPL session is created;
 - append-only provider-neutral event history and ordered history projection;
 - before-action user, assistant, tool-intent, approval, and tool-outcome events;
+- caller cancellation propagated through tool preparation, approval, execution,
+  and blocking built-in boundaries;
 - generic database/file fences around memory-owned storage; and
 - durable turn-lease acquisition, heartbeat, release, expiry, and fencing
   primitives.
@@ -58,6 +60,9 @@ implemented foundation.
 ### Story 1 - Cancellable tool lifecycle
 
 - [Planning summary](story_1/README.md)
+- Status: delivered by [issue #55](https://github.com/davidadel66/evie/issues/55)
+  and merged in [pull request #56](https://github.com/davidadel66/evie/pull/56)
+  on 2026-08-23.
 - Outcome: propagate the caller's context through tool preparation, approval,
   and execution so observed turn cancellation stops later turn-owned work.
 - Depends on: existing caller-context support in the agent and provider.
@@ -77,6 +82,7 @@ implemented foundation.
 ### Story 2 - Lease-owned and fenced turns
 
 - [Planning summary](story_2/README.md)
+- Status: dependency satisfied; interactive decision refinement required.
 - Outcome: make a durable session lease own the complete live turn from the
   first event through provider and tool work.
 - Depends on: Story 1 and the existing SQLite turn-lease primitives.
@@ -149,10 +155,12 @@ accounting evidence.
   the answer is discarded and the same scanner remains the sole input owner.
 - A durable lease fences accepted state and tool starts, but it cannot recall a
   provider request already transmitted remotely.
-- Story 2 is decision-blocked until its provider failure/interruption event
-  taxonomy, safe payload/redaction policy, stale-owner behavior, streamed-output
-  behavior, and event correlation/parentage are approved and recorded in
-  `memory.decisions.md`.
+- Story 2's Story 1 dependency is satisfied, and its terminal-event,
+  payload/redaction, stale-owner, lease-timing, streamed-output, fencing,
+  cleanup, correlation, and incomplete-tool-group decisions are approved and
+  recorded in `memory.decisions.md`. Follow-up decisions from the first contract
+  challenge are also approved and recorded. The final independent closure
+  challenge found no material issues; Story 2 is ready for issue materialization.
 - Story 3's exact session-list presentation and selection details remain for
   interactive refinement; they may not weaken explicit scope confirmation.
 - Story 4 must refine the provider-neutral usage field set against captured
@@ -169,3 +177,21 @@ accounting evidence.
 - 2026-08-23: David approved Story 1's refined cancellation, timeout, approval-
   race, bounded cleanup, shell-snapshot, and explicit-exemption behavior after
   two independent read-only contract challenges.
+- 2026-08-23: Story 1 was delivered by issue #55 and merged in pull request #56;
+  David selected Story 2 as the next story for interactive refinement.
+- 2026-08-23: David approved Story 2's full decision package covering terminal
+  evidence, redaction, stale ownership, lease timing and conflicts, streaming,
+  fencing points, cleanup, correlation, and incomplete tool groups.
+- 2026-08-23: David approved every Story 2 follow-up from the first independent
+  contract challenge: pre-root cancellation, lifecycle stages, heartbeat states,
+  provider validation, web wire behavior, and release eligibility.
+- 2026-08-23: David approved the second challenge's complete lifecycle-stage
+  transition matrix and browser-visible discarded-response behavior.
+- 2026-08-23: David approved `assistant_persistence_failed` as the local-only
+  discarded-output cause for a non-lease assistant append failure.
+- 2026-08-23: The final independent Story 2 contract challenge found no material
+  issues; all acceptance criteria fit one coherent PR boundary with deterministic
+  evidence and no later-story dependency.
+- 2026-08-23: David authorized committing and pushing the approved planning
+  records, creating exactly one Story 2 execution-contract issue, and beginning
+  the reviewed delivery workflow immediately afterward.
