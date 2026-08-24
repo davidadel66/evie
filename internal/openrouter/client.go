@@ -50,7 +50,11 @@ func NewClient(key string) (*Client, error) {
 		return nil, errors.New("API key is empty")
 	}
 
-	return &Client{apiKey: key, baseURL: "https://openrouter.ai/api/v1/chat/completions"}, nil
+	return &Client{
+		apiKey:     key,
+		baseURL:    "https://openrouter.ai/api/v1/chat/completions",
+		httpClient: &http.Client{},
+	}, nil
 }
 
 // ChatStream sends one chat-completions request with streaming enabled,
@@ -88,7 +92,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to get response: %w", err))
 	}
@@ -243,7 +247,7 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to get response: %w", err)
 	}

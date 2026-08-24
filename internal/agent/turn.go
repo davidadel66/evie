@@ -259,10 +259,7 @@ func (s *Session) runOwnedTurn(
 				preview *tools.FileChangePreview,
 			) tools.Decision {
 				coordinator.setStage(memory.StageToolApproval)
-				if approve == nil {
-					return tools.Declined
-				}
-				return approve(approvalCtx, name, args, preview)
+				return admitApproval(coordinator, approve, approvalCtx, name, args, preview)
 			}
 			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
 				input, err := approvalEventInput(intentEvent.ID, executionID, decision)
@@ -340,6 +337,24 @@ func (s *Session) runOwnedTurn(
 		requestParentID = lastOutcomeID
 		progress.requestParentID = requestParentID
 	}
+}
+
+func admitApproval(
+	coordinator *turnCoordinator,
+	approve tools.Approver,
+	ctx context.Context,
+	name, args string,
+	preview *tools.FileChangePreview,
+) tools.Decision {
+	decision := tools.Expired
+	coordinator.emitIfActive(func() {
+		if approve == nil {
+			decision = tools.Declined
+			return
+		}
+		decision = approve(ctx, name, args, preview)
+	})
+	return decision
 }
 
 func (s *Session) emitAssistantAccepted(

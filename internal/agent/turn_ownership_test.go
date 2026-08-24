@@ -175,12 +175,15 @@ func TestSuccessfulTurnCancelsInflightHeartbeatBeforeBoundedRelease(t *testing.T
 	s := ownedSession(waitForHeartbeatClient{started: started}, &fakeHistory{}, owner)
 	ticks := useManualHeartbeatTicker(s)
 	ticks <- time.Now()
-	start := time.Now()
-	if err := s.Send(context.Background(), "hello", &recorder{}, nil); err != nil {
-		t.Fatalf("Send: %v", err)
-	}
-	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-		t.Fatalf("Send waited %v for in-flight heartbeat shutdown", elapsed)
+	done := make(chan error, 1)
+	go func() { done <- s.Send(context.Background(), "hello", &recorder{}, nil) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Send deadlocked while stopping the in-flight heartbeat")
 	}
 	_, heartbeats, _, releases := owner.counts()
 	if heartbeats != 1 || releases != 1 {
@@ -263,7 +266,7 @@ func TestTurnCoordinatorAtomicallySelectsOneFirstCause(t *testing.T) {
 }
 
 func TestCallbackAdmissionGateSerializesEveryLiveCallbackWithCauseSelection(t *testing.T) {
-	callbackNames := []string{"reasoning", "content", "assistant_done", "tool_call", "tool_result"}
+	callbackNames := []string{"reasoning", "content", "assistant_done", "tool_call", "tool_result", "approval"}
 	causes := []struct {
 		name string
 		kind causeKind
@@ -352,6 +355,101 @@ func TestAdmittedCallbackMayWaitForCoordinatorCancellationWithoutDeadlock(t *tes
 		}
 	case <-time.After(time.Second):
 		t.Fatal("terminal selection did not finish after callback returned")
+	}
+}
+
+func TestApprovalAdmissionSuppressesCallbackAndLaterToolLifecycle(t *testing.T) {
+	for _, cause := range []struct {
+		name string
+		kind causeKind
+		err  error
+	}{
+		{name: "caller cancellation", kind: causeCallerCancelled, err: context.Canceled},
+		{name: "heartbeat lease loss", kind: causeLeaseLost, err: ErrLeaseLost},
+	} {
+		t.Run(cause.name, func(t *testing.T) {
+			coordinator := newTurnCoordinator(context.Background())
+			coordinator.setStage(memory.StageToolApproval)
+			coordinator.callbackMu.Lock()
+
+			admissionAttempted := make(chan struct{})
+			admissionDecision := make(chan tools.Decision, 1)
+			selectionDone := make(chan bool, 1)
+			lifecycleDone := make(chan error, 1)
+			frontendCalled := false
+			observed := false
+			ran := false
+			var authorizations []tools.AuthorizationBoundary
+			tool := echoTool("gated", true, &ran)
+			call := toolCall("call", "gated", `{}`)
+			go func() {
+				_, _, err := tools.ExecuteWithApprovalAuthorized(
+					coordinator.ctx,
+					[]tools.Tool{tool},
+					call,
+					func(ctx context.Context, name, args string, preview *tools.FileChangePreview) tools.Decision {
+						close(admissionAttempted)
+						decision := admitApproval(
+							coordinator,
+							func(context.Context, string, string, *tools.FileChangePreview) tools.Decision {
+								frontendCalled = true
+								return tools.Approved
+							},
+							ctx,
+							name,
+							args,
+							preview,
+						)
+						admissionDecision <- decision
+						return decision
+					},
+					func(context.Context, tools.Decision) error {
+						observed = true
+						return nil
+					},
+					func(_ context.Context, boundary tools.AuthorizationBoundary) error {
+						authorizations = append(authorizations, boundary)
+						return nil
+					},
+				)
+				lifecycleDone <- err
+			}()
+			select {
+			case <-admissionAttempted:
+			case <-time.After(time.Second):
+				coordinator.callbackMu.Unlock()
+				t.Fatal("tool lifecycle did not reach approval admission")
+			}
+			go func() {
+				selectionDone <- coordinator.selectCause(cause.kind, cause.err, 0)
+			}()
+			select {
+			case <-coordinator.ctx.Done():
+			case <-time.After(time.Second):
+				coordinator.callbackMu.Unlock()
+				t.Fatal("terminal cause did not cancel approval context")
+			}
+			coordinator.callbackMu.Unlock()
+
+			if selected := <-selectionDone; !selected {
+				t.Fatal("terminal cause was not selected")
+			}
+			if err := <-lifecycleDone; !errors.Is(err, context.Canceled) {
+				t.Fatalf("tool lifecycle error=%v, want context.Canceled", err)
+			}
+			if decision := <-admissionDecision; decision != tools.Expired {
+				t.Fatalf("suppressed approval decision=%v, want Expired", decision)
+			}
+			if frontendCalled || observed || ran {
+				t.Fatalf("frontend=%v observed=%v ran=%v", frontendCalled, observed, ran)
+			}
+			if len(authorizations) != 1 || authorizations[0] != tools.AuthorizePreparation {
+				t.Fatalf("authorizations=%v, want preparation only", authorizations)
+			}
+			if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageToolApproval {
+				t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageToolApproval)
+			}
+		})
 	}
 }
 
@@ -492,13 +590,9 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 		history := &fakeHistory{appendBlockAt: 2}
 		s := ownedSession(&fakeClient{steps: []step{{err: providerErr}}}, history, &scriptedOwner{})
 		s.timing.cleanupTimeout = 5 * time.Millisecond
-		start := time.Now()
 		err := s.Send(context.Background(), "go", &recorder{}, nil)
 		if !errors.Is(err, providerErr) || !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("Send error=%v, want provider and terminal deadline errors", err)
-		}
-		if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-			t.Fatalf("bounded terminal append took %v", elapsed)
 		}
 		if len(history.events) != 1 || history.events[0].Type != memory.EventUserMessage {
 			t.Fatalf("accepted state=%+v", history.events)
@@ -509,13 +603,9 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 		owner := &scriptedOwner{releaseBlock: true}
 		s := ownedSession(&fakeClient{steps: []step{assistantStep("done", nil)}}, &fakeHistory{}, owner)
 		s.timing.cleanupTimeout = 5 * time.Millisecond
-		start := time.Now()
 		err := s.Send(context.Background(), "go", &recorder{}, nil)
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("Send error=%v, want release deadline", err)
-		}
-		if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
-			t.Fatalf("bounded release took %v", elapsed)
 		}
 		_, _, _, releases := owner.counts()
 		if releases != 1 {

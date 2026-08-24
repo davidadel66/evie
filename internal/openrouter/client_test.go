@@ -329,14 +329,6 @@ func TestChatStreamClassifiesRequestConstructionFailure(t *testing.T) {
 }
 
 func TestChatStreamClassifiesTransportAndBodyIOAsProviderErrors(t *testing.T) {
-	original := http.DefaultClient
-	defer func() { http.DefaultClient = original }()
-	client, err := NewClient("key")
-	if err != nil {
-		t.Fatal(err)
-	}
-	client.baseURL = "http://provider.test"
-
 	for _, tt := range []struct {
 		name      string
 		transport roundTripFunc
@@ -368,8 +360,14 @@ func TestChatStreamClassifiesTransportAndBodyIOAsProviderErrors(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			http.DefaultClient = &http.Client{Transport: tt.transport}
-			_, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+			t.Parallel()
+			client, err := NewClient("key")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.baseURL = "http://provider.test"
+			client.httpClient = &http.Client{Transport: tt.transport}
+			_, err = client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
 			var streamErr *StreamError
 			if !errors.As(err, &streamErr) || streamErr.Kind != StreamProviderError || streamErr.HTTPStatus != tt.status {
 				t.Fatalf("error=%v typed=%+v", err, streamErr)
