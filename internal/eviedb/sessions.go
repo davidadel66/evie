@@ -5,15 +5,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/google/uuid"
 )
 
+var (
+	ErrProjectNotActive = errors.New("eviedb: project is missing or archived")
+	ErrSessionNotActive = errors.New("eviedb: session is missing or inactive")
+)
+
 func (s *Store) GetSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, project_id, project_root_snapshot, parent_session_id, status, created_at, updated_at FROM sessions WHERE id = ?
+		SELECT id, project_id, project_root_snapshot, parent_session_id, COALESCE(title, ''), status, created_at, updated_at FROM sessions WHERE id = ?
 		`, id)
 	session, err := scanSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -25,10 +31,90 @@ func (s *Store) GetSession(ctx context.Context, id memory.SessionID) (memory.Ses
 	return session, nil
 }
 
+func (s *Store) GetActiveSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
+	session, err := scanSession(s.db.QueryRowContext(ctx, `
+		SELECT id, project_id, project_root_snapshot, parent_session_id, COALESCE(title, ''), status, created_at, updated_at
+		FROM sessions
+		WHERE id = ? AND status = ?
+	`, id, memory.SessionActive))
+	if errors.Is(err, sql.ErrNoRows) {
+		return memory.Session{}, fmt.Errorf("%w: session %q", ErrSessionNotActive, id)
+	}
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("read active session: %w", err)
+	}
+	return session, nil
+}
+
+// ListActiveSessions excludes closed sessions at the persistence boundary and
+// parses activity timestamps in Go. Activity is the timestamp attached to the
+// greatest accepted sequence, with creation time as the empty-history fallback.
+func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT sessions.id, sessions.project_id, sessions.project_root_snapshot,
+		       sessions.parent_session_id, COALESCE(sessions.title, ''), sessions.status,
+		       sessions.created_at, sessions.updated_at,
+		       (
+		           SELECT events.recorded_at
+		           FROM events
+		           WHERE events.session_id = sessions.id
+		           ORDER BY events.sequence DESC
+		           LIMIT 1
+		       )
+		FROM sessions
+		WHERE sessions.status = ?
+	`, memory.SessionActive)
+	if err != nil {
+		return nil, fmt.Errorf("query active sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var listings []memory.SessionListing
+	for rows.Next() {
+		var activityText sql.NullString
+		session, err := scanSessionWithActivity(rows, &activityText)
+		if err != nil {
+			return nil, err
+		}
+		activityAt := session.CreatedAt
+		if activityText.Valid {
+			activityAt, err = time.Parse(time.RFC3339Nano, activityText.String)
+			if err != nil {
+				return nil, fmt.Errorf("parse session activity timestamp: %w", err)
+			}
+		}
+		listings = append(listings, memory.SessionListing{Session: session, ActivityAt: activityAt})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read active sessions: %w", err)
+	}
+	sort.Slice(listings, func(i, j int) bool {
+		if !listings[i].ActivityAt.Equal(listings[j].ActivityAt) {
+			return listings[i].ActivityAt.After(listings[j].ActivityAt)
+		}
+		return listings[i].ID < listings[j].ID
+	})
+	return listings, nil
+}
+
+func scanSessionWithActivity(scanner rowScanner, activity *sql.NullString) (memory.Session, error) {
+	var (
+		id, title, status, createdText, updatedText string
+		projectID, rootSnapshot, parentID           sql.NullString
+	)
+	if err := scanner.Scan(
+		&id, &projectID, &rootSnapshot, &parentID, &title, &status,
+		&createdText, &updatedText, activity,
+	); err != nil {
+		return memory.Session{}, err
+	}
+	return sessionFromScanned(id, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
+}
+
 func scanSession(scanner rowScanner) (memory.Session, error) {
 	var (
-		id, status, createdText, updatedText string
-		projectID, rootSnapshot, parentID    sql.NullString
+		id, title, status, createdText, updatedText string
+		projectID, rootSnapshot, parentID           sql.NullString
 	)
 
 	if err := scanner.Scan(
@@ -36,6 +122,7 @@ func scanSession(scanner rowScanner) (memory.Session, error) {
 		&projectID,
 		&rootSnapshot,
 		&parentID,
+		&title,
 		&status,
 		&createdText,
 		&updatedText,
@@ -43,6 +130,14 @@ func scanSession(scanner rowScanner) (memory.Session, error) {
 		return memory.Session{}, err
 	}
 
+	return sessionFromScanned(id, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
+}
+
+func sessionFromScanned(
+	id string,
+	projectID, rootSnapshot, parentID sql.NullString,
+	title, status, createdText, updatedText string,
+) (memory.Session, error) {
 	createdAt, err := time.Parse(time.RFC3339Nano, createdText)
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("parse session created_at: %w", err)
@@ -54,6 +149,7 @@ func scanSession(scanner rowScanner) (memory.Session, error) {
 
 	session := memory.Session{
 		ID:        memory.SessionID(id),
+		Title:     title,
 		Status:    memory.SessionStatus(status),
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
@@ -104,7 +200,7 @@ func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.Proje
 		projectID,
 	).Scan(&storedProjectID, &session.ProjectRootSnapshot)
 	if errors.Is(err, sql.ErrNoRows) {
-		return memory.Session{}, fmt.Errorf("project %q is missing or archived: %w", projectID, err)
+		return memory.Session{}, fmt.Errorf("%w: project %q", ErrProjectNotActive, projectID)
 	}
 
 	if err != nil {

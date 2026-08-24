@@ -10,313 +10,326 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 )
 
 type fakeREPLSessionStore struct {
-	project               memory.Project
-	findErr               error
-	registeredProject     memory.Project
-	projectAfterRegister  memory.Project
-	registerErr           error
-	registrationAttempted bool
-	findRoots             []string
-	registerNames         []string
-	registerRoots         []string
-	projectSessionIDs     []memory.ProjectID
-	globalSessions        int
+	projects       []memory.Project
+	sessions       []memory.SessionListing
+	findProject    memory.Project
+	findErr        error
+	registerErr    error
+	registerCalls  int
+	createdProject []memory.ProjectID
+	createdGlobal  int
+	activeGets     []memory.SessionID
+	createHook     func(memory.ProjectID) (memory.Session, error)
+	getHook        func(memory.SessionID) (memory.Session, error)
+	listHook       func() ([]memory.Project, []memory.SessionListing)
 }
 
-func (f *fakeREPLSessionStore) FindProjectByRoot(_ context.Context, root string) (memory.Project, error) {
-	f.findRoots = append(f.findRoots, root)
-	if f.registrationAttempted && f.projectAfterRegister.ID != "" {
-		return f.projectAfterRegister, nil
+func (f *fakeREPLSessionStore) ListProjects(context.Context, bool) ([]memory.Project, error) {
+	if f.listHook != nil {
+		projects, _ := f.listHook()
+		return projects, nil
 	}
-	if f.findErr != nil {
-		return memory.Project{}, f.findErr
+	return append([]memory.Project(nil), f.projects...), nil
+}
+
+func (f *fakeREPLSessionStore) ListActiveSessions(context.Context) ([]memory.SessionListing, error) {
+	if f.listHook != nil {
+		_, sessions := f.listHook()
+		return sessions, nil
 	}
-	return f.project, nil
+	return append([]memory.SessionListing(nil), f.sessions...), nil
+}
+
+func (f *fakeREPLSessionStore) FindProjectByRoot(context.Context, string) (memory.Project, error) {
+	return f.findProject, f.findErr
 }
 
 func (f *fakeREPLSessionStore) RegisterProject(_ context.Context, displayName, root string) (memory.Project, error) {
-	f.registrationAttempted = true
-	f.registerNames = append(f.registerNames, displayName)
-	f.registerRoots = append(f.registerRoots, root)
+	f.registerCalls++
 	if f.registerErr != nil {
 		return memory.Project{}, f.registerErr
 	}
-	f.registeredProject = memory.Project{
-		ID:            "registered-project",
-		DisplayName:   displayName,
-		CanonicalRoot: root,
-	}
-	return f.registeredProject, nil
+	return memory.Project{ID: "registered", DisplayName: displayName, CanonicalRoot: root}, nil
 }
 
-func (f *fakeREPLSessionStore) CreateProjectSession(_ context.Context, projectID memory.ProjectID) (memory.Session, error) {
-	f.projectSessionIDs = append(f.projectSessionIDs, projectID)
-	root := f.project.CanonicalRoot
-	if projectID == f.registeredProject.ID {
-		root = f.registeredProject.CanonicalRoot
+func (f *fakeREPLSessionStore) CreateProjectSession(_ context.Context, id memory.ProjectID) (memory.Session, error) {
+	f.createdProject = append(f.createdProject, id)
+	if f.createHook != nil {
+		return f.createHook(id)
 	}
-	return memory.Session{
-		ID:                  "project-session",
-		ProjectID:           projectID,
-		ProjectRootSnapshot: root,
-		Status:              memory.SessionActive,
-	}, nil
+	return memory.Session{ID: "new-project", ProjectID: id, Status: memory.SessionActive}, nil
 }
 
 func (f *fakeREPLSessionStore) CreateGlobalSession(context.Context) (memory.Session, error) {
-	f.globalSessions++
-	return memory.Session{ID: "global-session", Status: memory.SessionActive}, nil
+	f.createdGlobal++
+	return memory.Session{ID: "new-global", Status: memory.SessionActive}, nil
 }
 
-func TestSelectREPLSession(t *testing.T) {
-	tests := []struct {
-		name             string
-		matched          bool
-		archived         bool
-		input            string
-		wantProjectID    memory.ProjectID
-		wantGlobal       bool
-		wantRegisterName string
-		wantOutput       []string
-	}{
-		{
-			name:          "matching cwd confirms suggested project",
-			matched:       true,
-			input:         "project\n",
-			wantProjectID: "matched-project",
-			wantOutput:    []string{"matches active project \"Evie\"", "[p]roject or [g]lobal"},
-		},
-		{
-			name:       "matching cwd explicitly chooses global",
-			matched:    true,
-			input:      "\ng\n",
-			wantGlobal: true,
-			wantOutput: []string{"Please enter p or g."},
-		},
-		{
-			name:       "archived cwd explicitly chooses global",
-			matched:    true,
-			archived:   true,
-			input:      "g\n",
-			wantGlobal: true,
-			wantOutput: []string{"belongs to archived project \"Evie\"", "[g]lobal scope"},
-		},
-		{
-			name:             "unmatched cwd explicitly registers project",
-			input:            "register\nWorkspace\n",
-			wantProjectID:    "registered-project",
-			wantRegisterName: "Workspace",
-			wantOutput:       []string{"No active project is registered", "[r]egister this directory or use [g]lobal", "Project name"},
-		},
-		{
-			name:       "unmatched cwd explicitly chooses global",
-			input:      "global\n",
-			wantGlobal: true,
-			wantOutput: []string{"No active project is registered"},
-		},
+func (f *fakeREPLSessionStore) GetActiveSession(_ context.Context, id memory.SessionID) (memory.Session, error) {
+	f.activeGets = append(f.activeGets, id)
+	if f.getHook != nil {
+		return f.getHook(id)
+	}
+	for _, listing := range f.sessions {
+		if listing.ID == id {
+			return listing.Session, nil
+		}
+	}
+	return memory.Session{}, eviedb.ErrSessionNotActive
+}
+
+func TestRenderREPLChooserCombinedHierarchyAndSafeLabels(t *testing.T) {
+	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	projects := []memory.Project{
+		{ID: "z", DisplayName: "Same\x1b[31m", CanonicalRoot: "/z\nroot"},
+		{ID: "a", DisplayName: "Same\u200b", CanonicalRoot: "/a\troot"},
+		{ID: "empty", DisplayName: "Empty", CanonicalRoot: "/empty"},
+		{ID: "archived", DisplayName: "Old", CanonicalRoot: "/old", Archived: true},
+		{ID: "archived-empty", DisplayName: "Hidden", CanonicalRoot: "/hidden", Archived: true},
+	}
+	sessions := []memory.SessionListing{
+		{Session: memory.Session{ID: "a-old", ProjectID: "a", ProjectRootSnapshot: "/moved\x1b", Title: "older", CreatedAt: now}, ActivityAt: now},
+		{Session: memory.Session{ID: "a-new", ProjectID: "a", ProjectRootSnapshot: "/a\troot", Title: "new\n\x1btitle", CreatedAt: now}, ActivityAt: now.Add(time.Minute)},
+		{Session: memory.Session{ID: "archived-session", ProjectID: "archived", ProjectRootSnapshot: "/old", CreatedAt: now}, ActivityAt: now},
+		{Session: memory.Session{ID: "global", Title: "global", CreatedAt: now}, ActivityAt: now},
 	}
 
+	var out bytes.Buffer
+	actions, err := renderREPLChooser(&out, "/a\troot", projects, sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"Empty — \"/empty\"",
+		"Same — \"/a\\troot\" (current directory)",
+		"newtitle",
+		"stored root: \"/moved\\x1b\"",
+		"Old — \"/old\" (archived)",
+		"Untitled — 2026-08-24T12:00:00Z",
+		"Global",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("chooser output %q missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, "Hidden") || strings.ContainsRune(got, '\x1b') || strings.Contains(got, "\u200b") {
+		t.Fatalf("chooser leaked hidden or terminal-active label: %q", got)
+	}
+	if strings.Index(got, "Empty") > strings.Index(got, "Old") || strings.Index(got, "Old") > strings.Index(got, "Global") {
+		t.Fatalf("project/archive/global ordering is wrong: %q", got)
+	}
+	if gotNew := strings.Index(got, "newtitle"); gotNew > strings.Index(got, "older") {
+		t.Fatalf("session activity ordering is wrong: %q", got)
+	}
+	if len(actions) != 8 {
+		t.Fatalf("actions = %d, want 8", len(actions))
+	}
+}
+
+func TestSelectREPLSessionExplicitNumberedPaths(t *testing.T) {
+	root := t.TempDir()
+	project := memory.Project{ID: "project", DisplayName: "Project", CanonicalRoot: root}
+	projectSession := memory.Session{ID: "project-existing", ProjectID: project.ID, ProjectRootSnapshot: root, Status: memory.SessionActive, CreatedAt: time.Now()}
+	globalSession := memory.Session{ID: "global-existing", Status: memory.SessionActive, CreatedAt: time.Now()}
+
+	tests := []struct {
+		name       string
+		input      string
+		wantID     memory.SessionID
+		wantOutput string
+	}{
+		{name: "new project after invalid choice", input: "project\n1\n", wantID: "new-project", wantOutput: "Please enter a listed number."},
+		{name: "resume project", input: "2\n", wantID: projectSession.ID},
+		{name: "new global", input: "3\n", wantID: "new-global"},
+		{name: "resume global", input: "4\n", wantID: globalSession.ID},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			launchDir := t.TempDir()
-			canonicalRoot, err := memory.CanonicalProjectRoot(launchDir)
-			if err != nil {
-				t.Fatalf("canonicalize launch directory: %v", err)
-			}
-
 			store := &fakeREPLSessionStore{
-				project: memory.Project{
-					ID:            "matched-project",
-					DisplayName:   "Evie",
-					CanonicalRoot: canonicalRoot,
-				},
+				projects: []memory.Project{project},
+				sessions: []memory.SessionListing{{Session: projectSession}, {Session: globalSession}},
 			}
-			store.project.Archived = tt.archived
-			if !tt.matched {
-				store.findErr = fmt.Errorf("lookup: %w", eviedb.ErrProjectNotFound)
-			}
-
-			var output bytes.Buffer
-			session, err := selectREPLSession(
-				context.Background(),
-				store,
-				launchDir,
-				bufio.NewScanner(strings.NewReader(tt.input)),
-				&output,
-			)
+			var out bytes.Buffer
+			got, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader(tt.input)), &out)
 			if err != nil {
-				t.Fatalf("select REPL session: %v", err)
+				t.Fatal(err)
 			}
-
-			if len(store.findRoots) != 1 || store.findRoots[0] != canonicalRoot {
-				t.Errorf("lookup roots = %q, want canonical launch root %q", store.findRoots, canonicalRoot)
+			if got.ID != tt.wantID {
+				t.Fatalf("selected %q, want %q; output=%q", got.ID, tt.wantID, out.String())
 			}
-			if tt.wantGlobal {
-				if session.ProjectID != "" || store.globalSessions != 1 || len(store.projectSessionIDs) != 0 {
-					t.Errorf("global selection created session %+v; global calls=%d project calls=%v",
-						session, store.globalSessions, store.projectSessionIDs)
-				}
-			} else if session.ProjectID != tt.wantProjectID || store.globalSessions != 0 ||
-				len(store.projectSessionIDs) != 1 || store.projectSessionIDs[0] != tt.wantProjectID {
-				t.Errorf("project selection created session %+v; global calls=%d project calls=%v",
-					session, store.globalSessions, store.projectSessionIDs)
-			}
-
-			if tt.wantRegisterName == "" {
-				if len(store.registerNames) != 0 {
-					t.Errorf("unexpected registrations: names=%v roots=%v", store.registerNames, store.registerRoots)
-				}
-			} else if len(store.registerNames) != 1 || store.registerNames[0] != tt.wantRegisterName ||
-				len(store.registerRoots) != 1 || store.registerRoots[0] != canonicalRoot {
-				t.Errorf("registrations: names=%v roots=%v, want %q at %q",
-					store.registerNames, store.registerRoots, tt.wantRegisterName, canonicalRoot)
-			}
-
-			for _, want := range tt.wantOutput {
-				if !strings.Contains(output.String(), want) {
-					t.Errorf("output %q does not contain %q", output.String(), want)
-				}
+			if tt.wantOutput != "" && !strings.Contains(out.String(), tt.wantOutput) {
+				t.Errorf("output %q missing %q", out.String(), tt.wantOutput)
 			}
 		})
 	}
 }
 
-func TestSelectREPLSessionReconfirmsAConcurrentRegistration(t *testing.T) {
-	root := t.TempDir()
-	canonicalRoot, err := memory.CanonicalProjectRoot(root)
-	if err != nil {
-		t.Fatalf("canonicalize root: %v", err)
-	}
-	store := &fakeREPLSessionStore{
-		findErr:     eviedb.ErrProjectNotFound,
-		registerErr: errors.New("unique root collision"),
-		projectAfterRegister: memory.Project{
-			ID:            "concurrent-project",
-			DisplayName:   "Concurrent",
-			CanonicalRoot: canonicalRoot,
-		},
-	}
-
-	var output bytes.Buffer
-	session, err := selectREPLSession(
-		context.Background(),
-		store,
-		root,
-		bufio.NewScanner(strings.NewReader("r\nMine\np\n")),
-		&output,
-	)
-	if err != nil {
-		t.Fatalf("select REPL session: %v", err)
-	}
-	if session.ProjectID != "concurrent-project" {
-		t.Errorf("selected project = %q, want concurrent project", session.ProjectID)
-	}
-	if len(store.findRoots) != 2 {
-		t.Errorf("project lookups = %d, want initial discovery plus collision retry", len(store.findRoots))
-	}
-	if !strings.Contains(output.String(), "matches active project \"Concurrent\"") {
-		t.Errorf("output %q does not reconfirm the concurrently registered project", output.String())
-	}
-}
-
-func TestSelectREPLSessionHandlesArchivedRootWithRealStore(t *testing.T) {
-	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	store := eviedb.NewStore(db)
-	root := t.TempDir()
-
-	project, err := store.RegisterProject(context.Background(), "Archived", root)
-	if err != nil {
-		t.Fatalf("register project: %v", err)
-	}
-	if _, err := db.Exec(`UPDATE projects SET archived = 1 WHERE id = ?`, project.ID); err != nil {
-		t.Fatalf("archive project: %v", err)
-	}
-
-	var output bytes.Buffer
-	session, err := selectREPLSession(
-		context.Background(),
-		store,
-		root,
-		bufio.NewScanner(strings.NewReader("g\n")),
-		&output,
-	)
-	if err != nil {
-		t.Fatalf("select REPL session: %v", err)
-	}
-	if session.ProjectID != "" {
-		t.Errorf("session scope = %+v, want global", session.ScopeContext())
-	}
-	if !strings.Contains(output.String(), "belongs to archived project \"Archived\"") {
-		t.Errorf("output %q does not explain the archived root", output.String())
-	}
-
-	var projects int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM projects WHERE canonical_root = ?`, project.CanonicalRoot).Scan(&projects); err != nil {
-		t.Fatalf("count projects: %v", err)
-	}
-	if projects != 1 {
-		t.Errorf("projects at archived root = %d, want no duplicate registration", projects)
-	}
-}
-
-func TestSelectREPLSessionRequiresAnExplicitChoice(t *testing.T) {
-	for _, matched := range []bool{true, false} {
-		t.Run(fmt.Sprintf("matched=%t", matched), func(t *testing.T) {
-			root := t.TempDir()
-			store := &fakeREPLSessionStore{
-				project: memory.Project{
-					ID:            "matched-project",
-					DisplayName:   "Evie",
-					CanonicalRoot: root,
-				},
-			}
-			if !matched {
-				store.findErr = eviedb.ErrProjectNotFound
-			}
-
-			_, err := selectREPLSession(
-				context.Background(),
-				store,
-				root,
-				bufio.NewScanner(strings.NewReader("\n")),
-				io.Discard,
-			)
-			if !errors.Is(err, io.EOF) {
-				t.Fatalf("selection error = %v, want io.EOF", err)
-			}
-			if store.globalSessions != 0 || len(store.projectSessionIDs) != 0 || len(store.registerNames) != 0 {
-				t.Fatalf("blank input created state: global=%d project=%v registrations=%v",
-					store.globalSessions, store.projectSessionIDs, store.registerNames)
-			}
-		})
-	}
-}
-
-func TestSelectREPLSessionUsesDefaultProjectName(t *testing.T) {
+func TestSelectREPLSessionRegistrationIsExplicit(t *testing.T) {
 	root := t.TempDir()
 	store := &fakeREPLSessionStore{findErr: eviedb.ErrProjectNotFound}
-
-	_, err := selectREPLSession(
-		context.Background(),
-		store,
-		root,
-		bufio.NewScanner(strings.NewReader("r\n\n")),
-		io.Discard,
-	)
+	var out bytes.Buffer
+	session, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("2\n\n")), &out)
 	if err != nil {
-		t.Fatalf("select REPL session: %v", err)
+		t.Fatal(err)
 	}
-	if len(store.registerNames) != 1 || store.registerNames[0] != filepath.Base(root) {
-		t.Errorf("registered names = %v, want default %q", store.registerNames, filepath.Base(root))
+	if session.ProjectID != "registered" || store.registerCalls != 1 {
+		t.Fatalf("registration selection = %+v calls=%d", session, store.registerCalls)
 	}
+	if !strings.Contains(out.String(), "Register current directory") || !strings.Contains(out.String(), filepath.Base(root)) {
+		t.Fatalf("registration UI missing: %q", out.String())
+	}
+}
+
+func TestSelectREPLSessionRefreshesConcurrentRegistrationWithoutScopeGrant(t *testing.T) {
+	root := t.TempDir()
+	project := memory.Project{ID: "concurrent", DisplayName: "Concurrent", CanonicalRoot: root}
+	store := &fakeREPLSessionStore{registerErr: errors.New("unique root collision"), findProject: project}
+	store.listHook = func() ([]memory.Project, []memory.SessionListing) {
+		if store.registerCalls > 0 {
+			return []memory.Project{project}, nil
+		}
+		return nil, nil
+	}
+	var out bytes.Buffer
+	session, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("2\nMine\n1\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.ProjectID != project.ID || len(store.createdProject) != 1 {
+		t.Fatalf("concurrent registration result=%+v created=%v", session, store.createdProject)
+	}
+	if !strings.Contains(out.String(), replStateChanged) || strings.Count(out.String(), "Select session:") != 2 {
+		t.Fatalf("chooser did not require refreshed explicit choice: %q", out.String())
+	}
+}
+
+func TestSelectREPLSessionRefreshesArchiveBetweenRenderAndCreate(t *testing.T) {
+	root := t.TempDir()
+	project := memory.Project{ID: "project", DisplayName: "Project", CanonicalRoot: root}
+	archived := false
+	store := &fakeREPLSessionStore{}
+	store.listHook = func() ([]memory.Project, []memory.SessionListing) {
+		project.Archived = archived
+		return []memory.Project{project}, nil
+	}
+	store.createHook = func(memory.ProjectID) (memory.Session, error) {
+		archived = true
+		return memory.Session{}, eviedb.ErrProjectNotActive
+	}
+	var out bytes.Buffer
+	session, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("1\n1\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.ProjectID != "" || store.createdGlobal != 1 || len(store.createdProject) != 1 {
+		t.Fatalf("archive race silently selected scope: session=%+v project=%v global=%d", session, store.createdProject, store.createdGlobal)
+	}
+	if !strings.Contains(out.String(), replStateChanged) {
+		t.Fatalf("archive race notice missing: %q", out.String())
+	}
+}
+
+func TestSelectREPLSessionClosedSelectionRefreshes(t *testing.T) {
+	root := t.TempDir()
+	session := memory.Session{ID: "closed-after-render", CreatedAt: time.Now()}
+	closed := false
+	store := &fakeREPLSessionStore{}
+	store.listHook = func() ([]memory.Project, []memory.SessionListing) {
+		if closed {
+			return nil, nil
+		}
+		return nil, []memory.SessionListing{{Session: session}}
+	}
+	store.getHook = func(memory.SessionID) (memory.Session, error) {
+		closed = true
+		return memory.Session{}, eviedb.ErrSessionNotActive
+	}
+	var out bytes.Buffer
+	selected, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("2\n1\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ID != "new-global" || len(store.activeGets) != 1 {
+		t.Fatalf("closed selection result=%+v gets=%v", selected, store.activeGets)
+	}
+}
+
+func TestArchivedExactCWDHasNoSuggestionOrRegistration(t *testing.T) {
+	root := t.TempDir()
+	project := memory.Project{ID: "archived", DisplayName: "Archived", CanonicalRoot: root, Archived: true}
+	session := memory.Session{ID: "resume", ProjectID: project.ID, ProjectRootSnapshot: root, CreatedAt: time.Now()}
+	var out bytes.Buffer
+	actions, err := renderREPLChooser(&out, root, []memory.Project{project}, []memory.SessionListing{{Session: session}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "current directory") || strings.Contains(out.String(), "Register current directory") {
+		t.Fatalf("archived cwd received suggestion: %q", out.String())
+	}
+	if len(actions) != 2 || actions[0].kind != replActionResume || actions[1].kind != replActionNewGlobal {
+		t.Fatalf("archived actions = %+v", actions)
+	}
+}
+
+func TestSelectREPLSessionRequiresInput(t *testing.T) {
+	root := t.TempDir()
+	store := &fakeREPLSessionStore{}
+	_, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("\n")), io.Discard)
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("selection error = %v, want EOF after invalid blank", err)
+	}
+	if store.createdGlobal != 0 || len(store.createdProject) != 0 || store.registerCalls != 0 {
+		t.Fatalf("blank input granted scope: global=%d project=%v register=%d", store.createdGlobal, store.createdProject, store.registerCalls)
+	}
+}
+
+func TestSelectREPLSessionRealStoreResumesArchivedSession(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := eviedb.NewStore(db)
+	root := t.TempDir()
+	project, err := store.RegisterProject(context.Background(), "Archived", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.CreateProjectSession(context.Background(), project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE projects SET archived = 1 WHERE id = ?`, project.ID); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	selected, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("1\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ID != created.ID || selected.ScopeContext() != created.ScopeContext() {
+		t.Fatalf("resumed scope=%+v, want %+v", selected.ScopeContext(), created.ScopeContext())
+	}
+	if !strings.Contains(out.String(), "(archived)") {
+		t.Fatalf("archived heading missing: %q", out.String())
+	}
+}
+
+func Example_renderREPLChooser() {
+	var out bytes.Buffer
+	_, _ = renderREPLChooser(&out, "/work", nil, nil)
+	fmt.Print(out.String())
+	// Output:
+	// Sessions
+	// Global
+	//   1. New session
+	//   2. Register current directory — "/work"
 }

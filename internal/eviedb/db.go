@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     project_id            TEXT REFERENCES projects(id),
     project_root_snapshot TEXT,
     parent_session_id     TEXT REFERENCES sessions(id),
+    title                 TEXT,
     status                TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'closed')),
     created_at            TEXT NOT NULL,
     updated_at            TEXT NOT NULL,
@@ -211,6 +212,10 @@ func OpenDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
+	}
+	if err := ensureSessionTitles(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade session titles: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		db.Close()

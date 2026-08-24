@@ -126,8 +126,9 @@ func (o *scriptedOwner) Release(ctx context.Context, _ memory.TurnLease) error {
 	return err
 }
 
-func (*scriptedOwner) IsConflict(err error) bool  { return errors.Is(err, errFakeConflict) }
-func (*scriptedOwner) IsLeaseLost(err error) bool { return errors.Is(err, errFakeLeaseLost) }
+func (*scriptedOwner) IsConflict(err error) bool    { return errors.Is(err, errFakeConflict) }
+func (*scriptedOwner) IsSessionInactive(error) bool { return false }
+func (*scriptedOwner) IsLeaseLost(err error) bool   { return errors.Is(err, errFakeLeaseLost) }
 
 func (o *scriptedOwner) counts() (acquire, heartbeat, authorize, release int) {
 	o.mu.Lock()

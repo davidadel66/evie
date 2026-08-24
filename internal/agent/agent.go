@@ -105,6 +105,9 @@ func (s *Session) Send(
 		if s.owner.IsConflict(err) {
 			return fmt.Errorf("%w: %v", ErrLeaseConflict, err)
 		}
+		if s.owner.IsSessionInactive(err) {
+			return fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
+		}
 		return fmt.Errorf("acquire turn lease: %w", err)
 	}
 

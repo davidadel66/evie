@@ -89,6 +89,10 @@ func (*SessionTurnOwner) IsConflict(err error) bool {
 	return errors.Is(err, ErrTurnLeaseHeld)
 }
 
+func (*SessionTurnOwner) IsSessionInactive(err error) bool {
+	return errors.Is(err, ErrTurnLeaseSessionInactive)
+}
+
 func (*SessionTurnOwner) IsLeaseLost(err error) bool {
 	return errors.Is(err, ErrTurnLeaseLost)
 }

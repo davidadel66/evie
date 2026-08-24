@@ -180,4 +180,5 @@ func (testTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Duration)
 func (testTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
 func (testTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
 func (testTurnOwner) IsConflict(error) bool                             { return false }
+func (testTurnOwner) IsSessionInactive(error) bool                      { return false }
 func (testTurnOwner) IsLeaseLost(error) bool                            { return false }

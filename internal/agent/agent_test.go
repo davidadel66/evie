@@ -109,6 +109,7 @@ func (o *fakeTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Durati
 func (o *fakeTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
 func (o *fakeTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
 func (o *fakeTurnOwner) IsConflict(error) bool                             { return false }
+func (o *fakeTurnOwner) IsSessionInactive(error) bool                      { return false }
 func (o *fakeTurnOwner) IsLeaseLost(error) bool                            { return false }
 
 func (f *fakeClient) ChatStream(_ context.Context, req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {

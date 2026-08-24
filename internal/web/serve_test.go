@@ -133,6 +133,7 @@ func (webTestTurnOwner) Heartbeat(context.Context, memory.TurnLease, time.Durati
 func (webTestTurnOwner) Authorize(context.Context, memory.TurnLease) error { return nil }
 func (webTestTurnOwner) Release(context.Context, memory.TurnLease) error   { return nil }
 func (o webTestTurnOwner) IsConflict(error) bool                           { return o.conflict }
+func (o webTestTurnOwner) IsSessionInactive(error) bool                    { return false }
 func (o webTestTurnOwner) IsLeaseLost(error) bool                          { return o.leaseLost }
 
 // chatRequest builds a well-formed same-origin chat POST; individual
