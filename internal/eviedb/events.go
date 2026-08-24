@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -33,10 +34,8 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 	}
 
 	if input.Type == memory.EventTurnFailed || input.Type == memory.EventTurnInterrupted {
-		var terminal memory.TurnTerminalPayload
-		decoder := json.NewDecoder(bytes.NewReader(input.Payload))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&terminal); err != nil {
+		terminal, canonical, err := decodeCanonicalTerminalPayload(input.Payload)
+		if err != nil {
 			return memory.EventInput{}, fmt.Errorf("decode terminal payload: %w", err)
 		}
 		if err := terminal.Validate(input.Type); err != nil {
@@ -48,10 +47,73 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 		if input.Role != "" || input.ExecutionID != "" {
 			return memory.EventInput{}, errors.New("terminal events cannot carry a role or execution ID")
 		}
+		input.Payload = canonical
 	}
 
 	input.Payload = append(json.RawMessage(nil), input.Payload...)
 	return input, nil
+}
+
+func decodeCanonicalTerminalPayload(raw json.RawMessage) (memory.TurnTerminalPayload, json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := decoder.Token()
+	if err != nil {
+		return memory.TurnTerminalPayload{}, nil, err
+	}
+	if delim, ok := opening.(json.Delim); !ok || delim != '{' {
+		return memory.TurnTerminalPayload{}, nil, errors.New("terminal payload must be a JSON object")
+	}
+	var terminal memory.TurnTerminalPayload
+	seen := make(map[string]struct{}, 4)
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return memory.TurnTerminalPayload{}, nil, err
+		}
+		key, ok := token.(string)
+		if !ok {
+			return memory.TurnTerminalPayload{}, nil, errors.New("terminal payload key must be a string")
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return memory.TurnTerminalPayload{}, nil, fmt.Errorf("terminal payload repeats field %q", key)
+		}
+		seen[key] = struct{}{}
+		switch key {
+		case "turn_id":
+			err = decoder.Decode(&terminal.TurnID)
+		case "classification":
+			err = decoder.Decode(&terminal.Classification)
+		case "stage":
+			err = decoder.Decode(&terminal.Stage)
+		case "http_status":
+			err = decoder.Decode(&terminal.HTTPStatus)
+			if err == nil && terminal.HTTPStatus == nil {
+				return memory.TurnTerminalPayload{}, nil, errors.New("terminal http_status must be numeric when present")
+			}
+		default:
+			return memory.TurnTerminalPayload{}, nil, fmt.Errorf("terminal payload contains unknown field %q", key)
+		}
+		if err != nil {
+			return memory.TurnTerminalPayload{}, nil, err
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil {
+		return memory.TurnTerminalPayload{}, nil, err
+	}
+	if delim, ok := closing.(json.Delim); !ok || delim != '}' {
+		return memory.TurnTerminalPayload{}, nil, errors.New("terminal payload object is not closed")
+	}
+	if token, err := decoder.Token(); err == nil {
+		return memory.TurnTerminalPayload{}, nil, fmt.Errorf("terminal payload has trailing data %v", token)
+	} else if !errors.Is(err, io.EOF) {
+		return memory.TurnTerminalPayload{}, nil, fmt.Errorf("read terminal payload trailer: %w", err)
+	}
+	canonical, err := json.Marshal(terminal)
+	if err != nil {
+		return memory.TurnTerminalPayload{}, nil, err
+	}
+	return terminal, canonical, nil
 }
 
 // AppendEventWithLease performs the event mutation and both ownership fences in
@@ -88,6 +150,15 @@ func (s *Store) appendEvent(
 	input, err := normalizeEventInput(input)
 	if err != nil {
 		return memory.Event{}, err
+	}
+	if input.Type == memory.EventTurnFailed || input.Type == memory.EventTurnInterrupted {
+		var terminal memory.TurnTerminalPayload
+		if err := json.Unmarshal(input.Payload, &terminal); err != nil {
+			return memory.Event{}, fmt.Errorf("decode canonical terminal payload: %w", err)
+		}
+		if err := validateTerminalCorrelation(ctx, executor, sessionID, input.ParentID, terminal.TurnID); err != nil {
+			return memory.Event{}, err
+		}
 	}
 
 	id, err := uuid.NewRandom()
@@ -155,6 +226,156 @@ func (s *Store) appendEvent(
 		event.ProjectID = memory.ProjectID(projectID.String)
 	}
 	return event, nil
+}
+
+func validateTerminalCorrelation(
+	ctx context.Context,
+	executor eventQueryExecutor,
+	sessionID memory.SessionID,
+	parentID memory.EventID,
+	turnID memory.EventID,
+) error {
+	if parentID == "" {
+		return errors.New("terminal event must have a parent")
+	}
+	var rootType, rootRole string
+	var rootParent sql.NullString
+	err := executor.queryRowContext(ctx, `
+		SELECT event_type, COALESCE(role, ''), parent_id
+		FROM events
+		WHERE session_id = ? AND id = ?
+	`, sessionID, turnID).Scan(&rootType, &rootRole, &rootParent)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("terminal turn ID %q is not an accepted event in session %q", turnID, sessionID)
+	}
+	if err != nil {
+		return fmt.Errorf("validate terminal turn root: %w", err)
+	}
+	if memory.EventType(rootType) != memory.EventUserMessage ||
+		memory.EventRole(rootRole) != memory.RoleUser || rootParent.Valid {
+		return fmt.Errorf("terminal turn ID %q is not a root user event", turnID)
+	}
+	var latestRootID string
+	err = executor.queryRowContext(ctx, `
+		SELECT id
+		FROM events
+		WHERE session_id = ? AND event_type = ? AND role = ? AND parent_id IS NULL
+		ORDER BY sequence DESC
+		LIMIT 1
+	`, sessionID, memory.EventUserMessage, memory.RoleUser).Scan(&latestRootID)
+	if err != nil {
+		return fmt.Errorf("validate latest terminal turn root: %w", err)
+	}
+	if memory.EventID(latestRootID) != turnID {
+		return fmt.Errorf("terminal turn ID %q is not the latest accepted turn root", turnID)
+	}
+
+	var parentType string
+	err = executor.queryRowContext(ctx, `
+		SELECT event_type
+		FROM events
+		WHERE session_id = ? AND id = ?
+	`, sessionID, parentID).Scan(&parentType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("terminal parent ID %q is not an accepted event in session %q", parentID, sessionID)
+	}
+	if err != nil {
+		return fmt.Errorf("validate terminal parent: %w", err)
+	}
+	parentEventType := memory.EventType(parentType)
+	if parentID == turnID {
+		if parentEventType != memory.EventUserMessage {
+			return errors.New("terminal root parent is not a user event")
+		}
+	} else if parentEventType != memory.EventToolSucceeded &&
+		parentEventType != memory.EventToolFailed &&
+		parentEventType != memory.EventToolCancelled {
+		return fmt.Errorf("terminal parent %q is not a durable provider trigger", parentID)
+	}
+
+	var connected bool
+	err = executor.queryRowContext(ctx, `
+		WITH RECURSIVE lineage(id, parent_id) AS (
+			SELECT id, parent_id FROM events WHERE session_id = ? AND id = ?
+			UNION
+			SELECT parent.id, parent.parent_id
+			FROM events AS parent
+			JOIN lineage AS child ON parent.id = child.parent_id
+			WHERE parent.session_id = ?
+		)
+		SELECT EXISTS(SELECT 1 FROM lineage WHERE id = ?)
+	`, sessionID, parentID, sessionID, turnID).Scan(&connected)
+	if err != nil {
+		return fmt.Errorf("validate terminal ancestry: %w", err)
+	}
+	if !connected {
+		return fmt.Errorf("terminal parent %q is not descended from turn root %q", parentID, turnID)
+	}
+	var latestTriggerID string
+	err = executor.queryRowContext(ctx, `
+		WITH RECURSIVE descendants(id, event_type, sequence) AS (
+			SELECT id, event_type, sequence FROM events WHERE session_id = ? AND id = ?
+			UNION
+			SELECT child.id, child.event_type, child.sequence
+			FROM events AS child
+			JOIN descendants AS parent ON child.parent_id = parent.id
+			WHERE child.session_id = ?
+		), complete_tool_groups(assistant_id, call_count, intent_count, outcome_count, last_outcome_sequence) AS (
+			SELECT assistant.id,
+				json_array_length(assistant.payload_json, '$.tool_calls'),
+				COUNT(DISTINCT intent.id),
+				COUNT(DISTINCT outcome.id),
+				MAX(outcome.sequence)
+			FROM descendants AS accepted
+			JOIN events AS assistant ON assistant.id = accepted.id
+			LEFT JOIN events AS intent
+				ON intent.session_id = assistant.session_id
+				AND intent.parent_id = assistant.id
+				AND intent.event_type = ?
+				AND EXISTS (
+					SELECT 1
+					FROM json_each(assistant.payload_json, '$.tool_calls') AS requested
+					WHERE json_extract(requested.value, '$.id') = json_extract(intent.payload_json, '$.call.id')
+				)
+			LEFT JOIN events AS outcome
+				ON outcome.session_id = assistant.session_id
+				AND outcome.execution_id = intent.execution_id
+				AND outcome.event_type IN (?, ?, ?)
+				AND json_extract(outcome.payload_json, '$.tool_call_id') = json_extract(intent.payload_json, '$.call.id')
+				AND (
+					outcome.parent_id = intent.id OR outcome.parent_id IN (
+						SELECT approval.id FROM events AS approval
+						WHERE approval.session_id = assistant.session_id
+							AND approval.parent_id = intent.id
+							AND approval.event_type = ?
+					)
+				)
+			WHERE assistant.event_type = ?
+			GROUP BY assistant.id
+			HAVING json_array_length(assistant.payload_json, '$.tool_calls') > 0
+				AND COUNT(DISTINCT intent.id) = json_array_length(assistant.payload_json, '$.tool_calls')
+				AND COUNT(DISTINCT json_extract(intent.payload_json, '$.call.id')) = json_array_length(assistant.payload_json, '$.tool_calls')
+				AND COUNT(DISTINCT CASE WHEN outcome.id IS NOT NULL THEN intent.id END) = json_array_length(assistant.payload_json, '$.tool_calls')
+		)
+		SELECT COALESCE((
+			SELECT outcome.id
+			FROM complete_tool_groups AS completed
+			JOIN events AS outcome ON outcome.session_id = ? AND outcome.sequence = completed.last_outcome_sequence
+			ORDER BY completed.last_outcome_sequence DESC
+			LIMIT 1
+		), ?)
+	`, sessionID, turnID, sessionID,
+		memory.EventToolIntent,
+		memory.EventToolSucceeded, memory.EventToolFailed, memory.EventToolCancelled,
+		memory.EventApproval, memory.EventAssistantMessage,
+		sessionID, turnID).Scan(&latestTriggerID)
+	if err != nil {
+		return fmt.Errorf("validate latest terminal provider trigger: %w", err)
+	}
+	if memory.EventID(latestTriggerID) != parentID {
+		return fmt.Errorf("terminal parent %q is not the latest durable provider trigger %q", parentID, latestTriggerID)
+	}
+	return nil
 }
 
 func (s *Store) LoadEvents(

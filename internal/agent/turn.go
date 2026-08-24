@@ -26,6 +26,31 @@ type turnProgress struct {
 	requestParentID memory.EventID
 }
 
+type providerCallbackLifetime struct {
+	mu     sync.Mutex
+	closed bool
+	active sync.WaitGroup
+}
+
+func (l *providerCallbackLifetime) invoke(callback func()) {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.active.Add(1)
+	l.mu.Unlock()
+	defer l.active.Done()
+	callback()
+}
+
+func (l *providerCallbackLifetime) closeAndWait() {
+	l.mu.Lock()
+	l.closed = true
+	l.mu.Unlock()
+	l.active.Wait()
+}
+
 func (r *renderedOutput) discardState() (rendered, reasoningOpen, assistantCommitted bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,32 +156,38 @@ func (s *Session) runOwnedTurn(
 			return err
 		}
 
+		callbackLifetime := &providerCallbackLifetime{}
 		handlers := openrouter.StreamHandlers{
 			OnReasoning: func(text string) {
-				coordinator.emitIfActive(func() {
-					rendered.mu.Lock()
-					rendered.reasoning = true
-					rendered.reasoningOpen = true
-					rendered.mu.Unlock()
-					ev.Reasoning(text)
+				callbackLifetime.invoke(func() {
+					coordinator.emitIfActive(func() {
+						rendered.mu.Lock()
+						rendered.reasoning = true
+						rendered.reasoningOpen = true
+						rendered.mu.Unlock()
+						ev.Reasoning(text)
+					})
 				})
 			},
 			OnContent: func(text string) {
-				coordinator.emitIfActive(func() {
-					rendered.mu.Lock()
-					closeReasoning := rendered.reasoningOpen
-					rendered.reasoningOpen = false
-					rendered.content = true
-					rendered.mu.Unlock()
-					if closeReasoning {
-						ev.ReasoningDone()
-					}
-					ev.Delta(text)
+				callbackLifetime.invoke(func() {
+					coordinator.emitIfActive(func() {
+						rendered.mu.Lock()
+						closeReasoning := rendered.reasoningOpen
+						rendered.reasoningOpen = false
+						rendered.content = true
+						rendered.mu.Unlock()
+						if closeReasoning {
+							ev.ReasoningDone()
+						}
+						ev.Delta(text)
+					})
 				})
 			},
 		}
 
 		res, err := s.client.ChatStream(coordinator.ctx, req, handlers)
+		callbackLifetime.closeAndWait()
 		if err != nil {
 			return s.classifyProviderError(coordinator, err)
 		}
@@ -293,13 +324,22 @@ func (s *Session) runOwnedTurn(
 				return s.owner.Authorize(authorizeCtx, lease)
 			}
 
-			result, isErr, err := tools.ExecuteWithApprovalAuthorized(
+			if !coordinator.beginToolPhase() {
+				return s.observeTurnContext(coordinator)
+			}
+			result, isErr, err := tools.ExecuteWithApprovalAuthorizedCompletion(
 				coordinator.ctx, extra, call, wrappedApprover, observeApproval, authorize,
+				func() {
+					if s.timing.beforeToolResultHandoff != nil {
+						s.timing.beforeToolResultHandoff()
+					}
+					coordinator.completeToolPhase()
+				},
 			)
 			if err != nil {
+				coordinator.abortToolPhase()
 				return s.classifyLocalError(coordinator, fmt.Errorf("execute tool lifecycle: %w", err))
 			}
-			coordinator.setStage(memory.StageToolCommit)
 
 			outcomeParentID := intentEvent.ID
 			outcomeType := memory.EventToolSucceeded

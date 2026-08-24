@@ -8,6 +8,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -115,6 +116,28 @@ func ExecuteWithApprovalAuthorized(
 	observe ApprovalObserver,
 	authorize LifecycleAuthorizer,
 ) (openrouter.Message, bool, error) {
+	return ExecuteWithApprovalAuthorizedCompletion(ctx, extra, call, approve, observe, authorize, nil)
+}
+
+// ExecuteWithApprovalAuthorizedCompletion calls ordinaryComplete at the exact
+// handoff where preparation failure, non-approved completion, execution result,
+// or unknown-tool output becomes an ordinary model-visible tool result.
+// Cancellation and authorization failures do not call it.
+func ExecuteWithApprovalAuthorizedCompletion(
+	ctx context.Context,
+	extra []Tool,
+	call openrouter.ToolCall,
+	approve Approver,
+	observe ApprovalObserver,
+	authorize LifecycleAuthorizer,
+	ordinaryComplete func(),
+) (openrouter.Message, bool, error) {
+	complete := func(message openrouter.Message, isErr bool) (openrouter.Message, bool, error) {
+		if ordinaryComplete != nil {
+			ordinaryComplete()
+		}
+		return message, isErr, nil
+	}
 	if err := ctx.Err(); err != nil {
 		return openrouter.Message{}, false, err
 	}
@@ -139,11 +162,11 @@ func ExecuteWithApprovalAuthorized(
 						}
 						p, err := tool.Prepare(ctx, call.Function.Arguments)
 						if err != nil {
-							if ctx.Err() != nil {
+							if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 								return openrouter.Message{}, false, ctx.Err()
 							}
 							msg, isErr := toolError(call.ID, err)
-							return msg, isErr, nil
+							return complete(msg, isErr)
 						}
 						prepared = &p
 					}
@@ -190,17 +213,17 @@ func ExecuteWithApprovalAuthorized(
 						}
 					}
 				case Expired:
-					return openrouter.Message{
+					return complete(openrouter.Message{
 						Role:       "tool",
 						Content:    "The approval request expired before David saw it - the call was not run. Ask again if it still matters.",
 						ToolCallID: call.ID,
-					}, false, nil
+					}, false)
 				default:
-					return openrouter.Message{
+					return complete(openrouter.Message{
 						Role:       "tool",
 						Content:    "David declined this tool call. Do not retry it unless he asks for something different.",
 						ToolCallID: call.ID,
-					}, false, nil
+					}, false)
 				}
 			}
 			if !tool.NeedsApproval && authorize != nil {
@@ -219,27 +242,27 @@ func ExecuteWithApprovalAuthorized(
 			} else {
 				response, err = tool.Execute(ctx, call.Function.Arguments)
 			}
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return openrouter.Message{}, false, ctxErr
-			}
 			if err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+					return openrouter.Message{}, false, ctxErr
+				}
 				msg, isErr := toolError(call.ID, err)
-				return msg, isErr, nil
+				return complete(msg, isErr)
 			}
 
-			return openrouter.Message{
+			return complete(openrouter.Message{
 				Role:       "tool",
 				Content:    response,
 				ToolCallID: call.ID,
-			}, false, nil
+			}, false)
 		}
 	}
 
-	return openrouter.Message{
+	return complete(openrouter.Message{
 		Role:       "tool",
 		Content:    fmt.Sprintf("Unknown Tool Call: %s", call.Function.Name),
 		ToolCallID: call.ID,
-	}, true, nil
+	}, true)
 }
 
 func toolError(id string, err error) (openrouter.Message, bool) {

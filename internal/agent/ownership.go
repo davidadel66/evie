@@ -46,6 +46,9 @@ type turnTiming struct {
 	heartbeatInterval time.Duration
 	cleanupTimeout    time.Duration
 	newTicker         func(time.Duration) heartbeatTicker
+	// beforeToolResultHandoff is a deterministic test seam at the zero-work
+	// boundary after ordinary tool return and before lifecycle-stage handoff.
+	beforeToolResultHandoff func()
 }
 
 var defaultTurnTiming = turnTiming{
@@ -102,6 +105,7 @@ type turnCoordinator struct {
 	stage      memory.TurnStage
 	cause      terminalCause
 	pending    *terminalCause
+	toolDone   chan struct{}
 }
 
 func newTurnCoordinator(parent context.Context) *turnCoordinator {
@@ -130,6 +134,12 @@ func (c *turnCoordinator) selectCause(kind causeKind, err error, httpStatus int)
 	// callback may rely on this context to finish; pending prevents any new
 	// callback from being admitted while lifecycle-stage finalization waits.
 	c.cancel()
+	c.mu.Lock()
+	toolDone := c.toolDone
+	c.mu.Unlock()
+	if toolDone != nil {
+		<-toolDone
+	}
 
 	c.callbackMu.Lock()
 	defer c.callbackMu.Unlock()
@@ -177,6 +187,40 @@ func (c *turnCoordinator) finishSuccessBoundary() {
 	c.pending = nil
 	c.mu.Unlock()
 	c.callbackMu.RUnlock()
+}
+
+func (c *turnCoordinator) beginToolPhase() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cause.kind != causeNone || c.pending != nil || c.ctx.Err() != nil {
+		return false
+	}
+	c.toolDone = make(chan struct{})
+	return true
+}
+
+// completeToolPhase resolves the consumer-owned result handoff before a
+// pending cause can capture its lifecycle stage. No coordinator lock is held
+// while preparation or execution itself runs.
+func (c *turnCoordinator) completeToolPhase() {
+	c.mu.Lock()
+	if c.cause.kind == causeNone {
+		c.stage = memory.StageToolCommit
+	}
+	if c.toolDone != nil {
+		close(c.toolDone)
+		c.toolDone = nil
+	}
+	c.mu.Unlock()
+}
+
+func (c *turnCoordinator) abortToolPhase() {
+	c.mu.Lock()
+	if c.toolDone != nil {
+		close(c.toolDone)
+		c.toolDone = nil
+	}
+	c.mu.Unlock()
 }
 
 func (c *turnCoordinator) result() terminalCause {

@@ -34,6 +34,9 @@ type Session struct {
 	timing    turnTiming
 }
 type Client interface {
+	// ChatStream callbacks need not be synchronous with its return. Session
+	// owns a per-call lifetime gate that closes admission and joins admitted
+	// callbacks before it inspects the response or advances turn state.
 	ChatStream(
 		ctx context.Context,
 		req openrouter.ChatRequest,

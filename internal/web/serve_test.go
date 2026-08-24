@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -156,6 +157,85 @@ func TestChatStreamsATurn(t *testing.T) {
 	if !strings.HasSuffix(body, "event: turn_done\ndata: {}\n\n") {
 		t.Fatalf("stream does not end with turn_done:\n%s", body)
 	}
+}
+
+type asyncWebClient struct {
+	deltaWriteStarted <-chan struct{}
+	callbackDone      chan<- struct{}
+}
+
+func (c asyncWebClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	go func() {
+		handlers.OnContent("async")
+		close(c.callbackDone)
+	}()
+	<-c.deltaWriteStarted
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{
+		Message: openrouter.Message{Role: "assistant", Content: "complete"},
+	}}}, nil
+}
+
+type blockingDeltaWriter struct {
+	*httptest.ResponseRecorder
+	deltaStarted chan struct{}
+	releaseDelta <-chan struct{}
+	once         sync.Once
+}
+
+func (w *blockingDeltaWriter) Write(data []byte) (int, error) {
+	if strings.Contains(string(data), "event: delta\n") {
+		w.once.Do(func() { close(w.deltaStarted) })
+		<-w.releaseDelta
+	}
+	return w.ResponseRecorder.Write(data)
+}
+
+func (w *blockingDeltaWriter) Flush() {}
+
+func TestChatWaitsForAdmittedProviderCallbackBeforeAssistantAndTurnDone(t *testing.T) {
+	deltaStarted := make(chan struct{})
+	releaseDelta := make(chan struct{})
+	callbackDone := make(chan struct{})
+	client := asyncWebClient{deltaWriteStarted: deltaStarted, callbackDone: callbackDone}
+	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, webTestTurnOwner{})
+	w := &blockingDeltaWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		deltaStarted:     deltaStarted,
+		releaseDelta:     releaseDelta,
+	}
+	done := make(chan struct{})
+	go func() {
+		NewServer(session).Handler().ServeHTTP(w, chatRequest(`{"message":"hi"}`))
+		close(done)
+	}()
+	select {
+	case <-deltaStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("asynchronous delta did not reach the SSE writer")
+	}
+	select {
+	case <-done:
+		t.Fatal("HTTP turn completed while asynchronous provider callback was active")
+	default:
+	}
+	close(releaseDelta)
+	select {
+	case <-callbackDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("asynchronous delta callback did not return")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP turn did not finish after asynchronous callback joined")
+	}
+	assertSSEOrder(t, w.Body.String(),
+		"event: delta\ndata: {\"text\":\"async\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: turn_done\ndata: {}",
+	)
 }
 
 func TestChatStreamsReasoningBeforeContent(t *testing.T) {

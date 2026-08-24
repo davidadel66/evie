@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -1225,6 +1226,324 @@ func triggerPostCommitCause(
 	case <-coordinator.ctx.Done():
 	case <-time.After(time.Second):
 		t.Fatal("terminal cause was not reserved at post-commit boundary")
+	}
+}
+
+type contextAwareHistory struct{ inner *fakeHistory }
+
+func (h contextAwareHistory) Append(ctx context.Context, lease memory.TurnLease, input memory.EventInput) (memory.Event, error) {
+	if err := ctx.Err(); err != nil {
+		return memory.Event{}, err
+	}
+	return h.inner.Append(ctx, lease, input)
+}
+
+func (h contextAwareHistory) Events(ctx context.Context) ([]memory.Event, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return h.inner.Events(ctx)
+}
+
+func TestOrdinaryToolReturnTransitionsAtomicallyToToolCommit(t *testing.T) {
+	tests := []struct {
+		name        string
+		tool        func(*bool) tools.Tool
+		wantPrepare bool
+		wantExecute bool
+	}{
+		{
+			name: "preparation failure",
+			tool: func(prepared *bool) tools.Tool {
+				return tools.Tool{
+					Schema:        openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "target"}},
+					NeedsApproval: true,
+					Prepare: func(context.Context, string) (tools.PreparedTool, error) {
+						*prepared = true
+						return tools.PreparedTool{}, errors.New("ordinary preparation failure")
+					},
+				}
+			},
+			wantPrepare: true,
+		},
+		{
+			name: "successful execution",
+			tool: func(executed *bool) tools.Tool {
+				return tools.Tool{
+					Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "target"}},
+					Execute: func(context.Context, string) (string, error) {
+						*executed = true
+						return "ok", nil
+					},
+				}
+			},
+			wantExecute: true,
+		},
+		{
+			name: "execution error",
+			tool: func(executed *bool) tools.Tool {
+				return tools.Tool{
+					Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "target"}},
+					Execute: func(context.Context, string) (string, error) {
+						*executed = true
+						return "", errors.New("ordinary execution failure")
+					},
+				}
+			},
+			wantExecute: true,
+		},
+	}
+	for _, test := range tests {
+		for _, cause := range postCommitCauses {
+			t.Run(test.name+"_"+cause.name, func(t *testing.T) {
+				owner := &scriptedOwner{}
+				if cause.heartbeat {
+					owner.heartbeatErr = errFakeLeaseLost
+				}
+				coordinator := newTurnCoordinator(context.Background())
+				coordinator.setStage(memory.StageTurnStart)
+				history := &fakeHistory{events: []memory.Event{{
+					ID: "root", SessionID: "test-session", Sequence: 1,
+					Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
+				}}}
+				client := &fakeClient{steps: []step{assistantStep("", nil,
+					toolCall("call", "target", `{}`),
+				)}}
+				s := New(client, "test", contextAwareHistory{inner: history}, memory.ScopeContext{
+					OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+				}, owner)
+				ticks := useManualHeartbeatTicker(s)
+				handoff := make(chan struct{})
+				release := make(chan struct{})
+				s.timing.beforeToolResultHandoff = func() {
+					close(handoff)
+					<-release
+				}
+				lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
+				stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
+				defer stopHeartbeat()
+				ran := false
+				events := &recorder{}
+				done := make(chan error, 1)
+				go func() {
+					done <- s.runOwnedTurn(
+						coordinator, lease, events,
+						func(context.Context, string, string, *tools.FileChangePreview) tools.Decision {
+							return tools.Approved
+						},
+						&turnProgress{requestParentID: "root"},
+						[]tools.Tool{test.tool(&ran)},
+					)
+				}()
+				select {
+				case <-handoff:
+				case <-time.After(5 * time.Second):
+					t.Fatal("ordinary tool result did not reach handoff")
+				}
+				triggerPostCommitCause(t, coordinator, ticks, cause)
+				close(release)
+				var err error
+				select {
+				case err = <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal("tool-result cause ordering deadlocked")
+				}
+				if !errors.Is(err, cause.err) {
+					t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
+				}
+				if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageToolCommit {
+					t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageToolCommit)
+				}
+				if ran != (test.wantPrepare || test.wantExecute) {
+					t.Fatalf("tool phase ran=%v, want true", ran)
+				}
+				if len(history.events) != 3 || len(client.reqs) != 1 {
+					t.Fatalf("durable=%+v provider calls=%d", history.events, len(client.reqs))
+				}
+				for _, callback := range events.events {
+					if strings.HasPrefix(callback, "result:") {
+						t.Fatalf("tool-result callback emitted after selected cause: %v", events.events)
+					}
+				}
+			})
+		}
+	}
+}
+
+type asyncProviderClient struct {
+	mu               sync.Mutex
+	calls            int
+	deltaStarted     <-chan struct{}
+	callbackDone     chan<- struct{}
+	lateRelease      <-chan struct{}
+	lateCallbackDone chan<- struct{}
+}
+
+func (c *asyncProviderClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	c.mu.Lock()
+	c.calls++
+	call := c.calls
+	c.mu.Unlock()
+	if call == 1 && c.lateRelease != nil {
+		go func() {
+			<-c.lateRelease
+			handlers.OnContent("too late")
+			close(c.lateCallbackDone)
+		}()
+		return assistantStep("final", nil).res, nil
+	}
+	if call == 1 {
+		go func() {
+			handlers.OnContent("admitted")
+			close(c.callbackDone)
+		}()
+		<-c.deltaStarted
+		return assistantStep("", nil, toolCall("call", "echo", `{}`)).res, nil
+	}
+	return assistantStep("final", nil).res, nil
+}
+
+func (c *asyncProviderClient) callCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+type blockingLifetimeEvents struct {
+	mu           sync.Mutex
+	deltaStarted chan struct{}
+	releaseDelta <-chan struct{}
+	deltaActive  bool
+	overlapped   bool
+	events       []string
+	startOnce    sync.Once
+}
+
+func (e *blockingLifetimeEvents) Delta(text string) {
+	e.mu.Lock()
+	e.deltaActive = true
+	e.events = append(e.events, "delta:"+text)
+	e.mu.Unlock()
+	e.startOnce.Do(func() { close(e.deltaStarted) })
+	<-e.releaseDelta
+	e.mu.Lock()
+	e.deltaActive = false
+	e.mu.Unlock()
+}
+
+func (e *blockingLifetimeEvents) record(value string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.deltaActive {
+		e.overlapped = true
+	}
+	e.events = append(e.events, value)
+}
+
+func (e *blockingLifetimeEvents) Reasoning(text string) { e.record("reasoning:" + text) }
+func (e *blockingLifetimeEvents) ReasoningDone()        { e.record("reasoningdone") }
+func (e *blockingLifetimeEvents) AssistantDone(content string) {
+	e.record("done:" + content)
+}
+func (e *blockingLifetimeEvents) ToolCall(id, name, args string) {
+	e.record(fmt.Sprintf("call:%s:%s:%s", id, name, args))
+}
+func (e *blockingLifetimeEvents) ToolResult(id, content string, isErr bool) {
+	e.record(fmt.Sprintf("result:%s:%v:%s", id, isErr, content))
+}
+func (e *blockingLifetimeEvents) ResponseDiscarded(reason DiscardReason, message string) {
+	e.record(fmt.Sprintf("discarded:%s:%s", reason, message))
+}
+
+func (e *blockingLifetimeEvents) snapshot() ([]string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.events...), e.overlapped
+}
+
+func TestProviderCallbackLifetimeJoinsAdmittedAsyncCallbackBeforeTurnProgress(t *testing.T) {
+	deltaStarted := make(chan struct{})
+	releaseDelta := make(chan struct{})
+	callbackDone := make(chan struct{})
+	client := &asyncProviderClient{deltaStarted: deltaStarted, callbackDone: callbackDone}
+	events := &blockingLifetimeEvents{deltaStarted: deltaStarted, releaseDelta: releaseDelta}
+	ran := false
+	done := make(chan error, 1)
+	go func() {
+		done <- ownedSession(client, &fakeHistory{}, &scriptedOwner{}).Send(
+			context.Background(), "go", events, nil, echoTool("echo", false, &ran),
+		)
+	}()
+	select {
+	case <-deltaStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("asynchronous provider callback was not admitted")
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("Send completed while provider callback was active: %v", err)
+	default:
+	}
+	if got, overlapped := events.snapshot(); overlapped || len(got) != 1 || got[0] != "delta:admitted" || ran {
+		t.Fatalf("callbacks=%v overlapped=%v tool ran=%v before provider callback release", got, overlapped, ran)
+	}
+	close(releaseDelta)
+	select {
+	case <-callbackDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("admitted provider callback did not finish")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Send did not finish after provider callback joined")
+	}
+	got, overlapped := events.snapshot()
+	if overlapped || !ran || client.callCount() != 2 {
+		t.Fatalf("callbacks=%v overlapped=%v tool ran=%v provider calls=%d", got, overlapped, ran, client.callCount())
+	}
+	assertOrderedCallbacks(t, got,
+		"delta:admitted", "done:", "call:call:echo:{}", "result:call:false:echo:{}", "done:final",
+	)
+}
+
+func TestProviderCallbackLifetimeRejectsCallbackStartingAfterReturn(t *testing.T) {
+	lateRelease := make(chan struct{})
+	lateDone := make(chan struct{})
+	client := &asyncProviderClient{lateRelease: lateRelease, lateCallbackDone: lateDone}
+	events := &recorder{}
+	if err := ownedSession(client, &fakeHistory{}, &scriptedOwner{}).Send(context.Background(), "go", events, nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	close(lateRelease)
+	select {
+	case <-lateDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("late provider callback did not return")
+	}
+	if containsString(events.events, "delta:too late") {
+		t.Fatalf("late post-return callback was emitted: %v", events.events)
+	}
+}
+
+func assertOrderedCallbacks(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	position := -1
+	for _, expected := range want {
+		found := -1
+		for i := position + 1; i < len(got); i++ {
+			if got[i] == expected {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			t.Fatalf("callbacks=%v missing ordered value %q", got, expected)
+		}
+		position = found
 	}
 }
 
