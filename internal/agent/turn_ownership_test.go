@@ -30,7 +30,6 @@ type scriptedOwner struct {
 	releaseErr     error
 	releaseBlock   bool
 	releaseContext chan<- context.Context
-	releaseWait    <-chan struct{}
 	heartbeatBlock bool
 	heartbeatStart chan struct{}
 	heartbeatWait  <-chan struct{}
@@ -116,14 +115,9 @@ func (o *scriptedOwner) Release(ctx context.Context, _ memory.TurnLease) error {
 	err := o.releaseErr
 	block := o.releaseBlock
 	contextOut := o.releaseContext
-	wait := o.releaseWait
 	o.mu.Unlock()
 	if contextOut != nil {
 		contextOut <- ctx
-	}
-	if wait != nil {
-		<-wait
-		return err
 	}
 	if block {
 		<-ctx.Done()
@@ -599,32 +593,35 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 
 	t.Run("terminal timeout", func(t *testing.T) {
 		providerErr := errors.New("provider unavailable")
-		appendContext := make(chan context.Context, 1)
-		releaseAppend := make(chan struct{})
-		history := &fakeHistory{
-			appendWaitAt: 2, appendContext: appendContext, appendWait: releaseAppend,
-			appendErrAt: 2, appendErr: context.DeadlineExceeded,
-		}
+		appendEntered := make(chan struct{})
+		history := &fakeHistory{appendBlockAt: 2, appendEntered: appendEntered}
 		s := ownedSession(&fakeClient{steps: []step{{err: providerErr}}}, history, &scriptedOwner{})
-		fixedDeadline := time.Now().Add(time.Hour)
+		terminalCtx := newScriptedDeadlineContext()
+		releaseCtx := newScriptedDeadlineContext()
+		contextCalls := 0
 		s.timing.newCleanupContext = func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 			if timeout != 5*time.Second {
 				panic(fmt.Sprintf("cleanup timeout=%v", timeout))
 			}
-			return context.WithDeadline(context.WithoutCancel(parent), fixedDeadline)
+			contextCalls++
+			if contextCalls == 1 {
+				return terminalCtx, func() {}
+			}
+			return releaseCtx, func() {}
 		}
 		done := make(chan error, 1)
 		go func() { done <- s.Send(context.Background(), "go", &recorder{}, nil) }()
-		var terminalCtx context.Context
 		select {
-		case terminalCtx = <-appendContext:
+		case <-appendEntered:
 		case <-time.After(5 * time.Second):
 			t.Fatal("terminal cleanup did not reach append boundary")
 		}
-		if deadline, ok := terminalCtx.Deadline(); !ok || !deadline.Equal(fixedDeadline) {
-			t.Fatalf("terminal deadline=%v present=%v, want %v", deadline, ok, fixedDeadline)
+		select {
+		case err := <-done:
+			t.Fatalf("terminal cleanup completed before deadline trigger: %v", err)
+		default:
 		}
-		close(releaseAppend)
+		terminalCtx.expire()
 		var err error
 		select {
 		case err = <-done:
@@ -641,17 +638,14 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 
 	t.Run("release timeout", func(t *testing.T) {
 		releaseContext := make(chan context.Context, 1)
-		releaseOwner := make(chan struct{})
-		owner := &scriptedOwner{
-			releaseErr: context.DeadlineExceeded, releaseContext: releaseContext, releaseWait: releaseOwner,
-		}
+		owner := &scriptedOwner{releaseBlock: true, releaseContext: releaseContext}
 		s := ownedSession(&fakeClient{steps: []step{assistantStep("done", nil)}}, &fakeHistory{}, owner)
-		fixedDeadline := time.Now().Add(time.Hour)
+		triggeredCtx := newScriptedDeadlineContext()
 		s.timing.newCleanupContext = func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 			if timeout != 5*time.Second {
 				panic(fmt.Sprintf("cleanup timeout=%v", timeout))
 			}
-			return context.WithDeadline(context.WithoutCancel(parent), fixedDeadline)
+			return triggeredCtx, func() {}
 		}
 		done := make(chan error, 1)
 		go func() { done <- s.Send(context.Background(), "go", &recorder{}, nil) }()
@@ -661,10 +655,15 @@ func TestTerminalAndReleaseCleanupAreBoundedAndErrorsAreJoined(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("release cleanup did not reach release boundary")
 		}
-		if deadline, ok := releaseCtx.Deadline(); !ok || !deadline.Equal(fixedDeadline) {
-			t.Fatalf("release deadline=%v present=%v, want %v", deadline, ok, fixedDeadline)
+		if deadline, ok := releaseCtx.Deadline(); !ok || !deadline.Equal(triggeredCtx.deadline) {
+			t.Fatalf("release deadline=%v present=%v, want %v", deadline, ok, triggeredCtx.deadline)
 		}
-		close(releaseOwner)
+		select {
+		case err := <-done:
+			t.Fatalf("release completed before deadline trigger: %v", err)
+		default:
+		}
+		triggeredCtx.expire()
 		var err error
 		select {
 		case err = <-done:

@@ -38,9 +38,6 @@ type fakeHistory struct {
 	appendErrAt    int
 	appendBlockAt  int
 	appendEntered  chan struct{}
-	appendWaitAt   int
-	appendContext  chan<- context.Context
-	appendWait     <-chan struct{}
 	appendErr      error
 	eventsErr      error
 	afterAppend    func(memory.EventInput)
@@ -55,15 +52,6 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 		}
 		<-ctx.Done()
 		return memory.Event{}, ctx.Err()
-	}
-	if f.appendWaitAt == f.appendAttempts {
-		if f.appendContext != nil {
-			f.appendContext <- ctx
-		}
-		if f.appendWait != nil {
-			<-f.appendWait
-		}
-		return memory.Event{}, f.appendErr
 	}
 	if f.appendErr != nil && (f.appendErrAt == 0 || f.appendAttempts == f.appendErrAt) {
 		return memory.Event{}, f.appendErr

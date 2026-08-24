@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,6 +45,38 @@ type transactionResolutionObservation struct {
 	hasDeadline bool
 }
 
+type triggeredDeadlineContext struct {
+	context.Context
+	deadline time.Time
+	done     chan struct{}
+	once     sync.Once
+	mu       sync.RWMutex
+	expired  bool
+}
+
+func newTriggeredDeadlineContext(deadline time.Time) *triggeredDeadlineContext {
+	return &triggeredDeadlineContext{Context: context.Background(), deadline: deadline, done: make(chan struct{})}
+}
+
+func (c *triggeredDeadlineContext) Deadline() (time.Time, bool) { return c.deadline, true }
+func (c *triggeredDeadlineContext) Done() <-chan struct{}       { return c.done }
+func (c *triggeredDeadlineContext) Err() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.expired {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func (c *triggeredDeadlineContext) trigger() {
+	c.once.Do(func() {
+		c.mu.Lock()
+		c.expired = true
+		c.mu.Unlock()
+		close(c.done)
+	})
+}
+
 func TestTransactionResolutionContextIgnoresCancellationButKeepsDeadline(t *testing.T) {
 	deadlineCtx, stopDeadline := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
 	defer stopDeadline()
@@ -62,12 +95,29 @@ func TestTransactionResolutionContextIgnoresCancellationButKeepsDeadline(t *test
 	}
 }
 
-func scriptStoreResolutionDeadline(
-	store *Store,
-) (<-chan transactionResolutionObservation, <-chan struct{}, func()) {
+func scriptStoreResolutionDeadline(t *testing.T, store *Store, deadline time.Time) (
+	<-chan transactionResolutionObservation,
+	<-chan struct{}, *triggeredDeadlineContext,
+	<-chan struct{}, *triggeredDeadlineContext,
+) {
+	t.Helper()
 	observed := make(chan transactionResolutionObservation, 2)
 	commitEntered := make(chan struct{})
-	releaseCommit := make(chan struct{})
+	rollbackEntered := make(chan struct{})
+	commitCtx := newTriggeredDeadlineContext(deadline)
+	rollbackCtx := newTriggeredDeadlineContext(deadline)
+	contextCalls := 0
+	store.newResolutionContext = func(context.Context) (context.Context, context.CancelFunc) {
+		contextCalls++
+		if contextCalls == 1 {
+			return commitCtx, func() {}
+		}
+		if contextCalls == 2 {
+			return rollbackCtx, func() {}
+		}
+		t.Fatalf("resolution context calls=%d, want at most 2", contextCalls)
+		return context.Background(), func() {}
+	}
 	store.resolveImmediateTransaction = func(
 		ctx context.Context,
 		_ *sql.Conn,
@@ -77,13 +127,25 @@ func scriptStoreResolutionDeadline(
 		observed <- transactionResolutionObservation{
 			statement: statement, deadline: deadline, hasDeadline: ok,
 		}
-		if statement == `COMMIT` {
+		switch statement {
+		case `COMMIT`:
 			close(commitEntered)
-			<-releaseCommit
+		case `ROLLBACK`:
+			close(rollbackEntered)
 		}
-		return nil, context.DeadlineExceeded
+		<-ctx.Done()
+		return nil, ctx.Err()
 	}
-	return observed, commitEntered, func() { close(releaseCommit) }
+	return observed, commitEntered, commitCtx, rollbackEntered, rollbackCtx
+}
+
+func requireStillBlocked(t *testing.T, done <-chan error, phase string) {
+	t.Helper()
+	select {
+	case err := <-done:
+		t.Fatalf("%s completed before deadline trigger: %v", phase, err)
+	default:
+	}
 }
 
 func requireBoundedTransactionResolution(
@@ -109,6 +171,7 @@ func requireBoundedTransactionResolution(
 
 func TestCleanupDeadlineBoundsReleaseCommitAndRollback(t *testing.T) {
 	db := newTestDB(t)
+	db.SetMaxOpenConns(1)
 	store := NewStore(db)
 	session, err := store.CreateGlobalSession(context.Background())
 	if err != nil {
@@ -119,10 +182,9 @@ func TestCleanupDeadlineBoundsReleaseCommitAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	observed, commitEntered, releaseCommit := scriptStoreResolutionDeadline(store)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
-	wantDeadline, _ := ctx.Deadline()
-	defer cancel()
+	deadline := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	observed, commitEntered, commitCtx, rollbackEntered, rollbackCtx := scriptStoreResolutionDeadline(t, store, deadline)
+	ctx := newTriggeredDeadlineContext(deadline)
 	done := make(chan error, 1)
 	go func() {
 		done <- store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken)
@@ -132,7 +194,15 @@ func TestCleanupDeadlineBoundsReleaseCommitAndRollback(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("release did not reach COMMIT resolution")
 	}
-	releaseCommit()
+	requireStillBlocked(t, done, "release COMMIT")
+	commitCtx.trigger()
+	select {
+	case <-rollbackEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("release did not reach ROLLBACK resolution")
+	}
+	requireStillBlocked(t, done, "release ROLLBACK")
+	rollbackCtx.trigger()
 
 	select {
 	case err := <-done:
@@ -142,9 +212,10 @@ func TestCleanupDeadlineBoundsReleaseCommitAndRollback(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("release transaction outlived cleanup deadline")
 	}
-	requireBoundedTransactionResolution(t, observed, wantDeadline)
+	requireBoundedTransactionResolution(t, observed, deadline)
 
 	store.resolveImmediateTransaction = executeImmediateTransactionStatement
+	store.newResolutionContext = transactionResolutionContext
 	if _, err := store.GetTurnLease(context.Background(), session.ID); err != nil {
 		t.Fatalf("failed release must leave lease held: %v", err)
 	}
@@ -152,6 +223,7 @@ func TestCleanupDeadlineBoundsReleaseCommitAndRollback(t *testing.T) {
 
 func TestCleanupDeadlineBoundsTerminalCommitAndRollback(t *testing.T) {
 	db := newTestDB(t)
+	db.SetMaxOpenConns(1)
 	store := NewStore(db)
 	session, err := store.CreateGlobalSession(context.Background())
 	if err != nil {
@@ -176,10 +248,9 @@ func TestCleanupDeadlineBoundsTerminalCommitAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	observed, commitEntered, releaseCommit := scriptStoreResolutionDeadline(store)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
-	wantDeadline, _ := ctx.Deadline()
-	defer cancel()
+	deadline := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	observed, commitEntered, commitCtx, rollbackEntered, rollbackCtx := scriptStoreResolutionDeadline(t, store, deadline)
+	ctx := newTriggeredDeadlineContext(deadline)
 	done := make(chan error, 1)
 	go func() {
 		_, appendErr := history.Append(ctx, lease, memory.EventInput{
@@ -195,7 +266,15 @@ func TestCleanupDeadlineBoundsTerminalCommitAndRollback(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("terminal append did not reach COMMIT resolution")
 	}
-	releaseCommit()
+	requireStillBlocked(t, done, "terminal COMMIT")
+	commitCtx.trigger()
+	select {
+	case <-rollbackEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("terminal append did not reach ROLLBACK resolution")
+	}
+	requireStillBlocked(t, done, "terminal ROLLBACK")
+	rollbackCtx.trigger()
 
 	select {
 	case err := <-done:
@@ -205,9 +284,10 @@ func TestCleanupDeadlineBoundsTerminalCommitAndRollback(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("terminal transaction outlived cleanup deadline")
 	}
-	requireBoundedTransactionResolution(t, observed, wantDeadline)
+	requireBoundedTransactionResolution(t, observed, deadline)
 
 	store.resolveImmediateTransaction = executeImmediateTransactionStatement
+	store.newResolutionContext = transactionResolutionContext
 	events, err := store.LoadEvents(context.Background(), session.ID)
 	if err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 )
 
 type immediateTransactionResolver func(context.Context, *sql.Conn, string) (sql.Result, error)
+type immediateTransactionContextFactory func(context.Context) (context.Context, context.CancelFunc)
 
 func executeImmediateTransactionStatement(
 	ctx context.Context,
@@ -47,6 +48,7 @@ func withImmediateTransaction(
 		ctx,
 		db,
 		executeImmediateTransactionStatement,
+		transactionResolutionContext,
 		operation,
 	)
 }
@@ -55,6 +57,7 @@ func withImmediateTransactionResolver(
 	ctx context.Context,
 	db *sql.DB,
 	resolve immediateTransactionResolver,
+	resolutionContext immediateTransactionContextFactory,
 	operation func(*sql.Conn) error,
 ) (err error) {
 	conn, err := db.Conn(ctx)
@@ -75,7 +78,7 @@ func withImmediateTransactionResolver(
 		if committed {
 			return
 		}
-		rollbackCtx, cancel := transactionResolutionContext(ctx)
+		rollbackCtx, cancel := resolutionContext(ctx)
 		defer cancel()
 		if _, rollbackErr := resolve(rollbackCtx, conn, `ROLLBACK`); rollbackErr != nil {
 			discardImmediateTransactionConnection(conn)
@@ -91,7 +94,7 @@ func withImmediateTransactionResolver(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	commitCtx, cancel := transactionResolutionContext(ctx)
+	commitCtx, cancel := resolutionContext(ctx)
 	defer cancel()
 	if _, err := resolve(commitCtx, conn, `COMMIT`); err != nil {
 		return fmt.Errorf("commit immediate transaction: %w", err)
