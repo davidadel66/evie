@@ -255,9 +255,10 @@ func smoothPrinterTo(out io.Writer) (onDelta func(string), done func()) {
 // lazily on the first delta of each assistant message and flushed when
 // the message completes, so pacing never leaks across messages.
 type replEvents struct {
-	deltaIn func(string)
-	flush   func()
-	out     io.Writer
+	deltaIn         func(string)
+	flush           func()
+	out             io.Writer
+	streamedContent strings.Builder
 }
 
 func (r *replEvents) writer() io.Writer {
@@ -271,6 +272,7 @@ func (r *replEvents) Delta(text string) {
 	if r.deltaIn == nil {
 		r.deltaIn, r.flush = smoothPrinterTo(r.writer())
 	}
+	r.streamedContent.WriteString(text)
 	r.deltaIn(text)
 }
 
@@ -302,6 +304,11 @@ func (r *replEvents) AssistantDone(content string) {
 		r.flush()
 		r.deltaIn, r.flush = nil, nil
 	}
+	streamed := r.streamedContent.String()
+	if strings.HasPrefix(content, streamed) {
+		_, _ = fmt.Fprint(r.writer(), content[len(streamed):])
+	}
+	r.streamedContent.Reset()
 	if content != "" {
 		_, _ = fmt.Fprintln(r.writer())
 	}
@@ -319,6 +326,7 @@ func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
 		r.deltaIn, r.flush = nil, nil
 		_, _ = fmt.Fprintln(r.writer())
 	}
+	r.streamedContent.Reset()
 	_, _ = fmt.Fprintln(r.writer(), message)
 }
 

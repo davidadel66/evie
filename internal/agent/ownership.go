@@ -42,10 +42,12 @@ type TurnOwnership interface {
 }
 
 type turnTiming struct {
-	leaseDuration     time.Duration
-	heartbeatInterval time.Duration
-	cleanupTimeout    time.Duration
-	newTicker         func(time.Duration) heartbeatTicker
+	leaseDuration               time.Duration
+	heartbeatInterval           time.Duration
+	cleanupTimeout              time.Duration
+	newTicker                   func(time.Duration) heartbeatTicker
+	beforeAssistantConstruction func()
+	beforeApprovalInvocation    func()
 	// beforeToolResultHandoff is a deterministic test seam at the zero-work
 	// boundary after ordinary tool return and before lifecycle-stage handoff.
 	beforeToolResultHandoff func()
@@ -113,7 +115,21 @@ func newTurnCoordinator(parent context.Context) *turnCoordinator {
 	return &turnCoordinator{ctx: ctx, cancel: cancel}
 }
 
-func (c *turnCoordinator) setStage(stage memory.TurnStage) {
+// setStage admits an ordinary phase entry only while the coordinator remains
+// live. Mandatory transitions after a durable commit or ordinary tool return
+// use their dedicated handoff methods because those transitions intentionally
+// finish even when a cause was reserved concurrently.
+func (c *turnCoordinator) setStage(stage memory.TurnStage) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cause.kind != causeNone || c.pending != nil || c.ctx.Err() != nil {
+		return false
+	}
+	c.stage = stage
+	return true
+}
+
+func (c *turnCoordinator) finishAdmittedCallbackStage(stage memory.TurnStage) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.cause.kind == causeNone {

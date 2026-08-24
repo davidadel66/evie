@@ -32,3 +32,22 @@ func TestREPLReasoningOnlyDiscardUsesExactWarning(t *testing.T) {
 		t.Fatalf("REPL output = %q", got)
 	}
 }
+
+func TestREPLAssistantDonePrintsCommittedAsyncProviderContentWithoutDelta(t *testing.T) {
+	var out bytes.Buffer
+	events := &replEvents{out: &out}
+	events.AssistantDone("complete answer")
+	if got := out.String(); got != "complete answer\n" {
+		t.Fatalf("REPL output=%q, want committed content once", got)
+	}
+}
+
+func TestREPLAssistantDonePrintsOnlyMissingCommittedAsyncProviderSuffix(t *testing.T) {
+	var out bytes.Buffer
+	events := &replEvents{out: &out}
+	events.Delta("complete ")
+	events.AssistantDone("complete answer")
+	if got := out.String(); got != "complete answer\n" {
+		t.Fatalf("REPL output=%q, want committed content without duplication", got)
+	}
+}

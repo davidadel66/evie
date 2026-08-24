@@ -29,6 +29,35 @@ describe("reduce", () => {
     expect(items[0]).toMatchObject({ streaming: false, text: "hi" });
   });
 
+  it("uses committed async-provider content when no delta was admitted", () => {
+    const items = fold([
+      { type: "reasoning", text: "thinking" },
+      { type: "reasoning_done" },
+      { type: "assistant_done", content: "complete answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(2);
+    expect(items[1]).toMatchObject({
+      kind: "assistant",
+      text: "complete answer",
+      streaming: false,
+    });
+  });
+
+  it("reconciles a partial async-provider delta to committed content", () => {
+    const items = fold([
+      { type: "delta", text: "complete " },
+      { type: "assistant_done", content: "complete answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "complete answer",
+      streaming: false,
+    });
+  });
+
   it("drops the empty assistant message of a tool-only turn", () => {
     // The real sequence: no deltas, assistant_done with no content, then the
     // tool calls. An empty bubble must never reach the transcript.

@@ -1229,6 +1229,212 @@ func triggerPostCommitCause(
 	}
 }
 
+func TestOrdinaryAssistantPhaseEntryRejectsReservedCause(t *testing.T) {
+	for _, cause := range postCommitCauses {
+		t.Run(cause.name, func(t *testing.T) {
+			owner := &scriptedOwner{}
+			if cause.heartbeat {
+				owner.heartbeatErr = errFakeLeaseLost
+			}
+			coordinator := newTurnCoordinator(context.Background())
+			coordinator.setStage(memory.StageTurnStart)
+			history := &fakeHistory{events: []memory.Event{{
+				ID: "root", SessionID: "test-session", Sequence: 1,
+				Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
+			}}}
+			client := &fakeClient{steps: []step{assistantStep("must not commit", nil)}}
+			s := ownedSession(client, history, owner)
+			ticks := useManualHeartbeatTicker(s)
+			s.timing.beforeAssistantConstruction = func() {
+				triggerPostCommitCause(t, coordinator, ticks, cause)
+			}
+			lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
+			stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
+			defer stopHeartbeat()
+			events := &recorder{}
+			err := s.runOwnedTurn(
+				coordinator, lease, events, nil,
+				&turnProgress{requestParentID: "root"}, nil,
+			)
+			if !errors.Is(err, cause.err) {
+				t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
+			}
+			if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageProvider {
+				t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageProvider)
+			}
+			if len(history.events) != 1 || len(client.reqs) != 1 || len(events.events) != 0 {
+				t.Fatalf("durable=%+v provider=%d callbacks=%v", history.events, len(client.reqs), events.events)
+			}
+		})
+	}
+}
+
+func TestOrdinaryPhaseEntryCannotOverwritePendingCauseStage(t *testing.T) {
+	tests := []struct {
+		name      string
+		previous  memory.TurnStage
+		attempted memory.TurnStage
+	}{
+		{name: "before assistant construction", previous: memory.StageProvider, attempted: memory.StageAssistantCommit},
+		{name: "before approval invocation", previous: memory.StageToolPrepare, attempted: memory.StageToolApproval},
+	}
+	for _, test := range tests {
+		for _, cause := range []struct {
+			name string
+			kind causeKind
+			err  error
+		}{
+			{name: "caller", kind: causeCallerCancelled, err: context.Canceled},
+			{name: "lease", kind: causeLeaseLost, err: ErrLeaseLost},
+		} {
+			t.Run(test.name+"_"+cause.name, func(t *testing.T) {
+				coordinator := newTurnCoordinator(context.Background())
+				if !coordinator.setStage(test.previous) {
+					t.Fatalf("could not enter fixture stage %q", test.previous)
+				}
+				// Hold terminal finalization after reservation so phase admission
+				// observes pending != nil while cause.kind is still causeNone.
+				coordinator.callbackMu.RLock()
+				selectionDone := make(chan bool, 1)
+				go func() {
+					selectionDone <- coordinator.selectCause(cause.kind, cause.err, 0)
+				}()
+				select {
+				case <-coordinator.ctx.Done():
+				case <-time.After(5 * time.Second):
+					coordinator.callbackMu.RUnlock()
+					t.Fatal("cause was not reserved")
+				}
+				if coordinator.setStage(test.attempted) {
+					coordinator.callbackMu.RUnlock()
+					t.Fatalf("pending cause admitted stage %q", test.attempted)
+				}
+				coordinator.mu.Lock()
+				stage := coordinator.stage
+				coordinator.mu.Unlock()
+				if stage != test.previous {
+					coordinator.callbackMu.RUnlock()
+					t.Fatalf("stage=%q, want previously entered %q", stage, test.previous)
+				}
+				coordinator.callbackMu.RUnlock()
+				select {
+				case selected := <-selectionDone:
+					if !selected {
+						t.Fatal("reserved cause did not finalize")
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("reserved cause did not finish")
+				}
+				if result := coordinator.result(); result.kind != cause.kind || result.stage != test.previous {
+					t.Fatalf("cause=%+v, want kind=%v stage=%q", result, cause.kind, test.previous)
+				}
+			})
+		}
+	}
+}
+
+func TestOrdinaryPhaseEntryRejectsPendingOrCancelledCoordinator(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		previous  memory.TurnStage
+		attempted memory.TurnStage
+	}{
+		{name: "assistant construction", previous: memory.StageProvider, attempted: memory.StageAssistantCommit},
+		{name: "approval invocation", previous: memory.StageToolPrepare, attempted: memory.StageToolApproval},
+	} {
+		t.Run(test.name+"_pending", func(t *testing.T) {
+			coordinator := newTurnCoordinator(context.Background())
+			if !coordinator.setStage(test.previous) {
+				t.Fatal("fixture stage was not entered")
+			}
+			coordinator.mu.Lock()
+			coordinator.pending = &terminalCause{kind: causeLeaseLost, err: ErrLeaseLost}
+			coordinator.mu.Unlock()
+			if coordinator.setStage(test.attempted) {
+				t.Fatalf("pending cause admitted stage %q", test.attempted)
+			}
+			coordinator.mu.Lock()
+			stage := coordinator.stage
+			coordinator.mu.Unlock()
+			if stage != test.previous {
+				t.Fatalf("stage=%q, want %q", stage, test.previous)
+			}
+		})
+
+		t.Run(test.name+"_cancelled", func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			coordinator := newTurnCoordinator(ctx)
+			if !coordinator.setStage(test.previous) {
+				t.Fatal("fixture stage was not entered")
+			}
+			cancel()
+			if coordinator.setStage(test.attempted) {
+				t.Fatalf("cancelled context admitted stage %q", test.attempted)
+			}
+			coordinator.mu.Lock()
+			stage := coordinator.stage
+			coordinator.mu.Unlock()
+			if stage != test.previous {
+				t.Fatalf("stage=%q, want %q", stage, test.previous)
+			}
+		})
+	}
+}
+
+func TestOrdinaryApprovalPhaseEntryRejectsReservedCause(t *testing.T) {
+	for _, cause := range postCommitCauses {
+		t.Run(cause.name, func(t *testing.T) {
+			owner := &scriptedOwner{}
+			if cause.heartbeat {
+				owner.heartbeatErr = errFakeLeaseLost
+			}
+			coordinator := newTurnCoordinator(context.Background())
+			coordinator.setStage(memory.StageTurnStart)
+			history := &fakeHistory{events: []memory.Event{{
+				ID: "root", SessionID: "test-session", Sequence: 1,
+				Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
+			}}}
+			client := &fakeClient{steps: []step{assistantStep("", nil,
+				toolCall("call", "gated", `{}`),
+			)}}
+			s := ownedSession(client, history, owner)
+			ticks := useManualHeartbeatTicker(s)
+			s.timing.beforeApprovalInvocation = func() {
+				triggerPostCommitCause(t, coordinator, ticks, cause)
+			}
+			lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
+			stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
+			defer stopHeartbeat()
+			frontendCalled := false
+			ran := false
+			events := &recorder{}
+			err := s.runOwnedTurn(
+				coordinator, lease, events,
+				func(context.Context, string, string, *tools.FileChangePreview) tools.Decision {
+					frontendCalled = true
+					return tools.Approved
+				},
+				&turnProgress{requestParentID: "root"},
+				[]tools.Tool{echoTool("gated", true, &ran)},
+			)
+			if !errors.Is(err, cause.err) {
+				t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
+			}
+			if selected := coordinator.result(); selected.kind != cause.kind || selected.stage != memory.StageToolPrepare {
+				t.Fatalf("cause=%+v, want kind=%v stage=%q", selected, cause.kind, memory.StageToolPrepare)
+			}
+			if frontendCalled || ran || len(history.events) != 3 || len(client.reqs) != 1 {
+				t.Fatalf("frontend=%v ran=%v durable=%+v provider=%d callbacks=%v", frontendCalled, ran, history.events, len(client.reqs), events.events)
+			}
+			for _, callback := range events.events {
+				if strings.HasPrefix(callback, "result:") {
+					t.Fatalf("tool result emitted after rejected approval entry: %v", events.events)
+				}
+			}
+		})
+	}
+}
+
 type contextAwareHistory struct{ inner *fakeHistory }
 
 func (h contextAwareHistory) Append(ctx context.Context, lease memory.TurnLease, input memory.EventInput) (memory.Event, error) {

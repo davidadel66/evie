@@ -129,12 +129,33 @@ export function reduce(
 
     case "assistant_done": {
       const last = items[items.length - 1];
-      if (last?.kind !== "assistant" || !last.streaming) return items;
       // AssistantDone fires for every assistant message, including the
       // tool-only ones that carry no text. The design has no empty bubbles,
       // so drop it rather than render a blank.
-      if (last.text === "") return items.slice(0, -1);
-      return replaceLast(items, { ...last, streaming: false });
+      if (ev.content === "") {
+        if (last?.kind === "assistant" && last.streaming) {
+          return items.slice(0, -1);
+        }
+        return items;
+      }
+      // Committed content is authoritative. An asynchronous provider may
+      // produce no admitted deltas or only a prefix before its lifetime closes.
+      if (last?.kind === "assistant" && last.streaming) {
+        return replaceLast(items, {
+          ...last,
+          text: ev.content,
+          streaming: false,
+        });
+      }
+      return [
+        ...items,
+        {
+          kind: "assistant",
+          key: nextKey("a"),
+          text: ev.content,
+          streaming: false,
+        },
+      ];
     }
 
     case "tool_call": {

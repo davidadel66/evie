@@ -214,7 +214,12 @@ func (s *Session) runOwnedTurn(
 			return err
 		}
 
-		coordinator.setStage(memory.StageAssistantCommit)
+		if s.timing.beforeAssistantConstruction != nil {
+			s.timing.beforeAssistantConstruction()
+		}
+		if !coordinator.setStage(memory.StageAssistantCommit) {
+			return s.observeTurnContext(coordinator)
+		}
 		assistantInput, err := assistantEventInput(msg)
 		if err != nil {
 			coordinator.selectCause(causeProviderInvalid, err, 0)
@@ -265,9 +270,8 @@ func (s *Session) runOwnedTurn(
 
 		var lastOutcomeID memory.EventID
 		for callIndex, call := range msg.ToolCalls {
-			coordinator.setStage(memory.StageToolPrepare)
-			if err := s.observeTurnContext(coordinator); err != nil {
-				return err
+			if !coordinator.setStage(memory.StageToolPrepare) {
+				return s.observeTurnContext(coordinator)
 			}
 			executionUUID, err := uuid.NewRandom()
 			if err != nil {
@@ -297,7 +301,12 @@ func (s *Session) runOwnedTurn(
 				name, args string,
 				preview *tools.FileChangePreview,
 			) tools.Decision {
-				coordinator.setStage(memory.StageToolApproval)
+				if s.timing.beforeApprovalInvocation != nil {
+					s.timing.beforeApprovalInvocation()
+				}
+				if !coordinator.setStage(memory.StageToolApproval) {
+					return tools.Expired
+				}
 				return admitApproval(coordinator, approve, approvalCtx, name, args, preview)
 			}
 			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
@@ -325,9 +334,13 @@ func (s *Session) runOwnedTurn(
 			authorize := func(authorizeCtx context.Context, boundary tools.AuthorizationBoundary) error {
 				switch boundary {
 				case tools.AuthorizePreparation:
-					coordinator.setStage(memory.StageToolPrepare)
+					if !coordinator.setStage(memory.StageToolPrepare) {
+						return s.observeTurnContext(coordinator)
+					}
 				case tools.AuthorizeExecution:
-					coordinator.setStage(memory.StageToolExecute)
+					if !coordinator.setStage(memory.StageToolExecute) {
+						return s.observeTurnContext(coordinator)
+					}
 				}
 				return s.owner.Authorize(authorizeCtx, lease)
 			}
@@ -373,7 +386,7 @@ func (s *Session) runOwnedTurn(
 			if !coordinator.emitIfActive(func() {
 				ev.ToolResult(call.ID, result.Content, isErr)
 				if callIndex+1 < len(msg.ToolCalls) {
-					coordinator.setStage(memory.StageToolPrepare)
+					coordinator.finishAdmittedCallbackStage(memory.StageToolPrepare)
 				}
 			}) {
 				return s.observeTurnContext(coordinator)
