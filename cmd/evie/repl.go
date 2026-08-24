@@ -344,33 +344,17 @@ func (r *replEvents) ToolCall(id, name, args string) {
 func (r *replEvents) ToolResult(id, content string, isErr bool) {}
 
 func (r *replEvents) ResponseDiscarded(_ agent.DiscardReason, message string) {
-	r.reasoningOpen = false
-	if r.deltaIn != nil {
-		r.flush()
-		r.deltaIn, r.flush = nil, nil
-		_, _ = fmt.Fprintln(r.writer())
-	}
-	r.streamedContent.Reset()
-	_, _ = fmt.Fprintln(r.writer(), message)
-}
-
-// finishSend is the terminal consumer boundary for every Session.Send call.
-// A transport or provider failure can end an incomplete, uncommitted stream
-// without the normal callbacks fully finalizing consumer state. Flush and reset
-// that per-message state so it cannot survive into the next turn.
-func (r *replEvents) finishSend() {
 	if r.deltaIn != nil {
 		if r.reasoningOpen {
 			r.deltaIn("\x1b[0m")
 		}
-		if r.flush != nil {
-			r.flush()
-		}
+		r.flush()
 		r.deltaIn, r.flush = nil, nil
 		_, _ = fmt.Fprintln(r.writer())
 	}
 	r.reasoningOpen = false
 	r.streamedContent.Reset()
+	_, _ = fmt.Fprintln(r.writer(), message)
 }
 
 // runREPL is the outer loop: one prompt, one Send, repeat. Turn failures
@@ -411,7 +395,6 @@ func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.
 			return
 		}
 		err := session.Send(ctx, scanner.Text(), ev, approve)
-		ev.finishSend()
 		if err != nil {
 			fmt.Printf("request failed: %v\n", err)
 		}

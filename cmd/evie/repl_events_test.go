@@ -81,47 +81,68 @@ func TestREPLAssistantDoneCorrectsStreamWhenCommittedContentIsEmpty(t *testing.T
 	}
 }
 
-func TestREPLFinishSendAfterIncompleteProviderStreamDoesNotContaminateNextTurn(t *testing.T) {
-	for _, failure := range []string{"transport failure", "provider stream failure"} {
-		t.Run(failure, func(t *testing.T) {
-			var out bytes.Buffer
-			events := &replEvents{out: &out}
-
-			// The provider streamed partial speculative content, then failed before
-			// any assistant response committed or its normal callbacks finalized.
-			events.Delta("partial provider response")
-			events.finishSend()
-			if events.deltaIn != nil || events.flush != nil || events.reasoningOpen || events.streamedContent.Len() != 0 {
-				t.Fatalf("pending REPL state survived %s", failure)
-			}
-
-			events.Delta("next ")
-			events.AssistantDone("next answer")
-			events.finishSend()
-			want := "partial provider response\nnext answer\n"
-			if got := out.String(); got != want {
-				t.Fatalf("REPL output after %s=%q, want %q", failure, got, want)
-			}
-			if strings.Contains(out.String(), replUnsavedStreamCorrection) {
-				t.Fatalf("finishSend invented an authoritative-content correction after %s", failure)
-			}
-		})
-	}
+type replDiscardThenSucceedClient struct {
+	reasoning bool
+	calls     int
 }
 
-func TestREPLFinishSendClosesOpenReasoningOnceBeforeNextTurn(t *testing.T) {
-	var out bytes.Buffer
-	events := &replEvents{out: &out}
-	events.Reasoning("unfinished reasoning")
-	events.finishSend()
-	events.finishSend() // completed printers are not closed twice
-	events.Delta("next ")
-	events.AssistantDone("next answer")
-	events.finishSend()
+func (c *replDiscardThenSucceedClient) ChatStream(
+	_ context.Context,
+	_ openrouter.ChatRequest,
+	h openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	c.calls++
+	if c.calls == 1 {
+		if c.reasoning {
+			h.OnReasoning("unfinished thought")
+		} else {
+			h.OnContent("partial answer")
+		}
+		return openrouter.ChatResponse{}, &openrouter.StreamError{
+			Kind: openrouter.StreamProviderError,
+			Err:  errors.New("transport failed"),
+		}
+	}
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "next answer",
+	}}}}, nil
+}
 
-	want := "\x1b[90mthinking…\nunfinished reasoning\x1b[0m\nnext answer\n"
-	if got := out.String(); got != want {
-		t.Fatalf("REPL output=%q, want safely reset reasoning then next turn %q", got, want)
+func TestSessionToREPLDiscardedStreamCleansStateBeforeNextTurn(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		reasoning bool
+		prefix    string
+	}{
+		{name: "partial content", prefix: "partial answer\n"},
+		{name: "reasoning only", reasoning: true, prefix: "\x1b[90mthinking…\nunfinished thought\x1b[0m\n\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			events := &replEvents{out: &out}
+			client := &replDiscardThenSucceedClient{reasoning: tt.reasoning}
+			session := agent.New(client, "test", &recordingREPLHistory{}, memory.ScopeContext{
+				OwnerID: memory.LocalOwnerID, SessionID: "session",
+			}, testTurnOwner{})
+
+			if err := session.Send(context.Background(), "first", events, nil); err == nil {
+				t.Fatal("first Send succeeded, want provider transport failure")
+			}
+			if events.deltaIn != nil || events.flush != nil || events.reasoningOpen || events.streamedContent.Len() != 0 {
+				t.Fatalf("ResponseDiscarded left pending REPL state: %+v", events)
+			}
+			if err := session.Send(context.Background(), "second", events, nil); err != nil {
+				t.Fatalf("second Send: %v", err)
+			}
+
+			want := tt.prefix + agent.DiscardedResponseMessage + "\nnext answer\n"
+			if got := out.String(); got != want {
+				t.Fatalf("REPL output=%q, want %q", got, want)
+			}
+			if strings.Contains(out.String(), replUnsavedStreamCorrection) || strings.Count(out.String(), "next answer") != 1 {
+				t.Fatalf("subsequent turn was corrected or duplicated: %q", out.String())
+			}
+		})
 	}
 }
 
@@ -153,7 +174,6 @@ func TestREPLRendersContentFirstProviderAsOneAuthoritativeAssistant(t *testing.T
 	if err := session.Send(context.Background(), "go", events, nil); err != nil {
 		t.Fatal(err)
 	}
-	events.finishSend()
 	if got := out.String(); got != "answer\n" {
 		t.Fatalf("REPL output=%q, want one authoritative assistant", got)
 	}
@@ -232,7 +252,6 @@ func TestSessionToREPLPresentsCommittedAssistantBeforeTerminalCause(t *testing.T
 				if err := session.Send(ctx, "go", events, nil); err == nil {
 					t.Fatal("Send succeeded after terminal cause")
 				}
-				events.finishSend()
 				if got := out.String(); got != presentation.want {
 					t.Fatalf("REPL output=%q, want %q", got, presentation.want)
 				}
