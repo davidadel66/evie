@@ -261,6 +261,12 @@ type replEvents struct {
 	streamedContent strings.Builder
 }
 
+const (
+	replUnsavedStreamCorrection = "[streamed response above was not saved]"
+	replCommittedResponseLabel  = "[committed response]"
+	replEmptyCommittedResponse  = "(empty response)"
+)
+
 func (r *replEvents) writer() io.Writer {
 	if r.out != nil {
 		return r.out
@@ -305,11 +311,24 @@ func (r *replEvents) AssistantDone(content string) {
 		r.deltaIn, r.flush = nil, nil
 	}
 	streamed := r.streamedContent.String()
-	if strings.HasPrefix(content, streamed) {
+	matchesStream := strings.HasPrefix(content, streamed)
+	if matchesStream {
 		_, _ = fmt.Fprint(r.writer(), content[len(streamed):])
+	} else {
+		// Terminal output cannot retract divergent streamed bytes. Mark those
+		// bytes honestly and print the complete durable response separately;
+		// AssistantDone is successful committed content, not a discard event.
+		_, _ = fmt.Fprintln(r.writer())
+		_, _ = fmt.Fprintln(r.writer(), replUnsavedStreamCorrection)
+		_, _ = fmt.Fprintln(r.writer(), replCommittedResponseLabel)
+		if content == "" {
+			_, _ = fmt.Fprintln(r.writer(), replEmptyCommittedResponse)
+		} else {
+			_, _ = fmt.Fprintln(r.writer(), content)
+		}
 	}
 	r.streamedContent.Reset()
-	if content != "" {
+	if content != "" && matchesStream {
 		_, _ = fmt.Fprintln(r.writer())
 	}
 }

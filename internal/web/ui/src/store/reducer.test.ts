@@ -58,6 +58,29 @@ describe("reduce", () => {
     });
   });
 
+  it("replaces a divergent async-provider delta with committed content", () => {
+    const items = fold([
+      { type: "delta", text: "speculative answer" },
+      { type: "assistant_done", content: "committed answer" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "assistant",
+      text: "committed answer",
+      streaming: false,
+    });
+  });
+
+  it("removes streamed text when committed assistant content is empty", () => {
+    const items = fold([
+      { type: "delta", text: "speculative answer" },
+      { type: "assistant_done", content: "" },
+      { type: "turn_done" },
+    ]);
+    expect(items).toEqual([]);
+  });
+
   it("drops the empty assistant message of a tool-only turn", () => {
     // The real sequence: no deltas, assistant_done with no content, then the
     // tool calls. An empty bubble must never reach the transcript.

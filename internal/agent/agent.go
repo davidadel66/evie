@@ -47,7 +47,7 @@ type Events interface {
 	Delta(text string)                         // streaming assistant text
 	Reasoning(text string)                     // streaming thinking text
 	ReasoningDone()                            // thinking ended for this assistant message
-	AssistantDone(content string)              // every assistant message, even empty (tool-only)
+	AssistantDone(content string)              // authoritative committed content for every assistant message, even empty (tool-only)
 	ToolCall(id, name, args string)            // emitted immediately before executing
 	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
 	ResponseDiscarded(reason DiscardReason, message string)

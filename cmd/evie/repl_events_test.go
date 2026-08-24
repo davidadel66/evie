@@ -51,3 +51,27 @@ func TestREPLAssistantDonePrintsOnlyMissingCommittedAsyncProviderSuffix(t *testi
 		t.Fatalf("REPL output=%q, want committed content without duplication", got)
 	}
 }
+
+func TestREPLAssistantDoneCorrectsDivergentStreamWithAuthoritativeContent(t *testing.T) {
+	var out bytes.Buffer
+	events := &replEvents{out: &out}
+	events.Delta("speculative answer")
+	events.AssistantDone("committed answer")
+	want := "speculative answer\n" + replUnsavedStreamCorrection + "\n" +
+		replCommittedResponseLabel + "\ncommitted answer\n"
+	if got := out.String(); got != want {
+		t.Fatalf("REPL output=%q, want correction %q", got, want)
+	}
+}
+
+func TestREPLAssistantDoneCorrectsStreamWhenCommittedContentIsEmpty(t *testing.T) {
+	var out bytes.Buffer
+	events := &replEvents{out: &out}
+	events.Delta("speculative answer")
+	events.AssistantDone("")
+	want := "speculative answer\n" + replUnsavedStreamCorrection + "\n" +
+		replCommittedResponseLabel + "\n" + replEmptyCommittedResponse + "\n"
+	if got := out.String(); got != want {
+		t.Fatalf("REPL output=%q, want correction %q", got, want)
+	}
+}
