@@ -125,7 +125,7 @@ type streamChunk struct {
 // the function name arrive on the first fragment, argument JSON drips
 // in across the rest.
 type toolCallDelta struct {
-	Index    int    `json:"index"`
+	Index    *int   `json:"index"`
 	ID       string `json:"id"`
 	Type     string `json:"type"`
 	Function struct {

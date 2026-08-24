@@ -45,13 +45,28 @@ type turnTiming struct {
 	leaseDuration     time.Duration
 	heartbeatInterval time.Duration
 	cleanupTimeout    time.Duration
+	newTicker         func(time.Duration) heartbeatTicker
 }
 
 var defaultTurnTiming = turnTiming{
 	leaseDuration:     30 * time.Second,
 	heartbeatInterval: 10 * time.Second,
 	cleanupTimeout:    5 * time.Second,
+	newTicker: func(interval time.Duration) heartbeatTicker {
+		return realHeartbeatTicker{Ticker: time.NewTicker(interval)}
+	},
 }
+
+type heartbeatTicker interface {
+	C() <-chan time.Time
+	Stop()
+}
+
+type realHeartbeatTicker struct {
+	*time.Ticker
+}
+
+func (t realHeartbeatTicker) C() <-chan time.Time { return t.Ticker.C }
 
 type causeKind int
 
@@ -111,6 +126,10 @@ func (c *turnCoordinator) selectCause(kind causeKind, err error, httpStatus int)
 	pending := &terminalCause{kind: kind, err: err, httpStatus: httpStatus}
 	c.pending = pending
 	c.mu.Unlock()
+	// Cancellation must not wait for an admitted frontend callback. The
+	// callback may rely on this context to finish; pending prevents any new
+	// callback from being admitted while lifecycle-stage finalization waits.
+	c.cancel()
 
 	c.callbackMu.Lock()
 	defer c.callbackMu.Unlock()
@@ -123,8 +142,41 @@ func (c *turnCoordinator) selectCause(kind causeKind, err error, httpStatus int)
 	c.cause = *pending
 	c.pending = nil
 	c.mu.Unlock()
-	c.cancel()
 	return true
+}
+
+// beginCommitBoundary prevents terminal-cause stage capture from completing
+// between a durable append and its mandatory post-commit stage transition.
+func (c *turnCoordinator) beginCommitBoundary() bool {
+	c.callbackMu.RLock()
+	c.mu.Lock()
+	active := c.cause.kind == causeNone && c.pending == nil && c.ctx.Err() == nil
+	c.mu.Unlock()
+	if !active {
+		c.callbackMu.RUnlock()
+	}
+	return active
+}
+
+func (c *turnCoordinator) abortCommitBoundary() {
+	c.callbackMu.RUnlock()
+}
+
+func (c *turnCoordinator) finishCommitBoundary(stage memory.TurnStage) {
+	c.mu.Lock()
+	if c.cause.kind == causeNone {
+		c.stage = stage
+	}
+	c.mu.Unlock()
+	c.callbackMu.RUnlock()
+}
+
+func (c *turnCoordinator) finishSuccessBoundary() {
+	c.mu.Lock()
+	c.cause = terminalCause{kind: causeSuccess, stage: c.stage}
+	c.pending = nil
+	c.mu.Unlock()
+	c.callbackMu.RUnlock()
 }
 
 func (c *turnCoordinator) result() terminalCause {

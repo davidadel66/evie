@@ -159,16 +159,23 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 			details = append(details, choice.Delta.ReasoningDetails...)
 		}
 		for _, tcd := range choice.Delta.ToolCalls {
-			if tcd.Index < 0 {
+			if tcd.Index == nil {
 				return ChatResponse{}, streamError(
 					StreamProviderResponseInvalid,
-					fmt.Errorf("provider tool call index %d is negative", tcd.Index),
+					errors.New("provider tool call fragment is missing its index"),
 				)
 			}
-			tc := toolCalls[tcd.Index]
+			index := *tcd.Index
+			if index < 0 {
+				return ChatResponse{}, streamError(
+					StreamProviderResponseInvalid,
+					fmt.Errorf("provider tool call index %d is negative", index),
+				)
+			}
+			tc := toolCalls[index]
 			if tc == nil {
 				tc = &ToolCall{}
-				toolCalls[tcd.Index] = tc
+				toolCalls[index] = tc
 			}
 			if tcd.ID != "" {
 				tc.ID = tcd.ID

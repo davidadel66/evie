@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -52,7 +51,7 @@ func (s *Session) startHeartbeat(
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(s.timing.heartbeatInterval)
+		ticker := s.timing.newTicker(s.timing.heartbeatInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -61,7 +60,7 @@ func (s *Session) startHeartbeat(
 			case <-caller.Done():
 				coordinator.selectCause(callerCause(caller.Err()), caller.Err(), 0)
 				return
-			case <-ticker.C:
+			case <-ticker.C():
 				_, err := s.owner.Heartbeat(heartbeatCtx, lease, s.timing.leaseDuration)
 				if err == nil {
 					continue
@@ -183,8 +182,12 @@ func (s *Session) runOwnedTurn(
 			return err
 		}
 		assistantInput.ParentID = requestParentID
+		if !coordinator.beginCommitBoundary() {
+			return s.observeTurnContext(coordinator)
+		}
 		assistantEvent, err := s.history.Append(coordinator.ctx, lease, assistantInput)
 		if err != nil {
+			coordinator.abortCommitBoundary()
 			if coordinator.result().kind != causeNone {
 				return coordinator.result().err
 			}
@@ -201,19 +204,22 @@ func (s *Session) runOwnedTurn(
 			coordinator.selectCause(causeAssistantPersistence, wrapped, 0)
 			return wrapped
 		}
+		if len(msg.ToolCalls) == 0 {
+			// A committed final assistant is durable success. This deliberately
+			// wins over cancellation reserved while its append was in flight.
+			coordinator.finishSuccessBoundary()
+		} else {
+			coordinator.finishCommitBoundary(memory.StageToolPrepare)
+		}
 		rendered.mu.Lock()
 		rendered.assistantCommitted = true
 		rendered.mu.Unlock()
 
 		if len(msg.ToolCalls) == 0 {
-			// A committed final assistant is durable success. This deliberately
-			// wins over cancellation observed by a post-commit callback.
-			coordinator.commitSuccess()
 			s.emitAssistantAccepted(coordinator, ev, rendered, msg.Content, true)
 			return nil
 		}
 
-		coordinator.setStage(memory.StageToolPrepare)
 		if !s.emitAssistantAccepted(coordinator, ev, rendered, msg.Content, false) {
 			return s.observeTurnContext(coordinator)
 		}
@@ -263,16 +269,20 @@ func (s *Session) runOwnedTurn(
 				if err != nil {
 					return err
 				}
+				if !coordinator.beginCommitBoundary() {
+					return s.observeTurnContext(coordinator)
+				}
 				approvalEvent, err := s.history.Append(observeCtx, lease, input)
 				if err != nil {
+					coordinator.abortCommitBoundary()
 					return fmt.Errorf("persist approval: %w", err)
 				}
 				approvalEventID = approvalEvent.ID
 				approvalDecision = decision
 				if decision == tools.Approved {
-					coordinator.setStage(memory.StageToolExecute)
+					coordinator.finishCommitBoundary(memory.StageToolExecute)
 				} else {
-					coordinator.setStage(memory.StageToolCommit)
+					coordinator.finishCommitBoundary(memory.StageToolCommit)
 				}
 				return nil
 			}
@@ -330,15 +340,6 @@ func (s *Session) runOwnedTurn(
 		requestParentID = lastOutcomeID
 		progress.requestParentID = requestParentID
 	}
-}
-
-func (c *turnCoordinator) commitSuccess() {
-	c.callbackMu.Lock()
-	defer c.callbackMu.Unlock()
-	c.mu.Lock()
-	c.cause = terminalCause{kind: causeSuccess, stage: c.stage}
-	c.pending = nil
-	c.mu.Unlock()
 }
 
 func (s *Session) emitAssistantAccepted(
