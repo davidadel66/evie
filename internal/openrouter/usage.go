@@ -115,13 +115,20 @@ func normalizedCounter(values []json.RawMessage) *int64 {
 	if len(text) == 0 {
 		return nil
 	}
-	for _, digit := range text {
+	digits := text
+	if text[0] == '-' {
+		digits = text[1:]
+	}
+	if len(digits) == 0 {
+		return nil
+	}
+	for _, digit := range digits {
 		if digit < '0' || digit > '9' {
 			return nil
 		}
 	}
 	value, err := strconv.ParseInt(string(text), 10, 64)
-	if err != nil {
+	if err != nil || value < 0 {
 		return nil
 	}
 	return &value

@@ -136,6 +136,11 @@ func TestChatStreamAndChatNormalizeUsageIdentically(t *testing.T) {
 			want:         `{"input_tokens":0,"total_tokens":7}`,
 		},
 		{
+			name:         "negative zero remains reported zero",
+			usageMembers: `"usage":{"prompt_tokens":-0}`,
+			want:         `{"input_tokens":0}`,
+		},
+		{
 			name:         "maximum signed 64-bit counter",
 			usageMembers: `"usage":{"total_tokens":9223372036854775807}`,
 			want:         `{"total_tokens":9223372036854775807}`,
