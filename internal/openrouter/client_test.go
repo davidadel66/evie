@@ -175,6 +175,7 @@ func TestChatStreamAndChatNormalizeUsageIdentically(t *testing.T) {
 		{name: "unknown only", usageMembers: `"usage":{"future_tokens":8}`, want: `null`},
 		{name: "excluded only", usageMembers: `"usage":{"cost":1.2,"is_byok":true,"prompt_tokens_details":{"audio_tokens":4}}`, want: `null`},
 		{name: "non-object", usageMembers: `"usage":7`, want: `null`},
+		{name: "non-object overflowing exponent", usageMembers: `"usage":1e1000`, want: `null`},
 		{name: "duplicate top-level usage", usageMembers: `"usage":{"prompt_tokens":1},"usage":{"total_tokens":2}`, want: `null`},
 		{name: "non-object detail containers", usageMembers: `"usage":{"prompt_tokens":1,"prompt_tokens_details":[],"completion_tokens_details":null}`, want: `{"input_tokens":1}`},
 	}
@@ -314,6 +315,14 @@ func TestChatStreamUsesLastNonNullUsageOccurrenceWithoutMerging(t *testing.T) {
 			chunks: []string{
 				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
 				`{"choices":[],"usage":{"prompt_tokens":2},"usage":{"total_tokens":3}}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "duplicate null final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":null,"usage":null}`,
 			},
 			want: `null`,
 		},

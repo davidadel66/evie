@@ -35,12 +35,7 @@ func parseProviderUsage(data []byte) (*TokenUsage, bool, error) {
 		return nil, false, nil
 	}
 	if len(occurrences) > 1 {
-		for _, occurrence := range occurrences {
-			if !isJSONNull(occurrence) {
-				return nil, true, nil
-			}
-		}
-		return nil, false, nil
+		return nil, true, nil
 	}
 	if isJSONNull(occurrences[0]) {
 		return nil, false, nil
@@ -136,6 +131,7 @@ func normalizedCounter(values []json.RawMessage) *int64 {
 
 func parseJSONObject(data []byte) ([]jsonMember, bool, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
 	token, err := decoder.Token()
 	if err != nil {
 		return nil, false, err
