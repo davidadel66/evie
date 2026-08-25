@@ -1,6 +1,6 @@
 # Story 4 - Provider usage evidence
 
-Status: proposed; dependency blocked by Story 2
+Status: implementation candidate for issue #61; awaiting review and merge
 
 ## Outcome
 
@@ -16,18 +16,30 @@ provider-neutral turn evidence for later context and evaluation diagnostics.
 
 ## Depends on
 
-- Story 2's fenced terminal provider-event path.
+- Story 2's fenced terminal provider-event path, delivered by issue #57 and
+  pull request #58.
 
 ## Acceptance summary
 
-- Approved provider-neutral usage fields returned by a successful provider turn
-  are persisted with immutable terminal-turn evidence.
-- Available usage survives event round trips and restart.
-- Provider responses without usage remain explicitly absent rather than
-  receiving invented zero values.
-- Opaque continuation payloads, reasoning details, and raw transport state are
-  not stored as semantic evidence.
-- Usage persistence remains fenced by the active turn lease.
+- Six approved optional provider counters are normalized identically for
+  streaming and non-streaming responses, with missing, zero, malformed,
+  duplicate, overflow, excluded, and repeated-container cases preserving their
+  approved meanings.
+- The final non-null stream usage occurrence replaces rather than merges earlier
+  occurrences, including trailing usage-only chunks.
+- Every successful provider iteration stores its own usage on the corresponding
+  assistant payload in the same fenced append, including tool-calling
+  iterations.
+- Available, partial, zero, and absent usage survive event round trips and
+  restart without changing provider history projection or incomplete-tool-group
+  omission.
+- Usage remains immutable episodic diagnostics. Provider-specific metadata,
+  opaque continuation payloads, reasoning-related accounting details, and raw
+  transport state remain excluded from normalized `TokenUsage` and durable
+  `AssistantMessagePayload`. Existing transient `openrouter.Message.Reasoning`
+  and `Message.ReasoningDetails` presentation behavior remains unchanged and
+  non-durable. Semantic compilation, policy, aggregation, and frontend
+  representation remain excluded.
 
 ## Verification summary
 
@@ -47,6 +59,7 @@ state.
 
 ## Readiness
 
-`DEPENDENCY_BLOCKED` until Story 2 lands. Refinement must confirm the exact
-provider-neutral field set against captured fixtures before the story can be
-declared ready.
+David approved the complete refined execution contract on 2026-08-25 and it was
+materialized as [issue #61](https://github.com/davidadel66/evie/issues/61).
+Implementation is prepared from reviewed base
+`5593518cf64abae9558d9dc91f21188dd5d66b3f` for independent review.

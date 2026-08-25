@@ -118,6 +118,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		finishReason string
 		gotChunk     bool
 		completed    bool
+		usage        *TokenUsage
 		toolCalls    = make(map[int]*ToolCall)
 	)
 	msg.Role = "assistant"
@@ -133,6 +134,14 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		if data == "[DONE]" {
 			completed = true
 			break
+		}
+
+		chunkUsage, hasNonNullUsage, err := parseProviderUsage([]byte(data))
+		if err != nil {
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to parse stream chunk: %w", err))
+		}
+		if hasNonNullUsage {
+			usage = chunkUsage
 		}
 
 		var chunk streamChunk
@@ -228,7 +237,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 	}
 
-	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}}, nil
+	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}, Usage: usage}, nil
 }
 
 // Chat sends one chat-completions request and returns the parsed response.
@@ -266,10 +275,17 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 		return ChatResponse{}, fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes)
 	}
 
-	var chatResp ChatResponse
-	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil {
+	var wireResponse struct {
+		Choices []Choice `json:"choices"`
+	}
+	if err := json.Unmarshal(bodyBytes, &wireResponse); err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to parse response: %w", err)
 	}
+	usage, _, err := parseProviderUsage(bodyBytes)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+	chatResp := ChatResponse{Choices: wireResponse.Choices, Usage: usage}
 
 	if len(chatResp.Choices) == 0 {
 		return ChatResponse{}, fmt.Errorf("response contained no choices: %s", bodyBytes)

@@ -102,6 +102,342 @@ func TestChatStreamAssemblesReasoning(t *testing.T) {
 	if got := res.Choices[0].FinishReason; got != "stop" {
 		t.Errorf("finish reason = %q, want stop", got)
 	}
+	usageJSON, err := json.Marshal(res.Usage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const wantUsage = `{"input_tokens":135,"output_tokens":74,"total_tokens":209,"reasoning_output_tokens":29,"cached_input_tokens":0,"cache_write_input_tokens":0}`
+	if string(usageJSON) != wantUsage {
+		t.Fatalf("captured Kimi usage = %s, want %s", usageJSON, wantUsage)
+	}
+	for _, excluded := range []string{"cost", "is_byok", "audio_tokens", "video_tokens", "image_tokens", "provider", "model", "service_tier"} {
+		if strings.Contains(string(usageJSON), excluded) {
+			t.Errorf("provider-only field %q crossed usage boundary: %s", excluded, usageJSON)
+		}
+	}
+}
+
+func TestChatStreamAndChatNormalizeUsageIdentically(t *testing.T) {
+	tests := []struct {
+		name         string
+		usageMembers string
+		want         string
+	}{
+		{
+			name: "complete",
+			usageMembers: `"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3,` +
+				`"completion_tokens_details":{"reasoning_tokens":4},` +
+				`"prompt_tokens_details":{"cached_tokens":5,"cache_write_tokens":6}}`,
+			want: `{"input_tokens":1,"output_tokens":2,"total_tokens":3,"reasoning_output_tokens":4,"cached_input_tokens":5,"cache_write_input_tokens":6}`,
+		},
+		{
+			name:         "partial preserves reported zero",
+			usageMembers: `"usage":{"prompt_tokens":0,"completion_tokens":null,"total_tokens":7}`,
+			want:         `{"input_tokens":0,"total_tokens":7}`,
+		},
+		{
+			name:         "negative zero remains reported zero",
+			usageMembers: `"usage":{"prompt_tokens":-0}`,
+			want:         `{"input_tokens":0}`,
+		},
+		{
+			name:         "maximum signed 64-bit counter",
+			usageMembers: `"usage":{"total_tokens":9223372036854775807}`,
+			want:         `{"total_tokens":9223372036854775807}`,
+		},
+		{
+			name:         "arithmetic inconsistency is reported evidence",
+			usageMembers: `"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":1,"completion_tokens_details":{"reasoning_tokens":30}}`,
+			want:         `{"input_tokens":10,"output_tokens":20,"total_tokens":1,"reasoning_output_tokens":30}`,
+		},
+		{
+			name:         "malformed counters preserve valid siblings",
+			usageMembers: `"usage":{"prompt_tokens":-1,"completion_tokens":1.5,"total_tokens":9,"completion_tokens_details":{"reasoning_tokens":1e2},"prompt_tokens_details":{"cached_tokens":"8","cache_write_tokens":9223372036854775808}}`,
+			want:         `{"total_tokens":9}`,
+		},
+		{
+			name:         "duplicate direct counter omits only destination",
+			usageMembers: `"usage":{"prompt_tokens":1,"prompt_tokens":2,"completion_tokens":3}`,
+			want:         `{"output_tokens":3}`,
+		},
+		{
+			name:         "repeated detail containers track full paths",
+			usageMembers: `"usage":{"prompt_tokens_details":{"cached_tokens":4},"prompt_tokens_details":{"cache_write_tokens":5}}`,
+			want:         `{"cached_input_tokens":4,"cache_write_input_tokens":5}`,
+		},
+		{
+			name:         "duplicate nested path preserves sibling",
+			usageMembers: `"usage":{"prompt_tokens_details":{"cached_tokens":4,"cache_write_tokens":5},"prompt_tokens_details":{"cached_tokens":6}}`,
+			want:         `{"cache_write_input_tokens":5}`,
+		},
+		{name: "null", usageMembers: `"usage":null`, want: `null`},
+		{name: "empty", usageMembers: `"usage":{}`, want: `null`},
+		{name: "unknown only", usageMembers: `"usage":{"future_tokens":8}`, want: `null`},
+		{name: "excluded only", usageMembers: `"usage":{"cost":1.2,"is_byok":true,"prompt_tokens_details":{"audio_tokens":4}}`, want: `null`},
+		{name: "non-object", usageMembers: `"usage":7`, want: `null`},
+		{name: "non-object overflowing exponent", usageMembers: `"usage":1e1000`, want: `null`},
+		{name: "duplicate top-level usage", usageMembers: `"usage":{"prompt_tokens":1},"usage":{"total_tokens":2}`, want: `null`},
+		{name: "non-object detail containers", usageMembers: `"usage":{"prompt_tokens":1,"prompt_tokens_details":[],"completion_tokens_details":null}`, want: `{"input_tokens":1}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			streamBody := `{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}],` + tt.usageMembers + `}`
+			streamResponse := streamResponseForTest(t, streamBody)
+			chatBody := `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],` + tt.usageMembers + `}`
+			chatResponse := chatResponseForTest(t, chatBody)
+
+			streamJSON, err := json.Marshal(streamResponse.Usage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			chatJSON, err := json.Marshal(chatResponse.Usage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(streamJSON) != tt.want || string(chatJSON) != tt.want {
+				t.Fatalf("stream usage=%s chat usage=%s, want %s", streamJSON, chatJSON, tt.want)
+			}
+			if streamResponse.Choices[0].Message.Content != "ok" || chatResponse.Choices[0].Message.Content != "ok" {
+				t.Fatalf("valid assistant was lost: stream=%+v chat=%+v", streamResponse, chatResponse)
+			}
+		})
+	}
+}
+
+func TestChatStreamAndChatLeaveOmittedUsageAbsent(t *testing.T) {
+	streamResponse := streamResponseForTest(t, `{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`)
+	chatResponse := chatResponseForTest(t, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	if streamResponse.Usage != nil || chatResponse.Usage != nil {
+		t.Fatalf("omitted usage became present: stream=%+v chat=%+v", streamResponse.Usage, chatResponse.Usage)
+	}
+	if streamResponse.Choices[0].Message.Content != "ok" || chatResponse.Choices[0].Message.Content != "ok" {
+		t.Fatalf("assistant content changed: stream=%+v chat=%+v", streamResponse, chatResponse)
+	}
+}
+
+func TestChatRejectsSyntacticallyMalformedJSONBeforeUsageNormalization(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"must not return"}}],"usage":{"prompt_tokens":`))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.Chat(ChatRequest{Model: "test"})
+	if err == nil || !strings.Contains(err.Error(), "failed to parse response") {
+		t.Fatalf("Chat response=%+v error=%v, want malformed-response error", response, err)
+	}
+}
+
+func TestChatResponseProviderNeutralJSONRoundTripPreservesSupportedFields(t *testing.T) {
+	input, output := int64(3), int64(4)
+	original := ChatResponse{
+		Choices: []Choice{{Message: Message{
+			Role:             "assistant",
+			Content:          "answer",
+			Reasoning:        "thinking",
+			ReasoningDetails: json.RawMessage(`[{"type":"reasoning.text","text":"thinking"}]`),
+		}, FinishReason: "stop"}},
+		Usage: &TokenUsage{InputTokens: &input, OutputTokens: &output},
+	}
+	encoded, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"prompt_tokens"`) || !strings.Contains(string(encoded), `"input_tokens":3`) {
+		t.Fatalf("shared response did not serialize provider-neutral usage: %s", encoded)
+	}
+	var decoded ChatResponse
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	roundTripped, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(roundTripped) != string(encoded) {
+		t.Fatalf("shared response JSON round trip changed fields:\nfirst:  %s\nsecond: %s", encoded, roundTripped)
+	}
+}
+
+func TestChatStreamUsesLastNonNullUsageOccurrenceWithoutMerging(t *testing.T) {
+	tests := []struct {
+		name   string
+		chunks []string
+		want   string
+	}{
+		{
+			name: "trailing usage-only chunk replaces earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`,
+				`{"choices":[],"usage":null}`,
+				`{"choices":[],"usage":{"total_tokens":9}}`,
+			},
+			want: `{"total_tokens":9}`,
+		},
+		{
+			name: "partial final replaces rather than merges",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`,
+				`{"choices":[],"usage":{"completion_tokens":4}}`,
+			},
+			want: `{"output_tokens":4}`,
+		},
+		{
+			name: "trailing null is ignored",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":null}`,
+			},
+			want: `{"input_tokens":1}`,
+		},
+		{
+			name: "recognized malformed final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":{"prompt_tokens":"malformed"}}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "excluded-only final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":{"cost":0.5,"is_byok":false}}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "duplicate final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":{"prompt_tokens":2},"usage":{"total_tokens":3}}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "duplicate null final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":null,"usage":null}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "empty final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":{}}`,
+			},
+			want: `null`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := streamChunksResponseForTest(t, tt.chunks)
+			got, err := json.Marshal(response.Usage)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tt.want {
+				t.Fatalf("usage=%s, want %s", got, tt.want)
+			}
+			if response.Choices[0].Message.Content != "ok" {
+				t.Fatalf("assistant content=%q", response.Choices[0].Message.Content)
+			}
+		})
+	}
+}
+
+func TestChatRequestsDoNotAskProviderForUsage(t *testing.T) {
+	assertRequest := func(t *testing.T, request *http.Request) {
+		t.Helper()
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"stream_options", "include_usage", "usage"} {
+			if _, ok := body[forbidden]; ok {
+				t.Errorf("request unexpectedly contains %q: %v", forbidden, body)
+			}
+		}
+	}
+
+	t.Run("streaming", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assertRequest(t, r)
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n"))
+		}))
+		defer srv.Close()
+		client, _ := NewClient("key")
+		client.baseURL = srv.URL
+		if _, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("non-streaming", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assertRequest(t, r)
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+		}))
+		defer srv.Close()
+		client, _ := NewClient("key")
+		client.baseURL = srv.URL
+		if _, err := client.Chat(ChatRequest{Model: "test"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func streamResponseForTest(t *testing.T, chunk string) ChatResponse {
+	t.Helper()
+	return streamChunksResponseForTest(t, []string{chunk})
+}
+
+func streamChunksResponseForTest(t *testing.T, chunks []string) ChatResponse {
+	t.Helper()
+	var body strings.Builder
+	for _, chunk := range chunks {
+		fmt.Fprintf(&body, "data: %s\n\n", chunk)
+	}
+	body.WriteString("data: [DONE]\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body.String()))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.ChatStream(context.Background(), ChatRequest{Model: "test"}, StreamHandlers{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+func chatResponseForTest(t *testing.T, body string) ChatResponse {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.Chat(ChatRequest{Model: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
 }
 
 func TestChatStreamEmitsSameChunkReasoningBeforeContent(t *testing.T) {

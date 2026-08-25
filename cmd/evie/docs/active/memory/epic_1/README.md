@@ -114,6 +114,9 @@ implemented foundation.
 ### Story 4 - Provider usage evidence
 
 - [Planning summary](story_4/README.md)
+- Status: implementation candidate for
+  [issue #61](https://github.com/davidadel66/evie/issues/61); awaiting review and
+  merge.
 - Outcome: preserve usage reported by the provider as immutable,
   provider-neutral turn evidence.
 - Depends on: Story 2's terminal provider-event path.
@@ -163,8 +166,9 @@ accounting evidence.
   challenge found no material issues; Story 2 is ready for issue materialization.
 - Story 3's exact session-list presentation and selection details remain for
   interactive refinement; they may not weaken explicit scope confirmation.
-- Story 4 must refine the provider-neutral usage field set against captured
-  provider fixtures before its execution contract is ready.
+- Story 4's exact six-counter provider-neutral allowlist, normalization rules,
+  per-iteration association, persistence fate, and episodic-only exclusions were
+  approved and materialized as issue #61 on 2026-08-25.
 
 ## Approval record
 
@@ -195,3 +199,7 @@ accounting evidence.
 - 2026-08-23: David authorized committing and pushing the approved planning
   records, creating exactly one Story 2 execution-contract issue, and beginning
   the reviewed delivery workflow immediately afterward.
+- 2026-08-25: David approved Story 4's six-counter usage allowlist, independent
+  malformed-field normalization, repeated-container and last-non-null stream
+  rules, atomic per-assistant persistence, replay/compiler/policy exclusions,
+  fixture provenance, and one-PR execution contract as issue #61.

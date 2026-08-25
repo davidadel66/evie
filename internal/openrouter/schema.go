@@ -84,7 +84,20 @@ type FunctionCall struct {
 
 // ChatResponse is the body of a successful chat-completions reply.
 type ChatResponse struct {
-	Choices []Choice `json:"choices"`
+	Choices []Choice    `json:"choices"`
+	Usage   *TokenUsage `json:"usage,omitempty"`
+}
+
+// TokenUsage is the provider-neutral subset of token accounting retained from
+// a successful provider iteration. Pointers preserve the distinction between a
+// missing counter and a reported zero.
+type TokenUsage struct {
+	InputTokens           *int64 `json:"input_tokens,omitempty"`
+	OutputTokens          *int64 `json:"output_tokens,omitempty"`
+	TotalTokens           *int64 `json:"total_tokens,omitempty"`
+	ReasoningOutputTokens *int64 `json:"reasoning_output_tokens,omitempty"`
+	CachedInputTokens     *int64 `json:"cached_input_tokens,omitempty"`
+	CacheWriteInputTokens *int64 `json:"cache_write_input_tokens,omitempty"`
 }
 
 // ReasoningConfig opts a request into reasoning. Effort ("low", "medium",

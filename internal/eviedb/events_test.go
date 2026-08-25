@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -199,6 +200,18 @@ func TestFencedEventAppendRejectsStaleLeaseAndRollsBackAtFinalFence(t *testing.T
 	}); !errors.Is(err, ErrTurnLeaseLost) {
 		t.Fatalf("stale append error = %v, want ErrTurnLeaseLost", err)
 	}
+	usageTotal := int64(11)
+	stalePayload, err := json.Marshal(memory.AssistantMessagePayload{
+		Usage: &memory.TokenUsage{TotalTokens: &usageTotal},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken+1, memory.EventInput{
+		Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "stale", Payload: stalePayload,
+	}); !errors.Is(err, ErrTurnLeaseLost) {
+		t.Fatalf("stale assistant usage append error = %v, want ErrTurnLeaseLost", err)
+	}
 
 	samples := 0
 	store.now = func() time.Time {
@@ -219,6 +232,82 @@ func TestFencedEventAppendRejectsStaleLeaseAndRollsBackAtFinalFence(t *testing.T
 	}
 	if len(events) != 0 {
 		t.Fatalf("rolled-back fenced appends = %+v", events)
+	}
+}
+
+func TestAssistantUsagePayloadSurvivesDatabaseCloseAndReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "holder", time.Minute)
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+
+	zero, total := int64(0), int64(15)
+	partialPayload, err := json.Marshal(memory.AssistantMessagePayload{Usage: &memory.TokenUsage{
+		CachedInputTokens: &zero,
+		TotalTokens:       &total,
+	}})
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	absentPayload, err := json.Marshal(memory.AssistantMessagePayload{})
+	if err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	for _, input := range []memory.EventInput{
+		{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "partial", Payload: partialPayload},
+		{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "absent", Payload: absentPayload},
+	} {
+		if _, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, input); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	events, err := NewStore(reopened).LoadEvents(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events after reopen=%+v", events)
+	}
+	var partial memory.AssistantMessagePayload
+	if err := json.Unmarshal(events[0].Payload, &partial); err != nil {
+		t.Fatal(err)
+	}
+	if partial.Usage == nil || partial.Usage.CachedInputTokens == nil || *partial.Usage.CachedInputTokens != 0 ||
+		partial.Usage.TotalTokens == nil || *partial.Usage.TotalTokens != 15 ||
+		partial.Usage.InputTokens != nil {
+		t.Fatalf("partial usage after reopen=%+v", partial.Usage)
+	}
+	var absent memory.AssistantMessagePayload
+	if err := json.Unmarshal(events[1].Payload, &absent); err != nil {
+		t.Fatal(err)
+	}
+	if absent.Usage != nil || string(events[1].Payload) != `{}` {
+		t.Fatalf("absent usage after reopen payload=%s decoded=%+v", events[1].Payload, absent)
 	}
 }
 

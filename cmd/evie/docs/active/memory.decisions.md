@@ -1,5 +1,33 @@
 # memory - decisions
 
+- **2026-08-25 - provider token usage is immutable per-assistant episodic diagnostics.**
+  Each successful provider iteration may attach one optional provider-neutral
+  usage object to its accepted `assistant_message` payload in the same existing
+  lease-fenced append. The allowlist maps OpenRouter prompt, completion, total,
+  reasoning-completion, cached-prompt, and cache-write-prompt counts to input,
+  output, total, reasoning-output, cached-input, and cache-write-input tokens.
+  Missing counters remain absent and reported zero remains present. Each
+  recognized counter is normalized independently to a non-negative signed
+  64-bit integer; null, negative, fractional or exponent-form, overflowing,
+  duplicate, and non-number values omit only that counter without rejecting an
+  otherwise valid assistant. Null, non-object, empty, excluded-only, and
+  invalid-only containers contribute no durable usage. Duplicate top-level
+  usage members normalize usage to absent, while repeated detail containers
+  count duplicates by full recognized JSON path and preserve valid siblings.
+  Streaming uses the last non-null usage occurrence for the iteration and
+  replaces rather than merges earlier occurrences, including when the final
+  occurrence normalizes to absent. Usage-only chunks are parsed even without a
+  choice. Cost, BYOK, modalities, provider/model/routing identity, service or
+  server-tool metadata, reasoning-related accounting details, unknown fields,
+  and raw transport payloads are excluded from normalized `TokenUsage` and the
+  durable `AssistantMessagePayload`. The pre-existing transient
+  `openrouter.Message.Reasoning` and `Message.ReasoningDetails` behavior remains
+  unchanged for live presentation; neither field becomes durable evidence.
+  Usage survives payload storage and restart but is ignored by provider-history
+  projection and is never content, continuation state, semantic compiler
+  evidence, claim provenance, authorization, billing, budget, aggregation, or
+  frontend protocol state.
+
 - **2026-08-23 - prior reference-system research satisfies Stage 0.**
   David confirmed that he completed the necessary Letta and reference-system
   research before the current delivery plan. Stage 0 therefore requires no new

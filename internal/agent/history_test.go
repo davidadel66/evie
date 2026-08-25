@@ -20,13 +20,17 @@ func historyPayload(t *testing.T, value any) json.RawMessage {
 
 func TestMessagesFromEventsProjectsConversationAndOmitsOperations(t *testing.T) {
 	call := memory.ToolCall{ID: "call-1", Name: "time", Arguments: `{}`}
+	inputTokens := int64(8)
 	events := []memory.Event{
 		{Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "what time is it?"},
 		{
 			Sequence: 2,
 			Type:     memory.EventAssistantMessage,
 			Role:     memory.RoleAssistant,
-			Payload:  historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{call}}),
+			Payload: historyPayload(t, memory.AssistantMessagePayload{
+				ToolCalls: []memory.ToolCall{call},
+				Usage:     &memory.TokenUsage{InputTokens: &inputTokens},
+			}),
 		},
 		{
 			Sequence:    3,
@@ -126,9 +130,13 @@ func TestMessagesFromEventsOmitsIncompleteToolGroupsWhole(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			usageTotal := int64(21)
 			events := []memory.Event{
 				{ID: "u1", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "first"},
-				{ID: "a1", Sequence: 2, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: tt.calls})},
+				{ID: "a1", Sequence: 2, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: historyPayload(t, memory.AssistantMessagePayload{
+					ToolCalls: tt.calls,
+					Usage:     &memory.TokenUsage{TotalTokens: &usageTotal},
+				})},
 			}
 			for i, outcome := range tt.outcomes {
 				events = append(events, memory.Event{
@@ -152,6 +160,13 @@ func TestMessagesFromEventsOmitsIncompleteToolGroupsWhole(t *testing.T) {
 			}
 			if !reflect.DeepEqual(messages, want) {
 				t.Fatalf("messages=%#v want=%#v", messages, want)
+			}
+			var durablePayload memory.AssistantMessagePayload
+			if err := json.Unmarshal(events[1].Payload, &durablePayload); err != nil {
+				t.Fatal(err)
+			}
+			if durablePayload.Usage == nil || *durablePayload.Usage.TotalTokens != 21 {
+				t.Fatalf("incomplete group lost durable usage: %+v", durablePayload.Usage)
 			}
 		})
 	}
