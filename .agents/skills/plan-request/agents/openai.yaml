@@ -1,4 +1,0 @@
-interface:
-  display_name: "Plan Request"
-  short_description: "Plan, audit, and ready one selected story"
-  default_prompt: "Use $plan-request to interactively plan this request or audit and refine one selected backlog story until its execution contract is ready."
