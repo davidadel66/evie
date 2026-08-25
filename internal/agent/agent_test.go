@@ -660,6 +660,20 @@ func assistantStep(content string, deltas []string, calls ...openrouter.ToolCall
 	}
 }
 
+func assistantUsageStep(content string, usage *openrouter.TokenUsage, calls ...openrouter.ToolCall) step {
+	step := assistantStep(content, nil, calls...)
+	step.res.Usage = usage
+	return step
+}
+
+func testProviderUsage(input, output, total int64) *openrouter.TokenUsage {
+	return &openrouter.TokenUsage{
+		InputTokens:  &input,
+		OutputTokens: &output,
+		TotalTokens:  &total,
+	}
+}
+
 // reasoningStep scripts an assistant message that thinks first: reasoning
 // fragments stream before the content deltas, as providers actually send.
 func reasoningStep(content string, reasoning, deltas []string, calls ...openrouter.ToolCall) step {
@@ -717,6 +731,133 @@ func TestPlainAnswer(t *testing.T) {
 	if len(c.reqs[0].Tools) != len(tools.Schemas()) {
 		t.Fatalf("request advertised %d tools, want base registry %d", len(c.reqs[0].Tools), len(tools.Schemas()))
 	}
+}
+
+func TestSendPersistsSeparateUsageForEveryProviderIteration(t *testing.T) {
+	history := &fakeHistory{}
+	client := &fakeClient{steps: []step{
+		assistantUsageStep("", testProviderUsage(10, 2, 12), toolCall("call-1", "echo", `{}`)),
+		assistantUsageStep("done", testProviderUsage(20, 3, 23)),
+	}}
+	session := New(client, "test-model", history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	if err := session.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	var usages []*memory.TokenUsage
+	for _, event := range history.events {
+		if event.Type != memory.EventAssistantMessage {
+			continue
+		}
+		var payload memory.AssistantMessagePayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		usages = append(usages, payload.Usage)
+	}
+	if len(usages) != 2 || usages[0] == nil || usages[1] == nil ||
+		*usages[0].InputTokens != 10 || *usages[0].OutputTokens != 2 || *usages[0].TotalTokens != 12 ||
+		*usages[1].InputTokens != 20 || *usages[1].OutputTokens != 3 || *usages[1].TotalTokens != 23 {
+		t.Fatalf("durable per-iteration usage=%+v", usages)
+	}
+	if len(client.reqs) != 2 {
+		t.Fatalf("provider requests=%d, want 2", len(client.reqs))
+	}
+	secondRequest, err := json.Marshal(client.reqs[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(secondRequest), `"usage"`) || strings.Contains(string(secondRequest), `"input_tokens"`) {
+		t.Fatalf("durable usage leaked into provider history request: %s", secondRequest)
+	}
+}
+
+func TestAssistantEventInputMapsAndNormalizesUsage(t *testing.T) {
+	inputCount, outputCount, totalCount := int64(1), int64(2), int64(3)
+	reasoningCount, cachedCount, cacheWriteCount := int64(4), int64(5), int64(6)
+	complete, err := assistantEventInput(openrouter.Message{Role: "assistant", Content: "ok"}, &openrouter.TokenUsage{
+		InputTokens:           &inputCount,
+		OutputTokens:          &outputCount,
+		TotalTokens:           &totalCount,
+		ReasoningOutputTokens: &reasoningCount,
+		CachedInputTokens:     &cachedCount,
+		CacheWriteInputTokens: &cacheWriteCount,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const wantComplete = `{"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3,"reasoning_output_tokens":4,"cached_input_tokens":5,"cache_write_input_tokens":6}}`
+	if string(complete.Payload) != wantComplete {
+		t.Fatalf("complete durable usage payload=%s, want %s", complete.Payload, wantComplete)
+	}
+
+	negative, zero := int64(-1), int64(0)
+	input, err := assistantEventInput(openrouter.Message{Role: "assistant", Content: "ok"}, &openrouter.TokenUsage{
+		InputTokens:  &negative,
+		OutputTokens: &zero,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(input.Payload) != `{"usage":{"output_tokens":0}}` {
+		t.Fatalf("normalized adversarial usage payload=%s", input.Payload)
+	}
+
+	empty, err := assistantEventInput(openrouter.Message{Role: "assistant", Content: "ok"}, &openrouter.TokenUsage{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(empty.Payload) != `{}` {
+		t.Fatalf("empty usage payload=%s, want {}", empty.Payload)
+	}
+}
+
+func TestAssistantUsageSharesAssistantCommitOrRollbackFate(t *testing.T) {
+	t.Run("commit wins cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		history := &fakeHistory{afterAppend: func(input memory.EventInput) {
+			if input.Type == memory.EventAssistantMessage {
+				cancel()
+			}
+		}}
+		client := &fakeClient{steps: []step{
+			assistantUsageStep("accepted", testProviderUsage(4, 5, 9)),
+		}}
+		session := New(client, "test-model", history, memory.ScopeContext{
+			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+		}, newFakeTurnOwner())
+		if err := session.Send(ctx, "go", &recorder{}, nil); err != nil {
+			t.Fatalf("Send error=%v, want committed success", err)
+		}
+		if len(history.events) != 2 || history.events[1].Type != memory.EventAssistantMessage {
+			t.Fatalf("events=%+v", history.events)
+		}
+		var payload memory.AssistantMessagePayload
+		if err := json.Unmarshal(history.events[1].Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Usage == nil || *payload.Usage.TotalTokens != 9 {
+			t.Fatalf("committed usage=%+v", payload.Usage)
+		}
+	})
+
+	t.Run("assistant append rollback", func(t *testing.T) {
+		history := &fakeHistory{appendErrAt: 2, appendErr: errors.New("rolled back")}
+		client := &fakeClient{steps: []step{
+			assistantUsageStep("not accepted", testProviderUsage(4, 5, 9)),
+		}}
+		session := New(client, "test-model", history, memory.ScopeContext{
+			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+		}, newFakeTurnOwner())
+		if err := session.Send(context.Background(), "go", &recorder{}, nil); err == nil {
+			t.Fatal("Send succeeded after assistant append rollback")
+		}
+		if len(history.events) != 1 || history.events[0].Type != memory.EventUserMessage {
+			t.Fatalf("rolled-back assistant or usage persisted: %+v", history.events)
+		}
+	})
 }
 
 func TestToolRoundTrip(t *testing.T) {

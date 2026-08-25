@@ -231,11 +231,12 @@ func New(
 	}
 }
 
-func assistantEventInput(msg openrouter.Message) (
+func assistantEventInput(msg openrouter.Message, usage *openrouter.TokenUsage) (
 	memory.EventInput, error,
 ) {
 	payload := memory.AssistantMessagePayload{
 		ToolCalls: make([]memory.ToolCall, len(msg.ToolCalls)),
+		Usage:     memoryUsage(usage),
 	}
 
 	for i, call := range msg.ToolCalls {
@@ -257,6 +258,34 @@ func assistantEventInput(msg openrouter.Message) (
 		Content: msg.Content,
 		Payload: payloadJSON,
 	}, nil
+}
+
+func memoryUsage(usage *openrouter.TokenUsage) *memory.TokenUsage {
+	if usage == nil {
+		return nil
+	}
+	mapped := &memory.TokenUsage{
+		InputTokens:           nonNegativeInt64(usage.InputTokens),
+		OutputTokens:          nonNegativeInt64(usage.OutputTokens),
+		TotalTokens:           nonNegativeInt64(usage.TotalTokens),
+		ReasoningOutputTokens: nonNegativeInt64(usage.ReasoningOutputTokens),
+		CachedInputTokens:     nonNegativeInt64(usage.CachedInputTokens),
+		CacheWriteInputTokens: nonNegativeInt64(usage.CacheWriteInputTokens),
+	}
+	if mapped.InputTokens == nil && mapped.OutputTokens == nil && mapped.TotalTokens == nil &&
+		mapped.ReasoningOutputTokens == nil && mapped.CachedInputTokens == nil &&
+		mapped.CacheWriteInputTokens == nil {
+		return nil
+	}
+	return mapped
+}
+
+func nonNegativeInt64(value *int64) *int64 {
+	if value == nil || *value < 0 {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func toolIntentInput(

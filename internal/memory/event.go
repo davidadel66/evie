@@ -116,7 +116,17 @@ type ToolCall struct {
 }
 
 type AssistantMessagePayload struct {
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	ToolCalls []ToolCall  `json:"tool_calls,omitempty"`
+	Usage     *TokenUsage `json:"usage,omitempty"`
+}
+
+type TokenUsage struct {
+	InputTokens           *int64 `json:"input_tokens,omitempty"`
+	OutputTokens          *int64 `json:"output_tokens,omitempty"`
+	TotalTokens           *int64 `json:"total_tokens,omitempty"`
+	ReasoningOutputTokens *int64 `json:"reasoning_output_tokens,omitempty"`
+	CachedInputTokens     *int64 `json:"cached_input_tokens,omitempty"`
+	CacheWriteInputTokens *int64 `json:"cache_write_input_tokens,omitempty"`
 }
 
 type ToolIntentPayload struct {

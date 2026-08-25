@@ -1152,7 +1152,9 @@ func TestCommittedToolCallingAssistantNotifiedBeforePostCommitCancellationStopsT
 		}
 	}
 	events := &recorder{}
-	client := &fakeClient{steps: []step{assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))}}
+	providerStep := assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))
+	providerStep.res.Usage = testProviderUsage(7, 2, 9)
+	client := &fakeClient{steps: []step{providerStep}}
 	err := ownedSession(client, history, &scriptedOwner{}).Send(ctx, "go", events, nil, echoTool("echo", false, nil))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Send error=%v, want context.Canceled", err)
@@ -1169,12 +1171,21 @@ func TestCommittedToolCallingAssistantNotifiedBeforePostCommitCancellationStopsT
 		history.events[2].Type != memory.EventTurnInterrupted {
 		t.Fatalf("durable events=%+v", history.events)
 	}
+	var payload memory.AssistantMessagePayload
+	if err := json.Unmarshal(history.events[1].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Usage == nil || payload.Usage.TotalTokens == nil || *payload.Usage.TotalTokens != 9 {
+		t.Fatalf("committed tool-calling usage=%+v", payload.Usage)
+	}
 }
 
 func TestToolCallingAssistantCallbacksSuppressedWhenAppendLosesLease(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 2, appendErr: errFakeLeaseLost}
 	events := &recorder{}
-	client := &fakeClient{steps: []step{assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))}}
+	providerStep := assistantStep("calling", []string{"calling"}, toolCall("call", "echo", `{}`))
+	providerStep.res.Usage = testProviderUsage(7, 2, 9)
+	client := &fakeClient{steps: []step{providerStep}}
 	err := ownedSession(client, history, &scriptedOwner{}).Send(
 		context.Background(), "go", events, nil, echoTool("echo", false, nil),
 	)
@@ -2022,9 +2033,11 @@ func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
 					ID: "root", SessionID: "test-session", Sequence: 1,
 					Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go",
 				}}}
-				client := &fakeClient{steps: []step{assistantStep("calling", presentation.deltas,
+				providerStep := assistantStep("calling", presentation.deltas,
 					toolCall("call", "echo", `{}`),
-				)}}
+				)
+				providerStep.res.Usage = testProviderUsage(6, 3, 9)
+				client := &fakeClient{steps: []step{providerStep}}
 				s := ownedSession(client, history, owner)
 				ticks := useManualHeartbeatTicker(s)
 				triggered := false
@@ -2062,6 +2075,13 @@ func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
 					fmt.Sprint(events.events) != fmt.Sprint(presentation.want) ||
 					len(client.reqs) != 1 || heartbeats != wantHeartbeats || authorizations != 1 {
 					t.Fatalf("triggered=%v durable=%+v callbacks=%v", triggered, history.events, events.events)
+				}
+				var payload memory.AssistantMessagePayload
+				if err := json.Unmarshal(history.events[1].Payload, &payload); err != nil {
+					t.Fatal(err)
+				}
+				if payload.Usage == nil || payload.Usage.TotalTokens == nil || *payload.Usage.TotalTokens != 9 {
+					t.Fatalf("commit-boundary usage=%+v", payload.Usage)
 				}
 				events.events = append(events.events, "error", "turn_done")
 				assertOrderedCallbacks(t, events.events, "done:calling", "error", "turn_done")

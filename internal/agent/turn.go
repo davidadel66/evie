@@ -224,7 +224,7 @@ func (s *Session) runOwnedTurn(
 		if !coordinator.setStage(memory.StageAssistantCommit) {
 			return s.observeTurnContext(coordinator)
 		}
-		assistantInput, err := assistantEventInput(msg)
+		assistantInput, err := assistantEventInput(msg, res.Usage)
 		if err != nil {
 			coordinator.selectCause(causeProviderInvalid, err, 0)
 			return err

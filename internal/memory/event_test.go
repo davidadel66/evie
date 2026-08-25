@@ -1,6 +1,43 @@
 package memory
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestAssistantMessagePayloadUsageJSONPreservesPartialZeroAndAbsence(t *testing.T) {
+	zero, total := int64(0), int64(12)
+	payload := AssistantMessagePayload{Usage: &TokenUsage{
+		InputTokens: &zero,
+		TotalTokens: &total,
+	}}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"usage":{"input_tokens":0,"total_tokens":12}}`
+	if string(encoded) != want {
+		t.Fatalf("payload JSON=%s, want %s", encoded, want)
+	}
+
+	var decoded AssistantMessagePayload
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Usage == nil || decoded.Usage.InputTokens == nil || *decoded.Usage.InputTokens != 0 ||
+		decoded.Usage.TotalTokens == nil || *decoded.Usage.TotalTokens != 12 ||
+		decoded.Usage.OutputTokens != nil {
+		t.Fatalf("round-tripped payload=%+v usage=%+v", decoded, decoded.Usage)
+	}
+
+	absent, err := json.Marshal(AssistantMessagePayload{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(absent) != `{}` {
+		t.Fatalf("absent usage JSON=%s, want {}", absent)
+	}
+}
 
 func TestTurnTerminalPayloadClosedStageAndClassificationMatrix(t *testing.T) {
 	stages := []TurnStage{

@@ -118,6 +118,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		finishReason string
 		gotChunk     bool
 		completed    bool
+		usage        *TokenUsage
 		toolCalls    = make(map[int]*ToolCall)
 	)
 	msg.Role = "assistant"
@@ -133,6 +134,14 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		if data == "[DONE]" {
 			completed = true
 			break
+		}
+
+		chunkUsage, hasNonNullUsage, err := parseProviderUsage([]byte(data))
+		if err != nil {
+			return ChatResponse{}, streamError(StreamProviderResponseInvalid, fmt.Errorf("failed to parse stream chunk: %w", err))
+		}
+		if hasNonNullUsage {
+			usage = chunkUsage
 		}
 
 		var chunk streamChunk
@@ -228,7 +237,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		}
 	}
 
-	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}}, nil
+	return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: finishReason}}, Usage: usage}, nil
 }
 
 // Chat sends one chat-completions request and returns the parsed response.
