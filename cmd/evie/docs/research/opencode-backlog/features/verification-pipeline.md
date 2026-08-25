@@ -13,9 +13,9 @@ OpenCode provides the shell, todos, profiles, subagents, snapshots, and session
 state needed to run checks, but it does not impose one universal software-build
 workflow. That is correct: verification is project-specific.
 
-EVIE's strongest design evidence comes from its own `docs/delivery-loop.md`:
-project-specific deterministic checks, fresh independent review, structured
-evidence, bounded repair, and explicit safe stops.
+EVIE's repository verification script and CI demonstrate project-specific
+deterministic checks without prescribing how a user runs an AI-assisted
+development session.
 
 ## Proposed EVIE adaptation
 

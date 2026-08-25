@@ -14,13 +14,9 @@ permissions, persisted tool states, snapshots, compaction, and worktrees. The
 important lesson is that autonomy is the composition of these controls, not one
 `--auto` flag.
 
-The current `docs/delivery-loop.md` keeps the repository's coding workflow
-small and mechanism-driven before making EVIE an execution backend:
-
-```text
-scope -> one implementation task -> deterministic checks
--> one fresh review -> bounded repair or safe stop -> human merge
-```
+The repository currently leaves development workflow to user-directed,
+AI-assisted sessions. Making EVIE an execution backend would require an
+explicitly approved runtime contract rather than inheriting a repository loop.
 
 ## Preconditions
 

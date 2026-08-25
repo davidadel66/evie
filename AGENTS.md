@@ -53,27 +53,6 @@ Interfaces should normally be owned by the package that consumes them.
 - Add or update tests when behavior changes. Prefer existing seams and ask
   before adding a production dependency.
 
-## Delivery loop
-
-Use the thin loop in `docs/delivery-loop.md`:
-
-1. Agree on one ready outcome.
-2. Use one implementation task to make the smallest patch, running focused
-   checks while developing.
-3. Run `scripts/verify-change.sh` before handoff.
-4. Open a draft pull request only when requested and let the required `Verify`
-   check run.
-5. Obtain one fresh, read-only review against the task, applicable specification,
-   and exact diff. Use Codex `/review` when available.
-6. The same implementer may make one bounded repair of blocking, in-scope
-   findings, then reruns verification. Re-review only when the diff changed
-   materially.
-7. Hand the pull request to a human for approval and merge.
-
-Do not use a multi-agent review swarm by default. Parallel work is appropriate
-only for genuinely independent, dependency-ready changes or clearly distinct
-specialist investigations, with isolated ownership and explicit user scope.
-
 ## Git safety
 
 - Preserve user-owned and pre-existing working-tree changes.

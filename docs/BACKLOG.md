@@ -9,8 +9,8 @@ Details live in active plans/specs and completed feature records.
   and merged in pull requests #60/#62, completing Epic 1 and Stage 1.
 - Mid-flight: no memory story is active. Epic 2 has not yet been decomposed or
   selected for implementation.
-- Start with: use the lightweight delivery loop to select and refine the first
-  dependency-ready, independently verifiable Epic 2 story.
+- Start with: work with David in one AI-assisted session to select and refine
+  the first dependency-ready, independently verifiable Epic 2 story.
 
 ## In progress
 - memory — [approved specification](../cmd/evie/docs/active/memory.spec.md);

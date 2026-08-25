@@ -129,7 +129,7 @@ Before promoting any brief to `docs/active`:
 
 1. Resolve every item marked `Open decisions` that affects its first stage.
 2. Recheck OpenCode's current revision; these notes are pinned in time.
-3. Reconcile overlaps with `memory.spec.md`, `docs/delivery-loop.md`, and the
-   shipped Bash/file-tool decisions.
+3. Reconcile overlaps with `memory.spec.md`, `AGENTS.md`, and the shipped
+   Bash/file-tool decisions.
 4. Write an EVIE-specific spec. OpenCode behavior is evidence, not acceptance
    criteria by itself.
