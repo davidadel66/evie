@@ -1,6 +1,6 @@
 # memory - local temporal-graph memory for Evie
 
-Status: approved by David on 2026-08-17; Stage 1 in progress as of 2026-08-21
+Status: approved by David on 2026-08-17; Stage 1 complete as of 2026-08-25
 
 ## Purpose
 
@@ -960,10 +960,10 @@ claims, graph indexes, and procedural files.
 
 **Goal:** make the existing agent loop restart-safe and observable.
 
-**Progress (2026-08-23):** the durable event spine, explicit global/project REPL
-scope selection, SQLite turn-lease primitives, and context-aware tool
-cancellation are integrated and tested. Live agent lease integration,
-existing-session resume, and usage capture remain unfinished.
+**Progress (2026-08-25):** the durable event spine, explicit global/project REPL
+scope and existing-session selection, restart resume, SQLite turn-lease
+primitives, context-aware tool cancellation, live agent lease integration, and
+provider-neutral usage capture are integrated and tested. Stage 1 is complete.
 
 **Tasks:**
 
@@ -980,15 +980,15 @@ existing-session resume, and usage capture remain unfinished.
 - [x] propagate caller cancellation through tool preparation, approval,
   execution, and blocking built-in boundaries while preserving the approved
   bounded-cleanup and non-turn exemptions;
-- [ ] inject immutable `ScopeContext` and lease-cancellable turn ownership into
+- [x] inject immutable `ScopeContext` and lease-cancellable turn ownership into
   `Session`;
 - [x] persist user/assistant messages plus tool intent, approval, success,
   failure, and cancellation events in before-action order;
-- [ ] fence event appends with the durable turn lease and persist provider
+- [x] fence event appends with the durable turn lease and persist provider
   failure/interruption events;
-- [ ] add cwd-assisted explicit project confirmation, session selection, and
+- [x] add cwd-assisted explicit project confirmation, session selection, and
   resume for the REPL;
-- [ ] capture provider usage;
+- [x] capture provider usage;
 
 **Go lesson:** transaction boundaries, interfaces owned by consumers, and safe
 recovery from partial side effects.

@@ -28,6 +28,37 @@
   evidence, claim provenance, authorization, billing, budget, aggregation, or
   frontend protocol state.
 
+- **2026-08-24 - REPL session selection uses one explicit combined hierarchy.**
+  Startup lists registered project headings and their active sessions, followed
+  by global sessions. Project labels include a terminal-safe display name and
+  escaped canonical root; relocated sessions also show a differing stored root
+  snapshot. Selecting a numbered existing/new entry or current-directory
+  registration is the explicit scope grant. An exact cwd match may annotate one
+  unarchived project but never preselects it. Projects and sessions have stable
+  deterministic ordering, and stale registration/archive state refreshes the
+  chooser without silently creating a session or switching scope.
+
+- **2026-08-24 - session titles are durable deterministic metadata.**
+  `sessions.title` is nullable and added through an idempotent,
+  concurrent-start-safe additive upgrade. Existing sessions are backfilled from
+  their earliest nonblank accepted root user event. A new title is initialized
+  atomically with that event inside the turn-lease fence, never overwrites a
+  populated title, and does not change `sessions.updated_at`. Titles are
+  normalized to one terminal-safe line of at most 80 Unicode code points;
+  untitled sessions use a generated display fallback. This persistence behavior
+  applies to every session, including web-created sessions, while rename APIs,
+  title history, web presentation, and editing remain deferred.
+
+- **2026-08-24 - project archival and session resumability remain separate.**
+  Resume eligibility is determined by `sessions.status = active`, not the
+  project's archive flag. An archived project may therefore expose its active
+  sessions under an archived heading, but it is never a cwd suggestion and
+  cannot create a new session. Closed sessions are not listed. A held turn lease
+  reports `Session busy; message not sent.` and keeps the selected REPL prompt;
+  an after-selection inactive session reports `Session unavailable; message not
+  sent.` Neither path starts or records turn work. Broader project archival,
+  restoration, and session-closing UX remain separate work.
+
 - **2026-08-23 - prior reference-system research satisfies Stage 0.**
   David confirmed that he completed the necessary Letta and reference-system
   research before the current delivery plan. Stage 0 therefore requires no new

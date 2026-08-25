@@ -1,6 +1,6 @@
 # Epic 1 - Restart-safe leased REPL sessions
 
-Status: approved for planning by David on 2026-08-23
+Status: completed on 2026-08-25
 
 ## Outcome
 
@@ -82,7 +82,9 @@ implemented foundation.
 ### Story 2 - Lease-owned and fenced turns
 
 - [Planning summary](story_2/README.md)
-- Status: dependency satisfied; interactive decision refinement required.
+- Status: delivered by [issue #57](https://github.com/davidadel66/evie/issues/57)
+  and merged in [pull request #58](https://github.com/davidadel66/evie/pull/58)
+  on 2026-08-24.
 - Outcome: make a durable session lease own the complete live turn from the
   first event through provider and tool work.
 - Depends on: Story 1 and the existing SQLite turn-lease primitives.
@@ -99,24 +101,30 @@ implemented foundation.
 ### Story 3 - Safe existing-session selection and resume
 
 - [Planning summary](story_3/README.md)
+- Status: delivered by [issue #59](https://github.com/davidadel66/evie/issues/59)
+  and merged in [pull request #60](https://github.com/davidadel66/evie/pull/60)
+  on 2026-08-24.
 - Outcome: explicitly select and resume an existing global or project REPL
-  session without weakening its immutable scope or durable ownership.
-- Depends on: Story 2.
-- Acceptance summary: session selection never grants project scope silently,
-  preserves the stored project/root snapshot, rebuilds ordered provider-neutral
-  history, and reports a live lease conflict instead of opening a competing
-  turn.
-- Verification summary: global/project selection, restart, relocation-snapshot,
-  and competing-process tests plus a manual REPL resume demonstration.
-- Proposed PR boundary: active-session listing/query seams and REPL startup
-  flow; no web UI, compaction, or graph work.
+  session from a combined hierarchy without weakening immutable scope or
+  durable ownership, with deterministic durable session titles.
+- Depends on: delivered Story 2.
+- Acceptance summary: explicit combined project/global selection, active-session
+  resume across restart, immutable relocation snapshots, ordered provider-neutral
+  history, fenced first-message title initialization and legacy backfill, and
+  friendly conflict handling without competing work.
+- Verification summary: chooser/scope, migration/concurrency, title-boundary,
+  restart/history, relocation, and competing-store tests plus manual global and
+  project resume demonstrations.
+- Proposed PR boundary: active-session queries, REPL startup/resume flow,
+  additive session-title persistence, common fenced title initialization, and
+  tests; no rename API, web session UI/endpoints, compaction, or graph work.
 
 ### Story 4 - Provider usage evidence
 
 - [Planning summary](story_4/README.md)
-- Status: implementation candidate for
-  [issue #61](https://github.com/davidadel66/evie/issues/61); awaiting review and
-  merge.
+- Status: delivered by [issue #61](https://github.com/davidadel66/evie/issues/61)
+  and merged in [pull request #62](https://github.com/davidadel66/evie/pull/62)
+  on 2026-08-25.
 - Outcome: preserve usage reported by the provider as immutable,
   provider-neutral turn evidence.
 - Depends on: Story 2's terminal provider-event path.
@@ -158,17 +166,17 @@ accounting evidence.
   the answer is discarded and the same scanner remains the sole input owner.
 - A durable lease fences accepted state and tool starts, but it cannot recall a
   provider request already transmitted remotely.
-- Story 2's Story 1 dependency is satisfied, and its terminal-event,
-  payload/redaction, stale-owner, lease-timing, streamed-output, fencing,
-  cleanup, correlation, and incomplete-tool-group decisions are approved and
-  recorded in `memory.decisions.md`. Follow-up decisions from the first contract
-  challenge are also approved and recorded. The final independent closure
-  challenge found no material issues; Story 2 is ready for issue materialization.
-- Story 3's exact session-list presentation and selection details remain for
-  interactive refinement; they may not weaken explicit scope confirmation.
+- Story 2 was delivered by issue #57 and pull request #58. Its terminal-event,
+  redaction, ownership, lifecycle, cleanup, correlation, and incomplete-tool-
+  group decisions remain recorded in `memory.decisions.md`.
+- Story 3's combined chooser, unambiguous scope labels, title persistence,
+  archived-session behavior, deterministic ordering, and conflict presentation
+  are approved. Editing titles and broader project/session lifecycle UX remain
+  deferred.
 - Story 4's exact six-counter provider-neutral allowlist, normalization rules,
   per-iteration association, persistence fate, and episodic-only exclusions were
-  approved and materialized as issue #61 on 2026-08-25.
+  delivered. Token budgets, compaction, aggregation, and billing policy remain
+  deferred.
 
 ## Approval record
 
@@ -199,7 +207,16 @@ accounting evidence.
 - 2026-08-23: David authorized committing and pushing the approved planning
   records, creating exactly one Story 2 execution-contract issue, and beginning
   the reviewed delivery workflow immediately afterward.
+- 2026-08-24: Story 2 was delivered by issue #57 and merged in pull request #58.
+- 2026-08-24: David selected Story 3 and approved its combined project/global
+  chooser, durable first-message titles, archived-project/session boundary,
+  ordering, migration, recovery, and one-PR execution contract after independent
+  read-only challenges.
+- 2026-08-24: Story 3 was delivered by issue #59 and merged in pull request #60.
 - 2026-08-25: David approved Story 4's six-counter usage allowlist, independent
   malformed-field normalization, repeated-container and last-non-null stream
   rules, atomic per-assistant persistence, replay/compiler/policy exclusions,
   fixture provenance, and one-PR execution contract as issue #61.
+- 2026-08-25: Story 4 was delivered by issue #61 and merged in pull request #62;
+  all four stories and the Epic 1 completion evidence passed, completing the
+  epic.

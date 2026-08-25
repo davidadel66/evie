@@ -1,6 +1,6 @@
 # Story 2 - Lease-owned and fenced turns
 
-Status: STORY_READY; approved for one GitHub execution-contract issue
+Status: delivered by issue #57 and merged in pull request #58 on 2026-08-24
 
 ## Outcome
 
@@ -124,10 +124,7 @@ David approved the following decisions on 2026-08-23; the binding detail is in
 
 ## Readiness
 
-The Story 1 dependency is complete. David approved and recorded the initial and
+The Story 1 dependency was complete. David approved and recorded the initial and
 follow-up decision packages. A fresh independent closure challenge against base
-`d48c0ac1b9309bbaa73b37c23fdae7fa0a7e603d` found no material issues: every
-acceptance criterion fits the expanded one-PR boundary, deterministic evidence
-covers each behavior, and no later-story dependency or split remains. Story 2 is
-ready for David's separate approval to materialize exactly one GitHub issue.
-David granted that materialization approval on 2026-08-23.
+`d48c0ac1b9309bbaa73b37c23fdae7fa0a7e603d` found no material issues. Story 2
+was delivered by issue #57 and merged in pull request #58 on 2026-08-24.

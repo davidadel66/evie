@@ -1,6 +1,6 @@
 # Story 4 - Provider usage evidence
 
-Status: implementation candidate for issue #61; awaiting review and merge
+Status: delivered by issue #61 and merged in pull request #62 on 2026-08-25
 
 ## Outcome
 
@@ -57,9 +57,9 @@ payload, fenced persistence, and deterministic tests. Do not implement token
 budgets, compaction, retrieval diagnostics, billing policy, or opaque provider
 state.
 
-## Readiness
+## Delivery
 
 David approved the complete refined execution contract on 2026-08-25 and it was
-materialized as [issue #61](https://github.com/davidadel66/evie/issues/61).
-Implementation is prepared from reviewed base
-`5593518cf64abae9558d9dc91f21188dd5d66b3f` for independent review.
+materialized as [issue #61](https://github.com/davidadel66/evie/issues/61). It
+was delivered by [pull request #62](https://github.com/davidadel66/evie/pull/62),
+merged on 2026-08-25 as `dcbbe5727ca9f090f77bf9c4c7c8f9a3cb4d1f5f`.

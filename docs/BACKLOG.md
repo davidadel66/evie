@@ -5,17 +5,16 @@ stories to one line; delivery-discovered issues use the structured form below.
 Details live in active plans/specs and completed feature records.
 
 ## Next session
-- Last session: the generated memory epic/story breakdown was removed after its
-  boundaries proved too speculative and cross-cutting.
-- Mid-flight: the event/session foundation, explicit scope selection, and durable
-  lease storage remain implemented. The approved memory specification and
-  decisions remain the planning source; there is no active memory epic or story.
-- Start with: review the retained memory specification with David and plan only
-  the next small, independently verifiable outcome.
+- Last session: Memory Epic 1 Stories 3 and 4 were delivered by issues #59/#61
+  and merged in pull requests #60/#62, completing Epic 1 and Stage 1.
+- Mid-flight: no memory story is active. Epic 2 has not yet been decomposed or
+  selected for implementation.
+- Start with: use the lightweight delivery loop to select and refine the first
+  dependency-ready, independently verifiable Epic 2 story.
 
 ## In progress
 - memory — [approved specification](../cmd/evie/docs/active/memory.spec.md);
-  delivery planning reset, with no story currently selected
+  Epic 1 complete, with no Epic 2 story currently selected
 
 ## Next (ordered tool roadmap, decided 2026-07-29)
 - budget analysis verdict — ask evie "how am I tracking against budget?"; transcript decides if step 5 needs a dedicated tool
@@ -47,8 +46,19 @@ Do not use this section for speculative ideas, style cleanup, or work required
 by the current story's acceptance criteria.
 -->
 
+- [ ] Update the UI build chain past vulnerable nanoid 3.3.17
+  - ID: `E1-S4-BACKLOG-NANOID-3.3.17`
+  - Discovered during: issue #61 at final candidate `247d6688dadf1f62823ae84c31978e61903ae87e`
+  - Evidence: The reviewed base and final candidate package lock pin `nanoid` 3.3.17 through the existing Vite/PostCSS chain; `npm audit --json` reports GHSA-2v37-7h3g-55p8 with a fix available.
+  - Impact: The pre-existing UI build chain remains exposed to an infinite-loop availability advisory when a custom generator receives size zero.
+  - Why deferred: The issue predates Story 4, does not affect its acceptance criteria, and dependency updates are outside the approved provider-usage story.
+  - Verification: Complete an approved dependency update, then require `npm audit --json` to omit GHSA-2v37-7h3g-55p8, `npm run build` to pass, and `go test ./...` to pass.
+
 ## Recently done
 <!-- newest first, max 10; older entries are deleted — git history is the archive -->
+- 2026-08-25 memory Story 4: provider-neutral usage evidence, issue #61 / PR #62; Epic 1 complete
+- 2026-08-24 memory Story 3: safe titled REPL session selection and restart resume, issue #59 / PR #60
+- 2026-08-24 memory Story 2: lease-owned and fenced live turns, issue #57 / PR #58
 - 2026-08-13 YouTube transcripts: normalized SQLite/FTS library, 6,185 legacy imports, `ytscribe`, two Evie tools, read-only query_db integration
 - 2026-08-03 web_search (Brave API, raw results); flushed out + fixed the never-loading .env bug in main.go
 - 2026-08-03 web_fetch via full autopilot (spec review → independent tests → staged build → code review); 4 review bugs fixed
@@ -56,6 +66,3 @@ by the current story's acceptance criteria.
 - 2026-08-01 bash tool (ungated, persistent cwd, shell snapshot) + read_file/edit_file
 - 2026-07-29 file-tools spec; budget_limits promoted to standing template; tool-description convention sharpened
 - 2026-07-29 SSE streaming + smoothPrinter (first goroutine/channel/select in repo)
-- 2026-07-28 categorize writes budget_entries; backfill minted 236 entries (4 human preserved); idempotency proven live
-- 2026-07-28 budget_entries + budget_limits tables; budget spec rewritten (reference-not-copy model)
-- 2026-07-28 query_db/edit_db general tools; approval gate (NeedsApproval + injected y/N callback)
