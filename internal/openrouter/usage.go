@@ -13,23 +13,6 @@ type jsonMember struct {
 	value json.RawMessage
 }
 
-// UnmarshalJSON keeps provider-specific accounting out of ChatResponse while
-// applying the same counter normalization used by streaming responses.
-func (r *ChatResponse) UnmarshalJSON(data []byte) error {
-	var response struct {
-		Choices []Choice `json:"choices"`
-	}
-	if err := json.Unmarshal(data, &response); err != nil {
-		return err
-	}
-	usage, _, err := parseProviderUsage(data)
-	if err != nil {
-		return err
-	}
-	*r = ChatResponse{Choices: response.Choices, Usage: usage}
-	return nil
-}
-
 // parseProviderUsage returns the normalized usage and whether this JSON object
 // contains a non-null usage occurrence. The latter lets stream assembly replace
 // earlier usage with a later empty or invalid occurrence while ignoring null.

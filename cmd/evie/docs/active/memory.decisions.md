@@ -18,11 +18,15 @@
   replaces rather than merges earlier occurrences, including when the final
   occurrence normalizes to absent. Usage-only chunks are parsed even without a
   choice. Cost, BYOK, modalities, provider/model/routing identity, service or
-  server-tool metadata, reasoning details, unknown fields, and raw transport
-  payloads are excluded. Usage survives payload storage and restart but is
-  ignored by provider-history projection and is never content, continuation
-  state, semantic compiler evidence, claim provenance, authorization, billing,
-  budget, aggregation, or frontend protocol state.
+  server-tool metadata, reasoning-related accounting details, unknown fields,
+  and raw transport payloads are excluded from normalized `TokenUsage` and the
+  durable `AssistantMessagePayload`. The pre-existing transient
+  `openrouter.Message.Reasoning` and `Message.ReasoningDetails` behavior remains
+  unchanged for live presentation; neither field becomes durable evidence.
+  Usage survives payload storage and restart but is ignored by provider-history
+  projection and is never content, continuation state, semantic compiler
+  evidence, claim provenance, authorization, billing, budget, aggregation, or
+  frontend protocol state.
 
 - **2026-08-23 - prior reference-system research satisfies Stage 0.**
   David confirmed that he completed the necessary Letta and reference-system

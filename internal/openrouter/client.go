@@ -275,10 +275,17 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 		return ChatResponse{}, fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes)
 	}
 
-	var chatResp ChatResponse
-	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil {
+	var wireResponse struct {
+		Choices []Choice `json:"choices"`
+	}
+	if err := json.Unmarshal(bodyBytes, &wireResponse); err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to parse response: %w", err)
 	}
+	usage, _, err := parseProviderUsage(bodyBytes)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+	chatResp := ChatResponse{Choices: wireResponse.Choices, Usage: usage}
 
 	if len(chatResp.Choices) == 0 {
 		return ChatResponse{}, fmt.Errorf("response contained no choices: %s", bodyBytes)

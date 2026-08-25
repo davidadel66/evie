@@ -34,9 +34,12 @@ provider-neutral turn evidence for later context and evaluation diagnostics.
   restart without changing provider history projection or incomplete-tool-group
   omission.
 - Usage remains immutable episodic diagnostics. Provider-specific metadata,
-  opaque continuation payloads, reasoning details, raw transport state,
-  semantic compilation, policy, aggregation, and frontend representation remain
-  excluded.
+  opaque continuation payloads, reasoning-related accounting details, and raw
+  transport state remain excluded from normalized `TokenUsage` and durable
+  `AssistantMessagePayload`. Existing transient `openrouter.Message.Reasoning`
+  and `Message.ReasoningDetails` presentation behavior remains unchanged and
+  non-durable. Semantic compilation, policy, aggregation, and frontend
+  representation remain excluded.
 
 ## Verification summary
 

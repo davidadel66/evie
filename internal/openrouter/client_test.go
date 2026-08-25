@@ -192,7 +192,68 @@ func TestChatStreamAndChatNormalizeUsageIdentically(t *testing.T) {
 			if string(streamJSON) != tt.want || string(chatJSON) != tt.want {
 				t.Fatalf("stream usage=%s chat usage=%s, want %s", streamJSON, chatJSON, tt.want)
 			}
+			if streamResponse.Choices[0].Message.Content != "ok" || chatResponse.Choices[0].Message.Content != "ok" {
+				t.Fatalf("valid assistant was lost: stream=%+v chat=%+v", streamResponse, chatResponse)
+			}
 		})
+	}
+}
+
+func TestChatStreamAndChatLeaveOmittedUsageAbsent(t *testing.T) {
+	streamResponse := streamResponseForTest(t, `{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`)
+	chatResponse := chatResponseForTest(t, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	if streamResponse.Usage != nil || chatResponse.Usage != nil {
+		t.Fatalf("omitted usage became present: stream=%+v chat=%+v", streamResponse.Usage, chatResponse.Usage)
+	}
+	if streamResponse.Choices[0].Message.Content != "ok" || chatResponse.Choices[0].Message.Content != "ok" {
+		t.Fatalf("assistant content changed: stream=%+v chat=%+v", streamResponse, chatResponse)
+	}
+}
+
+func TestChatRejectsSyntacticallyMalformedJSONBeforeUsageNormalization(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"must not return"}}],"usage":{"prompt_tokens":`))
+	}))
+	defer srv.Close()
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = srv.URL
+	response, err := client.Chat(ChatRequest{Model: "test"})
+	if err == nil || !strings.Contains(err.Error(), "failed to parse response") {
+		t.Fatalf("Chat response=%+v error=%v, want malformed-response error", response, err)
+	}
+}
+
+func TestChatResponseProviderNeutralJSONRoundTripPreservesSupportedFields(t *testing.T) {
+	input, output := int64(3), int64(4)
+	original := ChatResponse{
+		Choices: []Choice{{Message: Message{
+			Role:             "assistant",
+			Content:          "answer",
+			Reasoning:        "thinking",
+			ReasoningDetails: json.RawMessage(`[{"type":"reasoning.text","text":"thinking"}]`),
+		}, FinishReason: "stop"}},
+		Usage: &TokenUsage{InputTokens: &input, OutputTokens: &output},
+	}
+	encoded, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"prompt_tokens"`) || !strings.Contains(string(encoded), `"input_tokens":3`) {
+		t.Fatalf("shared response did not serialize provider-neutral usage: %s", encoded)
+	}
+	var decoded ChatResponse
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	roundTripped, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(roundTripped) != string(encoded) {
+		t.Fatalf("shared response JSON round trip changed fields:\nfirst:  %s\nsecond: %s", encoded, roundTripped)
 	}
 }
 
@@ -228,10 +289,18 @@ func TestChatStreamUsesLastNonNullUsageOccurrenceWithoutMerging(t *testing.T) {
 			want: `{"input_tokens":1}`,
 		},
 		{
-			name: "invalid-only final removes earlier usage",
+			name: "recognized malformed final removes earlier usage",
 			chunks: []string{
 				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
-				`{"choices":[],"usage":{"prompt_tokens":-1}}`,
+				`{"choices":[],"usage":{"prompt_tokens":"malformed"}}`,
+			},
+			want: `null`,
+		},
+		{
+			name: "excluded-only final removes earlier usage",
+			chunks: []string{
+				`{"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":1}}`,
+				`{"choices":[],"usage":{"cost":0.5,"is_byok":false}}`,
 			},
 			want: `null`,
 		},

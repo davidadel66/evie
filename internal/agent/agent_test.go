@@ -777,7 +777,12 @@ func TestSendPersistsSeparateUsageForEveryProviderIteration(t *testing.T) {
 func TestAssistantEventInputMapsAndNormalizesUsage(t *testing.T) {
 	inputCount, outputCount, totalCount := int64(1), int64(2), int64(3)
 	reasoningCount, cachedCount, cacheWriteCount := int64(4), int64(5), int64(6)
-	complete, err := assistantEventInput(openrouter.Message{Role: "assistant", Content: "ok"}, &openrouter.TokenUsage{
+	complete, err := assistantEventInput(openrouter.Message{
+		Role:             "assistant",
+		Content:          "ok",
+		Reasoning:        "transient reasoning",
+		ReasoningDetails: json.RawMessage(`[{"type":"reasoning.text","text":"transient reasoning"}]`),
+	}, &openrouter.TokenUsage{
 		InputTokens:           &inputCount,
 		OutputTokens:          &outputCount,
 		TotalTokens:           &totalCount,
@@ -791,6 +796,10 @@ func TestAssistantEventInputMapsAndNormalizesUsage(t *testing.T) {
 	const wantComplete = `{"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3,"reasoning_output_tokens":4,"cached_input_tokens":5,"cache_write_input_tokens":6}}`
 	if string(complete.Payload) != wantComplete {
 		t.Fatalf("complete durable usage payload=%s, want %s", complete.Payload, wantComplete)
+	}
+	if strings.Contains(string(complete.Payload), "transient reasoning") ||
+		strings.Contains(string(complete.Payload), `"reasoning_details"`) {
+		t.Fatalf("transient reasoning crossed durable assistant boundary: %s", complete.Payload)
 	}
 
 	negative, zero := int64(-1), int64(0)
