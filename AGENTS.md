@@ -6,8 +6,8 @@ Evie is a Go-native personal agent runtime with local SQLite persistence,
 purpose-built tools, an OpenRouter conversational client, and a web interface.
 
 Prefer small, inspectable changes over speculative abstractions. Enforce safety,
-authorization, persistence, and recovery boundaries in code rather than relying
-on prompt instructions.
+authorization, persistence, and recovery boundaries in code and deterministic
+checks rather than relying on prompt instructions.
 
 ## Sources of truth
 
@@ -16,17 +16,16 @@ on prompt instructions.
 - Binding feature decisions live in adjacent `*.decisions.md` files.
 - Completed feature records live in `cmd/*/docs/done/`.
 - Cross-cutting designs and decisions live in `docs/`.
-- Files under a `research/` directory are evidence and backlog material only;
-  they do not authorize implementation.
+- Files under `research/` are evidence and backlog material only; they do not
+  authorize implementation.
 
-Before changing a feature, read the applicable task, specification, and decision
-record. If they conflict in a way that affects behavior, security, persistence,
-or a public interface, report the conflict instead of silently choosing an
-interpretation.
+Before changing a feature, read its task, specification, and decision record.
+If they conflict in a way that affects behavior, security, persistence, or a
+public interface, report the conflict instead of choosing silently.
 
 ## Repository map
 
-- `cmd/evie/`: Evie CLI, REPL, cron entry points, and Evie feature documents
+- `cmd/evie/`: CLI, REPL, cron entry points, and Evie feature documents
 - `cmd/finance/`, `cmd/todo/`, `cmd/ytscribe/`: supporting commands
 - `internal/agent/`: conversation loop and agent-owned interfaces
 - `internal/eviedb/`: SQLite setup and persistence implementations
@@ -38,45 +37,42 @@ interpretation.
 
 Interfaces should normally be owned by the package that consumes them.
 
-## Working agreement
+## Scope
 
 - Keep one change focused on one independently reviewable outcome.
-- Work only on the assigned acceptance criteria; do not implement later stages
-  or adjacent backlog items opportunistically.
-- Avoid unrelated refactors, renames, formatting, and dependency updates.
-- Add or update tests when behavior changes.
-- Prefer existing seams unless the task requires a new abstraction.
-- Ask before adding a production dependency.
-- If a change grows across multiple concerns or becomes difficult to review,
-  stop and propose a smaller sequence of changes.
-- When implementation is requested, complete the scoped work autonomously.
-  Use tutor-style, line-by-line development only when the user asks for it.
+- A ready story states its outcome, observable acceptance criteria, non-goals,
+  dependencies, risks, and deterministic verification. It may live in a GitHub
+  issue or a repository document; duplicate ceremony is not required.
+- Split work when outcomes can be demonstrated independently or when one change
+  combines multiple high-risk boundaries such as UI, persistence, migrations,
+  authorization, or concurrency.
+- Batch material product questions together. Do not invent a product decision
+  that the task, specification, or decision record does not define.
+- Work only on the assigned outcome. Avoid later stages, unrelated refactors,
+  renames, formatting, and dependency updates.
+- Add or update tests when behavior changes. Prefer existing seams and ask
+  before adding a production dependency.
 
-## Delivery workflow
+## Delivery loop
 
-- An initiative is a broad program, an epic is a coherent outcome spanning
-  multiple stories, and a story is one independently verifiable pull request.
-- Use initiatives and epics to provide context, dependency order, and completion
-  evidence. Do not hand an entire multi-story epic to an implementation agent as
-  one coding task.
-- Select one dependency-ready story before implementation. Its execution contract
-  must state the outcome, in-scope and out-of-scope boundaries, observable
-  acceptance criteria, deterministic verification, dependencies, risks, and the
-  intended one-PR boundary.
-- Implement one selected story per task, branch or worktree, and pull request.
-  Read the applicable initiative, epic, specification, and decisions for context,
-  but change only what the selected story authorizes.
-- Do not implement later stories opportunistically. If the selected story cannot
-  be completed or verified independently, stop and propose a revised story
-  boundary before continuing.
-- After the story passes verification, obtain review and hand off its pull
-  request for human approval. Never merge it on the user's behalf.
-- Record the story outcome, then select the next dependency-ready story. Declare
-  an epic complete only after all required stories and its epic-level completion
-  evidence pass.
-- Parallel story work is appropriate only when the stories are independently
-  ready, use isolated worktrees, and do not depend on unmerged behavior from one
-  another.
+Use the thin loop in `docs/delivery-loop.md`:
+
+1. Agree on one ready outcome.
+2. Use one implementation task to make the smallest patch, running focused
+   checks while developing.
+3. Run `scripts/verify-change.sh` before handoff.
+4. Open a draft pull request only when requested and let the required `Verify`
+   check run.
+5. Obtain one fresh, read-only review against the task, applicable specification,
+   and exact diff. Use Codex `/review` when available.
+6. The same implementer may make one bounded repair of blocking, in-scope
+   findings, then reruns verification. Re-review only when the diff changed
+   materially.
+7. Hand the pull request to a human for approval and merge.
+
+Do not use a multi-agent review swarm by default. Parallel work is appropriate
+only for genuinely independent, dependency-ready changes or clearly distinct
+specialist investigations, with isolated ownership and explicit user scope.
 
 ## Git safety
 
@@ -89,53 +85,40 @@ Interfaces should normally be owned by the package that consumes them.
 
 ## Verification
 
-Run focused checks while developing. Before handing off Go changes, run from the
-repository root:
+Run focused checks while developing. Before handing off code or CI changes, run
+from the repository root:
 
 ```sh
-go test ./...
-go vet ./...
+./scripts/verify-change.sh
 ```
 
-Format changed Go files with `gofmt`.
+Install UI dependencies first with `npm --prefix internal/web/ui ci` when
+needed. The verification script runs the full Go test and vet suites, UI lint
+and build, and staged and unstaged whitespace checks. Format changed Go files
+with `gofmt` before running it.
 
-If `internal/web/ui/` changed, also run from that directory:
+For documentation-only changes, `git diff --check` is sufficient locally; CI
+still runs the full required check. Report exact commands, results, warnings,
+and every skipped check with its reason. Model review never replaces these
+checks.
 
-```sh
-npm run lint
-npm run build
-```
+## Review priorities
 
-For documentation-only changes, run `git diff --check` and verify affected links
-or references when practical.
-
-Report exact commands, results, relevant warnings, and every skipped check with
-its reason. A model review does not replace deterministic verification.
-
-## Code review rules
-
-Review the change against its task and applicable specification. Prioritize:
+Review only the task and changed behavior. Prioritize:
 
 1. incorrect behavior or missing acceptance criteria;
 2. authorization, secret-handling, and data-boundary violations;
-3. persistence ordering, transaction, recovery, and concurrency bugs;
+3. persistence ordering, transaction, migration, recovery, and concurrency bugs;
 4. cancellation or resource leaks;
 5. missing regression and boundary tests;
 6. unnecessary complexity that materially increases risk.
 
-Keep findings scoped to the change. Do not block on unrelated cleanup or
-subjective formatting that deterministic tooling can enforce.
+Do not block on unrelated cleanup or formatting handled by deterministic tools.
 
 ## Handoff
 
-Every completed implementation should state:
-
-- what changed and why;
-- the applicable story or specification section;
-- verification performed and its results;
-- known gaps, risks, and deliberately deferred work;
-- manual demonstration steps when behavior is user-visible;
-- the best files or entry points for a reviewer to read first.
-
-Do not call work complete while required verification is failing or skipped
-without an explicit, recorded reason.
+State what changed and why, the applicable story or specification, exact
+verification and results, known risks and deferred work, manual demonstration
+steps for user-visible behavior, and the best review entry points. Do not call
+work complete while a required check is failing or skipped without an explicit
+reason.

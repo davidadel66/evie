@@ -1,4 +1,0 @@
-interface:
-  display_name: "Deliver a Story"
-  short_description: "Deliver one story through reviewed draft PR"
-  default_prompt: "Use $deliver-story to implement, review, repair, and deliver one approved story as a draft pull request."
