@@ -405,6 +405,7 @@ func (s *Session) runOwnedTurn(
 				coordinator.abortToolPhase()
 				return s.classifyLocalError(coordinator, fmt.Errorf("execute tool lifecycle: %w", err))
 			}
+			result.Content = admitToolResult(result.Content)
 
 			outcomeParentID := intentEvent.ID
 			outcomeType := memory.EventToolSucceeded

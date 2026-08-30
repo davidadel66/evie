@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -1123,6 +1125,159 @@ func TestToolRoundTrip(t *testing.T) {
 		if len(req.Tools) != len(tools.Schemas())+1 {
 			t.Fatalf("request %d advertised %d tools, want %d", i, len(req.Tools), len(tools.Schemas())+1)
 		}
+	}
+}
+
+func TestToolResultAdmissionCapsDurableAndVisibleContent(t *testing.T) {
+	upstream := strings.Repeat("🙂", toolResultAdmissionBytes/4+100)
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("c1", "large", `{}`)),
+		assistantStep("done", nil),
+	}}
+	history := &fakeHistory{}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	recorder := &recorder{}
+	large := tools.Tool{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "large", Parameters: openrouter.Parameter{Type: "object"},
+		}},
+		Execute: func(context.Context, string) (string, error) { return upstream, nil },
+	}
+
+	if err := session.Send(context.Background(), "go", recorder, nil, large); err != nil {
+		t.Fatal(err)
+	}
+	var durable string
+	for _, event := range history.events {
+		if event.Type == memory.EventToolSucceeded {
+			durable = event.Content
+		}
+	}
+	if len(durable) != toolResultAdmissionBytes || !utf8.ValidString(durable) {
+		t.Fatalf("durable result bytes=%d valid_utf8=%v", len(durable), utf8.ValidString(durable))
+	}
+	visible := "result:c1:false:" + durable
+	if !containsString(recorder.events, visible) {
+		t.Fatalf("visible result differs from durable result")
+	}
+	if got := client.reqs[1].Messages[len(client.reqs[1].Messages)-1].Content; got != durable {
+		t.Fatalf("provider result differs from durable result")
+	}
+}
+
+func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 154097, 154097, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []memory.Event{{ID: "root", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"}}
+	sequence := int64(2)
+	for group := 1; group <= 5; group++ {
+		assistantID := memory.EventID(fmt.Sprintf("assistant-%d", group))
+		callID := fmt.Sprintf("call-%d", group)
+		resultID := memory.EventID(fmt.Sprintf("result-%d", group))
+		events = append(events,
+			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "large", Arguments: `{}`}}})},
+			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+				Content: strings.Repeat(string(rune('a'+group-1)), 20*1024), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+		)
+		sequence += 2
+	}
+	history := &fakeHistory{events: events}
+	client := &fakeClient{steps: []step{assistantStep("done", nil)}}
+	session := New(client, profile, history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	session.reasoning = nil
+
+	if err := session.Send(context.Background(), "continue", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if history.events[2].Content != strings.Repeat("a", 20*1024) {
+		t.Fatal("canonical durable result was changed by request projection")
+	}
+	var projected, retained string
+	for _, message := range client.reqs[0].Messages {
+		switch message.ToolCallID {
+		case "call-1":
+			projected = message.Content
+		case "call-5":
+			retained = message.Content
+		}
+	}
+	digest := sha256.Sum256([]byte(history.events[2].Content))
+	exactProjection := fmt.Sprintf(
+		"[older tool result projected: event_id=result-1 original_bytes=20480 sha256=%x]\n<head>\n%s\n<tail>\n%s",
+		digest,
+		strings.Repeat("a", 512),
+		strings.Repeat("a", 512),
+	)
+	if projected != exactProjection {
+		t.Fatalf("provider projection=%q", projected)
+	}
+	if retained != strings.Repeat("e", 20*1024) {
+		t.Fatalf("newest retained result bytes=%d", len(retained))
+	}
+	var snapshot memory.ContextSnapshotPayload
+	for _, event := range history.allEvents() {
+		if event.Type == memory.EventContextSnapshot {
+			if err := json.Unmarshal(event.Payload, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	secondDigest := sha256.Sum256([]byte(history.events[4].Content))
+	if len(snapshot.Placeholders) != 2 || snapshot.Placeholders[0].EventID != "result-1" ||
+		snapshot.Placeholders[0].SHA256 != fmt.Sprintf("%x", digest) ||
+		snapshot.Placeholders[1].EventID != "result-2" || snapshot.Placeholders[1].SHA256 != fmt.Sprintf("%x", secondDigest) {
+		t.Fatalf("snapshot placeholders=%+v", snapshot.Placeholders)
+	}
+	if snapshot.SerializedBytes > percentageFloor(snapshot.UsableInputBytes, 60) {
+		t.Fatalf("snapshot bytes=%d target=%d", snapshot.SerializedBytes, percentageFloor(snapshot.UsableInputBytes, 60))
+	}
+	wantMessages := []openrouter.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: "run"},
+	}
+	for group := 1; group <= 5; group++ {
+		callID := fmt.Sprintf("call-%d", group)
+		wantMessages = append(wantMessages,
+			openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{
+				ID: callID, Type: "function", Function: openrouter.FunctionCall{Name: "large", Arguments: `{}`},
+			}}},
+			openrouter.Message{Role: "tool", ToolCallID: callID, Content: strings.Repeat(string(rune('a'+group-1)), 20*1024)},
+		)
+	}
+	wantMessages[3].Content = exactProjection
+	wantMessages[5].Content = fmt.Sprintf(
+		"[older tool result projected: event_id=result-2 original_bytes=20480 sha256=%x]\n<head>\n%s\n<tail>\n%s",
+		secondDigest,
+		strings.Repeat("b", 512),
+		strings.Repeat("b", 512),
+	)
+	wantRequest := openrouter.ChatRequest{
+		Model: "test/model", Messages: wantMessages, Tools: tools.Schemas(), Stream: true, MaxTokens: 1,
+	}
+	wantRequest.Messages = append(wantRequest.Messages, openrouter.Message{Role: "user", Content: "continue"})
+	if !reflect.DeepEqual(client.reqs[0], wantRequest) {
+		got := client.reqs[0]
+		if got.Model != wantRequest.Model || got.Stream != wantRequest.Stream || got.MaxTokens != wantRequest.MaxTokens ||
+			!reflect.DeepEqual(got.Reasoning, wantRequest.Reasoning) || !reflect.DeepEqual(got.Tools, wantRequest.Tools) ||
+			len(got.Messages) != len(wantRequest.Messages) {
+			t.Fatalf("provider request envelope mismatch: got messages=%d tools=%d reasoning=%+v; want messages=%d tools=%d reasoning=%+v",
+				len(got.Messages), len(got.Tools), got.Reasoning, len(wantRequest.Messages), len(wantRequest.Tools), wantRequest.Reasoning)
+		}
+		for i := range got.Messages {
+			if !reflect.DeepEqual(got.Messages[i], wantRequest.Messages[i]) {
+				t.Fatalf("provider message %d mismatch: got role=%s call=%s content_bytes=%d calls=%+v; want role=%s call=%s content_bytes=%d calls=%+v",
+					i, got.Messages[i].Role, got.Messages[i].ToolCallID, len(got.Messages[i].Content), got.Messages[i].ToolCalls,
+					wantRequest.Messages[i].Role, wantRequest.Messages[i].ToolCallID, len(wantRequest.Messages[i].Content), wantRequest.Messages[i].ToolCalls)
+			}
+		}
+		t.Fatal("provider request mismatch without a differing field")
 	}
 }
 

@@ -1,5 +1,27 @@
 # memory - decisions
 
+- **2026-08-30 - tool-result admission and request projection are bounded without rewriting evidence.**
+  The agent caps each model-visible tool return at 100 KiB after any
+  tool-specific lower cap and before the outcome append or frontend callback;
+  that admitted UTF-8-safe head/tail value is the canonical durable result.
+  During request composition, complete groups receive at most 128 KiB of
+  full-fidelity durable result content. A deterministic water-filling allocator
+  reduces the largest results first, ordinarily keeping at least 8 KiB per
+  result and crossing that floor only when the number of results makes it
+  impossible. Group previews and admission previews carry visible original-byte
+  and SHA-256 metadata, and no upstream-output archive is created.
+
+  After mandatory group bounding, the three newest complete groups stay
+  verbatim. When the canonical serialized request is above 60% of usable input,
+  eligible results in older complete groups are projected oldest first until
+  that target is reached or candidates are exhausted. Only durable results
+  larger than 4 KiB are eligible. The older-result projection contains
+  UTF-8-safe 512-byte head and tail excerpts plus its event ID, original byte
+  count, and SHA-256; the diagnostic projected-byte count includes that visible
+  metadata envelope. Incomplete groups remain omitted whole, canonical events
+  are never mutated, and any active group that cannot fit after legal projection
+  fails with `context_overflow` rather than orphaning messages.
+
 - **2026-08-30 - conversational requests are canonically composed and snapshotted before transport.**
   Every ordinary and post-tool conversational iteration rebuilds one complete
   `ChatRequest` from the immutable code-owned system prompt, an optional

@@ -315,11 +315,21 @@ func TestContextDiagnosticsPrintLatestSnapshotCounts(t *testing.T) {
 			EventID: "snapshot-1", Sequence: 2,
 			Manifest: memory.ContextSnapshotPayload{
 				MessageCount: 7, ToolSchemaCount: 5,
-				Placeholders: []memory.ContextPlaceholderManifest{{EventID: "result-1"}},
+				Placeholders: []memory.ContextPlaceholderManifest{{
+					EventID: "result-1", OriginalBytes: 8192, ProjectedBytes: 1200,
+					SHA256: strings.Repeat("a", 64),
+				}},
 			},
 		},
 	})
-	if got := out.String(); !strings.Contains(got, "latest snapshot counts: messages=7 tools=5 placeholders=1") {
-		t.Fatalf("output %q omitted latest snapshot counts", got)
+	got := out.String()
+	for _, want := range []string{
+		"latest snapshot counts: messages=7 tools=5 placeholders=1",
+		"latest snapshot placeholder: event=result-1 original_bytes=8192 projected_bytes=1200",
+		"latest snapshot placeholder bytes: original=8192 projected=1200 saved=6992",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output %q omitted %q", got, want)
+		}
 	}
 }

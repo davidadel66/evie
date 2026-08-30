@@ -2,9 +2,11 @@ package eviedb
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -95,6 +97,85 @@ func TestContextSnapshotAppendValidatesContentFreeManifestAndFrontier(t *testing
 		ParentID: nextRoot.ID, Type: memory.EventContextSnapshot, Payload: invalidFrontierJSON,
 	}); err == nil {
 		t.Fatal("snapshot with a non-root retained frontier was accepted")
+	}
+}
+
+func TestContextSnapshotAppendCorrelatesPlaceholderWithDurableToolResult(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantPayload, err := json.Marshal(memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{
+		ID: "call-1", Name: "large", Arguments: `{}`,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: assistantPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultContent := strings.Repeat("result", 1000)
+	resultPayload, err := json.Marshal(memory.ToolResultPayload{ToolCallID: "call-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: assistant.ID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+		Content: resultContent, Payload: resultPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(resultContent))
+	payload := validContextSnapshotPayload(root, result)
+	payload.Placeholders = []memory.ContextPlaceholderManifest{{
+		EventID: result.ID, OriginalBytes: int64(len(resultContent)), ProjectedBytes: 1200,
+		SHA256: fmt.Sprintf("%x", digest),
+	}}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: result.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	}); err != nil {
+		t.Fatalf("append correlated placeholder snapshot: %v", err)
+	}
+
+	other, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRoot, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := validContextSnapshotPayload(otherRoot, otherRoot)
+	bad.Placeholders = []memory.ContextPlaceholderManifest{{
+		EventID: result.ID, OriginalBytes: int64(len(resultContent)), ProjectedBytes: 1200,
+		SHA256: fmt.Sprintf("%x", digest),
+	}}
+	badJSON, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		ParentID: otherRoot.ID, Type: memory.EventContextSnapshot, Payload: badJSON,
+	}); err == nil {
+		t.Fatal("snapshot accepted placeholder from another session")
 	}
 }
 

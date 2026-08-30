@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -167,6 +168,184 @@ func TestContextComposerExactAdmissionBoundary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestContextComposerReducesLargestResultsFirstWithinGroupBudget(t *testing.T) {
+	profile := testContextProfile("test/model")
+	events := toolGroupEvents(t, "root", []string{
+		strings.Repeat("a", 90*1024),
+		strings.Repeat("b", 70*1024),
+		strings.Repeat("c", 10*1024),
+	})
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile: profile, Events: events, ActiveRootID: "root",
+		TriggerEventID: "result-3", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var projected []openrouter.Message
+	for _, message := range result.Request.Messages {
+		if message.Role == "tool" {
+			projected = append(projected, message)
+		}
+	}
+	if len(projected) != 3 {
+		t.Fatalf("tool messages=%d", len(projected))
+	}
+	if got := len(projected[0].Content) + len(projected[1].Content) + len(projected[2].Content); got != toolResultGroupBytes {
+		t.Fatalf("group bytes=%d, want %d", got, toolResultGroupBytes)
+	}
+	if len(projected[0].Content) != len(projected[1].Content) || len(projected[2].Content) != 10*1024 {
+		t.Fatalf("largest-first allocations=%d,%d,%d", len(projected[0].Content), len(projected[1].Content), len(projected[2].Content))
+	}
+	if len(result.Snapshot.Placeholders) != 2 {
+		t.Fatalf("placeholders=%+v", result.Snapshot.Placeholders)
+	}
+}
+
+func TestContextComposerRetainsThreeNewestGroupsAndProjectsOlderResultsOldestFirst(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 120000, 120000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []memory.Event{{ID: "root", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"}}
+	sequence := int64(2)
+	for group := 1; group <= 5; group++ {
+		assistantID := memory.EventID(fmt.Sprintf("assistant-%d", group))
+		callID := fmt.Sprintf("call-%d", group)
+		resultID := memory.EventID(fmt.Sprintf("result-%d", group))
+		events = append(events,
+			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "large", Arguments: `{}`}}})},
+			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+				Content: strings.Repeat(string(rune('a'+group-1)), 16*1024), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+		)
+		sequence += 2
+	}
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile: profile, Events: events, ActiveRootID: "root", TriggerEventID: "result-5", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Snapshot.Placeholders) == 0 || result.Snapshot.Placeholders[0].EventID != "result-1" {
+		t.Fatalf("oldest result was not projected first: %+v", result.Snapshot.Placeholders)
+	}
+	for _, message := range result.Request.Messages {
+		if message.Role != "tool" {
+			continue
+		}
+		n := strings.TrimPrefix(message.ToolCallID, "call-")
+		if n == "3" || n == "4" || n == "5" {
+			if len(message.Content) != 16*1024 {
+				t.Fatalf("recent group %s bytes=%d", n, len(message.Content))
+			}
+		}
+	}
+}
+
+func TestContextComposerNewestCompleteGroupWithNoLegalFitOverflowsWhole(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 100000, 100000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := toolGroupEvents(t, "root", []string{strings.Repeat("x", 100*1024), strings.Repeat("y", 100*1024)})
+	_, err = NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile: profile, Events: events, ActiveRootID: "root", TriggerEventID: "result-2", Iteration: 1,
+	})
+	if !IsContextOverflow(err) {
+		t.Fatalf("Compose error=%v, want context overflow", err)
+	}
+}
+
+func TestContextComposerPressureNeverExpandsTighterGroupProjection(t *testing.T) {
+	results := make([]string, 500)
+	for i := range results {
+		results[i] = strings.Repeat("x", 10*1024)
+	}
+	events := toolGroupEvents(t, "root", results)
+	sequence := int64(len(events) + 1)
+	for group := 1; group <= retainedCompleteToolResultGroups; group++ {
+		assistantID := memory.EventID(fmt.Sprintf("recent-assistant-%d", group))
+		callID := fmt.Sprintf("recent-call-%d", group)
+		resultID := memory.EventID(fmt.Sprintf("recent-result-%d", group))
+		events = append(events,
+			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "small", Arguments: `{}`}}})},
+			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+				Content: "ok", Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+		)
+		sequence += 2
+	}
+	groupOnly, err := applyToolResultGroupLimits(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projectOldToolResult(events[2])) <= len(groupOnly[2].Content) {
+		t.Fatal("fixture does not make the pressure projection larger")
+	}
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 304097, 304097, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile: profile, Events: events, ActiveRootID: "root",
+		TriggerEventID: "recent-result-3", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Snapshot.SerializedBytes <= percentageFloor(result.Snapshot.UsableInputBytes, 60) {
+		t.Fatal("fixture did not remain above the pressure target after non-reducing candidates were skipped")
+	}
+	if got := result.Request.Messages[3].Content; got != groupOnly[2].Content {
+		t.Fatalf("pressure projection expanded group result from %d to %d bytes", len(groupOnly[2].Content), len(got))
+	}
+}
+
+func TestContextComposerDropsOldTurnWhoseGroupMetadataCannotFit(t *testing.T) {
+	results := make([]string, 1000)
+	for i := range results {
+		results[i] = strings.Repeat("x", 10*1024)
+	}
+	events := toolGroupEvents(t, "old-root", results)
+	events = append(events, memory.Event{
+		ID: "active-root", Sequence: int64(len(events) + 1), Type: memory.EventUserMessage,
+		Role: memory.RoleUser, Content: "continue",
+	})
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile: testContextProfile("test/model"), Events: events, ActiveRootID: "active-root",
+		TriggerEventID: "active-root", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Request.Messages) != 2 || result.Request.Messages[1].Content != "continue" ||
+		result.Snapshot.RetainedFirstEventID != "active-root" {
+		t.Fatalf("projection=%+v snapshot=%+v", result.Request.Messages, result.Snapshot)
+	}
+}
+
+func toolGroupEvents(t *testing.T, rootID memory.EventID, results []string) []memory.Event {
+	t.Helper()
+	calls := make([]memory.ToolCall, len(results))
+	for i := range results {
+		calls[i] = memory.ToolCall{ID: fmt.Sprintf("call-%d", i+1), Name: "large", Arguments: `{}`}
+	}
+	events := []memory.Event{
+		{ID: rootID, Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"},
+		{ID: "assistant", Sequence: 2, ParentID: rootID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: calls})},
+	}
+	for i, content := range results {
+		events = append(events, memory.Event{
+			ID: memory.EventID(fmt.Sprintf("result-%d", i+1)), Sequence: int64(i + 3), ParentID: "assistant",
+			Type: memory.EventToolSucceeded, Role: memory.RoleTool, Content: content,
+			Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: calls[i].ID}),
+		})
+	}
+	return events
 }
 
 func TestInspectContextIsReadOnlyRedactedAndReportsCurrentProjection(t *testing.T) {

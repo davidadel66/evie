@@ -142,33 +142,70 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 
 	start := 0
 	var (
-		request      openrouter.ChatRequest
-		estimate     RequestEstimate
-		conversation []openrouter.Message
+		request           openrouter.ChatRequest
+		estimate          RequestEstimate
+		conversation      []openrouter.Message
+		selectedOriginal  []memory.Event
+		selectedProjected []memory.Event
 	)
 	for {
-		selected := flattenContextTurns(turns[start:])
-		conversation, err = messagesFromEvents(selected)
+		selectedOriginal = flattenContextTurns(turns[start:])
+		selectedProjected, err = applyToolResultGroupLimits(selectedOriginal)
 		if err != nil {
-			return ComposedContext{}, fmt.Errorf("project durable history: %w", err)
+			if IsContextOverflow(err) && start < activeIndex {
+				start++
+				continue
+			}
+			return ComposedContext{}, fmt.Errorf("bound durable tool-result groups: %w", err)
 		}
-		messages := make([]openrouter.Message, 0, len(conversation)+2)
-		messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
-		if input.Summary != nil {
-			messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
+		composeProjected := func(projected []memory.Event) error {
+			conversation, err = messagesFromEvents(projected)
+			if err != nil {
+				return fmt.Errorf("project durable history: %w", err)
+			}
+			messages := make([]openrouter.Message, 0, len(conversation)+2)
+			messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
+			if input.Summary != nil {
+				messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
+			}
+			messages = append(messages, conversation...)
+			request = openrouter.ChatRequest{
+				Model:     profile.ConfiguredModel,
+				Messages:  messages,
+				Tools:     append([]openrouter.Tool(nil), input.Tools...),
+				Stream:    true,
+				Reasoning: cloneReasoning(input.Reasoning),
+				MaxTokens: profile.OutputReserveTokens,
+			}
+			estimate, err = c.estimator.Estimate(request)
+			return err
 		}
-		messages = append(messages, conversation...)
-		request = openrouter.ChatRequest{
-			Model:     profile.ConfiguredModel,
-			Messages:  messages,
-			Tools:     append([]openrouter.Tool(nil), input.Tools...),
-			Stream:    true,
-			Reasoning: cloneReasoning(input.Reasoning),
-			MaxTokens: profile.OutputReserveTokens,
-		}
-		estimate, err = c.estimator.Estimate(request)
-		if err != nil {
+		if err := composeProjected(selectedProjected); err != nil {
 			return ComposedContext{}, err
+		}
+		groups, err := completeToolResultGroups(selectedOriginal)
+		if err != nil {
+			return ComposedContext{}, fmt.Errorf("identify durable tool-result groups: %w", err)
+		}
+		pressureTarget := percentageFloor(usable, 60)
+		eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+		for groupIndex := 0; estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
+			for _, resultIndex := range groups[groupIndex].resultIndexes {
+				if estimate.SerializedBytes <= pressureTarget {
+					break
+				}
+				if !isPressureProjectableToolResult(selectedOriginal[resultIndex]) {
+					continue
+				}
+				pressureProjection := projectOldToolResult(selectedOriginal[resultIndex])
+				if len(pressureProjection) >= len(selectedProjected[resultIndex].Content) {
+					continue
+				}
+				selectedProjected[resultIndex].Content = pressureProjection
+				if err := composeProjected(selectedProjected); err != nil {
+					return ComposedContext{}, err
+				}
+			}
 		}
 		if estimate.SerializedBytes <= usable {
 			break
@@ -219,6 +256,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		HistoryMessageBytes:    historyBytes,
 		ToolSchemaBytes:        toolBytes,
 		RequestSettingsBytes:   settingsBytes,
+		Placeholders:           toolResultPlaceholderManifests(selectedOriginal, selectedProjected),
 	}
 	if input.Summary != nil {
 		snapshot.ActiveCompactionEventID = input.Summary.CompactionEventID
@@ -227,6 +265,10 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		return ComposedContext{}, fmt.Errorf("validate context snapshot: %w", err)
 	}
 	return ComposedContext{Request: request, Snapshot: snapshot}, nil
+}
+
+func percentageFloor(value int64, percent int64) int64 {
+	return (value/100)*percent + (value%100)*percent/100
 }
 
 // InspectContext performs a point-in-time durable read and a hypothetical
@@ -482,6 +524,27 @@ func validateDurableContextHistory(events []memory.Event) error {
 			first.event.Type != memory.EventUserMessage || first.event.Role != memory.RoleUser || first.event.ParentID != "" ||
 			first.event.Sequence > parent.event.Sequence {
 			return fmt.Errorf("context snapshot event %q retained starting frontier is not a root user turn", event.ID)
+		}
+		seenPlaceholders := make(map[memory.EventID]struct{}, len(payload.Placeholders))
+		var previousSequence int64
+		for _, placeholder := range payload.Placeholders {
+			projected, ok := byID[placeholder.EventID]
+			if !ok || projected.index >= i || projected.event.Sequence < first.event.Sequence ||
+				projected.event.Sequence > parent.event.Sequence ||
+				(projected.event.Type != memory.EventToolSucceeded && projected.event.Type != memory.EventToolFailed &&
+					projected.event.Type != memory.EventToolCancelled) {
+				return fmt.Errorf("context snapshot event %q has an invalid placeholder event %q", event.ID, placeholder.EventID)
+			}
+			if _, duplicate := seenPlaceholders[placeholder.EventID]; duplicate || projected.event.Sequence <= previousSequence {
+				return fmt.Errorf("context snapshot event %q has unordered or repeated placeholders", event.ID)
+			}
+			digest := sha256.Sum256([]byte(projected.event.Content))
+			if placeholder.OriginalBytes != int64(len(projected.event.Content)) ||
+				placeholder.SHA256 != hex.EncodeToString(digest[:]) {
+				return fmt.Errorf("context snapshot event %q placeholder %q does not match durable content", event.ID, placeholder.EventID)
+			}
+			seenPlaceholders[placeholder.EventID] = struct{}{}
+			previousSequence = projected.event.Sequence
 		}
 	}
 	return nil

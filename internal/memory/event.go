@@ -239,12 +239,17 @@ func (p ContextSnapshotPayload) Validate() error {
 	default:
 		return fmt.Errorf("invalid context compaction failure category %q", p.CompactionFailureCategory)
 	}
+	seenPlaceholders := make(map[EventID]struct{}, len(p.Placeholders))
 	for i, placeholder := range p.Placeholders {
 		if placeholder.EventID == "" || placeholder.OriginalBytes <= 0 ||
 			placeholder.ProjectedBytes <= 0 || placeholder.ProjectedBytes >= placeholder.OriginalBytes ||
 			!validSHA256(placeholder.SHA256) {
 			return fmt.Errorf("invalid context placeholder manifest %d", i)
 		}
+		if _, duplicate := seenPlaceholders[placeholder.EventID]; duplicate {
+			return fmt.Errorf("context placeholder manifest repeats event %q", placeholder.EventID)
+		}
+		seenPlaceholders[placeholder.EventID] = struct{}{}
 	}
 	return nil
 }

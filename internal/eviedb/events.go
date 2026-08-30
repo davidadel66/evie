@@ -3,6 +3,7 @@ package eviedb
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -382,6 +383,34 @@ func validateContextSnapshotCorrelation(
 	if memory.EventType(firstType) != memory.EventUserMessage || memory.EventRole(firstRole) != memory.RoleUser ||
 		firstParent.Valid || firstSequence != snapshot.RetainedFirstSequence || firstSequence > parentSequence {
 		return errors.New("context snapshot retained starting frontier is inconsistent")
+	}
+	var previousPlaceholderSequence int64
+	for _, placeholder := range snapshot.Placeholders {
+		var eventType string
+		var content string
+		var sequence int64
+		err := executor.queryRowContext(ctx, `
+			SELECT event_type, content, sequence
+			FROM events
+			WHERE session_id = ? AND id = ?
+		`, sessionID, placeholder.EventID).Scan(&eventType, &content, &sequence)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("context snapshot placeholder event %q is not accepted in session %q", placeholder.EventID, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("validate context snapshot placeholder: %w", err)
+		}
+		typeValue := memory.EventType(eventType)
+		if (typeValue != memory.EventToolSucceeded && typeValue != memory.EventToolFailed &&
+			typeValue != memory.EventToolCancelled) || sequence < firstSequence || sequence > parentSequence ||
+			sequence <= previousPlaceholderSequence {
+			return fmt.Errorf("context snapshot placeholder event %q is outside the retained ordered tool results", placeholder.EventID)
+		}
+		digest := sha256.Sum256([]byte(content))
+		if placeholder.OriginalBytes != int64(len(content)) || placeholder.SHA256 != fmt.Sprintf("%x", digest) {
+			return fmt.Errorf("context snapshot placeholder event %q does not match durable content", placeholder.EventID)
+		}
+		previousPlaceholderSequence = sequence
 	}
 	return nil
 }

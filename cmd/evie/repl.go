@@ -615,6 +615,7 @@ func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics
 			contextDiagnosticValue(string(manifest.ActiveCompactionEventID)),
 			contextDiagnosticValue(string(manifest.CompactionFailureCategory)),
 		)
+		writePlaceholderDiagnostics(out, "latest snapshot", manifest.Placeholders)
 	}
 	projection := diagnostics.Projection
 	_, _ = fmt.Fprintf(
@@ -635,6 +636,7 @@ func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics
 		projection.ToolSchemaBytes,
 		projection.RequestSettingsBytes,
 	)
+	writePlaceholderDiagnostics(out, "projection", projection.Placeholders)
 	_, _ = fmt.Fprintf(out, "headroom bytes: %d\n", diagnostics.HeadroomBytes)
 	_, _ = fmt.Fprintf(
 		out,
@@ -652,6 +654,31 @@ func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics
 	for _, warning := range diagnostics.Warnings {
 		_, _ = fmt.Fprintf(out, "warning: %s\n", warning)
 	}
+}
+
+func writePlaceholderDiagnostics(out io.Writer, label string, placeholders []memory.ContextPlaceholderManifest) {
+	var originalBytes, projectedBytes int64
+	for _, placeholder := range placeholders {
+		originalBytes += placeholder.OriginalBytes
+		projectedBytes += placeholder.ProjectedBytes
+		_, _ = fmt.Fprintf(
+			out,
+			"%s placeholder: event=%s original_bytes=%d projected_bytes=%d sha256=%s\n",
+			label,
+			placeholder.EventID,
+			placeholder.OriginalBytes,
+			placeholder.ProjectedBytes,
+			placeholder.SHA256,
+		)
+	}
+	_, _ = fmt.Fprintf(
+		out,
+		"%s placeholder bytes: original=%d projected=%d saved=%d\n",
+		label,
+		originalBytes,
+		projectedBytes,
+		originalBytes-projectedBytes,
+	)
 }
 
 func contextDiagnosticValue(value string) string {
