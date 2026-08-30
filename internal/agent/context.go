@@ -298,8 +298,9 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if err := ctx.Err(); err != nil {
 		return ContextDiagnostics{}, err
 	}
-	if err := validateDurableContextHistory(events); err != nil {
-		return ContextDiagnostics{}, err
+	summary, _, err := reconstructCompactionChain(events)
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("reconstruct durable compaction chain: %w", err)
 	}
 
 	var latest *DurableContextSnapshotDiagnostics
@@ -343,7 +344,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 		iteration = latest.Manifest.Iteration + 1
 	}
 	composed, err := s.composer.Compose(ContextComposeInput{
-		Profile: s.profile, Summary: s.acceptedSummary(), Events: projectionEvents, ActiveRootID: hypothetical.ID,
+		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
 		Tools: tools.Schemas(), Reasoning: s.reasoning,
 	})

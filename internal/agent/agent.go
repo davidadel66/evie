@@ -44,8 +44,6 @@ type Session struct {
 	owner     TurnOwnership
 	composer  *ContextComposer
 	timing    turnTiming
-	summaryMu sync.RWMutex
-	summary   *ContextSummary
 }
 type Client interface {
 	// ChatStream callbacks need not be synchronous with its return. Session
@@ -214,23 +212,6 @@ func NewWithCompactor(
 		composer: NewContextComposer(CanonicalRequestEstimator{}),
 		timing:   defaultTurnTiming,
 	}
-}
-
-func (s *Session) acceptedSummary() *ContextSummary {
-	s.summaryMu.RLock()
-	defer s.summaryMu.RUnlock()
-	if s.summary == nil {
-		return nil
-	}
-	copy := *s.summary
-	return &copy
-}
-
-func (s *Session) setAcceptedSummary(summary ContextSummary) {
-	s.summaryMu.Lock()
-	defer s.summaryMu.Unlock()
-	copy := summary
-	s.summary = &copy
 }
 
 func (s *Session) ContextProfile() openrouter.ContextProfileDiagnostics {

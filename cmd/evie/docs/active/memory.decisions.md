@@ -1,5 +1,29 @@
 # memory - decisions
 
+- **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
+  Every manual compaction first reconstructs the complete accepted chain from
+  canonical `context_compacted` events, never from context snapshots or
+  process-local state. Generations begin at one, increase by exactly one, link
+  to the immediately prior compaction event, and cover the prior generation's
+  first retained root through a strictly later whole-root-turn frontier. The
+  replacement compactor input is exactly the latest accepted summary plus the
+  newly covered contiguous complete turns. Only the highest validated summary
+  replaces covered history in provider projection; all source events and every
+  superseded compaction event remain unchanged and inspectable.
+
+  Reconstruction rejects unsupported event or payload versions, noncanonical
+  or malformed payloads, invalid summaries and provenance, missing or
+  cross-session references, broken links, inconsistent generations,
+  overlapping or skipped frontiers, and incomplete-turn cuts. Stored model and
+  prompt identifiers are immutable provenance rather than current-configuration
+  requirements, so an accepted summary remains valid across process model,
+  budget, or prompt changes; the next generation records the current process
+  configuration. The ordinary lease transaction fences each append. Caller
+  cancellation before that append changes nothing, while a successful fenced
+  append wins a racing cancellation and becomes active even if a later snapshot
+  or provider request fails. Automatic pressure-triggered compaction remains
+  deferred to issue #68.
+
 - **2026-08-30 - manual compaction accepts one durable validated generation.**
   Exact `/compact` acquires the ordinary session lease and summarizes the
   maximal fitting contiguous prefix of completed root turns while retaining at

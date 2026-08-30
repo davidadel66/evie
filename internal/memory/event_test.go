@@ -126,6 +126,32 @@ func TestContextCompactedPayloadValidation(t *testing.T) {
 	}
 }
 
+func TestContextCompactedPayloadValidatesExactAdvance(t *testing.T) {
+	prior := ContextCompactedPayload{Generation: 1, FirstRetainedEventID: "turn-4"}
+	next := ContextCompactedPayload{
+		Generation: 2, PriorCompactionEventID: "compaction-1", CoveredFirstEventID: "turn-4",
+	}
+	if err := next.ValidateAdvance("compaction-1", prior); err != nil {
+		t.Fatalf("valid advance: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*ContextCompactedPayload)
+	}{
+		{name: "generation", mutate: func(payload *ContextCompactedPayload) { payload.Generation++ }},
+		{name: "prior link", mutate: func(payload *ContextCompactedPayload) { payload.PriorCompactionEventID = "other" }},
+		{name: "frontier", mutate: func(payload *ContextCompactedPayload) { payload.CoveredFirstEventID = "turn-3" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := next
+			test.mutate(&candidate)
+			if err := candidate.ValidateAdvance("compaction-1", prior); err == nil {
+				t.Fatalf("invalid advance accepted: %+v", candidate)
+			}
+		})
+	}
+}
+
 func TestTurnTerminalPayloadClosedStageAndClassificationMatrix(t *testing.T) {
 	stages := []TurnStage{
 		StageTurnStart, StageProvider, StageAssistantCommit, StageToolPrepare,

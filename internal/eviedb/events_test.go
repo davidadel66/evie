@@ -212,8 +212,8 @@ func TestContextCompactedAppendValidatesSummaryAndWholeTurnFrontier(t *testing.T
 		return root, assistant
 	}
 	firstRoot, firstAssistant := appendTurn("one")
-	retainedRoot, _ := appendTurn("two")
-	appendTurn("three")
+	retainedRoot, secondAssistant := appendTurn("two")
+	thirdRoot, _ := appendTurn("three")
 
 	summary := validContextCompactionSummary()
 	digest := sha256.Sum256([]byte(summary))
@@ -256,7 +256,32 @@ func TestContextCompactedAppendValidatesSummaryAndWholeTurnFrontier(t *testing.T
 	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
 		Type: memory.EventContextCompacted, Content: summary, Payload: encoded,
 	}); err == nil {
-		t.Fatal("second generation was accepted before chain support")
+		t.Fatal("repeated first generation was accepted")
+	}
+	appendTurn("four")
+	appendTurn("five")
+	secondSummary := strings.ReplaceAll(summary, "kept", "generation two")
+	secondDigest := sha256.Sum256([]byte(secondSummary))
+	secondPayload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 2,
+		Trigger: memory.ContextCompactionManual, PriorCompactionEventID: compacted.ID,
+		CoveredFirstEventID: retainedRoot.ID, CoveredFirstSequence: retainedRoot.Sequence,
+		CoveredLastEventID: secondAssistant.ID, CoveredLastSequence: secondAssistant.Sequence,
+		FirstRetainedEventID: thirdRoot.ID, CanonicalModel: "new/model",
+		PromptVersion: "compaction-v2", SummaryBytes: int64(len(secondSummary)), SummarySHA256: fmt.Sprintf("%x", secondDigest),
+	}
+	secondJSON, err := json.Marshal(secondPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondCompaction, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: secondSummary, Payload: secondJSON,
+	})
+	if err != nil {
+		t.Fatalf("append second generation: %v", err)
+	}
+	if secondCompaction.Sequence <= compacted.Sequence || secondAssistant.Sequence >= thirdRoot.Sequence {
+		t.Fatalf("compaction order: first=%+v second=%+v", compacted, secondCompaction)
 	}
 
 	other, err := store.CreateGlobalSession(ctx)

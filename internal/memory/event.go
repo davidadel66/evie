@@ -232,7 +232,7 @@ func (p ContextCompactedPayload) Validate(summary string) error {
 		p.FirstRetainedEventID == "" {
 		return errors.New("context compaction event frontier is invalid")
 	}
-	if strings.TrimSpace(p.CanonicalModel) == "" || p.PromptVersion != ContextCompactionPromptVersion {
+	if strings.TrimSpace(p.CanonicalModel) == "" || strings.TrimSpace(p.PromptVersion) == "" {
 		return errors.New("context compaction model and prompt provenance must be present")
 	}
 	if err := ValidateContextCompactionSummary(summary); err != nil {
@@ -244,6 +244,18 @@ func (p ContextCompactedPayload) Validate(summary string) error {
 	digest := sha256.Sum256([]byte(summary))
 	if !validSHA256(p.SummarySHA256) || p.SummarySHA256 != fmt.Sprintf("%x", digest) {
 		return errors.New("context compaction summary hash is invalid")
+	}
+	return nil
+}
+
+// ValidateAdvance checks the exact immutable chain link shared by persistence
+// admission and restart reconstruction. Frontier shape and event references
+// remain boundary-specific checks for their respective callers.
+func (p ContextCompactedPayload) ValidateAdvance(priorEventID EventID, prior ContextCompactedPayload) error {
+	if priorEventID == "" || p.Generation != prior.Generation+1 ||
+		p.PriorCompactionEventID != priorEventID ||
+		p.CoveredFirstEventID != prior.FirstRetainedEventID {
+		return errors.New("context compaction does not exactly advance the prior accepted generation")
 	}
 	return nil
 }

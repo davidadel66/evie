@@ -163,8 +163,12 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
 		}
+		summary, _, err := reconstructCompactionChain(events)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
+		}
 		composed, err := s.composer.Compose(ContextComposeInput{
-			Profile: s.profile, Summary: s.acceptedSummary(), Events: events, ActiveRootID: rootTurnID,
+			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
 		})

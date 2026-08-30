@@ -372,14 +372,34 @@ func validateContextCompactionCorrelation(
 	sessionID memory.SessionID,
 	payload memory.ContextCompactedPayload,
 ) error {
-	var existing int
-	if err := executor.queryRowContext(ctx, `
-		SELECT COUNT(*) FROM events WHERE session_id = ? AND event_type = ?
-	`, sessionID, memory.EventContextCompacted).Scan(&existing); err != nil {
-		return fmt.Errorf("count existing context compactions: %w", err)
-	}
-	if existing != 0 || payload.Generation != 1 || payload.PriorCompactionEventID != "" {
-		return errors.New("context compaction chains are not supported yet")
+	var priorID, priorContent, priorPayloadJSON string
+	priorErr := executor.queryRowContext(ctx, `
+		SELECT id, content, payload_json
+		FROM events
+		WHERE session_id = ? AND event_type = ?
+		ORDER BY sequence DESC
+		LIMIT 1
+	`, sessionID, memory.EventContextCompacted).Scan(&priorID, &priorContent, &priorPayloadJSON)
+	var priorPayload memory.ContextCompactedPayload
+	switch {
+	case errors.Is(priorErr, sql.ErrNoRows):
+		if payload.Generation != 1 || payload.PriorCompactionEventID != "" {
+			return errors.New("context compaction first generation is inconsistent")
+		}
+	case priorErr != nil:
+		return fmt.Errorf("load prior context compaction: %w", priorErr)
+	default:
+		decoded, canonical, err := decodeCanonicalContextCompactedPayload(json.RawMessage(priorPayloadJSON))
+		if err != nil || string(canonical) != priorPayloadJSON {
+			return errors.New("prior context compaction payload is malformed")
+		}
+		if err := decoded.Validate(priorContent); err != nil {
+			return fmt.Errorf("validate prior context compaction: %w", err)
+		}
+		priorPayload = decoded
+		if err := payload.ValidateAdvance(memory.EventID(priorID), priorPayload); err != nil {
+			return err
+		}
 	}
 
 	type frontier struct {
@@ -420,11 +440,35 @@ func validateContextCompactionCorrelation(
 		return err
 	}
 	if first.typeValue != memory.EventUserMessage || first.role != memory.RoleUser || first.parent.Valid ||
-		first.sequence != payload.CoveredFirstSequence || first.sequence != 1 {
-		return errors.New("context compaction covered frontier does not start at the first root turn")
+		first.sequence != payload.CoveredFirstSequence {
+		return errors.New("context compaction covered frontier does not start at a root turn")
 	}
-	if last.sequence != payload.CoveredLastSequence || retained.sequence != last.sequence+1 ||
+	if priorErr == nil {
+		if payload.CoveredFirstEventID == priorPayload.CoveredFirstEventID {
+			return errors.New("context compaction covered frontier overlaps or skips the prior frontier")
+		}
+	} else if first.sequence != 1 {
+		return errors.New("context compaction first generation does not start at the first root turn")
+	}
+	if last.sequence != payload.CoveredLastSequence || retained.sequence <= last.sequence ||
 		retained.typeValue != memory.EventUserMessage || retained.role != memory.RoleUser || retained.parent.Valid {
+		return errors.New("context compaction retained frontier is invalid")
+	}
+	var nextRootID string
+	var nextRootSequence int64
+	if err := executor.queryRowContext(ctx, `
+		SELECT id, sequence
+		FROM events
+		WHERE session_id = ? AND sequence > ? AND event_type = ? AND role = ? AND parent_id IS NULL
+		ORDER BY sequence
+		LIMIT 1
+	`, sessionID, last.sequence, memory.EventUserMessage, memory.RoleUser).Scan(&nextRootID, &nextRootSequence); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("context compaction retained frontier has no next root turn")
+		}
+		return fmt.Errorf("load next retained root turn: %w", err)
+	}
+	if memory.EventID(nextRootID) != payload.FirstRetainedEventID || nextRootSequence != retained.sequence {
 		return errors.New("context compaction retained frontier is not the next root turn")
 	}
 	if last.typeValue == memory.EventAssistantMessage {
