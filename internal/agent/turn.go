@@ -167,17 +167,81 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
 		}
-		composed, err := s.composer.Compose(ContextComposeInput{
+		composeInput := ContextComposeInput{
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
-		})
+		}
+		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
+		if err != nil {
+			if errors.Is(err, ErrNoLegalAutomaticCompaction) || IsContextOverflow(err) {
+				overflow := fmt.Errorf("%w: %v", ErrContextOverflow, err)
+				coordinator.selectCause(causeContextOverflow, overflow, 0)
+				return overflow
+			}
+			return s.classifyLocalError(coordinator, err)
+		}
+		failureCategory := memory.ContextCompactionFailureNone
+		if required {
+			if s.compactor == nil {
+				return s.classifyLocalError(coordinator, errors.New("agent: compactor is not configured"))
+			}
+			if !coordinator.setStage(memory.StageContextCompaction) {
+				return s.observeTurnContext(coordinator)
+			}
+			newSummary, compacted, failure := s.performAutomaticCompaction(coordinator, lease, plan)
+			if failure == nil {
+				summary = newSummary
+				events = append(events, compacted)
+				composeInput.Summary = summary
+				composeInput.Events = events
+				if err := s.observeTurnContext(coordinator); err != nil {
+					return err
+				}
+			} else {
+				if coordinator.result().kind != causeNone {
+					return failure.err
+				}
+				fits, fitErr := completeAutomaticProjectionFits(composeInput, s.composer)
+				if fitErr != nil {
+					return s.classifyLocalError(coordinator, fitErr)
+				}
+				if !fits {
+					if failure.cause != causeNone {
+						coordinator.selectCause(failure.cause, failure.err, failure.httpStatus)
+						return failure.err
+					}
+					return s.classifyLocalError(coordinator, failure.err)
+				}
+				failureCategory = failure.category
+				if !coordinator.setStage(memory.StageContextCompose) {
+					return s.observeTurnContext(coordinator)
+				}
+			}
+		}
+		composed, err := s.composer.Compose(composeInput)
 		if err != nil {
 			if IsContextOverflow(err) {
 				coordinator.selectCause(causeContextOverflow, err, 0)
 				return err
 			}
 			return s.classifyLocalError(coordinator, err)
+		}
+		if required && failureCategory == memory.ContextCompactionFailureNone &&
+			composed.Snapshot.RetainedFirstEventID != plan.FirstRetained.ID {
+			overflow := fmt.Errorf("%w: accepted automatic summary did not preserve its retained frontier", ErrContextOverflow)
+			coordinator.selectCause(causeContextOverflow, overflow, 0)
+			return overflow
+		}
+		if required && failureCategory == memory.ContextCompactionFailureNone &&
+			composed.Snapshot.SerializedBytes > percentageFloor(composed.Snapshot.WorkingCeilingTokens, automaticCompactionTargetPercent) {
+			overflow := fmt.Errorf("%w: accepted automatic summary did not satisfy its target", ErrContextOverflow)
+			coordinator.selectCause(causeContextOverflow, overflow, 0)
+			return overflow
+		}
+		composed.Snapshot.CompactionFailureCategory = failureCategory
+		if err := composed.Snapshot.Validate(); err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("validate final context snapshot: %w", err))
 		}
 		snapshotPayload, err := json.Marshal(composed.Snapshot)
 		if err != nil {

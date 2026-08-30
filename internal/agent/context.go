@@ -118,29 +118,47 @@ func NewContextComposer(estimator RequestEstimator) *ContextComposer {
 	return &ContextComposer{estimator: estimator}
 }
 
-func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, error) {
+type contextProjection struct {
+	request           openrouter.ChatRequest
+	estimate          RequestEstimate
+	conversation      []openrouter.Message
+	selectedOriginal  []memory.Event
+	selectedProjected []memory.Event
+}
+
+type contextPreparation struct {
+	profile     openrouter.ContextProfileDiagnostics
+	usable      int64
+	turns       [][]memory.Event
+	activeIndex int
+	trigger     memory.Event
+	start       int
+}
+
+func (c *ContextComposer) prepare(
+	input ContextComposeInput,
+) (contextPreparation, error) {
 	if c == nil || c.estimator == nil {
-		return ComposedContext{}, errors.New("context request estimator is not configured")
+		return contextPreparation{}, errors.New("context request estimator is not configured")
 	}
 	if input.Iteration <= 0 {
-		return ComposedContext{}, errors.New("context iteration must be positive")
+		return contextPreparation{}, errors.New("context iteration must be positive")
 	}
 	if input.Summary != nil && (input.Summary.CompactionEventID == "" || strings.TrimSpace(input.Summary.Content) == "") {
-		return ComposedContext{}, errors.New("context summary identity and content must be present")
+		return contextPreparation{}, errors.New("context summary identity and content must be present")
 	}
 	profile := input.Profile.Diagnostics()
 	usable, err := usableInputBytes(profile)
 	if err != nil {
-		return ComposedContext{}, err
+		return contextPreparation{}, err
 	}
 	if err := validateDurableContextHistory(input.Events); err != nil {
-		return ComposedContext{}, err
+		return contextPreparation{}, err
 	}
 	turns, activeIndex, trigger, err := contextRootTurns(input.Events, input.ActiveRootID, input.TriggerEventID)
 	if err != nil {
-		return ComposedContext{}, err
+		return contextPreparation{}, err
 	}
-
 	start := 0
 	if input.Summary != nil && input.Summary.FirstRetainedEventID != "" {
 		found := false
@@ -152,83 +170,103 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 			}
 		}
 		if !found {
-			return ComposedContext{}, fmt.Errorf("context summary retained root %q is missing", input.Summary.FirstRetainedEventID)
+			return contextPreparation{}, fmt.Errorf("context summary retained root %q is missing", input.Summary.FirstRetainedEventID)
 		}
 		if start > activeIndex {
-			return ComposedContext{}, errors.New("context summary retained frontier is after the active turn")
+			return contextPreparation{}, errors.New("context summary retained frontier is after the active turn")
 		}
 	}
-	var (
-		request           openrouter.ChatRequest
-		estimate          RequestEstimate
-		conversation      []openrouter.Message
-		selectedOriginal  []memory.Event
-		selectedProjected []memory.Event
-	)
+	return contextPreparation{
+		profile: profile, usable: usable, turns: turns, activeIndex: activeIndex, trigger: trigger, start: start,
+	}, nil
+}
+
+func (c *ContextComposer) projectAtStart(
+	input ContextComposeInput,
+	prepared contextPreparation,
+	start int,
+) (contextProjection, error) {
+	profile, usable, turns := prepared.profile, prepared.usable, prepared.turns
+	projection := contextProjection{selectedOriginal: flattenContextTurns(turns[start:])}
+	var err error
+	projection.selectedProjected, err = applyToolResultGroupLimits(projection.selectedOriginal)
+	if err != nil {
+		return contextProjection{}, fmt.Errorf("bound durable tool-result groups: %w", err)
+	}
+	composeProjected := func(projected []memory.Event) error {
+		projection.conversation, err = messagesFromEvents(projected)
+		if err != nil {
+			return fmt.Errorf("project durable history: %w", err)
+		}
+		messages := make([]openrouter.Message, 0, len(projection.conversation)+2)
+		messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
+		if input.Summary != nil {
+			messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
+		}
+		messages = append(messages, projection.conversation...)
+		projection.request = openrouter.ChatRequest{
+			Model:     profile.ConfiguredModel,
+			Messages:  messages,
+			Tools:     append([]openrouter.Tool(nil), input.Tools...),
+			Stream:    true,
+			Reasoning: cloneReasoning(input.Reasoning),
+			MaxTokens: profile.OutputReserveTokens,
+		}
+		projection.estimate, err = c.estimator.Estimate(projection.request)
+		return err
+	}
+	if err := composeProjected(projection.selectedProjected); err != nil {
+		return contextProjection{}, err
+	}
+	groups, err := completeToolResultGroups(projection.selectedOriginal)
+	if err != nil {
+		return contextProjection{}, fmt.Errorf("identify durable tool-result groups: %w", err)
+	}
+	pressureTarget := percentageFloor(usable, 60)
+	eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
+	for groupIndex := 0; projection.estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
+		for _, resultIndex := range groups[groupIndex].resultIndexes {
+			if projection.estimate.SerializedBytes <= pressureTarget {
+				break
+			}
+			if !isPressureProjectableToolResult(projection.selectedOriginal[resultIndex]) {
+				continue
+			}
+			pressureProjection := projectOldToolResult(projection.selectedOriginal[resultIndex])
+			if len(pressureProjection) >= len(projection.selectedProjected[resultIndex].Content) {
+				continue
+			}
+			projection.selectedProjected[resultIndex].Content = pressureProjection
+			if err := composeProjected(projection.selectedProjected); err != nil {
+				return contextProjection{}, err
+			}
+		}
+	}
+	return projection, nil
+}
+
+func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, error) {
+	prepared, err := c.prepare(input)
+	if err != nil {
+		return ComposedContext{}, err
+	}
+	profile, usable, turns := prepared.profile, prepared.usable, prepared.turns
+	activeIndex, trigger, start := prepared.activeIndex, prepared.trigger, prepared.start
+	var projection contextProjection
 	for {
-		selectedOriginal = flattenContextTurns(turns[start:])
-		selectedProjected, err = applyToolResultGroupLimits(selectedOriginal)
+		projection, err = c.projectAtStart(input, prepared, start)
 		if err != nil {
 			if IsContextOverflow(err) && start < activeIndex {
 				start++
 				continue
 			}
-			return ComposedContext{}, fmt.Errorf("bound durable tool-result groups: %w", err)
-		}
-		composeProjected := func(projected []memory.Event) error {
-			conversation, err = messagesFromEvents(projected)
-			if err != nil {
-				return fmt.Errorf("project durable history: %w", err)
-			}
-			messages := make([]openrouter.Message, 0, len(conversation)+2)
-			messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
-			if input.Summary != nil {
-				messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
-			}
-			messages = append(messages, conversation...)
-			request = openrouter.ChatRequest{
-				Model:     profile.ConfiguredModel,
-				Messages:  messages,
-				Tools:     append([]openrouter.Tool(nil), input.Tools...),
-				Stream:    true,
-				Reasoning: cloneReasoning(input.Reasoning),
-				MaxTokens: profile.OutputReserveTokens,
-			}
-			estimate, err = c.estimator.Estimate(request)
-			return err
-		}
-		if err := composeProjected(selectedProjected); err != nil {
 			return ComposedContext{}, err
 		}
-		groups, err := completeToolResultGroups(selectedOriginal)
-		if err != nil {
-			return ComposedContext{}, fmt.Errorf("identify durable tool-result groups: %w", err)
-		}
-		pressureTarget := percentageFloor(usable, 60)
-		eligibleGroups := max(0, len(groups)-retainedCompleteToolResultGroups)
-		for groupIndex := 0; estimate.SerializedBytes > pressureTarget && groupIndex < eligibleGroups; groupIndex++ {
-			for _, resultIndex := range groups[groupIndex].resultIndexes {
-				if estimate.SerializedBytes <= pressureTarget {
-					break
-				}
-				if !isPressureProjectableToolResult(selectedOriginal[resultIndex]) {
-					continue
-				}
-				pressureProjection := projectOldToolResult(selectedOriginal[resultIndex])
-				if len(pressureProjection) >= len(selectedProjected[resultIndex].Content) {
-					continue
-				}
-				selectedProjected[resultIndex].Content = pressureProjection
-				if err := composeProjected(selectedProjected); err != nil {
-					return ComposedContext{}, err
-				}
-			}
-		}
-		if estimate.SerializedBytes <= usable {
+		if projection.estimate.SerializedBytes <= usable {
 			break
 		}
 		if start >= activeIndex {
-			return ComposedContext{}, &contextOverflowError{serialized: estimate.SerializedBytes, usable: usable}
+			return ComposedContext{}, &contextOverflowError{serialized: projection.estimate.SerializedBytes, usable: usable}
 		}
 		start++
 	}
@@ -239,7 +277,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		canonicalModel = profile.ConfiguredModel
 	}
 	systemBytes, summaryBytes, historyBytes, toolBytes, settingsBytes, err := contextByteBreakdown(
-		request, len(conversation), input.Summary != nil,
+		projection.request, len(projection.conversation), input.Summary != nil,
 	)
 	if err != nil {
 		return ComposedContext{}, err
@@ -259,21 +297,21 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		OutputReserveTokens:    profile.OutputReserveTokens,
 		EstimationMarginTokens: profile.EstimationMarginTokens,
 		UsableInputBytes:       usable,
-		SerializedBytes:        estimate.SerializedBytes,
-		RoughTokenEstimate:     estimate.RoughTokens,
-		RequestSHA256:          estimate.RequestSHA256,
+		SerializedBytes:        projection.estimate.SerializedBytes,
+		RoughTokenEstimate:     projection.estimate.RoughTokens,
+		RequestSHA256:          projection.estimate.RequestSHA256,
 		RetainedFirstEventID:   first.ID,
 		RetainedFirstSequence:  first.Sequence,
 		RetainedLastEventID:    trigger.ID,
 		RetainedLastSequence:   trigger.Sequence,
-		MessageCount:           len(request.Messages),
-		ToolSchemaCount:        len(request.Tools),
+		MessageCount:           len(projection.request.Messages),
+		ToolSchemaCount:        len(projection.request.Tools),
 		SystemMessageBytes:     systemBytes,
 		SummaryMessageBytes:    summaryBytes,
 		HistoryMessageBytes:    historyBytes,
 		ToolSchemaBytes:        toolBytes,
 		RequestSettingsBytes:   settingsBytes,
-		Placeholders:           toolResultPlaceholderManifests(selectedOriginal, selectedProjected),
+		Placeholders:           toolResultPlaceholderManifests(projection.selectedOriginal, projection.selectedProjected),
 	}
 	if input.Summary != nil {
 		snapshot.ActiveCompactionEventID = input.Summary.CompactionEventID
@@ -281,7 +319,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 	if err := snapshot.Validate(); err != nil {
 		return ComposedContext{}, fmt.Errorf("validate context snapshot: %w", err)
 	}
-	return ComposedContext{Request: request, Snapshot: snapshot}, nil
+	return ComposedContext{Request: projection.request, Snapshot: snapshot}, nil
 }
 
 func percentageFloor(value int64, percent int64) int64 {
@@ -527,8 +565,21 @@ func validateDurableContextHistory(events []memory.Event) error {
 			return fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
 		}
 		parent, ok := byID[event.ParentID]
-		if !ok || parent.index != i-1 {
+		if !ok || (parent.index != i-1 && parent.index != i-2) {
 			return fmt.Errorf("context snapshot event %q does not immediately follow its durable parent", event.ID)
+		}
+		if parent.index == i-2 {
+			compaction := events[i-1]
+			if compaction.Type != memory.EventContextCompacted || payload.ActiveCompactionEventID != compaction.ID {
+				return fmt.Errorf("context snapshot event %q has an invalid intervening compaction", event.ID)
+			}
+			compactionPayload, err := decodeContextCompactionEvent(compaction)
+			if err != nil || compactionPayload.Trigger != memory.ContextCompactionAutomatic {
+				return fmt.Errorf("context snapshot event %q does not follow a valid automatic compaction", event.ID)
+			}
+			if payload.RetainedFirstEventID != compactionPayload.FirstRetainedEventID {
+				return fmt.Errorf("context snapshot event %q retained frontier does not match its automatic compaction", event.ID)
+			}
 		}
 		if parent.event.Type != memory.EventUserMessage && parent.event.Type != memory.EventToolSucceeded &&
 			parent.event.Type != memory.EventToolFailed && parent.event.Type != memory.EventToolCancelled {

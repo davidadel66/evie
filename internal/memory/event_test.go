@@ -126,6 +126,28 @@ func TestContextCompactedPayloadValidation(t *testing.T) {
 	}
 }
 
+func TestContextCompactedPayloadAcceptsAutomaticTrigger(t *testing.T) {
+	var summaryBuilder strings.Builder
+	for _, heading := range ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summaryBuilder, "## %s\nkept\n\n", heading)
+	}
+	summary := summaryBuilder.String()
+	digest := sha256.Sum256([]byte(summary))
+	payload := ContextCompactedPayload{
+		SchemaVersion:       ContextCompactedSchemaVersion,
+		Generation:          1,
+		Trigger:             ContextCompactionAutomatic,
+		CoveredFirstEventID: "first", CoveredFirstSequence: 1,
+		CoveredLastEventID: "last", CoveredLastSequence: 2,
+		FirstRetainedEventID: "retained", CanonicalModel: "test/model",
+		PromptVersion: ContextCompactionPromptVersion,
+		SummaryBytes:  int64(len(summary)), SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	if err := payload.Validate(summary); err != nil {
+		t.Fatalf("automatic trigger: %v", err)
+	}
+}
+
 func TestContextCompactedPayloadValidatesExactAdvance(t *testing.T) {
 	prior := ContextCompactedPayload{Generation: 1, FirstRetainedEventID: "turn-4"}
 	next := ContextCompactedPayload{

@@ -65,6 +65,9 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 			Payload: append([]byte(nil), input.Payload...), FormatVersion: 1,
 		}
 		f.ordered = append(f.ordered, event)
+		if f.afterAppend != nil {
+			f.afterAppend(input)
+		}
 		return event, nil
 	}
 	f.appendAttempts++

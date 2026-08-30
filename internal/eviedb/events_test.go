@@ -187,6 +187,67 @@ func TestContextSnapshotAppendCorrelatesPlaceholderWithDurableToolResult(t *test
 	}
 }
 
+func TestAutomaticContextSnapshotRequiresCompactionRetainedFrontier(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "first",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstAssistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: firstRoot.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+		Content: "answer", Payload: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retainedRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "active",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := validContextCompactionSummary()
+	digest := sha256.Sum256([]byte(summary))
+	compactionPayload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 1,
+		Trigger:             memory.ContextCompactionAutomatic,
+		CoveredFirstEventID: firstRoot.ID, CoveredFirstSequence: firstRoot.Sequence,
+		CoveredLastEventID: firstAssistant.ID, CoveredLastSequence: firstAssistant.Sequence,
+		FirstRetainedEventID: retainedRoot.ID, CanonicalModel: "test/model",
+		PromptVersion: memory.ContextCompactionPromptVersion, SummaryBytes: int64(len(summary)),
+		SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	compactionJSON, err := json.Marshal(compactionPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compacted, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: compactionJSON,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := validContextSnapshotPayload(firstRoot, retainedRoot)
+	snapshot.ActiveCompactionEventID = compacted.ID
+	snapshot.SummaryMessageBytes = int64(len(summary))
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: retainedRoot.ID, Type: memory.EventContextSnapshot, Payload: snapshotJSON,
+	}); err == nil {
+		t.Fatal("automatic snapshot accepted a frontier different from its compaction")
+	}
+}
+
 func TestContextCompactedAppendValidatesSummaryAndWholeTurnFrontier(t *testing.T) {
 	store := NewStore(newTestDB(t))
 	ctx := context.Background()

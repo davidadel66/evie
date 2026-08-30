@@ -1,5 +1,34 @@
 # memory - decisions
 
+- **2026-08-30 - automatic compaction is one pre-request pressure attempt per provider iteration.**
+  Every initial and post-tool conversational iteration first applies the
+  mandatory old-tool-result projection and measures the complete canonical
+  request. At or above 80 percent of the configured working ceiling, Evie
+  selects the smallest contiguous prefix of complete root turns whose
+  replacement by a maximum-sized validated summary targets at most 60 percent.
+  The current root-user turn is never eligible, tool groups remain atomic, and
+  a prefix is legal only when its complete compactor request fits. An automatic
+  compactor call has the manual path's model, prompt, timeout, no-tool,
+  zero-temperature, no-retry, validation, chain, and lease-fencing rules, and
+  each provider iteration makes at most one attempt.
+
+  A successful generation is appended with trigger `automatic` between the
+  durable provider trigger and its content-free `context_snapshot`; the
+  snapshot names that generation and its retained frontier. Transport,
+  validation, and persistence failures never activate generated output. When
+  the unchanged projected request still fits its usable route-safe budget, the
+  conversational call proceeds and the snapshot records exactly one of
+  `summary_provider_error`, `summary_invalid`, or
+  `summary_persistence_failed`. Otherwise transport and response failures use
+  the existing safe `provider_error` or `provider_response_invalid` terminal
+  evidence at `context_compaction`; no legal cut uses `context_overflow` at
+  `context_compose`. Cancellation before the summary append retains the prior
+  generation at `context_compaction`; a committed summary remains active and
+  moves the cancellation boundary to `context_compose`. Snapshots, generation
+  and failure counts, byte estimates, headroom, and placeholder manifests are
+  the Stage 2 tuning evidence; retries, exact tokenization, summary-call usage,
+  retrieval, caches, and later memory systems remain deferred.
+
 - **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
   Every manual compaction first reconstructs the complete accepted chain from
   canonical `context_compacted` events, never from context snapshots or

@@ -193,7 +193,10 @@ func ValidateContextCompactionSummary(summary string) error {
 
 type ContextCompactionTrigger string
 
-const ContextCompactionManual ContextCompactionTrigger = "manual"
+const (
+	ContextCompactionManual    ContextCompactionTrigger = "manual"
+	ContextCompactionAutomatic ContextCompactionTrigger = "automatic"
+)
 
 // ContextCompactedPayload records the content-free provenance and exact raw
 // event cut represented by one accepted rolling summary. The summary itself is
@@ -224,7 +227,7 @@ func (p ContextCompactedPayload) Validate(summary string) error {
 	if (p.Generation == 1) != (p.PriorCompactionEventID == "") {
 		return errors.New("context compaction generation and prior identity are inconsistent")
 	}
-	if p.Trigger != ContextCompactionManual {
+	if p.Trigger != ContextCompactionManual && p.Trigger != ContextCompactionAutomatic {
 		return fmt.Errorf("invalid context compaction trigger %q", p.Trigger)
 	}
 	if p.CoveredFirstEventID == "" || p.CoveredLastEventID == "" ||

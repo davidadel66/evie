@@ -489,3 +489,45 @@ func TestInspectContextRejectsDelayedSnapshot(t *testing.T) {
 		t.Fatal("InspectContext accepted a snapshot delayed past its trigger")
 	}
 }
+
+func TestDurableContextRejectsAutomaticSnapshotWithMismatchedCompactionFrontier(t *testing.T) {
+	turn := completedCompactionTurn("old", 1, "old", "answer")
+	active := memory.Event{ID: "active", Sequence: 3, Type: memory.EventUserMessage, Role: memory.RoleUser}
+	compacted := contextCompactionEvent(
+		t, "compacted", 4, 1, "", turn[0], turn[1], active,
+		validCompactionSummary(), "test/model", CompactionPromptVersion,
+	)
+	var compactionPayload memory.ContextCompactedPayload
+	if err := json.Unmarshal(compacted.Payload, &compactionPayload); err != nil {
+		t.Fatal(err)
+	}
+	compactionPayload.Trigger = memory.ContextCompactionAutomatic
+	encodedCompaction, err := json.Marshal(compactionPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compacted.Payload = encodedCompaction
+	snapshotPayload := memory.ContextSnapshotPayload{
+		SchemaVersion: memory.ContextSnapshotSchemaVersion, ComposerVersion: ContextComposerVersion,
+		EstimatorVersion: CanonicalRequestEstimatorVersion, Iteration: 1,
+		ConfiguredModel: "test/model", CanonicalModel: "test/model", ProfileSource: "explicit_override",
+		HardWindowTokens: 262144, WorkingCeilingTokens: 262144, OutputReserveTokens: 16384,
+		EstimationMarginTokens: 4096, UsableInputBytes: 241664, SerializedBytes: 100,
+		RoughTokenEstimate: 25, RequestSHA256: strings.Repeat("a", 64),
+		RetainedFirstEventID: turn[0].ID, RetainedFirstSequence: turn[0].Sequence,
+		RetainedLastEventID: active.ID, RetainedLastSequence: active.Sequence,
+		ActiveCompactionEventID: compacted.ID,
+		MessageCount:            3, SystemMessageBytes: 10, SummaryMessageBytes: 10,
+		HistoryMessageBytes: 10, RequestSettingsBytes: 10,
+	}
+	encodedSnapshot, err := json.Marshal(snapshotPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := append(append([]memory.Event{}, turn...), active, compacted, memory.Event{
+		ID: "snapshot", Sequence: 5, ParentID: active.ID, Type: memory.EventContextSnapshot, Payload: encodedSnapshot,
+	})
+	if err := validateDurableContextHistory(events); err == nil {
+		t.Fatal("durable context accepted an automatic snapshot frontier different from its compaction")
+	}
+}

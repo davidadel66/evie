@@ -143,50 +143,18 @@ func (s *Session) Compact(ctx context.Context) (result CompactionResult, retErr 
 	if err := s.observeTurnContext(coordinator); err != nil {
 		return CompactionResult{}, err
 	}
-	if len(response.Choices) != 1 {
-		return CompactionResult{}, invalidCompactionResponse(errors.New("compactor response must contain exactly one choice"))
-	}
-	message := response.Choices[0].Message
-	if message.Role != "assistant" {
-		return CompactionResult{}, invalidCompactionResponse(fmt.Errorf("compactor response has role %q", message.Role))
-	}
-	if len(message.ToolCalls) != 0 {
-		return CompactionResult{}, invalidCompactionResponse(errors.New("compactor response requested a tool"))
-	}
-	if err := validateCompactionSummary(message.Content); err != nil {
+	summary, err := validatedCompactionSummary(response)
+	if err != nil {
 		return CompactionResult{}, invalidCompactionResponse(err)
 	}
-
-	canonicalModel := s.profile.Diagnostics().CanonicalModel
-	if canonicalModel == "" {
-		canonicalModel = s.profile.Diagnostics().ConfiguredModel
-	}
-	digest := sha256.Sum256([]byte(message.Content))
-	payload := memory.ContextCompactedPayload{
-		SchemaVersion:          memory.ContextCompactedSchemaVersion,
-		Generation:             plan.Generation,
-		Trigger:                memory.ContextCompactionManual,
-		PriorCompactionEventID: plan.PriorCompactionEventID,
-		CoveredFirstEventID:    plan.CoveredFirst.ID,
-		CoveredFirstSequence:   plan.CoveredFirst.Sequence,
-		CoveredLastEventID:     plan.CoveredLast.ID,
-		CoveredLastSequence:    plan.CoveredLast.Sequence,
-		FirstRetainedEventID:   plan.FirstRetained.ID,
-		CanonicalModel:         canonicalModel,
-		PromptVersion:          CompactionPromptVersion,
-		SummaryBytes:           int64(len(message.Content)),
-		SummarySHA256:          fmt.Sprintf("%x", digest),
-	}
-	payloadJSON, err := json.Marshal(payload)
+	eventInput, err := compactionEventInput(s.profile, plan, summary, memory.ContextCompactionManual)
 	if err != nil {
-		return CompactionResult{}, fmt.Errorf("encode context compaction payload: %w", err)
+		return CompactionResult{}, err
 	}
 	if !coordinator.beginCommitBoundary() {
 		return CompactionResult{}, s.observeTurnContext(coordinator)
 	}
-	compacted, err := s.history.Append(coordinator.ctx, lease, memory.EventInput{
-		Type: memory.EventContextCompacted, Content: message.Content, Payload: payloadJSON,
-	})
+	compacted, err := s.history.Append(coordinator.ctx, lease, eventInput)
 	if err != nil {
 		coordinator.abortCommitBoundary()
 		return CompactionResult{}, s.classifyLocalError(coordinator, fmt.Errorf("persist context compaction: %w", err))
@@ -201,6 +169,59 @@ func invalidCompactionResponse(err error) error {
 		Stage:          memory.StageContextCompaction,
 		Err:            err,
 	}
+}
+
+func validatedCompactionSummary(response openrouter.ChatResponse) (string, error) {
+	if len(response.Choices) != 1 {
+		return "", errors.New("compactor response must contain exactly one choice")
+	}
+	message := response.Choices[0].Message
+	if message.Role != "assistant" {
+		return "", fmt.Errorf("compactor response has role %q", message.Role)
+	}
+	if len(message.ToolCalls) != 0 {
+		return "", errors.New("compactor response requested a tool")
+	}
+	if err := validateCompactionSummary(message.Content); err != nil {
+		return "", err
+	}
+	return message.Content, nil
+}
+
+func compactionEventInput(
+	profile openrouter.ContextProfile,
+	plan compactionPlan,
+	summary string,
+	trigger memory.ContextCompactionTrigger,
+) (memory.EventInput, error) {
+	diagnostics := profile.Diagnostics()
+	canonicalModel := diagnostics.CanonicalModel
+	if canonicalModel == "" {
+		canonicalModel = diagnostics.ConfiguredModel
+	}
+	digest := sha256.Sum256([]byte(summary))
+	payload := memory.ContextCompactedPayload{
+		SchemaVersion:          memory.ContextCompactedSchemaVersion,
+		Generation:             plan.Generation,
+		Trigger:                trigger,
+		PriorCompactionEventID: plan.PriorCompactionEventID,
+		CoveredFirstEventID:    plan.CoveredFirst.ID,
+		CoveredFirstSequence:   plan.CoveredFirst.Sequence,
+		CoveredLastEventID:     plan.CoveredLast.ID,
+		CoveredLastSequence:    plan.CoveredLast.Sequence,
+		FirstRetainedEventID:   plan.FirstRetained.ID,
+		CanonicalModel:         canonicalModel,
+		PromptVersion:          CompactionPromptVersion,
+		SummaryBytes:           int64(len(summary)),
+		SummarySHA256:          fmt.Sprintf("%x", digest),
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return memory.EventInput{}, fmt.Errorf("encode context compaction payload: %w", err)
+	}
+	return memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: payloadJSON,
+	}, nil
 }
 
 type compactionPlan struct {

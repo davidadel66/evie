@@ -513,19 +513,30 @@ func validateContextSnapshotCorrelation(
 	if snapshot.RetainedLastEventID != parentID || snapshot.RetainedLastSequence != parentSequence {
 		return errors.New("context snapshot retained endpoint does not match its provider trigger")
 	}
-	var latestEventID string
+	var latestEventID, latestEventType, latestPayloadJSON string
+	var latestSequence int64
 	err = executor.queryRowContext(ctx, `
-		SELECT id
+		SELECT id, event_type, sequence, payload_json
 		FROM events
 		WHERE session_id = ?
 		ORDER BY sequence DESC
 		LIMIT 1
-	`, sessionID).Scan(&latestEventID)
+	`, sessionID).Scan(&latestEventID, &latestEventType, &latestSequence, &latestPayloadJSON)
 	if err != nil {
 		return fmt.Errorf("validate latest context snapshot trigger: %w", err)
 	}
 	if memory.EventID(latestEventID) != parentID {
-		return errors.New("context snapshot does not immediately follow its provider trigger")
+		if memory.EventID(latestEventID) != snapshot.ActiveCompactionEventID ||
+			memory.EventType(latestEventType) != memory.EventContextCompacted || latestSequence != parentSequence+1 {
+			return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
+		}
+		compacted, _, err := decodeCanonicalContextCompactedPayload(json.RawMessage(latestPayloadJSON))
+		if err != nil || compacted.Trigger != memory.ContextCompactionAutomatic {
+			return errors.New("context snapshot intervening compaction is invalid")
+		}
+		if snapshot.RetainedFirstEventID != compacted.FirstRetainedEventID {
+			return errors.New("context snapshot retained frontier does not match its automatic compaction")
+		}
 	}
 	var firstType, firstRole string
 	var firstParent sql.NullString

@@ -16,11 +16,40 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 type compactionAcceptanceClient struct {
 	responses []openrouter.ChatResponse
 	requests  []openrouter.ChatRequest
+}
+
+type compactionAcceptanceErrorClient struct {
+	err      error
+	requests []openrouter.ChatRequest
+}
+
+func (c *compactionAcceptanceErrorClient) ChatStream(
+	_ context.Context,
+	request openrouter.ChatRequest,
+	_ openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	c.requests = append(c.requests, request)
+	return openrouter.ChatResponse{}, c.err
+}
+
+type compactionAcceptanceCancellingClient struct {
+	entered chan struct{}
+}
+
+func (c *compactionAcceptanceCancellingClient) ChatStream(
+	ctx context.Context,
+	_ openrouter.ChatRequest,
+	_ openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	close(c.entered)
+	<-ctx.Done()
+	return openrouter.ChatResponse{}, ctx.Err()
 }
 
 func (c *compactionAcceptanceClient) ChatStream(
@@ -62,7 +91,7 @@ func compactionAcceptanceResponse(summary string) openrouter.ChatResponse {
 
 func compactionAcceptanceProfile(t *testing.T, model string, working int64) openrouter.ContextProfile {
 	t.Helper()
-	profile, err := openrouter.NewExplicitContextProfile(model, 300000, working, 16384)
+	profile, err := openrouter.NewExplicitContextProfile(model, 700000, working, 16384)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,6 +336,270 @@ func TestDurableCompactionChainSurvivesSQLiteRestart(t *testing.T) {
 		!strings.Contains(string(requestJSON), "Execute the next action.") {
 		t.Fatalf("provider projection after restart=%s", requestJSON)
 	}
+}
+
+func TestAutomaticCompactionCrossesWindowWithToolHistoryAcrossRestart(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	sessionRecord, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const holder = memory.LeaseHolderID("automatic-compaction-acceptance")
+	profile := compactionAcceptanceProfile(t, "automatic/model", 600_000)
+	firstSummary := compactionAcceptanceSummary("automatic generation one")
+	firstConversation := &compactionAcceptanceClient{responses: []openrouter.ChatResponse{
+		compactionAcceptanceResponse("first answer"),
+		compactionAcceptanceResponse("second answer"),
+	}}
+	firstCompactor := &compactionAcceptanceClient{responses: []openrouter.ChatResponse{
+		compactionAcceptanceResponse(firstSummary),
+	}}
+	firstAgent := agent.NewWithCompactor(
+		firstConversation, firstCompactor, profile, store.BindHistory(sessionRecord.ID, holder),
+		sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
+	)
+	firstUser := "FIRST_RAW:" + strings.Repeat("a", 330_000)
+	secondUser := "SECOND_RAW:" + strings.Repeat("b", 190_000)
+	if err := firstAgent.Send(ctx, firstUser, nilAgentEvents{}, nil); err != nil {
+		t.Fatalf("first large turn: %v", err)
+	}
+	if err := firstAgent.Send(ctx, secondUser, nilAgentEvents{}, nil); err != nil {
+		t.Fatalf("second large turn: %v", err)
+	}
+	if len(firstCompactor.requests) != 1 || len(firstConversation.requests) != 2 {
+		t.Fatalf("before restart compactor requests=%d conversation requests=%d", len(firstCompactor.requests), len(firstConversation.requests))
+	}
+
+	beforeRestart, err := store.LoadEvents(ctx, sessionRecord.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstCompaction memory.Event
+	for _, event := range beforeRestart {
+		if event.Type == memory.EventContextCompacted {
+			firstCompaction = event
+		}
+	}
+	if firstCompaction.ID == "" {
+		t.Fatalf("first automatic generation missing: %v", acceptanceEventTypes(beforeRestart))
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store = eviedb.NewStore(db)
+	secondSummary := compactionAcceptanceSummary("automatic generation two after restart")
+	toolCall := openrouter.ToolCall{
+		ID: "call-large", Type: "function",
+		Function: openrouter.FunctionCall{Name: "large_result", Arguments: `{}`},
+	}
+	secondConversation := &compactionAcceptanceClient{responses: []openrouter.ChatResponse{
+		{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{toolCall}}}}},
+		compactionAcceptanceResponse("tool-heavy turn complete"),
+	}}
+	secondCompactor := &compactionAcceptanceClient{responses: []openrouter.ChatResponse{
+		compactionAcceptanceResponse(secondSummary),
+	}}
+	largeTool := tools.Tool{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "large_result", Description: "Return a deterministic large result.",
+			Parameters: openrouter.Parameter{Type: "object", Properties: map[string]openrouter.Property{}},
+		}},
+		Execute: func(context.Context, string) (string, error) {
+			return "TOOL_RAW:" + strings.Repeat("z", 67_000), nil
+		},
+	}
+	restarted := agent.NewWithCompactor(
+		secondConversation, secondCompactor, compactionAcceptanceProfile(t, "automatic/model", 330_000), store.BindHistory(sessionRecord.ID, holder),
+		sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
+	)
+	if err := restarted.Send(ctx, "Run the large tool after restart.", nilAgentEvents{}, nil, largeTool); err != nil {
+		t.Fatalf("tool-heavy turn after restart: %v", err)
+	}
+	if len(secondConversation.requests) != 2 || len(secondCompactor.requests) != 1 {
+		t.Fatalf("after restart conversation requests=%d compactor requests=%d", len(secondConversation.requests), len(secondCompactor.requests))
+	}
+
+	diagnostics, err := restarted.InspectContext(ctx)
+	if err != nil {
+		t.Fatalf("/context diagnostics: %v", err)
+	}
+	afterRestart, err := store.LoadEvents(ctx, sessionRecord.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compactions []memory.Event
+	var toolAssistant, toolResult memory.Event
+	for _, event := range afterRestart {
+		switch event.Type {
+		case memory.EventContextCompacted:
+			compactions = append(compactions, event)
+		case memory.EventAssistantMessage:
+			var payload memory.AssistantMessagePayload
+			if err := json.Unmarshal(event.Payload, &payload); err == nil && len(payload.ToolCalls) != 0 {
+				toolAssistant = event
+			}
+		case memory.EventToolSucceeded:
+			toolResult = event
+		}
+	}
+	if len(compactions) != 2 || diagnostics.Projection.ActiveCompactionEventID != compactions[1].ID ||
+		diagnostics.LatestSnapshot == nil || diagnostics.LatestSnapshot.Manifest.ActiveCompactionEventID != compactions[1].ID {
+		t.Fatalf("compactions=%d diagnostics=%+v", len(compactions), diagnostics)
+	}
+	var firstPayload, secondPayload memory.ContextCompactedPayload
+	if err := json.Unmarshal(compactions[0].Payload, &firstPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(compactions[1].Payload, &secondPayload); err != nil {
+		t.Fatal(err)
+	}
+	if firstPayload.Trigger != memory.ContextCompactionAutomatic || secondPayload.Trigger != memory.ContextCompactionAutomatic ||
+		firstPayload.Generation != 1 || secondPayload.Generation != 2 ||
+		secondPayload.PriorCompactionEventID != compactions[0].ID ||
+		secondPayload.CoveredFirstEventID != firstPayload.FirstRetainedEventID {
+		t.Fatalf("automatic chain: first=%+v second=%+v", firstPayload, secondPayload)
+	}
+	var toolAssistantPayload memory.AssistantMessagePayload
+	var toolResultPayload memory.ToolResultPayload
+	if err := json.Unmarshal(toolAssistant.Payload, &toolAssistantPayload); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(toolResult.Payload, &toolResultPayload); err != nil {
+		t.Fatal(err)
+	}
+	assistantToolCallID := ""
+	if len(toolAssistantPayload.ToolCalls) == 1 {
+		assistantToolCallID = toolAssistantPayload.ToolCalls[0].ID
+	}
+	if toolAssistant.ID == "" || toolResult.ID == "" || len(toolAssistantPayload.ToolCalls) != 1 ||
+		assistantToolCallID != toolResultPayload.ToolCallID ||
+		!strings.HasPrefix(toolResult.Content, "TOOL_RAW:") || len(toolResult.Content) != len("TOOL_RAW:")+67_000 {
+		t.Fatalf("tool pairing IDs assistant=%q result=%q", assistantToolCallID, toolResultPayload.ToolCallID)
+	}
+	seenFirst, seenSecond := false, false
+	for _, event := range afterRestart {
+		seenFirst = seenFirst || event.Type == memory.EventUserMessage && event.Content == firstUser
+		seenSecond = seenSecond || event.Type == memory.EventUserMessage && event.Content == secondUser
+	}
+	if !seenFirst || !seenSecond || len(afterRestart) <= len(beforeRestart) {
+		t.Fatalf("raw history was not retained: first=%v second=%v before=%d after=%d", seenFirst, seenSecond, len(beforeRestart), len(afterRestart))
+	}
+}
+
+func TestAutomaticCompactionPersistsDeterministicFailureAndCancellationEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		historySize int
+		cancel      bool
+		wantType    memory.EventType
+		wantClass   memory.TurnClassification
+	}{
+		{name: "provider failure", historySize: 210_000, wantType: memory.EventTurnFailed, wantClass: memory.ClassificationProviderError},
+		{name: "caller cancellation", historySize: 190_000, cancel: true, wantType: memory.EventTurnInterrupted, wantClass: memory.ClassificationCallerCancelled},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := eviedb.NewStore(openAcceptanceDB(t))
+			sessionRecord, err := store.CreateGlobalSession(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			holder := memory.LeaseHolderID("automatic-evidence-" + strings.ReplaceAll(test.name, " ", "-"))
+			history := store.BindHistory(sessionRecord.ID, holder)
+			lease, err := store.AcquireTurnLease(ctx, sessionRecord.ID, holder, time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			third := test.historySize / 3
+			for i, size := range []int{third, third, test.historySize - 2*third} {
+				root, err := history.Append(ctx, lease, memory.EventInput{
+					Type: memory.EventUserMessage, Role: memory.RoleUser,
+					Content: fmt.Sprintf("source-%d:", i+1) + strings.Repeat(string(rune('a'+i)), size),
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := history.Append(ctx, lease, memory.EventInput{
+					ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+					Content: "accepted", Payload: json.RawMessage(`{}`),
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := store.ReleaseTurnLease(ctx, sessionRecord.ID, holder, lease.FencingToken); err != nil {
+				t.Fatal(err)
+			}
+
+			conversation := &compactionAcceptanceClient{}
+			var compactor agent.Client
+			var cancel context.CancelFunc
+			sendCtx := ctx
+			if test.cancel {
+				blocking := &compactionAcceptanceCancellingClient{entered: make(chan struct{})}
+				compactor = blocking
+				sendCtx, cancel = context.WithCancel(ctx)
+				done := make(chan error, 1)
+				session := agent.NewWithCompactor(
+					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 230_000), history,
+					sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
+				)
+				go func() { done <- session.Send(sendCtx, strings.Repeat("d", 8_000), nilAgentEvents{}, nil) }()
+				<-blocking.entered
+				cancel()
+				if err := <-done; !errors.Is(err, context.Canceled) {
+					t.Fatalf("Send error=%v, want context canceled", err)
+				}
+			} else {
+				failing := &compactionAcceptanceErrorClient{err: errors.New("deterministic summary transport failure")}
+				compactor = failing
+				session := agent.NewWithCompactor(
+					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 230_000), history,
+					sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
+				)
+				if err := session.Send(sendCtx, strings.Repeat("d", 8_000), nilAgentEvents{}, nil); err == nil {
+					t.Fatal("Send unexpectedly succeeded")
+				}
+				if len(failing.requests) != 1 {
+					t.Fatalf("compactor requests=%d", len(failing.requests))
+				}
+			}
+
+			events, err := store.LoadEvents(ctx, sessionRecord.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			last := events[len(events)-1]
+			var terminal memory.TurnTerminalPayload
+			if err := json.Unmarshal(last.Payload, &terminal); err != nil {
+				t.Fatal(err)
+			}
+			if last.Type != test.wantType || last.Content != terminal.SafeContent() ||
+				terminal.Classification != test.wantClass || terminal.Stage != memory.StageContextCompaction ||
+				len(conversation.requests) != 0 {
+				t.Fatalf("terminal=%+v event_type=%q conversation_requests=%d", terminal, last.Type, len(conversation.requests))
+			}
+		})
+	}
+}
+
+func acceptanceEventTypes(events []memory.Event) []memory.EventType {
+	types := make([]memory.EventType, len(events))
+	for i := range events {
+		types[i] = events[i].Type
+	}
+	return types
 }
 
 func TestStaleLeaseCannotAppendCompactionEvent(t *testing.T) {
