@@ -1,5 +1,45 @@
 # memory - decisions
 
+- **2026-08-30 - conversational requests are canonically composed and snapshotted before transport.**
+  Every ordinary and post-tool conversational iteration rebuilds one complete
+  `ChatRequest` from the immutable code-owned system prompt, an optional
+  validated accepted rolling summary supplied by the compaction stage, current
+  tool schemas, and a suffix of durable root-user turns ending with the active
+  turn. The summary occupies a distinct system message immediately after the
+  base prompt and is charged by the same complete-request estimator; its durable
+  compaction identity and content-free byte count are recorded in the snapshot.
+  The stream flag is set before estimation. Canonical request bytes are the
+  standard Go JSON encoding of the exact request value passed to the OpenRouter
+  client; the replaceable estimator charges one token per UTF-8 byte and reports
+  `ceil(bytes / 4)` only as a rough diagnostic. Usable input is
+  `min(hard window, working ceiling) - output reserve - fixed margin`. A composer
+  may remove only whole older root-user turns, oldest first; it never removes
+  the active root turn or splits an assistant tool-call group from its matching
+  terminal results. Structurally incomplete tool groups retain the Stage 1
+  omit-whole projection. If the active turn cannot fit, the provider is not
+  called and the turn records `context_overflow` at `context_compose` with the
+  fixed safe message.
+
+- **2026-08-30 - context snapshots and local diagnostics contain manifests, never request content.**
+  After final composition and before provider authorization, every conversational
+  iteration appends one lease-fenced `context_snapshot` parented to the root user
+  message or terminal tool result that triggered it. Snapshot v1 records only
+  composer/estimator versions, iteration, selected and canonical model identity,
+  profile provenance and budgets, canonical byte counts and rough estimate,
+  request SHA-256, retained event frontier, message/tool counts, content-free
+  component byte counts, optional compaction identity/failure category, and
+  content-free placeholder manifests. It stores no prompt, message, summary,
+  tool schema, excerpt, secret, usage, or provider payload. Persistence is a
+  required pre-transport write and fails closed; an accepted snapshot is never
+  rolled back when authorization, transport, cancellation, or later persistence
+  fails. `/context` is an exact local command that performs only durable reads
+  and a hypothetical composition with no lease, event, activity update, or
+  provider call. It prints the latest validated snapshot and current projection,
+  approved budgets, safe counts/frontiers, byte diagnostics, headroom,
+  provenance, and fallback/staleness warnings. Invalid durable history or
+  snapshot data makes the command visibly fail rather than silently falling
+  back.
+
 - **2026-08-30 - one startup-resolved profile bounds every conversational request.**
   Each process resolves one immutable context profile before opening or resuming
   a conversational session. The profile keeps the configured model, canonical

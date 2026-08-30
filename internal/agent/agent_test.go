@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,9 @@ type step struct {
 
 type fakeHistory struct {
 	events         []memory.Event
+	ordered        []memory.Event
+	snapshotCount  int
+	snapshotErr    error
 	appendAttempts int
 	appendErrAt    int
 	appendBlockAt  int
@@ -45,6 +49,22 @@ type fakeHistory struct {
 }
 
 func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
+	if f.ordered == nil {
+		f.ordered = append([]memory.Event(nil), f.events...)
+	}
+	if input.Type == memory.EventContextSnapshot {
+		f.snapshotCount++
+		if f.snapshotErr != nil {
+			return memory.Event{}, f.snapshotErr
+		}
+		event := memory.Event{
+			ID: memory.EventID(fmt.Sprintf("snapshot-%d", f.snapshotCount)), SessionID: "test-session",
+			Sequence: int64(len(f.ordered) + 1), ParentID: input.ParentID, Type: input.Type,
+			Payload: append([]byte(nil), input.Payload...), FormatVersion: 1,
+		}
+		f.ordered = append(f.ordered, event)
+		return event, nil
+	}
 	f.appendAttempts++
 	if f.appendBlockAt == f.appendAttempts {
 		if f.appendEntered != nil {
@@ -59,7 +79,7 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 	event := memory.Event{
 		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
 		SessionID:     memory.SessionID("test-session"),
-		Sequence:      int64(len(f.events) + 1),
+		Sequence:      int64(len(f.ordered) + 1),
 		ParentID:      input.ParentID,
 		Type:          input.Type,
 		Role:          input.Role,
@@ -69,6 +89,7 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 		FormatVersion: 1,
 	}
 	f.events = append(f.events, event)
+	f.ordered = append(f.ordered, event)
 	if f.afterAppend != nil {
 		f.afterAppend(input)
 	}
@@ -79,7 +100,17 @@ func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
 	if f.onEvents != nil {
 		f.onEvents()
 	}
+	if f.ordered != nil {
+		return append([]memory.Event(nil), f.ordered...), f.eventsErr
+	}
 	return append([]memory.Event(nil), f.events...), f.eventsErr
+}
+
+func (f *fakeHistory) allEvents() []memory.Event {
+	if f.ordered != nil {
+		return f.ordered
+	}
+	return f.events
 }
 
 func newTestSession(client Client, model string) *Session {
@@ -169,6 +200,182 @@ func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
 	}
 	if !providerSawUser {
 		t.Fatal("provider was called before the user event was durable")
+	}
+}
+
+func TestSendComposesAndSnapshotsEveryProviderIteration(t *testing.T) {
+	history := &fakeHistory{}
+	providerEventCounts := []int{}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, openrouter.ToolCall{
+			ID: "call-1", Type: "function", Function: openrouter.FunctionCall{Name: "echo", Arguments: `{"value":"hi"}`},
+		}),
+		assistantStep("done", nil),
+	}}
+	client.onCall = func() { providerEventCounts = append(providerEventCounts, len(history.allEvents())) }
+	profile := testContextProfile("test-model")
+	session := New(client, profile, history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	extra := echoTool("echo", false, nil)
+
+	if err := session.Send(context.Background(), "go", &recorder{}, nil, extra); err != nil {
+		t.Fatal(err)
+	}
+	wantTypes := []memory.EventType{
+		memory.EventUserMessage,
+		memory.EventContextSnapshot,
+		memory.EventAssistantMessage,
+		memory.EventToolIntent,
+		memory.EventToolSucceeded,
+		memory.EventContextSnapshot,
+		memory.EventAssistantMessage,
+	}
+	allEvents := history.allEvents()
+	if len(allEvents) != len(wantTypes) {
+		t.Fatalf("events=%+v", allEvents)
+	}
+	for i, want := range wantTypes {
+		if allEvents[i].Type != want {
+			t.Fatalf("event %d type=%q, want %q", i, allEvents[i].Type, want)
+		}
+	}
+	if fmt.Sprint(providerEventCounts) != "[2 6]" {
+		t.Fatalf("provider observed event counts %v, want snapshots committed first", providerEventCounts)
+	}
+	if len(client.reqs) != 2 {
+		t.Fatalf("provider requests=%d", len(client.reqs))
+	}
+	toolSchemas := tools.SchemasWith([]tools.Tool{extra})
+	wantRequests := []openrouter.ChatRequest{
+		{
+			Model: "test-model", Stream: true, Reasoning: cloneReasoning(session.reasoning), MaxTokens: 16384,
+			Messages: []openrouter.Message{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: "go"},
+			},
+			Tools: toolSchemas,
+		},
+		{
+			Model: "test-model", Stream: true, Reasoning: cloneReasoning(session.reasoning), MaxTokens: 16384,
+			Messages: []openrouter.Message{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: "go"},
+				{Role: "assistant", ToolCalls: []openrouter.ToolCall{{
+					ID: "call-1", Type: "function", Function: openrouter.FunctionCall{Name: "echo", Arguments: `{"value":"hi"}`},
+				}}},
+				{Role: "tool", Content: `echo:{"value":"hi"}`, ToolCallID: "call-1"},
+			},
+			Tools: toolSchemas,
+		},
+	}
+	if !reflect.DeepEqual(client.reqs, wantRequests) {
+		t.Fatalf("provider requests mismatch\n got: %#v\nwant: %#v", client.reqs, wantRequests)
+	}
+	for i, eventIndex := range []int{1, 5} {
+		var snapshot memory.ContextSnapshotPayload
+		if err := json.Unmarshal(allEvents[eventIndex].Payload, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		estimate, err := (CanonicalRequestEstimator{}).Estimate(client.reqs[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Iteration != i+1 || snapshot.RequestSHA256 != estimate.RequestSHA256 ||
+			snapshot.SerializedBytes != estimate.SerializedBytes {
+			t.Fatalf("snapshot %d=%+v estimate=%+v", i, snapshot, estimate)
+		}
+		if allEvents[eventIndex].Content != "" {
+			t.Fatalf("snapshot stored content: %+v", allEvents[eventIndex])
+		}
+	}
+	if allEvents[1].ParentID != allEvents[0].ID || allEvents[5].ParentID != allEvents[4].ID {
+		t.Fatalf("snapshot parents=%q,%q", allEvents[1].ParentID, allEvents[5].ParentID)
+	}
+
+	firstComposition, err := session.composer.Compose(ContextComposeInput{
+		Profile: profile, Events: []memory.Event{allEvents[0]}, ActiveRootID: allEvents[0].ID,
+		TriggerEventID: allEvents[0].ID, Iteration: 1, Tools: toolSchemas, Reasoning: session.reasoning,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondComposition, err := session.composer.Compose(ContextComposeInput{
+		Profile: profile, Events: []memory.Event{allEvents[0], allEvents[2], allEvents[3], allEvents[4]},
+		ActiveRootID: allEvents[0].ID, TriggerEventID: allEvents[4].ID, Iteration: 2,
+		Tools: toolSchemas, Reasoning: session.reasoning,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstSnapshotJSON, err := json.Marshal(firstComposition.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSnapshotJSON, err := json.Marshal(secondComposition.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionID := allEvents[3].ExecutionID
+	if executionID == "" || allEvents[4].ExecutionID != executionID {
+		t.Fatalf("tool execution correlation=%q,%q", executionID, allEvents[4].ExecutionID)
+	}
+	wantEvents := []memory.Event{
+		{ID: "event-1", SessionID: "test-session", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go", FormatVersion: 1},
+		{ID: "snapshot-1", SessionID: "test-session", Sequence: 2, ParentID: "event-1", Type: memory.EventContextSnapshot, Payload: firstSnapshotJSON, FormatVersion: 1},
+		{ID: "event-2", SessionID: "test-session", Sequence: 3, ParentID: "event-1", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Payload: json.RawMessage(`{"tool_calls":[{"id":"call-1","name":"echo","arguments":"{\"value\":\"hi\"}"}]}`), FormatVersion: 1},
+		{ID: "event-3", SessionID: "test-session", Sequence: 4, ParentID: "event-2", Type: memory.EventToolIntent, ExecutionID: executionID,
+			Payload: json.RawMessage(`{"call":{"id":"call-1","name":"echo","arguments":"{\"value\":\"hi\"}"}}`), FormatVersion: 1},
+		{ID: "event-4", SessionID: "test-session", Sequence: 5, ParentID: "event-3", Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+			ExecutionID: executionID, Content: `echo:{"value":"hi"}`, Payload: json.RawMessage(`{"tool_call_id":"call-1","is_error":false}`), FormatVersion: 1},
+		{ID: "snapshot-2", SessionID: "test-session", Sequence: 6, ParentID: "event-4", Type: memory.EventContextSnapshot, Payload: secondSnapshotJSON, FormatVersion: 1},
+		{ID: "event-5", SessionID: "test-session", Sequence: 7, ParentID: "event-4", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Content: "done", Payload: json.RawMessage(`{}`), FormatVersion: 1},
+	}
+	if !reflect.DeepEqual(allEvents, wantEvents) {
+		t.Fatalf("ordered durable history mismatch\n got: %#v\nwant: %#v", allEvents, wantEvents)
+	}
+}
+
+func TestSendFailsClosedWhenContextSnapshotCannotPersist(t *testing.T) {
+	history := &fakeHistory{snapshotErr: errors.New("disk full")}
+	client := &fakeClient{steps: []step{assistantStep("not called", nil)}}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+
+	err := session.Send(context.Background(), "hello", &recorder{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "persist context snapshot") {
+		t.Fatalf("Send error=%v", err)
+	}
+	if len(client.reqs) != 0 || len(history.events) != 1 {
+		t.Fatalf("provider requests=%d events=%+v", len(client.reqs), history.events)
+	}
+}
+
+func TestSendRecordsContextOverflowBeforeProviderTransport(t *testing.T) {
+	history := &fakeHistory{}
+	client := &fakeClient{steps: []step{assistantStep("not called", nil)}}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+
+	err := session.Send(context.Background(), strings.Repeat("x", 250000), &recorder{}, nil)
+	if !errors.Is(err, ErrContextOverflow) {
+		t.Fatalf("Send error=%v, want ErrContextOverflow", err)
+	}
+	if len(client.reqs) != 0 || len(history.events) != 2 {
+		t.Fatalf("provider requests=%d events=%+v", len(client.reqs), history.events)
+	}
+	terminal := history.events[1]
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Type != memory.EventTurnFailed || terminal.Content != "The turn could not fit within the configured model context." ||
+		payload.Classification != memory.ClassificationContextOverflow || payload.Stage != memory.StageContextCompose {
+		t.Fatalf("overflow terminal=%+v payload=%+v", terminal, payload)
 	}
 }
 

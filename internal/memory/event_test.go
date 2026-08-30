@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +37,47 @@ func TestAssistantMessagePayloadUsageJSONPreservesPartialZeroAndAbsence(t *testi
 	}
 	if string(absent) != `{}` {
 		t.Fatalf("absent usage JSON=%s, want {}", absent)
+	}
+}
+
+func TestContextSnapshotPayloadValidation(t *testing.T) {
+	valid := ContextSnapshotPayload{
+		SchemaVersion: 1, ComposerVersion: "context-composer-v1", EstimatorVersion: "canonical-json-bytes-v1",
+		Iteration: 1, ConfiguredModel: "vendor/model", CanonicalModel: "vendor/model",
+		ProfileSource: "explicit_override", HardWindowTokens: 262144, WorkingCeilingTokens: 262144,
+		OutputReserveTokens: 16384, EstimationMarginTokens: 4096, UsableInputBytes: 241664,
+		SerializedBytes: 1234, RoughTokenEstimate: 309, RequestSHA256: strings.Repeat("a", 64),
+		RetainedFirstEventID: "event-1", RetainedFirstSequence: 1,
+		RetainedLastEventID: "event-2", RetainedLastSequence: 2,
+		MessageCount: 3, ToolSchemaCount: 2, SystemMessageBytes: 100, HistoryMessageBytes: 300,
+		ToolSchemaBytes: 200, RequestSettingsBytes: 80,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*ContextSnapshotPayload)
+	}{
+		{"unsupported version", func(p *ContextSnapshotPayload) { p.SchemaVersion = 2 }},
+		{"bad arithmetic", func(p *ContextSnapshotPayload) { p.UsableInputBytes++ }},
+		{"oversized request", func(p *ContextSnapshotPayload) { p.SerializedBytes = p.UsableInputBytes + 1 }},
+		{"bad hash", func(p *ContextSnapshotPayload) { p.RequestSHA256 = "secret" }},
+		{"backward frontier", func(p *ContextSnapshotPayload) { p.RetainedLastSequence = 0 }},
+		{"unknown failure", func(p *ContextSnapshotPayload) { p.CompactionFailureCategory = "raw provider error" }},
+		{"unexpected advertised metadata", func(p *ContextSnapshotPayload) { p.AdvertisedModel = "secret" }},
+		{"compaction without summary", func(p *ContextSnapshotPayload) { p.ActiveCompactionEventID = "compaction-1" }},
+		{"summary without compaction", func(p *ContextSnapshotPayload) { p.SummaryMessageBytes = 10 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := valid
+			tt.mutate(&payload)
+			if err := payload.Validate(); err == nil {
+				t.Fatalf("invalid payload validated: %+v", payload)
+			}
+		})
 	}
 }
 

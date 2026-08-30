@@ -23,6 +23,7 @@ type renderedOutput struct {
 
 type turnProgress struct {
 	rendered        renderedOutput
+	rootTurnID      memory.EventID
 	requestParentID memory.EventID
 }
 
@@ -138,26 +139,58 @@ func (s *Session) runOwnedTurn(
 	extra []tools.Tool,
 ) error {
 	requestParentID := progress.requestParentID
+	rootTurnID := progress.rootTurnID
+	if rootTurnID == "" {
+		rootTurnID = requestParentID
+	}
 	rendered := &progress.rendered
+	iteration := 0
 	for {
-		if !coordinator.transitionIfActive(memory.StageProvider, func() {
+		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
 		}) {
 			return s.observeTurnContext(coordinator)
 		}
 		rendered.begin()
+		iteration++
 
-		messages, err := s.requestMessages(coordinator.ctx)
+		events, err := s.history.Events(coordinator.ctx)
+		if err == nil {
+			if ctxErr := coordinator.ctx.Err(); ctxErr != nil {
+				err = ctxErr
+			}
+		}
 		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
+		}
+		composed, err := s.composer.Compose(ContextComposeInput{
+			Profile: s.profile, Events: events, ActiveRootID: rootTurnID,
+			TriggerEventID: requestParentID, Iteration: iteration,
+			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
+		})
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
 			return s.classifyLocalError(coordinator, err)
 		}
-		req := openrouter.ChatRequest{
-			Model:     s.profile.Model(),
-			Messages:  messages,
-			Tools:     tools.SchemasWith(extra),
-			Reasoning: s.reasoning,
-			MaxTokens: s.profile.OutputReserveTokens(),
+		snapshotPayload, err := json.Marshal(composed.Snapshot)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("encode context snapshot: %w", err))
 		}
+		if !coordinator.beginCommitBoundary() {
+			return s.observeTurnContext(coordinator)
+		}
+		_, err = s.history.Append(coordinator.ctx, lease, memory.EventInput{
+			ParentID: requestParentID, Type: memory.EventContextSnapshot, Payload: snapshotPayload,
+		})
+		if err != nil {
+			coordinator.abortCommitBoundary()
+			return s.classifyLocalError(coordinator, fmt.Errorf("persist context snapshot: %w", err))
+		}
+		coordinator.finishCommitBoundary(memory.StageProvider)
+		req := composed.Request
 		if err := s.owner.Authorize(coordinator.ctx, lease); err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("authorize provider start: %w", err))
 		}
@@ -516,7 +549,8 @@ func validateAssistantResponse(msg openrouter.Message) error {
 
 func causeHasDurableTerminal(kind causeKind) bool {
 	return kind == causeProviderError || kind == causeProviderInvalid ||
-		kind == causeCallerCancelled || kind == causeCallerDeadline
+		kind == causeCallerCancelled || kind == causeCallerDeadline ||
+		kind == causeContextOverflow
 }
 
 func (s *Session) appendTerminal(
@@ -545,6 +579,9 @@ func (s *Session) appendTerminal(
 	case causeCallerDeadline:
 		input.Type = memory.EventTurnInterrupted
 		payload.Classification = memory.ClassificationCallerDeadlineExceeded
+	case causeContextOverflow:
+		input.Type = memory.EventTurnFailed
+		payload.Classification = memory.ClassificationContextOverflow
 	default:
 		return nil
 	}

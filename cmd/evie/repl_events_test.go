@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -241,7 +242,7 @@ func TestSessionToREPLPresentsCommittedAssistantBeforeTerminalCause(t *testing.T
 						}
 					}
 				} else {
-					history.appendErrAt = 3 // tool intent, before ToolCall presentation
+					history.appendErrAt = 4 // tool intent, before ToolCall presentation
 				}
 				client := &fakeREPLBoundaryClient{deltas: presentation.deltas}
 				var out bytes.Buffer
@@ -278,4 +279,47 @@ func (c *fakeREPLBoundaryClient) ChatStream(
 			ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: "missing", Arguments: `{}`},
 		}},
 	}}}}, nil
+}
+
+func TestContextCommandIsLocalReadOnlyAndEventless(t *testing.T) {
+	client := &replCancellationClient{}
+	history := &recordingREPLHistory{}
+	session := agent.New(client, evieTestContextProfile("test/model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "session",
+	}, testTurnOwner{})
+	var out strings.Builder
+
+	runREPLContextIO(context.Background(), session, bufio.NewScanner(strings.NewReader("/context\n")), &out)
+
+	if client.calls.Load() != 0 {
+		t.Fatalf("provider calls=%d", client.calls.Load())
+	}
+	history.mu.Lock()
+	defer history.mu.Unlock()
+	if len(history.events) != 0 {
+		t.Fatalf("/context created events: %+v", history.events)
+	}
+	got := out.String()
+	for _, want := range []string{"Context\n", "profile: explicit_override", "usable input bytes:", "hypothetical projection:", "headroom bytes:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output %q missing %q", got, want)
+		}
+	}
+}
+
+func TestContextDiagnosticsPrintLatestSnapshotCounts(t *testing.T) {
+	var out strings.Builder
+	writeContextDiagnostics(&out, agent.ContextDiagnostics{
+		Profile: evieTestContextProfile("test/model").Diagnostics(),
+		LatestSnapshot: &agent.DurableContextSnapshotDiagnostics{
+			EventID: "snapshot-1", Sequence: 2,
+			Manifest: memory.ContextSnapshotPayload{
+				MessageCount: 7, ToolSchemaCount: 5,
+				Placeholders: []memory.ContextPlaceholderManifest{{EventID: "result-1"}},
+			},
+		},
+	})
+	if got := out.String(); !strings.Contains(got, "latest snapshot counts: messages=7 tools=5 placeholders=1") {
+		t.Fatalf("output %q omitted latest snapshot counts", got)
+	}
 }

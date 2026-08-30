@@ -441,7 +441,7 @@ func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *t
 						}
 					}
 				} else {
-					history.appendErrAt = 3 // intent append, before ToolCall presentation
+					history.appendErrAt = 4 // intent append, before ToolCall presentation
 					history.appendErr = errors.New("lease fence lost")
 					owner.leaseLost = true
 				}
@@ -484,7 +484,7 @@ func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *t
 }
 
 func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
-	history := &fakeHistory{appendErrAt: 2}
+	history := &fakeHistory{appendErrAt: 3}
 	client := &fakeClient{steps: []fakeStep{{deltas: []string{"partial"}, content: "partial"}}}
 	session := agent.New(client, webTestContextProfile("test"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
@@ -501,7 +501,7 @@ func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
 }
 
 func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
-	history := &fakeHistory{appendErrAt: 2}
+	history := &fakeHistory{appendErrAt: 3}
 	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}, content: "unrendered final"}}}
 	session := agent.New(client, webTestContextProfile("test"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",

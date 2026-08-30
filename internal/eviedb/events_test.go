@@ -6,11 +6,97 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 )
+
+func validContextSnapshotPayload(first, last memory.Event) memory.ContextSnapshotPayload {
+	return memory.ContextSnapshotPayload{
+		SchemaVersion: memory.ContextSnapshotSchemaVersion, ComposerVersion: "context-composer-v1",
+		EstimatorVersion: "canonical-json-bytes-v1", Iteration: 1,
+		ConfiguredModel: "test/model", CanonicalModel: "test/model", ProfileSource: "explicit_override",
+		HardWindowTokens: 262144, WorkingCeilingTokens: 262144, OutputReserveTokens: 16384,
+		EstimationMarginTokens: 4096, UsableInputBytes: 241664, SerializedBytes: 1000,
+		RoughTokenEstimate: 250, RequestSHA256: strings.Repeat("a", 64),
+		RetainedFirstEventID: first.ID, RetainedFirstSequence: first.Sequence,
+		RetainedLastEventID: last.ID, RetainedLastSequence: last.Sequence,
+		MessageCount: 2, SystemMessageBytes: 100, HistoryMessageBytes: 100,
+		RequestSettingsBytes: 50,
+	}
+}
+
+func TestContextSnapshotAppendValidatesContentFreeManifestAndFrontier(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "hello",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := validContextSnapshotPayload(root, root)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	})
+	if err != nil {
+		t.Fatalf("append valid snapshot: %v", err)
+	}
+	if snapshot.Content != "" || snapshot.Role != "" || snapshot.ExecutionID != "" || snapshot.ParentID != root.ID {
+		t.Fatalf("snapshot envelope=%+v", snapshot)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	}); err == nil {
+		t.Fatal("snapshot delayed past its trigger was accepted")
+	}
+
+	invalid := []memory.EventInput{
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Role: memory.RoleAssistant, Payload: encoded},
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Content: "prompt content", Payload: encoded},
+		{Type: memory.EventContextSnapshot, Payload: encoded},
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: json.RawMessage(`{"schema_version":1,"secret":"value"}`)},
+	}
+	for _, input := range invalid {
+		if got, err := store.appendEventForTest(ctx, session.ID, input); err == nil {
+			t.Fatalf("invalid snapshot appended: %+v", got)
+		}
+	}
+
+	assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "next",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidFrontier := validContextSnapshotPayload(assistant, nextRoot)
+	invalidFrontierJSON, err := json.Marshal(invalidFrontier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: nextRoot.ID, Type: memory.EventContextSnapshot, Payload: invalidFrontierJSON,
+	}); err == nil {
+		t.Fatal("snapshot with a non-root retained frontier was accepted")
+	}
+}
 
 type testEventExecutor struct{ db *sql.DB }
 
