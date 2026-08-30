@@ -3,6 +3,7 @@ package eviedb
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -49,9 +50,118 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 		}
 		input.Payload = canonical
 	}
+	if input.Type == memory.EventContextSnapshot {
+		snapshot, canonical, err := decodeCanonicalContextSnapshotPayload(input.Payload)
+		if err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode context snapshot payload: %w", err)
+		}
+		if err := snapshot.Validate(); err != nil {
+			return memory.EventInput{}, err
+		}
+		if input.ParentID == "" || input.Content != "" || input.Role != "" || input.ExecutionID != "" {
+			return memory.EventInput{}, errors.New("context snapshots require a parent and cannot carry content, role, or execution ID")
+		}
+		input.Payload = canonical
+	}
+	if input.Type == memory.EventContextCompacted {
+		compacted, canonical, err := decodeCanonicalContextCompactedPayload(input.Payload)
+		if err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode context compaction payload: %w", err)
+		}
+		if err := compacted.Validate(input.Content); err != nil {
+			return memory.EventInput{}, err
+		}
+		if input.ParentID != "" || input.Role != "" || input.ExecutionID != "" {
+			return memory.EventInput{}, errors.New("context compactions cannot carry a parent, role, or execution ID")
+		}
+		input.Payload = canonical
+	}
 
 	input.Payload = append(json.RawMessage(nil), input.Payload...)
 	return input, nil
+}
+
+func decodeCanonicalContextCompactedPayload(raw json.RawMessage) (memory.ContextCompactedPayload, json.RawMessage, error) {
+	if err := rejectDuplicateTopLevelJSONFields(raw); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var compacted memory.ContextCompactedPayload
+	if err := decoder.Decode(&compacted); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	canonical, err := json.Marshal(compacted)
+	if err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	return compacted, canonical, nil
+}
+
+func decodeCanonicalContextSnapshotPayload(raw json.RawMessage) (memory.ContextSnapshotPayload, json.RawMessage, error) {
+	if err := rejectDuplicateTopLevelJSONFields(raw); err != nil {
+		return memory.ContextSnapshotPayload{}, nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var snapshot memory.ContextSnapshotPayload
+	if err := decoder.Decode(&snapshot); err != nil {
+		return memory.ContextSnapshotPayload{}, nil, err
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return memory.ContextSnapshotPayload{}, nil, err
+	}
+	canonical, err := json.Marshal(snapshot)
+	if err != nil {
+		return memory.ContextSnapshotPayload{}, nil, err
+	}
+	return snapshot, canonical, nil
+}
+
+func rejectDuplicateTopLevelJSONFields(raw json.RawMessage) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if delim, ok := opening.(json.Delim); !ok || delim != '{' {
+		return errors.New("payload must be a JSON object")
+	}
+	seen := make(map[string]struct{})
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := token.(string)
+		if !ok {
+			return errors.New("payload key must be a string")
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("payload repeats field %q", key)
+		}
+		seen[key] = struct{}{}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	return ensureJSONEOF(decoder)
+}
+
+func ensureJSONEOF(decoder *json.Decoder) error {
+	if token, err := decoder.Token(); err == nil {
+		return fmt.Errorf("payload has trailing data %v", token)
+	} else if !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
 }
 
 func decodeCanonicalTerminalPayload(raw json.RawMessage) (memory.TurnTerminalPayload, json.RawMessage, error) {
@@ -160,6 +270,24 @@ func (s *Store) appendEvent(
 			return memory.Event{}, err
 		}
 	}
+	if input.Type == memory.EventContextSnapshot {
+		var snapshot memory.ContextSnapshotPayload
+		if err := json.Unmarshal(input.Payload, &snapshot); err != nil {
+			return memory.Event{}, fmt.Errorf("decode canonical context snapshot payload: %w", err)
+		}
+		if err := validateContextSnapshotCorrelation(ctx, executor, sessionID, input.ParentID, snapshot); err != nil {
+			return memory.Event{}, err
+		}
+	}
+	if input.Type == memory.EventContextCompacted {
+		var compacted memory.ContextCompactedPayload
+		if err := json.Unmarshal(input.Payload, &compacted); err != nil {
+			return memory.Event{}, fmt.Errorf("decode canonical context compaction payload: %w", err)
+		}
+		if err := validateContextCompactionCorrelation(ctx, executor, sessionID, compacted); err != nil {
+			return memory.Event{}, err
+		}
+	}
 
 	id, err := uuid.NewRandom()
 	if err != nil {
@@ -236,6 +364,227 @@ func (s *Store) appendEvent(
 		event.ProjectID = memory.ProjectID(projectID.String)
 	}
 	return event, nil
+}
+
+func validateContextCompactionCorrelation(
+	ctx context.Context,
+	executor eventQueryExecutor,
+	sessionID memory.SessionID,
+	payload memory.ContextCompactedPayload,
+) error {
+	var priorID, priorContent, priorPayloadJSON string
+	priorErr := executor.queryRowContext(ctx, `
+		SELECT id, content, payload_json
+		FROM events
+		WHERE session_id = ? AND event_type = ?
+		ORDER BY sequence DESC
+		LIMIT 1
+	`, sessionID, memory.EventContextCompacted).Scan(&priorID, &priorContent, &priorPayloadJSON)
+	var priorPayload memory.ContextCompactedPayload
+	switch {
+	case errors.Is(priorErr, sql.ErrNoRows):
+		if payload.Generation != 1 || payload.PriorCompactionEventID != "" {
+			return errors.New("context compaction first generation is inconsistent")
+		}
+	case priorErr != nil:
+		return fmt.Errorf("load prior context compaction: %w", priorErr)
+	default:
+		decoded, canonical, err := decodeCanonicalContextCompactedPayload(json.RawMessage(priorPayloadJSON))
+		if err != nil || string(canonical) != priorPayloadJSON {
+			return errors.New("prior context compaction payload is malformed")
+		}
+		if err := decoded.Validate(priorContent); err != nil {
+			return fmt.Errorf("validate prior context compaction: %w", err)
+		}
+		priorPayload = decoded
+		if err := payload.ValidateAdvance(memory.EventID(priorID), priorPayload); err != nil {
+			return err
+		}
+	}
+
+	type frontier struct {
+		typeValue memory.EventType
+		role      memory.EventRole
+		parent    sql.NullString
+		sequence  int64
+		payload   json.RawMessage
+	}
+	load := func(id memory.EventID) (frontier, error) {
+		var eventType, role, payloadJSON string
+		var value frontier
+		err := executor.queryRowContext(ctx, `
+			SELECT event_type, COALESCE(role, ''), parent_id, sequence, payload_json
+			FROM events WHERE session_id = ? AND id = ?
+		`, sessionID, id).Scan(&eventType, &role, &value.parent, &value.sequence, &payloadJSON)
+		if errors.Is(err, sql.ErrNoRows) {
+			return frontier{}, fmt.Errorf("context compaction frontier event %q is not accepted in session %q", id, sessionID)
+		}
+		if err != nil {
+			return frontier{}, fmt.Errorf("load context compaction frontier event %q: %w", id, err)
+		}
+		value.typeValue = memory.EventType(eventType)
+		value.role = memory.EventRole(role)
+		value.payload = json.RawMessage(payloadJSON)
+		return value, nil
+	}
+	first, err := load(payload.CoveredFirstEventID)
+	if err != nil {
+		return err
+	}
+	last, err := load(payload.CoveredLastEventID)
+	if err != nil {
+		return err
+	}
+	retained, err := load(payload.FirstRetainedEventID)
+	if err != nil {
+		return err
+	}
+	if first.typeValue != memory.EventUserMessage || first.role != memory.RoleUser || first.parent.Valid ||
+		first.sequence != payload.CoveredFirstSequence {
+		return errors.New("context compaction covered frontier does not start at a root turn")
+	}
+	if priorErr == nil {
+		if payload.CoveredFirstEventID == priorPayload.CoveredFirstEventID {
+			return errors.New("context compaction covered frontier overlaps or skips the prior frontier")
+		}
+	} else if first.sequence != 1 {
+		return errors.New("context compaction first generation does not start at the first root turn")
+	}
+	if last.sequence != payload.CoveredLastSequence || retained.sequence <= last.sequence ||
+		retained.typeValue != memory.EventUserMessage || retained.role != memory.RoleUser || retained.parent.Valid {
+		return errors.New("context compaction retained frontier is invalid")
+	}
+	var nextRootID string
+	var nextRootSequence int64
+	if err := executor.queryRowContext(ctx, `
+		SELECT id, sequence
+		FROM events
+		WHERE session_id = ? AND sequence > ? AND event_type = ? AND role = ? AND parent_id IS NULL
+		ORDER BY sequence
+		LIMIT 1
+	`, sessionID, last.sequence, memory.EventUserMessage, memory.RoleUser).Scan(&nextRootID, &nextRootSequence); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("context compaction retained frontier has no next root turn")
+		}
+		return fmt.Errorf("load next retained root turn: %w", err)
+	}
+	if memory.EventID(nextRootID) != payload.FirstRetainedEventID || nextRootSequence != retained.sequence {
+		return errors.New("context compaction retained frontier is not the next root turn")
+	}
+	if last.typeValue == memory.EventAssistantMessage {
+		var assistant memory.AssistantMessagePayload
+		if err := json.Unmarshal(last.payload, &assistant); err != nil {
+			return fmt.Errorf("decode covered terminal assistant payload: %w", err)
+		}
+		if len(assistant.ToolCalls) != 0 {
+			return errors.New("context compaction covered frontier ends with an unfinished tool call")
+		}
+	} else if last.typeValue != memory.EventTurnFailed && last.typeValue != memory.EventTurnInterrupted {
+		return errors.New("context compaction covered frontier does not end at a completed turn")
+	}
+	return nil
+}
+
+func validateContextSnapshotCorrelation(
+	ctx context.Context,
+	executor eventQueryExecutor,
+	sessionID memory.SessionID,
+	parentID memory.EventID,
+	snapshot memory.ContextSnapshotPayload,
+) error {
+	var parentType string
+	var parentSequence int64
+	err := executor.queryRowContext(ctx, `
+		SELECT event_type, sequence
+		FROM events
+		WHERE session_id = ? AND id = ?
+	`, sessionID, parentID).Scan(&parentType, &parentSequence)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("context snapshot parent ID %q is not an accepted event in session %q", parentID, sessionID)
+	}
+	if err != nil {
+		return fmt.Errorf("validate context snapshot parent: %w", err)
+	}
+	parentEventType := memory.EventType(parentType)
+	if parentEventType != memory.EventUserMessage && parentEventType != memory.EventToolSucceeded &&
+		parentEventType != memory.EventToolFailed && parentEventType != memory.EventToolCancelled {
+		return fmt.Errorf("context snapshot parent %q is not a durable provider trigger", parentID)
+	}
+	if snapshot.RetainedLastEventID != parentID || snapshot.RetainedLastSequence != parentSequence {
+		return errors.New("context snapshot retained endpoint does not match its provider trigger")
+	}
+	var latestEventID, latestEventType, latestPayloadJSON string
+	var latestSequence int64
+	err = executor.queryRowContext(ctx, `
+		SELECT id, event_type, sequence, payload_json
+		FROM events
+		WHERE session_id = ?
+		ORDER BY sequence DESC
+		LIMIT 1
+	`, sessionID).Scan(&latestEventID, &latestEventType, &latestSequence, &latestPayloadJSON)
+	if err != nil {
+		return fmt.Errorf("validate latest context snapshot trigger: %w", err)
+	}
+	if memory.EventID(latestEventID) != parentID {
+		if memory.EventID(latestEventID) != snapshot.ActiveCompactionEventID ||
+			memory.EventType(latestEventType) != memory.EventContextCompacted || latestSequence != parentSequence+1 {
+			return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
+		}
+		compacted, _, err := decodeCanonicalContextCompactedPayload(json.RawMessage(latestPayloadJSON))
+		if err != nil || compacted.Trigger != memory.ContextCompactionAutomatic {
+			return errors.New("context snapshot intervening compaction is invalid")
+		}
+		if snapshot.RetainedFirstEventID != compacted.FirstRetainedEventID {
+			return errors.New("context snapshot retained frontier does not match its automatic compaction")
+		}
+	}
+	var firstType, firstRole string
+	var firstParent sql.NullString
+	var firstSequence int64
+	err = executor.queryRowContext(ctx, `
+		SELECT event_type, COALESCE(role, ''), parent_id, sequence
+		FROM events
+		WHERE session_id = ? AND id = ?
+	`, sessionID, snapshot.RetainedFirstEventID).Scan(&firstType, &firstRole, &firstParent, &firstSequence)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("context snapshot retained first event %q is not accepted in session %q", snapshot.RetainedFirstEventID, sessionID)
+	}
+	if err != nil {
+		return fmt.Errorf("validate context snapshot retained frontier: %w", err)
+	}
+	if memory.EventType(firstType) != memory.EventUserMessage || memory.EventRole(firstRole) != memory.RoleUser ||
+		firstParent.Valid || firstSequence != snapshot.RetainedFirstSequence || firstSequence > parentSequence {
+		return errors.New("context snapshot retained starting frontier is inconsistent")
+	}
+	var previousPlaceholderSequence int64
+	for _, placeholder := range snapshot.Placeholders {
+		var eventType string
+		var content string
+		var sequence int64
+		err := executor.queryRowContext(ctx, `
+			SELECT event_type, content, sequence
+			FROM events
+			WHERE session_id = ? AND id = ?
+		`, sessionID, placeholder.EventID).Scan(&eventType, &content, &sequence)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("context snapshot placeholder event %q is not accepted in session %q", placeholder.EventID, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("validate context snapshot placeholder: %w", err)
+		}
+		typeValue := memory.EventType(eventType)
+		if (typeValue != memory.EventToolSucceeded && typeValue != memory.EventToolFailed &&
+			typeValue != memory.EventToolCancelled) || sequence < firstSequence || sequence > parentSequence ||
+			sequence <= previousPlaceholderSequence {
+			return fmt.Errorf("context snapshot placeholder event %q is outside the retained ordered tool results", placeholder.EventID)
+		}
+		digest := sha256.Sum256([]byte(content))
+		if placeholder.OriginalBytes != int64(len(content)) || placeholder.SHA256 != fmt.Sprintf("%x", digest) {
+			return fmt.Errorf("context snapshot placeholder event %q does not match durable content", placeholder.EventID)
+		}
+		previousPlaceholderSequence = sequence
+	}
+	return nil
 }
 
 func validateTerminalCorrelation(

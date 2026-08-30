@@ -2249,7 +2249,7 @@ func TestCallerInterruptionCapturesExactLifecycleStage(t *testing.T) {
 			},
 		},
 		{
-			name: "provider", stage: memory.StageProvider,
+			name: "context compose", stage: memory.StageContextCompose,
 			run: func(ctx context.Context, cancel context.CancelFunc, history *fakeHistory, events *recorder) error {
 				history.onEvents = cancel
 				return ownedSession(&fakeClient{}, history, &scriptedOwner{}).Send(ctx, "go", events, nil)

@@ -2,15 +2,365 @@ package eviedb
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 )
+
+func validContextSnapshotPayload(first, last memory.Event) memory.ContextSnapshotPayload {
+	return memory.ContextSnapshotPayload{
+		SchemaVersion: memory.ContextSnapshotSchemaVersion, ComposerVersion: "context-composer-v1",
+		EstimatorVersion: "canonical-json-bytes-v1", Iteration: 1,
+		ConfiguredModel: "test/model", CanonicalModel: "test/model", ProfileSource: "explicit_override",
+		HardWindowTokens: 262144, WorkingCeilingTokens: 262144, OutputReserveTokens: 16384,
+		EstimationMarginTokens: 4096, UsableInputBytes: 241664, SerializedBytes: 1000,
+		RoughTokenEstimate: 250, RequestSHA256: strings.Repeat("a", 64),
+		RetainedFirstEventID: first.ID, RetainedFirstSequence: first.Sequence,
+		RetainedLastEventID: last.ID, RetainedLastSequence: last.Sequence,
+		MessageCount: 2, SystemMessageBytes: 100, HistoryMessageBytes: 100,
+		RequestSettingsBytes: 50,
+	}
+}
+
+func validContextCompactionSummary() string {
+	var summary strings.Builder
+	for _, heading := range memory.ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summary, "## %s\nkept\n\n", heading)
+	}
+	return summary.String()
+}
+
+func TestContextSnapshotAppendValidatesContentFreeManifestAndFrontier(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "hello",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := validContextSnapshotPayload(root, root)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	})
+	if err != nil {
+		t.Fatalf("append valid snapshot: %v", err)
+	}
+	if snapshot.Content != "" || snapshot.Role != "" || snapshot.ExecutionID != "" || snapshot.ParentID != root.ID {
+		t.Fatalf("snapshot envelope=%+v", snapshot)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	}); err == nil {
+		t.Fatal("snapshot delayed past its trigger was accepted")
+	}
+
+	invalid := []memory.EventInput{
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Role: memory.RoleAssistant, Payload: encoded},
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Content: "prompt content", Payload: encoded},
+		{Type: memory.EventContextSnapshot, Payload: encoded},
+		{ParentID: root.ID, Type: memory.EventContextSnapshot, Payload: json.RawMessage(`{"schema_version":1,"secret":"value"}`)},
+	}
+	for _, input := range invalid {
+		if got, err := store.appendEventForTest(ctx, session.ID, input); err == nil {
+			t.Fatalf("invalid snapshot appended: %+v", got)
+		}
+	}
+
+	assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "next",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidFrontier := validContextSnapshotPayload(assistant, nextRoot)
+	invalidFrontierJSON, err := json.Marshal(invalidFrontier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: nextRoot.ID, Type: memory.EventContextSnapshot, Payload: invalidFrontierJSON,
+	}); err == nil {
+		t.Fatal("snapshot with a non-root retained frontier was accepted")
+	}
+}
+
+func TestContextSnapshotAppendCorrelatesPlaceholderWithDurableToolResult(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantPayload, err := json.Marshal(memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{
+		ID: "call-1", Name: "large", Arguments: `{}`,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: assistantPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultContent := strings.Repeat("result", 1000)
+	resultPayload, err := json.Marshal(memory.ToolResultPayload{ToolCallID: "call-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: assistant.ID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+		Content: resultContent, Payload: resultPayload,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256([]byte(resultContent))
+	payload := validContextSnapshotPayload(root, result)
+	payload.Placeholders = []memory.ContextPlaceholderManifest{{
+		EventID: result.ID, OriginalBytes: int64(len(resultContent)), ProjectedBytes: 1200,
+		SHA256: fmt.Sprintf("%x", digest),
+	}}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: result.ID, Type: memory.EventContextSnapshot, Payload: encoded,
+	}); err != nil {
+		t.Fatalf("append correlated placeholder snapshot: %v", err)
+	}
+
+	other, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRoot, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := validContextSnapshotPayload(otherRoot, otherRoot)
+	bad.Placeholders = []memory.ContextPlaceholderManifest{{
+		EventID: result.ID, OriginalBytes: int64(len(resultContent)), ProjectedBytes: 1200,
+		SHA256: fmt.Sprintf("%x", digest),
+	}}
+	badJSON, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		ParentID: otherRoot.ID, Type: memory.EventContextSnapshot, Payload: badJSON,
+	}); err == nil {
+		t.Fatal("snapshot accepted placeholder from another session")
+	}
+}
+
+func TestAutomaticContextSnapshotRequiresCompactionRetainedFrontier(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "first",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstAssistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: firstRoot.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+		Content: "answer", Payload: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retainedRoot, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "active",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := validContextCompactionSummary()
+	digest := sha256.Sum256([]byte(summary))
+	compactionPayload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 1,
+		Trigger:             memory.ContextCompactionAutomatic,
+		CoveredFirstEventID: firstRoot.ID, CoveredFirstSequence: firstRoot.Sequence,
+		CoveredLastEventID: firstAssistant.ID, CoveredLastSequence: firstAssistant.Sequence,
+		FirstRetainedEventID: retainedRoot.ID, CanonicalModel: "test/model",
+		PromptVersion: memory.ContextCompactionPromptVersion, SummaryBytes: int64(len(summary)),
+		SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	compactionJSON, err := json.Marshal(compactionPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compacted, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: compactionJSON,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := validContextSnapshotPayload(firstRoot, retainedRoot)
+	snapshot.ActiveCompactionEventID = compacted.ID
+	snapshot.SummaryMessageBytes = int64(len(summary))
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		ParentID: retainedRoot.ID, Type: memory.EventContextSnapshot, Payload: snapshotJSON,
+	}); err == nil {
+		t.Fatal("automatic snapshot accepted a frontier different from its compaction")
+	}
+}
+
+func TestContextCompactedAppendValidatesSummaryAndWholeTurnFrontier(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendTurn := func(label string) (memory.Event, memory.Event) {
+		t.Helper()
+		root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+			Type: memory.EventUserMessage, Role: memory.RoleUser, Content: label,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+			ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Content: "answer " + label, Payload: json.RawMessage(`{}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return root, assistant
+	}
+	firstRoot, firstAssistant := appendTurn("one")
+	retainedRoot, secondAssistant := appendTurn("two")
+	thirdRoot, _ := appendTurn("three")
+
+	summary := validContextCompactionSummary()
+	digest := sha256.Sum256([]byte(summary))
+	payload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 1,
+		Trigger:             memory.ContextCompactionManual,
+		CoveredFirstEventID: firstRoot.ID, CoveredFirstSequence: firstRoot.Sequence,
+		CoveredLastEventID: firstAssistant.ID, CoveredLastSequence: firstAssistant.Sequence,
+		FirstRetainedEventID: retainedRoot.ID, CanonicalModel: "vendor/model",
+		PromptVersion: "compaction-v1", SummaryBytes: int64(len(summary)), SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const malformedSummary = "prefix ## Goal / criteria / constraints\nmissing exact sections"
+	malformedDigest := sha256.Sum256([]byte(malformedSummary))
+	malformedPayload := payload
+	malformedPayload.SummaryBytes = int64(len(malformedSummary))
+	malformedPayload.SummarySHA256 = fmt.Sprintf("%x", malformedDigest)
+	malformedJSON, err := json.Marshal(malformedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: malformedSummary, Payload: malformedJSON,
+	}); err == nil {
+		t.Fatal("sectionless compaction summary was accepted")
+	}
+	compacted, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: encoded,
+	})
+	if err != nil {
+		t.Fatalf("append valid compaction: %v", err)
+	}
+	if compacted.ParentID != "" || compacted.Role != "" || compacted.ExecutionID != "" || compacted.Content != summary {
+		t.Fatalf("compaction envelope=%+v", compacted)
+	}
+
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: encoded,
+	}); err == nil {
+		t.Fatal("repeated first generation was accepted")
+	}
+	appendTurn("four")
+	appendTurn("five")
+	secondSummary := strings.ReplaceAll(summary, "kept", "generation two")
+	secondDigest := sha256.Sum256([]byte(secondSummary))
+	secondPayload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 2,
+		Trigger: memory.ContextCompactionManual, PriorCompactionEventID: compacted.ID,
+		CoveredFirstEventID: retainedRoot.ID, CoveredFirstSequence: retainedRoot.Sequence,
+		CoveredLastEventID: secondAssistant.ID, CoveredLastSequence: secondAssistant.Sequence,
+		FirstRetainedEventID: thirdRoot.ID, CanonicalModel: "new/model",
+		PromptVersion: "compaction-v2", SummaryBytes: int64(len(secondSummary)), SummarySHA256: fmt.Sprintf("%x", secondDigest),
+	}
+	secondJSON, err := json.Marshal(secondPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondCompaction, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: secondSummary, Payload: secondJSON,
+	})
+	if err != nil {
+		t.Fatalf("append second generation: %v", err)
+	}
+	if secondCompaction.Sequence <= compacted.Sequence || secondAssistant.Sequence >= thirdRoot.Sequence {
+		t.Fatalf("compaction order: first=%+v second=%+v", compacted, secondCompaction)
+	}
+
+	other, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := payload
+	bad.FirstRetainedEventID = firstRoot.ID
+	badJSON, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: badJSON,
+	}); err == nil {
+		t.Fatal("compaction accepted source events from another session")
+	}
+}
 
 type testEventExecutor struct{ db *sql.DB }
 

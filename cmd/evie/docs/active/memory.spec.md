@@ -1000,18 +1000,23 @@ resumes from its accepted provider-neutral event history after restart.
 
 **Goal:** separate durable history from what the model currently sees.
 
+**Progress (2026-08-30):** the route-safe context profile, canonical bounded
+composer, tool-result admission and projection, local diagnostics, manual and
+durable rolling-summary compaction, and automatic pre-request pressure handling
+are integrated. Stage 2 is complete.
+
 **Tasks:**
 
-- create the context composer;
-- before implementation, record model window/reserve defaults, estimation error
+- [x] create the context composer;
+- [x] before implementation, record model window/reserve defaults, estimation error
   policy, legal message cut boundaries, split-turn behavior, and summary-failure
   fallback in `memory.decisions.md`;
-- add configurable budgets and `/context` diagnostics;
-- clear old tool results without orphaning call/result structure;
-- implement manual then automatic compaction;
-- append compaction and context-snapshot events;
-- retain complete source history;
-- table-test legal cuts, split turns, repeated compaction, summary failure, and
+- [x] add configurable budgets and `/context` diagnostics;
+- [x] clear old tool results without orphaning call/result structure;
+- [x] implement manual then automatic compaction;
+- [x] append compaction and context-snapshot events;
+- [x] retain complete source history;
+- [x] table-test legal cuts, split turns, repeated compaction, summary failure, and
   tool-result placeholder structure.
 
 **Go lesson:** pure selection functions around an LLM side effect, token-budget

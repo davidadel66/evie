@@ -524,7 +524,37 @@ func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufi
 		if ctx.Err() != nil {
 			return
 		}
-		err := session.Send(ctx, scanner.Text(), ev, approve)
+		input := scanner.Text()
+		if input == "/context" {
+			diagnostics, err := session.InspectContext(ctx)
+			if err != nil {
+				_, _ = fmt.Fprintf(out, "context failed: %v\n", err)
+				continue
+			}
+			writeContextDiagnostics(out, diagnostics)
+			continue
+		}
+		if input == "/compact" {
+			_, err := session.Compact(ctx)
+			switch {
+			case errors.Is(err, agent.ErrNothingEligibleForCompaction):
+				_, _ = fmt.Fprintln(out, "Nothing eligible for compaction.")
+			case errors.Is(err, agent.ErrBusy), errors.Is(err, agent.ErrLeaseConflict):
+				_, _ = fmt.Fprintln(out, "Session busy; message not sent.")
+			case errors.Is(err, agent.ErrSessionUnavailable):
+				_, _ = fmt.Fprintln(out, "Session unavailable; message not sent.")
+			case err != nil:
+				_, _ = fmt.Fprintf(out, "compaction failed: %v\n", err)
+			default:
+				_, _ = fmt.Fprintln(out, "Context compacted.")
+			}
+			continue
+		}
+		if strings.HasPrefix(input, "/compact ") || strings.HasPrefix(input, "/compact\t") {
+			_, _ = fmt.Fprintln(out, "Usage: /compact")
+			continue
+		}
+		err := session.Send(ctx, input, ev, approve)
 		switch {
 		case errors.Is(err, agent.ErrLeaseConflict):
 			_, _ = fmt.Fprintln(out, "Session busy; message not sent.")
@@ -534,4 +564,146 @@ func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufi
 			_, _ = fmt.Fprintf(out, "request failed: %v\n", err)
 		}
 	}
+}
+
+func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics) {
+	profile := diagnostics.Profile
+	canonicalModel := profile.CanonicalModel
+	if canonicalModel == "" {
+		canonicalModel = profile.ConfiguredModel
+	}
+	_, _ = fmt.Fprintln(out, "Context")
+	_, _ = fmt.Fprintf(out, "profile: %s\n", profile.Source)
+	_, _ = fmt.Fprintf(out, "model: selected=%s canonical=%s\n", profile.ConfiguredModel, canonicalModel)
+	_, _ = fmt.Fprintf(
+		out,
+		"budgets: hard=%d working=%d output_reserve=%d estimation_margin=%d\n",
+		profile.HardWindowTokens,
+		profile.WorkingTokens,
+		profile.OutputReserveTokens,
+		profile.EstimationMarginTokens,
+	)
+	_, _ = fmt.Fprintf(out, "usable input bytes: %d\n", diagnostics.Projection.UsableInputBytes)
+	if diagnostics.LatestSnapshot == nil {
+		_, _ = fmt.Fprintln(out, "latest snapshot: none")
+	} else {
+		latest := diagnostics.LatestSnapshot
+		manifest := latest.Manifest
+		_, _ = fmt.Fprintf(
+			out,
+			"latest snapshot: id=%s sequence=%d iteration=%d bytes=%d rough_tokens=%d request_sha256=%s\n",
+			latest.EventID,
+			latest.Sequence,
+			manifest.Iteration,
+			manifest.SerializedBytes,
+			manifest.RoughTokenEstimate,
+			manifest.RequestSHA256,
+		)
+		_, _ = fmt.Fprintf(
+			out,
+			"latest snapshot bytes: system=%d summary=%d history=%d tools=%d settings=%d\n",
+			manifest.SystemMessageBytes,
+			manifest.SummaryMessageBytes,
+			manifest.HistoryMessageBytes,
+			manifest.ToolSchemaBytes,
+			manifest.RequestSettingsBytes,
+		)
+		_, _ = fmt.Fprintf(
+			out,
+			"latest snapshot counts: messages=%d tools=%d placeholders=%d\n",
+			manifest.MessageCount,
+			manifest.ToolSchemaCount,
+			len(manifest.Placeholders),
+		)
+		_, _ = fmt.Fprintf(
+			out,
+			"latest snapshot budgets: source=%s hard=%d working=%d output_reserve=%d estimation_margin=%d usable=%d\n",
+			manifest.ProfileSource,
+			manifest.HardWindowTokens,
+			manifest.WorkingCeilingTokens,
+			manifest.OutputReserveTokens,
+			manifest.EstimationMarginTokens,
+			manifest.UsableInputBytes,
+		)
+		_, _ = fmt.Fprintf(
+			out,
+			"latest snapshot frontier: first=%s:%d last=%s:%d active_compaction=%s compaction_failure=%s\n",
+			manifest.RetainedFirstEventID,
+			manifest.RetainedFirstSequence,
+			manifest.RetainedLastEventID,
+			manifest.RetainedLastSequence,
+			contextDiagnosticValue(string(manifest.ActiveCompactionEventID)),
+			contextDiagnosticValue(string(manifest.CompactionFailureCategory)),
+		)
+		writePlaceholderDiagnostics(out, "latest snapshot", manifest.Placeholders)
+	}
+	projection := diagnostics.Projection
+	_, _ = fmt.Fprintf(
+		out,
+		"hypothetical projection: bytes=%d rough_tokens=%d messages=%d tools=%d placeholders=%d\n",
+		projection.SerializedBytes,
+		projection.RoughTokenEstimate,
+		projection.MessageCount,
+		projection.ToolSchemaCount,
+		len(projection.Placeholders),
+	)
+	_, _ = fmt.Fprintf(
+		out,
+		"projection bytes: system=%d summary=%d history=%d tools=%d settings=%d\n",
+		projection.SystemMessageBytes,
+		projection.SummaryMessageBytes,
+		projection.HistoryMessageBytes,
+		projection.ToolSchemaBytes,
+		projection.RequestSettingsBytes,
+	)
+	writePlaceholderDiagnostics(out, "projection", projection.Placeholders)
+	_, _ = fmt.Fprintf(out, "headroom bytes: %d\n", diagnostics.HeadroomBytes)
+	_, _ = fmt.Fprintf(
+		out,
+		"retained frontier: first=%s:%d last=%s:%d\n",
+		projection.RetainedFirstEventID,
+		projection.RetainedFirstSequence,
+		projection.RetainedLastEventID,
+		projection.RetainedLastSequence,
+	)
+	if projection.ActiveCompactionEventID == "" {
+		_, _ = fmt.Fprintln(out, "active compaction: none")
+	} else {
+		_, _ = fmt.Fprintf(out, "active compaction: %s\n", projection.ActiveCompactionEventID)
+	}
+	for _, warning := range diagnostics.Warnings {
+		_, _ = fmt.Fprintf(out, "warning: %s\n", warning)
+	}
+}
+
+func writePlaceholderDiagnostics(out io.Writer, label string, placeholders []memory.ContextPlaceholderManifest) {
+	var originalBytes, projectedBytes int64
+	for _, placeholder := range placeholders {
+		originalBytes += placeholder.OriginalBytes
+		projectedBytes += placeholder.ProjectedBytes
+		_, _ = fmt.Fprintf(
+			out,
+			"%s placeholder: event=%s original_bytes=%d projected_bytes=%d sha256=%s\n",
+			label,
+			placeholder.EventID,
+			placeholder.OriginalBytes,
+			placeholder.ProjectedBytes,
+			placeholder.SHA256,
+		)
+	}
+	_, _ = fmt.Fprintf(
+		out,
+		"%s placeholder bytes: original=%d projected=%d saved=%d\n",
+		label,
+		originalBytes,
+		projectedBytes,
+		originalBytes-projectedBytes,
+	)
+}
+
+func contextDiagnosticValue(value string) string {
+	if value == "" {
+		return "none"
+	}
+	return value
 }

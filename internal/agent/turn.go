@@ -23,6 +23,7 @@ type renderedOutput struct {
 
 type turnProgress struct {
 	rendered        renderedOutput
+	rootTurnID      memory.EventID
 	requestParentID memory.EventID
 }
 
@@ -138,26 +139,126 @@ func (s *Session) runOwnedTurn(
 	extra []tools.Tool,
 ) error {
 	requestParentID := progress.requestParentID
+	rootTurnID := progress.rootTurnID
+	if rootTurnID == "" {
+		rootTurnID = requestParentID
+	}
 	rendered := &progress.rendered
+	iteration := 0
 	for {
-		if !coordinator.transitionIfActive(memory.StageProvider, func() {
+		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
 		}) {
 			return s.observeTurnContext(coordinator)
 		}
 		rendered.begin()
+		iteration++
 
-		messages, err := s.requestMessages(coordinator.ctx)
+		events, err := s.history.Events(coordinator.ctx)
+		if err == nil {
+			if ctxErr := coordinator.ctx.Err(); ctxErr != nil {
+				err = ctxErr
+			}
+		}
 		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
+		}
+		summary, _, err := reconstructCompactionChain(events)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
+		}
+		composeInput := ContextComposeInput{
+			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
+			TriggerEventID: requestParentID, Iteration: iteration,
+			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
+		}
+		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
+		if err != nil {
+			if errors.Is(err, ErrNoLegalAutomaticCompaction) || IsContextOverflow(err) {
+				overflow := fmt.Errorf("%w: %v", ErrContextOverflow, err)
+				coordinator.selectCause(causeContextOverflow, overflow, 0)
+				return overflow
+			}
 			return s.classifyLocalError(coordinator, err)
 		}
-		req := openrouter.ChatRequest{
-			Model:     s.profile.Model(),
-			Messages:  messages,
-			Tools:     tools.SchemasWith(extra),
-			Reasoning: s.reasoning,
-			MaxTokens: s.profile.OutputReserveTokens(),
+		failureCategory := memory.ContextCompactionFailureNone
+		if required {
+			if s.compactor == nil {
+				return s.classifyLocalError(coordinator, errors.New("agent: compactor is not configured"))
+			}
+			if !coordinator.setStage(memory.StageContextCompaction) {
+				return s.observeTurnContext(coordinator)
+			}
+			newSummary, compacted, failure := s.performAutomaticCompaction(coordinator, lease, plan)
+			if failure == nil {
+				summary = newSummary
+				events = append(events, compacted)
+				composeInput.Summary = summary
+				composeInput.Events = events
+				if err := s.observeTurnContext(coordinator); err != nil {
+					return err
+				}
+			} else {
+				if coordinator.result().kind != causeNone {
+					return failure.err
+				}
+				fits, fitErr := completeAutomaticProjectionFits(composeInput, s.composer)
+				if fitErr != nil {
+					return s.classifyLocalError(coordinator, fitErr)
+				}
+				if !fits {
+					if failure.cause != causeNone {
+						coordinator.selectCause(failure.cause, failure.err, failure.httpStatus)
+						return failure.err
+					}
+					return s.classifyLocalError(coordinator, failure.err)
+				}
+				failureCategory = failure.category
+				if !coordinator.setStage(memory.StageContextCompose) {
+					return s.observeTurnContext(coordinator)
+				}
+			}
 		}
+		composed, err := s.composer.Compose(composeInput)
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
+			return s.classifyLocalError(coordinator, err)
+		}
+		if required && failureCategory == memory.ContextCompactionFailureNone &&
+			composed.Snapshot.RetainedFirstEventID != plan.FirstRetained.ID {
+			overflow := fmt.Errorf("%w: accepted automatic summary did not preserve its retained frontier", ErrContextOverflow)
+			coordinator.selectCause(causeContextOverflow, overflow, 0)
+			return overflow
+		}
+		if required && failureCategory == memory.ContextCompactionFailureNone &&
+			composed.Snapshot.SerializedBytes > percentageFloor(composed.Snapshot.WorkingCeilingTokens, automaticCompactionTargetPercent) {
+			overflow := fmt.Errorf("%w: accepted automatic summary did not satisfy its target", ErrContextOverflow)
+			coordinator.selectCause(causeContextOverflow, overflow, 0)
+			return overflow
+		}
+		composed.Snapshot.CompactionFailureCategory = failureCategory
+		if err := composed.Snapshot.Validate(); err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("validate final context snapshot: %w", err))
+		}
+		snapshotPayload, err := json.Marshal(composed.Snapshot)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("encode context snapshot: %w", err))
+		}
+		if !coordinator.beginCommitBoundary() {
+			return s.observeTurnContext(coordinator)
+		}
+		_, err = s.history.Append(coordinator.ctx, lease, memory.EventInput{
+			ParentID: requestParentID, Type: memory.EventContextSnapshot, Payload: snapshotPayload,
+		})
+		if err != nil {
+			coordinator.abortCommitBoundary()
+			return s.classifyLocalError(coordinator, fmt.Errorf("persist context snapshot: %w", err))
+		}
+		coordinator.finishCommitBoundary(memory.StageProvider)
+		req := composed.Request
 		if err := s.owner.Authorize(coordinator.ctx, lease); err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("authorize provider start: %w", err))
 		}
@@ -372,6 +473,7 @@ func (s *Session) runOwnedTurn(
 				coordinator.abortToolPhase()
 				return s.classifyLocalError(coordinator, fmt.Errorf("execute tool lifecycle: %w", err))
 			}
+			result.Content = admitToolResult(result.Content)
 
 			outcomeParentID := intentEvent.ID
 			outcomeType := memory.EventToolSucceeded
@@ -516,7 +618,8 @@ func validateAssistantResponse(msg openrouter.Message) error {
 
 func causeHasDurableTerminal(kind causeKind) bool {
 	return kind == causeProviderError || kind == causeProviderInvalid ||
-		kind == causeCallerCancelled || kind == causeCallerDeadline
+		kind == causeCallerCancelled || kind == causeCallerDeadline ||
+		kind == causeContextOverflow
 }
 
 func (s *Session) appendTerminal(
@@ -545,6 +648,9 @@ func (s *Session) appendTerminal(
 	case causeCallerDeadline:
 		input.Type = memory.EventTurnInterrupted
 		payload.Classification = memory.ClassificationCallerDeadlineExceeded
+	case causeContextOverflow:
+		input.Type = memory.EventTurnFailed
+		payload.Classification = memory.ClassificationContextOverflow
 	default:
 		return nil
 	}

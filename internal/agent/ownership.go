@@ -92,6 +92,7 @@ const (
 	causeHeartbeatFailed
 	causeAssistantPersistence
 	causeStorage
+	causeContextOverflow
 )
 
 type terminalCause struct {

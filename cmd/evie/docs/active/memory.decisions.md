@@ -1,5 +1,150 @@
 # memory - decisions
 
+- **2026-08-30 - automatic compaction is one pre-request pressure attempt per provider iteration.**
+  Every initial and post-tool conversational iteration first applies the
+  mandatory old-tool-result projection and measures the complete canonical
+  request. At or above 80 percent of the configured working ceiling, Evie
+  selects the smallest contiguous prefix of complete root turns whose
+  replacement by a maximum-sized validated summary targets at most 60 percent.
+  The current root-user turn is never eligible, tool groups remain atomic, and
+  a prefix is legal only when its complete compactor request fits. An automatic
+  compactor call has the manual path's model, prompt, timeout, no-tool,
+  zero-temperature, no-retry, validation, chain, and lease-fencing rules, and
+  each provider iteration makes at most one attempt.
+
+  A successful generation is appended with trigger `automatic` between the
+  durable provider trigger and its content-free `context_snapshot`; the
+  snapshot names that generation and its retained frontier. Transport,
+  validation, and persistence failures never activate generated output. When
+  the unchanged projected request still fits its usable route-safe budget, the
+  conversational call proceeds and the snapshot records exactly one of
+  `summary_provider_error`, `summary_invalid`, or
+  `summary_persistence_failed`. Otherwise transport and response failures use
+  the existing safe `provider_error` or `provider_response_invalid` terminal
+  evidence at `context_compaction`; no legal cut uses `context_overflow` at
+  `context_compose`. Cancellation before the summary append retains the prior
+  generation at `context_compaction`; a committed summary remains active and
+  moves the cancellation boundary to `context_compose`. Snapshots, generation
+  and failure counts, byte estimates, headroom, and placeholder manifests are
+  the Stage 2 tuning evidence; retries, exact tokenization, summary-call usage,
+  retrieval, caches, and later memory systems remain deferred.
+
+- **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
+  Every manual compaction first reconstructs the complete accepted chain from
+  canonical `context_compacted` events, never from context snapshots or
+  process-local state. Generations begin at one, increase by exactly one, link
+  to the immediately prior compaction event, and cover the prior generation's
+  first retained root through a strictly later whole-root-turn frontier. The
+  replacement compactor input is exactly the latest accepted summary plus the
+  newly covered contiguous complete turns. Only the highest validated summary
+  replaces covered history in provider projection; all source events and every
+  superseded compaction event remain unchanged and inspectable.
+
+  Reconstruction rejects unsupported event or payload versions, noncanonical
+  or malformed payloads, invalid summaries and provenance, missing or
+  cross-session references, broken links, inconsistent generations,
+  overlapping or skipped frontiers, and incomplete-turn cuts. Stored model and
+  prompt identifiers are immutable provenance rather than current-configuration
+  requirements, so an accepted summary remains valid across process model,
+  budget, or prompt changes; the next generation records the current process
+  configuration. The ordinary lease transaction fences each append. Caller
+  cancellation before that append changes nothing, while a successful fenced
+  append wins a racing cancellation and becomes active even if a later snapshot
+  or provider request fails. Automatic pressure-triggered compaction remains
+  deferred to issue #68.
+
+- **2026-08-30 - manual compaction accepts one durable validated generation.**
+  Exact `/compact` acquires the ordinary session lease and summarizes the
+  maximal fitting contiguous prefix of completed root turns while retaining at
+  least the two newest completed turns. Fewer than three completed turns is an
+  eventless no-op, command arguments are rejected locally, and `//compact`
+  remains literal user text. The compactor is a separately injectable use of
+  the configured conversational transport with tools and reasoning disabled,
+  temperature zero, a 4,096-token output reserve, no retry, and a two-minute
+  timeout bounded by caller cancellation and lease ownership.
+
+  `compaction-v1` treats its canonically serialized, delimited transcript as
+  untrusted data and receives only the prior accepted summary (absent for the
+  first generation) plus newly covered complete model-visible turns. It uses
+  the route-safe hard window, working ceiling, fixed estimation margin, and byte
+  estimator, and can shrink only at whole-turn boundaries after mandatory tool
+  result bounding. Output must be nonblank UTF-8 Markdown no larger than 16 KiB
+  with the seven fixed continuity sections; tool calls and malformed output are
+  rejected. Transport and malformed-response failures are classified as
+  `provider_error` and `provider_response_invalid` at `context_compaction`;
+  storage failures stay local.
+
+  One accepted `context_compacted` event stores the summary content plus
+  content-free version, generation, trigger, frontier, model, prompt, byte, and
+  SHA-256 provenance under the lease fence. It has no role, execution, or
+  parent fields, creates no synthetic assistant event or usage record, and does
+  not rewrite raw history. The accepted summary immediately replaces its
+  covered prefix in this process's conversational projection. Reconstructing or
+  advancing the chain after restart remains Stage 2 issue #67; automatic
+  triggering remains issue #68.
+
+- **2026-08-30 - tool-result admission and request projection are bounded without rewriting evidence.**
+  The agent caps each model-visible tool return at 100 KiB after any
+  tool-specific lower cap and before the outcome append or frontend callback;
+  that admitted UTF-8-safe head/tail value is the canonical durable result.
+  During request composition, complete groups receive at most 128 KiB of
+  full-fidelity durable result content. A deterministic water-filling allocator
+  reduces the largest results first, ordinarily keeping at least 8 KiB per
+  result and crossing that floor only when the number of results makes it
+  impossible. Group previews and admission previews carry visible original-byte
+  and SHA-256 metadata, and no upstream-output archive is created.
+
+  After mandatory group bounding, the three newest complete groups stay
+  verbatim. When the canonical serialized request is above 60% of usable input,
+  eligible results in older complete groups are projected oldest first until
+  that target is reached or candidates are exhausted. Only durable results
+  larger than 4 KiB are eligible. The older-result projection contains
+  UTF-8-safe 512-byte head and tail excerpts plus its event ID, original byte
+  count, and SHA-256; the diagnostic projected-byte count includes that visible
+  metadata envelope. Incomplete groups remain omitted whole, canonical events
+  are never mutated, and any active group that cannot fit after legal projection
+  fails with `context_overflow` rather than orphaning messages.
+
+- **2026-08-30 - conversational requests are canonically composed and snapshotted before transport.**
+  Every ordinary and post-tool conversational iteration rebuilds one complete
+  `ChatRequest` from the immutable code-owned system prompt, an optional
+  validated accepted rolling summary supplied by the compaction stage, current
+  tool schemas, and a suffix of durable root-user turns ending with the active
+  turn. The summary occupies a distinct system message immediately after the
+  base prompt and is charged by the same complete-request estimator; its durable
+  compaction identity and content-free byte count are recorded in the snapshot.
+  The stream flag is set before estimation. Canonical request bytes are the
+  standard Go JSON encoding of the exact request value passed to the OpenRouter
+  client; the replaceable estimator charges one token per UTF-8 byte and reports
+  `ceil(bytes / 4)` only as a rough diagnostic. Usable input is
+  `min(hard window, working ceiling) - output reserve - fixed margin`. A composer
+  may remove only whole older root-user turns, oldest first; it never removes
+  the active root turn or splits an assistant tool-call group from its matching
+  terminal results. Structurally incomplete tool groups retain the Stage 1
+  omit-whole projection. If the active turn cannot fit, the provider is not
+  called and the turn records `context_overflow` at `context_compose` with the
+  fixed safe message.
+
+- **2026-08-30 - context snapshots and local diagnostics contain manifests, never request content.**
+  After final composition and before provider authorization, every conversational
+  iteration appends one lease-fenced `context_snapshot` parented to the root user
+  message or terminal tool result that triggered it. Snapshot v1 records only
+  composer/estimator versions, iteration, selected and canonical model identity,
+  profile provenance and budgets, canonical byte counts and rough estimate,
+  request SHA-256, retained event frontier, message/tool counts, content-free
+  component byte counts, optional compaction identity/failure category, and
+  content-free placeholder manifests. It stores no prompt, message, summary,
+  tool schema, excerpt, secret, usage, or provider payload. Persistence is a
+  required pre-transport write and fails closed; an accepted snapshot is never
+  rolled back when authorization, transport, cancellation, or later persistence
+  fails. `/context` is an exact local command that performs only durable reads
+  and a hypothetical composition with no lease, event, activity update, or
+  provider call. It prints the latest validated snapshot and current projection,
+  approved budgets, safe counts/frontiers, byte diagnostics, headroom,
+  provenance, and fallback/staleness warnings. Invalid durable history or
+  snapshot data makes the command visibly fail rather than silently falling
+  back.
+
 - **2026-08-30 - one startup-resolved profile bounds every conversational request.**
   Each process resolves one immutable context profile before opening or resuming
   a conversational session. The profile keeps the configured model, canonical

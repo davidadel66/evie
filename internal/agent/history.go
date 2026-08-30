@@ -18,6 +18,54 @@ type History interface {
 	Events(ctx context.Context) ([]memory.Event, error)
 }
 
+type completeToolResultGroup struct {
+	resultIndexes []int
+}
+
+func completeToolResultGroups(events []memory.Event) ([]completeToolResultGroup, error) {
+	omit, err := incompleteToolGroupEvents(events)
+	if err != nil {
+		return nil, err
+	}
+	var groups []completeToolResultGroup
+	for i, event := range events {
+		if event.Type != memory.EventAssistantMessage || omit[i] {
+			continue
+		}
+		var payload memory.AssistantMessagePayload
+		if err := decodeEventPayload(event, &payload); err != nil {
+			return nil, err
+		}
+		if len(payload.ToolCalls) == 0 {
+			continue
+		}
+		group := completeToolResultGroup{}
+		for j := i + 1; j < len(events); j++ {
+			if events[j].Type == memory.EventAssistantMessage || events[j].Type == memory.EventUserMessage {
+				break
+			}
+			if omit[j] || (events[j].Type != memory.EventToolSucceeded &&
+				events[j].Type != memory.EventToolFailed && events[j].Type != memory.EventToolCancelled) {
+				continue
+			}
+			var result memory.ToolResultPayload
+			if err := decodeEventPayload(events[j], &result); err != nil {
+				return nil, err
+			}
+			position := len(group.resultIndexes)
+			if position >= len(payload.ToolCalls) || result.ToolCallID != payload.ToolCalls[position].ID {
+				return nil, fmt.Errorf("tool event %q is out of order for assistant event %q", events[j].ID, event.ID)
+			}
+			group.resultIndexes = append(group.resultIndexes, j)
+		}
+		if len(group.resultIndexes) != len(payload.ToolCalls) {
+			return nil, fmt.Errorf("complete assistant event %q has an inconsistent result group", event.ID)
+		}
+		groups = append(groups, group)
+	}
+	return groups, nil
+}
+
 func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 	var messages []openrouter.Message
 	omit, err := incompleteToolGroupEvents(events)
@@ -95,7 +143,9 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 			memory.EventApproval,
 			memory.EventExecutionResolved,
 			memory.EventTurnFailed,
-			memory.EventTurnInterrupted:
+			memory.EventTurnInterrupted,
+			memory.EventContextSnapshot,
+			memory.EventContextCompacted:
 			continue
 
 		default:
@@ -108,6 +158,7 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 
 func incompleteToolGroupEvents(events []memory.Event) (map[int]bool, error) {
 	omit := make(map[int]bool)
+	claimedResults := make(map[int]bool)
 	for i, event := range events {
 		if event.Type != memory.EventAssistantMessage {
 			continue
@@ -145,9 +196,15 @@ func incompleteToolGroupEvents(events []memory.Event) (map[int]bool, error) {
 			if err := decodeEventPayload(events[j], &result); err != nil {
 				return nil, err
 			}
-			if _, ok := requested[result.ToolCallID]; ok {
-				requested[result.ToolCallID] = true
+			terminal, ok := requested[result.ToolCallID]
+			if !ok {
+				return nil, fmt.Errorf("tool event %q does not match the preceding assistant tool-call group", events[j].ID)
 			}
+			if terminal {
+				return nil, fmt.Errorf("tool call ID %q has multiple terminal results", result.ToolCallID)
+			}
+			requested[result.ToolCallID] = true
+			claimedResults[j] = true
 		}
 		complete := true
 		for _, terminal := range requested {
@@ -170,6 +227,15 @@ func incompleteToolGroupEvents(events []memory.Event) (map[int]bool, error) {
 			if _, ok := requested[result.ToolCallID]; ok {
 				omit[j] = true
 			}
+		}
+	}
+	for i, event := range events {
+		if event.Type != memory.EventToolSucceeded && event.Type != memory.EventToolFailed &&
+			event.Type != memory.EventToolCancelled {
+			continue
+		}
+		if !claimedResults[i] {
+			return nil, fmt.Errorf("tool event %q is orphaned from an assistant tool-call group", event.ID)
 		}
 	}
 	return omit, nil

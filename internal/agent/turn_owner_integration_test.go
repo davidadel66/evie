@@ -115,7 +115,8 @@ func TestTwoStoresAllowOnlyOneLiveAgentTurnForSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 2 || events[0].Content != "first" || events[1].Type != memory.EventAssistantMessage {
+	if len(events) != 3 || events[0].Content != "first" ||
+		events[1].Type != memory.EventContextSnapshot || events[2].Type != memory.EventAssistantMessage {
 		t.Fatalf("accepted events=%+v", events)
 	}
 }
@@ -153,20 +154,20 @@ func TestAgentTerminalSafeContentMatchesProductionStorageAuthority(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 2 || events[1].Type != memory.EventTurnFailed {
+	if len(events) != 3 || events[1].Type != memory.EventContextSnapshot || events[2].Type != memory.EventTurnFailed {
 		t.Fatalf("events=%+v", events)
 	}
 	var payload memory.TurnTerminalPayload
-	if err := json.Unmarshal(events[1].Payload, &payload); err != nil {
+	if err := json.Unmarshal(events[2].Payload, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if events[1].Content != payload.SafeContent() ||
+	if events[2].Content != payload.SafeContent() ||
 		payload.Classification != memory.ClassificationProviderError ||
 		payload.Stage != memory.StageProvider {
-		t.Fatalf("terminal=%+v payload=%+v", events[1], payload)
+		t.Fatalf("terminal=%+v payload=%+v", events[2], payload)
 	}
-	if strings.Contains(events[1].Content, "secret") || strings.Contains(string(events[1].Payload), "secret") {
-		t.Fatalf("terminal leaked provider detail: content=%q payload=%s", events[1].Content, events[1].Payload)
+	if strings.Contains(events[2].Content, "secret") || strings.Contains(string(events[2].Payload), "secret") {
+		t.Fatalf("terminal leaked provider detail: content=%q payload=%s", events[2].Content, events[2].Payload)
 	}
 }
 
@@ -261,10 +262,10 @@ func TestFinalToolResultCancellationPersistsPriorProviderTriggerAcrossStores(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 5 {
+	if len(events) != 6 {
 		t.Fatalf("events=%+v", events)
 	}
-	root, outcome, terminal := events[0], events[3], events[4]
+	root, outcome, terminal := events[0], events[4], events[5]
 	if outcome.Type != memory.EventToolSucceeded || terminal.Type != memory.EventTurnInterrupted || terminal.ParentID != root.ID {
 		t.Fatalf("root=%+v outcome=%+v terminal=%+v", root, outcome, terminal)
 	}
@@ -295,10 +296,10 @@ func TestSecondCycleProviderFailurePersistsFinalOutcomeTriggerAcrossStores(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 5 {
+	if len(events) != 7 {
 		t.Fatalf("events=%+v", events)
 	}
-	root, outcome, terminal := events[0], events[3], events[4]
+	root, outcome, terminal := events[0], events[4], events[6]
 	if outcome.Type != memory.EventToolSucceeded || terminal.Type != memory.EventTurnFailed || terminal.ParentID != outcome.ID {
 		t.Fatalf("root=%+v outcome=%+v terminal=%+v", root, outcome, terminal)
 	}

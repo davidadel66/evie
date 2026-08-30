@@ -36,11 +36,13 @@ func (e sessionUnavailableError) Unwrap() []error {
 type Session struct {
 	mu        sync.Mutex
 	client    Client
+	compactor Client
 	profile   openrouter.ContextProfile
 	reasoning *openrouter.ReasoningConfig
 	history   History
 	scope     memory.ScopeContext
 	owner     TurnOwnership
+	composer  *ContextComposer
 	timing    turnTiming
 }
 type Client interface {
@@ -61,35 +63,6 @@ type Events interface {
 	ToolCall(id, name, args string)            // emitted immediately before executing
 	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
 	ResponseDiscarded(reason DiscardReason, message string)
-}
-
-func (s *Session) requestMessages(
-	ctx context.Context,
-) ([]openrouter.Message, error) {
-	events, err := s.history.Events(ctx)
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
-	}
-	if err != nil {
-		return nil, fmt.Errorf("load durable history: %w", err)
-	}
-
-	conversation, err := messagesFromEvents(events)
-	if err != nil {
-		return nil, fmt.Errorf("project durable history: %w", err)
-	}
-
-	messages := make([]openrouter.Message, 0, len(conversation)+1)
-	messages = append(messages, openrouter.Message{
-		Role:    "system",
-		Content: systemPrompt,
-	})
-	messages = append(messages, conversation...)
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	return messages, nil
 }
 
 func (s *Session) Send(
@@ -159,7 +132,7 @@ func (s *Session) Send(
 		coordinator.selectCause(causeStorage, err, 0)
 		return fmt.Errorf("persist user message: %w", err)
 	}
-	progress := &turnProgress{requestParentID: rootEvent.ID}
+	progress := &turnProgress{rootTurnID: rootEvent.ID, requestParentID: rootEvent.ID}
 	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress, extra)
 	if turnErr != nil && coordinator.result().kind == causeNone {
 		coordinator.selectCause(causeStorage, turnErr, 0)
@@ -212,16 +185,32 @@ func New(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 ) *Session {
+	return NewWithCompactor(client, client, profile, history, scope, owner)
+}
+
+// NewWithCompactor keeps summary generation separately controllable while the
+// default New constructor uses the existing conversational transport for both
+// request kinds.
+func NewWithCompactor(
+	client Client,
+	compactor Client,
+	profile openrouter.ContextProfile,
+	history History,
+	scope memory.ScopeContext,
+	owner TurnOwnership,
+) *Session {
 	return &Session{
-		client:  client,
-		profile: profile,
+		client:    client,
+		compactor: compactor,
+		profile:   profile,
 		reasoning: resolveReasoning(
 			os.Getenv("EVIE_REASONING"),
 		),
-		scope:   scope,
-		history: history,
-		owner:   owner,
-		timing:  defaultTurnTiming,
+		scope:    scope,
+		history:  history,
+		owner:    owner,
+		composer: NewContextComposer(CanonicalRequestEstimator{}),
+		timing:   defaultTurnTiming,
 	}
 }
 

@@ -1,7 +1,10 @@
 package memory
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +39,138 @@ func TestAssistantMessagePayloadUsageJSONPreservesPartialZeroAndAbsence(t *testi
 	}
 	if string(absent) != `{}` {
 		t.Fatalf("absent usage JSON=%s, want {}", absent)
+	}
+}
+
+func TestContextSnapshotPayloadValidation(t *testing.T) {
+	valid := ContextSnapshotPayload{
+		SchemaVersion: 1, ComposerVersion: "context-composer-v1", EstimatorVersion: "canonical-json-bytes-v1",
+		Iteration: 1, ConfiguredModel: "vendor/model", CanonicalModel: "vendor/model",
+		ProfileSource: "explicit_override", HardWindowTokens: 262144, WorkingCeilingTokens: 262144,
+		OutputReserveTokens: 16384, EstimationMarginTokens: 4096, UsableInputBytes: 241664,
+		SerializedBytes: 1234, RoughTokenEstimate: 309, RequestSHA256: strings.Repeat("a", 64),
+		RetainedFirstEventID: "event-1", RetainedFirstSequence: 1,
+		RetainedLastEventID: "event-2", RetainedLastSequence: 2,
+		MessageCount: 3, ToolSchemaCount: 2, SystemMessageBytes: 100, HistoryMessageBytes: 300,
+		ToolSchemaBytes: 200, RequestSettingsBytes: 80,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*ContextSnapshotPayload)
+	}{
+		{"unsupported version", func(p *ContextSnapshotPayload) { p.SchemaVersion = 2 }},
+		{"bad arithmetic", func(p *ContextSnapshotPayload) { p.UsableInputBytes++ }},
+		{"oversized request", func(p *ContextSnapshotPayload) { p.SerializedBytes = p.UsableInputBytes + 1 }},
+		{"bad hash", func(p *ContextSnapshotPayload) { p.RequestSHA256 = "secret" }},
+		{"backward frontier", func(p *ContextSnapshotPayload) { p.RetainedLastSequence = 0 }},
+		{"unknown failure", func(p *ContextSnapshotPayload) { p.CompactionFailureCategory = "raw provider error" }},
+		{"unexpected advertised metadata", func(p *ContextSnapshotPayload) { p.AdvertisedModel = "secret" }},
+		{"compaction without summary", func(p *ContextSnapshotPayload) { p.ActiveCompactionEventID = "compaction-1" }},
+		{"summary without compaction", func(p *ContextSnapshotPayload) { p.SummaryMessageBytes = 10 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := valid
+			tt.mutate(&payload)
+			if err := payload.Validate(); err == nil {
+				t.Fatalf("invalid payload validated: %+v", payload)
+			}
+		})
+	}
+}
+
+func TestContextCompactedPayloadValidation(t *testing.T) {
+	var summaryBuilder strings.Builder
+	for _, heading := range ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summaryBuilder, "## %s\nkept\n\n", heading)
+	}
+	summary := summaryBuilder.String()
+	digest := sha256.Sum256([]byte(summary))
+	valid := ContextCompactedPayload{
+		SchemaVersion: ContextCompactedSchemaVersion,
+		Generation:    1, Trigger: ContextCompactionManual,
+		CoveredFirstEventID: "event-1", CoveredFirstSequence: 1,
+		CoveredLastEventID: "event-2", CoveredLastSequence: 2,
+		FirstRetainedEventID: "event-3", CanonicalModel: "vendor/model",
+		PromptVersion: "compaction-v1", SummaryBytes: int64(len(summary)),
+		SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	if err := valid.Validate(summary); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*ContextCompactedPayload)
+	}{
+		{"unsupported version", func(p *ContextCompactedPayload) { p.SchemaVersion++ }},
+		{"missing generation", func(p *ContextCompactedPayload) { p.Generation = 0 }},
+		{"manual generation has prior", func(p *ContextCompactedPayload) { p.PriorCompactionEventID = "prior" }},
+		{"unknown trigger", func(p *ContextCompactedPayload) { p.Trigger = "automatic-ish" }},
+		{"backward coverage", func(p *ContextCompactedPayload) { p.CoveredLastSequence = 0 }},
+		{"missing retained identity", func(p *ContextCompactedPayload) { p.FirstRetainedEventID = "" }},
+		{"wrong byte count", func(p *ContextCompactedPayload) { p.SummaryBytes++ }},
+		{"wrong digest", func(p *ContextCompactedPayload) { p.SummarySHA256 = strings.Repeat("0", 64) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload := valid
+			test.mutate(&payload)
+			if err := payload.Validate(summary); err == nil {
+				t.Fatalf("invalid payload validated: %+v", payload)
+			}
+		})
+	}
+}
+
+func TestContextCompactedPayloadAcceptsAutomaticTrigger(t *testing.T) {
+	var summaryBuilder strings.Builder
+	for _, heading := range ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summaryBuilder, "## %s\nkept\n\n", heading)
+	}
+	summary := summaryBuilder.String()
+	digest := sha256.Sum256([]byte(summary))
+	payload := ContextCompactedPayload{
+		SchemaVersion:       ContextCompactedSchemaVersion,
+		Generation:          1,
+		Trigger:             ContextCompactionAutomatic,
+		CoveredFirstEventID: "first", CoveredFirstSequence: 1,
+		CoveredLastEventID: "last", CoveredLastSequence: 2,
+		FirstRetainedEventID: "retained", CanonicalModel: "test/model",
+		PromptVersion: ContextCompactionPromptVersion,
+		SummaryBytes:  int64(len(summary)), SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	if err := payload.Validate(summary); err != nil {
+		t.Fatalf("automatic trigger: %v", err)
+	}
+}
+
+func TestContextCompactedPayloadValidatesExactAdvance(t *testing.T) {
+	prior := ContextCompactedPayload{Generation: 1, FirstRetainedEventID: "turn-4"}
+	next := ContextCompactedPayload{
+		Generation: 2, PriorCompactionEventID: "compaction-1", CoveredFirstEventID: "turn-4",
+	}
+	if err := next.ValidateAdvance("compaction-1", prior); err != nil {
+		t.Fatalf("valid advance: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*ContextCompactedPayload)
+	}{
+		{name: "generation", mutate: func(payload *ContextCompactedPayload) { payload.Generation++ }},
+		{name: "prior link", mutate: func(payload *ContextCompactedPayload) { payload.PriorCompactionEventID = "other" }},
+		{name: "frontier", mutate: func(payload *ContextCompactedPayload) { payload.CoveredFirstEventID = "turn-3" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := next
+			test.mutate(&candidate)
+			if err := candidate.ValidateAdvance("compaction-1", prior); err == nil {
+				t.Fatalf("invalid advance accepted: %+v", candidate)
+			}
+		})
 	}
 }
 

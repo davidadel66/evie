@@ -2,12 +2,15 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -34,6 +37,9 @@ type step struct {
 
 type fakeHistory struct {
 	events         []memory.Event
+	ordered        []memory.Event
+	snapshotCount  int
+	snapshotErr    error
 	appendAttempts int
 	appendErrAt    int
 	appendBlockAt  int
@@ -45,6 +51,25 @@ type fakeHistory struct {
 }
 
 func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memory.EventInput) (memory.Event, error) {
+	if f.ordered == nil {
+		f.ordered = append([]memory.Event(nil), f.events...)
+	}
+	if input.Type == memory.EventContextSnapshot {
+		f.snapshotCount++
+		if f.snapshotErr != nil {
+			return memory.Event{}, f.snapshotErr
+		}
+		event := memory.Event{
+			ID: memory.EventID(fmt.Sprintf("snapshot-%d", f.snapshotCount)), SessionID: "test-session",
+			Sequence: int64(len(f.ordered) + 1), ParentID: input.ParentID, Type: input.Type,
+			Payload: append([]byte(nil), input.Payload...), FormatVersion: 1,
+		}
+		f.ordered = append(f.ordered, event)
+		if f.afterAppend != nil {
+			f.afterAppend(input)
+		}
+		return event, nil
+	}
 	f.appendAttempts++
 	if f.appendBlockAt == f.appendAttempts {
 		if f.appendEntered != nil {
@@ -59,7 +84,7 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 	event := memory.Event{
 		ID:            memory.EventID(fmt.Sprintf("event-%d", len(f.events)+1)),
 		SessionID:     memory.SessionID("test-session"),
-		Sequence:      int64(len(f.events) + 1),
+		Sequence:      int64(len(f.ordered) + 1),
 		ParentID:      input.ParentID,
 		Type:          input.Type,
 		Role:          input.Role,
@@ -69,6 +94,7 @@ func (f *fakeHistory) Append(ctx context.Context, _ memory.TurnLease, input memo
 		FormatVersion: 1,
 	}
 	f.events = append(f.events, event)
+	f.ordered = append(f.ordered, event)
 	if f.afterAppend != nil {
 		f.afterAppend(input)
 	}
@@ -79,7 +105,17 @@ func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
 	if f.onEvents != nil {
 		f.onEvents()
 	}
+	if f.ordered != nil {
+		return append([]memory.Event(nil), f.ordered...), f.eventsErr
+	}
 	return append([]memory.Event(nil), f.events...), f.eventsErr
+}
+
+func (f *fakeHistory) allEvents() []memory.Event {
+	if f.ordered != nil {
+		return f.ordered
+	}
+	return f.events
 }
 
 func newTestSession(client Client, model string) *Session {
@@ -169,6 +205,182 @@ func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
 	}
 	if !providerSawUser {
 		t.Fatal("provider was called before the user event was durable")
+	}
+}
+
+func TestSendComposesAndSnapshotsEveryProviderIteration(t *testing.T) {
+	history := &fakeHistory{}
+	providerEventCounts := []int{}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, openrouter.ToolCall{
+			ID: "call-1", Type: "function", Function: openrouter.FunctionCall{Name: "echo", Arguments: `{"value":"hi"}`},
+		}),
+		assistantStep("done", nil),
+	}}
+	client.onCall = func() { providerEventCounts = append(providerEventCounts, len(history.allEvents())) }
+	profile := testContextProfile("test-model")
+	session := New(client, profile, history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	extra := echoTool("echo", false, nil)
+
+	if err := session.Send(context.Background(), "go", &recorder{}, nil, extra); err != nil {
+		t.Fatal(err)
+	}
+	wantTypes := []memory.EventType{
+		memory.EventUserMessage,
+		memory.EventContextSnapshot,
+		memory.EventAssistantMessage,
+		memory.EventToolIntent,
+		memory.EventToolSucceeded,
+		memory.EventContextSnapshot,
+		memory.EventAssistantMessage,
+	}
+	allEvents := history.allEvents()
+	if len(allEvents) != len(wantTypes) {
+		t.Fatalf("events=%+v", allEvents)
+	}
+	for i, want := range wantTypes {
+		if allEvents[i].Type != want {
+			t.Fatalf("event %d type=%q, want %q", i, allEvents[i].Type, want)
+		}
+	}
+	if fmt.Sprint(providerEventCounts) != "[2 6]" {
+		t.Fatalf("provider observed event counts %v, want snapshots committed first", providerEventCounts)
+	}
+	if len(client.reqs) != 2 {
+		t.Fatalf("provider requests=%d", len(client.reqs))
+	}
+	toolSchemas := tools.SchemasWith([]tools.Tool{extra})
+	wantRequests := []openrouter.ChatRequest{
+		{
+			Model: "test-model", Stream: true, Reasoning: cloneReasoning(session.reasoning), MaxTokens: 16384,
+			Messages: []openrouter.Message{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: "go"},
+			},
+			Tools: toolSchemas,
+		},
+		{
+			Model: "test-model", Stream: true, Reasoning: cloneReasoning(session.reasoning), MaxTokens: 16384,
+			Messages: []openrouter.Message{
+				{Role: "system", Content: systemPrompt},
+				{Role: "user", Content: "go"},
+				{Role: "assistant", ToolCalls: []openrouter.ToolCall{{
+					ID: "call-1", Type: "function", Function: openrouter.FunctionCall{Name: "echo", Arguments: `{"value":"hi"}`},
+				}}},
+				{Role: "tool", Content: `echo:{"value":"hi"}`, ToolCallID: "call-1"},
+			},
+			Tools: toolSchemas,
+		},
+	}
+	if !reflect.DeepEqual(client.reqs, wantRequests) {
+		t.Fatalf("provider requests mismatch\n got: %#v\nwant: %#v", client.reqs, wantRequests)
+	}
+	for i, eventIndex := range []int{1, 5} {
+		var snapshot memory.ContextSnapshotPayload
+		if err := json.Unmarshal(allEvents[eventIndex].Payload, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		estimate, err := (CanonicalRequestEstimator{}).Estimate(client.reqs[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Iteration != i+1 || snapshot.RequestSHA256 != estimate.RequestSHA256 ||
+			snapshot.SerializedBytes != estimate.SerializedBytes {
+			t.Fatalf("snapshot %d=%+v estimate=%+v", i, snapshot, estimate)
+		}
+		if allEvents[eventIndex].Content != "" {
+			t.Fatalf("snapshot stored content: %+v", allEvents[eventIndex])
+		}
+	}
+	if allEvents[1].ParentID != allEvents[0].ID || allEvents[5].ParentID != allEvents[4].ID {
+		t.Fatalf("snapshot parents=%q,%q", allEvents[1].ParentID, allEvents[5].ParentID)
+	}
+
+	firstComposition, err := session.composer.Compose(ContextComposeInput{
+		Profile: profile, Events: []memory.Event{allEvents[0]}, ActiveRootID: allEvents[0].ID,
+		TriggerEventID: allEvents[0].ID, Iteration: 1, Tools: toolSchemas, Reasoning: session.reasoning,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondComposition, err := session.composer.Compose(ContextComposeInput{
+		Profile: profile, Events: []memory.Event{allEvents[0], allEvents[2], allEvents[3], allEvents[4]},
+		ActiveRootID: allEvents[0].ID, TriggerEventID: allEvents[4].ID, Iteration: 2,
+		Tools: toolSchemas, Reasoning: session.reasoning,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstSnapshotJSON, err := json.Marshal(firstComposition.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSnapshotJSON, err := json.Marshal(secondComposition.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionID := allEvents[3].ExecutionID
+	if executionID == "" || allEvents[4].ExecutionID != executionID {
+		t.Fatalf("tool execution correlation=%q,%q", executionID, allEvents[4].ExecutionID)
+	}
+	wantEvents := []memory.Event{
+		{ID: "event-1", SessionID: "test-session", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "go", FormatVersion: 1},
+		{ID: "snapshot-1", SessionID: "test-session", Sequence: 2, ParentID: "event-1", Type: memory.EventContextSnapshot, Payload: firstSnapshotJSON, FormatVersion: 1},
+		{ID: "event-2", SessionID: "test-session", Sequence: 3, ParentID: "event-1", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Payload: json.RawMessage(`{"tool_calls":[{"id":"call-1","name":"echo","arguments":"{\"value\":\"hi\"}"}]}`), FormatVersion: 1},
+		{ID: "event-3", SessionID: "test-session", Sequence: 4, ParentID: "event-2", Type: memory.EventToolIntent, ExecutionID: executionID,
+			Payload: json.RawMessage(`{"call":{"id":"call-1","name":"echo","arguments":"{\"value\":\"hi\"}"}}`), FormatVersion: 1},
+		{ID: "event-4", SessionID: "test-session", Sequence: 5, ParentID: "event-3", Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+			ExecutionID: executionID, Content: `echo:{"value":"hi"}`, Payload: json.RawMessage(`{"tool_call_id":"call-1","is_error":false}`), FormatVersion: 1},
+		{ID: "snapshot-2", SessionID: "test-session", Sequence: 6, ParentID: "event-4", Type: memory.EventContextSnapshot, Payload: secondSnapshotJSON, FormatVersion: 1},
+		{ID: "event-5", SessionID: "test-session", Sequence: 7, ParentID: "event-4", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Content: "done", Payload: json.RawMessage(`{}`), FormatVersion: 1},
+	}
+	if !reflect.DeepEqual(allEvents, wantEvents) {
+		t.Fatalf("ordered durable history mismatch\n got: %#v\nwant: %#v", allEvents, wantEvents)
+	}
+}
+
+func TestSendFailsClosedWhenContextSnapshotCannotPersist(t *testing.T) {
+	history := &fakeHistory{snapshotErr: errors.New("disk full")}
+	client := &fakeClient{steps: []step{assistantStep("not called", nil)}}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+
+	err := session.Send(context.Background(), "hello", &recorder{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "persist context snapshot") {
+		t.Fatalf("Send error=%v", err)
+	}
+	if len(client.reqs) != 0 || len(history.events) != 1 {
+		t.Fatalf("provider requests=%d events=%+v", len(client.reqs), history.events)
+	}
+}
+
+func TestSendRecordsContextOverflowBeforeProviderTransport(t *testing.T) {
+	history := &fakeHistory{}
+	client := &fakeClient{steps: []step{assistantStep("not called", nil)}}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+
+	err := session.Send(context.Background(), strings.Repeat("x", 250000), &recorder{}, nil)
+	if !errors.Is(err, ErrContextOverflow) {
+		t.Fatalf("Send error=%v, want ErrContextOverflow", err)
+	}
+	if len(client.reqs) != 0 || len(history.events) != 2 {
+		t.Fatalf("provider requests=%d events=%+v", len(client.reqs), history.events)
+	}
+	terminal := history.events[1]
+	var payload memory.TurnTerminalPayload
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Type != memory.EventTurnFailed || terminal.Content != "The turn could not fit within the configured model context." ||
+		payload.Classification != memory.ClassificationContextOverflow || payload.Stage != memory.StageContextCompose {
+		t.Fatalf("overflow terminal=%+v payload=%+v", terminal, payload)
 	}
 }
 
@@ -916,6 +1128,159 @@ func TestToolRoundTrip(t *testing.T) {
 		if len(req.Tools) != len(tools.Schemas())+1 {
 			t.Fatalf("request %d advertised %d tools, want %d", i, len(req.Tools), len(tools.Schemas())+1)
 		}
+	}
+}
+
+func TestToolResultAdmissionCapsDurableAndVisibleContent(t *testing.T) {
+	upstream := strings.Repeat("🙂", toolResultAdmissionBytes/4+100)
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("c1", "large", `{}`)),
+		assistantStep("done", nil),
+	}}
+	history := &fakeHistory{}
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	recorder := &recorder{}
+	large := tools.Tool{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "large", Parameters: openrouter.Parameter{Type: "object"},
+		}},
+		Execute: func(context.Context, string) (string, error) { return upstream, nil },
+	}
+
+	if err := session.Send(context.Background(), "go", recorder, nil, large); err != nil {
+		t.Fatal(err)
+	}
+	var durable string
+	for _, event := range history.events {
+		if event.Type == memory.EventToolSucceeded {
+			durable = event.Content
+		}
+	}
+	if len(durable) != toolResultAdmissionBytes || !utf8.ValidString(durable) {
+		t.Fatalf("durable result bytes=%d valid_utf8=%v", len(durable), utf8.ValidString(durable))
+	}
+	visible := "result:c1:false:" + durable
+	if !containsString(recorder.events, visible) {
+		t.Fatalf("visible result differs from durable result")
+	}
+	if got := client.reqs[1].Messages[len(client.reqs[1].Messages)-1].Content; got != durable {
+		t.Fatalf("provider result differs from durable result")
+	}
+}
+
+func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 154097, 154097, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []memory.Event{{ID: "root", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "run"}}
+	sequence := int64(2)
+	for group := 1; group <= 5; group++ {
+		assistantID := memory.EventID(fmt.Sprintf("assistant-%d", group))
+		callID := fmt.Sprintf("call-%d", group)
+		resultID := memory.EventID(fmt.Sprintf("result-%d", group))
+		events = append(events,
+			memory.Event{ID: assistantID, Sequence: sequence, ParentID: "root", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+				Payload: historyPayload(t, memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{{ID: callID, Name: "large", Arguments: `{}`}}})},
+			memory.Event{ID: resultID, Sequence: sequence + 1, ParentID: assistantID, Type: memory.EventToolSucceeded, Role: memory.RoleTool,
+				Content: strings.Repeat(string(rune('a'+group-1)), 20*1024), Payload: historyPayload(t, memory.ToolResultPayload{ToolCallID: callID})},
+		)
+		sequence += 2
+	}
+	history := &fakeHistory{events: events}
+	client := &fakeClient{steps: []step{assistantStep("done", nil)}}
+	session := New(client, profile, history, memory.ScopeContext{
+		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
+	}, newFakeTurnOwner())
+	session.reasoning = nil
+
+	if err := session.Send(context.Background(), "continue", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if history.events[2].Content != strings.Repeat("a", 20*1024) {
+		t.Fatal("canonical durable result was changed by request projection")
+	}
+	var projected, retained string
+	for _, message := range client.reqs[0].Messages {
+		switch message.ToolCallID {
+		case "call-1":
+			projected = message.Content
+		case "call-5":
+			retained = message.Content
+		}
+	}
+	digest := sha256.Sum256([]byte(history.events[2].Content))
+	exactProjection := fmt.Sprintf(
+		"[older tool result projected: event_id=result-1 original_bytes=20480 sha256=%x]\n<head>\n%s\n<tail>\n%s",
+		digest,
+		strings.Repeat("a", 512),
+		strings.Repeat("a", 512),
+	)
+	if projected != exactProjection {
+		t.Fatalf("provider projection=%q", projected)
+	}
+	if retained != strings.Repeat("e", 20*1024) {
+		t.Fatalf("newest retained result bytes=%d", len(retained))
+	}
+	var snapshot memory.ContextSnapshotPayload
+	for _, event := range history.allEvents() {
+		if event.Type == memory.EventContextSnapshot {
+			if err := json.Unmarshal(event.Payload, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	secondDigest := sha256.Sum256([]byte(history.events[4].Content))
+	if len(snapshot.Placeholders) != 2 || snapshot.Placeholders[0].EventID != "result-1" ||
+		snapshot.Placeholders[0].SHA256 != fmt.Sprintf("%x", digest) ||
+		snapshot.Placeholders[1].EventID != "result-2" || snapshot.Placeholders[1].SHA256 != fmt.Sprintf("%x", secondDigest) {
+		t.Fatalf("snapshot placeholders=%+v", snapshot.Placeholders)
+	}
+	if snapshot.SerializedBytes > percentageFloor(snapshot.UsableInputBytes, 60) {
+		t.Fatalf("snapshot bytes=%d target=%d", snapshot.SerializedBytes, percentageFloor(snapshot.UsableInputBytes, 60))
+	}
+	wantMessages := []openrouter.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: "run"},
+	}
+	for group := 1; group <= 5; group++ {
+		callID := fmt.Sprintf("call-%d", group)
+		wantMessages = append(wantMessages,
+			openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{
+				ID: callID, Type: "function", Function: openrouter.FunctionCall{Name: "large", Arguments: `{}`},
+			}}},
+			openrouter.Message{Role: "tool", ToolCallID: callID, Content: strings.Repeat(string(rune('a'+group-1)), 20*1024)},
+		)
+	}
+	wantMessages[3].Content = exactProjection
+	wantMessages[5].Content = fmt.Sprintf(
+		"[older tool result projected: event_id=result-2 original_bytes=20480 sha256=%x]\n<head>\n%s\n<tail>\n%s",
+		secondDigest,
+		strings.Repeat("b", 512),
+		strings.Repeat("b", 512),
+	)
+	wantRequest := openrouter.ChatRequest{
+		Model: "test/model", Messages: wantMessages, Tools: tools.Schemas(), Stream: true, MaxTokens: 1,
+	}
+	wantRequest.Messages = append(wantRequest.Messages, openrouter.Message{Role: "user", Content: "continue"})
+	if !reflect.DeepEqual(client.reqs[0], wantRequest) {
+		got := client.reqs[0]
+		if got.Model != wantRequest.Model || got.Stream != wantRequest.Stream || got.MaxTokens != wantRequest.MaxTokens ||
+			!reflect.DeepEqual(got.Reasoning, wantRequest.Reasoning) || !reflect.DeepEqual(got.Tools, wantRequest.Tools) ||
+			len(got.Messages) != len(wantRequest.Messages) {
+			t.Fatalf("provider request envelope mismatch: got messages=%d tools=%d reasoning=%+v; want messages=%d tools=%d reasoning=%+v",
+				len(got.Messages), len(got.Tools), got.Reasoning, len(wantRequest.Messages), len(wantRequest.Tools), wantRequest.Reasoning)
+		}
+		for i := range got.Messages {
+			if !reflect.DeepEqual(got.Messages[i], wantRequest.Messages[i]) {
+				t.Fatalf("provider message %d mismatch: got role=%s call=%s content_bytes=%d calls=%+v; want role=%s call=%s content_bytes=%d calls=%+v",
+					i, got.Messages[i].Role, got.Messages[i].ToolCallID, len(got.Messages[i].Content), got.Messages[i].ToolCalls,
+					wantRequest.Messages[i].Role, wantRequest.Messages[i].ToolCallID, len(wantRequest.Messages[i].Content), wantRequest.Messages[i].ToolCalls)
+			}
+		}
+		t.Fatal("provider request mismatch without a differing field")
 	}
 }
 
