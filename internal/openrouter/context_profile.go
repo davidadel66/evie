@@ -84,9 +84,8 @@ func (p ContextProfile) Model() string { return p.configuredModel }
 
 func (p ContextProfile) OutputReserveTokens() int64 { return p.outputReserveTokens }
 
-// NewExplicitContextProfile constructs the same validated profile used by the
-// environment hard-window override. It is useful to startup adapters that
-// obtain an explicit hard limit from a source other than process environment.
+// NewExplicitContextProfile constructs a validated hard-window override
+// profile without remote metadata discovery.
 func NewExplicitContextProfile(
 	model string,
 	hardWindowTokens int64,
@@ -141,14 +140,7 @@ func (c *Client) ResolveContextProfile(ctx context.Context, model string) (Conte
 		return ContextProfile{}, err
 	}
 	if config.hardOverride > 0 {
-		return newContextProfile(ContextProfileDiagnostics{
-			ConfiguredModel:        model,
-			HardWindowTokens:       config.hardOverride,
-			WorkingTokens:          config.working,
-			OutputReserveTokens:    config.output,
-			EstimationMarginTokens: contextEstimationMargin,
-			Source:                 ContextProfileExplicitOverride,
-		})
+		return NewExplicitContextProfile(model, config.hardOverride, config.working, config.output)
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, c.contextDiscoveryTimeout)
@@ -191,6 +183,9 @@ func (c *Client) discoverContextProfile(
 	modelData := modelResponse.Data
 	if modelData.ID == "" || modelData.CanonicalSlug == "" || modelData.ContextLength == nil || *modelData.ContextLength <= 0 {
 		return ContextProfile{}, errors.New("focused model metadata is incomplete")
+	}
+	if _, _, err := modelSegments(modelData.ID); err != nil {
+		return ContextProfile{}, fmt.Errorf("advertised model metadata: %w", err)
 	}
 	canonicalAuthor, canonicalSlug, err := modelSegments(modelData.CanonicalSlug)
 	if err != nil {
@@ -235,12 +230,15 @@ func routeSafeWindow(response endpointMetadataResponse, outputReserve int64) (in
 		if endpoint.Status == nil {
 			return 0, fmt.Errorf("endpoint %d is missing status", i)
 		}
-		if *endpoint.Status != 0 || !containsParameter(endpoint.SupportedParameters, "max_tokens") ||
-			endpoint.MaxCompletionTokens == nil || *endpoint.MaxCompletionTokens < outputReserve {
+		if *endpoint.Status != 0 || !containsParameter(endpoint.SupportedParameters, "max_tokens") {
 			continue
 		}
-		if endpoint.ContextLength == nil || *endpoint.ContextLength <= 0 || *endpoint.MaxCompletionTokens <= 0 {
-			return 0, fmt.Errorf("eligible endpoint %d has invalid token limits", i)
+		if endpoint.ContextLength == nil || *endpoint.ContextLength <= 0 ||
+			endpoint.MaxCompletionTokens == nil || *endpoint.MaxCompletionTokens <= 0 {
+			return 0, fmt.Errorf("active max_tokens endpoint %d has invalid token limits", i)
+		}
+		if *endpoint.MaxCompletionTokens < outputReserve {
+			continue
 		}
 		if hardWindow == 0 || *endpoint.ContextLength < hardWindow {
 			hardWindow = *endpoint.ContextLength

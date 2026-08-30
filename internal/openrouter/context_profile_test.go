@@ -215,6 +215,51 @@ func TestResolveContextProfileRejectsMalformedEndpointMetadata(t *testing.T) {
 	}
 }
 
+func TestResolveContextProfileRejectsMalformedCompletionLimits(t *testing.T) {
+	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
+	tests := []struct {
+		name  string
+		limit string
+	}{
+		{name: "missing", limit: "null"},
+		{name: "zero", limit: "0"},
+		{name: "negative", limit: "-1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v1/model/custom/model":
+					_, _ = w.Write([]byte(`{"data":{"id":"custom/model","canonical_slug":"custom/model","context_length":300000}}`))
+				case "/api/v1/models/custom/model/endpoints":
+					_, _ = w.Write([]byte(`{"data":{"id":"custom/model","endpoints":[` +
+						`{"context_length":280000,"max_completion_tokens":` + tt.limit + `,"status":0,"supported_parameters":["max_tokens"]},` +
+						`{"context_length":300000,"max_completion_tokens":20000,"status":0,"supported_parameters":["max_tokens"]}` +
+						`]}}`))
+				}
+			}))
+			if _, err := client.ResolveContextProfile(context.Background(), "custom/model"); err == nil {
+				t.Fatal("malformed completion limit succeeded")
+			}
+		})
+	}
+}
+
+func TestResolveContextProfileRejectsMalformedAdvertisedIdentity(t *testing.T) {
+	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
+	client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/model/custom/model":
+			_, _ = w.Write([]byte(`{"data":{"id":"not-a-model-identity","canonical_slug":"custom/model","context_length":300000}}`))
+		case "/api/v1/models/custom/model/endpoints":
+			_, _ = w.Write([]byte(`{"data":{"id":"custom/model","endpoints":[{"context_length":300000,"max_completion_tokens":20000,"status":0,"supported_parameters":["max_tokens"]}]}}`))
+		}
+	}))
+	if _, err := client.ResolveContextProfile(context.Background(), "custom/model"); err == nil {
+		t.Fatal("malformed advertised identity succeeded")
+	}
+}
+
 func TestResolveContextProfileRejectsWorkingCeilingAboveDiscoveredHardWindow(t *testing.T) {
 	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
 	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "262144")
