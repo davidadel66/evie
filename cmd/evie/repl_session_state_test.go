@@ -76,7 +76,7 @@ func TestRunREPLPresentsBusyAndInactiveWithoutTurnWork(t *testing.T) {
 			client := &unavailableREPLClient{}
 			history := &unavailableREPLHistory{}
 			owner := &unavailableREPLOwner{err: tt.err}
-			session := agent.New(client, "test", history, memory.ScopeContext{
+			session := agent.New(client, evieTestContextProfile("test"), history, memory.ScopeContext{
 				OwnerID: memory.LocalOwnerID, SessionID: "session",
 			}, owner)
 			var out bytes.Buffer

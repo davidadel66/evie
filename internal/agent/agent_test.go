@@ -83,10 +83,18 @@ func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
 }
 
 func newTestSession(client Client, model string) *Session {
-	return New(client, model, &fakeHistory{}, memory.ScopeContext{
+	return New(client, testContextProfile(model), &fakeHistory{}, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: memory.SessionID("test-session"),
 	}, newFakeTurnOwner())
+}
+
+func testContextProfile(model string) openrouter.ContextProfile {
+	profile, err := openrouter.NewExplicitContextProfile(model, 300000, 262144, 16384)
+	if err != nil {
+		panic(err)
+	}
+	return profile
 }
 
 type fakeTurnOwner struct {
@@ -151,7 +159,7 @@ func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
 			history.events[0].Role == memory.RoleUser &&
 			history.events[0].Content == "hello"
 	}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -167,7 +175,7 @@ func TestSendPersistsUserBeforeProviderCall(t *testing.T) {
 func TestSendStopsWhenUserEventAppendFails(t *testing.T) {
 	history := &fakeHistory{appendErr: errors.New("disk full")}
 	c := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -203,7 +211,7 @@ func TestSendPersistsAssistantBeforeToolExecution(t *testing.T) {
 		assistantStep("", nil, toolCall("call-1", "echo", `{"x":1}`)),
 		assistantStep("done", nil),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -241,7 +249,7 @@ func TestSendStopsWhenAssistantEventAppendFails(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -261,7 +269,7 @@ func TestSendStopsWhenToolIntentAppendFails(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -329,7 +337,7 @@ func TestSendCancellationDuringHistoryLoadPreventsProvider(t *testing.T) {
 		onEvents:  cancel,
 	}
 	client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	s := New(client, "test-model", history, memory.ScopeContext{
+	s := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, newFakeTurnOwner())
 
@@ -366,7 +374,7 @@ func TestCommittedFinalAssistantRemainsDurableSuccess(t *testing.T) {
 		}}
 		client := &fakeClient{steps: []step{assistantStep("late final", nil)}}
 		events := &recorder{}
-		s := New(client, "test-model", history, memory.ScopeContext{
+		s := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 		}, newFakeTurnOwner())
 
@@ -406,7 +414,7 @@ func TestSendCancellationAtToolIntentAndOutcomeBoundariesStopsLaterPhases(t *tes
 		client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("call-1", "echo", `{}`))}}
 		ran := false
 		events := &recorder{}
-		s := New(client, "test-model", history, memory.ScopeContext{
+		s := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 		}, newFakeTurnOwner())
 
@@ -447,7 +455,7 @@ func TestSendCancellationAtToolIntentAndOutcomeBoundariesStopsLaterPhases(t *tes
 		}}
 		ran := false
 		events := &recorder{}
-		s := New(client, "test-model", history, memory.ScopeContext{
+		s := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 		}, newFakeTurnOwner())
 
@@ -490,7 +498,7 @@ func TestSendStopsWhenToolOutcomeAppendFails(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -533,7 +541,7 @@ func TestSendPersistsApprovalBeforeGatedToolExecution(t *testing.T) {
 		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
 		assistantStep("done", nil),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -555,7 +563,7 @@ func TestSendStopsWhenApprovalAppendFails(t *testing.T) {
 	c := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -582,7 +590,7 @@ func TestSendRecordsDeclinedApprovalAsCancellation(t *testing.T) {
 		assistantStep("", nil, toolCall("call-1", "dangerous", `{}`)),
 		assistantStep("understood", nil),
 	}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -728,6 +736,9 @@ func TestPlainAnswer(t *testing.T) {
 	if len(c.reqs) != 1 || c.reqs[0].Model != "test-model" {
 		t.Fatalf("request model = %q", c.reqs[0].Model)
 	}
+	if c.reqs[0].MaxTokens != 16384 {
+		t.Fatalf("request max_tokens = %d, want 16384", c.reqs[0].MaxTokens)
+	}
 	if len(c.reqs[0].Tools) != len(tools.Schemas()) {
 		t.Fatalf("request advertised %d tools, want base registry %d", len(c.reqs[0].Tools), len(tools.Schemas()))
 	}
@@ -739,7 +750,7 @@ func TestSendPersistsSeparateUsageForEveryProviderIteration(t *testing.T) {
 		assistantUsageStep("", testProviderUsage(10, 2, 12), toolCall("call-1", "echo", `{}`)),
 		assistantUsageStep("done", testProviderUsage(20, 3, 23)),
 	}}
-	session := New(client, "test-model", history, memory.ScopeContext{
+	session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, newFakeTurnOwner())
 	if err := session.Send(context.Background(), "go", &recorder{}, nil, echoTool("echo", false, nil)); err != nil {
@@ -764,6 +775,11 @@ func TestSendPersistsSeparateUsageForEveryProviderIteration(t *testing.T) {
 	}
 	if len(client.reqs) != 2 {
 		t.Fatalf("provider requests=%d, want 2", len(client.reqs))
+	}
+	for i, request := range client.reqs {
+		if request.MaxTokens != 16384 {
+			t.Fatalf("provider request %d max_tokens=%d, want 16384", i, request.MaxTokens)
+		}
 	}
 	secondRequest, err := json.Marshal(client.reqs[1])
 	if err != nil {
@@ -834,7 +850,7 @@ func TestAssistantUsageSharesAssistantCommitOrRollbackFate(t *testing.T) {
 		client := &fakeClient{steps: []step{
 			assistantUsageStep("accepted", testProviderUsage(4, 5, 9)),
 		}}
-		session := New(client, "test-model", history, memory.ScopeContext{
+		session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 		}, newFakeTurnOwner())
 		if err := session.Send(ctx, "go", &recorder{}, nil); err != nil {
@@ -857,7 +873,7 @@ func TestAssistantUsageSharesAssistantCommitOrRollbackFate(t *testing.T) {
 		client := &fakeClient{steps: []step{
 			assistantUsageStep("not accepted", testProviderUsage(4, 5, 9)),
 		}}
-		session := New(client, "test-model", history, memory.ScopeContext{
+		session := New(client, testContextProfile("test-model"), history, memory.ScopeContext{
 			OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 		}, newFakeTurnOwner())
 		if err := session.Send(context.Background(), "go", &recorder{}, nil); err == nil {
@@ -1071,7 +1087,7 @@ func TestSendBuildsProviderRequestFromDurableHistory(t *testing.T) {
 		{ID: "event-2", SessionID: "test-session", Sequence: 2, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "earlier answer", Payload: json.RawMessage(`{}`)},
 	}}
 	c := &fakeClient{steps: []step{assistantStep("new answer", nil)}}
-	s := New(c, "test-model", history, memory.ScopeContext{
+	s := New(c, testContextProfile("test-model"), history, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, newFakeTurnOwner())
@@ -1123,17 +1139,12 @@ func TestSecondSendGetsErrBusy(t *testing.T) {
 	}
 }
 
-func TestModelResolution(t *testing.T) {
-	t.Setenv("EVIE_MODEL", "env-model")
-	if s := newTestSession(nil, ""); s.model != "env-model" {
-		t.Fatalf("model = %q, want env override", s.model)
-	}
-	if s := newTestSession(nil, "explicit"); s.model != "explicit" {
-		t.Fatalf("model = %q, explicit arg must win", s.model)
-	}
-	t.Setenv("EVIE_MODEL", "")
-	if s := newTestSession(nil, ""); s.model != DefaultModel {
-		t.Fatalf("model = %q, want DefaultModel", s.model)
+func TestSessionExposesImmutableContextDiagnostics(t *testing.T) {
+	session := newTestSession(nil, "vendor/model")
+	diagnostics := session.ContextProfile()
+	diagnostics.HardWindowTokens = 1
+	if got := session.ContextProfile().HardWindowTokens; got != 300000 {
+		t.Fatalf("session hard window = %d, want immutable 300000", got)
 	}
 }
 

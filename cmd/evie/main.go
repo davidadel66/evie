@@ -52,6 +52,14 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to create client: %v", err)
 		}
+		model := os.Getenv("EVIE_MODEL")
+		if model == "" {
+			model = agent.DefaultModel
+		}
+		profile, err := client.ResolveContextProfile(context.Background(), model)
+		if err != nil {
+			log.Fatalf("failed to resolve context profile: %v", err)
+		}
 
 		db, err := eviedb.OpenDB()
 		if err != nil {
@@ -71,7 +79,7 @@ func main() {
 		holderID := memory.LeaseHolderID(holderUUID.String())
 		return agent.New(
 			client,
-			"",
+			profile,
 			store.BindHistory(storedSession.ID, holderID),
 			storedSession.ScopeContext(),
 			store.BindTurnOwner(storedSession.ID, holderID),

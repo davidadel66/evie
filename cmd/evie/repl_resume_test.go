@@ -61,6 +61,10 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	store = eviedb.NewStore(db)
+	processProfile, err := openrouter.NewExplicitContextProfile("current/model", 300000, 200000, 12000)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name      string
@@ -87,12 +91,15 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 
 			client := &resumeCaptureClient{}
 			holder := memory.LeaseHolderID("restart-" + tt.name)
-			resumed := agent.New(client, "test", store.BindHistory(selected.ID, holder), selected.ScopeContext(), store.BindTurnOwner(selected.ID, holder))
+			resumed := agent.New(client, processProfile, store.BindHistory(selected.ID, holder), selected.ScopeContext(), store.BindTurnOwner(selected.ID, holder))
 			if err := resumed.Send(context.Background(), "after restart", &replEvents{out: io.Discard}, nil); err != nil {
 				t.Fatal(err)
 			}
 			if len(client.requests) != 1 {
 				t.Fatalf("provider requests=%d", len(client.requests))
+			}
+			if request := client.requests[0]; request.Model != "current/model" || request.MaxTokens != 12000 {
+				t.Fatalf("resumed request profile model=%q max_tokens=%d", request.Model, request.MaxTokens)
 			}
 			messages := client.requests[0].Messages
 			wantRoles := []string{"system", "user", "assistant", "user", "user"}

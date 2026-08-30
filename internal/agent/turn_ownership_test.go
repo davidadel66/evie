@@ -137,7 +137,7 @@ func (o *scriptedOwner) counts() (acquire, heartbeat, authorize, release int) {
 }
 
 func ownedSession(client Client, history *fakeHistory, owner *scriptedOwner) *Session {
-	return New(client, "test", history, memory.ScopeContext{
+	return New(client, testContextProfile("test"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, owner)
 }
@@ -505,7 +505,7 @@ func TestCancellationDuringRolledBackRootAppendReleasesWithoutLaterWork(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	owner := &scriptedOwner{}
 	client := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	s := New(client, "test", rolledBackRootHistory{cancel: cancel}, memory.ScopeContext{
+	s := New(client, testContextProfile("test"), rolledBackRootHistory{cancel: cancel}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, owner)
 	err := s.Send(ctx, "hello", &recorder{}, nil)
@@ -1643,7 +1643,7 @@ func TestOrdinaryToolReturnTransitionsAtomicallyToToolCommit(t *testing.T) {
 				client := &fakeClient{steps: []step{assistantStep("", nil,
 					toolCall("call", "target", `{}`),
 				)}}
-				s := New(client, "test", contextAwareHistory{inner: history}, memory.ScopeContext{
+				s := New(client, testContextProfile("test"), contextAwareHistory{inner: history}, memory.ScopeContext{
 					OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 				}, owner)
 				ticks := useManualHeartbeatTicker(s)

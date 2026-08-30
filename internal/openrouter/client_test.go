@@ -394,6 +394,30 @@ func TestChatRequestsDoNotAskProviderForUsage(t *testing.T) {
 	})
 }
 
+func TestChatStreamSendsConfiguredMaxTokens(t *testing.T) {
+	var captured map[string]json.RawMessage
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&captured); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n"))
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewClient("key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = server.URL
+	if _, err := client.ChatStream(context.Background(), ChatRequest{
+		Model: "vendor/model", MaxTokens: 12000,
+	}, StreamHandlers{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(captured["max_tokens"]); got != "12000" {
+		t.Fatalf("captured max_tokens=%s, want 12000", got)
+	}
+}
+
 func streamResponseForTest(t *testing.T, chunk string) ChatResponse {
 	t.Helper()
 	return streamChunksResponseForTest(t, []string{chunk})

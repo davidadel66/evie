@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type StreamErrorKind string
@@ -51,9 +52,11 @@ func NewClient(key string) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:     key,
-		baseURL:    "https://openrouter.ai/api/v1/chat/completions",
-		httpClient: &http.Client{},
+		apiKey:                  key,
+		baseURL:                 "https://openrouter.ai/api/v1/chat/completions",
+		apiBaseURL:              "https://openrouter.ai/api/v1",
+		httpClient:              &http.Client{},
+		contextDiscoveryTimeout: 3 * time.Second,
 	}, nil
 }
 

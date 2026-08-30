@@ -152,10 +152,11 @@ func (s *Session) runOwnedTurn(
 			return s.classifyLocalError(coordinator, err)
 		}
 		req := openrouter.ChatRequest{
-			Model:     s.model,
+			Model:     s.profile.Model(),
 			Messages:  messages,
 			Tools:     tools.SchemasWith(extra),
 			Reasoning: s.reasoning,
+			MaxTokens: s.profile.OutputReserveTokens(),
 		}
 		if err := s.owner.Authorize(coordinator.ctx, lease); err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("authorize provider start: %w", err))

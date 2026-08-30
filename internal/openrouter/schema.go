@@ -3,6 +3,7 @@ package openrouter
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 // Message is one entry in a conversation. The same struct covers all roles:
@@ -29,9 +30,11 @@ type Choice struct {
 // purpose: construction goes through NewClient so an empty key can never
 // reach request time.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	apiKey                  string
+	baseURL                 string
+	apiBaseURL              string
+	httpClient              *http.Client
+	contextDiscoveryTimeout time.Duration
 }
 
 // Tool is the wire format for advertising one tool to the model. Type is
@@ -118,6 +121,7 @@ type ChatRequest struct {
 	Tools     []Tool           `json:"tools,omitempty"`
 	Stream    bool             `json:"stream,omitempty"`
 	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
+	MaxTokens int64            `json:"max_tokens,omitempty"`
 }
 
 // streamChunk is one SSE "data:" event in a streaming response. Deltas

@@ -42,6 +42,14 @@ func (c *blockingAgentClient) ChatStream(ctx context.Context, _ openrouter.ChatR
 
 type noOpAgentEvents struct{}
 
+func integrationContextProfile(model string) openrouter.ContextProfile {
+	profile, err := openrouter.NewExplicitContextProfile(model, 300000, 262144, 16384)
+	if err != nil {
+		panic(err)
+	}
+	return profile
+}
+
 func (noOpAgentEvents) Delta(string)                                  {}
 func (noOpAgentEvents) Reasoning(string)                              {}
 func (noOpAgentEvents) ReasoningDone()                                {}
@@ -79,7 +87,7 @@ func TestTwoStoresAllowOnlyOneLiveAgentTurnForSession(t *testing.T) {
 	clientA := &blockingAgentClient{entered: make(chan struct{}), release: make(chan struct{})}
 	clientB := &blockingAgentClient{}
 	newSession := func(store *eviedb.Store, holder memory.LeaseHolderID, client agent.Client) *agent.Session {
-		return agent.New(client, "test", store.BindHistory(storedSession.ID, holder), storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, holder))
+		return agent.New(client, integrationContextProfile("test"), store.BindHistory(storedSession.ID, holder), storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, holder))
 	}
 	sessionA := newSession(storeA, "holder-a", clientA)
 	sessionB := newSession(storeB, "holder-b", clientB)
@@ -131,7 +139,7 @@ func TestAgentTerminalSafeContentMatchesProductionStorageAuthority(t *testing.T)
 	}
 	session := agent.New(
 		failingAgentClient{err: providerErr},
-		"test",
+		integrationContextProfile("test"),
 		store.BindHistory(storedSession.ID, holder),
 		storedSession.ScopeContext(),
 		store.BindTurnOwner(storedSession.ID, holder),
@@ -238,7 +246,7 @@ func TestFinalToolResultCancellationPersistsPriorProviderTriggerAcrossStores(t *
 	holder := memory.LeaseHolderID("holder")
 	client := &toolCycleAgentClient{}
 	session := agent.New(
-		client, "test", storeA.BindHistory(storedSession.ID, holder),
+		client, integrationContextProfile("test"), storeA.BindHistory(storedSession.ID, holder),
 		storedSession.ScopeContext(), storeB.BindTurnOwner(storedSession.ID, holder),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -276,7 +284,7 @@ func TestSecondCycleProviderFailurePersistsFinalOutcomeTriggerAcrossStores(t *te
 	providerErr := &openrouter.StreamError{Kind: openrouter.StreamProviderError, Err: errors.New("provider down")}
 	client := &toolCycleAgentClient{secondErr: providerErr}
 	session := agent.New(
-		client, "test", storeA.BindHistory(storedSession.ID, holder),
+		client, integrationContextProfile("test"), storeA.BindHistory(storedSession.ID, holder),
 		storedSession.ScopeContext(), storeB.BindTurnOwner(storedSession.ID, holder),
 	)
 	err := session.Send(context.Background(), "hello", noOpAgentEvents{}, nil, integrationEchoTool())

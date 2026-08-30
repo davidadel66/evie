@@ -121,7 +121,7 @@ func TestSessionToREPLDiscardedStreamCleansStateBeforeNextTurn(t *testing.T) {
 			var out bytes.Buffer
 			events := &replEvents{out: &out}
 			client := &replDiscardThenSucceedClient{reasoning: tt.reasoning}
-			session := agent.New(client, "test", &recordingREPLHistory{}, memory.ScopeContext{
+			session := agent.New(client, evieTestContextProfile("test"), &recordingREPLHistory{}, memory.ScopeContext{
 				OwnerID: memory.LocalOwnerID, SessionID: "session",
 			}, testTurnOwner{})
 
@@ -166,7 +166,7 @@ func TestREPLRendersContentFirstProviderAsOneAuthoritativeAssistant(t *testing.T
 	history := &recordingREPLHistory{}
 	session := agent.New(
 		replContentFirstReasoningClient{},
-		"test",
+		evieTestContextProfile("test"),
 		history,
 		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"},
 		testTurnOwner{},
@@ -246,7 +246,7 @@ func TestSessionToREPLPresentsCommittedAssistantBeforeTerminalCause(t *testing.T
 				client := &fakeREPLBoundaryClient{deltas: presentation.deltas}
 				var out bytes.Buffer
 				events := &replEvents{out: &out}
-				session := agent.New(client, "test", history, memory.ScopeContext{
+				session := agent.New(client, evieTestContextProfile("test"), history, memory.ScopeContext{
 					OwnerID: memory.LocalOwnerID, SessionID: "session",
 				}, leaseAwareREPLTurnOwner{})
 				if err := session.Send(ctx, "go", events, nil); err == nil {

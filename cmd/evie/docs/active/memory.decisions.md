@@ -1,5 +1,37 @@
 # memory - decisions
 
+- **2026-08-30 - one startup-resolved profile bounds every conversational request.**
+  Each process resolves one immutable context profile before opening or resuming
+  a conversational session. The profile keeps the configured model, canonical
+  model identity, advertised model window, effective route-safe hard window,
+  working ceiling, output reserve, fixed estimation margin, and stable source
+  provenance as distinct diagnostics. `remote_metadata`, `explicit_override`,
+  and `builtin_fallback` are the closed provenance values. Resume always uses
+  the current process profile; there is no durable cache, session override,
+  runtime setter, or migration. The working ceiling defaults to 262,144 tokens,
+  the output reserve to 16,384, and the estimation margin is fixed at 4,096.
+  `EVIE_CONTEXT_WINDOW_TOKENS` is an optional positive hard-window override
+  which skips metadata discovery; `EVIE_CONTEXT_WORKING_TOKENS` and
+  `EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS` override their respective defaults.
+  Every value must fit a positive signed 64-bit integer, working must not exceed
+  hard, and reserve plus margin must fit and remain strictly below working.
+  Conversational requests send the profile reserve as `max_tokens`.
+
+- **2026-08-30 - remote route safety uses focused canonical metadata and eligible endpoints.**
+  Without a hard override, startup performs one authenticated focused-model
+  lookup followed by one authenticated endpoint lookup for the returned
+  canonical slug, under caller cancellation and one shared three-second
+  deadline. The advertised window comes only from focused-model metadata. The
+  route-safe hard window is the minimum positive context length across active
+  endpoints that advertise `max_tokens` and a maximum completion limit at least
+  as large as the configured output reserve. Non-serving endpoints and endpoints
+  that cannot honor that output limit are ineligible; malformed identity,
+  window, completion-limit, or eligible-endpoint metadata fails discovery.
+  Caller cancellation and caller deadline expiry always abort startup. Other
+  discovery failures use the checked-in 262,144-token `builtin_fallback` only
+  when the configured model is Evie's exact built-in model; an unknown custom
+  model fails startup unless a hard override was supplied.
+
 - **2026-08-25 - provider token usage is immutable per-assistant episodic diagnostics.**
   Each successful provider iteration may attach one optional provider-neutral
   usage object to its accepted `assistant_message` payload in the same existing

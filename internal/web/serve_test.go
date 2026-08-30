@@ -25,6 +25,14 @@ type fakeClient struct {
 	release chan struct{}
 }
 
+func webTestContextProfile(model string) openrouter.ContextProfile {
+	profile, err := openrouter.NewExplicitContextProfile(model, 300000, 262144, 16384)
+	if err != nil {
+		panic(err)
+	}
+	return profile
+}
+
 type fakeStep struct {
 	deltas    []string
 	reasoning []string // streamed before deltas, as real providers send it
@@ -108,7 +116,7 @@ func newTestServer(c *fakeClient) http.Handler {
 }
 
 func newTestServerFull(c *fakeClient) (*Server, http.Handler) {
-	srv := NewServer(agent.New(c, "test-model", &fakeHistory{}, memory.ScopeContext{
+	srv := NewServer(agent.New(c, webTestContextProfile("test-model"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID:   memory.LocalOwnerID,
 		SessionID: "test-session",
 	}, webTestTurnOwner{}))
@@ -208,7 +216,7 @@ func TestChatWaitsForAdmittedProviderCallbackBeforeAssistantAndTurnDone(t *testi
 	releaseDelta := make(chan struct{})
 	callbackDone := make(chan struct{})
 	client := asyncWebClient{deltaWriteStarted: deltaStarted, callbackDone: callbackDone}
-	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+	session := agent.New(client, webTestContextProfile("test"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})
 	w := &blockingDeltaWriter{
@@ -300,7 +308,7 @@ func TestChatSerializesConcurrentProviderCallbacksBeforeTurnDone(t *testing.T) {
 		callbacksDone:         callbacksDone,
 		allowReturn:           allowReturn,
 	}
-	session := agent.New(client, "test", &fakeHistory{}, memory.ScopeContext{
+	session := agent.New(client, webTestContextProfile("test"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})
 	w := &blockingReasoningWriter{
@@ -395,7 +403,7 @@ func (contentFirstWebClient) ChatStream(
 }
 
 func TestChatSuppressesReasoningThatArrivesAfterContent(t *testing.T) {
-	session := agent.New(contentFirstWebClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+	session := agent.New(contentFirstWebClient{}, webTestContextProfile("test"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})
 	recorder := httptest.NewRecorder()
@@ -445,7 +453,7 @@ func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *t
 						Function: openrouter.FunctionCall{Name: "missing", Arguments: `{}`},
 					}},
 				}}}
-				session := agent.New(client, "test", history, memory.ScopeContext{
+				session := agent.New(client, webTestContextProfile("test"), history, memory.ScopeContext{
 					OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 				}, owner)
 				recorder := httptest.NewRecorder()
@@ -478,7 +486,7 @@ func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *t
 func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 2}
 	client := &fakeClient{steps: []fakeStep{{deltas: []string{"partial"}, content: "partial"}}}
-	session := agent.New(client, "test", history, memory.ScopeContext{
+	session := agent.New(client, webTestContextProfile("test"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})
 	recorder := httptest.NewRecorder()
@@ -495,7 +503,7 @@ func TestChatStreamsContentDiscardBeforeErrorAndTurnDone(t *testing.T) {
 func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
 	history := &fakeHistory{appendErrAt: 2}
 	client := &fakeClient{steps: []fakeStep{{reasoning: []string{"thinking"}, content: "unrendered final"}}}
-	session := agent.New(client, "test", history, memory.ScopeContext{
+	session := agent.New(client, webTestContextProfile("test"), history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{})
 	recorder := httptest.NewRecorder()
@@ -512,7 +520,7 @@ func TestChatStreamsReasoningDoneBeforeStandaloneDiscard(t *testing.T) {
 
 func TestDurableLeaseConflictUsesPreStream409JSON(t *testing.T) {
 	conflictErr := errors.New("lease held elsewhere")
-	session := agent.New(&fakeClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+	session := agent.New(&fakeClient{}, webTestContextProfile("test"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{acquireErr: conflictErr, conflict: true})
 	recorder := httptest.NewRecorder()
@@ -527,7 +535,7 @@ func TestDurableLeaseConflictUsesPreStream409JSON(t *testing.T) {
 
 func TestInactiveSessionPreservesWebSSEErrorPayload(t *testing.T) {
 	acquireErr := errors.New(`eviedb: turn lease session is missing or inactive: session "test-session"`)
-	session := agent.New(&fakeClient{}, "test", &fakeHistory{}, memory.ScopeContext{
+	session := agent.New(&fakeClient{}, webTestContextProfile("test"), &fakeHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, webTestTurnOwner{acquireErr: acquireErr, sessionInactive: true})
 	recorder := httptest.NewRecorder()

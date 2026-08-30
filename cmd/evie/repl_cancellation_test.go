@@ -19,6 +19,14 @@ import (
 
 type replCancellationClient struct{ calls atomic.Int32 }
 
+func evieTestContextProfile(model string) openrouter.ContextProfile {
+	profile, err := openrouter.NewExplicitContextProfile(model, 300000, 262144, 16384)
+	if err != nil {
+		panic(err)
+	}
+	return profile
+}
+
 type scanReadBarrier struct {
 	reader  io.Reader
 	entered chan int
@@ -97,7 +105,7 @@ func TestRunREPLContextDiscardsInputThatUnblocksScannerAfterCancellation(t *test
 	defer reader.Close()
 	barrier := newScanReadBarrier(reader)
 	client := &replCancellationClient{}
-	session := agent.New(client, "test", replCancellationHistory{}, memory.ScopeContext{
+	session := agent.New(client, evieTestContextProfile("test"), replCancellationHistory{}, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "session",
 	}, testTurnOwner{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,7 +142,7 @@ func TestRunREPLContextDiscardsLateApprovalInputAfterCancellation(t *testing.T) 
 	barrier := newScanReadBarrier(reader)
 	client := &replApprovalClient{called: make(chan struct{}), path: path}
 	history := &recordingREPLHistory{}
-	session := agent.New(client, "test", history, memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
+	session := agent.New(client, evieTestContextProfile("test"), history, memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); runREPLContext(ctx, session, bufio.NewScanner(barrier)) }()

@@ -19,7 +19,7 @@ import (
 	"github.com/davidadel66/evie/internal/tools"
 )
 
-const DefaultModel = "moonshotai/kimi-k3"
+const DefaultModel = openrouter.BuiltinModel
 
 var ErrBusy = errors.New("agent: a turn is already in progress")
 
@@ -36,7 +36,7 @@ func (e sessionUnavailableError) Unwrap() []error {
 type Session struct {
 	mu        sync.Mutex
 	client    Client
-	model     string
+	profile   openrouter.ContextProfile
 	reasoning *openrouter.ReasoningConfig
 	history   History
 	scope     memory.ScopeContext
@@ -207,20 +207,14 @@ func resolveReasoning(v string) *openrouter.ReasoningConfig {
 
 func New(
 	client Client,
-	model string,
+	profile openrouter.ContextProfile,
 	history History,
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 ) *Session {
-	if model == "" {
-		model = os.Getenv("EVIE_MODEL")
-	}
-	if model == "" {
-		model = DefaultModel
-	}
 	return &Session{
-		client: client,
-		model:  model,
+		client:  client,
+		profile: profile,
 		reasoning: resolveReasoning(
 			os.Getenv("EVIE_REASONING"),
 		),
@@ -229,6 +223,10 @@ func New(
 		owner:   owner,
 		timing:  defaultTurnTiming,
 	}
+}
+
+func (s *Session) ContextProfile() openrouter.ContextProfileDiagnostics {
+	return s.profile.Diagnostics()
 }
 
 func assistantEventInput(msg openrouter.Message, usage *openrouter.TokenUsage) (
