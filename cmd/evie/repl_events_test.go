@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -45,6 +46,50 @@ func TestREPLAssistantDonePrintsCommittedAsyncProviderContentWithoutDelta(t *tes
 	events.AssistantDone("complete answer")
 	if got := out.String(); got != "complete answer\n" {
 		t.Fatalf("REPL output=%q, want committed content once", got)
+	}
+}
+
+func TestREPLCompactIsExactEventlessCommandAndDoubleSlashIsLiteralText(t *testing.T) {
+	history := &recordingREPLHistory{events: []memory.Event{
+		{ID: "turn-1", SessionID: "session", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "one", FormatVersion: 1},
+		{ID: "turn-1-assistant", SessionID: "session", Sequence: 2, ParentID: "turn-1", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "answer one", Payload: json.RawMessage(`{}`), FormatVersion: 1},
+		{ID: "turn-2", SessionID: "session", Sequence: 3, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "two", FormatVersion: 1},
+		{ID: "turn-2-assistant", SessionID: "session", Sequence: 4, ParentID: "turn-2", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "answer two", Payload: json.RawMessage(`{}`), FormatVersion: 1},
+	}}
+	client := replContentFirstReasoningClient{}
+	session := agent.New(client, evieTestContextProfile("test"), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
+	var out bytes.Buffer
+	runREPLContextIO(context.Background(), session, bufio.NewScanner(strings.NewReader("/compact\n//compact\n")), &out)
+
+	if !strings.Contains(out.String(), "Nothing eligible for compaction.\n") {
+		t.Fatalf("output=%q", out.String())
+	}
+	var compactCommands, literalMessages int
+	for _, event := range history.events {
+		if event.Type == memory.EventUserMessage && event.Content == "/compact" {
+			compactCommands++
+		}
+		if event.Type == memory.EventUserMessage && event.Content == "//compact" {
+			literalMessages++
+		}
+	}
+	if compactCommands != 0 || literalMessages != 1 {
+		t.Fatalf("compact command events=%d literal messages=%d events=%+v", compactCommands, literalMessages, history.events)
+	}
+}
+
+func TestREPLCompactRejectsSummaryInstructionsWithoutCreatingAnEvent(t *testing.T) {
+	history := &recordingREPLHistory{}
+	session := agent.New(replContentFirstReasoningClient{}, evieTestContextProfile("test"), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
+	var out bytes.Buffer
+	runREPLContextIO(context.Background(), session, bufio.NewScanner(strings.NewReader("/compact preserve this\n")), &out)
+	if got := out.String(); !strings.Contains(got, "Usage: /compact\n") {
+		t.Fatalf("output=%q", got)
+	}
+	if len(history.events) != 0 {
+		t.Fatalf("instruction created events: %+v", history.events)
 	}
 }
 

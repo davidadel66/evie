@@ -1,5 +1,35 @@
 # memory - decisions
 
+- **2026-08-30 - manual compaction accepts one durable validated generation.**
+  Exact `/compact` acquires the ordinary session lease and summarizes the
+  maximal fitting contiguous prefix of completed root turns while retaining at
+  least the two newest completed turns. Fewer than three completed turns is an
+  eventless no-op, command arguments are rejected locally, and `//compact`
+  remains literal user text. The compactor is a separately injectable use of
+  the configured conversational transport with tools and reasoning disabled,
+  temperature zero, a 4,096-token output reserve, no retry, and a two-minute
+  timeout bounded by caller cancellation and lease ownership.
+
+  `compaction-v1` treats its canonically serialized, delimited transcript as
+  untrusted data and receives only the prior accepted summary (absent for the
+  first generation) plus newly covered complete model-visible turns. It uses
+  the route-safe hard window, working ceiling, fixed estimation margin, and byte
+  estimator, and can shrink only at whole-turn boundaries after mandatory tool
+  result bounding. Output must be nonblank UTF-8 Markdown no larger than 16 KiB
+  with the seven fixed continuity sections; tool calls and malformed output are
+  rejected. Transport and malformed-response failures are classified as
+  `provider_error` and `provider_response_invalid` at `context_compaction`;
+  storage failures stay local.
+
+  One accepted `context_compacted` event stores the summary content plus
+  content-free version, generation, trigger, frontier, model, prompt, byte, and
+  SHA-256 provenance under the lease fence. It has no role, execution, or
+  parent fields, creates no synthetic assistant event or usage record, and does
+  not rewrite raw history. The accepted summary immediately replaces its
+  covered prefix in this process's conversational projection. Reconstructing or
+  advancing the chain after restart remains Stage 2 issue #67; automatic
+  triggering remains issue #68.
+
 - **2026-08-30 - tool-result admission and request projection are bounded without rewriting evidence.**
   The agent caps each model-visible tool return at 100 KiB after any
   tool-specific lower cap and before the outcome append or frontend callback;

@@ -534,6 +534,26 @@ func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufi
 			writeContextDiagnostics(out, diagnostics)
 			continue
 		}
+		if input == "/compact" {
+			_, err := session.Compact(ctx)
+			switch {
+			case errors.Is(err, agent.ErrNothingEligibleForCompaction):
+				_, _ = fmt.Fprintln(out, "Nothing eligible for compaction.")
+			case errors.Is(err, agent.ErrBusy), errors.Is(err, agent.ErrLeaseConflict):
+				_, _ = fmt.Fprintln(out, "Session busy; message not sent.")
+			case errors.Is(err, agent.ErrSessionUnavailable):
+				_, _ = fmt.Fprintln(out, "Session unavailable; message not sent.")
+			case err != nil:
+				_, _ = fmt.Fprintf(out, "compaction failed: %v\n", err)
+			default:
+				_, _ = fmt.Fprintln(out, "Context compacted.")
+			}
+			continue
+		}
+		if strings.HasPrefix(input, "/compact ") || strings.HasPrefix(input, "/compact\t") {
+			_, _ = fmt.Fprintln(out, "Usage: /compact")
+			continue
+		}
 		err := session.Send(ctx, input, ev, approve)
 		switch {
 		case errors.Is(err, agent.ErrLeaseConflict):

@@ -116,12 +116,13 @@ type ReasoningConfig struct {
 // a nil omits the key entirely — a model without reasoning support must
 // see exactly the request it saw before this field existed.
 type ChatRequest struct {
-	Model     string           `json:"model"`
-	Messages  []Message        `json:"messages"`
-	Tools     []Tool           `json:"tools,omitempty"`
-	Stream    bool             `json:"stream,omitempty"`
-	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
-	MaxTokens int64            `json:"max_tokens,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []Message        `json:"messages"`
+	Tools       []Tool           `json:"tools,omitempty"`
+	Stream      bool             `json:"stream,omitempty"`
+	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
+	Temperature *float64         `json:"temperature,omitempty"`
+	MaxTokens   int64            `json:"max_tokens,omitempty"`
 }
 
 // streamChunk is one SSE "data:" event in a streaming response. Deltas

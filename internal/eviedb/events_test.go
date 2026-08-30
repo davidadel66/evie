@@ -30,6 +30,14 @@ func validContextSnapshotPayload(first, last memory.Event) memory.ContextSnapsho
 	}
 }
 
+func validContextCompactionSummary() string {
+	var summary strings.Builder
+	for _, heading := range memory.ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summary, "## %s\nkept\n\n", heading)
+	}
+	return summary.String()
+}
+
 func TestContextSnapshotAppendValidatesContentFreeManifestAndFrontier(t *testing.T) {
 	db := newTestDB(t)
 	store := NewStore(db)
@@ -176,6 +184,95 @@ func TestContextSnapshotAppendCorrelatesPlaceholderWithDurableToolResult(t *test
 		ParentID: otherRoot.ID, Type: memory.EventContextSnapshot, Payload: badJSON,
 	}); err == nil {
 		t.Fatal("snapshot accepted placeholder from another session")
+	}
+}
+
+func TestContextCompactedAppendValidatesSummaryAndWholeTurnFrontier(t *testing.T) {
+	store := NewStore(newTestDB(t))
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendTurn := func(label string) (memory.Event, memory.Event) {
+		t.Helper()
+		root, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+			Type: memory.EventUserMessage, Role: memory.RoleUser, Content: label,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assistant, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+			ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Content: "answer " + label, Payload: json.RawMessage(`{}`),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return root, assistant
+	}
+	firstRoot, firstAssistant := appendTurn("one")
+	retainedRoot, _ := appendTurn("two")
+	appendTurn("three")
+
+	summary := validContextCompactionSummary()
+	digest := sha256.Sum256([]byte(summary))
+	payload := memory.ContextCompactedPayload{
+		SchemaVersion: memory.ContextCompactedSchemaVersion, Generation: 1,
+		Trigger:             memory.ContextCompactionManual,
+		CoveredFirstEventID: firstRoot.ID, CoveredFirstSequence: firstRoot.Sequence,
+		CoveredLastEventID: firstAssistant.ID, CoveredLastSequence: firstAssistant.Sequence,
+		FirstRetainedEventID: retainedRoot.ID, CanonicalModel: "vendor/model",
+		PromptVersion: "compaction-v1", SummaryBytes: int64(len(summary)), SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const malformedSummary = "prefix ## Goal / criteria / constraints\nmissing exact sections"
+	malformedDigest := sha256.Sum256([]byte(malformedSummary))
+	malformedPayload := payload
+	malformedPayload.SummaryBytes = int64(len(malformedSummary))
+	malformedPayload.SummarySHA256 = fmt.Sprintf("%x", malformedDigest)
+	malformedJSON, err := json.Marshal(malformedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: malformedSummary, Payload: malformedJSON,
+	}); err == nil {
+		t.Fatal("sectionless compaction summary was accepted")
+	}
+	compacted, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: encoded,
+	})
+	if err != nil {
+		t.Fatalf("append valid compaction: %v", err)
+	}
+	if compacted.ParentID != "" || compacted.Role != "" || compacted.ExecutionID != "" || compacted.Content != summary {
+		t.Fatalf("compaction envelope=%+v", compacted)
+	}
+
+	if _, err := store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: encoded,
+	}); err == nil {
+		t.Fatal("second generation was accepted before chain support")
+	}
+
+	other, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := payload
+	bad.FirstRetainedEventID = firstRoot.ID
+	badJSON, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.appendEventForTest(ctx, other.ID, memory.EventInput{
+		Type: memory.EventContextCompacted, Content: summary, Payload: badJSON,
+	}); err == nil {
+		t.Fatal("compaction accepted source events from another session")
 	}
 }
 

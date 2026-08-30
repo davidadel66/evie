@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -75,6 +77,49 @@ func TestContextSnapshotPayloadValidation(t *testing.T) {
 			payload := valid
 			tt.mutate(&payload)
 			if err := payload.Validate(); err == nil {
+				t.Fatalf("invalid payload validated: %+v", payload)
+			}
+		})
+	}
+}
+
+func TestContextCompactedPayloadValidation(t *testing.T) {
+	var summaryBuilder strings.Builder
+	for _, heading := range ContextCompactionSectionHeadings() {
+		fmt.Fprintf(&summaryBuilder, "## %s\nkept\n\n", heading)
+	}
+	summary := summaryBuilder.String()
+	digest := sha256.Sum256([]byte(summary))
+	valid := ContextCompactedPayload{
+		SchemaVersion: ContextCompactedSchemaVersion,
+		Generation:    1, Trigger: ContextCompactionManual,
+		CoveredFirstEventID: "event-1", CoveredFirstSequence: 1,
+		CoveredLastEventID: "event-2", CoveredLastSequence: 2,
+		FirstRetainedEventID: "event-3", CanonicalModel: "vendor/model",
+		PromptVersion: "compaction-v1", SummaryBytes: int64(len(summary)),
+		SummarySHA256: fmt.Sprintf("%x", digest),
+	}
+	if err := valid.Validate(summary); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*ContextCompactedPayload)
+	}{
+		{"unsupported version", func(p *ContextCompactedPayload) { p.SchemaVersion++ }},
+		{"missing generation", func(p *ContextCompactedPayload) { p.Generation = 0 }},
+		{"manual generation has prior", func(p *ContextCompactedPayload) { p.PriorCompactionEventID = "prior" }},
+		{"unknown trigger", func(p *ContextCompactedPayload) { p.Trigger = "automatic-ish" }},
+		{"backward coverage", func(p *ContextCompactedPayload) { p.CoveredLastSequence = 0 }},
+		{"missing retained identity", func(p *ContextCompactedPayload) { p.FirstRetainedEventID = "" }},
+		{"wrong byte count", func(p *ContextCompactedPayload) { p.SummaryBytes++ }},
+		{"wrong digest", func(p *ContextCompactedPayload) { p.SummarySHA256 = strings.Repeat("0", 64) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload := valid
+			test.mutate(&payload)
+			if err := payload.Validate(summary); err == nil {
 				t.Fatalf("invalid payload validated: %+v", payload)
 			}
 		})

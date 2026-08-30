@@ -164,7 +164,7 @@ func (s *Session) runOwnedTurn(
 			return s.classifyLocalError(coordinator, fmt.Errorf("load durable history: %w", err))
 		}
 		composed, err := s.composer.Compose(ContextComposeInput{
-			Profile: s.profile, Events: events, ActiveRootID: rootTurnID,
+			Profile: s.profile, Summary: s.acceptedSummary(), Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
 		})

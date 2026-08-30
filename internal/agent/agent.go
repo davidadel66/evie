@@ -36,6 +36,7 @@ func (e sessionUnavailableError) Unwrap() []error {
 type Session struct {
 	mu        sync.Mutex
 	client    Client
+	compactor Client
 	profile   openrouter.ContextProfile
 	reasoning *openrouter.ReasoningConfig
 	history   History
@@ -43,6 +44,8 @@ type Session struct {
 	owner     TurnOwnership
 	composer  *ContextComposer
 	timing    turnTiming
+	summaryMu sync.RWMutex
+	summary   *ContextSummary
 }
 type Client interface {
 	// ChatStream callbacks need not be synchronous with its return. Session
@@ -184,9 +187,24 @@ func New(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 ) *Session {
+	return NewWithCompactor(client, client, profile, history, scope, owner)
+}
+
+// NewWithCompactor keeps summary generation separately controllable while the
+// default New constructor uses the existing conversational transport for both
+// request kinds.
+func NewWithCompactor(
+	client Client,
+	compactor Client,
+	profile openrouter.ContextProfile,
+	history History,
+	scope memory.ScopeContext,
+	owner TurnOwnership,
+) *Session {
 	return &Session{
-		client:  client,
-		profile: profile,
+		client:    client,
+		compactor: compactor,
+		profile:   profile,
 		reasoning: resolveReasoning(
 			os.Getenv("EVIE_REASONING"),
 		),
@@ -196,6 +214,23 @@ func New(
 		composer: NewContextComposer(CanonicalRequestEstimator{}),
 		timing:   defaultTurnTiming,
 	}
+}
+
+func (s *Session) acceptedSummary() *ContextSummary {
+	s.summaryMu.RLock()
+	defer s.summaryMu.RUnlock()
+	if s.summary == nil {
+		return nil
+	}
+	copy := *s.summary
+	return &copy
+}
+
+func (s *Session) setAcceptedSummary(summary ContextSummary) {
+	s.summaryMu.Lock()
+	defer s.summaryMu.Unlock()
+	copy := summary
+	s.summary = &copy
 }
 
 func (s *Session) ContextProfile() openrouter.ContextProfileDiagnostics {

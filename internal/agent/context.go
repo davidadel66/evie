@@ -83,8 +83,9 @@ type ContextComposeInput struct {
 // compaction stage. The composer owns its request position and accounting;
 // callers own durable selection and validation.
 type ContextSummary struct {
-	CompactionEventID memory.EventID
-	Content           string
+	CompactionEventID    memory.EventID
+	FirstRetainedEventID memory.EventID
+	Content              string
 }
 
 type ComposedContext struct {
@@ -141,6 +142,22 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 	}
 
 	start := 0
+	if input.Summary != nil && input.Summary.FirstRetainedEventID != "" {
+		found := false
+		for i, turn := range turns {
+			if turn[0].ID == input.Summary.FirstRetainedEventID {
+				start = i
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ComposedContext{}, fmt.Errorf("context summary retained root %q is missing", input.Summary.FirstRetainedEventID)
+		}
+		if start > activeIndex {
+			return ComposedContext{}, errors.New("context summary retained frontier is after the active turn")
+		}
+	}
 	var (
 		request           openrouter.ChatRequest
 		estimate          RequestEstimate
@@ -326,7 +343,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 		iteration = latest.Manifest.Iteration + 1
 	}
 	composed, err := s.composer.Compose(ContextComposeInput{
-		Profile: s.profile, Events: projectionEvents, ActiveRootID: hypothetical.ID,
+		Profile: s.profile, Summary: s.acceptedSummary(), Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
 		Tools: tools.Schemas(), Reasoning: s.reasoning,
 	})

@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type (
@@ -29,6 +30,7 @@ const (
 	EventTurnFailed        EventType = "turn_failed"
 	EventTurnInterrupted   EventType = "turn_interrupted"
 	EventContextSnapshot   EventType = "context_snapshot"
+	EventContextCompacted  EventType = "context_compacted"
 
 	RoleUser      EventRole = "user"
 	RoleAssistant EventRole = "assistant"
@@ -48,14 +50,15 @@ const (
 type TurnStage string
 
 const (
-	StageTurnStart       TurnStage = "turn_start"
-	StageProvider        TurnStage = "provider"
-	StageAssistantCommit TurnStage = "assistant_commit"
-	StageToolPrepare     TurnStage = "tool_prepare"
-	StageToolApproval    TurnStage = "tool_approval"
-	StageToolExecute     TurnStage = "tool_execute"
-	StageToolCommit      TurnStage = "tool_commit"
-	StageContextCompose  TurnStage = "context_compose"
+	StageTurnStart         TurnStage = "turn_start"
+	StageProvider          TurnStage = "provider"
+	StageAssistantCommit   TurnStage = "assistant_commit"
+	StageToolPrepare       TurnStage = "tool_prepare"
+	StageToolApproval      TurnStage = "tool_approval"
+	StageToolExecute       TurnStage = "tool_execute"
+	StageToolCommit        TurnStage = "tool_commit"
+	StageContextCompose    TurnStage = "context_compose"
+	StageContextCompaction TurnStage = "context_compaction"
 )
 
 type TurnTerminalPayload struct {
@@ -71,7 +74,7 @@ func (p TurnTerminalPayload) Validate(eventType EventType) error {
 	}
 	switch p.Stage {
 	case StageTurnStart, StageProvider, StageAssistantCommit, StageToolPrepare,
-		StageToolApproval, StageToolExecute, StageToolCommit:
+		StageToolApproval, StageToolExecute, StageToolCommit, StageContextCompaction:
 		if p.Classification == ClassificationContextOverflow {
 			return fmt.Errorf("context overflow cannot use lifecycle stage %q", p.Stage)
 		}
@@ -123,6 +126,127 @@ func (p TurnTerminalPayload) SafeContent() string {
 }
 
 const ContextSnapshotSchemaVersion = 1
+
+const (
+	ContextCompactedSchemaVersion   = 1
+	ContextCompactionPromptVersion  = "compaction-v1"
+	ContextCompactedSummaryMaxBytes = 16 * 1024
+)
+
+var contextCompactionSectionHeadings = [...]string{
+	"Goal / criteria / constraints",
+	"Current state / completed actions",
+	"Decisions / discoveries",
+	"Durable paths / IDs / artifacts / tool outcomes",
+	"Unresolved questions / blockers / risks",
+	"Next steps",
+	"User preferences / commitments",
+}
+
+func ContextCompactionSectionHeadings() []string {
+	return append([]string(nil), contextCompactionSectionHeadings[:]...)
+}
+
+func ValidateContextCompactionSummary(summary string) error {
+	if !utf8.ValidString(summary) {
+		return errors.New("context compaction summary is not valid UTF-8")
+	}
+	if strings.TrimSpace(summary) == "" {
+		return errors.New("context compaction summary is blank")
+	}
+	if len(summary) > ContextCompactedSummaryMaxBytes {
+		return fmt.Errorf("context compaction summary exceeds %d bytes", ContextCompactedSummaryMaxBytes)
+	}
+
+	lines := strings.Split(summary, "\n")
+	positions := make([]int, len(contextCompactionSectionHeadings))
+	for i, heading := range contextCompactionSectionHeadings {
+		marker := "## " + heading
+		positions[i] = -1
+		for lineIndex, line := range lines {
+			if strings.TrimSuffix(line, "\r") != marker {
+				continue
+			}
+			if positions[i] >= 0 {
+				return fmt.Errorf("context compaction summary repeats heading %q", marker)
+			}
+			positions[i] = lineIndex
+		}
+		if positions[i] < 0 {
+			return fmt.Errorf("context compaction summary is missing heading %q", marker)
+		}
+		if i > 0 && positions[i] <= positions[i-1] {
+			return fmt.Errorf("context compaction summary heading %q is out of order", marker)
+		}
+	}
+	for i, start := range positions {
+		end := len(lines)
+		if i+1 < len(positions) {
+			end = positions[i+1]
+		}
+		if strings.TrimSpace(strings.Join(lines[start+1:end], "\n")) == "" {
+			return fmt.Errorf("context compaction summary section %q is blank", contextCompactionSectionHeadings[i])
+		}
+	}
+	return nil
+}
+
+type ContextCompactionTrigger string
+
+const ContextCompactionManual ContextCompactionTrigger = "manual"
+
+// ContextCompactedPayload records the content-free provenance and exact raw
+// event cut represented by one accepted rolling summary. The summary itself is
+// the context_compacted event content.
+type ContextCompactedPayload struct {
+	SchemaVersion          int                      `json:"schema_version"`
+	Generation             int64                    `json:"generation"`
+	Trigger                ContextCompactionTrigger `json:"trigger"`
+	PriorCompactionEventID EventID                  `json:"prior_compaction_event_id,omitempty"`
+	CoveredFirstEventID    EventID                  `json:"covered_first_event_id"`
+	CoveredFirstSequence   int64                    `json:"covered_first_sequence"`
+	CoveredLastEventID     EventID                  `json:"covered_last_event_id"`
+	CoveredLastSequence    int64                    `json:"covered_last_sequence"`
+	FirstRetainedEventID   EventID                  `json:"first_retained_event_id"`
+	CanonicalModel         string                   `json:"canonical_model"`
+	PromptVersion          string                   `json:"prompt_version"`
+	SummaryBytes           int64                    `json:"summary_bytes"`
+	SummarySHA256          string                   `json:"summary_sha256"`
+}
+
+func (p ContextCompactedPayload) Validate(summary string) error {
+	if p.SchemaVersion != ContextCompactedSchemaVersion {
+		return fmt.Errorf("unsupported context compaction schema version %d", p.SchemaVersion)
+	}
+	if p.Generation <= 0 {
+		return errors.New("context compaction generation must be positive")
+	}
+	if (p.Generation == 1) != (p.PriorCompactionEventID == "") {
+		return errors.New("context compaction generation and prior identity are inconsistent")
+	}
+	if p.Trigger != ContextCompactionManual {
+		return fmt.Errorf("invalid context compaction trigger %q", p.Trigger)
+	}
+	if p.CoveredFirstEventID == "" || p.CoveredLastEventID == "" ||
+		p.CoveredFirstSequence <= 0 || p.CoveredLastSequence < p.CoveredFirstSequence ||
+		p.FirstRetainedEventID == "" {
+		return errors.New("context compaction event frontier is invalid")
+	}
+	if strings.TrimSpace(p.CanonicalModel) == "" || p.PromptVersion != ContextCompactionPromptVersion {
+		return errors.New("context compaction model and prompt provenance must be present")
+	}
+	if err := ValidateContextCompactionSummary(summary); err != nil {
+		return err
+	}
+	if p.SummaryBytes != int64(len(summary)) {
+		return errors.New("context compaction summary byte count is invalid")
+	}
+	digest := sha256.Sum256([]byte(summary))
+	if !validSHA256(p.SummarySHA256) || p.SummarySHA256 != fmt.Sprintf("%x", digest) {
+		return errors.New("context compaction summary hash is invalid")
+	}
+	return nil
+}
 
 type ContextCompactionFailureCategory string
 

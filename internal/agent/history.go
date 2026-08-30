@@ -144,7 +144,8 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 			memory.EventExecutionResolved,
 			memory.EventTurnFailed,
 			memory.EventTurnInterrupted,
-			memory.EventContextSnapshot:
+			memory.EventContextSnapshot,
+			memory.EventContextCompacted:
 			continue
 
 		default:

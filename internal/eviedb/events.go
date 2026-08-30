@@ -63,9 +63,42 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 		}
 		input.Payload = canonical
 	}
+	if input.Type == memory.EventContextCompacted {
+		compacted, canonical, err := decodeCanonicalContextCompactedPayload(input.Payload)
+		if err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode context compaction payload: %w", err)
+		}
+		if err := compacted.Validate(input.Content); err != nil {
+			return memory.EventInput{}, err
+		}
+		if input.ParentID != "" || input.Role != "" || input.ExecutionID != "" {
+			return memory.EventInput{}, errors.New("context compactions cannot carry a parent, role, or execution ID")
+		}
+		input.Payload = canonical
+	}
 
 	input.Payload = append(json.RawMessage(nil), input.Payload...)
 	return input, nil
+}
+
+func decodeCanonicalContextCompactedPayload(raw json.RawMessage) (memory.ContextCompactedPayload, json.RawMessage, error) {
+	if err := rejectDuplicateTopLevelJSONFields(raw); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var compacted memory.ContextCompactedPayload
+	if err := decoder.Decode(&compacted); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	canonical, err := json.Marshal(compacted)
+	if err != nil {
+		return memory.ContextCompactedPayload{}, nil, err
+	}
+	return compacted, canonical, nil
 }
 
 func decodeCanonicalContextSnapshotPayload(raw json.RawMessage) (memory.ContextSnapshotPayload, json.RawMessage, error) {
@@ -246,6 +279,15 @@ func (s *Store) appendEvent(
 			return memory.Event{}, err
 		}
 	}
+	if input.Type == memory.EventContextCompacted {
+		var compacted memory.ContextCompactedPayload
+		if err := json.Unmarshal(input.Payload, &compacted); err != nil {
+			return memory.Event{}, fmt.Errorf("decode canonical context compaction payload: %w", err)
+		}
+		if err := validateContextCompactionCorrelation(ctx, executor, sessionID, compacted); err != nil {
+			return memory.Event{}, err
+		}
+	}
 
 	id, err := uuid.NewRandom()
 	if err != nil {
@@ -322,6 +364,81 @@ func (s *Store) appendEvent(
 		event.ProjectID = memory.ProjectID(projectID.String)
 	}
 	return event, nil
+}
+
+func validateContextCompactionCorrelation(
+	ctx context.Context,
+	executor eventQueryExecutor,
+	sessionID memory.SessionID,
+	payload memory.ContextCompactedPayload,
+) error {
+	var existing int
+	if err := executor.queryRowContext(ctx, `
+		SELECT COUNT(*) FROM events WHERE session_id = ? AND event_type = ?
+	`, sessionID, memory.EventContextCompacted).Scan(&existing); err != nil {
+		return fmt.Errorf("count existing context compactions: %w", err)
+	}
+	if existing != 0 || payload.Generation != 1 || payload.PriorCompactionEventID != "" {
+		return errors.New("context compaction chains are not supported yet")
+	}
+
+	type frontier struct {
+		typeValue memory.EventType
+		role      memory.EventRole
+		parent    sql.NullString
+		sequence  int64
+		payload   json.RawMessage
+	}
+	load := func(id memory.EventID) (frontier, error) {
+		var eventType, role, payloadJSON string
+		var value frontier
+		err := executor.queryRowContext(ctx, `
+			SELECT event_type, COALESCE(role, ''), parent_id, sequence, payload_json
+			FROM events WHERE session_id = ? AND id = ?
+		`, sessionID, id).Scan(&eventType, &role, &value.parent, &value.sequence, &payloadJSON)
+		if errors.Is(err, sql.ErrNoRows) {
+			return frontier{}, fmt.Errorf("context compaction frontier event %q is not accepted in session %q", id, sessionID)
+		}
+		if err != nil {
+			return frontier{}, fmt.Errorf("load context compaction frontier event %q: %w", id, err)
+		}
+		value.typeValue = memory.EventType(eventType)
+		value.role = memory.EventRole(role)
+		value.payload = json.RawMessage(payloadJSON)
+		return value, nil
+	}
+	first, err := load(payload.CoveredFirstEventID)
+	if err != nil {
+		return err
+	}
+	last, err := load(payload.CoveredLastEventID)
+	if err != nil {
+		return err
+	}
+	retained, err := load(payload.FirstRetainedEventID)
+	if err != nil {
+		return err
+	}
+	if first.typeValue != memory.EventUserMessage || first.role != memory.RoleUser || first.parent.Valid ||
+		first.sequence != payload.CoveredFirstSequence || first.sequence != 1 {
+		return errors.New("context compaction covered frontier does not start at the first root turn")
+	}
+	if last.sequence != payload.CoveredLastSequence || retained.sequence != last.sequence+1 ||
+		retained.typeValue != memory.EventUserMessage || retained.role != memory.RoleUser || retained.parent.Valid {
+		return errors.New("context compaction retained frontier is not the next root turn")
+	}
+	if last.typeValue == memory.EventAssistantMessage {
+		var assistant memory.AssistantMessagePayload
+		if err := json.Unmarshal(last.payload, &assistant); err != nil {
+			return fmt.Errorf("decode covered terminal assistant payload: %w", err)
+		}
+		if len(assistant.ToolCalls) != 0 {
+			return errors.New("context compaction covered frontier ends with an unfinished tool call")
+		}
+	} else if last.typeValue != memory.EventTurnFailed && last.typeValue != memory.EventTurnInterrupted {
+		return errors.New("context compaction covered frontier does not end at a completed turn")
+	}
+	return nil
 }
 
 func validateContextSnapshotCorrelation(
