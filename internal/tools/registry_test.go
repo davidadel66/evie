@@ -246,6 +246,53 @@ func TestSchemasMatchesSchemasWithNil(t *testing.T) {
 	}
 }
 
+func TestToolsetCopiesSchemasAndExecutionAtConstruction(t *testing.T) {
+	definitions := []Tool{{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "pinned",
+			Parameters: openrouter.Parameter{
+				Type:       "object",
+				Required:   []string{"value"},
+				Properties: map[string]openrouter.Property{"value": {Type: "string", Enum: []string{"original"}}},
+			},
+		}},
+		Execute: func(context.Context, string) (string, error) { return "original", nil },
+	}}
+	toolset := NewToolset(definitions)
+
+	definitions[0].Schema.Function.Name = "changed"
+	definitions[0].Schema.Function.Parameters.Required[0] = "changed"
+	property := definitions[0].Schema.Function.Parameters.Properties["value"]
+	property.Enum[0] = "changed"
+	definitions[0].Schema.Function.Parameters.Properties["value"] = property
+	definitions[0].Execute = func(context.Context, string) (string, error) { return "changed", nil }
+
+	firstSchemas := toolset.Schemas()
+	firstSchemas[0].Function.Name = "returned-copy-changed"
+	firstSchemas[0].Function.Parameters.Required[0] = "returned-copy-changed"
+	returnedProperty := firstSchemas[0].Function.Parameters.Properties["value"]
+	returnedProperty.Enum[0] = "returned-copy-changed"
+	firstSchemas[0].Function.Parameters.Properties["value"] = returnedProperty
+
+	schemas := toolset.Schemas()
+	if len(schemas) != 1 || schemas[0].Function.Name != "pinned" ||
+		schemas[0].Function.Parameters.Required[0] != "value" ||
+		schemas[0].Function.Parameters.Properties["value"].Enum[0] != "original" {
+		t.Fatalf("Toolset schemas changed after construction: %+v", schemas)
+	}
+	message, isErr, err := toolset.ExecuteWithApprovalAuthorizedCompletion(
+		context.Background(), callFor("pinned", `{}`), nil, nil, nil, nil,
+	)
+	if err != nil || isErr || message.Content != "original" {
+		t.Fatalf("Toolset execution = (%+v, %v, %v), want original", message, isErr, err)
+	}
+
+	nilProperties := NewToolset([]Tool{{Schema: callSchema("empty")}}).Schemas()[0].Function.Parameters.Properties
+	if nilProperties != nil {
+		t.Fatalf("nil schema properties changed to an empty map: %+v", nilProperties)
+	}
+}
+
 func TestExecuteWithDispatchesExtra(t *testing.T) {
 	var gotArgs string
 	extra := extraTool("show", false, func(_ context.Context, args string) (string, error) {

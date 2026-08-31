@@ -77,12 +77,13 @@ func main() {
 		}
 
 		holderID := memory.LeaseHolderID(holderUUID.String())
-		return agent.New(
+		return agent.NewWithToolset(
 			client,
 			profile,
 			store.BindHistory(storedSession.ID, holderID),
 			storedSession.ScopeContext(),
 			store.BindTurnOwner(storedSession.ID, holderID),
+			tools.BuiltinToolset(),
 		)
 	}
 

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -37,13 +38,26 @@ type Session struct {
 	mu        sync.Mutex
 	client    Client
 	compactor Client
-	profile   openrouter.ContextProfile
-	reasoning *openrouter.ReasoningConfig
-	history   History
-	scope     memory.ScopeContext
-	owner     TurnOwnership
-	composer  *ContextComposer
-	timing    turnTiming
+	toolset   tools.Toolset
+	// legacyToolsetPending supports the former New + Send(extra...) entry
+	// point. It is resolved once, before the first turn, and never changes
+	// afterward. New production sessions use NewWithToolset instead.
+	legacyToolsetPending bool
+	legacyToolSignatures []legacyToolSignature
+	profile              openrouter.ContextProfile
+	reasoning            *openrouter.ReasoningConfig
+	history              History
+	scope                memory.ScopeContext
+	owner                TurnOwnership
+	composer             *ContextComposer
+	timing               turnTiming
+}
+
+type legacyToolSignature struct {
+	Schema        openrouter.Tool
+	NeedsApproval bool
+	HasExecute    bool
+	HasPrepare    bool
 }
 type Client interface {
 	// ChatStream callbacks need not be synchronous with its return. Session
@@ -82,6 +96,10 @@ func (s *Session) Send(
 	if s.owner == nil {
 		return errors.New("agent: turn ownership is not configured")
 	}
+	signatures := legacyToolSignatures(extra)
+	if !s.legacyToolsetPending && len(extra) != 0 && !reflect.DeepEqual(signatures, s.legacyToolSignatures) {
+		return errors.New("agent: session Toolset is already pinned")
+	}
 
 	lease, err := s.owner.Acquire(ctx, s.timing.leaseDuration)
 	if err != nil {
@@ -92,6 +110,11 @@ func (s *Session) Send(
 			return sessionUnavailableError{cause: err}
 		}
 		return fmt.Errorf("acquire turn lease: %w", err)
+	}
+	if s.legacyToolsetPending {
+		s.toolset = s.toolset.WithTools(extra)
+		s.legacyToolSignatures = signatures
+		s.legacyToolsetPending = false
 	}
 
 	coordinator := newTurnCoordinator(ctx)
@@ -133,7 +156,7 @@ func (s *Session) Send(
 		return fmt.Errorf("persist user message: %w", err)
 	}
 	progress := &turnProgress{rootTurnID: rootEvent.ID, requestParentID: rootEvent.ID}
-	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress, extra)
+	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress)
 	if turnErr != nil && coordinator.result().kind == causeNone {
 		coordinator.selectCause(causeStorage, turnErr, 0)
 	}
@@ -167,6 +190,23 @@ func (s *Session) Send(
 	return turnErr
 }
 
+func legacyToolSignatures(definitions []tools.Tool) []legacyToolSignature {
+	if len(definitions) == 0 {
+		return nil
+	}
+	schemas := tools.NewToolset(definitions).Schemas()
+	signatures := make([]legacyToolSignature, len(definitions))
+	for i, definition := range definitions {
+		signatures[i] = legacyToolSignature{
+			Schema:        schemas[i],
+			NeedsApproval: definition.NeedsApproval,
+			HasExecute:    definition.Execute != nil,
+			HasPrepare:    definition.Prepare != nil,
+		}
+	}
+	return signatures
+}
+
 func resolveReasoning(v string) *openrouter.ReasoningConfig {
 	switch v {
 	case "off":
@@ -185,7 +225,21 @@ func New(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 ) *Session {
-	return NewWithCompactor(client, client, profile, history, scope, owner)
+	session := NewWithToolset(client, profile, history, scope, owner, tools.BuiltinToolset())
+	session.legacyToolsetPending = true
+	return session
+}
+
+// NewWithToolset constructs a session with one resolved immutable Toolset.
+func NewWithToolset(
+	client Client,
+	profile openrouter.ContextProfile,
+	history History,
+	scope memory.ScopeContext,
+	owner TurnOwnership,
+	toolset tools.Toolset,
+) *Session {
+	return NewWithCompactorAndToolset(client, client, profile, history, scope, owner, toolset)
 }
 
 // NewWithCompactor keeps summary generation separately controllable while the
@@ -199,9 +253,28 @@ func NewWithCompactor(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 ) *Session {
+	session := NewWithCompactorAndToolset(
+		client, compactor, profile, history, scope, owner, tools.BuiltinToolset(),
+	)
+	session.legacyToolsetPending = true
+	return session
+}
+
+// NewWithCompactorAndToolset constructs a session with independently supplied
+// conversational and compaction clients plus one resolved immutable Toolset.
+func NewWithCompactorAndToolset(
+	client Client,
+	compactor Client,
+	profile openrouter.ContextProfile,
+	history History,
+	scope memory.ScopeContext,
+	owner TurnOwnership,
+	toolset tools.Toolset,
+) *Session {
 	return &Session{
 		client:    client,
 		compactor: compactor,
+		toolset:   toolset,
 		profile:   profile,
 		reasoning: resolveReasoning(
 			os.Getenv("EVIE_REASONING"),

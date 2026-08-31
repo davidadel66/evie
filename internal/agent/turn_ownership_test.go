@@ -17,27 +17,29 @@ import (
 
 var (
 	errFakeConflict  = errors.New("fake lease conflict")
+	errFakeInactive  = errors.New("fake session inactive")
 	errFakeLeaseLost = errors.New("fake lease lost")
 )
 
 type scriptedOwner struct {
 	mu sync.Mutex
 
-	acquireErr     error
-	heartbeatErr   error
-	authorizeErrAt int
-	authorizeErr   error
-	releaseErr     error
-	releaseBlock   bool
-	releaseContext chan<- context.Context
-	heartbeatBlock bool
-	heartbeatStart chan struct{}
-	heartbeatWait  <-chan struct{}
-	afterAcquire   func()
-	acquires       int
-	heartbeats     int
-	authorizations int
-	releases       int
+	acquireErr      error
+	heartbeatErr    error
+	authorizeErrAt  int
+	authorizeErr    error
+	releaseErr      error
+	releaseBlock    bool
+	releaseContext  chan<- context.Context
+	sessionInactive bool
+	heartbeatBlock  bool
+	heartbeatStart  chan struct{}
+	heartbeatWait   <-chan struct{}
+	afterAcquire    func()
+	acquires        int
+	heartbeats      int
+	authorizations  int
+	releases        int
 }
 
 type manualHeartbeatTicker struct {
@@ -126,9 +128,13 @@ func (o *scriptedOwner) Release(ctx context.Context, _ memory.TurnLease) error {
 	return err
 }
 
-func (*scriptedOwner) IsConflict(err error) bool    { return errors.Is(err, errFakeConflict) }
-func (*scriptedOwner) IsSessionInactive(error) bool { return false }
-func (*scriptedOwner) IsLeaseLost(err error) bool   { return errors.Is(err, errFakeLeaseLost) }
+func (*scriptedOwner) IsConflict(err error) bool { return errors.Is(err, errFakeConflict) }
+func (o *scriptedOwner) IsSessionInactive(error) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.sessionInactive
+}
+func (*scriptedOwner) IsLeaseLost(err error) bool { return errors.Is(err, errFakeLeaseLost) }
 
 func (o *scriptedOwner) counts() (acquire, heartbeat, authorize, release int) {
 	o.mu.Lock()
@@ -471,6 +477,72 @@ func TestLeaseAcquisitionConflictDoesNoTurnWorkOrRelease(t *testing.T) {
 	acquires, _, authorizations, releases := owner.counts()
 	if acquires != 1 || authorizations != 0 || releases != 0 || len(history.events) != 0 || len(client.reqs) != 0 {
 		t.Fatalf("acquire=%d authorize=%d release=%d events=%d requests=%d", acquires, authorizations, releases, len(history.events), len(client.reqs))
+	}
+}
+
+func TestLegacyToolsetPinsOnlyAfterSuccessfulLeaseAcquisition(t *testing.T) {
+	for _, test := range []struct {
+		acquireErr      error
+		wantErr         error
+		sessionInactive bool
+	}{
+		{acquireErr: errFakeConflict, wantErr: ErrLeaseConflict},
+		{acquireErr: errFakeInactive, wantErr: ErrSessionUnavailable, sessionInactive: true},
+		{acquireErr: context.Canceled, wantErr: context.Canceled},
+	} {
+		t.Run(test.acquireErr.Error(), func(t *testing.T) {
+			owner := &scriptedOwner{acquireErr: test.acquireErr, sessionInactive: test.sessionInactive}
+			client := &fakeClient{steps: []step{
+				assistantStep("", nil, toolCall("call-1", "retry_tool", `{}`)),
+				assistantStep("done", nil),
+			}}
+			ran := false
+			tool := echoTool("retry_tool", false, &ran)
+			session := ownedSession(client, &fakeHistory{}, owner)
+
+			first := session.Send(context.Background(), "first", &recorder{}, nil, tool)
+			if !errors.Is(first, test.wantErr) {
+				t.Fatalf("first Send error = %v, want %v", first, test.wantErr)
+			}
+			owner.mu.Lock()
+			owner.acquireErr = nil
+			owner.sessionInactive = false
+			owner.mu.Unlock()
+
+			if err := session.Send(context.Background(), "retry", &recorder{}, nil, tool); err != nil {
+				t.Fatalf("retry Send: %v", err)
+			}
+			if !ran || len(client.reqs) != 2 {
+				t.Fatalf("retry ran = %v, provider requests = %d", ran, len(client.reqs))
+			}
+		})
+	}
+}
+
+func TestLegacySessionAcceptsEquivalentToolsOnLaterTurns(t *testing.T) {
+	owner := &scriptedOwner{}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "repeat_tool", `{}`)),
+		assistantStep("first done", nil),
+		assistantStep("", nil, toolCall("call-2", "repeat_tool", `{}`)),
+		assistantStep("second done", nil),
+	}}
+	runs := 0
+	tool := echoTool("repeat_tool", false, nil)
+	tool.Execute = func(context.Context, string) (string, error) {
+		runs++
+		return "repeated", nil
+	}
+	session := ownedSession(client, &fakeHistory{}, owner)
+
+	if err := session.Send(context.Background(), "first", &recorder{}, nil, tool); err != nil {
+		t.Fatalf("first Send: %v", err)
+	}
+	if err := session.Send(context.Background(), "second", &recorder{}, nil, tool); err != nil {
+		t.Fatalf("second Send: %v", err)
+	}
+	if runs != 2 || len(client.reqs) != 4 {
+		t.Fatalf("tool runs = %d, provider requests = %d", runs, len(client.reqs))
 	}
 }
 
@@ -1302,6 +1374,7 @@ func TestMultiToolHeartbeatLossAfterFirstResultTransitionsToToolPrepare(t *testi
 		toolCall("call-2", "second", `{}`),
 	)}}
 	s := ownedSession(client, history, owner)
+	s.toolset = s.toolset.WithTools([]tools.Tool{first, echoTool("second", false, &secondRan)})
 	ticks := useManualHeartbeatTicker(s)
 	ticks <- time.Now()
 	lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
@@ -1313,7 +1386,6 @@ func TestMultiToolHeartbeatLossAfterFirstResultTransitionsToToolPrepare(t *testi
 		events,
 		nil,
 		&turnProgress{requestParentID: "root"},
-		[]tools.Tool{first, echoTool("second", false, &secondRan)},
 	)
 	if !errors.Is(err, ErrLeaseLost) || secondRan {
 		t.Fatalf("runOwnedTurn error=%v second tool ran=%v", err, secondRan)
@@ -1382,7 +1454,7 @@ func TestOrdinaryAssistantPhaseEntryRejectsReservedCause(t *testing.T) {
 			events := &recorder{}
 			err := s.runOwnedTurn(
 				coordinator, lease, events, nil,
-				&turnProgress{requestParentID: "root"}, nil,
+				&turnProgress{requestParentID: "root"},
 			)
 			if !errors.Is(err, cause.err) {
 				t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
@@ -1535,6 +1607,7 @@ func TestOrdinaryApprovalPhaseEntryRejectsReservedCause(t *testing.T) {
 			defer stopHeartbeat()
 			frontendCalled := false
 			ran := false
+			s.toolset = s.toolset.WithTools([]tools.Tool{echoTool("gated", true, &ran)})
 			events := &recorder{}
 			err := s.runOwnedTurn(
 				coordinator, lease, events,
@@ -1543,7 +1616,6 @@ func TestOrdinaryApprovalPhaseEntryRejectsReservedCause(t *testing.T) {
 					return tools.Approved
 				},
 				&turnProgress{requestParentID: "root"},
-				[]tools.Tool{echoTool("gated", true, &ran)},
 			)
 			if !errors.Is(err, cause.err) {
 				t.Fatalf("runOwnedTurn error=%v, want %v", err, cause.err)
@@ -1657,6 +1729,7 @@ func TestOrdinaryToolReturnTransitionsAtomicallyToToolCommit(t *testing.T) {
 				stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
 				defer stopHeartbeat()
 				ran := false
+				s.toolset = s.toolset.WithTools([]tools.Tool{test.tool(&ran)})
 				events := &recorder{}
 				done := make(chan error, 1)
 				go func() {
@@ -1666,7 +1739,6 @@ func TestOrdinaryToolReturnTransitionsAtomicallyToToolCommit(t *testing.T) {
 							return tools.Approved
 						},
 						&turnProgress{requestParentID: "root"},
-						[]tools.Tool{test.tool(&ran)},
 					)
 				}()
 				select {
@@ -2051,6 +2123,7 @@ func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
 				stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
 				defer stopHeartbeat()
 				ran := false
+				s.toolset = s.toolset.WithTools([]tools.Tool{echoTool("echo", false, &ran)})
 				events := &recorder{}
 				err := s.runOwnedTurn(
 					coordinator,
@@ -2058,7 +2131,6 @@ func TestAssistantCommitTransitionsAtomicallyToToolPrepare(t *testing.T) {
 					events,
 					nil,
 					&turnProgress{requestParentID: "root"},
-					[]tools.Tool{echoTool("echo", false, &ran)},
 				)
 				if !errors.Is(err, cause.err) || ran {
 					t.Fatalf("runOwnedTurn error=%v tool ran=%v", err, ran)
@@ -2120,6 +2192,7 @@ func TestCommittedAssistantNotificationMayBlockAfterCauseWithoutReopeningWork(t 
 				<-releaseCallback
 			}}
 			ran := false
+			s.toolset = s.toolset.WithTools([]tools.Tool{echoTool("echo", false, &ran)})
 			lease := memory.TurnLease{SessionID: "test-session", HolderID: "holder", FencingToken: 7, Generation: 7}
 			stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
 			defer stopHeartbeat()
@@ -2128,7 +2201,6 @@ func TestCommittedAssistantNotificationMayBlockAfterCauseWithoutReopeningWork(t 
 				done <- s.runOwnedTurn(
 					coordinator, lease, events, nil,
 					&turnProgress{requestParentID: "root"},
-					[]tools.Tool{echoTool("echo", false, &ran)},
 				)
 			}()
 			select {
@@ -2195,6 +2267,7 @@ func TestApprovalCommitTransitionsAtomicallyBeforeCauseCapture(t *testing.T) {
 				stopHeartbeat := s.startHeartbeat(context.Background(), coordinator, lease)
 				defer stopHeartbeat()
 				ran := false
+				s.toolset = s.toolset.WithTools([]tools.Tool{echoTool("gated", true, &ran)})
 				events := &recorder{}
 				err := s.runOwnedTurn(
 					coordinator,
@@ -2204,7 +2277,6 @@ func TestApprovalCommitTransitionsAtomicallyBeforeCauseCapture(t *testing.T) {
 						return decision.decision
 					},
 					&turnProgress{requestParentID: "root"},
-					[]tools.Tool{echoTool("gated", true, &ran)},
 				)
 				if !errors.Is(err, cause.err) || ran {
 					t.Fatalf("runOwnedTurn error=%v tool ran=%v", err, ran)
