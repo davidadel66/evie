@@ -54,7 +54,7 @@ func NewToolset(toolDefinitions []Tool) Toolset {
 // BuiltinToolset returns the complete legacy built-in tool surface. A fresh
 // immutable value is returned for each session.
 func BuiltinToolset() Toolset {
-	return NewToolset(all)
+	return NewToolset(legacyBuiltinTools)
 }
 
 func (t Toolset) Schemas() []openrouter.Tool {
@@ -114,7 +114,7 @@ type PreparedTool struct {
 
 type Approver func(ctx context.Context, name, args string, preview *FileChangePreview) Decision
 
-var all = []Tool{
+var kernelTools = []Tool{
 	{Schema: getTimeTool, Execute: getTime},
 	{Schema: todoListTool, Execute: toDoList},
 	{Schema: todoAddTool, Execute: toDoAdd},
@@ -128,11 +128,27 @@ var all = []Tool{
 	{Schema: readFileTool, Execute: readFile},
 	{Schema: editFileTool, Execute: editFile, Prepare: prepareEditFileTool, NeedsApproval: true},
 	{Schema: bashTool, Execute: runBash},
-	{Schema: webFetchTool, Execute: webFetch},
-	{Schema: webSearchTool, Execute: webSearch},
 	{Schema: cronAddTool, Execute: cronAdd},
 	{Schema: cronListTool, Execute: cronList},
 	{Schema: cronRemoveTool, Execute: cronRemove},
+}
+
+var legacyBuiltinTools = append(append([]Tool(nil), kernelTools...), WebTools()...)
+
+// KernelToolset returns the non-plugin capability surface. Production session
+// composition adds enabled plugin contributions to this immutable base.
+func KernelToolset() Toolset {
+	return NewToolset(kernelTools)
+}
+
+// WebTools returns fresh definitions for the existing model-facing Web tools.
+// The Web first-party plugin attaches canonical Capability identities while
+// preserving these schemas and execution functions unchanged.
+func WebTools() []Tool {
+	return []Tool{
+		{Schema: cloneSchema(webFetchTool), Execute: webFetch},
+		{Schema: cloneSchema(webSearchTool), Execute: webSearch},
+	}
 }
 
 func Schemas() []openrouter.Tool {
@@ -140,7 +156,7 @@ func Schemas() []openrouter.Tool {
 }
 
 func SchemasWith(extra []Tool) []openrouter.Tool {
-	definitions := append(append([]Tool(nil), all...), extra...)
+	definitions := append(append([]Tool(nil), legacyBuiltinTools...), extra...)
 	return NewToolset(definitions).Schemas()
 }
 
@@ -192,7 +208,7 @@ func ExecuteWithApprovalAuthorizedCompletion(
 	authorize LifecycleAuthorizer,
 	ordinaryComplete func(),
 ) (openrouter.Message, bool, error) {
-	definitions := append(append([]Tool(nil), all...), extra...)
+	definitions := append(append([]Tool(nil), legacyBuiltinTools...), extra...)
 	return NewToolset(definitions).ExecuteWithApprovalAuthorizedCompletion(
 		ctx, call, approve, observe, authorize, ordinaryComplete,
 	)

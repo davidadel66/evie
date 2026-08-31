@@ -16,6 +16,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/web"
 	"github.com/google/uuid"
@@ -38,6 +39,14 @@ func main() {
 	}
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../../.env")
+
+	pluginManager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb())
+	if err != nil {
+		log.Fatalf("failed to load compiled plugins: %v", err)
+	}
+	if err := pluginManager.SetEnabled(plugins.WebPluginID, true); err != nil {
+		log.Fatalf("failed to enable Web plugin: %v", err)
+	}
 
 	cmd := ""
 	if len(os.Args) > 1 {
@@ -77,13 +86,17 @@ func main() {
 		}
 
 		holderID := memory.LeaseHolderID(holderUUID.String())
+		toolset, err := pluginManager.NewSessionToolset()
+		if err != nil {
+			log.Fatalf("failed to compose session Toolset: %v", err)
+		}
 		return agent.NewWithToolset(
 			client,
 			profile,
 			store.BindHistory(storedSession.ID, holderID),
 			storedSession.ScopeContext(),
 			store.BindTurnOwner(storedSession.ID, holderID),
-			tools.BuiltinToolset(),
+			toolset,
 		)
 	}
 
