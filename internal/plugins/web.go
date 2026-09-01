@@ -1,6 +1,10 @@
 package plugins
 
-import "github.com/davidadel66/evie/internal/tools"
+import (
+	"context"
+
+	"github.com/davidadel66/evie/internal/tools"
+)
 
 const (
 	WebPluginID           PluginID     = "web"
@@ -14,6 +18,10 @@ const (
 type Web struct{}
 
 func NewWeb() Web { return Web{} }
+
+func (Web) Start(context.Context) error { return nil }
+
+func (Web) Stop(context.Context) error { return nil }
 
 func (Web) Manifest() Manifest {
 	return Manifest{

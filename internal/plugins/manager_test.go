@@ -16,6 +16,10 @@ type fakePlugin struct {
 
 func (p fakePlugin) Manifest() Manifest { return p.manifest }
 
+func (p fakePlugin) Start(context.Context) error { return nil }
+
+func (p fakePlugin) Stop(context.Context) error { return nil }
+
 func (p fakePlugin) ToolCapabilities() []ToolCapability { return p.capabilities }
 
 func fakeToolPlugin(pluginID, capabilityID, toolName, result string) fakePlugin {
