@@ -358,7 +358,7 @@ func runCronTool(t *testing.T, name string, params map[string]any) (string, erro
 	if err != nil {
 		t.Fatalf("test setup: marshal args: %v", err)
 	}
-	for _, tool := range all {
+	for _, tool := range legacyBuiltinTools {
 		if tool.Schema.Function.Name == name {
 			return tool.Execute(context.Background(), string(raw))
 		}
@@ -1181,9 +1181,9 @@ func TestRunScheduled(t *testing.T) {
 // as the loudest security decision since ungated bash.
 func TestCronToolsRegisteredUngated(t *testing.T) {
 	find := func(name string) *Tool {
-		for i := range all {
-			if all[i].Schema.Function.Name == name {
-				return &all[i]
+		for i := range legacyBuiltinTools {
+			if legacyBuiltinTools[i].Schema.Function.Name == name {
+				return &legacyBuiltinTools[i]
 			}
 		}
 		return nil
@@ -1260,9 +1260,9 @@ func TestCronToolsRegisteredUngated(t *testing.T) {
 // does not — a hand-edited jobs row would silently diverge from its plist.
 func TestEvieDBRegistration(t *testing.T) {
 	find := func(name string) *Tool {
-		for i := range all {
-			if all[i].Schema.Function.Name == name {
-				return &all[i]
+		for i := range legacyBuiltinTools {
+			if legacyBuiltinTools[i].Schema.Function.Name == name {
+				return &legacyBuiltinTools[i]
 			}
 		}
 		t.Fatalf("%s is not in the tool registry", name)

@@ -29,6 +29,13 @@ CREATE TABLE IF NOT EXISTS job_runs (
     output      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS plugin_enabled_configuration (
+    plugin_id  TEXT PRIMARY KEY NOT NULL CHECK (length(trim(plugin_id)) > 0),
+    enabled    INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    revision   INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS projects (
     id             TEXT PRIMARY KEY NOT NULL,
     display_name   TEXT NOT NULL,
@@ -64,6 +71,51 @@ WHEN NEW.project_id IS NOT OLD.project_id
     OR NEW.parent_session_id IS NOT OLD.parent_session_id
 BEGIN
     SELECT RAISE(ABORT, 'session scope is immutable');
+END;
+
+CREATE TABLE IF NOT EXISTS session_composition_receipts (
+    session_id   TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
+    receipt_json TEXT NOT NULL CHECK (json_valid(receipt_json) AND json_type(receipt_json) = 'object'),
+    recorded_at  TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS session_composition_receipts_immutable_update
+BEFORE UPDATE ON session_composition_receipts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'composition receipts are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_composition_receipts_immutable_delete
+BEFORE DELETE ON session_composition_receipts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'composition receipts are immutable');
+END;
+
+CREATE TABLE IF NOT EXISTS session_compatibility_resolutions (
+    session_id      TEXT NOT NULL REFERENCES session_composition_receipts(session_id),
+    resolution_key  TEXT NOT NULL CHECK (length(resolution_key) = 64),
+    resolution_json TEXT NOT NULL CHECK (json_valid(resolution_json) AND json_type(resolution_json) = 'object'),
+    resolved_at     TEXT NOT NULL,
+    PRIMARY KEY (session_id, resolution_key)
+);
+
+CREATE INDEX IF NOT EXISTS session_compatibility_resolutions_time_idx
+ON session_compatibility_resolutions(session_id, resolved_at, resolution_key);
+
+CREATE TRIGGER IF NOT EXISTS session_compatibility_resolutions_append_only_update
+BEFORE UPDATE ON session_compatibility_resolutions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'compatibility resolutions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_compatibility_resolutions_append_only_delete
+BEFORE DELETE ON session_compatibility_resolutions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'compatibility resolutions are append-only');
 END;
 
 CREATE TABLE IF NOT EXISTS session_turn_leases (
@@ -222,6 +274,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+	if err := ensurePluginConfigurationRevision(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade plugin enabled configuration: %w", err)
+	}
 	if hooks.afterSchema != nil {
 		hooks.afterSchema()
 	}
@@ -238,4 +294,29 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		return nil, err
 	}
 	return db, nil
+}
+
+func ensurePluginConfigurationRevision(ctx context.Context, db *sql.DB) error {
+	hasRevision := func() (bool, error) {
+		var count int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM pragma_table_info('plugin_enabled_configuration') WHERE name = 'revision'
+		`).Scan(&count)
+		return count == 1, err
+	}
+	present, err := hasRevision()
+	if err != nil || present {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `
+		ALTER TABLE plugin_enabled_configuration
+		ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)
+	`); err != nil {
+		present, checkErr := hasRevision()
+		if checkErr == nil && present {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

@@ -136,7 +136,6 @@ func (s *Session) runOwnedTurn(
 	ev Events,
 	approve tools.Approver,
 	progress *turnProgress,
-	extra []tools.Tool,
 ) error {
 	requestParentID := progress.requestParentID
 	rootTurnID := progress.rootTurnID
@@ -170,7 +169,7 @@ func (s *Session) runOwnedTurn(
 		composeInput := ContextComposeInput{
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
-			Tools: tools.SchemasWith(extra), Reasoning: s.reasoning,
+			Tools: s.toolset.Schemas(), Reasoning: s.reasoning,
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
 		if err != nil {
@@ -460,8 +459,8 @@ func (s *Session) runOwnedTurn(
 			if !coordinator.beginToolPhase() {
 				return s.observeTurnContext(coordinator)
 			}
-			result, isErr, err := tools.ExecuteWithApprovalAuthorizedCompletion(
-				coordinator.ctx, extra, call, wrappedApprover, observeApproval, authorize,
+			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
+				coordinator.ctx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {
 						s.timing.beforeToolResultHandoff()

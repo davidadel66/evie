@@ -355,9 +355,9 @@ func TestYouTubeToolsAreRegisteredUngatedWithDeclaredSchemas(t *testing.T) {
 	}
 	for name, expectation := range want {
 		var found *Tool
-		for i := range all {
-			if all[i].Schema.Function.Name == name {
-				found = &all[i]
+		for i := range legacyBuiltinTools {
+			if legacyBuiltinTools[i].Schema.Function.Name == name {
+				found = &legacyBuiltinTools[i]
 				break
 			}
 		}
@@ -413,9 +413,9 @@ func TestYouTubeTranscriptDescriptionTreatsTranscriptAsContextNotResponse(t *tes
 func TestTranscriptDBRegistrationDescriptionAndWriteFence(t *testing.T) {
 	findTool := func(name string) *Tool {
 		t.Helper()
-		for i := range all {
-			if all[i].Schema.Function.Name == name {
-				return &all[i]
+		for i := range legacyBuiltinTools {
+			if legacyBuiltinTools[i].Schema.Function.Name == name {
+				return &legacyBuiltinTools[i]
 			}
 		}
 		t.Fatalf("tool %s not registered", name)

@@ -14,7 +14,6 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
-	"github.com/davidadel66/evie/internal/tools"
 )
 
 const (
@@ -384,7 +383,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	composed, err := s.composer.Compose(ContextComposeInput{
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
-		Tools: tools.Schemas(), Reasoning: s.reasoning,
+		Tools: s.toolset.Schemas(), Reasoning: s.reasoning,
 	})
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)

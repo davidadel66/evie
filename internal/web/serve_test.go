@@ -14,6 +14,7 @@ import (
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 // fakeClient scripts the provider, same shape as the agent package's
@@ -23,6 +24,7 @@ type fakeClient struct {
 	steps   []fakeStep
 	entered chan struct{}
 	release chan struct{}
+	reqs    []openrouter.ChatRequest
 }
 
 func webTestContextProfile(model string) openrouter.ContextProfile {
@@ -81,6 +83,7 @@ func (f *fakeHistory) Events(_ context.Context) ([]memory.Event, error) {
 }
 
 func (f *fakeClient) ChatStream(_ context.Context, req openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	f.reqs = append(f.reqs, req)
 	if f.entered != nil {
 		f.entered <- struct{}{}
 	}
@@ -176,6 +179,52 @@ func TestChatStreamsATurn(t *testing.T) {
 	if !strings.HasSuffix(body, "event: turn_done\ndata: {}\n\n") {
 		t.Fatalf("stream does not end with turn_done:\n%s", body)
 	}
+}
+
+func TestWebUsesSessionToolsetForEveryProviderIteration(t *testing.T) {
+	client := &fakeClient{steps: []fakeStep{
+		{toolCalls: []openrouter.ToolCall{{
+			ID: "call-1", Type: "function",
+			Function: openrouter.FunctionCall{Name: "web_only", Arguments: `{}`},
+		}}},
+		{content: "complete"},
+	}}
+	toolset := tools.NewToolset([]tools.Tool{{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "web_only", Parameters: openrouter.Parameter{Type: "object"},
+		}},
+		Execute: func(context.Context, string) (string, error) { return "web result", nil },
+	}})
+	session := agent.NewWithToolset(
+		client,
+		webTestContextProfile("test-model"),
+		&fakeHistory{},
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"},
+		webTestTurnOwner{},
+		toolset,
+	)
+	recorder := httptest.NewRecorder()
+
+	NewServer(session).Handler().ServeHTTP(recorder, chatRequest(`{"message":"use it"}`))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if len(client.reqs) != 2 {
+		t.Fatalf("provider requests = %d, want 2", len(client.reqs))
+	}
+	for i, req := range client.reqs {
+		if len(req.Tools) != 1 || req.Tools[0].Function.Name != "web_only" {
+			t.Fatalf("request %d tools = %+v", i, req.Tools)
+		}
+	}
+	assertSSEOrder(t, recorder.Body.String(),
+		"event: assistant_done\ndata: {\"content\":\"\"}",
+		"event: tool_call\ndata: {\"id\":\"call-1\",\"name\":\"web_only\",\"args\":\"{}\"}",
+		"event: tool_result\ndata: {\"id\":\"call-1\",\"content\":\"web result\",\"isError\":false}",
+		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: turn_done\ndata: {}",
+	)
 }
 
 type asyncWebClient struct {

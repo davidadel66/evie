@@ -494,7 +494,7 @@ func TestWebSearch(t *testing.T) {
 // One registry line, ungated: read-only against the web, same threat model
 // as web_fetch minus arbitrary page fetching.
 func TestWebSearchIsRegisteredUngated(t *testing.T) {
-	for _, tool := range all {
+	for _, tool := range legacyBuiltinTools {
 		if tool.Schema.Function.Name != "web_search" {
 			continue
 		}

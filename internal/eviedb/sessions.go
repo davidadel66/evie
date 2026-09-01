@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/google/uuid"
 )
@@ -204,7 +205,7 @@ func sessionFromScanned(
 }
 
 func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.ProjectID) (memory.Session, error) {
-	return s.createProjectSession(ctx, projectID, "", "", "", false)
+	return s.createProjectSession(ctx, projectID, "", "", "", false, nil)
 }
 
 // CreateProjectSessionForChooser atomically requires the rendered project root,
@@ -216,7 +217,20 @@ func (s *Store) CreateProjectSessionForChooser(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 ) (memory.Session, error) {
-	return s.createProjectSession(ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, true)
+	return s.createProjectSession(ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, true, nil)
+}
+
+func (s *Store) CreateProjectSessionForChooserWithComposition(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	expectedProjectRoot string,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createProjectSession(
+		ctx, projectID, expectedProjectRoot, cwdRoot, expectedCWDProjectID, true, &receipt,
+	)
 }
 
 func (s *Store) createProjectSession(
@@ -226,7 +240,16 @@ func (s *Store) createProjectSession(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 	guarded bool,
+	receipt *composition.Receipt,
 ) (memory.Session, error) {
+	var encodedReceipt []byte
+	if receipt != nil {
+		var err error
+		encodedReceipt, err = composition.Marshal(*receipt)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("validate Composition Receipt: %w", err)
+		}
+	}
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("generate session ID: %w", err)
@@ -267,6 +290,11 @@ func (s *Store) createProjectSession(
 				return fmt.Errorf("insert project session: %w", err)
 			}
 			session.ProjectID = memory.ProjectID(storedProjectID)
+			if receipt != nil {
+				if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
+					return fmt.Errorf("insert project session Composition Receipt: %w", err)
+				}
+			}
 			return nil
 		})
 		if err != nil {
@@ -304,7 +332,14 @@ func (s *Store) createProjectSession(
 }
 
 func (s *Store) CreateGlobalSession(ctx context.Context) (memory.Session, error) {
-	return s.createGlobalSession(ctx, "", "", false)
+	return s.createGlobalSession(ctx, "", "", false, nil)
+}
+
+func (s *Store) CreateGlobalSessionWithComposition(
+	ctx context.Context,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createGlobalSession(ctx, "", "", false, &receipt)
 }
 
 func (s *Store) CreateGlobalSessionForChooser(
@@ -312,7 +347,16 @@ func (s *Store) CreateGlobalSessionForChooser(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 ) (memory.Session, error) {
-	return s.createGlobalSession(ctx, cwdRoot, expectedCWDProjectID, true)
+	return s.createGlobalSession(ctx, cwdRoot, expectedCWDProjectID, true, nil)
+}
+
+func (s *Store) CreateGlobalSessionForChooserWithComposition(
+	ctx context.Context,
+	cwdRoot string,
+	expectedCWDProjectID memory.ProjectID,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createGlobalSession(ctx, cwdRoot, expectedCWDProjectID, true, &receipt)
 }
 
 func (s *Store) createGlobalSession(
@@ -320,7 +364,16 @@ func (s *Store) createGlobalSession(
 	cwdRoot string,
 	expectedCWDProjectID memory.ProjectID,
 	guarded bool,
+	receipt *composition.Receipt,
 ) (memory.Session, error) {
+	var encodedReceipt []byte
+	if receipt != nil {
+		var err error
+		encodedReceipt, err = composition.Marshal(*receipt)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("validate Composition Receipt: %w", err)
+		}
+	}
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return memory.Session{}, fmt.Errorf("generate session ID: %w", err)
@@ -349,6 +402,34 @@ func (s *Store) createGlobalSession(
 				session.UpdatedAt.Format(time.RFC3339Nano),
 			); err != nil {
 				return fmt.Errorf("insert global session: %w", err)
+			}
+			if receipt != nil {
+				if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
+					return fmt.Errorf("insert global session Composition Receipt: %w", err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return memory.Session{}, err
+		}
+		return session, nil
+	}
+	if receipt != nil {
+		err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+			if _, err := conn.ExecContext(ctx, `
+				INSERT INTO sessions (id, status, created_at, updated_at)
+				VALUES (?, ?, ?, ?)
+			`,
+				session.ID,
+				session.Status,
+				session.CreatedAt.Format(time.RFC3339Nano),
+				session.UpdatedAt.Format(time.RFC3339Nano),
+			); err != nil {
+				return fmt.Errorf("insert global session: %w", err)
+			}
+			if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
+				return fmt.Errorf("insert global session Composition Receipt: %w", err)
 			}
 			return nil
 		})

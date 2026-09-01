@@ -13,7 +13,69 @@ import (
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/tools"
 )
+
+type pinnedREPLToolClient struct {
+	requests []openrouter.ChatRequest
+}
+
+func (c *pinnedREPLToolClient) ChatStream(
+	_ context.Context,
+	req openrouter.ChatRequest,
+	_ openrouter.StreamHandlers,
+) (openrouter.ChatResponse, error) {
+	c.requests = append(c.requests, req)
+	if len(c.requests) == 1 {
+		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+			Role: "assistant", ToolCalls: []openrouter.ToolCall{{
+				ID: "call-1", Type: "function",
+				Function: openrouter.FunctionCall{Name: "repl_only", Arguments: `{}`},
+			}},
+		}}}}, nil
+	}
+	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
+		Role: "assistant", Content: "complete",
+	}}}}, nil
+}
+
+func TestREPLUsesSessionToolsetForEveryProviderIteration(t *testing.T) {
+	client := &pinnedREPLToolClient{}
+	toolset := tools.NewToolset([]tools.Tool{{
+		Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{
+			Name: "repl_only", Parameters: openrouter.Parameter{Type: "object"},
+		}},
+		Execute: func(context.Context, string) (string, error) { return "repl result", nil },
+	}})
+	session := agent.NewWithToolset(
+		client,
+		evieTestContextProfile("test"),
+		&recordingREPLHistory{},
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"},
+		testTurnOwner{},
+		toolset,
+	)
+	var out bytes.Buffer
+
+	runREPLContextIO(
+		context.Background(), session, bufio.NewScanner(strings.NewReader("use it\n")), &out,
+	)
+
+	if len(client.requests) != 2 {
+		t.Fatalf("provider requests = %d, want 2", len(client.requests))
+	}
+	for i, req := range client.requests {
+		if len(req.Tools) != 1 || req.Tools[0].Function.Name != "repl_only" {
+			t.Fatalf("request %d tools = %+v", i, req.Tools)
+		}
+	}
+	if got := client.requests[1].Messages[len(client.requests[1].Messages)-1]; got.Role != "tool" || got.Content != "repl result" {
+		t.Fatalf("second request tool result = %+v", got)
+	}
+	if got := out.String(); !strings.Contains(got, "[calling repl_only]\n") || !strings.Contains(got, "complete\n") {
+		t.Fatalf("REPL output = %q", got)
+	}
+}
 
 func TestREPLDiscardedContentStaysVisibleAndIsMarked(t *testing.T) {
 	var out bytes.Buffer

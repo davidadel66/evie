@@ -1009,7 +1009,7 @@ func TestWebFetch(t *testing.T) {
 // The registry is the only wiring web_fetch needs, and it is ungated on
 // purpose — it cannot damage the filesystem.
 func TestWebFetchIsRegisteredUngated(t *testing.T) {
-	for _, tool := range all {
+	for _, tool := range legacyBuiltinTools {
 		if tool.Schema.Function.Name != "web_fetch" {
 			continue
 		}

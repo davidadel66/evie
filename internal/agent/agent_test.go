@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -340,6 +341,96 @@ func TestSendComposesAndSnapshotsEveryProviderIteration(t *testing.T) {
 	}
 	if !reflect.DeepEqual(allEvents, wantEvents) {
 		t.Fatalf("ordered durable history mismatch\n got: %#v\nwant: %#v", allEvents, wantEvents)
+	}
+}
+
+func TestSessionsKeepSeparateToolsetsAcrossProviderIterations(t *testing.T) {
+	newSession := func(toolName, result string) (*Session, *fakeClient) {
+		client := &fakeClient{steps: []step{
+			assistantStep("", nil, toolCall("call-1", toolName, `{}`)),
+			assistantStep("done", nil),
+		}}
+		toolset := tools.NewToolset([]tools.Tool{{
+			Schema: openrouter.Tool{
+				Type: "function",
+				Function: openrouter.Function{
+					Name: toolName, Parameters: openrouter.Parameter{Type: "object"},
+				},
+			},
+			Execute: func(context.Context, string) (string, error) { return result, nil },
+		}})
+		return NewWithToolset(
+			client,
+			testContextProfile("test-model"),
+			&fakeHistory{},
+			memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: memory.SessionID(toolName)},
+			newFakeTurnOwner(),
+			toolset,
+		), client
+	}
+
+	first, firstClient := newSession("first_only", "first result")
+	second, secondClient := newSession("second_only", "second result")
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, session := range []*Session{first, second} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- session.Send(context.Background(), "go", &recorder{}, nil)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	assertPinned := func(client *fakeClient, wantName, wantResult string) {
+		t.Helper()
+		if len(client.reqs) != 2 {
+			t.Fatalf("%s provider requests = %d, want 2", wantName, len(client.reqs))
+		}
+		for i, req := range client.reqs {
+			if len(req.Tools) != 1 || req.Tools[0].Function.Name != wantName {
+				t.Fatalf("%s request %d tools = %+v", wantName, i, req.Tools)
+			}
+		}
+		messages := client.reqs[1].Messages
+		if got := messages[len(messages)-1]; got.Role != "tool" || got.Content != wantResult {
+			t.Fatalf("%s second request result = %+v", wantName, got)
+		}
+	}
+	assertPinned(firstClient, "first_only", "first result")
+	assertPinned(secondClient, "second_only", "second result")
+}
+
+func TestSessionToolsetReturnsUnknownForAbsentTool(t *testing.T) {
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "absent", `{}`)),
+		assistantStep("done", nil),
+	}}
+	session := NewWithToolset(
+		client,
+		testContextProfile("test-model"),
+		&fakeHistory{},
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"},
+		newFakeTurnOwner(),
+		tools.NewToolset(nil),
+	)
+
+	if err := session.Send(context.Background(), "go", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.reqs) != 2 || len(client.reqs[0].Tools) != 0 || len(client.reqs[1].Tools) != 0 {
+		t.Fatalf("provider requests = %+v", client.reqs)
+	}
+	result := client.reqs[1].Messages[len(client.reqs[1].Messages)-1]
+	if result.Role != "tool" || result.ToolCallID != "call-1" || result.Content != "Unknown Tool Call: absent" {
+		t.Fatalf("unknown tool result = %+v", result)
 	}
 }
 
