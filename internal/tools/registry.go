@@ -114,13 +114,13 @@ type PreparedTool struct {
 
 type Approver func(ctx context.Context, name, args string, preview *FileChangePreview) Decision
 
-var kernelTools = []Tool{
+var kernelToolsBeforeFinance = []Tool{
 	{Schema: getTimeTool, Execute: getTime},
 	{Schema: todoListTool, Execute: toDoList},
 	{Schema: todoAddTool, Execute: toDoAdd},
-	{Schema: financeSyncTool, Execute: financeSync},
-	{Schema: financeRulesTool, Execute: financeRules},
-	{Schema: financeCategorizeTool, Execute: financeCategorize},
+}
+
+var kernelToolsAfterFinance = []Tool{
 	{Schema: youtubeTranscriptTool, Execute: youtubeTranscript},
 	{Schema: youtubeScrapeChannelTool, Execute: youtubeScrapeChannel},
 	{Schema: queryDBTool, Execute: queryDB},
@@ -133,7 +133,16 @@ var kernelTools = []Tool{
 	{Schema: cronRemoveTool, Execute: cronRemove},
 }
 
-var legacyBuiltinTools = append(append([]Tool(nil), kernelTools...), WebTools()...)
+var kernelTools = append(append([]Tool(nil), kernelToolsBeforeFinance...), kernelToolsAfterFinance...)
+
+var legacyBuiltinTools = func() []Tool {
+	definitions := make([]Tool, 0, len(kernelTools)+len(FinanceTools())+len(WebTools()))
+	definitions = append(definitions, kernelToolsBeforeFinance...)
+	definitions = append(definitions, FinanceTools()...)
+	definitions = append(definitions, kernelToolsAfterFinance...)
+	definitions = append(definitions, WebTools()...)
+	return definitions
+}()
 
 // KernelToolset returns the non-plugin capability surface. Production session
 // composition adds enabled plugin contributions to this immutable base.
@@ -149,6 +158,32 @@ func WebTools() []Tool {
 		{Schema: cloneSchema(webFetchTool), Execute: webFetch},
 		{Schema: cloneSchema(webSearchTool), Execute: webSearch},
 	}
+}
+
+// FinanceTools returns fresh definitions for the existing model-facing
+// Finance tools. The Finance first-party plugin attaches canonical Capability
+// identities while preserving these schemas and execution functions unchanged.
+func FinanceTools() []Tool {
+	return []Tool{
+		FinanceSyncTool(),
+		FinanceRulesTool(),
+		FinanceCategorizeTool(),
+	}
+}
+
+// FinanceSyncTool returns the Finance synchronization definition.
+func FinanceSyncTool() Tool {
+	return Tool{Schema: cloneSchema(financeSyncTool), Execute: financeSync}
+}
+
+// FinanceRulesTool returns the Finance rule-loading definition.
+func FinanceRulesTool() Tool {
+	return Tool{Schema: cloneSchema(financeRulesTool), Execute: financeRules}
+}
+
+// FinanceCategorizeTool returns the Finance categorization definition.
+func FinanceCategorizeTool() Tool {
+	return Tool{Schema: cloneSchema(financeCategorizeTool), Execute: financeCategorize}
 }
 
 func Schemas() []openrouter.Tool {

@@ -40,12 +40,19 @@ func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../../.env")
 
-	pluginManager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb())
+	pluginManager, err := plugins.NewManager(
+		tools.KernelToolset(),
+		plugins.NewWeb(),
+		plugins.NewFinance(),
+	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
 	}
 	if err := pluginManager.SetEnabled(plugins.WebPluginID, true); err != nil {
 		log.Fatalf("failed to enable Web plugin: %v", err)
+	}
+	if err := pluginManager.SetEnabled(plugins.FinancePluginID, true); err != nil {
+		log.Fatalf("failed to enable Finance plugin: %v", err)
 	}
 
 	cmd := ""
