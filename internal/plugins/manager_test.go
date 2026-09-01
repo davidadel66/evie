@@ -192,11 +192,14 @@ func TestManagerChecksKernelCompatibilityRange(t *testing.T) {
 	}
 }
 
-func TestManagerRejectsCapabilityOutsidePluginNamespace(t *testing.T) {
-	plugin := fakeToolPlugin("fixture", "other.echo", "fixture_echo", "result")
-	_, err := NewManager(tools.NewToolset(nil), plugin)
-	if err == nil || !strings.Contains(err.Error(), `Capability ID "other.echo" is not namespaced by plugin "fixture"`) {
-		t.Fatalf("NewManager error = %v", err)
+func TestManagerAcceptsUnboundedStrictVersionComponents(t *testing.T) {
+	plugin := fakeToolPlugin("fixture", "fixture.echo", "fixture_echo", "result")
+	plugin.manifest.ImplementationVersion = "184467440737095516160.0.0"
+	plugin.manifest.Capabilities[0].Version = "184467440737095516160.0.0"
+	plugin.capabilities[0].ContractVersion = "184467440737095516160.0.0"
+
+	if _, err := NewManager(tools.NewToolset(nil), plugin); err != nil {
+		t.Fatalf("NewManager rejected strict unbounded version: %v", err)
 	}
 }
 
@@ -211,8 +214,21 @@ func TestManagerRejectsMalformedCapabilityContractVersionBeforeStart(t *testing.
 	}
 }
 
+func TestManagerRejectsCapabilityOutsidePluginNamespace(t *testing.T) {
+	plugin := fakeToolPlugin("fixture", "other.echo", "fixture_echo", "result")
+	_, err := NewManager(tools.NewToolset(nil), plugin)
+	if err == nil || !strings.Contains(err.Error(), `Capability ID "other.echo" is not namespaced by plugin "fixture"`) {
+		t.Fatalf("NewManager error = %v", err)
+	}
+}
+
 func TestManagerRejectsNonCanonicalPluginIDs(t *testing.T) {
-	for _, id := range []string{"fixture.plugin", "Fixture", " fixture", "fixture "} {
+	for _, id := range []string{
+		"fixture.plugin",
+		"Fixture",
+		" fixture",
+		"fixture ",
+	} {
 		t.Run(id, func(t *testing.T) {
 			plugin := fakeToolPlugin(id, id+".echo", "fixture_echo", "result")
 			_, err := NewManager(tools.NewToolset(nil), plugin)
@@ -224,11 +240,17 @@ func TestManagerRejectsNonCanonicalPluginIDs(t *testing.T) {
 }
 
 func TestManagerRejectsMalformedCapabilityIDs(t *testing.T) {
-	for _, id := range []string{"fixture.Echo", "fixture. echo", "fixture.", "fixture..echo", "fixture.echo."} {
+	for _, id := range []string{
+		"fixture.Echo",
+		"fixture. echo",
+		"fixture.",
+		"fixture..echo",
+		"fixture.echo.",
+	} {
 		t.Run(id, func(t *testing.T) {
 			plugin := fakeToolPlugin("fixture", id, "fixture_echo", "result")
 			_, err := NewManager(tools.NewToolset(nil), plugin)
-			if err == nil || !strings.Contains(err.Error(), "namespaced by plugin") {
+			if err == nil || !strings.Contains(err.Error(), "has invalid ID") {
 				t.Fatalf("NewManager error = %v, want canonical Capability ID rejection", err)
 			}
 		})

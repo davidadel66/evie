@@ -15,6 +15,7 @@ import (
 type sessionCompositionStore interface {
 	SaveCompositionReceipt(context.Context, memory.SessionID, composition.Receipt) error
 	GetCompositionReceipt(context.Context, memory.SessionID) (composition.Receipt, error)
+	AppendCompatibilityResolutions(context.Context, memory.SessionID, []composition.CompatibilityResolution) error
 }
 
 type sessionCompositionResolver interface {
@@ -98,11 +99,10 @@ func bindSessionComposition(
 		if createdComposition != nil && reflect.DeepEqual(receipt, createdComposition.Receipt) {
 			return newBoundSessionComposition(*createdComposition), nil
 		}
-		resolved, resumeErr := resolver.ResumeComposition(receipt)
-		if resumeErr != nil {
-			return boundSessionComposition{}, fmt.Errorf("resume pinned session composition: %w", resumeErr)
-		}
-		return newBoundSessionComposition(resolved), nil
+		return resumeAndRecordSessionComposition(
+			ctx, store, resolver, sessionID, receipt,
+			"resume pinned session composition", "record resume compatibility",
+		)
 	}
 	if !errors.Is(err, eviedb.ErrCompositionReceiptNotFound) {
 		return boundSessionComposition{}, err
@@ -116,9 +116,27 @@ func bindSessionComposition(
 	if err != nil {
 		return boundSessionComposition{}, err
 	}
+	return resumeAndRecordSessionComposition(
+		ctx, store, resolver, sessionID, receipt,
+		"resume concurrently pinned session composition", "record concurrent resume compatibility",
+	)
+}
+
+func resumeAndRecordSessionComposition(
+	ctx context.Context,
+	store sessionCompositionStore,
+	resolver sessionCompositionResolver,
+	sessionID memory.SessionID,
+	receipt composition.Receipt,
+	resumeContext string,
+	recordContext string,
+) (boundSessionComposition, error) {
 	resolved, err := resolver.ResumeComposition(receipt)
 	if err != nil {
-		return boundSessionComposition{}, fmt.Errorf("resume concurrently pinned session composition: %w", err)
+		return boundSessionComposition{}, fmt.Errorf("%s: %w", resumeContext, err)
+	}
+	if err := store.AppendCompatibilityResolutions(ctx, sessionID, resolved.CompatibilityResolutions); err != nil {
+		return boundSessionComposition{}, fmt.Errorf("%s: %w", recordContext, err)
 	}
 	return newBoundSessionComposition(resolved), nil
 }

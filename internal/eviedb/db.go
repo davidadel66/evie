@@ -86,6 +86,31 @@ BEGIN
     SELECT RAISE(ABORT, 'composition receipts are immutable');
 END;
 
+CREATE TABLE IF NOT EXISTS session_compatibility_resolutions (
+    session_id      TEXT NOT NULL REFERENCES session_composition_receipts(session_id),
+    resolution_key  TEXT NOT NULL CHECK (length(resolution_key) = 64),
+    resolution_json TEXT NOT NULL CHECK (json_valid(resolution_json) AND json_type(resolution_json) = 'object'),
+    resolved_at     TEXT NOT NULL,
+    PRIMARY KEY (session_id, resolution_key)
+);
+
+CREATE INDEX IF NOT EXISTS session_compatibility_resolutions_time_idx
+ON session_compatibility_resolutions(session_id, resolved_at, resolution_key);
+
+CREATE TRIGGER IF NOT EXISTS session_compatibility_resolutions_append_only_update
+BEFORE UPDATE ON session_compatibility_resolutions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'compatibility resolutions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_compatibility_resolutions_append_only_delete
+BEFORE DELETE ON session_compatibility_resolutions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'compatibility resolutions are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS session_turn_leases (
     session_id       TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
     holder_id        TEXT CHECK (holder_id IS NULL OR length(trim(holder_id)) > 0),

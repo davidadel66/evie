@@ -183,7 +183,7 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 	changedProvider.Providers = append([]ProviderReceipt(nil), pinned.Receipt.Providers...)
 	changedProvider.Providers[0].ImplementationVersion = "1.0.1"
 	if _, err := manager.ResumeComposition(changedProvider); err == nil ||
-		!strings.Contains(err.Error(), "does not match the exact loaded providers") {
+		!strings.Contains(err.Error(), `provider plugin "finance" requires implementation version "1.0.1"`) {
 		t.Fatalf("changed provider resume error = %v", err)
 	}
 
@@ -191,7 +191,7 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 	changedSchema.Capabilities = append([]CapabilityReceipt(nil), pinned.Receipt.Capabilities...)
 	changedSchema.Capabilities[0].SchemaSHA256 = strings.Repeat("0", 64)
 	if _, err := manager.ResumeComposition(changedSchema); err == nil ||
-		!strings.Contains(err.Error(), "does not match the exact loaded providers") {
+		!strings.Contains(err.Error(), `pinned Capability "finance.sync" requires schema`) {
 		t.Fatalf("changed schema resume error = %v", err)
 	}
 
@@ -199,7 +199,72 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 		t.Fatal(err)
 	}
 	if _, err := manager.ResumeComposition(pinned.Receipt); err == nil ||
-		!strings.Contains(err.Error(), `required Capability "finance.sync"`) {
+		!strings.Contains(err.Error(), `pinned provider plugin "finance" is disabled`) {
 		t.Fatalf("missing pinned provider resume error = %v", err)
+	}
+}
+
+func TestResumeCompositionUsesOnlyExplicitCompatibleReplacement(t *testing.T) {
+	originalPlugin := fakeToolPlugin("fixture", "fixture.echo", "fixture_echo", "original")
+	originalManager, err := NewManager(tools.NewToolset(nil), originalPlugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := originalManager.SetEnabled("fixture", true); err != nil {
+		t.Fatal(err)
+	}
+	preset := fixturePreset("fixture.echo")
+	pinned, err := originalManager.resolvePreset(preset)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exact, err := originalManager.resumePreset(preset, pinned.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(exact.CompatibilityResolutions) != 0 {
+		t.Fatalf("exact resume resolutions = %#v, want none", exact.CompatibilityResolutions)
+	}
+
+	replacementPlugin := fakeToolPlugin("fixture", "fixture.echo", "fixture_echo", "replacement")
+	replacementPlugin.manifest.ImplementationVersion = "1.1.0"
+	replacementPlugin.manifest.ResumableFrom = []ImplementationCompatibility{{
+		ImplementationVersion: "1.0.0",
+		Capabilities: []CapabilityCompatibility{{
+			ID: "fixture.echo", ContractVersion: "1.0.0",
+			SchemaSHA256: pinned.Receipt.Capabilities[0].SchemaSHA256,
+		}},
+	}}
+	replacementManager, err := NewManager(tools.NewToolset(nil), replacementPlugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := replacementManager.SetEnabled("fixture", true); err != nil {
+		t.Fatal(err)
+	}
+
+	resumed, err := replacementManager.resumePreset(preset, pinned.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertToolResult(t, resumed.Toolset, "fixture_echo", "replacement")
+	if !reflect.DeepEqual(resumed.Receipt, pinned.Receipt) {
+		t.Fatalf("resumed receipt = %#v, want immutable original %#v", resumed.Receipt, pinned.Receipt)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 {
+		t.Fatalf("replacement resolutions = %#v, want one", resumed.CompatibilityResolutions)
+	}
+	resolution := resumed.CompatibilityResolutions[0]
+	if resolution.OriginalProvider.ID != "fixture" ||
+		resolution.OriginalProvider.ImplementationVersion != "1.0.0" ||
+		resolution.ReplacementImplementationVersion != "1.1.0" ||
+		resolution.KernelAPIVersion != KernelAPIVersion ||
+		len(resolution.Capabilities) != 1 ||
+		resolution.Capabilities[0].ID != "fixture.echo" ||
+		resolution.Capabilities[0].ContractVersion != "1.0.0" ||
+		resolution.Capabilities[0].SchemaSHA256 != pinned.Receipt.Capabilities[0].SchemaSHA256 ||
+		resolution.ResolvedAt.IsZero() {
+		t.Fatalf("replacement resolution = %#v, want exact requirement, evidence, and time", resolution)
 	}
 }

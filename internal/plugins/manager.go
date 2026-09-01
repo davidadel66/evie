@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -37,6 +37,21 @@ type CapabilityContract struct {
 	OptionalDependencies []PluginID
 }
 
+// CapabilityCompatibility is the exact prior contract and schema that the
+// current implementation declares it can continue serving.
+type CapabilityCompatibility struct {
+	ID              CapabilityID
+	ContractVersion string
+	SchemaSHA256    string
+}
+
+// ImplementationCompatibility explicitly names one unavailable prior
+// implementation that the current implementation may replace.
+type ImplementationCompatibility struct {
+	ImplementationVersion string
+	Capabilities          []CapabilityCompatibility
+}
+
 // Dependency identifies one compiled plugin and the implementation versions
 // with which the dependent plugin is compatible.
 type Dependency struct {
@@ -52,6 +67,7 @@ type Manifest struct {
 	RequiredDependencies  []Dependency
 	OptionalDependencies  []Dependency
 	Capabilities          []CapabilityContract
+	ResumableFrom         []ImplementationCompatibility
 }
 
 // Plugin is the smallest common compiled-plugin boundary needed by the
@@ -182,6 +198,9 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 			return nil, err
 		}
 		manager.plugins[manifest.ID].capabilities = capabilities
+		if err := validateImplementationCompatibility(manifest, capabilities); err != nil {
+			return nil, err
+		}
 	}
 	if err := manager.validateDependencies(); err != nil {
 		return nil, err
@@ -195,8 +214,69 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 	return manager, nil
 }
 
+func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability) error {
+	current, err := parseManifestVersion(manifest.ImplementationVersion)
+	if err != nil {
+		return err
+	}
+	active := make(map[CapabilityID]ToolCapability, len(capabilities))
+	for _, capability := range capabilities {
+		active[capability.ID] = capability
+	}
+	seenVersions := make(map[string]struct{}, len(manifest.ResumableFrom))
+	for _, declaration := range manifest.ResumableFrom {
+		prior, err := parseManifestVersion(declaration.ImplementationVersion)
+		if err != nil {
+			return fmt.Errorf("plugin %q has invalid resumable implementation version %q: %w", manifest.ID, declaration.ImplementationVersion, err)
+		}
+		if prior.Compare(current) >= 0 {
+			return fmt.Errorf(
+				"plugin %q resumable implementation version %s is not older than replacement version %s",
+				manifest.ID, declaration.ImplementationVersion, manifest.ImplementationVersion,
+			)
+		}
+		if _, duplicate := seenVersions[declaration.ImplementationVersion]; duplicate {
+			return fmt.Errorf("plugin %q repeats resumable implementation version %s", manifest.ID, declaration.ImplementationVersion)
+		}
+		seenVersions[declaration.ImplementationVersion] = struct{}{}
+		seenCapabilities := make(map[CapabilityID]struct{}, len(declaration.Capabilities))
+		for _, evidence := range declaration.Capabilities {
+			if _, duplicate := seenCapabilities[evidence.ID]; duplicate {
+				return fmt.Errorf(
+					"plugin %q compatibility for implementation %s repeats Capability %q",
+					manifest.ID, declaration.ImplementationVersion, evidence.ID,
+				)
+			}
+			seenCapabilities[evidence.ID] = struct{}{}
+			capability, exists := active[evidence.ID]
+			if !exists {
+				return fmt.Errorf(
+					"plugin %q compatibility for implementation %s names unavailable Capability %q",
+					manifest.ID, declaration.ImplementationVersion, evidence.ID,
+				)
+			}
+			if evidence.ContractVersion != capability.ContractVersion {
+				return fmt.Errorf(
+					"plugin %q compatibility for implementation %s declares Capability %q contract %s, loaded contract is %s",
+					manifest.ID, declaration.ImplementationVersion, evidence.ID,
+					evidence.ContractVersion, capability.ContractVersion,
+				)
+			}
+			actualSchema := schemaHash(capability.Tool.Schema)
+			if evidence.SchemaSHA256 != actualSchema {
+				return fmt.Errorf(
+					"plugin %q compatibility for implementation %s declares Capability %q schema %s, loaded schema is %s",
+					manifest.ID, declaration.ImplementationVersion, evidence.ID,
+					evidence.SchemaSHA256, actualSchema,
+				)
+			}
+		}
+	}
+	return nil
+}
+
 func validateManifest(manifest Manifest) error {
-	if !validProviderID(manifest.ID) {
+	if !composition.ValidProviderID(string(manifest.ID)) {
 		return fmt.Errorf("plugin %q has invalid ID", manifest.ID)
 	}
 	if strings.TrimSpace(manifest.ImplementationVersion) == "" {
@@ -219,7 +299,7 @@ func validateManifest(manifest Manifest) error {
 			manifest.ID, manifest.KernelCompatibility.MaximumExclusive, err,
 		)
 	}
-	if minimum.compare(maximum) >= 0 {
+	if minimum.Compare(maximum) >= 0 {
 		return fmt.Errorf(
 			"plugin %q has invalid Kernel compatibility range [%s,%s)",
 			manifest.ID,
@@ -231,7 +311,7 @@ func validateManifest(manifest Manifest) error {
 	if err != nil {
 		return fmt.Errorf("Kernel API version %q is invalid: %w", KernelAPIVersion, err)
 	}
-	if kernelVersion.compare(minimum) < 0 || kernelVersion.compare(maximum) >= 0 {
+	if kernelVersion.Compare(minimum) < 0 || kernelVersion.Compare(maximum) >= 0 {
 		return fmt.Errorf(
 			"plugin %q is incompatible with Kernel API %s; supported range is [%s,%s)",
 			manifest.ID,
@@ -242,7 +322,10 @@ func validateManifest(manifest Manifest) error {
 	}
 	seen := make(map[CapabilityID]struct{}, len(manifest.Capabilities))
 	for _, contract := range manifest.Capabilities {
-		if !validCapabilityID(contract.ID, manifest.ID) {
+		if !composition.ValidIdentity(string(contract.ID)) {
+			return fmt.Errorf("Capability %q has invalid ID", contract.ID)
+		}
+		if !composition.ValidCapabilityID(string(contract.ID), string(manifest.ID)) {
 			return fmt.Errorf(
 				"Capability ID %q is not namespaced by plugin %q",
 				contract.ID, manifest.ID,
@@ -263,38 +346,6 @@ func validateManifest(manifest Manifest) error {
 		seen[contract.ID] = struct{}{}
 	}
 	return nil
-}
-
-func validProviderID(id PluginID) bool {
-	return validIdentitySegment(string(id))
-}
-
-func validCapabilityID(id CapabilityID, provider PluginID) bool {
-	value := string(id)
-	if !validProviderID(provider) || !strings.HasPrefix(value, string(provider)+".") {
-		return false
-	}
-	for _, segment := range strings.Split(value, ".") {
-		if !validIdentitySegment(segment) {
-			return false
-		}
-	}
-	return true
-}
-
-func validIdentitySegment(value string) bool {
-	if value == "" || value[0] < 'a' || value[0] > 'z' {
-		return false
-	}
-	for _, character := range value[1:] {
-		if (character >= 'a' && character <= 'z') ||
-			(character >= '0' && character <= '9') ||
-			character == '_' || character == '-' {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 func (m *Manager) validateDependencies() error {
@@ -332,7 +383,7 @@ func (m *Manager) validateDependencies() error {
 				if err != nil {
 					return fmt.Errorf("plugin %q dependency %q has invalid compiled implementation version %q: %w", id, dependency.ID, target.manifest.ImplementationVersion, err)
 				}
-				if targetVersion.compare(minimum) < 0 || targetVersion.compare(maximum) >= 0 {
+				if targetVersion.Compare(minimum) < 0 || targetVersion.Compare(maximum) >= 0 {
 					return fmt.Errorf(
 						"plugin %q requires %s dependency %q in range [%s,%s), compiled version is %s",
 						id, group.kind, dependency.ID,
@@ -358,17 +409,17 @@ func (m *Manager) validateDependencies() error {
 	return nil
 }
 
-func parseVersionRange(versionRange VersionRange) (manifestVersion, manifestVersion, error) {
+func parseVersionRange(versionRange VersionRange) (composition.Version, composition.Version, error) {
 	minimum, err := parseManifestVersion(versionRange.Minimum)
 	if err != nil {
-		return manifestVersion{}, manifestVersion{}, fmt.Errorf("invalid minimum %q: %w", versionRange.Minimum, err)
+		return composition.Version{}, composition.Version{}, fmt.Errorf("invalid minimum %q: %w", versionRange.Minimum, err)
 	}
 	maximum, err := parseManifestVersion(versionRange.MaximumExclusive)
 	if err != nil {
-		return manifestVersion{}, manifestVersion{}, fmt.Errorf("invalid maximum %q: %w", versionRange.MaximumExclusive, err)
+		return composition.Version{}, composition.Version{}, fmt.Errorf("invalid maximum %q: %w", versionRange.MaximumExclusive, err)
 	}
-	if minimum.compare(maximum) >= 0 {
-		return manifestVersion{}, manifestVersion{}, fmt.Errorf("invalid range [%s,%s)", versionRange.Minimum, versionRange.MaximumExclusive)
+	if minimum.Compare(maximum) >= 0 {
+		return composition.Version{}, composition.Version{}, fmt.Errorf("invalid range [%s,%s)", versionRange.Minimum, versionRange.MaximumExclusive)
 	}
 	return minimum, maximum, nil
 }
@@ -444,50 +495,8 @@ func (m *Manager) dependencyOrder() ([]PluginID, error) {
 	return order, nil
 }
 
-type manifestVersion struct {
-	major uint64
-	minor uint64
-	patch uint64
-}
-
-func parseManifestVersion(value string) (manifestVersion, error) {
-	parts := strings.Split(value, ".")
-	if len(parts) != 3 {
-		return manifestVersion{}, fmt.Errorf("want MAJOR.MINOR.PATCH")
-	}
-	components := [3]uint64{}
-	for i, part := range parts {
-		if part == "" {
-			return manifestVersion{}, fmt.Errorf("version component %d is empty", i+1)
-		}
-		if len(part) > 1 && part[0] == '0' {
-			return manifestVersion{}, fmt.Errorf("version component %d has a leading zero", i+1)
-		}
-		for _, digit := range part {
-			if digit < '0' || digit > '9' {
-				return manifestVersion{}, fmt.Errorf("version component %d is not numeric", i+1)
-			}
-		}
-		parsed, err := strconv.ParseUint(part, 10, 64)
-		if err != nil {
-			return manifestVersion{}, fmt.Errorf("version component %d: %w", i+1, err)
-		}
-		components[i] = parsed
-	}
-	return manifestVersion{major: components[0], minor: components[1], patch: components[2]}, nil
-}
-
-func (v manifestVersion) compare(other manifestVersion) int {
-	for i, component := range [...]uint64{v.major, v.minor, v.patch} {
-		otherComponent := [...]uint64{other.major, other.minor, other.patch}[i]
-		if component < otherComponent {
-			return -1
-		}
-		if component > otherComponent {
-			return 1
-		}
-	}
-	return 0
+func parseManifestVersion(value string) (composition.Version, error) {
+	return composition.ParseVersion(value)
 }
 
 func snapshotToolCapabilities(manifest Manifest, supplied []ToolCapability) ([]ToolCapability, error) {
@@ -535,6 +544,12 @@ func cloneManifest(manifest Manifest) Manifest {
 	manifest.RequiredDependencies = append([]Dependency(nil), manifest.RequiredDependencies...)
 	manifest.OptionalDependencies = append([]Dependency(nil), manifest.OptionalDependencies...)
 	manifest.Capabilities = append([]CapabilityContract(nil), manifest.Capabilities...)
+	manifest.ResumableFrom = append([]ImplementationCompatibility(nil), manifest.ResumableFrom...)
+	for i := range manifest.ResumableFrom {
+		manifest.ResumableFrom[i].Capabilities = append(
+			[]CapabilityCompatibility(nil), manifest.ResumableFrom[i].Capabilities...,
+		)
+	}
 	for i := range manifest.Capabilities {
 		manifest.Capabilities[i].OptionalDependencies = append(
 			[]PluginID(nil), manifest.Capabilities[i].OptionalDependencies...,

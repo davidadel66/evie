@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -48,11 +50,13 @@ type CapabilityReceipt = composition.Capability
 type ToolSchemaReceipt = composition.ToolSchema
 type CompositionWarning = composition.Warning
 type CompositionReceipt = composition.Receipt
+type CompatibilityResolution = composition.CompatibilityResolution
 
 type ResolvedComposition struct {
-	Toolset  tools.Toolset
-	Receipt  CompositionReceipt
-	Warnings []string
+	Toolset                  tools.Toolset
+	Receipt                  CompositionReceipt
+	Warnings                 []string
+	CompatibilityResolutions []CompatibilityResolution
 }
 
 func standardPresetContent() Preset {
@@ -240,7 +244,7 @@ func (m *Manager) resolveCapabilityLocked(
 			return nil, ToolCapability{}, composition.WarningContractIncompatible,
 				fmt.Sprintf("requested compatibility is invalid: %v", err)
 		}
-		if version.compare(minimum) < 0 || version.compare(maximum) >= 0 {
+		if version.Compare(minimum) < 0 || version.Compare(maximum) >= 0 {
 			return nil, ToolCapability{}, composition.WarningContractIncompatible, fmt.Sprintf(
 				"provider plugin %q contract version %s is outside required range [%s,%s)",
 				providerID, capability.ContractVersion,
@@ -328,35 +332,231 @@ func ValidateCompositionReceipt(receipt CompositionReceipt) error {
 	return composition.Validate(receipt)
 }
 
-// ResumeComposition reconstructs the exact standard composition. Compatible
-// replacement and cross-Evie-version resolution are intentionally deferred.
+// ResumeComposition reconstructs the pinned standard composition. The exact
+// provider version wins; a newer version is considered only when its Manifest
+// explicitly proves compatibility with every pinned contract and schema.
 func (m *Manager) ResumeComposition(receipt CompositionReceipt) (ResolvedComposition, error) {
+	return m.resumePreset(BuiltinStandardPreset(), receipt)
+}
+
+func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (ResolvedComposition, error) {
 	if err := ValidateCompositionReceipt(receipt); err != nil {
 		return ResolvedComposition{}, err
 	}
-	if PresetID(receipt.Preset.ID) != StandardPresetID {
+	if PresetID(receipt.Preset.ID) != preset.ID {
 		return ResolvedComposition{}, fmt.Errorf("pinned Agent Preset %q is not available", receipt.Preset.ID)
 	}
-	if receipt.Preset.Version != StandardPresetVersion {
+	if receipt.Preset.Version != preset.Version {
 		return ResolvedComposition{}, fmt.Errorf("pinned Agent Preset %q version %q is not available", receipt.Preset.ID, receipt.Preset.Version)
 	}
-	if receipt.EvieVersion != EvieVersion {
-		return ResolvedComposition{}, fmt.Errorf("pinned Evie version %q is not available; current version is %q", receipt.EvieVersion, EvieVersion)
-	}
-	resolved, err := m.ResolvePreset(PresetID(receipt.Preset.ID))
-	if err != nil {
+	if err := validateReceiptCapabilitiesForPreset(preset, receipt); err != nil {
 		return ResolvedComposition{}, err
 	}
-	want, err := json.Marshal(receipt)
-	if err != nil {
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	providerReceipts := make(map[PluginID]ProviderReceipt, len(receipt.Providers))
+	for _, provider := range receipt.Providers {
+		providerReceipts[PluginID(provider.ID)] = provider
+	}
+	providerCapabilities := make(map[PluginID][]CapabilityReceipt)
+	definitions := make([]tools.Tool, 0, len(receipt.Capabilities))
+	for _, pinnedCapability := range receipt.Capabilities {
+		providerID := PluginID(pinnedCapability.ProviderID)
+		providerCapabilities[providerID] = append(providerCapabilities[providerID], pinnedCapability)
+		entry, exists := m.plugins[providerID]
+		if !exists {
+			provider := providerReceipts[providerID]
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned provider plugin %q version %q is not compiled into Evie",
+				providerID, provider.ImplementationVersion,
+			)
+		}
+		if entry.state != StateReady {
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned provider plugin %q is %s; required version is %q",
+				providerID, entry.state, providerReceipts[providerID].ImplementationVersion,
+			)
+		}
+		capability, exists := activeCapability(entry, CapabilityID(pinnedCapability.ID))
+		if !exists {
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned Capability %q is not exposed by provider plugin %q version %q",
+				pinnedCapability.ID, providerID, entry.manifest.ImplementationVersion,
+			)
+		}
+		if capability.ContractVersion != pinnedCapability.ContractVersion {
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned Capability %q requires contract version %q; provider plugin %q version %q exposes %q",
+				pinnedCapability.ID, pinnedCapability.ContractVersion, providerID,
+				entry.manifest.ImplementationVersion, capability.ContractVersion,
+			)
+		}
+		actualSchema := schemaHash(capability.Tool.Schema)
+		if actualSchema != pinnedCapability.SchemaSHA256 {
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned Capability %q requires schema %s; provider plugin %q version %q exposes %s",
+				pinnedCapability.ID, pinnedCapability.SchemaSHA256, providerID,
+				entry.manifest.ImplementationVersion, actualSchema,
+			)
+		}
+		definitions = append(definitions, capability.Tool)
+	}
+
+	resolutions := make([]CompatibilityResolution, 0)
+	for _, pinnedProvider := range receipt.Providers {
+		entry := m.plugins[PluginID(pinnedProvider.ID)]
+		if entry == nil {
+			continue
+		}
+		if entry.manifest.ImplementationVersion == pinnedProvider.ImplementationVersion {
+			continue
+		}
+		declaration, exists := compatibleImplementation(entry.manifest, pinnedProvider.ImplementationVersion)
+		if !exists {
+			return ResolvedComposition{}, fmt.Errorf(
+				"pinned provider plugin %q requires implementation version %q; loaded version %q does not declare it resumable",
+				pinnedProvider.ID, pinnedProvider.ImplementationVersion, entry.manifest.ImplementationVersion,
+			)
+		}
+		evidenceByID := make(map[CapabilityID]CapabilityCompatibility, len(declaration.Capabilities))
+		for _, evidence := range declaration.Capabilities {
+			evidenceByID[evidence.ID] = evidence
+		}
+		resolution := CompatibilityResolution{
+			OriginalProvider:                 pinnedProvider,
+			ReplacementImplementationVersion: entry.manifest.ImplementationVersion,
+			KernelAPIVersion:                 KernelAPIVersion,
+			ResolvedAt:                       time.Now().UTC(),
+		}
+		for _, pinnedCapability := range providerCapabilities[PluginID(pinnedProvider.ID)] {
+			evidence, declared := evidenceByID[CapabilityID(pinnedCapability.ID)]
+			if !declared || evidence.ContractVersion != pinnedCapability.ContractVersion ||
+				evidence.SchemaSHA256 != pinnedCapability.SchemaSHA256 {
+				return ResolvedComposition{}, fmt.Errorf(
+					"pinned provider plugin %q version %q lacks exact compatibility evidence for Capability %q contract %q schema %s",
+					pinnedProvider.ID, pinnedProvider.ImplementationVersion, pinnedCapability.ID,
+					pinnedCapability.ContractVersion, pinnedCapability.SchemaSHA256,
+				)
+			}
+			resolution.Capabilities = append(resolution.Capabilities, compatibilityResolutionCapability(evidence))
+		}
+		if err := composition.ValidateCompatibilityResolution(resolution); err != nil {
+			return ResolvedComposition{}, fmt.Errorf("build Compatibility Resolution: %w", err)
+		}
+		resolutions = append(resolutions, resolution)
+	}
+
+	toolset := m.base.WithTools(definitions)
+	if err := validatePinnedToolSchemas(receipt.ToolSchemas, toolSchemaReceipts(toolset.Schemas())); err != nil {
 		return ResolvedComposition{}, err
 	}
-	got, err := json.Marshal(resolved.Receipt)
-	if err != nil {
-		return ResolvedComposition{}, err
+	return ResolvedComposition{
+		Toolset: toolset, Receipt: composition.Clone(receipt),
+		CompatibilityResolutions: resolutions,
+	}, nil
+}
+
+func compatibilityResolutionCapability(evidence CapabilityCompatibility) composition.CompatibilityCapability {
+	return composition.CompatibilityCapability{
+		ID: string(evidence.ID), ContractVersion: evidence.ContractVersion, SchemaSHA256: evidence.SchemaSHA256,
 	}
-	if string(got) != string(want) {
-		return ResolvedComposition{}, errors.New("pinned Composition Receipt does not match the exact loaded providers, contracts, schemas, and instructions")
+}
+
+func validateReceiptCapabilitiesForPreset(preset Preset, receipt CompositionReceipt) error {
+	required := make(map[CapabilityID]struct{}, len(preset.RequiredCapabilities))
+	allowed := make(map[CapabilityID]VersionRange, len(preset.RequiredCapabilities)+len(preset.OptionalCapabilities))
+	for _, requirement := range preset.RequiredCapabilities {
+		required[requirement.ID] = struct{}{}
+		allowed[requirement.ID] = requirement.Compatibility
 	}
-	return resolved, nil
+	for _, requirement := range preset.OptionalCapabilities {
+		allowed[requirement.ID] = requirement.Compatibility
+	}
+	usedProviders := make(map[string]struct{}, len(receipt.Providers))
+	for _, capability := range receipt.Capabilities {
+		id := CapabilityID(capability.ID)
+		compatibility, exists := allowed[id]
+		if !exists {
+			return fmt.Errorf("pinned Agent Preset %q contains unexpected Capability %q", preset.ID, id)
+		}
+		version, err := parseManifestVersion(capability.ContractVersion)
+		if err != nil {
+			return fmt.Errorf("pinned Capability %q contract version %q is invalid: %w", id, capability.ContractVersion, err)
+		}
+		minimum, maximum, err := parseVersionRange(compatibility)
+		if err != nil {
+			return fmt.Errorf("pinned Agent Preset %q Capability %q compatibility is invalid: %w", preset.ID, id, err)
+		}
+		if version.Compare(minimum) < 0 || version.Compare(maximum) >= 0 {
+			return fmt.Errorf(
+				"pinned Capability %q contract version %q is outside Agent Preset %q required range [%s,%s)",
+				id, capability.ContractVersion, preset.ID,
+				compatibility.Minimum, compatibility.MaximumExclusive,
+			)
+		}
+		usedProviders[capability.ProviderID] = struct{}{}
+		delete(required, id)
+	}
+	if len(required) != 0 {
+		ids := make([]string, 0, len(required))
+		for id := range required {
+			ids = append(ids, string(id))
+		}
+		sort.Strings(ids)
+		return fmt.Errorf("pinned Agent Preset %q is missing required Capability %q", preset.ID, ids[0])
+	}
+	for _, provider := range receipt.Providers {
+		if _, used := usedProviders[provider.ID]; !used {
+			return fmt.Errorf(
+				"pinned Agent Preset %q contains unused provider plugin %q version %q",
+				preset.ID, provider.ID, provider.ImplementationVersion,
+			)
+		}
+	}
+	if !reflect.DeepEqual(receipt.Instructions, preset.Instructions) ||
+		!reflect.DeepEqual(receipt.Configuration, preset.Configuration) {
+		return fmt.Errorf("pinned Agent Preset %q instructions or configuration do not match version %q", preset.ID, preset.Version)
+	}
+	return nil
+}
+
+func validatePinnedToolSchemas(pinned, loaded []ToolSchemaReceipt) error {
+	shared := len(pinned)
+	if len(loaded) < shared {
+		shared = len(loaded)
+	}
+	for i := 0; i < shared; i++ {
+		if pinned[i] != loaded[i] {
+			return fmt.Errorf(
+				"pinned tool schema %q hash %s does not match loaded schema %q hash %s at position %d",
+				pinned[i].Name, pinned[i].SHA256, loaded[i].Name, loaded[i].SHA256, i,
+			)
+		}
+	}
+	if len(pinned) > shared {
+		return fmt.Errorf("pinned tool schema %q is missing from the loaded composition", pinned[shared].Name)
+	}
+	if len(loaded) > shared {
+		return fmt.Errorf("loaded tool schema %q is absent from the pinned composition", loaded[shared].Name)
+	}
+	return nil
+}
+
+func activeCapability(entry *compiledPlugin, id CapabilityID) (ToolCapability, bool) {
+	for _, capability := range entry.activeCapabilities {
+		if capability.ID == id {
+			return capability, true
+		}
+	}
+	return ToolCapability{}, false
+}
+
+func compatibleImplementation(manifest Manifest, version string) (ImplementationCompatibility, bool) {
+	for _, declaration := range manifest.ResumableFrom {
+		if declaration.ImplementationVersion == version {
+			return declaration, true
+		}
+	}
+	return ImplementationCompatibility{}, false
 }

@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -14,6 +17,7 @@ import (
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/tools"
 )
@@ -114,7 +118,7 @@ func TestNewlyCreatedSessionUsesOriginalSnapshotWithoutSecondResolution(t *testi
 	}
 
 	if _, err := bindSessionComposition(ctx, store, resolver, session.ID, original, nil); err == nil ||
-		!strings.Contains(err.Error(), `required Capability "finance.sync"`) {
+		!strings.Contains(err.Error(), `pinned provider plugin "finance" is disabled`) {
 		t.Fatalf("actual resume after provider disable error = %v", err)
 	}
 	if resolver.resumeCalls != 1 {
@@ -326,6 +330,302 @@ func TestPreReceiptDatabaseReopensAndBindsLegacySessionOnce(t *testing.T) {
 	}
 	if receipts != 1 {
 		t.Fatalf("legacy receipts after second bind = %d, want one", receipts)
+	}
+}
+
+func TestSessionCompositionReopenAuditsOnlyDeclaredCompatibleReplacement(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "evie.db")
+	pinned := seedPinnedStandardCompositionWithEvieVersion(t, ctx, path, "0.9.0")
+	exactDB, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exactStore := eviedb.NewStore(exactDB)
+	session := onlySession(t, ctx, exactDB)
+	exactManager := sessionCompositionManager(t)
+	if _, err := bindSessionComposition(
+		ctx, exactStore, exactManager, session.ID, plugins.ResolvedComposition{}, nil,
+	); err != nil {
+		t.Fatalf("unchanged composition after Evie upgrade did not resume: %v", err)
+	}
+	exactResolutions, err := exactStore.GetCompatibilityResolutions(ctx, session.ID)
+	if err != nil || len(exactResolutions) != 0 {
+		t.Fatalf("unchanged resume resolutions = %#v, %v; want none", exactResolutions, err)
+	}
+	if err := exactDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	session = onlySession(t, ctx, db)
+	manager := replacementSessionCompositionManager(t, pinned.Receipt, replacementMutation{})
+	bound, err := bindSessionComposition(ctx, store, manager, session.ID, plugins.ResolvedComposition{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(bound.Resolved.Receipt, pinned.Receipt) {
+		t.Fatalf("resumed receipt = %#v, want original %#v", bound.Resolved.Receipt, pinned.Receipt)
+	}
+	assertCompositionToolResult(t, bound.Resolved.Toolset, "finance_sync", "replacement finance.sync")
+	resolutions, err := store.GetCompatibilityResolutions(ctx, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolutions) != 1 || resolutions[0].OriginalProvider.ID != "finance" ||
+		resolutions[0].OriginalProvider.ImplementationVersion != "1.0.0" ||
+		resolutions[0].ReplacementImplementationVersion != "1.1.0" ||
+		resolutions[0].KernelAPIVersion != plugins.KernelAPIVersion ||
+		len(resolutions[0].Capabilities) != 3 || resolutions[0].ResolvedAt.IsZero() {
+		t.Fatalf("Compatibility Resolutions = %#v, want exact Finance substitution evidence", resolutions)
+	}
+	if _, err := bindSessionComposition(ctx, store, manager, session.ID, plugins.ResolvedComposition{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	resolutions, err = store.GetCompatibilityResolutions(ctx, session.ID)
+	if err != nil || len(resolutions) != 1 {
+		t.Fatalf("resolutions after repeated resume = %#v, %v; want one", resolutions, err)
+	}
+	stored, err := store.GetCompositionReceipt(ctx, session.ID)
+	if err != nil || !reflect.DeepEqual(stored, pinned.Receipt) {
+		t.Fatalf("stored receipt after substitution = %#v, %v; want immutable %#v", stored, err, pinned.Receipt)
+	}
+}
+
+func TestSessionCompositionRealSQLiteReopenBlocksEveryIncompatibleReplacement(t *testing.T) {
+	tests := []struct {
+		name       string
+		mutation   replacementMutation
+		want       string
+		managerErr bool
+	}{
+		{name: "undeclared", mutation: replacementMutation{undeclared: true}, want: `loaded version "1.1.0" does not declare it resumable`},
+		{name: "schema changing", mutation: replacementMutation{changeSchema: true}, want: `pinned Capability "finance.sync" requires schema`},
+		{name: "contract changing", mutation: replacementMutation{changeContract: true}, want: `pinned Capability "finance.sync" requires contract version "1.0.0"`},
+		{name: "Kernel incompatible", mutation: replacementMutation{kernelIncompatible: true}, want: `plugin "finance" is incompatible with Kernel API 1.0.0`, managerErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			path := filepath.Join(t.TempDir(), "evie.db")
+			pinned := seedPinnedStandardComposition(t, ctx, path)
+			db, err := eviedb.OpenDBAt(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			store := eviedb.NewStore(db)
+			session := onlySession(t, ctx, db)
+			manager, managerErr := newReplacementSessionCompositionManager(pinned.Receipt, tc.mutation)
+			if tc.managerErr {
+				if managerErr == nil || !strings.Contains(managerErr.Error(), tc.want) {
+					t.Fatalf("replacement Manager error = %v, want containing %q", managerErr, tc.want)
+				}
+				return
+			}
+			if managerErr != nil {
+				t.Fatal(managerErr)
+			}
+			for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+				if err := manager.SetEnabled(id, true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := bindSessionComposition(ctx, store, manager, session.ID, plugins.ResolvedComposition{}, nil); err == nil ||
+				!strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("incompatible reopened resume error = %v, want containing %q", err, tc.want)
+			}
+			resolutions, err := store.GetCompatibilityResolutions(ctx, session.ID)
+			if err != nil || len(resolutions) != 0 {
+				t.Fatalf("rejected resume resolutions = %#v, %v; want none", resolutions, err)
+			}
+		})
+	}
+}
+
+func TestSessionCompositionMissingPinnedProviderNeverFallsBackAfterSQLiteReopen(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "evie.db")
+	pinned := seedPinnedStandardComposition(t, ctx, path)
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	session := onlySession(t, ctx, db)
+	alternate := compatibilityTestPlugin{
+		manifest: plugins.Manifest{
+			ID: "alternate", ImplementationVersion: "1.0.0",
+			KernelCompatibility: plugins.VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"},
+			Capabilities:        []plugins.CapabilityContract{{ID: "alternate.sync", Version: "1.0.0"}},
+		},
+		capabilities: []plugins.ToolCapability{{
+			ID: "alternate.sync", ContractVersion: "1.0.0",
+			Tool: plugins.NewFinance().ToolCapabilities()[0].Tool,
+		}},
+	}
+	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), alternate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, "alternate"} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := bindSessionComposition(ctx, store, manager, session.ID, plugins.ResolvedComposition{}, nil); err == nil ||
+		!strings.Contains(err.Error(), `pinned provider plugin "finance" version "1.0.0" is not compiled into Evie`) {
+		t.Fatalf("missing pinned provider error = %v", err)
+	}
+	stored, err := store.GetCompositionReceipt(ctx, session.ID)
+	if err != nil || !reflect.DeepEqual(stored, pinned.Receipt) {
+		t.Fatalf("missing-provider receipt = %#v, %v; want original %#v", stored, err, pinned.Receipt)
+	}
+}
+
+type replacementMutation struct {
+	undeclared         bool
+	changeSchema       bool
+	changeContract     bool
+	kernelIncompatible bool
+}
+
+type compatibilityTestPlugin struct {
+	manifest     plugins.Manifest
+	capabilities []plugins.ToolCapability
+}
+
+func (p compatibilityTestPlugin) Manifest() plugins.Manifest { return p.manifest }
+
+func (compatibilityTestPlugin) Start(context.Context) error { return nil }
+
+func (compatibilityTestPlugin) Stop(context.Context) error { return nil }
+
+func (p compatibilityTestPlugin) ToolCapabilities() []plugins.ToolCapability {
+	return append([]plugins.ToolCapability(nil), p.capabilities...)
+}
+
+func replacementSessionCompositionManager(
+	t *testing.T,
+	receipt composition.Receipt,
+	mutation replacementMutation,
+) *plugins.Manager {
+	t.Helper()
+	manager, err := newReplacementSessionCompositionManager(receipt, mutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return manager
+}
+
+func newReplacementSessionCompositionManager(
+	receipt composition.Receipt,
+	mutation replacementMutation,
+) (*plugins.Manager, error) {
+	finance := plugins.NewFinance()
+	manifest := finance.Manifest()
+	manifest.ImplementationVersion = "1.1.0"
+	capabilities := finance.ToolCapabilities()
+	for i := range capabilities {
+		capabilityID := capabilities[i].ID
+		capabilities[i].Tool.Execute = func(context.Context, string) (string, error) {
+			return "replacement " + string(capabilityID), nil
+		}
+	}
+	if mutation.changeSchema {
+		capabilities[0].Tool.Schema.Function.Description = "changed across incompatible upgrade"
+	}
+	if mutation.changeContract {
+		manifest.Capabilities[0].Version = "1.1.0"
+		capabilities[0].ContractVersion = "1.1.0"
+	}
+	if mutation.kernelIncompatible {
+		manifest.KernelCompatibility = plugins.VersionRange{Minimum: "2.0.0", MaximumExclusive: "3.0.0"}
+	}
+	if !mutation.undeclared {
+		declaration := plugins.ImplementationCompatibility{ImplementationVersion: "1.0.0"}
+		for _, capability := range capabilities {
+			declaration.Capabilities = append(declaration.Capabilities, plugins.CapabilityCompatibility{
+				ID: capability.ID, ContractVersion: capability.ContractVersion,
+				SchemaSHA256: testToolSchemaHash(capability.Tool.Schema),
+			})
+		}
+		manifest.ResumableFrom = []plugins.ImplementationCompatibility{declaration}
+	}
+	return plugins.NewManager(
+		tools.KernelToolset(), plugins.NewWeb(),
+		compatibilityTestPlugin{manifest: manifest, capabilities: capabilities},
+	)
+}
+
+func seedPinnedStandardComposition(t *testing.T, ctx context.Context, path string) plugins.ResolvedComposition {
+	return seedPinnedStandardCompositionWithEvieVersion(t, ctx, path, plugins.EvieVersion)
+}
+
+func seedPinnedStandardCompositionWithEvieVersion(
+	t *testing.T,
+	ctx context.Context,
+	path string,
+	evieVersion string,
+) plugins.ResolvedComposition {
+	t.Helper()
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	pinned, err := sessionCompositionManager(t).ResolvePreset("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned.Receipt.EvieVersion = evieVersion
+	if _, err := store.CreateGlobalSessionWithComposition(ctx, pinned.Receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return pinned
+}
+
+func onlySession(t *testing.T, ctx context.Context, db *sql.DB) memory.Session {
+	t.Helper()
+	var id memory.SessionID
+	if err := db.QueryRowContext(ctx, `SELECT id FROM sessions`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return memory.Session{ID: id}
+}
+
+func testToolSchemaHash(schema openrouter.Tool) string {
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
+}
+
+func assertCompositionToolResult(t *testing.T, toolset tools.Toolset, name, want string) {
+	t.Helper()
+	message, isErr, err := toolset.ExecuteWithApprovalAuthorizedCompletion(
+		context.Background(),
+		openrouter.ToolCall{ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: name, Arguments: `{}`}},
+		nil, nil, nil, nil,
+	)
+	if err != nil || isErr || message.Content != want {
+		t.Fatalf("execute %q = (%+v, %v, %v), want %q", name, message, isErr, err, want)
 	}
 }
 

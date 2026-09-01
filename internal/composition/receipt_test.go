@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReceiptCodecIsClosedToCredentialFields(t *testing.T) {
@@ -24,6 +25,61 @@ func TestReceiptCodecIsClosedToCredentialFields(t *testing.T) {
 	receipt.Configuration[0].ID = "raw-token"
 	if _, err := Marshal(receipt); err == nil || !strings.Contains(err.Error(), "canonical UUID") {
 		t.Fatalf("raw configuration value error = %v", err)
+	}
+}
+
+func TestCompatibilityResolutionRequiresStrictlyNewerReplacement(t *testing.T) {
+	valid := CompatibilityResolution{
+		OriginalProvider:                 Provider{ID: "fixture", ImplementationVersion: "1.2.3"},
+		ReplacementImplementationVersion: "1.2.4",
+		KernelAPIVersion:                 "1.0.0",
+		Capabilities: []CompatibilityCapability{{
+			ID: "fixture.echo", ContractVersion: "1.0.0", SchemaSHA256: strings.Repeat("0", 64),
+		}},
+		ResolvedAt: time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC),
+	}
+	if err := ValidateCompatibilityResolution(valid); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name        string
+		replacement string
+		want        string
+	}{
+		{name: "equal", replacement: "1.2.3", want: "must be newer than original version"},
+		{name: "downgrade major", replacement: "0.9.9", want: "must be newer than original version"},
+		{name: "downgrade minor", replacement: "1.1.9", want: "must be newer than original version"},
+		{name: "downgrade patch", replacement: "1.2.2", want: "must be newer than original version"},
+		{name: "malformed", replacement: "1.2", want: "versions must be MAJOR.MINOR.PATCH"},
+		{name: "leading zero", replacement: "1.02.4", want: "versions must be MAJOR.MINOR.PATCH"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolution := valid
+			resolution.ReplacementImplementationVersion = tc.replacement
+			if err := ValidateCompatibilityResolution(resolution); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("validation error = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*CompatibilityResolution)
+	}{
+		{name: "malformed original", mutate: func(resolution *CompatibilityResolution) {
+			resolution.OriginalProvider.ImplementationVersion = "1.2"
+		}},
+		{name: "malformed Kernel", mutate: func(resolution *CompatibilityResolution) {
+			resolution.KernelAPIVersion = "v1.0.0"
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolution := valid
+			tc.mutate(&resolution)
+			if err := ValidateCompatibilityResolution(resolution); err == nil ||
+				!strings.Contains(err.Error(), "versions must be MAJOR.MINOR.PATCH") {
+				t.Fatalf("validation error = %v, want strict version diagnostic", err)
+			}
+		})
 	}
 }
 
