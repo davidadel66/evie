@@ -16,6 +16,8 @@ import (
 	"sync"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/plugins"
 )
 
 // Serve runs the web frontend until the process exits. Loopback only:
@@ -23,12 +25,22 @@ import (
 // being a defense (docs/decisions.md) — so a non-loopback EVIE_ADDR
 // is refused outright rather than warned about.
 func Serve(session *agent.Session) error {
+	return serveServer(NewServer(session))
+}
+
+// ServeManaged keeps Kernel-owned management available even when a degraded
+// startup could not compose a chat session.
+func ServeManaged(session *agent.Session, manager *plugins.Manager, receipts ReceiptInspector) error {
+	return serveServer(NewManagedServer(session, manager, receipts))
+}
+
+func serveServer(server *Server) error {
 	addr, err := listenAddr()
 	if err != nil {
 		return err
 	}
 	log.Printf("evie serve listening on http://%s", addr)
-	return http.ListenAndServe(addr, NewServer(session).Handler())
+	return http.ListenAndServe(addr, server.Handler())
 }
 
 // listenAddr resolves EVIE_ADDR (default 127.0.0.1:6687) and enforces
@@ -51,10 +63,19 @@ func listenAddr() (string, error) {
 // Server is the web frontend's whole state: one session (one
 // conversation, v1), plus the approvals waiting for a browser answer.
 type Server struct {
-	session *agent.Session
+	session  *agent.Session
+	manager  *plugins.Manager
+	receipts ReceiptInspector
 
 	mu      sync.Mutex
 	pending map[string]chan bool
+}
+
+// ReceiptInspector is the read-only, Kernel-owned session audit boundary.
+// Its value types structurally exclude credentials.
+type ReceiptInspector interface {
+	GetCompositionReceipt(context.Context, memory.SessionID) (plugins.CompositionReceipt, error)
+	GetCompatibilityResolutions(context.Context, memory.SessionID) ([]plugins.CompatibilityResolution, error)
 }
 
 // NewServer wires a server around an existing session. The session is
@@ -67,6 +88,13 @@ func NewServer(session *agent.Session) *Server {
 	}
 }
 
+func NewManagedServer(session *agent.Session, manager *plugins.Manager, receipts ReceiptInspector) *Server {
+	server := NewServer(session)
+	server.manager = manager
+	server.receipts = receipts
+	return server
+}
+
 // Handler is the route table. Every /api route sits behind the
 // cross-origin guard — bash is ungated, so a drive-by form POST from a
 // malicious page must die here, not in the handler.
@@ -74,8 +102,29 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/chat", s.guard(s.handleChat))
 	mux.HandleFunc("POST /api/approve", s.guard(s.handleApprove))
+	if s.manager != nil {
+		mux.Handle("/api/plugins/list", s.managementRoute(s.handlePluginList))
+		mux.Handle("/api/plugins/lifecycle", s.managementRoute(s.handlePluginLifecycle))
+		mux.Handle("/api/presets/list", s.managementRoute(s.handlePresetList))
+		mux.Handle("/api/presets/validate", s.managementRoute(s.handlePresetValidate))
+	}
+	if s.receipts != nil {
+		mux.Handle("/api/sessions/inspect", s.managementRoute(s.handleSessionInspect))
+	}
 	mux.Handle("/", s.staticHandler())
 	return mux
+}
+
+func (s *Server) managementRoute(next http.HandlerFunc) http.Handler {
+	guarded := s.guard(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			jsonError(w, http.StatusMethodNotAllowed, "management routes require POST")
+			return
+		}
+		guarded(w, r)
+	})
 }
 
 // guard rejects requests that a browser could be tricked into sending
@@ -123,6 +172,10 @@ func isLoopbackHost(host string) bool {
 // been written yet when TryLock fails, so the response is still free for
 // a plain 409.
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
+	if s.session == nil {
+		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
+		return
+	}
 	var req struct {
 		Message string `json:"message"`
 	}

@@ -7,6 +7,7 @@ import { Panel } from "./artifacts/Panel";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { useSession } from "./store/useSession";
+import { Management } from "./management/Management";
 import { Banner } from "./ui/Banner";
 import { TextSizeMenu } from "./ui/TextSizeMenu";
 import {
@@ -15,7 +16,7 @@ import {
   type ChatTextSize,
 } from "./ui/textSize";
 
-type Tab = "chat" | "board" | "reports";
+export type Tab = "chat" | "board" | "reports" | "system";
 const textSizeStorageKey = "evie.chatTextSize";
 
 export default function App() {
@@ -108,11 +109,12 @@ export default function App() {
           detail="Saved dashboards and queries Evie builds and edits. Not yet built."
         />
       )}
+      {tab === "system" && <Management />}
     </div>
   );
 }
 
-function TopBar({
+export function TopBar({
   tab,
   onTab,
   textSize,
@@ -132,6 +134,7 @@ function TopBar({
         <TabButton label="Chat" active={tab === "chat"} onClick={() => onTab("chat")} />
         <TabButton label="Whiteboard" active={tab === "board"} onClick={() => onTab("board")} />
         <TabButton label="Reports" active={tab === "reports"} onClick={() => onTab("reports")} />
+        <TabButton label="System" active={tab === "system"} onClick={() => onTab("system")} />
       </div>
       <div className="flex-1" />
       <TextSizeMenu value={textSize} onChange={onTextSize} />
@@ -149,9 +152,11 @@ function TabButton({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className="flex cursor-pointer items-center px-[14px] font-sans text-[12.5px] font-medium"
+      aria-current={active ? "page" : undefined}
+      className="flex cursor-pointer items-center border-0 bg-transparent px-[14px] font-sans text-[12.5px] font-medium"
     >
       {/* The design underlines the active tab with an offset box-shadow rather
           than a border, so the line sits at the bar's bottom edge. */}
@@ -165,7 +170,7 @@ function TabButton({
       >
         {label}
       </span>
-    </div>
+    </button>
   );
 }
 

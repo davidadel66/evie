@@ -123,13 +123,19 @@ func TestFinanceCanBeEnabledAndDisabledWithoutChangingWebOrKernel(t *testing.T) 
 		t.Fatalf("post-disable schema names = %v, want Kernel and Web schemas %v", got, wantWebAndKernel)
 	}
 
-	inspection := manager.Inspect()
+	inspection := mustInspect(t, manager)
 	if inspection.Degraded {
 		t.Fatalf("inspection is degraded after a deliberate Finance disable: %+v", inspection)
 	}
 	wantStatuses := []PluginStatus{
-		{ID: FinancePluginID, Enabled: false, State: StateDisabled},
-		{ID: WebPluginID, Enabled: true, State: StateReady},
+		{
+			ID: FinancePluginID, Version: financeImplementationVersion, Enabled: false, State: StateDisabled,
+			Health: HealthHealthy, ConnectionReadiness: ConnectionReadiness{State: ConnectionNotRequired},
+		},
+		{
+			ID: WebPluginID, Version: webImplementationVersion, Enabled: true, State: StateReady,
+			Health: HealthHealthy, ConnectionReadiness: ConnectionReadiness{State: ConnectionNotRequired},
+		},
 	}
 	if !reflect.DeepEqual(inspection.Plugins, wantStatuses) {
 		t.Fatalf("provider statuses\n got: %+v\nwant: %+v", inspection.Plugins, wantStatuses)

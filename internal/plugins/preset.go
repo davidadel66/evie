@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -42,6 +43,20 @@ type Preset struct {
 	OptionalCapabilities []CapabilityRequirement
 	Instructions         []InstructionReference
 	Configuration        []ConfigurationReference
+}
+
+// PresetInspection is the complete generic management representation of one
+// immutable built-in preset. Errors contain every unavailable or incompatible
+// required Capability; warnings contain every unavailable optional one.
+type PresetInspection struct {
+	ID                   PresetID                `json:"id"`
+	Version              string                  `json:"version"`
+	RequiredCapabilities []CapabilityRequirement `json:"requiredCapabilities"`
+	OptionalCapabilities []CapabilityRequirement `json:"optionalCapabilities"`
+	Valid                bool                    `json:"valid"`
+	Warnings             []string                `json:"warnings"`
+	Errors               []string                `json:"errors"`
+	Immutable            bool                    `json:"immutable"`
 }
 
 type PresetIdentity = composition.PresetIdentity
@@ -102,6 +117,13 @@ func clonePreset(preset Preset) Preset {
 // ResolvePreset resolves one allowed preset once. Empty means the reserved
 // standard preset; unknown explicit identities fail without fallback.
 func (m *Manager) ResolvePreset(id PresetID) (ResolvedComposition, error) {
+	return m.ResolvePresetContext(context.Background(), id)
+}
+
+func (m *Manager) ResolvePresetContext(ctx context.Context, id PresetID) (ResolvedComposition, error) {
+	if err := m.RefreshEnabledState(ctx); err != nil {
+		return ResolvedComposition{}, err
+	}
 	if id == "" {
 		id = StandardPresetID
 	}
@@ -111,9 +133,80 @@ func (m *Manager) ResolvePreset(id PresetID) (ResolvedComposition, error) {
 	return m.resolvePreset(BuiltinStandardPreset())
 }
 
-func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
+// InspectPresets lists detached snapshots of the built-ins known to this
+// binary. Phase 1 intentionally has no mutable or plugin-injected presets.
+func (m *Manager) InspectPresets() ([]PresetInspection, error) {
+	return m.InspectPresetsContext(context.Background())
+}
+
+func (m *Manager) InspectPresetsContext(ctx context.Context) ([]PresetInspection, error) {
+	if err := m.RefreshEnabledState(ctx); err != nil {
+		return nil, err
+	}
+	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true)}, nil
+}
+
+// ValidatePreset validates exactly the requested built-in. Unknown IDs are
+// returned as invalid and are never replaced with the default preset.
+func (m *Manager) ValidatePreset(id PresetID) (PresetInspection, error) {
+	return m.ValidatePresetContext(context.Background(), id)
+}
+
+func (m *Manager) validatePresetCurrent(id PresetID) PresetInspection {
+	if id == "" {
+		id = StandardPresetID
+	}
+	if id != StandardPresetID {
+		return PresetInspection{
+			ID: id, Valid: false, Immutable: true,
+			Errors:   []string{fmt.Sprintf("Agent Preset %q is not allowed; choose %q", id, StandardPresetID)},
+			Warnings: []string{}, RequiredCapabilities: []CapabilityRequirement{}, OptionalCapabilities: []CapabilityRequirement{},
+		}
+	}
+	return m.inspectPreset(BuiltinStandardPreset(), true)
+}
+
+func (m *Manager) ValidatePresetContext(ctx context.Context, id PresetID) (PresetInspection, error) {
+	if err := m.RefreshEnabledState(ctx); err != nil {
+		return PresetInspection{}, err
+	}
+	return m.validatePresetCurrent(id), nil
+}
+
+func (m *Manager) inspectPreset(preset Preset, immutable bool) PresetInspection {
+	report := PresetInspection{
+		ID: preset.ID, Version: preset.Version,
+		RequiredCapabilities: append([]CapabilityRequirement(nil), preset.RequiredCapabilities...),
+		OptionalCapabilities: append([]CapabilityRequirement(nil), preset.OptionalCapabilities...),
+		Warnings:             []string{}, Errors: []string{}, Immutable: immutable,
+	}
 	if err := validatePreset(preset); err != nil {
-		return ResolvedComposition{}, fmt.Errorf("Agent Preset %q is invalid: %w", preset.ID, err)
+		report.Errors = append(report.Errors, fmt.Sprintf("Agent Preset %q is invalid: %v", preset.ID, err))
+		report.Valid = false
+		return report
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, requirement := range preset.RequiredCapabilities {
+		_, _, _, diagnostic := m.resolveCapabilityLocked(requirement)
+		if diagnostic != "" {
+			report.Errors = append(report.Errors, fmt.Sprintf("required Capability %q is unavailable: %s", requirement.ID, diagnostic))
+		}
+	}
+	for _, requirement := range preset.OptionalCapabilities {
+		_, _, _, diagnostic := m.resolveCapabilityLocked(requirement)
+		if diagnostic != "" {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("optional Capability %q is unavailable: %s", requirement.ID, diagnostic))
+		}
+	}
+	report.Valid = len(report.Errors) == 0
+	return report
+}
+
+func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
+	report := m.inspectPreset(preset, preset.ID == StandardPresetID)
+	if !report.Valid {
+		return ResolvedComposition{}, fmt.Errorf("resolve Agent Preset %q: %s", preset.ID, strings.Join(report.Errors, "; "))
 	}
 
 	m.mu.RLock()
@@ -336,6 +429,18 @@ func ValidateCompositionReceipt(receipt CompositionReceipt) error {
 // provider version wins; a newer version is considered only when its Manifest
 // explicitly proves compatibility with every pinned contract and schema.
 func (m *Manager) ResumeComposition(receipt CompositionReceipt) (ResolvedComposition, error) {
+	return m.ResumeCompositionContext(context.Background(), receipt)
+}
+
+// ResumeCompositionContext reconstructs a pinned composition while preserving
+// cancellation across durable enabled-state refresh and lifecycle work.
+func (m *Manager) ResumeCompositionContext(
+	ctx context.Context,
+	receipt CompositionReceipt,
+) (ResolvedComposition, error) {
+	if err := m.RefreshEnabledState(ctx); err != nil {
+		return ResolvedComposition{}, err
+	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }
 

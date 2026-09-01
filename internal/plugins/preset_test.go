@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -8,6 +10,24 @@ import (
 	kernelcomposition "github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/tools"
 )
+
+type cancelingEnabledStateStore struct {
+	*enabledStateMemoryStore
+	cancelReads bool
+	entered     chan struct{}
+}
+
+func (s *cancelingEnabledStateStore) PluginEnabled(
+	ctx context.Context,
+	id string,
+) (bool, uint64, bool, error) {
+	if s.cancelReads {
+		close(s.entered)
+		<-ctx.Done()
+		return false, 0, false, ctx.Err()
+	}
+	return s.enabledStateMemoryStore.PluginEnabled(ctx, id)
+}
 
 func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if got := canonicalPresetVersion(standardPresetContent()); got != StandardPresetVersion {
@@ -201,6 +221,40 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 	if _, err := manager.ResumeComposition(pinned.Receipt); err == nil ||
 		!strings.Contains(err.Error(), `pinned provider plugin "finance" is disabled`) {
 		t.Fatalf("missing pinned provider resume error = %v", err)
+	}
+}
+
+func TestResumeCompositionContextCancelsEnabledStateRefresh(t *testing.T) {
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &cancelingEnabledStateStore{enabledStateMemoryStore: &enabledStateMemoryStore{
+		values: map[string]bool{string(WebPluginID): true, string(FinancePluginID): true},
+	}}
+	if err := manager.ConfigureEnabledState(context.Background(), store, map[PluginID]bool{
+		WebPluginID: true, FinancePluginID: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := manager.ResolvePreset("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store.cancelReads = true
+	store.entered = make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, resumeErr := manager.ResumeCompositionContext(ctx, pinned.Receipt)
+		result <- resumeErr
+	}()
+	<-store.entered
+	cancel()
+	err = <-result
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ResumeCompositionContext error = %v, want context canceled", err)
 	}
 }
 

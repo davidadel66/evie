@@ -242,7 +242,7 @@ func TestManagerKeepsPluginUsableWhenOptionalDependencyIsUnavailable(t *testing.
 			}
 			assertToolResult(t, toolset, "consumer_echo", "consumer result")
 			assertUnknownTool(t, toolset, "consumer_extension")
-			if got := manager.Inspect().Degraded; got != tc.degraded {
+			if got := mustInspect(t, manager).Degraded; got != tc.degraded {
 				t.Fatalf("Inspect().Degraded = %v, want %v", got, tc.degraded)
 			}
 		})
@@ -365,7 +365,7 @@ func TestManagerRepeatedLifecycleOnUnavailableOptionalProviderLeavesConsumerRead
 				t.Fatal(err)
 			}
 			assertPluginStatus(t, manager, "extension", tc.initialState, "")
-			if got := manager.Inspect().Degraded; got != tc.initialDegrade {
+			if got := mustInspect(t, manager).Degraded; got != tc.initialDegrade {
 				t.Fatalf("initial Inspect().Degraded = %v, want %v", got, tc.initialDegrade)
 			}
 			consumerStartsBefore := countLifecycleEvent(events, "start:consumer")
@@ -383,7 +383,7 @@ func TestManagerRepeatedLifecycleOnUnavailableOptionalProviderLeavesConsumerRead
 				!strings.Contains(consumerStatus.Warnings[0], tc.wantWarning) {
 				t.Fatalf("consumer status = %+v, want ready with warning containing %q", consumerStatus, tc.wantWarning)
 			}
-			if got := manager.Inspect().Degraded; got != tc.wantDegrade {
+			if got := mustInspect(t, manager).Degraded; got != tc.wantDegrade {
 				t.Fatalf("Inspect().Degraded = %v, want %v", got, tc.wantDegrade)
 			}
 			toolset, err := manager.NewSessionToolset()
@@ -486,16 +486,16 @@ func TestManagerOptionalProviderStopFailureRecomposesConsumerBeforeReturningErro
 	}
 
 	err = manager.Stop(context.Background(), "extension")
-	if err == nil || !strings.Contains(err.Error(), "extension stop failed") {
+	if err == nil || !strings.Contains(err.Error(), `plugin "extension" cleanup failed`) {
 		t.Fatalf("Stop error = %v, want extension stop failure", err)
 	}
-	assertPluginStatus(t, manager, "extension", StateFailed, "cleanup pending: stop failed: extension stop failed")
+	assertPluginStatus(t, manager, "extension", StateFailed, "cleanup is pending")
 	consumerStatus, statusErr := manager.Status("consumer")
 	if statusErr != nil {
 		t.Fatal(statusErr)
 	}
 	if consumerStatus.State != StateReady || len(consumerStatus.Warnings) != 1 ||
-		!strings.Contains(consumerStatus.Warnings[0], `optional dependency "extension" failed: cleanup pending`) {
+		consumerStatus.Warnings[0] != `optional dependency "extension" failed` {
 		t.Fatalf("consumer status after provider Stop failure = %+v, want ready with failed-provider warning", consumerStatus)
 	}
 	toolset, toolsetErr := manager.NewSessionToolset()
@@ -510,7 +510,7 @@ func TestManagerOptionalProviderStopFailureRecomposesConsumerBeforeReturningErro
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("degraded recovery events = %v, want %v", got, want)
 	}
-	if !manager.Inspect().Degraded {
+	if !mustInspect(t, manager).Degraded {
 		t.Fatal("cleanup-pending provider did not keep inspection degraded")
 	}
 
@@ -568,16 +568,15 @@ func TestManagerRefreshesOptionalWarningWhenWaitingProviderStartFails(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if providerStatus.State != StateFailed ||
-		!strings.Contains(providerStatus.Diagnostic, "start failed: extension start failed") ||
-		!strings.Contains(providerStatus.Diagnostic, "cleanup pending: extension cleanup failed") {
+	if providerStatus.State != StateFailed || providerStatus.DiagnosticCode != "cleanup_pending" ||
+		providerStatus.Diagnostic != `plugin "extension" failed to start; cleanup is pending` {
 		t.Fatalf("provider status = %+v, want failed start with cleanup pending", providerStatus)
 	}
 	failed, err := manager.Status("consumer")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantWarning := `optional dependency "extension" failed: ` + providerStatus.Diagnostic
+	wantWarning := `optional dependency "extension" failed`
 	if failed.State != StateReady || len(failed.Warnings) != 1 || failed.Warnings[0] != wantWarning {
 		t.Fatalf("consumer status after provider failure = %+v, want warning %q", failed, wantWarning)
 	}
@@ -608,12 +607,12 @@ func TestManagerCleanupErrorDoesNotPreventOptionalCompositionFromStabilizing(t *
 	if err := manager.Enable(context.Background(), "unrelated"); err != nil {
 		t.Fatal(err)
 	}
-	assertPluginStatus(t, manager, "unrelated", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "unrelated", StateFailed, "cleanup is pending")
 	eventsBefore := len(events)
 
 	err = manager.Enable(context.Background(), "extension")
-	if err == nil || !strings.Contains(err.Error(), "unrelated cleanup failed") {
-		t.Fatalf("Enable extension error = %v, want unrelated cleanup failure", err)
+	if err != nil {
+		t.Fatalf("Enable extension retried unrelated cleanup: %v", err)
 	}
 	assertPluginStatus(t, manager, "extension", StateReady, "")
 	consumerStatus, err := manager.Status("consumer")
@@ -630,12 +629,12 @@ func TestManagerCleanupErrorDoesNotPreventOptionalCompositionFromStabilizing(t *
 	assertToolResult(t, toolset, "consumer_echo", "consumer result")
 	assertToolResult(t, toolset, "consumer_extension", "consumer_extension result")
 	if got, want := events[eventsBefore:], []string{
-		"stop:unrelated", "start:extension", "stop:consumer", "start:consumer",
+		"start:extension", "stop:consumer", "start:consumer",
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("stabilization events = %v, want %v", got, want)
 	}
-	if got := countLifecycleEvent(events, "stop:unrelated"); got != 2 {
-		t.Fatalf("unrelated cleanup attempts = %d, want rollback plus one retry", got)
+	if got := countLifecycleEvent(events, "stop:unrelated"); got != 1 {
+		t.Fatalf("unrelated cleanup attempts = %d, want rollback only", got)
 	}
 	if got := countLifecycleEvent(events, "start:consumer"); got != 2 {
 		t.Fatalf("consumer Start calls = %d, want initial plus stabilized composition", got)
@@ -738,7 +737,7 @@ func TestManagerFailedOptionalRecompositionBlocksTransitiveRequiredDependentUnti
 	eventsBefore := len(events)
 
 	err = manager.Enable(context.Background(), "extension")
-	if err == nil || !strings.Contains(err.Error(), "consumer stop failed") {
+	if err == nil || !strings.Contains(err.Error(), `plugin "consumer" cleanup failed`) {
 		t.Fatalf("Enable extension error = %v, want consumer cleanup failure", err)
 	}
 	if got, want := events[eventsBefore:], []string{
@@ -746,7 +745,7 @@ func TestManagerFailedOptionalRecompositionBlocksTransitiveRequiredDependentUnti
 	}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failed recomposition events = %v, want %v", got, want)
 	}
-	assertPluginStatus(t, manager, "consumer", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "consumer", StateFailed, "cleanup is pending")
 	assertPluginStatus(t, manager, "dependent", StateWaiting, `required dependency "consumer" failed`)
 	failed, err := manager.NewSessionToolset()
 	if err != nil {
@@ -756,7 +755,7 @@ func TestManagerFailedOptionalRecompositionBlocksTransitiveRequiredDependentUnti
 	assertUnknownTool(t, failed, "consumer_echo")
 	assertUnknownTool(t, failed, "consumer_extension")
 	assertUnknownTool(t, failed, "dependent_echo")
-	if !manager.Inspect().Degraded {
+	if !mustInspect(t, manager).Degraded {
 		t.Fatal("failed consumer did not leave inspection degraded")
 	}
 
@@ -806,7 +805,7 @@ func TestManagerBlocksPluginWithMissingOrFailedRequiredDependency(t *testing.T) 
 				dependency.start = func(context.Context) error { return lifecycleError("dependency", "start") }
 				return dependency
 			},
-			want: `required dependency "dependency" failed: start failed`,
+			want: `required dependency "dependency" failed`,
 		},
 	}
 	for _, tc := range tests {
@@ -861,7 +860,7 @@ func TestManagerRollsBackFailedInitializationAndRestartsCompiledPlugin(t *testin
 	if err := manager.Enable(context.Background(), "fixture"); err != nil {
 		t.Fatal(err)
 	}
-	assertPluginStatus(t, manager, "fixture", StateFailed, "start failed")
+	assertPluginStatus(t, manager, "fixture", StateFailed, "failed to start")
 	if got, want := events, []string{"start:fixture", "stop:fixture"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("failed initialization events = %v, want %v", got, want)
 	}
@@ -870,7 +869,7 @@ func TestManagerRollsBackFailedInitializationAndRestartsCompiledPlugin(t *testin
 		t.Fatal(err)
 	}
 	assertUnknownTool(t, failedToolset, "fixture_echo")
-	if !manager.Inspect().Degraded {
+	if !mustInspect(t, manager).Degraded {
 		t.Fatal("failed enabled plugin did not make inspection degraded")
 	}
 
@@ -921,7 +920,7 @@ func TestManagerFailureLeavesKernelToolsetAndInspectionAvailable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inspection := manager.Inspect()
+	inspection := mustInspect(t, manager)
 	if !inspection.Degraded || len(inspection.Plugins) != 1 || inspection.Plugins[0].State != StateFailed {
 		t.Fatalf("inspection = %+v, want visible degraded failed plugin", inspection)
 	}
@@ -1034,7 +1033,7 @@ func TestManagerCancellationRollsBackWithoutPublishingCapabilities(t *testing.T)
 	if err := <-result; !errors.Is(err, context.Canceled) {
 		t.Fatalf("Enable error = %v, want context canceled", err)
 	}
-	assertPluginStatus(t, manager, "fixture", StateFailed, "context canceled")
+	assertPluginStatus(t, manager, "fixture", StateFailed, "failed to start")
 	if got, want := events, []string{"start:fixture", "stop:fixture"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("canceled initialization events = %v, want %v", got, want)
 	}
@@ -1119,7 +1118,7 @@ func TestManagerStopFailureHidesDependentsContinuesCleanupAndRecoversBeforeResta
 	}
 
 	err = manager.Stop(context.Background(), "dependency")
-	if err == nil || !strings.Contains(err.Error(), "dependent stop failed") {
+	if err == nil || !strings.Contains(err.Error(), `plugin "dependent" cleanup failed`) {
 		t.Fatalf("Stop error = %v, want dependent cleanup failure", err)
 	}
 	toolset, toolsetErr := manager.NewSessionToolset()
@@ -1128,7 +1127,7 @@ func TestManagerStopFailureHidesDependentsContinuesCleanupAndRecoversBeforeResta
 	}
 	assertUnknownTool(t, toolset, "dependent_echo")
 	assertUnknownTool(t, toolset, "dependency_echo")
-	assertPluginStatus(t, manager, "dependent", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "dependent", StateFailed, "cleanup is pending")
 	assertPluginStatus(t, manager, "dependency", StateStopped, "")
 	if got, want := events, []string{
 		"start:dependency", "start:dependent", "stop:dependent", "stop:dependency",
@@ -1179,10 +1178,10 @@ func TestManagerDisableFailureStaysHiddenAndRetriesCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Enabled || status.State != StateFailed || !strings.Contains(status.Diagnostic, "cleanup pending") {
+	if status.Enabled || status.State != StateFailed || !strings.Contains(status.Diagnostic, "cleanup is pending") {
 		t.Fatalf("status after failed Disable = %+v, want disabled eligibility with failed cleanup pending", status)
 	}
-	if !manager.Inspect().Degraded {
+	if !mustInspect(t, manager).Degraded {
 		t.Fatal("cleanup-pending disabled plugin did not keep inspection degraded")
 	}
 	toolset, err := manager.NewSessionToolset()
@@ -1195,7 +1194,7 @@ func TestManagerDisableFailureStaysHiddenAndRetriesCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertPluginStatus(t, manager, "fixture", StateDisabled, "")
-	if manager.Inspect().Degraded {
+	if mustInspect(t, manager).Degraded {
 		t.Fatal("inspection remained degraded after cleanup retry succeeded")
 	}
 }
@@ -1224,7 +1223,7 @@ func TestManagerAggregatesReverseOrderCleanupFailures(t *testing.T) {
 	if err == nil {
 		t.Fatal("Stop succeeded despite three cleanup failures")
 	}
-	for _, want := range []string{"second stop failed", "first stop failed", "base stop failed"} {
+	for _, want := range []string{`plugin "second" cleanup failed`, `plugin "first" cleanup failed`, `plugin "base" cleanup failed`} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Stop error %q does not contain %q", err, want)
 		}
@@ -1261,7 +1260,7 @@ func TestManagerFailedStartCleanupMustSucceedBeforeRetryStart(t *testing.T) {
 	if err := manager.Enable(context.Background(), "fixture"); err != nil {
 		t.Fatal(err)
 	}
-	assertPluginStatus(t, manager, "fixture", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "fixture", StateFailed, "cleanup is pending")
 	if starts != 1 || stops != 1 {
 		t.Fatalf("after failed initialization starts=%d stops=%d, want 1/1", starts, stops)
 	}
@@ -1325,7 +1324,7 @@ func TestManagerShutdownHidesContributionsBeforeHooksAndContinuesAfterCancellati
 	if got := events; len(got) < 4 || got[len(got)-2] != "stop:dependent" || got[len(got)-1] != "stop:dependency" {
 		t.Fatalf("events = %v, want both reverse-order stop attempts", got)
 	}
-	assertPluginStatus(t, manager, "dependent", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "dependent", StateFailed, "cleanup is pending")
 	assertPluginStatus(t, manager, "dependency", StateStopped, "")
 
 	if err := manager.Start(context.Background(), "dependency"); err != nil {
@@ -1398,7 +1397,7 @@ func TestManagerFailedStartRollbackIsBoundedAndRecoverable(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Enable hung on failed-start rollback cleanup")
 	}
-	assertPluginStatus(t, manager, "fixture", StateFailed, "cleanup pending")
+	assertPluginStatus(t, manager, "fixture", StateFailed, "cleanup is pending")
 	toolset, err := manager.NewSessionToolset()
 	if err != nil {
 		t.Fatal(err)

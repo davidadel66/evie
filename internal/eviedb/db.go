@@ -29,6 +29,13 @@ CREATE TABLE IF NOT EXISTS job_runs (
     output      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS plugin_enabled_configuration (
+    plugin_id  TEXT PRIMARY KEY NOT NULL CHECK (length(trim(plugin_id)) > 0),
+    enabled    INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    revision   INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS projects (
     id             TEXT PRIMARY KEY NOT NULL,
     display_name   TEXT NOT NULL,
@@ -267,6 +274,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+	if err := ensurePluginConfigurationRevision(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade plugin enabled configuration: %w", err)
+	}
 	if hooks.afterSchema != nil {
 		hooks.afterSchema()
 	}
@@ -283,4 +294,29 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		return nil, err
 	}
 	return db, nil
+}
+
+func ensurePluginConfigurationRevision(ctx context.Context, db *sql.DB) error {
+	hasRevision := func() (bool, error) {
+		var count int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM pragma_table_info('plugin_enabled_configuration') WHERE name = 'revision'
+		`).Scan(&count)
+		return count == 1, err
+	}
+	present, err := hasRevision()
+	if err != nil || present {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `
+		ALTER TABLE plugin_enabled_configuration
+		ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)
+	`); err != nil {
+		present, checkErr := hasRevision()
+		if checkErr == nil && present {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

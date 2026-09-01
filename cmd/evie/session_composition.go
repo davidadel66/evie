@@ -19,7 +19,7 @@ type sessionCompositionStore interface {
 }
 
 type sessionCompositionResolver interface {
-	ResumeComposition(composition.Receipt) (plugins.ResolvedComposition, error)
+	ResumeCompositionContext(context.Context, composition.Receipt) (plugins.ResolvedComposition, error)
 }
 
 type visibleCompositionWarning struct {
@@ -131,7 +131,7 @@ func resumeAndRecordSessionComposition(
 	resumeContext string,
 	recordContext string,
 ) (boundSessionComposition, error) {
-	resolved, err := resolver.ResumeComposition(receipt)
+	resolved, err := resolver.ResumeCompositionContext(ctx, receipt)
 	if err != nil {
 		return boundSessionComposition{}, fmt.Errorf("%s: %w", resumeContext, err)
 	}

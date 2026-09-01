@@ -40,6 +40,15 @@ func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../../.env")
 
+	cmd := ""
+	if len(os.Args) > 1 {
+		cmd = os.Args[1]
+	}
+	if cmd == "cron-exec" {
+		runCronExec(os.Args[2:])
+		return
+	}
+
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -48,23 +57,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
 	}
-	if err := pluginManager.SetEnabled(plugins.WebPluginID, true); err != nil {
-		log.Fatalf("failed to enable Web plugin: %v", err)
+	db, err := eviedb.OpenDB()
+	if err != nil {
+		log.Fatalf("failed to open Evie database: %v", err)
 	}
-	if err := pluginManager.SetEnabled(plugins.FinancePluginID, true); err != nil {
-		log.Fatalf("failed to enable Finance plugin: %v", err)
+	defer db.Close()
+	kernelStore := eviedb.NewStore(db)
+	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
+		plugins.WebPluginID: true, plugins.FinancePluginID: true,
+	}); err != nil {
+		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}
-
-	cmd := ""
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if cmd == "plugins" || cmd == "presets" || cmd == "sessions" {
+		handled, err := runManagementCommand(
+			context.Background(), os.Args[1:], os.Stdout, pluginManager, kernelStore,
+		)
+		if err != nil {
+			log.Fatalf("management command: %v", err)
+		}
+		if handled {
+			return
+		}
 	}
 
 	// cron-exec runs headless under launchd with no API key — it must
 	// never pay for (or die on) client construction, so the session is
 	// built inside the arms that talk to the model.
 	newSession := func(selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
-		defaultComposition, err := pluginManager.ResolvePreset("")
+		defaultComposition, err := pluginManager.ResolvePresetContext(context.Background(), "")
 		if err != nil {
 			log.Fatalf("failed to resolve default Agent Preset: %v", err)
 		}
@@ -81,11 +101,7 @@ func main() {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
 
-		db, err := eviedb.OpenDB()
-		if err != nil {
-			log.Fatalf("failed to open Evie database: %v", err)
-		}
-		store := eviedb.NewStore(db)
+		store := kernelStore
 
 		selection, err := selectStoredSession(store, defaultComposition)
 		if err != nil {
@@ -134,19 +150,30 @@ func main() {
 		})
 		runREPL(session, scanner)
 	case "serve":
+		presetReport, err := pluginManager.ValidatePresetContext(context.Background(), "")
+		if err != nil {
+			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
+		}
+		if !presetReport.Valid {
+			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
+			if err := web.ServeManaged(nil, pluginManager, kernelStore); err != nil {
+				log.Fatalf("serve degraded management: %v", err)
+			}
+			break
+		}
+		var managementStore *eviedb.Store
 		globalSession := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
+			managementStore = store
 			created, err := store.CreateGlobalSessionWithComposition(context.Background(), resolved.Receipt)
 			if err != nil {
 				return storedSessionSelection{}, err
 			}
 			return storedSessionSelection{Session: created, createdComposition: &resolved}, nil
 		})
-		if err := web.Serve(globalSession); err != nil {
+		if err := web.ServeManaged(globalSession, pluginManager, managementStore); err != nil {
 			log.Fatalf("serve: %v", err)
 		}
-	case "cron-exec":
-		runCronExec(os.Args[2:])
 	default:
-		log.Fatalf("unknown command %q (usage: evie [serve|cron-exec <job-id>])", cmd)
+		log.Fatalf("unknown command %q (usage: evie [serve|cron-exec <job-id>|plugins ...|presets ...|sessions ...])", cmd)
 	}
 }

@@ -56,6 +56,25 @@ func TestBindSessionCompositionPinsLegacySessionOnce(t *testing.T) {
 	}
 }
 
+func TestResumeAndRecordSessionCompositionPropagatesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	resolver := cancellationAwareCompositionResolver{}
+
+	_, err := resumeAndRecordSessionComposition(
+		ctx,
+		panicCompositionStore{},
+		resolver,
+		"session",
+		composition.Receipt{},
+		"resume",
+		"record",
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("resume error = %v, want context canceled", err)
+	}
+}
+
 func TestReceiptBoundREPLStoreCreatesSessionAndReceiptAtomically(t *testing.T) {
 	ctx := context.Background()
 	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
@@ -645,8 +664,38 @@ func (s *countingCompositionStore) SaveCompositionReceipt(
 
 type echoCompositionResolver struct{}
 
-func (echoCompositionResolver) ResumeComposition(receipt composition.Receipt) (plugins.ResolvedComposition, error) {
+func (echoCompositionResolver) ResumeCompositionContext(
+	_ context.Context,
+	receipt composition.Receipt,
+) (plugins.ResolvedComposition, error) {
 	return plugins.ResolvedComposition{Receipt: receipt}, nil
+}
+
+type cancellationAwareCompositionResolver struct{}
+
+func (cancellationAwareCompositionResolver) ResumeCompositionContext(
+	ctx context.Context,
+	_ composition.Receipt,
+) (plugins.ResolvedComposition, error) {
+	return plugins.ResolvedComposition{}, ctx.Err()
+}
+
+type panicCompositionStore struct{}
+
+func (panicCompositionStore) SaveCompositionReceipt(context.Context, memory.SessionID, composition.Receipt) error {
+	panic("unexpected receipt save")
+}
+
+func (panicCompositionStore) GetCompositionReceipt(context.Context, memory.SessionID) (composition.Receipt, error) {
+	panic("unexpected receipt read")
+}
+
+func (panicCompositionStore) AppendCompatibilityResolutions(
+	context.Context,
+	memory.SessionID,
+	[]composition.CompatibilityResolution,
+) error {
+	panic("canceled resolution must not be recorded")
 }
 
 type countingSessionCompositionResolver struct {
@@ -660,11 +709,12 @@ func (r *countingSessionCompositionResolver) ResolvePreset(id plugins.PresetID) 
 	return r.manager.ResolvePreset(id)
 }
 
-func (r *countingSessionCompositionResolver) ResumeComposition(
+func (r *countingSessionCompositionResolver) ResumeCompositionContext(
+	ctx context.Context,
 	receipt composition.Receipt,
 ) (plugins.ResolvedComposition, error) {
 	r.resumeCalls++
-	return r.manager.ResumeComposition(receipt)
+	return r.manager.ResumeCompositionContext(ctx, receipt)
 }
 
 type missingReceiptBarrier struct {
