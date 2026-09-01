@@ -63,7 +63,11 @@ func main() {
 	// cron-exec runs headless under launchd with no API key — it must
 	// never pay for (or die on) client construction, so the session is
 	// built inside the arms that talk to the model.
-	newSession := func(selectStoredSession func(*eviedb.Store) (memory.Session, error)) *agent.Session {
+	newSession := func(selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
+		defaultComposition, err := pluginManager.ResolvePreset("")
+		if err != nil {
+			log.Fatalf("failed to resolve default Agent Preset: %v", err)
+		}
 		client, err := openrouter.NewClient(os.Getenv("OPENROUTER_API_KEY"))
 		if err != nil {
 			log.Fatalf("failed to create client: %v", err)
@@ -83,7 +87,7 @@ func main() {
 		}
 		store := eviedb.NewStore(db)
 
-		storedSession, err := selectStoredSession(store)
+		selection, err := selectStoredSession(store, defaultComposition)
 		if err != nil {
 			log.Fatalf("failed to create session: %v", err)
 		}
@@ -93,17 +97,23 @@ func main() {
 		}
 
 		holderID := memory.LeaseHolderID(holderUUID.String())
-		toolset, err := pluginManager.NewSessionToolset()
+		resolvedComposition, err := bindSessionComposition(
+			context.Background(), store, pluginManager, selection.ID, defaultComposition,
+			selection.createdComposition,
+		)
 		if err != nil {
-			log.Fatalf("failed to compose session Toolset: %v", err)
+			log.Fatalf("failed to compose session from its Agent Preset: %v", err)
+		}
+		for _, warning := range resolvedComposition.Warnings {
+			log.Printf("session composition warning [%s]: %s", warning.Code, warning.Message)
 		}
 		return agent.NewWithToolset(
 			client,
 			profile,
-			store.BindHistory(storedSession.ID, holderID),
-			storedSession.ScopeContext(),
-			store.BindTurnOwner(storedSession.ID, holderID),
-			toolset,
+			store.BindHistory(selection.ID, holderID),
+			selection.ScopeContext(),
+			store.BindTurnOwner(selection.ID, holderID),
+			resolvedComposition.Resolved.Toolset,
 		)
 	}
 
@@ -114,13 +124,22 @@ func main() {
 			log.Fatalf("failed to read launch directory: %v", err)
 		}
 		scanner := bufio.NewScanner(os.Stdin)
-		session := newSession(func(store *eviedb.Store) (memory.Session, error) {
-			return selectREPLSession(context.Background(), store, launchDir, scanner, os.Stdout)
+		session := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
+			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved}
+			selected, err := selectREPLSession(
+				context.Background(), boundStore,
+				launchDir, scanner, os.Stdout,
+			)
+			return boundStore.selection(selected), err
 		})
 		runREPL(session, scanner)
 	case "serve":
-		globalSession := newSession(func(store *eviedb.Store) (memory.Session, error) {
-			return store.CreateGlobalSession(context.Background())
+		globalSession := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
+			created, err := store.CreateGlobalSessionWithComposition(context.Background(), resolved.Receipt)
+			if err != nil {
+				return storedSessionSelection{}, err
+			}
+			return storedSessionSelection{Session: created, createdComposition: &resolved}, nil
 		})
 		if err := web.Serve(globalSession); err != nil {
 			log.Fatalf("serve: %v", err)

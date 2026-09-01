@@ -66,6 +66,26 @@ BEGIN
     SELECT RAISE(ABORT, 'session scope is immutable');
 END;
 
+CREATE TABLE IF NOT EXISTS session_composition_receipts (
+    session_id   TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
+    receipt_json TEXT NOT NULL CHECK (json_valid(receipt_json) AND json_type(receipt_json) = 'object'),
+    recorded_at  TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS session_composition_receipts_immutable_update
+BEFORE UPDATE ON session_composition_receipts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'composition receipts are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_composition_receipts_immutable_delete
+BEFORE DELETE ON session_composition_receipts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'composition receipts are immutable');
+END;
+
 CREATE TABLE IF NOT EXISTS session_turn_leases (
     session_id       TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
     holder_id        TEXT CHECK (holder_id IS NULL OR length(trim(holder_id)) > 0),
