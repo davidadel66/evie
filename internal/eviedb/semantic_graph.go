@@ -148,6 +148,11 @@ func (s *Store) PrepareCreateGraphLink(ctx context.Context, scope memory.ScopeCo
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.CreateGraphLinkProposal{}, err
 	}
+	if request.UseSessionScope {
+		if err := requireSemanticScopeKeysAvailable(ctx, s.db, []string{"session:" + string(scope.SessionID)}); err != nil {
+			return memory.CreateGraphLinkProposal{}, err
+		}
+	}
 	if !strings.HasPrefix(request.IdempotencyKey, "idem:v1:") || validateSemanticUUID(strings.TrimPrefix(request.IdempotencyKey, "idem:v1:")) != nil {
 		return memory.CreateGraphLinkProposal{}, errors.New("idempotency key must be idem:v1:<canonical-uuidv4>")
 	}
@@ -298,7 +303,7 @@ func (s *Store) ApplyCreateGraphLink(ctx context.Context, lease memory.TurnLease
 		if !stringSlicesEqual(baseKeys, semanticScopeKeys(proposal.Scopes)) {
 			return errors.New("Graph Link proposal contains an unauthorized scope")
 		}
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}
@@ -458,6 +463,9 @@ func (s *Store) exactReadMetadata(ctx context.Context, queryer semanticInspectio
 		return memory.ExactReadMetadata{}, err
 	}
 	keys := allowedSemanticReadScopeKeys(scope)
+	if err := requireSemanticScopeKeysAvailable(ctx, queryer, keys); err != nil {
+		return memory.ExactReadMetadata{}, err
+	}
 	metadata := memory.ExactReadMetadata{ValidAt: validAt, AsKnownAt: asKnownAt, AllowedScopes: keys}
 	if cursor != nil {
 		parsedValid, err := parseSemanticTime(cursor.ValidAt)

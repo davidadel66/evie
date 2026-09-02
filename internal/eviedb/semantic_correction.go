@@ -501,7 +501,7 @@ func (s *Store) ApplyCorrectClaim(ctx context.Context, lease memory.TurnLease, p
 			proposal.Source.SessionID, proposal.Source.ScopeKey, proposal.Scopes); err != nil {
 			return err
 		}
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}

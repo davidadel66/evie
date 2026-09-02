@@ -595,6 +595,11 @@ func (s *Store) PrepareMemoryLifecycle(ctx context.Context, scope memory.ScopeCo
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.MemoryLifecycleProposal{}, err
 	}
+	if request.UseSessionScope {
+		if err := requireSemanticScopeKeysAvailable(ctx, s.db, []string{"session:" + string(scope.SessionID)}); err != nil {
+			return memory.MemoryLifecycleProposal{}, err
+		}
+	}
 	if !strings.HasPrefix(request.IdempotencyKey, "idem:v1:") ||
 		validateSemanticUUID(strings.TrimPrefix(request.IdempotencyKey, "idem:v1:")) != nil {
 		return memory.MemoryLifecycleProposal{}, errors.New("idempotency key must be idem:v1:<canonical-uuidv4>")
@@ -817,7 +822,7 @@ func (s *Store) ApplyMemoryLifecycle(ctx context.Context, lease memory.TurnLease
 		if !stringSlicesEqual(sortedStringSet(writtenScopes), proposal.EffectScopes) {
 			return errors.New("memory lifecycle proposal written scopes changed after preparation")
 		}
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}
@@ -1050,6 +1055,9 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 	query := semanticInspectionQueryer(tx)
 	target, err := loadLifecycleTargetScope(ctx, inspectionLifecycleQueryer{query}, kind, id)
 	if err != nil {
+		return memory.SemanticObjectInspection{}, err
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, query, []string{target.Key}); err != nil {
 		return memory.SemanticObjectInspection{}, err
 	}
 	allowedScopes := map[string]struct{}{

@@ -278,6 +278,11 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
+	if request.UseSessionScope {
+		if err := requireSemanticScopeKeysAvailable(ctx, s.db, []string{"session:" + string(scope.SessionID)}); err != nil {
+			return memory.RememberEntityProposal{}, err
+		}
+	}
 	if !strings.HasPrefix(request.IdempotencyKey, "idem:v1:") ||
 		validateSemanticUUID(strings.TrimPrefix(request.IdempotencyKey, "idem:v1:")) != nil {
 		return memory.RememberEntityProposal{}, errors.New("idempotency key must be idem:v1:<canonical-uuidv4>")
@@ -699,7 +704,7 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			return errors.New("semantic source evidence changed")
 		}
 
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}
@@ -936,6 +941,9 @@ func (s *Store) LookupEntitiesByAlias(ctx context.Context, scope memory.ScopeCon
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return nil, err
 	}
+	if err := requireSemanticScopeKeysAvailable(ctx, s.db, allowedSemanticReadScopeKeys(scope)); err != nil {
+		return nil, err
+	}
 	normalized := normalizeAlias(alias)
 	if normalized == "" {
 		return nil, errors.New("Alias must not be blank")
@@ -947,6 +955,9 @@ func (s *Store) LookupEntitiesByAlias(ctx context.Context, scope memory.ScopeCon
 // current session Scope and returns matches from every scope eligible there.
 func (s *Store) LookupEntitiesByAliasAtScope(ctx context.Context, scope memory.ScopeContext, alias string, useSessionScope bool) ([]memory.AliasEntityMatch, error) {
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
+		return nil, err
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, s.db, allowedSemanticReadScopeKeys(scope)); err != nil {
 		return nil, err
 	}
 	normalized := normalizeAlias(alias)
@@ -961,6 +972,9 @@ func (s *Store) InspectSemanticEntity(ctx context.Context, scope memory.ScopeCon
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.SemanticEntity{}, err
 	}
+	if err := requireSemanticScopeKeysAvailable(ctx, s.db, allowedSemanticReadScopeKeys(scope)); err != nil {
+		return memory.SemanticEntity{}, err
+	}
 	return loadEntityByID(ctx, s.db, id, "session:"+string(scope.SessionID), scopeKeyForContext(scope))
 }
 
@@ -968,6 +982,9 @@ func (s *Store) InspectSemanticEntity(ctx context.Context, scope memory.ScopeCon
 // current session Scope while preserving the exact eligible-scope matrix.
 func (s *Store) InspectSemanticEntityAtScope(ctx context.Context, scope memory.ScopeContext, id memory.SemanticID, useSessionScope bool) (memory.SemanticEntity, error) {
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
+		return memory.SemanticEntity{}, err
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, s.db, allowedSemanticReadScopeKeys(scope)); err != nil {
 		return memory.SemanticEntity{}, err
 	}
 	return loadEntityByID(ctx, s.db, id, targetScopeKey(scope, useSessionScope), scopeKeyForContext(scope))

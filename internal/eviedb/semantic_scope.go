@@ -36,6 +36,9 @@ func (s *Store) InspectArchivedSessionClaims(
 	if status != memory.SessionClosed {
 		return memory.ClaimsInspection{}, errors.New("archived Semantic Memory inspection requires a closed session")
 	}
+	if err := requireSemanticScopeKeysAvailable(ctx, tx, []string{"session:" + string(sessionID)}); err != nil {
+		return memory.ClaimsInspection{}, err
+	}
 	scope := memory.ScopeContext{SessionID: sessionID}
 	if workspaceID.Valid {
 		scope.WorkspaceID = memory.WorkspaceID(workspaceID.String)

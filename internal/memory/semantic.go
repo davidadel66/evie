@@ -96,6 +96,42 @@ type SemanticScope struct {
 	Revision   int64      `json:"revision"`
 }
 
+// SemanticProjectionMismatch identifies one canonical projection table whose
+// rows differ from replay for a single scope.
+type SemanticProjectionMismatch struct {
+	Table               string   `json:"table"`
+	LiveHash            string   `json:"live_hash"`
+	ShadowHash          string   `json:"shadow_hash"`
+	LiveRows            int64    `json:"live_rows"`
+	ShadowRows          int64    `json:"shadow_rows"`
+	LiveCanonicalRows   []string `json:"live_canonical_rows"`
+	ShadowCanonicalRows []string `json:"shadow_canonical_rows"`
+}
+
+// SemanticProjectionScopeVerification is the owner-visible deterministic
+// comparison for one independently quarantinable semantic scope.
+type SemanticProjectionScopeVerification struct {
+	ScopeKey       string                       `json:"scope_key"`
+	LiveHash       string                       `json:"live_hash"`
+	ShadowHash     string                       `json:"shadow_hash"`
+	LiveFrontier   string                       `json:"live_frontier"`
+	ShadowFrontier string                       `json:"shadow_frontier"`
+	LiveRevision   int64                        `json:"live_revision"`
+	ShadowRevision int64                        `json:"shadow_revision"`
+	Mismatches     []SemanticProjectionMismatch `json:"mismatches"`
+	Quarantined    bool                         `json:"quarantined"`
+}
+
+type SemanticProjectionVerification struct {
+	Valid  bool                                  `json:"valid"`
+	Scopes []SemanticProjectionScopeVerification `json:"scopes"`
+}
+
+type SemanticProjectionRebuild struct {
+	SemanticProjectionVerification
+	FencingToken int64 `json:"fencing_token"`
+}
+
 type ScopeRevision struct {
 	ScopeKey string `json:"scope_key"`
 	Revision int64  `json:"revision"`

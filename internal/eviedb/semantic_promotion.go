@@ -58,6 +58,9 @@ func (s *Store) PreparePromotion(
 		return memory.PromotionProposal{}, fmt.Errorf("load Promotion source Claim: %w", err)
 	}
 	sourceKey := sourceClaim.ScopeKey
+	if err := requireSemanticScopeKeysAvailable(ctx, s.db, []string{sourceKey, request.DestinationScopeKey}); err != nil {
+		return memory.PromotionProposal{}, err
+	}
 	if !promotionPathAllowed(scope, sourceKey, request.DestinationScopeKey) {
 		return memory.PromotionProposal{}, errors.New("Promotion source and destination are outside the session-bound broader-scope path")
 	}
@@ -382,7 +385,7 @@ func (s *Store) ApplyPromotion(
 		if !promotionPathAllowed(bound, proposal.SourceScope.Key, proposal.DestinationScope.Key) {
 			return errors.New("Promotion scope path changed or is unauthorized")
 		}
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}

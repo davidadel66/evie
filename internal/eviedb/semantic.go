@@ -211,6 +211,25 @@ CREATE TABLE IF NOT EXISTS semantic_state_events (
     PRIMARY KEY (operation_id, object_kind, object_id, state)
 );
 
+CREATE TABLE IF NOT EXISTS semantic_projection_quarantine (
+    scope_id      TEXT PRIMARY KEY NOT NULL REFERENCES semantic_scopes(scope_id),
+    reason        TEXT NOT NULL CHECK (length(reason) > 0),
+    operation_id  TEXT,
+    verified_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS semantic_maintenance_lock (
+    singleton     INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
+    fencing_token INTEGER NOT NULL CHECK (fencing_token >= 0),
+    holder_id     TEXT,
+    expires_at    TEXT,
+    CHECK ((holder_id IS NULL AND expires_at IS NULL) OR
+           (holder_id IS NOT NULL AND length(trim(holder_id)) > 0 AND expires_at IS NOT NULL))
+);
+
+INSERT OR IGNORE INTO semantic_maintenance_lock (singleton, fencing_token, holder_id, expires_at)
+VALUES (1, 0, NULL, NULL);
+
 CREATE INDEX IF NOT EXISTS semantic_claims_scope_idx ON semantic_claims(scope_id, lifecycle, claim_id);
 CREATE INDEX IF NOT EXISTS semantic_aliases_exact_idx ON semantic_aliases(scope_id, normalized_value, lifecycle, entity_id, alias_id);
 CREATE INDEX IF NOT EXISTS semantic_source_links_claim_idx ON semantic_source_links(claim_id, eligibility, source_link_id);
@@ -1008,6 +1027,34 @@ func validateSessionScope(ctx context.Context, query interface {
 		projectID.String != string(scope.ProjectID) || projectID.Valid != (scope.ProjectID != "") {
 		return errors.New("semantic request scope does not match its session")
 	}
+	keys := []string{"global"}
+	if contextKey := scopeKeyForContext(scope); contextKey != "global" {
+		keys = append(keys, contextKey)
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, query, keys); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requireSemanticScopeKeysAvailable(ctx context.Context, query interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, keys []string) error {
+	for _, key := range keys {
+		var reason string
+		err := query.QueryRowContext(ctx, `
+			SELECT quarantine.reason FROM semantic_projection_quarantine AS quarantine
+			JOIN semantic_scopes AS scopes ON scopes.scope_id = quarantine.scope_id
+			WHERE scopes.scope_key = ?
+		`, key).Scan(&reason)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: %s: %s", ErrSemanticScopeQuarantined, key, reason)
+	}
 	return nil
 }
 
@@ -1358,7 +1405,16 @@ func validateSemanticScopeVector(
 	writer turnLeaseWriteExecutor,
 	scopes []memory.SemanticScope,
 	priors []memory.ScopeRevision,
+	now time.Time,
 ) (map[string]memory.SemanticScope, error) {
+	var maintenanceHolder sql.NullString
+	var maintenanceExpiry sql.NullString
+	if err := writer.queryRowContext(ctx, `SELECT holder_id, expires_at FROM semantic_maintenance_lock WHERE singleton = 1`).Scan(&maintenanceHolder, &maintenanceExpiry); err != nil {
+		return nil, err
+	}
+	if maintenanceHolder.Valid && maintenanceExpiry.Valid && maintenanceExpiry.String > formatSemanticTime(now.UTC()) {
+		return nil, fmt.Errorf("%w: held by %s", ErrSemanticMaintenanceHeld, maintenanceHolder.String)
+	}
 	byKey := make(map[string]memory.SemanticScope, len(scopes))
 	for index, scope := range scopes {
 		if index > 0 && scopes[index-1].Key >= scope.Key {
@@ -1368,12 +1424,24 @@ func validateSemanticScopeVector(
 			return nil, errors.New("semantic proposal contains a duplicate scope")
 		}
 		byKey[scope.Key] = scope
+		var quarantineReason string
+		err := writer.queryRowContext(ctx, `
+			SELECT quarantine.reason FROM semantic_projection_quarantine AS quarantine
+			JOIN semantic_scopes AS stored_scope ON stored_scope.scope_id = quarantine.scope_id
+			WHERE stored_scope.scope_key = ?
+		`, scope.Key).Scan(&quarantineReason)
+		if err == nil {
+			return nil, fmt.Errorf("%w: %s: %s", ErrSemanticScopeQuarantined, scope.Key, quarantineReason)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
 		if err := validateScopeBacking(ctx, writer, scope); err != nil {
 			return nil, err
 		}
 		var storedID string
 		var storedRevision int64
-		err := writer.queryRowContext(ctx, `SELECT scope_id, revision FROM semantic_scopes WHERE scope_key = ?`, scope.Key).Scan(&storedID, &storedRevision)
+		err = writer.queryRowContext(ctx, `SELECT scope_id, revision FROM semantic_scopes WHERE scope_key = ?`, scope.Key).Scan(&storedID, &storedRevision)
 		switch {
 		case errors.Is(err, sql.ErrNoRows) && scope.Revision == 0:
 			kind, registryID, splitErr := splitScopeKey(scope.Key)
@@ -1605,7 +1673,7 @@ func (s *Store) ApplyRememberLiteral(
 			return errors.New("semantic source observation time changed")
 		}
 
-		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())
 		if err != nil {
 			return err
 		}
