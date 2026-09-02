@@ -55,6 +55,9 @@ func main() {
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
+		log.Fatalf("failed to import legacy Todo list: %v", err)
+	}
 	if _, err := kernelStore.RecoverInactiveTaskClaims(context.Background()); err != nil {
 		log.Fatalf("failed to recover inactive Task claims: %v", err)
 	}

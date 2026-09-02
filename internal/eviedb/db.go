@@ -719,6 +719,48 @@ BEGIN
     SELECT RAISE(ABORT, 'task coordination conflicts are append-only');
 END;
 
+CREATE TABLE IF NOT EXISTS task_legacy_todo_imports (
+    migration_id  TEXT PRIMARY KEY NOT NULL CHECK (length(trim(migration_id)) > 0),
+    source_list   TEXT NOT NULL CHECK (length(trim(source_list)) > 0),
+    source_sha256 TEXT NOT NULL CHECK (length(source_sha256) = 64 AND source_sha256 NOT GLOB '*[^0-9a-f]*'),
+    item_count    INTEGER NOT NULL CHECK (typeof(item_count) = 'integer' AND item_count >= 0),
+    applied_at    TEXT NOT NULL CHECK (typeof(applied_at) = 'text')
+);
+
+CREATE TRIGGER IF NOT EXISTS task_legacy_todo_imports_append_only_update
+BEFORE UPDATE ON task_legacy_todo_imports
+BEGIN
+    SELECT RAISE(ABORT, 'legacy Todo imports are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_legacy_todo_imports_append_only_delete
+BEFORE DELETE ON task_legacy_todo_imports
+BEGIN
+    SELECT RAISE(ABORT, 'legacy Todo imports are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_legacy_todo_provenance (
+    migration_id TEXT NOT NULL REFERENCES task_legacy_todo_imports(migration_id),
+    source_list  TEXT NOT NULL CHECK (length(trim(source_list)) > 0),
+    legacy_id    INTEGER NOT NULL CHECK (typeof(legacy_id) = 'integer' AND legacy_id >= 0),
+    source_index INTEGER NOT NULL CHECK (typeof(source_index) = 'integer' AND source_index >= 0),
+    task_id      TEXT NOT NULL UNIQUE REFERENCES tasks(id),
+    PRIMARY KEY (migration_id, source_list, legacy_id),
+    UNIQUE (migration_id, source_index)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_legacy_todo_provenance_append_only_update
+BEFORE UPDATE ON task_legacy_todo_provenance
+BEGIN
+    SELECT RAISE(ABORT, 'legacy Todo provenance is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_legacy_todo_provenance_append_only_delete
+BEFORE DELETE ON task_legacy_todo_provenance
+BEGIN
+    SELECT RAISE(ABORT, 'legacy Todo provenance is append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS events (
     id             TEXT PRIMARY KEY NOT NULL,
     session_id     TEXT NOT NULL REFERENCES sessions(id),
