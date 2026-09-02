@@ -570,11 +570,11 @@ func (s *Store) ApplyCorrectClaim(ctx context.Context, lease memory.TurnLease, p
 		}
 		if _, err := writer.execContext(ctx, `
 			INSERT INTO semantic_source_links (
-				source_link_id, claim_id, event_id, source_session_id, source_scope_key,
+				source_link_id, scope_id, claim_id, event_id, source_session_id, source_scope_key,
 				event_part, locator_kind, locator_value, evidence_sha256, source_actor,
 				source_type, authority, observed_at, eligibility, created_operation_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
-		`, proposal.Source.ID, proposal.ReplacementClaim.ID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
+		`, proposal.Source.ID, proposal.Scope.ID, proposal.ReplacementClaim.ID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
 			proposal.Source.EventPart, proposal.Source.LocatorKind, proposal.Source.LocatorValue,
 			proposal.Source.EvidenceSHA256, proposal.Source.Actor, proposal.Source.SourceType,
 			proposal.Source.Authority, proposal.Source.ObservedAt, proposal.OperationID); err != nil {
@@ -795,16 +795,68 @@ func (s *Store) inspectClaimsSnapshot(
 		}
 	}
 	result := memory.ClaimsInspection{ValidAt: validAt, AsKnownAt: asKnownAt}
-	key := targetScopeKey(scope, useSessionScope)
+	keys := allowedSemanticReadScopeKeys(scope)
+	if useSessionScope {
+		keys = []string{targetScopeKey(scope, true)}
+	}
+	allowed := make(map[string]struct{}, len(allowedSemanticReadScopeKeys(scope)))
+	for _, key := range allowedSemanticReadScopeKeys(scope) {
+		allowed[key] = struct{}{}
+	}
+	targetKey := targetScopeKey(scope, useSessionScope)
+	for _, key := range keys {
+		part, found, err := s.inspectClaimsInScope(ctx, queryer, key, validAt, asKnownAt, includeOutsideValidTime, allowed)
+		if err != nil {
+			return result, err
+		}
+		if !found {
+			if key == targetKey {
+				result.Scope.Key = key
+			}
+			continue
+		}
+		result.Scopes = append(result.Scopes, part.Scope)
+		result.ScopeRevisions = append(result.ScopeRevisions, memory.ScopeRevision{ScopeKey: part.Scope.Key, Revision: part.ScopeRevision})
+		result.Claims = append(result.Claims, part.Claims...)
+		if key == targetKey {
+			result.Scope = part.Scope
+			result.ScopeRevision = part.ScopeRevision
+		}
+	}
+	if result.Scope.Key == "" {
+		result.Scope.Key = targetKey
+	}
+	return result, nil
+}
+
+func allowedSemanticReadScopeKeys(scope memory.ScopeContext) []string {
+	keys := []string{"global"}
+	contextKey := scopeKeyForContext(scope)
+	if contextKey != "global" {
+		keys = append(keys, contextKey)
+	}
+	keys = append(keys, "session:"+string(scope.SessionID))
+	return keys
+}
+
+func (s *Store) inspectClaimsInScope(
+	ctx context.Context,
+	queryer semanticInspectionQueryer,
+	key string,
+	validAt time.Time,
+	asKnownAt time.Time,
+	includeOutsideValidTime bool,
+	allowedSourceScopes map[string]struct{},
+) (memory.ClaimsInspection, bool, error) {
+	result := memory.ClaimsInspection{ValidAt: validAt, AsKnownAt: asKnownAt}
 	var registry sql.NullString
 	var currentRevision int64
 	if err := queryer.QueryRowContext(ctx, `SELECT scope_id, scope_key, registry_id, revision FROM semantic_scopes WHERE scope_key = ?`, key).Scan(
 		&result.Scope.ID, &result.Scope.Key, &registry, &currentRevision,
 	); errors.Is(err, sql.ErrNoRows) {
-		result.Scope.Key = key
-		return result, nil
+		return result, false, nil
 	} else if err != nil {
-		return result, err
+		return result, false, err
 	}
 	if registry.Valid {
 		result.Scope.RegistryID = registry.String
@@ -815,7 +867,7 @@ func (s *Store) inspectClaimsSnapshot(
 		JOIN semantic_operations AS operations ON operations.operation_id = operation_scopes.operation_id
 		WHERE operation_scopes.scope_id = ? AND operations.transaction_time <= ?
 	`, result.Scope.ID, formatSemanticTime(asKnownAt)).Scan(&result.ScopeRevision); err != nil {
-		return result, err
+		return result, false, err
 	}
 	result.Scope.Revision = result.ScopeRevision
 	rows, err := queryer.QueryContext(ctx, `
@@ -824,34 +876,34 @@ func (s *Store) inspectClaimsSnapshot(
 		ORDER BY claims.claim_id
 	`, result.Scope.ID, formatSemanticTime(asKnownAt))
 	if err != nil {
-		return result, err
+		return result, false, err
 	}
 	var ids []memory.SemanticID
 	for rows.Next() {
 		var id memory.SemanticID
 		if err := rows.Scan(&id); err != nil {
 			rows.Close()
-			return result, err
+			return result, false, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Close(); err != nil {
-		return result, err
+		return result, false, err
 	}
 	for _, id := range ids {
 		claim, err := loadSemanticClaim(ctx, queryer, id)
 		if err != nil {
-			return result, err
+			return result, false, err
 		}
 		lifecycle, err := loadSemanticLifecycleAt(ctx, queryer, "claim", id, asKnownAt)
 		if err != nil || len(lifecycle) == 0 {
-			return result, errors.New("semantic Claim has no accepted lifecycle")
+			return result, false, errors.New("semantic Claim has no accepted lifecycle")
 		}
 		effectiveValidTime := claim.ValidTime
 		latest := lifecycle[len(lifecycle)-1].State
 		correction, found, err := loadVisibleCorrection(ctx, queryer, id, asKnownAt)
 		if err != nil {
-			return result, err
+			return result, false, err
 		}
 		if found {
 			if correction.Mode == memory.CorrectionError {
@@ -866,10 +918,15 @@ func (s *Store) inspectClaimsSnapshot(
 		}
 		sources, err := loadEligibleSourcesAt(ctx, queryer, id, asKnownAt)
 		if err != nil {
-			return result, err
+			return result, false, err
 		}
 		if len(sources) == 0 {
 			continue
+		}
+		for index := range sources {
+			if _, allowed := allowedSourceScopes[sources[index].ScopeKey]; !allowed {
+				sources[index].Evidence = ""
+			}
 		}
 		inspection := memory.ClaimInspection{
 			SemanticClaim: claim, Scope: result.Scope, Sources: sources, Lifecycle: lifecycle,
@@ -877,18 +934,18 @@ func (s *Store) inspectClaimsSnapshot(
 		}
 		inspection.Subject, err = loadSemanticEntityForInspection(ctx, queryer, claim.SubjectEntityID)
 		if err != nil {
-			return result, err
+			return result, false, err
 		}
 		if claim.Object.EntityID != "" {
 			entity, err := loadSemanticEntityForInspection(ctx, queryer, claim.Object.EntityID)
 			if err != nil {
-				return result, err
+				return result, false, err
 			}
 			inspection.ObjectEntity = &entity
 		}
 		result.Claims = append(result.Claims, inspection)
 	}
-	return result, nil
+	return result, true, nil
 }
 
 func loadSemanticLifecycleAt(ctx context.Context, queryer semanticInspectionQueryer, objectKind string, objectID memory.SemanticID, asKnownAt time.Time) ([]memory.SemanticState, error) {
@@ -1007,7 +1064,8 @@ func (s *Store) InspectLiteralClaims(ctx context.Context, scope memory.ScopeCont
 		return memory.LiteralClaimsInspection{}, err
 	}
 	result := memory.LiteralClaimsInspection{
-		Scope: claims.Scope, ScopeRevision: claims.ScopeRevision, EffectiveAt: claims.ValidAt,
+		Scope: claims.Scope, Scopes: claims.Scopes, ScopeRevisions: claims.ScopeRevisions,
+		ScopeRevision: claims.ScopeRevision, EffectiveAt: claims.ValidAt,
 		ValidAt: claims.ValidAt, AsKnownAt: claims.AsKnownAt,
 	}
 	result.Claims = literalClaimsFromInspection(claims)
@@ -1045,7 +1103,8 @@ func (s *Store) InspectEntityClaimsAtScope(ctx context.Context, scope memory.Sco
 		return memory.EntityClaimsInspection{}, err
 	}
 	result := memory.EntityClaimsInspection{
-		Scope: claims.Scope, ScopeRevision: claims.ScopeRevision, EffectiveAt: claims.ValidAt,
+		Scope: claims.Scope, Scopes: claims.Scopes, ScopeRevisions: claims.ScopeRevisions,
+		ScopeRevision: claims.ScopeRevision, EffectiveAt: claims.ValidAt,
 		ValidAt: claims.ValidAt, AsKnownAt: claims.AsKnownAt,
 	}
 	result.Claims = entityClaimsFromInspection(claims)

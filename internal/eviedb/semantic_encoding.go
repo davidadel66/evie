@@ -270,3 +270,90 @@ func canonicalRememberEntityProposal(proposal memory.RememberEntityProposal) can
 		SourceEventIDs: []memory.EventID{proposal.Source.EventID}, Effect: effect,
 	}
 }
+
+type canonicalPromotionMapping struct {
+	SourceEntityID      memory.SemanticID `json:"source_entity_id"`
+	DestinationEntityID memory.SemanticID `json:"destination_entity_id"`
+}
+
+type canonicalPromotionRecord struct {
+	SourceScopeKey      string                      `json:"source_scope_key"`
+	DestinationScopeKey string                      `json:"destination_scope_key"`
+	SourceClaimID       memory.SemanticID           `json:"source_claim_id"`
+	DestinationClaimID  memory.SemanticID           `json:"destination_claim_id"`
+	EntityMappings      []canonicalPromotionMapping `json:"entity_mappings"`
+}
+
+type canonicalPromotionEffect struct {
+	Scopes      []string                   `json:"scopes"`
+	Predicates  []struct{}                 `json:"predicates"`
+	Entities    []canonicalEntity          `json:"entities"`
+	Aliases     []struct{}                 `json:"aliases"`
+	Claims      []canonicalCorrectionClaim `json:"claims"`
+	SourceLinks []canonicalSourceLink      `json:"source_links"`
+	GraphLinks  []struct{}                 `json:"graph_links"`
+	Transitions []struct{}                 `json:"transitions"`
+	Promotions  []canonicalPromotionRecord `json:"promotions"`
+}
+
+type canonicalPromotionProposal struct {
+	Kind           string                   `json:"kind"`
+	IdempotencyKey string                   `json:"idempotency_key"`
+	Actor          memory.SemanticActor     `json:"actor"`
+	SessionID      memory.SessionID         `json:"session_id"`
+	PriorRevisions []memory.ScopeRevision   `json:"prior_revisions"`
+	SourceEventIDs []memory.EventID         `json:"source_event_ids"`
+	Effect         canonicalPromotionEffect `json:"effect"`
+}
+
+func canonicalPromoteClaimProposal(proposal memory.PromotionProposal) canonicalPromotionProposal {
+	effect := canonicalPromotionEffect{
+		Scopes: []string{proposal.DestinationScope.Key}, Predicates: []struct{}{}, Entities: []canonicalEntity{},
+		Aliases: []struct{}{}, Claims: []canonicalCorrectionClaim{}, SourceLinks: []canonicalSourceLink{},
+		GraphLinks: []struct{}{}, Transitions: []struct{}{},
+	}
+	mappings := make([]canonicalPromotionMapping, 0, len(proposal.PromotedEntities))
+	for _, promoted := range proposal.PromotedEntities {
+		mappings = append(mappings, canonicalPromotionMapping{
+			SourceEntityID: promoted.SourceEntityID, DestinationEntityID: promoted.DestinationEntity.ID,
+		})
+		if promoted.DestinationEntity.Create {
+			effect.Entities = append(effect.Entities, canonicalEntity{
+				EntityID: promoted.DestinationEntity.ID, ScopeKey: promoted.DestinationEntity.ScopeKey,
+				CanonicalName: promoted.DestinationEntity.CanonicalName, EntityType: promoted.DestinationEntity.EntityType,
+				Lifecycle: "active",
+			})
+		}
+	}
+	if proposal.DestinationClaimCreate {
+		claim := proposal.DestinationClaim
+		effect.Claims = append(effect.Claims, canonicalCorrectionClaim{
+			ClaimID: claim.ID, ScopeKey: claim.ScopeKey, SubjectEntityID: claim.SubjectEntityID,
+			PredicateID: claim.Predicate.ID, PredicateToken: claim.Predicate.Token, PredicateVersion: claim.Predicate.Version,
+			Object:   canonicalCorrectionClaimObject{EntityID: claim.Object.EntityID, Literal: claim.Object.Literal},
+			Polarity: claim.Polarity, ValidTime: encodeCanonicalValidTime(claim.ValidTime), Lifecycle: "active",
+		})
+	}
+	for _, source := range proposal.Sources {
+		if !source.Create {
+			continue
+		}
+		effect.SourceLinks = append(effect.SourceLinks, canonicalSourceLink{
+			SourceLinkID: source.ID, ClaimID: proposal.DestinationClaim.ID,
+			Locator: canonicalLocator{EventID: source.EventID, EventPart: source.EventPart,
+				LocatorKind: source.LocatorKind, LocatorValue: source.LocatorValue, EvidenceSHA256: source.EvidenceSHA256},
+			Actor: source.Actor, SourceType: source.SourceType, Authority: source.Authority,
+			ObservedAt: source.ObservedAt, Eligibility: memory.EligibilityEligible,
+		})
+	}
+	effect.Promotions = []canonicalPromotionRecord{{
+		SourceScopeKey: proposal.SourceScope.Key, DestinationScopeKey: proposal.DestinationScope.Key,
+		SourceClaimID: proposal.SourceClaim.ID, DestinationClaimID: proposal.DestinationClaim.ID,
+		EntityMappings: mappings,
+	}}
+	return canonicalPromotionProposal{
+		Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey, Actor: proposal.Actor,
+		SessionID: proposal.SessionID, PriorRevisions: proposal.PriorRevisions,
+		SourceEventIDs: []memory.EventID{proposal.Evidence.EventID}, Effect: effect,
+	}
+}

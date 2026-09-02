@@ -1,0 +1,101 @@
+{
+  "fixture_schema_version": 4,
+  "name": "explicit Workspace to global Promotion preserves narrower memory",
+  "operations": [
+    {
+      "schema_version": 4,
+      "operation_id": "85000000-0000-4000-8000-000000000001",
+      "proposal": {
+        "kind": "promote_claim",
+        "idempotency_key": "idem:v1:85000000-0000-4000-8000-000000000002",
+        "actor": "owner",
+        "session_id": "85000000-0000-4000-8000-000000000003",
+        "prior_revisions": [
+          { "scope_key": "global", "revision": 2 },
+          { "scope_key": "workspace:85000000-0000-4000-8000-000000000004", "revision": 1 }
+        ],
+        "source_event_ids": ["85000000-0000-4000-8000-000000000005"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [
+            {
+              "entity_id": "85000000-0000-4000-8000-000000000006",
+              "scope_key": "global",
+              "canonical_name": "Alice",
+              "entity_type": "person",
+              "lifecycle": "active"
+            },
+            {
+              "entity_id": "85000000-0000-4000-8000-000000000007",
+              "scope_key": "global",
+              "canonical_name": "Bob",
+              "entity_type": "person",
+              "lifecycle": "active"
+            }
+          ],
+          "aliases": [],
+          "claims": [
+            {
+              "claim_id": "85000000-0000-4000-8000-000000000008",
+              "scope_key": "global",
+              "subject_entity_id": "85000000-0000-4000-8000-000000000006",
+              "predicate_id": "85000000-0000-4000-8000-000000000009",
+              "predicate_token": "mentors",
+              "predicate_version": 1,
+              "object": { "entity_id": "85000000-0000-4000-8000-000000000007" },
+              "polarity": "affirmed",
+              "valid_time": { "from": null, "to": null },
+              "lifecycle": "active"
+            }
+          ],
+          "source_links": [
+            {
+              "source_link_id": "85000000-0000-4000-8000-000000000010",
+              "claim_id": "85000000-0000-4000-8000-000000000008",
+              "locator": {
+                "event_id": "85000000-0000-4000-8000-000000000011",
+                "event_part": "content",
+                "locator_kind": "whole",
+                "locator_value": "",
+                "evidence_sha256": "sha256:0ae44e5f4a59801d2b310960247e7346cdd4af19b2dfd576fbb47c11e2e1f7a5"
+              },
+              "actor": "owner",
+              "source_type": "user_message",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-02T18:00:00.000000000Z",
+              "eligibility": "eligible"
+            }
+          ],
+          "graph_links": [],
+          "transitions": [],
+          "promotions": [
+            {
+              "source_scope_key": "workspace:85000000-0000-4000-8000-000000000004",
+              "destination_scope_key": "global",
+              "source_claim_id": "85000000-0000-4000-8000-000000000012",
+              "destination_claim_id": "85000000-0000-4000-8000-000000000008",
+              "entity_mappings": [
+                {
+                  "source_entity_id": "85000000-0000-4000-8000-000000000013",
+                  "destination_entity_id": "85000000-0000-4000-8000-000000000006"
+                },
+                {
+                  "source_entity_id": "85000000-0000-4000-8000-000000000014",
+                  "destination_entity_id": "85000000-0000-4000-8000-000000000007"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:685ee4c103997de491854b72f7af23ccd31117ea195ac6d1f9a8f274eb642c8c",
+      "transaction_time": "2026-09-02T18:00:01.000000000Z",
+      "resulting_revisions": [
+        { "scope_key": "global", "revision": 3 },
+        { "scope_key": "workspace:85000000-0000-4000-8000-000000000004", "revision": 1 }
+      ],
+      "effect_sha256": "sha256:bfb112862ed2c239c651730a5e82b47d6e37933aff704138ef6db5ca3c9a9d33"
+    }
+  ]
+}

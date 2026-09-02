@@ -15,6 +15,8 @@ const (
 	v1FixtureSHA256  = "d5b77d3204310fc9a4eb22a038738faac8551b4989dc28c15b453fbb73db0b56"
 	v2ManifestSHA256 = "65d2e91245d037d500a7f4d22de00938ed2e98f70bd48ffd45af3f58c0ca47e2"
 	v2FixtureSHA256  = "b87b5e7501ab14bd4d0c61e32b5edc88e77ac2487a9b155ba6cac34e200feb05"
+	v3ManifestSHA256 = "39b31c674edd5f3646ebbca6bd7758c4030ee9fa964aa3adfeb7ffb9599bda97"
+	v3FixtureSHA256  = "e8d76202fc041aa62fe5eb8ebf4423f3fc3e62609a9bc73abce26ece47e7794e"
 )
 
 func TestSemanticCorrectionEncodingV2FixtureAndFrozenV1Contract(t *testing.T) {
@@ -194,6 +196,146 @@ func TestSemanticLifecycleEncodingV3FixtureAndFrozenPriorContracts(t *testing.T)
 				index, proposalHash, effectHash, operation.ProposalSHA256, operation.EffectSHA256)
 		}
 	}
+}
+
+func TestSemanticPromotionEncodingV4FixtureAndFrozenPriorContracts(t *testing.T) {
+	fixtures := filepath.Join("..", "..", "cmd", "evie", "docs", "fixtures", "semantic-memory")
+	for path, want := range map[string]string{
+		filepath.Join(fixtures, "v1", "manifest.schema.json"):  v1ManifestSHA256,
+		filepath.Join(fixtures, "v1", "literal-claim.json"):    v1FixtureSHA256,
+		filepath.Join(fixtures, "v2", "manifest.schema.json"):  v2ManifestSHA256,
+		filepath.Join(fixtures, "v2", "claim-correction.json"): v2FixtureSHA256,
+		filepath.Join(fixtures, "v3", "manifest.schema.json"):  v3ManifestSHA256,
+		filepath.Join(fixtures, "v3", "lifecycle.json"):        v3FixtureSHA256,
+	} {
+		assertFileSHA256(t, path, want)
+	}
+
+	schemaBytes, err := os.ReadFile(filepath.Join(fixtures, "v4", "manifest.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Const int `json:"const"`
+		} `json:"properties"`
+		Definitions map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Properties["fixture_schema_version"].Const != 4 {
+		t.Fatal("v4 fixture schema does not require version 4")
+	}
+	for _, definition := range []string{"entityMapping", "promotion", "effectV4", "proposalV4", "operationV4", "operation"} {
+		if len(schema.Definitions[definition]) == 0 {
+			t.Fatalf("v4 fixture schema omits %s", definition)
+		}
+	}
+	var effectRules struct {
+		Properties map[string]struct {
+			Type     string `json:"type"`
+			MinItems *int   `json:"minItems"`
+			MaxItems *int   `json:"maxItems"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(schema.Definitions["effectV4"], &effectRules); err != nil {
+		t.Fatal(err)
+	}
+	if minimum := effectRules.Properties["source_links"].MinItems; minimum != nil && *minimum > 0 {
+		t.Fatalf("v4 fixture schema rejects an accepted all-reuse Promotion with zero created Source Links: minItems=%d", *minimum)
+	}
+	if effectRules.Properties["source_links"].Type != "array" ||
+		promotionArrayCountAllowed(effectRules.Properties["claims"].MinItems, effectRules.Properties["claims"].MaxItems, 2) ||
+		promotionArrayCountAllowed(effectRules.Properties["predicates"].MinItems, effectRules.Properties["predicates"].MaxItems, 1) {
+		t.Fatal("v4 fixture schema failed positive/negative Promotion effect array bounds")
+	}
+	for _, prior := range []string{
+		`../v1/manifest.schema.json#/$defs/operation`,
+		`../v2/manifest.schema.json#/$defs/operationV2`,
+		`../v3/manifest.schema.json#/$defs/operationV3`,
+	} {
+		assertJSONContains(t, schema.Definitions["operation"], prior)
+	}
+
+	fixtureBytes, err := os.ReadFile(filepath.Join(fixtures, "v4", "scope-promotion.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		SchemaVersion int `json:"fixture_schema_version"`
+		Operations    []struct {
+			SchemaVersion  int                        `json:"schema_version"`
+			Proposal       canonicalPromotionProposal `json:"proposal"`
+			ProposalSHA256 string                     `json:"proposal_sha256"`
+			EffectSHA256   string                     `json:"effect_sha256"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(fixtureBytes, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.SchemaVersion != 4 || len(fixture.Operations) != 1 || fixture.Operations[0].SchemaVersion != 4 {
+		t.Fatalf("v4 fixture envelope = %+v", fixture)
+	}
+	operation := fixture.Operations[0]
+	if operation.Proposal.Kind != "promote_claim" || len(operation.Proposal.PriorRevisions) != 2 ||
+		len(operation.Proposal.Effect.Promotions) != 1 || len(operation.Proposal.Effect.Claims) != 1 ||
+		len(operation.Proposal.Effect.SourceLinks) != 1 {
+		t.Fatalf("v4 Promotion effect is incomplete: %+v", operation.Proposal.Effect)
+	}
+	proposalHash, _, err := semanticHash(operation.Proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	effectHash, _, err := semanticHash(operation.Proposal.Effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposalHash != operation.ProposalSHA256 || effectHash != operation.EffectSHA256 {
+		t.Fatalf("v4 canonical hashes = %s / %s, fixture = %s / %s",
+			proposalHash, effectHash, operation.ProposalSHA256, operation.EffectSHA256)
+	}
+
+	reuseBytes, err := os.ReadFile(filepath.Join(fixtures, "v4", "all-reuse-scope-promotion.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reuseFixture struct {
+		SchemaVersion int `json:"fixture_schema_version"`
+		Operations    []struct {
+			SchemaVersion  int                        `json:"schema_version"`
+			Proposal       canonicalPromotionProposal `json:"proposal"`
+			ProposalSHA256 string                     `json:"proposal_sha256"`
+			EffectSHA256   string                     `json:"effect_sha256"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(reuseBytes, &reuseFixture); err != nil {
+		t.Fatal(err)
+	}
+	if reuseFixture.SchemaVersion != 4 || len(reuseFixture.Operations) != 1 || reuseFixture.Operations[0].SchemaVersion != 4 {
+		t.Fatalf("v4 all-reuse fixture envelope = %+v", reuseFixture)
+	}
+	reuse := reuseFixture.Operations[0]
+	if len(reuse.Proposal.Effect.Entities) != 0 || len(reuse.Proposal.Effect.Claims) != 0 ||
+		len(reuse.Proposal.Effect.SourceLinks) != 0 || len(reuse.Proposal.Effect.Promotions) != 1 {
+		t.Fatalf("v4 all-reuse Promotion effect = %+v", reuse.Proposal.Effect)
+	}
+	reuseProposalHash, _, err := semanticHash(reuse.Proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reuseEffectHash, _, err := semanticHash(reuse.Proposal.Effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reuseProposalHash != reuse.ProposalSHA256 || reuseEffectHash != reuse.EffectSHA256 {
+		t.Fatalf("v4 all-reuse canonical hashes = %s / %s, fixture = %s / %s",
+			reuseProposalHash, reuseEffectHash, reuse.ProposalSHA256, reuse.EffectSHA256)
+	}
+}
+
+func promotionArrayCountAllowed(minimum, maximum *int, count int) bool {
+	return (minimum == nil || count >= *minimum) && (maximum == nil || count <= *maximum)
 }
 
 type correctionEffectArrayRule struct {

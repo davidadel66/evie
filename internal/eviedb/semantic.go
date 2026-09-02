@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS semantic_scopes (
 
 CREATE TABLE IF NOT EXISTS semantic_operations (
     operation_id       TEXT PRIMARY KEY NOT NULL,
-    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3)),
+    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3, 4)),
     operation_kind     TEXT NOT NULL,
     idempotency_key    TEXT NOT NULL UNIQUE,
     actor               TEXT NOT NULL,
@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS semantic_operation_scopes (
 
 CREATE TABLE IF NOT EXISTS semantic_predicates (
     predicate_id       TEXT PRIMARY KEY NOT NULL,
+    scope_id           TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
     token              TEXT NOT NULL,
     version            INTEGER NOT NULL CHECK (version > 0),
     label              TEXT NOT NULL,
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS semantic_claims (
 
 CREATE TABLE IF NOT EXISTS semantic_source_links (
     source_link_id       TEXT PRIMARY KEY NOT NULL,
+    scope_id             TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
     claim_id             TEXT NOT NULL REFERENCES semantic_claims(claim_id),
     event_id             TEXT NOT NULL REFERENCES events(id),
     source_session_id    TEXT NOT NULL REFERENCES sessions(id),
@@ -160,6 +162,22 @@ CREATE TABLE IF NOT EXISTS semantic_claim_corrections (
     CHECK (replacement_from IS NULL OR replacement_to IS NULL OR replacement_from < replacement_to)
 );
 
+CREATE TABLE IF NOT EXISTS semantic_promotions (
+    operation_id         TEXT PRIMARY KEY NOT NULL REFERENCES semantic_operations(operation_id),
+    source_scope_id      TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    destination_scope_id TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    source_claim_id      TEXT NOT NULL REFERENCES semantic_claims(claim_id),
+    destination_claim_id TEXT NOT NULL REFERENCES semantic_claims(claim_id)
+);
+
+CREATE TABLE IF NOT EXISTS semantic_promotion_entities (
+    operation_id          TEXT NOT NULL REFERENCES semantic_promotions(operation_id),
+    source_entity_id      TEXT NOT NULL REFERENCES semantic_entities(entity_id),
+    destination_entity_id TEXT NOT NULL REFERENCES semantic_entities(entity_id),
+    PRIMARY KEY (operation_id, source_entity_id),
+    UNIQUE (source_entity_id, destination_entity_id)
+);
+
 CREATE TABLE IF NOT EXISTS semantic_state_events (
     scope_id             TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
     object_kind          TEXT NOT NULL CHECK (object_kind IN ('entity', 'alias', 'claim', 'source_link', 'graph_link')),
@@ -193,6 +211,10 @@ CREATE TRIGGER IF NOT EXISTS semantic_source_links_append_only_update BEFORE UPD
 CREATE TRIGGER IF NOT EXISTS semantic_source_links_append_only_delete BEFORE DELETE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_update BEFORE UPDATE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_delete BEFORE DELETE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_promotions_append_only_update BEFORE UPDATE ON semantic_promotions BEGIN SELECT RAISE(ABORT, 'semantic promotions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_promotions_append_only_delete BEFORE DELETE ON semantic_promotions BEGIN SELECT RAISE(ABORT, 'semantic promotions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_promotion_entities_append_only_update BEFORE UPDATE ON semantic_promotion_entities BEGIN SELECT RAISE(ABORT, 'semantic promotion entities are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_promotion_entities_append_only_delete BEFORE DELETE ON semantic_promotion_entities BEGIN SELECT RAISE(ABORT, 'semantic promotion entities are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_state_events_append_only_update BEFORE UPDATE ON semantic_state_events BEGIN SELECT RAISE(ABORT, 'semantic state events are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_state_events_append_only_delete BEFORE DELETE ON semantic_state_events BEGIN SELECT RAISE(ABORT, 'semantic state events are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_scopes_identity_immutable
@@ -210,33 +232,126 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureSemanticOperationSchemaV3(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureSemanticOperationSchemaV4(ctx, db); err != nil {
+		return err
+	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
-	if err != nil || present {
+	if err != nil {
+		return err
+	}
+	if !present {
+		if err := withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+			var count int
+			if err := conn.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM pragma_table_info('semantic_claims') WHERE name = 'object_kind'
+		`).Scan(&count); err != nil {
+				return err
+			}
+			if count == 1 {
+				return nil
+			}
+			if _, err := conn.ExecContext(ctx, semanticClaimsObjectMigration); err != nil {
+				return fmt.Errorf("migrate Semantic Memory Claim objects: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return ensureSemanticObjectScopeColumns(ctx, db)
+}
+
+func ensureSemanticObjectScopeColumns(ctx context.Context, db *sql.DB) error {
+	predicateScope, err := tableHasColumn(ctx, db, "semantic_predicates", "scope_id")
+	if err != nil {
+		return err
+	}
+	sourceScope, err := tableHasColumn(ctx, db, "semantic_source_links", "scope_id")
+	if err != nil {
+		return err
+	}
+	if predicateScope && sourceScope {
+		_, err := db.ExecContext(ctx, semanticObjectScopeInsertTriggers)
 		return err
 	}
 	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
-		var count int
-		if err := conn.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM pragma_table_info('semantic_claims') WHERE name = 'object_kind'
-		`).Scan(&count); err != nil {
+		var predicateCount, sourceCount int
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('semantic_predicates') WHERE name = 'scope_id'`).Scan(&predicateCount); err != nil {
 			return err
 		}
-		if count == 1 {
-			return nil
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('semantic_source_links') WHERE name = 'scope_id'`).Scan(&sourceCount); err != nil {
+			return err
 		}
-		if _, err := conn.ExecContext(ctx, semanticClaimsObjectMigration); err != nil {
-			return fmt.Errorf("migrate Semantic Memory Claim objects: %w", err)
+		predicateScope = predicateCount == 1
+		sourceScope = sourceCount == 1
+		if predicateScope && sourceScope {
+			_, err := conn.ExecContext(ctx, semanticObjectScopeInsertTriggers)
+			return err
 		}
-		return nil
+		if _, err := conn.ExecContext(ctx, `
+			DROP TRIGGER IF EXISTS semantic_predicates_append_only_update;
+			DROP TRIGGER IF EXISTS semantic_source_links_append_only_update;
+		`); err != nil {
+			return err
+		}
+		if !predicateScope {
+			if _, err := conn.ExecContext(ctx, `ALTER TABLE semantic_predicates ADD COLUMN scope_id TEXT REFERENCES semantic_scopes(scope_id)`); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, `UPDATE semantic_predicates SET scope_id = (SELECT scope_id FROM semantic_scopes WHERE scope_key = 'global')`); err != nil {
+				return err
+			}
+		}
+		if !sourceScope {
+			if _, err := conn.ExecContext(ctx, `ALTER TABLE semantic_source_links ADD COLUMN scope_id TEXT REFERENCES semantic_scopes(scope_id)`); err != nil {
+				return err
+			}
+			if _, err := conn.ExecContext(ctx, `
+				UPDATE semantic_source_links
+				SET scope_id = (SELECT claims.scope_id FROM semantic_claims AS claims WHERE claims.claim_id = semantic_source_links.claim_id)
+			`); err != nil {
+				return err
+			}
+		}
+		var missing int
+		if err := conn.QueryRowContext(ctx, `
+			SELECT (SELECT COUNT(*) FROM semantic_predicates WHERE scope_id IS NULL) +
+			       (SELECT COUNT(*) FROM semantic_source_links WHERE scope_id IS NULL)
+		`).Scan(&missing); err != nil {
+			return err
+		}
+		if missing != 0 {
+			return fmt.Errorf("migrate canonical semantic object scopes: %d rows lack a canonical scope", missing)
+		}
+		if _, err := conn.ExecContext(ctx, `
+			CREATE TRIGGER semantic_predicates_append_only_update BEFORE UPDATE ON semantic_predicates BEGIN SELECT RAISE(ABORT, 'semantic predicates are append-only'); END;
+			CREATE TRIGGER semantic_source_links_append_only_update BEFORE UPDATE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
+		`); err != nil {
+			return err
+		}
+		_, err := conn.ExecContext(ctx, semanticObjectScopeInsertTriggers)
+		return err
 	})
 }
+
+const semanticObjectScopeInsertTriggers = `
+CREATE TRIGGER IF NOT EXISTS semantic_predicates_global_scope_insert
+BEFORE INSERT ON semantic_predicates
+WHEN NEW.scope_id IS NULL OR NOT EXISTS (SELECT 1 FROM semantic_scopes WHERE scope_id = NEW.scope_id AND scope_key = 'global')
+BEGIN SELECT RAISE(ABORT, 'semantic predicates require the canonical global scope'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_source_links_claim_scope_insert
+BEFORE INSERT ON semantic_source_links
+WHEN NEW.scope_id IS NULL OR NOT EXISTS (SELECT 1 FROM semantic_claims WHERE claim_id = NEW.claim_id AND scope_id = NEW.scope_id)
+BEGIN SELECT RAISE(ABORT, 'semantic source link scope must match its claim'); END;
+`
 
 func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	var definition string
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") {
+	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
+		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -290,7 +405,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -331,6 +446,60 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	}
 	if violations != 0 {
 		return fmt.Errorf("migrate Semantic Memory operation encoding v3: %d foreign-key violations", violations)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
+	var definition string
+	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+		return err
+	}
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
+		return nil
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`)
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, semanticOperationsV4Migration); err != nil {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v4: %w", err)
+	}
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	violations := 0
+	for rows.Next() {
+		violations++
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if violations != 0 {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v4: %d foreign-key violations", violations)
 	}
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return err
@@ -387,6 +556,32 @@ CREATE TABLE semantic_operations_v3 (
 INSERT INTO semantic_operations_v3 SELECT * FROM semantic_operations;
 DROP TABLE semantic_operations;
 ALTER TABLE semantic_operations_v3 RENAME TO semantic_operations;
+CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+`
+
+const semanticOperationsV4Migration = `
+DROP TRIGGER IF EXISTS semantic_operations_append_only_update;
+DROP TRIGGER IF EXISTS semantic_operations_append_only_delete;
+CREATE TABLE semantic_operations_v4 (
+    operation_id       TEXT PRIMARY KEY NOT NULL,
+    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3, 4)),
+    operation_kind     TEXT NOT NULL,
+    idempotency_key    TEXT NOT NULL UNIQUE,
+    actor               TEXT NOT NULL,
+    session_id          TEXT NOT NULL REFERENCES sessions(id),
+    target_scope_id     TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    source_event_id     TEXT NOT NULL REFERENCES events(id),
+    proposal_sha256     TEXT NOT NULL,
+    effect_sha256       TEXT NOT NULL,
+    proposal_json       TEXT NOT NULL CHECK (json_valid(proposal_json) AND json_type(proposal_json) = 'object'),
+    prepared_proposal_json TEXT NOT NULL CHECK (json_valid(prepared_proposal_json) AND json_type(prepared_proposal_json) = 'object'),
+    result_json         TEXT NOT NULL CHECK (json_valid(result_json) AND json_type(result_json) = 'object'),
+    transaction_time    TEXT NOT NULL
+);
+INSERT INTO semantic_operations_v4 SELECT * FROM semantic_operations;
+DROP TABLE semantic_operations;
+ALTER TABLE semantic_operations_v4 RENAME TO semantic_operations;
 CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 `
@@ -1328,9 +1523,9 @@ func (s *Store) ApplyRememberLiteral(
 				return errors.New("semantic Predicate version changed after preparation")
 			}
 			if _, err := writer.execContext(ctx, `
-				INSERT INTO semantic_predicates (predicate_id, token, version, label, object_constraint, cardinality, created_operation_id)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
-			`, proposal.Predicate.ID, proposal.Predicate.Token, proposal.Predicate.Version, proposal.Predicate.Label,
+				INSERT INTO semantic_predicates (predicate_id, scope_id, token, version, label, object_constraint, cardinality, created_operation_id)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			`, proposal.Predicate.ID, byKey["global"].ID, proposal.Predicate.Token, proposal.Predicate.Version, proposal.Predicate.Label,
 				proposal.Predicate.ObjectConstraint, proposal.Predicate.Cardinality, proposal.OperationID); err != nil {
 				return fmt.Errorf("create semantic Predicate: %w", err)
 			}
@@ -1412,11 +1607,11 @@ func (s *Store) ApplyRememberLiteral(
 		if proposal.Source.Create {
 			if _, err := writer.execContext(ctx, `
 				INSERT INTO semantic_source_links (
-					source_link_id, claim_id, event_id, source_session_id, source_scope_key,
+					source_link_id, scope_id, claim_id, event_id, source_session_id, source_scope_key,
 					event_part, locator_kind, locator_value, evidence_sha256, source_actor,
 					source_type, authority, observed_at, eligibility, created_operation_id
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
-			`, proposal.SourceLinkID, proposal.ClaimID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
+			`, proposal.SourceLinkID, proposal.Scope.ID, proposal.ClaimID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
 				proposal.Source.EventPart, proposal.Source.LocatorKind, proposal.Source.LocatorValue,
 				proposal.Source.EvidenceSHA256, proposal.Source.Actor, proposal.Source.SourceType,
 				proposal.Source.Authority, proposal.Source.ObservedAt, proposal.OperationID); err != nil {

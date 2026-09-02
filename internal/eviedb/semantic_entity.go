@@ -759,8 +759,8 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			if proposal.Predicate.Version != latest+1 {
 				return errors.New("semantic Predicate version changed after preparation")
 			}
-			if _, err := writer.execContext(ctx, `INSERT INTO semantic_predicates (predicate_id, token, version, label, object_constraint, cardinality, created_operation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				proposal.Predicate.ID, proposal.Predicate.Token, proposal.Predicate.Version, proposal.Predicate.Label,
+			if _, err := writer.execContext(ctx, `INSERT INTO semantic_predicates (predicate_id, scope_id, token, version, label, object_constraint, cardinality, created_operation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				proposal.Predicate.ID, byKey["global"].ID, proposal.Predicate.Token, proposal.Predicate.Version, proposal.Predicate.Label,
 				proposal.Predicate.ObjectConstraint, proposal.Predicate.Cardinality, proposal.OperationID); err != nil {
 				return err
 			}
@@ -843,11 +843,11 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 		if proposal.Source.Create {
 			if _, err := writer.execContext(ctx, `
 				INSERT INTO semantic_source_links (
-					source_link_id, claim_id, event_id, source_session_id, source_scope_key,
+					source_link_id, scope_id, claim_id, event_id, source_session_id, source_scope_key,
 					event_part, locator_kind, locator_value, evidence_sha256, source_actor,
 					source_type, authority, observed_at, eligibility, created_operation_id
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
-			`, proposal.Source.ID, proposal.Claim.ID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
+			`, proposal.Source.ID, proposal.Scope.ID, proposal.Claim.ID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
 				proposal.Source.EventPart, proposal.Source.LocatorKind, proposal.Source.LocatorValue,
 				proposal.Source.EvidenceSHA256, proposal.Source.Actor, proposal.Source.SourceType,
 				proposal.Source.Authority, proposal.Source.ObservedAt, proposal.OperationID); err != nil {
@@ -933,7 +933,14 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 
 // LookupEntitiesByAlias returns every current exact match in canonical ID order.
 func (s *Store) LookupEntitiesByAlias(ctx context.Context, scope memory.ScopeContext, alias string) ([]memory.AliasEntityMatch, error) {
-	return s.LookupEntitiesByAliasAtScope(ctx, scope, alias, false)
+	if err := validateSessionScope(ctx, s.db, scope); err != nil {
+		return nil, err
+	}
+	normalized := normalizeAlias(alias)
+	if normalized == "" {
+		return nil, errors.New("Alias must not be blank")
+	}
+	return lookupAliases(ctx, s.db, "session:"+string(scope.SessionID), scopeKeyForContext(scope), normalized)
 }
 
 // LookupEntitiesByAliasAtScope selects either the default Context Scope or the
@@ -951,7 +958,10 @@ func (s *Store) LookupEntitiesByAliasAtScope(ctx context.Context, scope memory.S
 
 // InspectSemanticEntity performs an exact stable-ID read inside the bound scope.
 func (s *Store) InspectSemanticEntity(ctx context.Context, scope memory.ScopeContext, id memory.SemanticID) (memory.SemanticEntity, error) {
-	return s.InspectSemanticEntityAtScope(ctx, scope, id, false)
+	if err := validateSessionScope(ctx, s.db, scope); err != nil {
+		return memory.SemanticEntity{}, err
+	}
+	return loadEntityByID(ctx, s.db, id, "session:"+string(scope.SessionID), scopeKeyForContext(scope))
 }
 
 // InspectSemanticEntityAtScope selects either the default Context Scope or the

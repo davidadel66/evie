@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -485,12 +486,7 @@ func TestSemanticSchemaUpgradesLiteralClaimsFromIssue104AndAcceptsEntityClaims(t
 	if err := store.ReleaseTurnLease(ctx, lease.SessionID, lease.HolderID, lease.FencingToken); err != nil {
 		t.Fatal(err)
 	}
-	if err := withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
-		_, err := conn.ExecContext(ctx, semanticClaimsIssue104Downgrade)
-		return err
-	}); err != nil {
-		t.Fatalf("build issue #104 schema: %v", err)
-	}
+	downgradeSemanticClaimsToIssue104(t, ctx, db)
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -504,6 +500,20 @@ func TestSemanticSchemaUpgradesLiteralClaimsFromIssue104AndAcceptsEntityClaims(t
 	inspection, err := store.InspectLiteralClaims(ctx, session.ScopeContext())
 	if err != nil || len(inspection.Claims) != 1 || inspection.Claims[0].ID != literal.ClaimID {
 		t.Fatalf("migrated literal inspection = %+v, error = %v", inspection, err)
+	}
+	var predicateScope, sourceScope, claimScope string
+	if err := db.QueryRowContext(ctx, `
+		SELECT predicate_scopes.scope_key, source_links.scope_id, claims.scope_id
+		FROM semantic_predicates AS predicates
+		JOIN semantic_scopes AS predicate_scopes ON predicate_scopes.scope_id = predicates.scope_id
+		JOIN semantic_claims AS claims ON claims.predicate_id = predicates.predicate_id
+		JOIN semantic_source_links AS source_links ON source_links.claim_id = claims.claim_id
+		WHERE claims.claim_id = ?
+	`, literal.ClaimID).Scan(&predicateScope, &sourceScope, &claimScope); err != nil {
+		t.Fatal(err)
+	}
+	if predicateScope != "global" || sourceScope != claimScope {
+		t.Fatalf("migrated object scopes: Predicate=%q Source Link=%q Claim=%q", predicateScope, sourceScope, claimScope)
 	}
 	lease, err = store.AcquireTurnLease(ctx, session.ID, "semantic-upgraded", time.Minute)
 	if err != nil {
@@ -549,11 +559,134 @@ func TestSemanticSchemaUpgradesLiteralClaimsFromIssue104AndAcceptsEntityClaims(t
 	}
 }
 
+func TestSemanticObjectScopeMigrationSupportsConcurrentLegacyOpens(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(db)
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(ctx, session.ID, "concurrent-scope-migration", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Remember the legacy migration value",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), memory.RememberLiteralRequest{
+		IdempotencyKey: "idem:v1:85000000-0000-4000-8004-000000000198", SourceEventID: event.ID,
+		Predicate: "legacy_scope", PredicateLabel: "legacy scope",
+		Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "value"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ApplyRememberLiteral(ctx, lease, proposal); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReleaseTurnLease(ctx, lease.SessionID, lease.HolderID, lease.FencingToken); err != nil {
+		t.Fatal(err)
+	}
+	downgradeSemanticClaimsToIssue104(t, ctx, db)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	dbs := make([]*sql.DB, 2)
+	errs := make([]error, 2)
+	var wait sync.WaitGroup
+	wait.Add(2)
+	for index := range dbs {
+		go func() {
+			defer wait.Done()
+			<-start
+			dbs[index], errs[index] = OpenDBAt(path)
+		}()
+	}
+	close(start)
+	wait.Wait()
+	for index, openErr := range errs {
+		if openErr != nil {
+			t.Fatalf("concurrent legacy open[%d]: %v", index, openErr)
+		}
+		defer dbs[index].Close()
+	}
+	var invalidScopes int
+	if err := dbs[0].QueryRowContext(ctx, `
+		SELECT (SELECT COUNT(*) FROM semantic_predicates AS predicates
+		        JOIN semantic_scopes AS scopes ON scopes.scope_id = predicates.scope_id
+		        WHERE scopes.scope_key != 'global') +
+		       (SELECT COUNT(*) FROM semantic_source_links AS links
+		        JOIN semantic_claims AS claims ON claims.claim_id = links.claim_id
+		        WHERE links.scope_id != claims.scope_id)
+	`).Scan(&invalidScopes); err != nil {
+		t.Fatal(err)
+	}
+	if invalidScopes != 0 {
+		t.Fatalf("concurrent migration left %d invalid canonical object scopes", invalidScopes)
+	}
+}
+
+func downgradeSemanticClaimsToIssue104(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, semanticClaimsIssue104Downgrade); err != nil {
+		_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+		t.Fatalf("build issue #104 schema: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatal(err)
+	}
+}
+
 const semanticClaimsIssue104Downgrade = `
 DROP TRIGGER semantic_operations_append_only_update;
 UPDATE semantic_operations
 SET prepared_proposal_json = json_remove(prepared_proposal_json, '$.claim_create', '$.source.create');
 CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+
+DROP TRIGGER semantic_predicates_append_only_update;
+DROP TRIGGER semantic_predicates_append_only_delete;
+DROP TRIGGER semantic_predicates_global_scope_insert;
+CREATE TABLE semantic_predicates_v0 (
+    predicate_id TEXT PRIMARY KEY NOT NULL,
+    token TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    label TEXT NOT NULL,
+    object_constraint TEXT NOT NULL CHECK (object_constraint IN ('entity', 'text', 'integer', 'decimal', 'boolean', 'date', 'datetime')),
+    cardinality TEXT NOT NULL CHECK (cardinality IN ('one', 'many')),
+    created_operation_id TEXT NOT NULL REFERENCES semantic_operations(operation_id),
+    UNIQUE (token, version)
+);
+INSERT INTO semantic_predicates_v0 (
+    predicate_id, token, version, label, object_constraint, cardinality, created_operation_id
+)
+SELECT predicate_id, token, version, label, object_constraint, cardinality, created_operation_id
+FROM semantic_predicates;
+DROP TABLE semantic_predicates;
+ALTER TABLE semantic_predicates_v0 RENAME TO semantic_predicates;
 
 DROP TRIGGER semantic_source_links_append_only_update;
 DROP TRIGGER semantic_source_links_append_only_delete;
@@ -601,7 +734,15 @@ CREATE TABLE semantic_source_links_v0 (
     created_operation_id TEXT NOT NULL REFERENCES semantic_operations(operation_id),
     UNIQUE (claim_id, event_id, event_part, locator_kind, locator_value, evidence_sha256)
 );
-INSERT INTO semantic_source_links_v0 SELECT * FROM semantic_source_links;
+INSERT INTO semantic_source_links_v0 (
+    source_link_id, claim_id, event_id, source_session_id, source_scope_key, event_part,
+    locator_kind, locator_value, evidence_sha256, source_actor, source_type, authority,
+    observed_at, eligibility, created_operation_id
+)
+SELECT source_link_id, claim_id, event_id, source_session_id, source_scope_key, event_part,
+       locator_kind, locator_value, evidence_sha256, source_actor, source_type, authority,
+       observed_at, eligibility, created_operation_id
+FROM semantic_source_links;
 DROP TABLE semantic_source_links;
 DROP TABLE semantic_claims;
 ALTER TABLE semantic_claims_v0 RENAME TO semantic_claims;

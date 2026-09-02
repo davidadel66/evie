@@ -29,6 +29,14 @@ type SemanticMemory interface {
 	InspectClaims(context.Context, memory.ScopeContext, memory.ClaimQuery) (memory.ClaimsInspection, error)
 }
 
+// SemanticPromotionMemory is the explicit broader-scope mutation seam. It is
+// separate from model-facing SemanticMemory so ordinary memory writes cannot
+// select or widen their scope.
+type SemanticPromotionMemory interface {
+	PreparePromotion(context.Context, memory.ScopeContext, memory.PromotionRequest) (memory.PromotionProposal, error)
+	ApplyPromotion(context.Context, memory.TurnLease, memory.PromotionProposal) (memory.PromotionResult, error)
+}
+
 func (s *Session) beginLocalSemanticCommand(
 	ctx context.Context,
 ) (memory.TurnLease, func(*error), error) {
@@ -153,6 +161,29 @@ func (s *Session) PrepareRememberEntity(
 	command string,
 	request memory.RememberEntityRequest,
 ) (proposal memory.RememberEntityProposal, retErr error) {
+	request.UseSessionScope = false
+	return s.prepareRememberEntity(ctx, semantic, command, request)
+}
+
+// PrepareRememberEntityForCurrentSession is the explicit local-only target.
+// The caller chooses no scope identity: the harness binds this operation to the
+// current session and the storage boundary revalidates that exact identity.
+func (s *Session) PrepareRememberEntityForCurrentSession(
+	ctx context.Context,
+	semantic SemanticMemory,
+	command string,
+	request memory.RememberEntityRequest,
+) (proposal memory.RememberEntityProposal, retErr error) {
+	request.UseSessionScope = true
+	return s.prepareRememberEntity(ctx, semantic, command, request)
+}
+
+func (s *Session) prepareRememberEntity(
+	ctx context.Context,
+	semantic SemanticMemory,
+	command string,
+	request memory.RememberEntityRequest,
+) (proposal memory.RememberEntityProposal, retErr error) {
 	if semantic == nil {
 		return proposal, errors.New("agent: Semantic Memory is not configured")
 	}
@@ -206,6 +237,80 @@ func (s *Session) ResolveRememberEntity(
 	result, err = semantic.ApplyRememberEntity(ctx, lease, proposal)
 	if err != nil {
 		return result, fmt.Errorf("apply remember Entity proposal: %w", err)
+	}
+	return result, nil
+}
+
+// PreparePromotion records the owner's exact broader-scope command as
+// Episodic Memory before the Kernel prepares a source-linked Promotion.
+func (s *Session) PreparePromotion(
+	ctx context.Context,
+	semantic SemanticPromotionMemory,
+	command string,
+	request memory.PromotionRequest,
+) (proposal memory.PromotionProposal, retErr error) {
+	if semantic == nil {
+		return proposal, errors.New("agent: Semantic Promotion Memory is not configured")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return proposal, err
+	}
+	defer finish(&retErr)
+	event, err := s.history.Append(ctx, lease, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: command,
+	})
+	if err != nil {
+		return proposal, fmt.Errorf("persist Promotion request: %w", err)
+	}
+	request.SourceEventID = event.ID
+	proposal, err = semantic.PreparePromotion(ctx, s.scope, request)
+	if err != nil {
+		return proposal, fmt.Errorf("prepare Promotion proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+// ResolvePromotion durably records the owner's exact proposal and prepared
+// hashes before an approved broader-scope effect enters the atomic apply path.
+// Declined and expired decisions remain Episodic events and never mutate
+// Semantic Memory.
+func (s *Session) ResolvePromotion(
+	ctx context.Context,
+	semantic SemanticPromotionMemory,
+	proposal memory.PromotionProposal,
+	decision tools.Decision,
+) (result memory.PromotionResult, retErr error) {
+	if semantic == nil {
+		return result, errors.New("agent: Semantic Promotion Memory is not configured")
+	}
+	if proposal.SessionID != s.scope.SessionID {
+		return result, errors.New("agent: Promotion proposal belongs to another session")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer finish(&retErr)
+	approval, err := semanticApprovalEventInput(
+		proposal.Evidence.EventID,
+		memory.ExecutionID(proposal.OperationID),
+		decision,
+		proposal.ProposalSHA256,
+		proposal.PreparedSHA256,
+	)
+	if err != nil {
+		return result, err
+	}
+	if _, err := s.history.Append(ctx, lease, approval); err != nil {
+		return result, fmt.Errorf("persist Promotion approval: %w", err)
+	}
+	if decision != tools.Approved {
+		return result, nil
+	}
+	result, err = semantic.ApplyPromotion(ctx, lease, proposal)
+	if err != nil {
+		return result, fmt.Errorf("apply Promotion proposal: %w", err)
 	}
 	return result, nil
 }

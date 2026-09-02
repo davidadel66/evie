@@ -851,6 +851,14 @@ func loadAllSourceInspections(ctx context.Context, queryer semanticInspectionQue
 	return result, nil
 }
 
+func redactSourceInspections(sources []memory.SemanticSourceInspection, allowedScopes map[string]struct{}) {
+	for index := range sources {
+		if _, allowed := allowedScopes[sources[index].Source.ScopeKey]; !allowed {
+			sources[index].Source.Evidence = ""
+		}
+	}
+}
+
 func loadSemanticOperationInspection(ctx context.Context, queryer semanticInspectionQueryer, id memory.SemanticID) (memory.SemanticOperationInspection, error) {
 	var operation memory.SemanticOperationInspection
 	var transactionTime string
@@ -938,6 +946,7 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 	allowedScopes := map[string]struct{}{
 		"global":                               {},
 		scopeKeyForContext(scope):              {},
+		"session:" + string(scope.SessionID):   {},
 		targetScopeKey(scope, useSessionScope): {},
 	}
 	if _, allowed := allowedScopes[target.Key]; !allowed {
@@ -992,6 +1001,7 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 		if err != nil {
 			return result, err
 		}
+		redactSourceInspections(result.Sources, allowedScopes)
 		if result.Status == memory.SemanticStatusActive {
 			supported := false
 			for _, source := range result.Sources {
@@ -1014,6 +1024,9 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 			source.Eligibility = memory.EligibilityEligible
 		}
 		result.Source = &source
+		if _, allowed := allowedScopes[source.ScopeKey]; !allowed {
+			result.Source.Evidence = ""
+		}
 	}
 	operationIDs := make(map[memory.SemanticID]struct{})
 	for _, state := range result.Lifecycle {
@@ -1031,6 +1044,19 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 	for _, operationID := range ordered {
 		operation, err := loadSemanticOperationInspection(ctx, query, operationID)
 		if err != nil {
+			return result, err
+		}
+		var promotionSourceScope string
+		err = query.QueryRowContext(ctx, `
+			SELECT scopes.scope_key FROM semantic_promotions AS promotions
+			JOIN semantic_scopes AS scopes ON scopes.scope_id = promotions.source_scope_id
+			WHERE promotions.operation_id = ?
+		`, operationID).Scan(&promotionSourceScope)
+		if err == nil {
+			if _, allowed := allowedScopes[promotionSourceScope]; !allowed {
+				operation.PreparedJSON = ""
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return result, err
 		}
 		result.Operations = append(result.Operations, operation)

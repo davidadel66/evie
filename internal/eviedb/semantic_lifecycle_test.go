@@ -456,8 +456,9 @@ func TestContextEntityRetirementCarriesSessionDependentClaimsInOneRevisionVector
 	if err != nil || globalExact.Scope.Key != "global" {
 		t.Fatalf("Context-view global Entity inspection: result=%+v error=%v", globalExact, err)
 	}
-	if _, err := store.InspectSemanticObject(ctx, session.ScopeContext(), memory.SemanticObjectClaim, sessionResult.ClaimID); err == nil {
-		t.Fatal("default Context inspection unexpectedly read current-session Claim")
+	defaultSessionExact, err := store.InspectSemanticObject(ctx, session.ScopeContext(), memory.SemanticObjectClaim, sessionResult.ClaimID)
+	if err != nil || defaultSessionExact.Scope.Key != sessionKey {
+		t.Fatalf("allowed-scope inspection omitted current-session Claim: result=%+v error=%v", defaultSessionExact, err)
 	}
 	sessionExact, err := store.InspectSemanticObjectAtScope(ctx, session.ScopeContext(), memory.SemanticObjectClaim,
 		sessionResult.ClaimID, true)
@@ -900,23 +901,23 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
 	}
 	db, err = OpenDBAt(path)
 	if err != nil {
-		t.Fatalf("upgrade v2 operation table to v3: %v", err)
+		t.Fatalf("upgrade v2 operation table to current schema: %v", err)
 	}
 	defer db.Close()
 	after := loadAcceptedOperationBytes(t, ctx, db)
 	if len(after) != len(before) {
-		t.Fatalf("operation count after v3 upgrade = %d, want %d", len(after), len(before))
+		t.Fatalf("operation count after current-schema upgrade = %d, want %d", len(after), len(before))
 	}
 	for id, want := range before {
 		if got := after[id]; got != want {
-			t.Fatalf("accepted operation %s changed during v3 upgrade\ngot  %+v\nwant %+v", id, got, want)
+			t.Fatalf("accepted operation %s changed during current-schema upgrade\ngot  %+v\nwant %+v", id, got, want)
 		}
 	}
 	var definition string
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(definition, "schema_version IN (1, 2, 3)") {
+	if !strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
 		t.Fatalf("upgraded operation schema = %s", definition)
 	}
 	store = NewStore(db)
@@ -926,7 +927,7 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
 	}
 	legacyRetried, err := store.ApplyRememberLiteral(ctx, lease, legacyRetry)
 	if err != nil || legacyRetried.OperationID != legacyResult.OperationID {
-		t.Fatalf("v1 retry after v3 upgrade: result=%+v error=%v", legacyRetried, err)
+		t.Fatalf("v1 retry after current-schema upgrade: result=%+v error=%v", legacyRetried, err)
 	}
 	correctionRetry, err := store.PrepareCorrectClaim(ctx, session.ScopeContext(), correctionRequest)
 	if err != nil {
@@ -934,7 +935,7 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
 	}
 	correctedRetry, err := store.ApplyCorrectClaim(ctx, lease, correctionRetry)
 	if err != nil || correctedRetry.OperationID != corrected.OperationID {
-		t.Fatalf("v2 retry after v3 upgrade: result=%+v error=%v", correctedRetry, err)
+		t.Fatalf("v2 retry after current-schema upgrade: result=%+v error=%v", correctedRetry, err)
 	}
 	retireEvent := appendLifecycleEvent(t, ctx, store, session, lease, "retire corrected Claim")
 	retire, err := store.PrepareMemoryLifecycle(ctx, session.ScopeContext(), memory.MemoryLifecycleRequest{
@@ -949,6 +950,25 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
 	}
 	if _, err := store.ApplyMemoryLifecycle(ctx, lease, retire); err != nil {
 		t.Fatal(err)
+	}
+	beforeV4 := loadAcceptedOperationBytes(t, ctx, db)
+	downgradeSemanticOperationsToV3(t, ctx, db)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = OpenDBAt(path)
+	if err != nil {
+		t.Fatalf("upgrade v3 operation table to v4: %v", err)
+	}
+	defer db.Close()
+	afterV4 := loadAcceptedOperationBytes(t, ctx, db)
+	if len(afterV4) != len(beforeV4) {
+		t.Fatalf("operation count after v4 upgrade = %d, want %d", len(afterV4), len(beforeV4))
+	}
+	for id, want := range beforeV4 {
+		if got := afterV4[id]; got != want {
+			t.Fatalf("accepted operation %s changed during v4 upgrade\ngot  %+v\nwant %+v", id, got, want)
+		}
 	}
 }
 
@@ -1035,6 +1055,57 @@ CREATE TABLE semantic_operations_v2_only (
 INSERT INTO semantic_operations_v2_only SELECT * FROM semantic_operations;
 DROP TABLE semantic_operations;
 ALTER TABLE semantic_operations_v2_only RENAME TO semantic_operations;
+CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+`
+
+func downgradeSemanticOperationsToV3(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, semanticOperationsV3Downgrade); err != nil {
+		_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const semanticOperationsV3Downgrade = `
+DROP TRIGGER semantic_operations_append_only_update;
+DROP TRIGGER semantic_operations_append_only_delete;
+CREATE TABLE semantic_operations_v3_only (
+    operation_id TEXT PRIMARY KEY NOT NULL,
+    schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3)),
+    operation_kind TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    actor TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    target_scope_id TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    source_event_id TEXT NOT NULL REFERENCES events(id),
+    proposal_sha256 TEXT NOT NULL,
+    effect_sha256 TEXT NOT NULL,
+    proposal_json TEXT NOT NULL CHECK (json_valid(proposal_json) AND json_type(proposal_json) = 'object'),
+    prepared_proposal_json TEXT NOT NULL CHECK (json_valid(prepared_proposal_json) AND json_type(prepared_proposal_json) = 'object'),
+    result_json TEXT NOT NULL CHECK (json_valid(result_json) AND json_type(result_json) = 'object'),
+    transaction_time TEXT NOT NULL
+);
+INSERT INTO semantic_operations_v3_only SELECT * FROM semantic_operations;
+DROP TABLE semantic_operations;
+ALTER TABLE semantic_operations_v3_only RENAME TO semantic_operations;
 CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 `

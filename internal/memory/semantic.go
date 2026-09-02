@@ -254,11 +254,13 @@ type ClaimInspection struct {
 }
 
 type ClaimsInspection struct {
-	Scope         SemanticScope     `json:"scope"`
-	ScopeRevision int64             `json:"scope_revision"`
-	ValidAt       time.Time         `json:"valid_at"`
-	AsKnownAt     time.Time         `json:"as_known_at"`
-	Claims        []ClaimInspection `json:"claims"`
+	Scope          SemanticScope     `json:"scope"`
+	Scopes         []SemanticScope   `json:"scopes"`
+	ScopeRevisions []ScopeRevision   `json:"scope_revisions"`
+	ScopeRevision  int64             `json:"scope_revision"`
+	ValidAt        time.Time         `json:"valid_at"`
+	AsKnownAt      time.Time         `json:"as_known_at"`
+	Claims         []ClaimInspection `json:"claims"`
 }
 
 type RememberLiteralRequest struct {
@@ -424,6 +426,8 @@ type ClaimConflictWarning struct {
 
 type LiteralClaimsInspection struct {
 	Scope          SemanticScope            `json:"scope"`
+	Scopes         []SemanticScope          `json:"scopes"`
+	ScopeRevisions []ScopeRevision          `json:"scope_revisions"`
 	ScopeRevision  int64                    `json:"scope_revision"`
 	EffectiveAt    time.Time                `json:"effective_at"`
 	ValidAt        time.Time                `json:"valid_at"`
@@ -498,6 +502,49 @@ type RememberEntityResult struct {
 	ScopeRevision      int64           `json:"scope_revision"`
 }
 
+type PromotedEntity struct {
+	SourceEntityID    SemanticID     `json:"source_entity_id"`
+	DestinationEntity SemanticEntity `json:"destination_entity"`
+}
+
+type PromotionRequest struct {
+	IdempotencyKey      string
+	SourceEventID       EventID
+	SourceClaimID       SemanticID
+	DestinationScopeKey string
+}
+
+type PromotionProposal struct {
+	SchemaVersion          int                       `json:"schema_version"`
+	Kind                   string                    `json:"kind"`
+	OperationID            SemanticID                `json:"operation_id"`
+	IdempotencyKey         string                    `json:"idempotency_key"`
+	Actor                  SemanticActor             `json:"actor"`
+	SessionID              SessionID                 `json:"session_id"`
+	SourceScope            SemanticScope             `json:"source_scope"`
+	DestinationScope       SemanticScope             `json:"destination_scope"`
+	Scopes                 []SemanticScope           `json:"scopes"`
+	PriorRevisions         []ScopeRevision           `json:"prior_revisions"`
+	SourceClaim            SemanticClaim             `json:"source_claim"`
+	DestinationClaim       SemanticClaim             `json:"destination_claim"`
+	DestinationClaimCreate bool                      `json:"destination_claim_create"`
+	PromotedEntities       []PromotedEntity          `json:"promoted_entities"`
+	Sources                []SemanticSource          `json:"sources"`
+	Evidence               SemanticOperationEvidence `json:"evidence"`
+	Request                PromotionRequest          `json:"request"`
+	ProposalSHA256         string                    `json:"-"`
+	PreparedSHA256         string                    `json:"-"`
+}
+
+type PromotionResult struct {
+	OperationID         SemanticID      `json:"operation_id"`
+	SourceClaimID       SemanticID      `json:"source_claim_id"`
+	DestinationClaimID  SemanticID      `json:"destination_claim_id"`
+	TransactionTime     time.Time       `json:"transaction_time"`
+	ResultingRevisions  []ScopeRevision `json:"resulting_revisions"`
+	DestinationRevision int64           `json:"destination_revision"`
+}
+
 type AliasEntityMatch struct {
 	Entity SemanticEntity `json:"entity"`
 	Alias  SemanticAlias  `json:"alias"`
@@ -517,6 +564,8 @@ type EntityClaimInspection struct {
 
 type EntityClaimsInspection struct {
 	Scope          SemanticScope           `json:"scope"`
+	Scopes         []SemanticScope         `json:"scopes"`
+	ScopeRevisions []ScopeRevision         `json:"scope_revisions"`
 	ScopeRevision  int64                   `json:"scope_revision"`
 	EffectiveAt    time.Time               `json:"effective_at"`
 	ValidAt        time.Time               `json:"valid_at"`
