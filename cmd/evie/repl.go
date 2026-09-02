@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/tools"
+	"github.com/google/uuid"
 )
 
 type replSessionStore interface {
@@ -621,11 +623,25 @@ func runREPL(session *agent.Session, scanner *bufio.Scanner) {
 	runREPLContext(context.Background(), session, scanner)
 }
 
+func runREPLWithMemory(session *agent.Session, scanner *bufio.Scanner, semantic agent.SemanticMemory) {
+	runREPLContextIOWithMemory(context.Background(), session, scanner, os.Stdout, semantic)
+}
+
 func runREPLContext(ctx context.Context, session *agent.Session, scanner *bufio.Scanner) {
 	runREPLContextIO(ctx, session, scanner, os.Stdout)
 }
 
 func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufio.Scanner, out io.Writer) {
+	runREPLContextIOWithMemory(ctx, session, scanner, out, nil)
+}
+
+func runREPLContextIOWithMemory(
+	ctx context.Context,
+	session *agent.Session,
+	scanner *bufio.Scanner,
+	out io.Writer,
+	semantic agent.SemanticMemory,
+) {
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
@@ -657,6 +673,57 @@ func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufi
 			return
 		}
 		input := scanner.Text()
+		if input == "/memory" {
+			inspection, err := session.InspectSemanticMemory(ctx, semantic)
+			if err != nil {
+				_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+				continue
+			}
+			writeMemoryInspection(out, inspection)
+			continue
+		}
+		if input == "/remember" {
+			_, _ = fmt.Fprintln(out, "Usage: /remember <predicate> <text>")
+			continue
+		}
+		if strings.HasPrefix(input, "/remember ") || strings.HasPrefix(input, "/remember\t") {
+			arguments := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, "/remember")))
+			if len(arguments) < 2 {
+				_, _ = fmt.Fprintln(out, "Usage: /remember <predicate> <text>")
+				continue
+			}
+			predicate := arguments[0]
+			valueStart := strings.Index(strings.TrimSpace(strings.TrimPrefix(input, "/remember")), predicate) + len(predicate)
+			remainder := strings.TrimSpace(strings.TrimSpace(strings.TrimPrefix(input, "/remember"))[valueStart:])
+			id, err := uuid.NewRandom()
+			if err != nil {
+				_, _ = fmt.Fprintf(out, "remember failed: generate idempotency key: %v\n", err)
+				continue
+			}
+			proposal, err := session.PrepareRememberLiteral(ctx, semantic, input, memory.RememberLiteralRequest{
+				IdempotencyKey: "idem:v1:" + id.String(), Predicate: predicate,
+				PredicateLabel: strings.ReplaceAll(predicate, "_", " "),
+				Literal:        memory.TypedLiteral{Kind: memory.LiteralText, Value: remainder},
+			})
+			if err != nil {
+				_, _ = fmt.Fprintf(out, "remember failed: %v\n", err)
+				continue
+			}
+			writeRememberProposal(out, proposal)
+			decision := approve(ctx, "memory.remember", rememberProposalApprovalJSON(proposal), nil)
+			result, err := session.ResolveRememberLiteral(ctx, semantic, proposal, decision)
+			if err != nil {
+				_, _ = fmt.Fprintf(out, "remember failed: %v\n", err)
+				continue
+			}
+			if decision != tools.Approved {
+				_, _ = fmt.Fprintln(out, "Memory proposal declined; Semantic Memory unchanged.")
+				continue
+			}
+			_, _ = fmt.Fprintf(out, "Remembered Claim %s in %s at revision %d (operation %s).\n",
+				result.ClaimID, proposal.Scope.Key, result.ScopeRevision, result.OperationID)
+			continue
+		}
 		if input == "/context" {
 			diagnostics, err := session.InspectContext(ctx)
 			if err != nil {
@@ -696,6 +763,55 @@ func runREPLContextIO(ctx context.Context, session *agent.Session, scanner *bufi
 			_, _ = fmt.Fprintf(out, "request failed: %v\n", err)
 		}
 	}
+}
+
+func rememberProposalApprovalJSON(proposal memory.RememberLiteralProposal) string {
+	encoded, err := json.Marshal(proposal)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
+}
+
+func writeRememberProposal(out io.Writer, proposal memory.RememberLiteralProposal) {
+	_, _ = fmt.Fprintln(out, "Memory proposal")
+	_, _ = fmt.Fprintf(out, "scope: %s (expected revision %d)\n", proposal.Scope.Key, proposal.ExpectedRevision)
+	_, _ = fmt.Fprintf(out, "proposition: %s %s %q (%s, %s)\n",
+		proposal.Subject.CanonicalName, proposal.Predicate.Token, proposal.Literal.Value, proposal.Literal.Kind, proposal.Polarity)
+	_, _ = fmt.Fprintf(out, "valid time: from=%s to=%s\n", memoryTimeLabel(proposal.ValidTime.From), memoryTimeLabel(proposal.ValidTime.To))
+	_, _ = fmt.Fprintf(out, "evidence: event=%s part=%s locator=%s hash=%s observed_at=%s\n",
+		proposal.Source.EventID, proposal.Source.EventPart, proposal.Source.LocatorKind,
+		proposal.Source.EvidenceSHA256, proposal.Source.ObservedAt)
+	_, _ = fmt.Fprintf(out, "generated IDs: operation=%s scope=%s predicate=%s owner=%s evie=%s claim=%s source_link=%s\n",
+		proposal.OperationID, proposal.Scope.ID, proposal.Predicate.ID, proposal.Subject.ID,
+		proposal.Evie.ID, proposal.ClaimID, proposal.SourceLinkID)
+}
+
+func writeMemoryInspection(out io.Writer, inspection memory.LiteralClaimsInspection) {
+	_, _ = fmt.Fprintf(out, "Semantic Memory — scope=%s revision=%d effective_at=%s\n",
+		inspection.Scope.Key, inspection.ScopeRevision, inspection.EffectiveAt.UTC().Format(time.RFC3339Nano))
+	if len(inspection.Claims) == 0 {
+		_, _ = fmt.Fprintln(out, "No accepted Claims.")
+		return
+	}
+	for _, claim := range inspection.Claims {
+		_, _ = fmt.Fprintf(out, "Claim %s: %s %s %q (%s, %s)\n",
+			claim.ID, claim.Subject.CanonicalName, claim.Predicate.Token, claim.Literal.Value,
+			claim.Literal.Kind, claim.Polarity)
+		_, _ = fmt.Fprintf(out, "  scope=%s operation=%s transaction_time=%s valid_from=%s valid_to=%s\n",
+			claim.Scope.Key, claim.OperationID, claim.TransactionTime.UTC().Format(time.RFC3339Nano),
+			memoryTimeLabel(claim.ValidTime.From), memoryTimeLabel(claim.ValidTime.To))
+		_, _ = fmt.Fprintf(out, "  source=%s event=%s session=%s authority=%s observed_at=%s hash=%s\n",
+			claim.Source.ID, claim.Source.EventID, claim.Source.SessionID, claim.Source.Authority,
+			claim.Source.ObservedAt, claim.Source.EvidenceSHA256)
+	}
+}
+
+func memoryTimeLabel(value *time.Time) string {
+	if value == nil {
+		return "unknown"
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics) {

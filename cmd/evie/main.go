@@ -148,7 +148,7 @@ func main() {
 			)
 			return boundStore.selection(selected), err
 		})
-		runREPL(session, scanner)
+		runREPLWithMemory(session, scanner, kernelStore)
 	case "serve":
 		presetReport, err := pluginManager.ValidatePresetContext(context.Background(), "")
 		if err != nil {
