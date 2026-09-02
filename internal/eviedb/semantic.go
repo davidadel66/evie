@@ -1018,6 +1018,19 @@ func loadSemanticScope(ctx context.Context, query interface {
 func validateSessionScope(ctx context.Context, query interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, scope memory.ScopeContext) error {
+	if err := validateSessionScopeIdentity(ctx, query, scope); err != nil {
+		return err
+	}
+	keys := []string{"global"}
+	if contextKey := scopeKeyForContext(scope); contextKey != "global" {
+		keys = append(keys, contextKey)
+	}
+	return requireSemanticScopeKeysAvailable(ctx, query, keys)
+}
+
+func validateSessionScopeIdentity(ctx context.Context, query interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, scope memory.ScopeContext) error {
 	var workspaceID, projectID sql.NullString
 	if err := query.QueryRowContext(ctx, `SELECT workspace_id, project_id FROM sessions WHERE id = ? AND status = ?`,
 		scope.SessionID, memory.SessionActive).Scan(&workspaceID, &projectID); err != nil {
@@ -1026,13 +1039,6 @@ func validateSessionScope(ctx context.Context, query interface {
 	if workspaceID.String != string(scope.WorkspaceID) || workspaceID.Valid != (scope.WorkspaceID != "") ||
 		projectID.String != string(scope.ProjectID) || projectID.Valid != (scope.ProjectID != "") {
 		return errors.New("semantic request scope does not match its session")
-	}
-	keys := []string{"global"}
-	if contextKey := scopeKeyForContext(scope); contextKey != "global" {
-		keys = append(keys, contextKey)
-	}
-	if err := requireSemanticScopeKeysAvailable(ctx, query, keys); err != nil {
-		return err
 	}
 	return nil
 }

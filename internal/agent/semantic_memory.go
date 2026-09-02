@@ -159,6 +159,13 @@ func (s *Session) ListSemanticObjects(ctx context.Context, semantic SemanticGrap
 	return semantic.ListSemanticObjects(ctx, s.scope, query)
 }
 
+func (s *Session) ListSemanticScopes(ctx context.Context, semantic SemanticGraphMemory, query memory.SemanticScopeListQuery) (memory.SemanticScopePage, error) {
+	if semantic == nil {
+		return memory.SemanticScopePage{}, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	return semantic.ListSemanticScopes(ctx, s.scope, query)
+}
+
 func (s *Session) InspectSemanticObjectAt(ctx context.Context, semantic SemanticGraphMemory, kind memory.SemanticObjectKind, id memory.SemanticID, temporal memory.ClaimQuery) (memory.SemanticObjectInspection, error) {
 	if semantic == nil {
 		return memory.SemanticObjectInspection{}, errors.New("agent: Semantic Graph Memory is not configured")

@@ -90,10 +90,12 @@ type TypedLiteral struct {
 }
 
 type SemanticScope struct {
-	ID         SemanticID `json:"scope_id"`
-	Key        string     `json:"scope_key"`
-	RegistryID string     `json:"registry_id,omitempty"`
-	Revision   int64      `json:"revision"`
+	ID               SemanticID `json:"scope_id"`
+	Key              string     `json:"scope_key"`
+	RegistryID       string     `json:"registry_id,omitempty"`
+	Revision         int64      `json:"revision"`
+	Quarantined      bool       `json:"quarantined,omitempty"`
+	QuarantineReason string     `json:"quarantine_reason,omitempty"`
 }
 
 // SemanticProjectionMismatch identifies one canonical projection table whose
@@ -283,6 +285,7 @@ type CorrectClaimResult struct {
 type ClaimQuery struct {
 	ValidAt         *time.Time    `json:"valid_at,omitempty"`
 	AsKnownAt       *time.Time    `json:"as_known_at,omitempty"`
+	ScopeKey        string        `json:"scope_key,omitempty"`
 	PredicateToken  string        `json:"predicate_token,omitempty"`
 	Polarity        ClaimPolarity `json:"polarity,omitempty"`
 	SubjectEntityID SemanticID    `json:"subject_entity_id,omitempty"`
@@ -293,6 +296,7 @@ type ClaimQuery struct {
 type ExactReadMetadata struct {
 	ValidAt        time.Time       `json:"valid_at"`
 	AsKnownAt      time.Time       `json:"as_known_at"`
+	SelectedScope  string          `json:"selected_scope,omitempty"`
 	AllowedScopes  []string        `json:"allowed_scopes"`
 	ScopeRevisions []ScopeRevision `json:"scope_revisions"`
 }
@@ -372,7 +376,10 @@ type SemanticObjectSummary struct {
 	ObjectID   SemanticID           `json:"object_id"`
 	ScopeKey   string               `json:"scope_key"`
 	Status     SemanticObjectStatus `json:"status"`
+	Entity     *SemanticEntity      `json:"entity,omitempty"`
+	Alias      *SemanticAlias       `json:"alias,omitempty"`
 	Claim      *SemanticClaim       `json:"claim,omitempty"`
+	Source     *SemanticSource      `json:"source,omitempty"`
 	GraphLink  *SemanticGraphLink   `json:"graph_link,omitempty"`
 }
 
@@ -574,6 +581,7 @@ type SemanticObjectInspection struct {
 	Lifecycle  []SemanticState               `json:"lifecycle"`
 	Sources    []SemanticSourceInspection    `json:"sources"`
 	Operations []SemanticOperationInspection `json:"operations"`
+	Conflicts  []ClaimConflictWarning        `json:"conflicts"`
 	Metadata   ExactReadMetadata             `json:"metadata"`
 }
 

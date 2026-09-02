@@ -19,6 +19,24 @@ func literalConflictWarnings(claims []memory.LiteralClaimInspection) []memory.Cl
 	return classifyClaimConflicts(candidates)
 }
 
+func exactClaimConflictWarnings(claims []memory.ClaimInspection) []memory.ClaimConflictWarning {
+	candidates := make([]claimConflictCandidate, 0, len(claims))
+	for _, claim := range claims {
+		objectKey := ""
+		if claim.Object.EntityID != "" {
+			objectKey = "entity\x00" + string(claim.Object.EntityID)
+		} else if claim.Object.Literal != nil {
+			objectKey = "literal\x00" + string(claim.Object.Literal.Kind) + "\x00" + claim.Object.Literal.Value
+		}
+		candidates = append(candidates, claimConflictCandidate{
+			ID: claim.ID, SubjectID: claim.SubjectEntityID, PredicateID: claim.Predicate.ID,
+			PredicateToken: claim.Predicate.Token, ObjectKey: objectKey, Polarity: claim.Polarity,
+			ValidTime: claim.EffectiveValidTime, Cardinality: claim.Predicate.Cardinality,
+		})
+	}
+	return classifyClaimConflicts(candidates)
+}
+
 func sortConflictWarnings(warnings []memory.ClaimConflictWarning) {
 	sort.Slice(warnings, func(i, j int) bool {
 		if warnings[i].PredicateToken != warnings[j].PredicateToken {

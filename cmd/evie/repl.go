@@ -673,13 +673,7 @@ func runREPLContextIOWithMemory(
 			return
 		}
 		input := scanner.Text()
-		if input == "/memory" {
-			inspection, err := session.InspectSemanticMemory(ctx, semantic)
-			if err != nil {
-				_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
-				continue
-			}
-			writeMemoryInspection(out, inspection)
+		if handleMemoryCommand(ctx, session, semantic, input, out) {
 			continue
 		}
 		if input == "/remember" {
@@ -765,6 +759,205 @@ func runREPLContextIOWithMemory(
 	}
 }
 
+type memoryCommandOptions struct {
+	scope     string
+	history   bool
+	validAt   *time.Time
+	asKnownAt *time.Time
+	pageSize  int
+	cursor    string
+	kind      memory.SemanticObjectKind
+}
+
+// semanticMaintenanceMemory stays in the local REPL boundary so projection
+// verification and owner rebuild are never exposed as model capabilities.
+type semanticMaintenanceMemory interface {
+	VerifySemanticProjection(context.Context) (memory.SemanticProjectionVerification, error)
+	OwnerRebuildSemanticProjection(context.Context, string) (memory.SemanticProjectionRebuild, error)
+}
+
+func handleMemoryCommand(ctx context.Context, session *agent.Session, semantic agent.SemanticMemory, input string, out io.Writer) bool {
+	fields := strings.Fields(input)
+	if len(fields) == 0 || fields[0] != "/memory" {
+		return false
+	}
+	graph, ok := semantic.(agent.SemanticGraphMemory)
+	if !ok {
+		_, _ = fmt.Fprintln(out, "memory inspection failed: Semantic Memory inspection is unavailable")
+		return true
+	}
+	if len(fields) >= 2 && fields[1] == "verify" {
+		if len(fields) != 2 {
+			_, _ = fmt.Fprintln(out, "Usage: /memory verify")
+			return true
+		}
+		maintenance, ok := semantic.(semanticMaintenanceMemory)
+		if !ok {
+			_, _ = fmt.Fprintln(out, "memory verification failed: owner maintenance is unavailable")
+			return true
+		}
+		_, _ = fmt.Fprintln(out, "Memory verification progress: replaying accepted operations into a shadow projection…")
+		report, err := maintenance.VerifySemanticProjection(ctx)
+		if err != nil {
+			_, _ = fmt.Fprintf(out, "memory verification failed: %v\n", err)
+			return true
+		}
+		writeSemanticVerification(out, report)
+		return true
+	}
+	if len(fields) >= 2 && fields[1] == "rebuild" {
+		if len(fields) != 2 {
+			_, _ = fmt.Fprintln(out, "Usage: /memory rebuild")
+			return true
+		}
+		maintenance, ok := semantic.(semanticMaintenanceMemory)
+		if !ok {
+			_, _ = fmt.Fprintln(out, "memory rebuild failed: owner maintenance is unavailable")
+			return true
+		}
+		holder, err := uuid.NewRandom()
+		if err != nil {
+			_, _ = fmt.Fprintf(out, "memory rebuild failed: create maintenance holder: %v\n", err)
+			return true
+		}
+		_, _ = fmt.Fprintln(out, "Memory rebuild progress: acquiring owner maintenance fence and validating shadow projection…")
+		rebuild, err := maintenance.OwnerRebuildSemanticProjection(ctx, "repl-memory-rebuild-"+holder.String())
+		if err != nil {
+			_, _ = fmt.Fprintf(out, "memory rebuild failed: %v\n", err)
+			return true
+		}
+		_, _ = fmt.Fprintf(out, "rebuild outcome: recovered\nfencing token: %d\n", rebuild.FencingToken)
+		writeSemanticVerification(out, rebuild.SemanticProjectionVerification)
+		return true
+	}
+
+	inspect := len(fields) >= 2 && fields[1] == "inspect"
+	arguments := fields[1:]
+	var objectKind memory.SemanticObjectKind
+	var objectID memory.SemanticID
+	if inspect {
+		if len(arguments) < 3 {
+			_, _ = fmt.Fprintln(out, "Usage: /memory inspect <entity|alias|claim|source_link|graph_link> <id> [--scope context|global|session] [--history] [--valid-at RFC3339] [--as-known-at RFC3339]")
+			return true
+		}
+		objectKind, objectID = memory.SemanticObjectKind(arguments[1]), memory.SemanticID(arguments[2])
+		arguments = arguments[3:]
+	}
+	options, err := parseMemoryCommandOptions(arguments)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+		return true
+	}
+	scopes, err := session.ListSemanticScopes(ctx, graph, memory.SemanticScopeListQuery{PageSize: 100})
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+		return true
+	}
+	selected, err := resolveMemoryScope(options.scope, scopes.Scopes)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+		return true
+	}
+	temporal := memory.ClaimQuery{ScopeKey: selected, ValidAt: options.validAt, AsKnownAt: options.asKnownAt}
+	mode := "current"
+	if options.history || options.validAt != nil || options.asKnownAt != nil {
+		mode = "history"
+	}
+	if inspect {
+		detail, err := session.InspectSemanticObjectAt(ctx, graph, objectKind, objectID, temporal)
+		if err != nil {
+			_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+			return true
+		}
+		writeSemanticObjectDetail(out, selected, mode, detail)
+		return true
+	}
+	query := memory.SemanticObjectListQuery{ClaimQuery: temporal, PageSize: options.pageSize, Cursor: options.cursor}
+	if options.kind != "" {
+		query.Kinds = []memory.SemanticObjectKind{options.kind}
+	}
+	page, err := session.ListSemanticObjects(ctx, graph, query)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "memory inspection failed: %v\n", err)
+		return true
+	}
+	writeSemanticObjectPage(out, selected, mode, page)
+	return true
+}
+
+func parseMemoryCommandOptions(arguments []string) (memoryCommandOptions, error) {
+	options := memoryCommandOptions{scope: "context", pageSize: 50}
+	if len(arguments) != 0 && !strings.HasPrefix(arguments[0], "--") {
+		options.scope, arguments = arguments[0], arguments[1:]
+	}
+	for index := 0; index < len(arguments); index++ {
+		argument := arguments[index]
+		if argument == "--history" {
+			options.history = true
+			continue
+		}
+		if index+1 >= len(arguments) {
+			return options, fmt.Errorf("%s requires a value", argument)
+		}
+		value := arguments[index+1]
+		index++
+		switch argument {
+		case "--scope":
+			options.scope = value
+		case "--valid-at", "--as-known-at":
+			parsed, err := time.Parse(time.RFC3339Nano, value)
+			if err != nil {
+				return options, fmt.Errorf("%s must be RFC3339: %w", argument, err)
+			}
+			if argument == "--valid-at" {
+				options.validAt = &parsed
+			} else {
+				options.asKnownAt = &parsed
+			}
+		case "--page-size":
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return options, errors.New("--page-size must be an integer")
+			}
+			options.pageSize = parsed
+		case "--cursor":
+			options.cursor = value
+		case "--kind":
+			options.kind = memory.SemanticObjectKind(value)
+		default:
+			return options, fmt.Errorf("unknown memory option %q", argument)
+		}
+	}
+	return options, nil
+}
+
+func resolveMemoryScope(selector string, scopes []memory.SemanticScope) (string, error) {
+	if selector == "" {
+		selector = "context"
+	}
+	if selector == "context" {
+		for _, scope := range scopes {
+			if scope.Key != "global" && !strings.HasPrefix(scope.Key, "session:") {
+				return scope.Key, nil
+			}
+		}
+		selector = "global"
+	}
+	if selector == "session" {
+		for _, scope := range scopes {
+			if strings.HasPrefix(scope.Key, "session:") {
+				return scope.Key, nil
+			}
+		}
+	}
+	for _, scope := range scopes {
+		if scope.Key == selector {
+			return scope.Key, nil
+		}
+	}
+	return "", fmt.Errorf("scope %q is not available to this session", selector)
+}
+
 func rememberProposalApprovalJSON(proposal memory.RememberLiteralProposal) string {
 	encoded, err := json.Marshal(proposal)
 	if err != nil {
@@ -787,23 +980,96 @@ func writeRememberProposal(out io.Writer, proposal memory.RememberLiteralProposa
 		proposal.Evie.ID, proposal.ClaimID, proposal.SourceLinkID)
 }
 
-func writeMemoryInspection(out io.Writer, inspection memory.LiteralClaimsInspection) {
-	_, _ = fmt.Fprintf(out, "Semantic Memory — scope=%s revision=%d effective_at=%s\n",
-		inspection.Scope.Key, inspection.ScopeRevision, inspection.EffectiveAt.UTC().Format(time.RFC3339Nano))
-	if len(inspection.Claims) == 0 {
+func writeSemanticObjectPage(out io.Writer, selected, mode string, page memory.SemanticObjectPage) {
+	revision := int64(0)
+	for _, item := range page.Metadata.ScopeRevisions {
+		if item.ScopeKey == selected {
+			revision = item.Revision
+		}
+	}
+	_, _ = fmt.Fprintf(out, "Semantic Memory — scope=%s revision=%d mode=%s valid_at=%s as_known_at=%s\n",
+		selected, revision, mode, page.Metadata.ValidAt.UTC().Format(time.RFC3339Nano), page.Metadata.AsKnownAt.UTC().Format(time.RFC3339Nano))
+	for _, revision := range page.Metadata.ScopeRevisions {
+		_, _ = fmt.Fprintf(out, "scope revision: %s=%d\n", revision.ScopeKey, revision.Revision)
+	}
+	if len(page.Objects) == 0 {
 		_, _ = fmt.Fprintln(out, "No accepted Claims.")
+	}
+	for _, object := range page.Objects {
+		switch {
+		case object.Entity != nil:
+			_, _ = fmt.Fprintf(out, "Entity %s: %s (%s) scope=%s status=%s anchor=%s\n", object.ObjectID,
+				object.Entity.CanonicalName, object.Entity.EntityType, object.ScopeKey, object.Status, object.Entity.AnchorKind)
+		case object.Alias != nil:
+			_, _ = fmt.Fprintf(out, "Alias %s: %q normalized=%q entity=%s scope=%s status=%s operation=%s\n", object.ObjectID,
+				object.Alias.Value, object.Alias.NormalizedValue, object.Alias.EntityID, object.ScopeKey, object.Status, object.Alias.OperationID)
+		case object.Claim != nil:
+			_, _ = fmt.Fprintf(out, "Claim %s: subject=%s Predicate %s@%d (%s, cardinality=%s) object=%s polarity=%s scope=%s status=%s\n",
+				object.ObjectID, object.Claim.SubjectEntityID, object.Claim.Predicate.Token, object.Claim.Predicate.Version,
+				object.Claim.Predicate.Label, object.Claim.Predicate.Cardinality, claimObjectLabel(object.Claim.Object),
+				object.Claim.Polarity, object.ScopeKey, object.Status)
+			_, _ = fmt.Fprintf(out, "  valid_from=%s valid_to=%s transaction_time=%s operation=%s\n",
+				memoryTimeLabel(object.Claim.ValidTime.From), memoryTimeLabel(object.Claim.ValidTime.To),
+				object.Claim.TransactionTime.UTC().Format(time.RFC3339Nano), object.Claim.CreatedOperationID)
+		case object.Source != nil:
+			_, _ = fmt.Fprintf(out, "Source Link %s: event=%s session=%s source_scope=%s authority=%s eligibility=%s observed_at=%s operation=%s\n",
+				object.ObjectID, object.Source.EventID, object.Source.SessionID, object.Source.ScopeKey, object.Source.Authority,
+				object.Source.Eligibility, object.Source.ObservedAt, object.Source.OperationID)
+			if object.Source.Evidence == "" {
+				_, _ = fmt.Fprintln(out, "  evidence: [source text unavailable in this scope]")
+			} else {
+				_, _ = fmt.Fprintf(out, "  evidence: %q hash=%s locator=%s:%s\n", object.Source.Evidence,
+					object.Source.EvidenceSHA256, object.Source.LocatorKind, object.Source.LocatorValue)
+			}
+		case object.GraphLink != nil:
+			_, _ = fmt.Fprintf(out, "Graph Link %s: %s %s:%s -> %s:%s scope=%s status=%s operation=%s transaction_time=%s\n",
+				object.ObjectID, object.GraphLink.Relation, object.GraphLink.Source.Kind, object.GraphLink.Source.ID,
+				object.GraphLink.Target.Kind, object.GraphLink.Target.ID, object.ScopeKey, object.Status,
+				object.GraphLink.CreatedOperationID, object.GraphLink.TransactionTime.UTC().Format(time.RFC3339Nano))
+		default:
+			_, _ = fmt.Fprintf(out, "%s %s scope=%s status=%s\n", object.ObjectKind, object.ObjectID, object.ScopeKey, object.Status)
+		}
+	}
+	if page.NextCursor != "" {
+		_, _ = fmt.Fprintf(out, "next cursor: %s\n", page.NextCursor)
+	}
+}
+
+func claimObjectLabel(object memory.ClaimObject) string {
+	if object.EntityID != "" {
+		return "entity:" + string(object.EntityID)
+	}
+	if object.Literal != nil {
+		return string(object.Literal.Kind) + ":" + strconv.Quote(object.Literal.Value)
+	}
+	return "unknown"
+}
+
+func writeSemanticObjectDetail(out io.Writer, selected, mode string, detail memory.SemanticObjectInspection) {
+	_, _ = fmt.Fprintf(out, "Memory detail — scope=%s kind=%s id=%s status=%s mode=%s valid_at=%s as_known_at=%s\n",
+		selected, detail.ObjectKind, detail.ObjectID, detail.Status, mode,
+		detail.Metadata.ValidAt.UTC().Format(time.RFC3339Nano), detail.Metadata.AsKnownAt.UTC().Format(time.RFC3339Nano))
+	encoded, err := json.MarshalIndent(detail, "", "  ")
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "memory detail encoding failed: %v\n", err)
 		return
 	}
-	for _, claim := range inspection.Claims {
-		_, _ = fmt.Fprintf(out, "Claim %s: %s %s %q (%s, %s)\n",
-			claim.ID, claim.Subject.CanonicalName, claim.Predicate.Token, claim.Literal.Value,
-			claim.Literal.Kind, claim.Polarity)
-		_, _ = fmt.Fprintf(out, "  scope=%s operation=%s transaction_time=%s valid_from=%s valid_to=%s\n",
-			claim.Scope.Key, claim.OperationID, claim.TransactionTime.UTC().Format(time.RFC3339Nano),
-			memoryTimeLabel(claim.ValidTime.From), memoryTimeLabel(claim.ValidTime.To))
-		_, _ = fmt.Fprintf(out, "  source=%s event=%s session=%s authority=%s observed_at=%s hash=%s\n",
-			claim.Source.ID, claim.Source.EventID, claim.Source.SessionID, claim.Source.Authority,
-			claim.Source.ObservedAt, claim.Source.EvidenceSHA256)
+	_, _ = fmt.Fprintln(out, string(encoded))
+}
+
+func writeSemanticVerification(out io.Writer, report memory.SemanticProjectionVerification) {
+	outcome := "valid"
+	if !report.Valid {
+		outcome = "mismatch"
+	}
+	_, _ = fmt.Fprintf(out, "verification outcome: %s\n", outcome)
+	for _, scope := range report.Scopes {
+		_, _ = fmt.Fprintf(out, "scope=%s live_revision=%d shadow_revision=%d quarantined=%t live_frontier=%s shadow_frontier=%s\n",
+			scope.ScopeKey, scope.LiveRevision, scope.ShadowRevision, scope.Quarantined, scope.LiveFrontier, scope.ShadowFrontier)
+		for _, mismatch := range scope.Mismatches {
+			_, _ = fmt.Fprintf(out, "  mismatch table=%s live_rows=%d shadow_rows=%d live_hash=%s shadow_hash=%s\n",
+				mismatch.Table, mismatch.LiveRows, mismatch.ShadowRows, mismatch.LiveHash, mismatch.ShadowHash)
+		}
 	}
 }
 

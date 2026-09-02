@@ -454,8 +454,8 @@ func exactQueryHash(kind string, query any) (string, error) {
 	return fmt.Sprintf("sha256:%x", digest), nil
 }
 
-func (s *Store) exactReadMetadata(ctx context.Context, queryer semanticInspectionQueryer, scope memory.ScopeContext, query memory.ClaimQuery, cursor *semanticCursorPayload) (memory.ExactReadMetadata, error) {
-	if err := validateSessionScope(ctx, queryer, scope); err != nil {
+func (s *Store) exactReadMetadata(ctx context.Context, queryer semanticInspectionQueryer, scope memory.ScopeContext, query memory.ClaimQuery, cursor *semanticCursorPayload, requireAvailable bool) (memory.ExactReadMetadata, error) {
+	if err := validateSessionScopeIdentity(ctx, queryer, scope); err != nil {
 		return memory.ExactReadMetadata{}, err
 	}
 	validAt, asKnownAt, err := s.semanticQueryTimes(ctx, queryer, query)
@@ -463,10 +463,21 @@ func (s *Store) exactReadMetadata(ctx context.Context, queryer semanticInspectio
 		return memory.ExactReadMetadata{}, err
 	}
 	keys := allowedSemanticReadScopeKeys(scope)
-	if err := requireSemanticScopeKeysAvailable(ctx, queryer, keys); err != nil {
-		return memory.ExactReadMetadata{}, err
+	if query.ScopeKey != "" {
+		if !containsString(keys, query.ScopeKey) {
+			return memory.ExactReadMetadata{}, errors.New("semantic exact read selected a scope outside the session boundary")
+		}
+		keys = []string{query.ScopeKey}
 	}
-	metadata := memory.ExactReadMetadata{ValidAt: validAt, AsKnownAt: asKnownAt, AllowedScopes: keys}
+	if requireAvailable {
+		if err := requireSemanticScopeKeysAvailable(ctx, queryer, keys); err != nil {
+			return memory.ExactReadMetadata{}, err
+		}
+	}
+	metadata := memory.ExactReadMetadata{ValidAt: validAt, AsKnownAt: asKnownAt, SelectedScope: query.ScopeKey, AllowedScopes: keys}
+	if len(keys) == 1 {
+		metadata.SelectedScope = keys[0]
+	}
 	if cursor != nil {
 		parsedValid, err := parseSemanticTime(cursor.ValidAt)
 		if err != nil {
@@ -571,6 +582,13 @@ func requestedRelations(relations []memory.GraphRelation) (map[memory.GraphRelat
 func latestStateAt(ctx context.Context, queryer semanticInspectionQueryer, kind memory.SemanticObjectKind, id memory.SemanticID, at string) (memory.SemanticStateValue, error) {
 	var state memory.SemanticStateValue
 	err := queryer.QueryRowContext(ctx, `SELECT state FROM semantic_state_events WHERE object_kind = ? AND object_id = ? AND transaction_time <= ? ORDER BY transaction_time DESC, scope_revision DESC, operation_id DESC, state DESC LIMIT 1`, kind, id, at).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) && kind == memory.SemanticObjectEntity {
+		err = queryer.QueryRowContext(ctx, `
+			SELECT entities.lifecycle FROM semantic_entities AS entities
+			JOIN semantic_operations AS operations ON operations.operation_id = entities.created_operation_id
+			WHERE entities.entity_id = ? AND operations.transaction_time <= ?
+		`, id, at).Scan(&state)
+	}
 	return state, err
 }
 
@@ -630,6 +648,35 @@ func (s *Store) collectExactObjects(ctx context.Context, queryer semanticInspect
 			}
 			status := semanticStatus(state)
 			row := memory.SemanticObjectSummary{ObjectKind: kind, ObjectID: id, ScopeKey: scopeKey, Status: status}
+			switch kind {
+			case memory.SemanticObjectEntity:
+				entity, err := loadSemanticEntityForInspection(ctx, queryer, id)
+				if err != nil {
+					return err
+				}
+				row.Entity = &entity
+			case memory.SemanticObjectAlias:
+				var alias memory.SemanticAlias
+				if err := queryer.QueryRowContext(ctx, `
+					SELECT aliases.alias_id, aliases.entity_id, scopes.scope_key, aliases.value,
+					       aliases.normalized_value, aliases.created_operation_id, aliases.source_event_id
+					FROM semantic_aliases AS aliases JOIN semantic_scopes AS scopes ON scopes.scope_id = aliases.scope_id
+					WHERE aliases.alias_id = ?
+				`, id).Scan(&alias.ID, &alias.EntityID, &alias.ScopeKey, &alias.Value, &alias.NormalizedValue,
+					&alias.OperationID, &alias.SourceEventID); err != nil {
+					return err
+				}
+				row.Alias = &alias
+			case memory.SemanticObjectSourceLink:
+				source, err := loadSourceForInspection(ctx, queryer, id)
+				if err != nil {
+					return err
+				}
+				if !containsString(allowedSemanticReadScopeKeys(scope), source.ScopeKey) {
+					source.Evidence = ""
+				}
+				row.Source = &source
+			}
 			visible[semanticNodeKey{Kind: kind, ID: id}] = row
 			if _, wanted := kinds[kind]; wanted {
 				objects = append(objects, row)
@@ -638,13 +685,13 @@ func (s *Store) collectExactObjects(ctx context.Context, queryer semanticInspect
 		return rows.Err()
 	}
 	if err := loadSimple(memory.SemanticObjectEntity, "semantic_entities", "entity_id", memory.SemanticStateActive); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list Semantic Memory Entities: %w", err)
 	}
 	if err := loadSimple(memory.SemanticObjectAlias, "semantic_aliases", "alias_id", memory.SemanticStateActive); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list Semantic Memory Aliases: %w", err)
 	}
 	if err := loadSimple(memory.SemanticObjectSourceLink, "semantic_source_links", "source_link_id", memory.SemanticStateEligible); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list Semantic Memory Source Links: %w", err)
 	}
 	if _, wanted := kinds[memory.SemanticObjectGraphLink]; wanted {
 		rows, err := queryer.QueryContext(ctx, `SELECT graph_link_id FROM semantic_graph_links ORDER BY graph_link_id`)
@@ -727,7 +774,7 @@ func (s *Store) ListSemanticObjects(ctx context.Context, scope memory.ScopeConte
 		}
 		cursor = &decoded
 	}
-	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, cursor)
+	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, cursor, true)
 	if err != nil {
 		return memory.SemanticObjectPage{}, err
 	}
@@ -788,16 +835,23 @@ func (s *Store) ListSemanticScopes(ctx context.Context, scope memory.ScopeContex
 		}
 		cursor = &decoded
 	}
-	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, cursor)
+	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, cursor, false)
 	if err != nil {
 		return memory.SemanticScopePage{}, err
 	}
 	var scopes []memory.SemanticScope
 	for _, key := range metadata.AllowedScopes {
 		var item memory.SemanticScope
-		var registry sql.NullString
-		err := tx.QueryRowContext(ctx, `SELECT scope_id, scope_key, registry_id, revision FROM semantic_scopes WHERE scope_key = ?`, key).Scan(&item.ID, &item.Key, &registry, &item.Revision)
+		var registry, quarantineReason sql.NullString
+		err := tx.QueryRowContext(ctx, `
+			SELECT scopes.scope_id, scopes.scope_key, scopes.registry_id, scopes.revision, quarantine.reason
+			FROM semantic_scopes AS scopes
+			LEFT JOIN semantic_projection_quarantine AS quarantine ON quarantine.scope_id = scopes.scope_id
+			WHERE scopes.scope_key = ?
+		`, key).Scan(&item.ID, &item.Key, &registry, &item.Revision, &quarantineReason)
 		if errors.Is(err, sql.ErrNoRows) {
+			item.Key = key
+			scopes = append(scopes, item)
 			continue
 		}
 		if err != nil {
@@ -805,6 +859,10 @@ func (s *Store) ListSemanticScopes(ctx context.Context, scope memory.ScopeContex
 		}
 		if registry.Valid {
 			item.RegistryID = registry.String
+		}
+		if quarantineReason.Valid {
+			item.Quarantined = true
+			item.QuarantineReason = quarantineReason.String
 		}
 		scopes = append(scopes, item)
 	}
@@ -857,7 +915,7 @@ func (s *Store) TraverseSemanticNeighborhood(ctx context.Context, scope memory.S
 		return memory.SemanticNeighborhood{}, err
 	}
 	defer tx.Rollback()
-	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, nil)
+	metadata, err := s.exactReadMetadata(ctx, tx, scope, query.ClaimQuery, nil, true)
 	if err != nil {
 		return memory.SemanticNeighborhood{}, err
 	}

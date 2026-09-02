@@ -189,7 +189,7 @@ func main() {
 				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
 			), nil
 		})
-		if err := web.ServeContextManaged(pluginManager, kernelStore, controller); err != nil {
+		if err := web.ServeContextManaged(pluginManager, kernelStore, controller, kernelStore); err != nil {
 			log.Fatalf("serve: %v", err)
 		}
 	default:

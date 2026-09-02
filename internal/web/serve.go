@@ -38,8 +38,9 @@ func ServeContextManaged(
 	manager *plugins.Manager,
 	receipts ReceiptInspector,
 	contextSessions ContextSessionController,
+	semanticMemory agent.SemanticGraphMemory,
 ) error {
-	return serveServer(NewContextServer(nil, manager, receipts, contextSessions))
+	return serveServer(NewContextMemoryServer(nil, manager, receipts, contextSessions, semanticMemory))
 }
 
 func serveServer(server *Server) error {
@@ -80,6 +81,7 @@ type Server struct {
 	manager          *plugins.Manager
 	receipts         ReceiptInspector
 	contextSessions  ContextSessionController
+	semanticMemory   agent.SemanticGraphMemory
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -120,6 +122,20 @@ func NewContextServer(
 	return server
 }
 
+// NewContextMemoryServer composes the read-only Semantic Memory surface with
+// the Context-managed web server without changing the legacy test seam.
+func NewContextMemoryServer(
+	session *agent.Session,
+	manager *plugins.Manager,
+	receipts ReceiptInspector,
+	contextSessions ContextSessionController,
+	semanticMemory agent.SemanticGraphMemory,
+) *Server {
+	server := NewContextServer(session, manager, receipts, contextSessions)
+	server.semanticMemory = semanticMemory
+	return server
+}
+
 // Handler is the route table. Every /api route sits behind the
 // cross-origin guard — bash is ungated, so a drive-by form POST from a
 // malicious page must die here, not in the handler.
@@ -140,6 +156,11 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
 		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
 		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
+	}
+	if s.semanticMemory != nil {
+		mux.Handle("/api/memory/scopes", s.managementRoute(s.handleMemoryScopes))
+		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
+		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
 	}
 	mux.Handle("/", s.staticHandler())
 	return mux

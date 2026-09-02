@@ -1041,7 +1041,7 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 // primitive. Convenience wrappers keep current-time and Context-scope callers
 // compact without hiding either temporal axis from callers that need history.
 func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope memory.ScopeContext, kind memory.SemanticObjectKind, id memory.SemanticID, useSessionScope bool, temporal memory.ClaimQuery) (memory.SemanticObjectInspection, error) {
-	if err := validateSessionScope(ctx, s.db, scope); err != nil {
+	if err := validateSessionScopeIdentity(ctx, s.db, scope); err != nil {
 		return memory.SemanticObjectInspection{}, err
 	}
 	if err := validateLifecycleActionTarget(memory.MemoryLifecycleRequest{Action: actionForInspection(kind), ObjectKind: kind, ObjectID: id}); err != nil {
@@ -1069,8 +1069,11 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 	if _, allowed := allowedScopes[target.Key]; !allowed {
 		return memory.SemanticObjectInspection{}, errors.New("semantic inspection target is outside the session-bound scope")
 	}
+	if temporal.ScopeKey != "" && temporal.ScopeKey != target.Key {
+		return memory.SemanticObjectInspection{}, errors.New("semantic inspection target is outside the explicitly selected scope")
+	}
 	result := memory.SemanticObjectInspection{ObjectKind: kind, ObjectID: id, Scope: target}
-	result.Metadata, err = s.exactReadMetadata(ctx, query, scope, temporal, nil)
+	result.Metadata, err = s.exactReadMetadata(ctx, query, scope, temporal, nil, true)
 	if err != nil {
 		return result, err
 	}
@@ -1119,6 +1122,17 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 			}
 			if !supported {
 				result.Status = memory.SemanticStatusUnsupported
+			}
+		}
+		diagnosticQuery := temporal
+		diagnosticQuery.ScopeKey = target.Key
+		diagnostics, err := s.inspectClaimsSnapshot(ctx, query, scope, false, diagnosticQuery, true)
+		if err != nil {
+			return result, err
+		}
+		for _, warning := range exactClaimConflictWarnings(diagnostics.Claims) {
+			if containsSemanticID(warning.ClaimIDs, id) {
+				result.Conflicts = append(result.Conflicts, warning)
 			}
 		}
 	case memory.SemanticObjectSourceLink:
@@ -1207,6 +1221,15 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 		return result, err
 	}
 	return result, nil
+}
+
+func containsSemanticID(values []memory.SemanticID, wanted memory.SemanticID) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 type inspectionLifecycleQueryer struct{ semanticInspectionQueryer }

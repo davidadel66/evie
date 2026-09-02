@@ -769,7 +769,7 @@ func (s *Store) inspectClaimsSnapshot(
 	query memory.ClaimQuery,
 	includeOutsideValidTime bool,
 ) (memory.ClaimsInspection, error) {
-	if err := validateSessionScope(ctx, queryer, scope); err != nil {
+	if err := validateSessionScopeIdentity(ctx, queryer, scope); err != nil {
 		return memory.ClaimsInspection{}, err
 	}
 	captured := s.now().UTC()
@@ -799,11 +799,23 @@ func (s *Store) inspectClaimsSnapshot(
 	if useSessionScope {
 		keys = []string{targetScopeKey(scope, true)}
 	}
+	if query.ScopeKey != "" {
+		if !containsString(keys, query.ScopeKey) {
+			return result, errors.New("semantic exact read selected a scope outside the session boundary")
+		}
+		keys = []string{query.ScopeKey}
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, queryer, keys); err != nil {
+		return result, err
+	}
 	allowed := make(map[string]struct{}, len(allowedSemanticReadScopeKeys(scope)))
 	for _, key := range allowedSemanticReadScopeKeys(scope) {
 		allowed[key] = struct{}{}
 	}
 	targetKey := targetScopeKey(scope, useSessionScope)
+	if query.ScopeKey != "" {
+		targetKey = query.ScopeKey
+	}
 	for _, key := range keys {
 		part, found, err := s.inspectClaimsInScope(ctx, queryer, key, validAt, asKnownAt, includeOutsideValidTime, allowed)
 		if err != nil {
@@ -850,6 +862,15 @@ func (s *Store) inspectClaimsSnapshot(
 	}
 	result.AllowedScopes = append([]string(nil), keys...)
 	return result, nil
+}
+
+func containsString(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func allowedSemanticReadScopeKeys(scope memory.ScopeContext) []string {
@@ -995,7 +1016,32 @@ func loadSemanticLifecycleAt(ctx context.Context, queryer semanticInspectionQuer
 		}
 		states = append(states, state)
 	}
-	return states, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(states) == 0 && objectKind == string(memory.SemanticObjectEntity) {
+		var state memory.SemanticState
+		var transactionTime string
+		err := queryer.QueryRowContext(ctx, `
+			SELECT entities.lifecycle, entities.created_operation_id, operation_scopes.resulting_revision,
+			       operations.transaction_time
+			FROM semantic_entities AS entities
+			JOIN semantic_operations AS operations ON operations.operation_id = entities.created_operation_id
+			JOIN semantic_operation_scopes AS operation_scopes
+			  ON operation_scopes.operation_id = operations.operation_id AND operation_scopes.scope_id = entities.scope_id
+			WHERE entities.entity_id = ? AND operations.transaction_time <= ?
+		`, objectID, formatSemanticTime(asKnownAt)).Scan(&state.State, &state.OperationID, &state.ScopeRevision, &transactionTime)
+		if err == nil {
+			state.TransactionTime, err = parseSemanticTime(transactionTime)
+			if err == nil {
+				states = append(states, state)
+			}
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return states, nil
 }
 
 func loadVisibleCorrection(ctx context.Context, queryer semanticInspectionQueryer, oldClaimID memory.SemanticID, asKnownAt time.Time) (visibleCorrection, bool, error) {

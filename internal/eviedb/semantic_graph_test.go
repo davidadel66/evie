@@ -217,6 +217,69 @@ func TestExactSemanticPaginationFiltersTraversalTemporalLifecycleAndRestart(t *t
 	if len(page.Objects) != 1 || page.NextCursor == "" || page.Metadata.ValidAt.IsZero() || len(page.Metadata.ScopeRevisions) != 2 {
 		t.Fatalf("first exact page = %+v", page)
 	}
+	globalOnly, err := store.ListSemanticObjects(ctx, session.ScopeContext(), memory.SemanticObjectListQuery{
+		ClaimQuery: memory.ClaimQuery{ScopeKey: "global", PredicateToken: "scope_marker"},
+		Kinds:      []memory.SemanticObjectKind{memory.SemanticObjectClaim}, PageSize: 10,
+	})
+	if err != nil || globalOnly.Metadata.SelectedScope != "global" || len(globalOnly.Metadata.AllowedScopes) != 1 ||
+		len(globalOnly.Objects) != 3 {
+		t.Fatalf("global-only exact page: result=%+v error=%v", globalOnly, err)
+	}
+	sessionKey := "session:" + string(session.ID)
+	sessionOnly, err := store.ListSemanticObjects(ctx, session.ScopeContext(), memory.SemanticObjectListQuery{
+		ClaimQuery: memory.ClaimQuery{ScopeKey: sessionKey, PredicateToken: "scope_marker"},
+		Kinds:      []memory.SemanticObjectKind{memory.SemanticObjectClaim}, PageSize: 10,
+	})
+	if err != nil || sessionOnly.Metadata.SelectedScope != sessionKey || len(sessionOnly.Objects) != 1 {
+		t.Fatalf("session-only exact page: result=%+v error=%v", sessionOnly, err)
+	}
+	if _, err := store.InspectSemanticObjectAt(ctx, session.ScopeContext(), memory.SemanticObjectClaim, first.Claim.ID, memory.ClaimQuery{ScopeKey: sessionKey}); err == nil {
+		t.Fatal("selected session scope inspected a global object")
+	}
+	var sessionScopeID string
+	if err := db.QueryRowContext(ctx, `SELECT scope_id FROM semantic_scopes WHERE scope_key = ?`, sessionKey).Scan(&sessionScopeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO semantic_projection_quarantine (scope_id, reason, verified_at) VALUES (?, 'test sibling quarantine', ?)`, sessionScopeID, formatSemanticTime(clock)); err != nil {
+		t.Fatal(err)
+	}
+	globalDetail, err := store.InspectSemanticObjectAt(ctx, session.ScopeContext(), memory.SemanticObjectClaim, first.Claim.ID, memory.ClaimQuery{ScopeKey: "global"})
+	if err != nil || globalDetail.ObjectID != first.Claim.ID || globalDetail.Metadata.SelectedScope != "global" {
+		t.Fatalf("global exact inspection with quarantined sibling: result=%+v error=%v", globalDetail, err)
+	}
+	if _, err := store.ListSemanticObjects(ctx, session.ScopeContext(), memory.SemanticObjectListQuery{ClaimQuery: memory.ClaimQuery{ScopeKey: sessionKey}}); !errors.Is(err, ErrSemanticScopeQuarantined) {
+		t.Fatalf("selected quarantined session scope error = %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM semantic_projection_quarantine WHERE scope_id = ?`, sessionScopeID); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := store.RegisterWorkspace(ctx, "Selected exact-read quarantine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceSession, err := store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, standardReceipt(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = rememberScopeClaim(t, ctx, store, workspaceSession, false, 215)
+	workspaceKey := "workspace:" + string(workspace.ID)
+	var workspaceScopeID string
+	if err := db.QueryRowContext(ctx, `SELECT scope_id FROM semantic_scopes WHERE scope_key = ?`, workspaceKey).Scan(&workspaceScopeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO semantic_projection_quarantine (scope_id, reason, verified_at) VALUES (?, 'test context quarantine', ?)`, workspaceScopeID, formatSemanticTime(clock)); err != nil {
+		t.Fatal(err)
+	}
+	globalDetail, err = store.InspectSemanticObjectAt(ctx, workspaceSession.ScopeContext(), memory.SemanticObjectClaim, first.Claim.ID, memory.ClaimQuery{ScopeKey: "global"})
+	if err != nil || globalDetail.ObjectID != first.Claim.ID || globalDetail.Metadata.SelectedScope != "global" {
+		t.Fatalf("global exact inspection with quarantined Context sibling: result=%+v error=%v", globalDetail, err)
+	}
+	entities, err := store.ListSemanticObjects(ctx, session.ScopeContext(), memory.SemanticObjectListQuery{
+		ClaimQuery: memory.ClaimQuery{ScopeKey: "global"}, Kinds: []memory.SemanticObjectKind{memory.SemanticObjectEntity}, PageSize: 10,
+	})
+	if err != nil || len(entities.Objects) == 0 || entities.Objects[0].Entity == nil || entities.Objects[0].Entity.CanonicalName == "" {
+		t.Fatalf("owner-facing Entity summaries: result=%+v error=%v", entities, err)
+	}
 	scopePage, err := store.ListSemanticScopes(ctx, session.ScopeContext(), memory.SemanticScopeListQuery{PageSize: 1})
 	if err != nil || len(scopePage.Scopes) != 1 || scopePage.NextCursor == "" || len(scopePage.Metadata.AllowedScopes) != 2 {
 		t.Fatalf("paginated scope listing: result=%+v error=%v", scopePage, err)

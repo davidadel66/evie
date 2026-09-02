@@ -8,6 +8,7 @@ import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { useSession } from "./store/useSession";
 import { Management } from "./management/Management";
+import { Memory } from "./memory/Memory";
 import { ContextChooser } from "./context/ContextChooser";
 import { useContextSessions } from "./store/useContextSessions";
 import { Banner } from "./ui/Banner";
@@ -18,7 +19,7 @@ import {
   type ChatTextSize,
 } from "./ui/textSize";
 
-export type Tab = "chat" | "board" | "reports" | "system";
+export type Tab = "chat" | "memory" | "board" | "reports" | "system";
 const textSizeStorageKey = "evie.chatTextSize";
 
 export default function App() {
@@ -128,6 +129,7 @@ export default function App() {
         </div>
       )}
 
+      {tab === "memory" && <Memory />}
       {tab === "board" && (
         <Soon
           title="Whiteboard"
@@ -163,6 +165,7 @@ export function TopBar({
       </span>
       <div className="flex h-full items-stretch gap-[2px]">
         <TabButton label="Chat" active={tab === "chat"} onClick={() => onTab("chat")} />
+        <TabButton label="Memory" active={tab === "memory"} onClick={() => onTab("memory")} />
         <TabButton label="Whiteboard" active={tab === "board"} onClick={() => onTab("board")} />
         <TabButton label="Reports" active={tab === "reports"} onClick={() => onTab("reports")} />
         <TabButton label="System" active={tab === "system"} onClick={() => onTab("system")} />
