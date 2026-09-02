@@ -34,6 +34,15 @@ func ServeManaged(session *agent.Session, manager *plugins.Manager, receipts Rec
 	return serveServer(NewManagedServer(session, manager, receipts))
 }
 
+func ServeContextManaged(
+	manager *plugins.Manager,
+	receipts ReceiptInspector,
+	contextSessions ContextSessionController,
+	semanticMemory agent.SemanticGraphMemory,
+) error {
+	return serveServer(NewContextMemoryServer(nil, manager, receipts, contextSessions, semanticMemory))
+}
+
 func serveServer(server *Server) error {
 	addr, err := listenAddr()
 	if err != nil {
@@ -60,12 +69,19 @@ func listenAddr() (string, error) {
 	return addr, nil
 }
 
-// Server is the web frontend's whole state: one session (one
-// conversation, v1), plus the approvals waiting for a browser answer.
+// Server is the web frontend's selected conversation plus the approvals
+// waiting for a browser answer. Context-managed servers may replace the
+// selected conversation only between turns.
 type Server struct {
-	session  *agent.Session
-	manager  *plugins.Manager
-	receipts ReceiptInspector
+	sessionMu        sync.RWMutex
+	session          *agent.Session
+	activeSession    memory.Session
+	activeTurns      int
+	selectingSession bool
+	manager          *plugins.Manager
+	receipts         ReceiptInspector
+	contextSessions  ContextSessionController
+	semanticMemory   agent.SemanticGraphMemory
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -95,6 +111,31 @@ func NewManagedServer(session *agent.Session, manager *plugins.Manager, receipts
 	return server
 }
 
+func NewContextServer(
+	session *agent.Session,
+	manager *plugins.Manager,
+	receipts ReceiptInspector,
+	contextSessions ContextSessionController,
+) *Server {
+	server := NewManagedServer(session, manager, receipts)
+	server.contextSessions = contextSessions
+	return server
+}
+
+// NewContextMemoryServer composes the read-only Semantic Memory surface with
+// the Context-managed web server without changing the legacy test seam.
+func NewContextMemoryServer(
+	session *agent.Session,
+	manager *plugins.Manager,
+	receipts ReceiptInspector,
+	contextSessions ContextSessionController,
+	semanticMemory agent.SemanticGraphMemory,
+) *Server {
+	server := NewContextServer(session, manager, receipts, contextSessions)
+	server.semanticMemory = semanticMemory
+	return server
+}
+
 // Handler is the route table. Every /api route sits behind the
 // cross-origin guard — bash is ungated, so a drive-by form POST from a
 // malicious page must die here, not in the handler.
@@ -110,6 +151,16 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.receipts != nil {
 		mux.Handle("/api/sessions/inspect", s.managementRoute(s.handleSessionInspect))
+	}
+	if s.contextSessions != nil {
+		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
+		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
+		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
+	}
+	if s.semanticMemory != nil {
+		mux.Handle("/api/memory/scopes", s.managementRoute(s.handleMemoryScopes))
+		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
+		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
 	}
 	mux.Handle("/", s.staticHandler())
 	return mux
@@ -172,10 +223,26 @@ func isLoopbackHost(host string) bool {
 // been written yet when TryLock fails, so the response is still free for
 // a plain 409.
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
-	if s.session == nil {
+	s.sessionMu.Lock()
+	if s.selectingSession {
+		s.sessionMu.Unlock()
+		jsonError(w, http.StatusConflict, "a Context Scope selection is in progress")
+		return
+	}
+	session := s.session
+	if session != nil {
+		s.activeTurns++
+	}
+	s.sessionMu.Unlock()
+	if session == nil {
 		jsonError(w, http.StatusServiceUnavailable, "chat is unavailable because the active Agent Preset is invalid; use plugin diagnostics to repair startup")
 		return
 	}
+	defer func() {
+		s.sessionMu.Lock()
+		s.activeTurns--
+		s.sessionMu.Unlock()
+	}()
 	var req struct {
 		Message string `json:"message"`
 	}
@@ -190,7 +257,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendErr := s.session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
+	sendErr := session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
 
 	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")

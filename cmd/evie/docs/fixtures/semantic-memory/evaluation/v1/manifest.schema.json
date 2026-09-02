@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidadel66/evie/blob/master/cmd/evie/docs/fixtures/semantic-memory/evaluation/v1/manifest.schema.json",
+  "title": "Evie Semantic Memory evaluation manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "fixture_version", "dataset_sha256", "imports", "panels", "required_coverage", "cases"],
+  "properties": {
+    "manifest_version": {"const": 1},
+    "fixture_version": {"const": "semantic-stage-3-v1"},
+    "dataset_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "imports": {"type": "array", "minItems": 7, "items": {"type": "string", "minLength": 1}},
+    "panels": {"const": ["semantic_conformance", "learned_extraction", "retrieval_provenance", "answer_abstention"]},
+    "required_coverage": {"type": "array", "minItems": 25, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$"},
+    "revisionMap": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "integer", "minimum": 0}},
+    "digestMap":{"type":"object","minProperties":1,"additionalProperties":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}},
+    "idArray": {"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/id"}},
+    "snapshot": {
+      "type":"object","additionalProperties":false,
+      "required":["scope_keys","scope_revisions","scope_hashes","scope_frontiers","predicate_ids","entity_ids","alias_ids","claim_ids","source_link_ids","graph_link_ids","active_claim_ids","superseded_claim_ids"],
+      "properties": {
+        "scope_keys":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"string","minLength":1}},
+        "scope_revisions":{"$ref":"#/$defs/revisionMap"},
+        "scope_hashes":{"$ref":"#/$defs/digestMap"},"scope_frontiers":{"$ref":"#/$defs/digestMap"},
+        "predicate_ids":{"$ref":"#/$defs/idArray"},"entity_ids":{"$ref":"#/$defs/idArray"},"alias_ids":{"$ref":"#/$defs/idArray"},"claim_ids":{"$ref":"#/$defs/idArray"},"source_link_ids":{"$ref":"#/$defs/idArray"},"graph_link_ids":{"$ref":"#/$defs/idArray"},
+        "active_claim_ids":{"$ref":"#/$defs/idArray"},"superseded_claim_ids":{"$ref":"#/$defs/idArray"},
+        "workspace_claim_id":{"$ref":"#/$defs/id"},"global_claim_id":{"$ref":"#/$defs/id"},"promotion_operation_id":{"$ref":"#/$defs/id"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "session_id", "scope_key", "recorded_at", "evidence_sha256", "content"],
+      "properties": {
+        "event_id": {"$ref": "#/$defs/id"}, "session_id": {"$ref": "#/$defs/id"}, "scope_key": {"type": "string", "minLength": 1},
+        "recorded_at": {"type": "string", "format": "date-time"}, "evidence_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "content": {"type": "string", "minLength": 1}
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf":[
+        {"if":{"properties":{"kind":{"const":"remember_literal_claim"}}},"then":{"properties":{"request":{"$ref":"#/$defs/literalRequest"}}}},
+        {"if":{"properties":{"kind":{"const":"remember_entity_claim"}}},"then":{"properties":{"request":{"$ref":"#/$defs/entityRequest"}}}},
+        {"if":{"properties":{"kind":{"const":"correct_claim"}}},"then":{"properties":{"request":{"$ref":"#/$defs/correctionRequest"}}}},
+        {"if":{"properties":{"kind":{"enum":["retract_source","restore_source","retire_memory","restore_memory"]}}},"then":{"properties":{"request":{"$ref":"#/$defs/lifecycleRequest"}}}},
+        {"if":{"properties":{"kind":{"const":"promote_claim"}}},"then":{"properties":{"request":{"$ref":"#/$defs/promotionRequest"}}}},
+        {"if":{"properties":{"kind":{"const":"create_graph_link"}}},"then":{"properties":{"request":{"$ref":"#/$defs/graphRequest"}}}}
+      ],
+      "required": ["operation_id", "schema_version", "kind", "name", "request", "idempotency_key", "clock", "source_event_ids", "generated_ids", "expected_outcome", "expected_revisions"],
+      "properties": {
+        "operation_id": {"$ref": "#/$defs/id"}, "schema_version": {"type": "integer", "minimum": 1, "maximum": 5}, "kind": {"enum":["remember_literal_claim","remember_entity_claim","correct_claim","retract_source","restore_source","retire_memory","restore_memory","promote_claim","create_graph_link"]}, "name": {"type":"string","minLength":1}, "request":{"$ref":"#/$defs/operationRequest"},
+        "idempotency_key": {"type": "string", "minLength": 1}, "clock": {"type": "string", "format": "date-time"},
+        "source_event_ids": {"type": "array", "minItems": 1, "maxItems":1,"items": {"$ref": "#/$defs/id"}},
+        "generated_ids": {"type": "object", "additionalProperties": {"$ref": "#/$defs/id"}},
+        "expected_outcome": {"enum": ["accepted", "rejected"]}, "expected_revisions": {"$ref": "#/$defs/revisionMap"}
+      }
+    },
+    "literal":{"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"enum":["text","integer","decimal","boolean","date","datetime"]},"value":{"type":"string"}}},
+    "entitySelector":{"oneOf":[{"type":"object","additionalProperties":false,"required":["entity_id"],"properties":{"entity_id":{"$ref":"#/$defs/id"}}},{"type":"object","additionalProperties":false,"required":["create","canonical_name","entity_type","alias"],"properties":{"create":{"const":true},"canonical_name":{"type":"string","minLength":1},"entity_type":{"type":"string","minLength":1},"alias":{"type":"string","minLength":1}}}]},
+    "operationRequest":{"type":"object","required":["session_id"],"properties":{"session_id":{"$ref":"#/$defs/id"}}},
+    "literalRequest":{"type":"object","additionalProperties":false,"required":["session_id","predicate","predicate_label","predicate_cardinality","literal"],"properties":{"session_id":{"$ref":"#/$defs/id"},"predicate":{"type":"string","minLength":1},"predicate_label":{"type":"string","minLength":1},"predicate_cardinality":{"enum":["one","many"]},"literal":{"$ref":"#/$defs/literal"},"valid_from":{"type":"string","format":"date-time"},"valid_to":{"type":"string","format":"date-time"},"force_prior_revision":{"type":"integer","minimum":0}}},
+    "entityRequest":{"type":"object","additionalProperties":false,"required":["session_id","predicate","predicate_label","predicate_cardinality","subject","object"],"properties":{"session_id":{"$ref":"#/$defs/id"},"predicate":{"type":"string","minLength":1},"predicate_label":{"type":"string","minLength":1},"predicate_cardinality":{"enum":["one","many"]},"subject":{"$ref":"#/$defs/entitySelector"},"object":{"$ref":"#/$defs/entitySelector"},"use_session_scope":{"type":"boolean"}}},
+    "correctionRequest":{"type":"object","additionalProperties":false,"required":["session_id","old_claim_id","mode","replacement_literal"],"allOf":[{"if":{"properties":{"mode":{"const":"changed"}}},"then":{"required":["effective_time"]}},{"if":{"properties":{"mode":{"const":"error"}}},"then":{"not":{"required":["effective_time"]}}}],"properties":{"session_id":{"$ref":"#/$defs/id"},"old_claim_id":{"$ref":"#/$defs/id"},"mode":{"enum":["error","changed"]},"replacement_literal":{"$ref":"#/$defs/literal"},"effective_time":{"type":"string","format":"date-time"}}},
+    "lifecycleRequest":{"type":"object","additionalProperties":false,"required":["session_id","action","object_kind","object_id"],"properties":{"session_id":{"$ref":"#/$defs/id"},"action":{"enum":["retire","restore","retract_source","restore_source"]},"object_kind":{"enum":["entity","alias","claim","source_link","graph_link"]},"object_id":{"$ref":"#/$defs/id"}}},
+    "promotionRequest":{"type":"object","additionalProperties":false,"required":["session_id","source_claim_id","destination_scope_key"],"properties":{"session_id":{"$ref":"#/$defs/id"},"source_claim_id":{"$ref":"#/$defs/id"},"destination_scope_key":{"type":"string","minLength":1}}},
+    "graphRequest":{"type":"object","additionalProperties":false,"required":["session_id","relation","source_kind","source_id","target_kind","target_id"],"properties":{"session_id":{"$ref":"#/$defs/id"},"relation":{"enum":["derivation","generalization","contradiction"]},"source_kind":{"enum":["entity","claim"]},"source_id":{"$ref":"#/$defs/id"},"target_kind":{"enum":["entity","claim"]},"target_id":{"$ref":"#/$defs/id"}}},
+    "query": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "expected_ids"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "kind": {"type": "string", "minLength": 1}, "session_id":{"$ref":"#/$defs/id"}, "scope_key":{"type":"string","minLength":1}, "alias":{"type":"string","minLength":1}, "valid_at": {"type": "string", "format": "date-time"}, "as_known_at": {"type": "string", "format": "date-time"}, "expected_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}}}
+    },
+    "path": {
+      "type": "object", "additionalProperties": false, "required": ["id", "depth", "expected_object_ids"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "depth": {"enum": [1, 2]}, "expected_object_ids": {"type": "array", "minItems":1, "uniqueItems":true, "items": {"$ref": "#/$defs/id"}}, "expected_graph_link_ids": {"type": "array", "uniqueItems":true, "items": {"$ref": "#/$defs/id"}}}
+    },
+    "rejection": {
+      "type": "object", "additionalProperties": false, "required": ["id", "kind", "request", "error_code", "unchanged_revisions"],
+      "allOf":[{"if":{"properties":{"kind":{"const":"inspect_claims"}}},"then":{"properties":{"request":{"$ref":"#/$defs/inspectRejection"}}}},{"if":{"properties":{"kind":{"const":"remember_literal_claim"}}},"then":{"properties":{"request":{"$ref":"#/$defs/staleRejection"}}}},{"if":{"properties":{"kind":{"const":"replay_operation"}}},"then":{"properties":{"request":{"$ref":"#/$defs/replayRejection"}}}}],
+      "properties": {"id": {"type": "string", "minLength": 1}, "kind":{"enum":["inspect_claims","remember_literal_claim","replay_operation"]}, "request":{"type":"object","minProperties":1}, "error_code": {"type": "string", "minLength": 1}, "unchanged_revisions": {"$ref": "#/$defs/revisionMap"}}
+    },
+    "inspectRejection":{"type":"object","additionalProperties":false,"required":["session_id","scope_key"],"properties":{"session_id":{"$ref":"#/$defs/id"},"scope_key":{"type":"string","minLength":1}}},
+    "staleRejection":{"type":"object","additionalProperties":false,"required":["operation_name"],"properties":{"operation_name":{"type":"string","minLength":1}}},
+    "replayRejection":{"type":"object","additionalProperties":false,"required":["schema_version"],"properties":{"schema_version":{"type":"integer","minimum":1}}},
+    "scope":{"type":"object","additionalProperties":false,"required":["scope_id","scope_key","revision"],"properties":{"scope_id":{"$ref":"#/$defs/id"},"scope_key":{"type":"string","minLength":1},"revision":{"type":"integer","minimum":0}}},
+    "workspace":{"type":"object","additionalProperties":false,"required":["workspace_id","display_name","current_revision_id"],"properties":{"workspace_id":{"$ref":"#/$defs/id"},"display_name":{"type":"string","minLength":1},"current_revision_id":{"$ref":"#/$defs/id"}}},
+    "project":{"type":"object","additionalProperties":false,"required":["project_id","display_name","root"],"properties":{"project_id":{"$ref":"#/$defs/id"},"display_name":{"type":"string","minLength":1},"root":{"type":"string","minLength":1}}},
+    "session":{"type":"object","additionalProperties":false,"required":["session_id","title","status","context_scope_key"],"properties":{"session_id":{"$ref":"#/$defs/id"},"title":{"type":"string"},"status":{"enum":["active","closed"]},"context_scope_key":{"type":"string","minLength":1},"workspace_id":{"$ref":"#/$defs/id"},"workspace_revision_id":{"$ref":"#/$defs/id"},"project_id":{"$ref":"#/$defs/id"}}},
+    "registry":{"type":"object","additionalProperties":false,"required":["scopes","workspaces","projects","sessions"],"properties":{"scopes":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/scope"}},"workspaces":{"type":"array","items":{"$ref":"#/$defs/workspace"}},"projects":{"type":"array","items":{"$ref":"#/$defs/project"}},"sessions":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/session"}}}},
+    "database":{"type":"object","additionalProperties":false,"required":["reset","reuse_between_cases"],"properties":{"reset":{"const":"new_empty_database"},"reuse_between_cases":{"const":false}}},
+    "case": {
+      "type": "object", "additionalProperties": false, "required": ["id", "description", "failure_taxonomy", "database", "registry", "coverage", "sources", "operations", "expected"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"}, "description": {"type": "string", "minLength": 1}, "failure_taxonomy":{"enum":["operation_outcome","scope_revision","replay_divergence","idempotence","scope_leakage","stale_lifecycle_state","temporal_boundary_error","missing_or_wrong_provenance","query_equivalence","restart","recovery"]}, "database":{"$ref":"#/$defs/database"}, "registry":{"$ref":"#/$defs/registry"},
+        "coverage": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}}, "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}},
+        "expected": {
+          "type": "object", "additionalProperties": false, "required": ["snapshot", "queries", "paths", "rejections"],
+          "properties": {"snapshot": {"$ref":"#/$defs/snapshot"}, "queries": {"type": "array", "items": {"$ref": "#/$defs/query"}}, "paths": {"type": "array", "items": {"$ref": "#/$defs/path"}}, "rejections": {"type": "array", "items": {"$ref": "#/$defs/rejection"}}}
+        }
+      }
+    }
+  }
+}

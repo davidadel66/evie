@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidadel66/evie/blob/master/cmd/evie/docs/fixtures/semantic-memory/v2/manifest.schema.json",
+  "title": "Evie Semantic Memory correction fixture manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fixture_schema_version", "name", "preexisting_claims", "operations"],
+  "properties": {
+    "fixture_schema_version": { "const": 2 },
+    "name": { "type": "string", "minLength": 1 },
+    "preexisting_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "../v1/manifest.schema.json#/$defs/claim" }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/operation" }
+    }
+  },
+  "$defs": {
+    "correctionValidTimeEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["old_before", "old_after", "replacement"],
+      "properties": {
+        "old_before": { "$ref": "../v1/manifest.schema.json#/$defs/validTime" },
+        "old_after": { "$ref": "../v1/manifest.schema.json#/$defs/validTime" },
+        "replacement": { "$ref": "../v1/manifest.schema.json#/$defs/validTime" }
+      }
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["old_claim_id", "replacement_claim_id", "mode", "effective_time", "valid_time_effect"],
+      "properties": {
+        "old_claim_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "replacement_claim_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "mode": { "enum": ["error", "changed"] },
+        "effective_time": { "$ref": "../v1/manifest.schema.json#/$defs/nullableTimestamp" },
+        "valid_time_effect": { "$ref": "#/$defs/correctionValidTimeEffect" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "error" } } },
+          "then": { "properties": { "effective_time": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "changed" } } },
+          "then": { "properties": { "effective_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" } } }
+        }
+      ]
+    },
+    "effectV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions", "corrections"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "maxItems": 0, "items": { "$ref": "../v1/manifest.schema.json#/$defs/predicate" } },
+        "entities": { "type": "array", "maxItems": 0, "items": { "$ref": "../v1/manifest.schema.json#/$defs/entity" } },
+        "aliases": { "type": "array", "maxItems": 0, "items": { "$ref": "../v1/manifest.schema.json#/$defs/alias" } },
+        "claims": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/claim" } },
+        "source_links": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/sourceLink" } },
+        "graph_links": { "type": "array", "maxItems": 0, "items": { "$ref": "../v1/manifest.schema.json#/$defs/graphLink" } },
+        "transitions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                { "$ref": "../v1/manifest.schema.json#/$defs/transition" },
+                { "properties": { "object_kind": { "const": "claim" }, "state": { "const": "superseded" } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "../v1/manifest.schema.json#/$defs/transition" },
+                { "properties": { "object_kind": { "const": "claim" }, "state": { "const": "active" } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "../v1/manifest.schema.json#/$defs/transition" },
+                { "properties": { "object_kind": { "const": "source_link" }, "state": { "const": "eligible" } } }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "corrections": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/correction" } }
+      }
+    },
+    "proposalV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "const": "correct_claim" },
+        "idempotency_key": { "$ref": "../v1/manifest.schema.json#/$defs/idempotencyKey" },
+        "actor": { "const": "owner" },
+        "session_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/effectV2" }
+      }
+    },
+    "operationV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 2 },
+        "operation_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/proposalV2" },
+        "proposal_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" },
+        "transaction_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "effect_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        { "$ref": "../v1/manifest.schema.json#/$defs/operation" },
+        { "$ref": "#/$defs/operationV2" }
+      ]
+    }
+  }
+}

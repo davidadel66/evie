@@ -85,6 +85,23 @@ func TestQueryDBEvieAllowsOnlyPublicTables(t *testing.T) {
 		{name: "SQLite schema", query: `SELECT name FROM sqlite_schema`},
 		{name: "qualified memory table", query: `SELECT content FROM main.events`},
 		{name: "quoted memory table", query: `SELECT content FROM "events"`},
+		{name: "semantic scopes", query: `SELECT scope_key FROM semantic_scopes`},
+		{name: "semantic operations", query: `SELECT operation_id FROM semantic_operations`},
+		{name: "semantic operation scopes", query: `SELECT operation_id FROM semantic_operation_scopes`},
+		{name: "semantic cursor authorization", query: `SELECT cursor_id FROM semantic_cursor_auth`},
+		{name: "semantic predicates", query: `SELECT token FROM semantic_predicates`},
+		{name: "semantic entities", query: `SELECT canonical_name FROM semantic_entities`},
+		{name: "semantic aliases", query: `SELECT normalized_value FROM semantic_aliases`},
+		{name: "semantic claims", query: `SELECT literal_value FROM semantic_claims`},
+		{name: "semantic source links", query: `SELECT evidence_sha256 FROM semantic_source_links`},
+		{name: "semantic graph links", query: `SELECT relation FROM semantic_graph_links`},
+		{name: "semantic claim corrections", query: `SELECT old_claim_id FROM semantic_claim_corrections`},
+		{name: "semantic promotions", query: `SELECT source_claim_id FROM semantic_promotions`},
+		{name: "semantic promotion preparations", query: `SELECT prepared_json FROM semantic_promotion_preparations`},
+		{name: "semantic promotion entities", query: `SELECT source_entity_id FROM semantic_promotion_entities`},
+		{name: "semantic state events", query: `SELECT state FROM semantic_state_events`},
+		{name: "semantic projection quarantine", query: `SELECT reason FROM semantic_projection_quarantine`},
+		{name: "semantic maintenance lock", query: `SELECT fencing_token FROM semantic_maintenance_lock`},
 	}
 
 	for _, tt := range privateQueries {

@@ -26,6 +26,7 @@ var (
 // arbitrary caller-provided SQL never becomes an authorization surface.
 type turnLeaseWriteExecutor interface {
 	execContext(context.Context, string, ...any) (sql.Result, error)
+	queryContext(context.Context, string, ...any) (*sql.Rows, error)
 	queryRowContext(context.Context, string, ...any) rowScanner
 }
 
@@ -44,6 +45,19 @@ func (w *turnLeaseWriter) queryRowContext(
 		return errorRow{err: errTurnLeaseWriterClosed}
 	}
 	return w.conn.QueryRowContext(ctx, query, args...)
+}
+
+func (w *turnLeaseWriter) queryContext(
+	ctx context.Context,
+	query string,
+	args ...any,
+) (*sql.Rows, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.closed {
+		return nil, errTurnLeaseWriterClosed
+	}
+	return w.conn.QueryContext(ctx, query, args...)
 }
 
 type turnLeaseWriter struct {

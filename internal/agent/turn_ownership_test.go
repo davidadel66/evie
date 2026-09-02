@@ -416,7 +416,7 @@ func TestApprovalAdmissionSuppressesCallbackAndLaterToolLifecycle(t *testing.T) 
 						admissionDecision <- decision
 						return decision
 					},
-					func(context.Context, tools.Decision) error {
+					func(context.Context, tools.Decision, tools.ApprovalMetadata) error {
 						observed = true
 						return nil
 					},

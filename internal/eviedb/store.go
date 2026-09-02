@@ -11,6 +11,13 @@ type Store struct {
 	now                         func() time.Time
 	resolveImmediateTransaction immediateTransactionResolver
 	newResolutionContext        immediateTransactionContextFactory
+	semanticMaintenance         semanticMaintenanceHooks
+}
+
+type semanticMaintenanceHooks struct {
+	afterLock              func() error
+	beforeShadowValidation func(*sql.DB) error
+	beforeSwap             func() error
 }
 
 func NewStore(db *sql.DB) *Store {

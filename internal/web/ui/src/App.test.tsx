@@ -7,7 +7,7 @@ describe("TopBar", () => {
     const html = renderToStaticMarkup(
       <TopBar tab="system" onTab={() => undefined} textSize="default" onTextSize={() => undefined} />,
     );
-    for (const label of ["Chat", "Whiteboard", "Reports", "System"]) {
+    for (const label of ["Chat", "Memory", "Whiteboard", "Reports", "System"]) {
       expect(html).toContain(`<button type="button"`);
       expect(html).toContain(`>${label}</span>`);
     }

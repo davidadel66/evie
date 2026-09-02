@@ -20,7 +20,7 @@ import (
 const (
 	EvieVersion                    = "1.0.0"
 	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
+	StandardPresetVersion          = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
 )
 
 type PresetID string
@@ -85,7 +85,17 @@ func standardPresetContent() Preset {
 			{ID: WebFetchCapabilityID, Compatibility: compatibility},
 			{ID: WebSearchCapabilityID, Compatibility: compatibility},
 		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
 	}
+}
+
+func memoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
+	ids := allMemoryCapabilityIDs()
+	requirements := make([]CapabilityRequirement, len(ids))
+	for i, id := range ids {
+		requirements[i] = CapabilityRequirement{ID: id, Compatibility: compatibility}
+	}
+	return requirements
 }
 
 // BuiltinStandardPreset returns a detached snapshot so callers cannot mutate

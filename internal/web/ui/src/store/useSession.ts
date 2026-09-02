@@ -61,6 +61,7 @@ export type Session = {
   send: (text: string) => void;
   answer: (reqId: string, approve: boolean) => void;
   dismissProblem: () => void;
+  reset: () => void;
 };
 
 export function useSession(): Session {
@@ -194,6 +195,18 @@ export function useSession(): Session {
     setStatus((s) => (s === "error" ? s : "idle"));
   }, []);
 
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    pendingRef.current = [];
+    setItems([]);
+    setQueue([]);
+    setProblem(null);
+    setStatus("idle");
+  }, []);
+
   // Drain the queue: a finished turn fires the next waiting message. Only
   // "idle" drains — after an error the queue parks until David sends
   // something manually, rather than firing into a broken stream.
@@ -204,7 +217,7 @@ export function useSession(): Session {
     send(next);
   }, [status, queue, send]);
 
-  return { items, status, queue, problem, send, answer, dismissProblem };
+  return { items, status, queue, problem, send, answer, dismissProblem, reset };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

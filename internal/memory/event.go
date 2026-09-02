@@ -443,7 +443,9 @@ const (
 )
 
 type ApprovalPayload struct {
-	Decision ApprovalDecision `json:"decision"`
+	Decision       ApprovalDecision `json:"decision"`
+	ProposalSHA256 string           `json:"proposal_sha256,omitempty"`
+	PreparedSHA256 string           `json:"prepared_sha256,omitempty"`
 }
 
 type EventInput struct {
@@ -459,6 +461,7 @@ type Event struct {
 	ID            EventID
 	SessionID     SessionID
 	Sequence      int64
+	WorkspaceID   WorkspaceID
 	ProjectID     ProjectID
 	ParentID      EventID
 	Type          EventType

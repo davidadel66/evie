@@ -412,6 +412,29 @@ func approvalEventInput(
 	executionID memory.ExecutionID,
 	decision tools.Decision,
 ) (memory.EventInput, error) {
+	return approvalEventInputWithHashes(parentID, executionID, decision, "", "")
+}
+
+func semanticApprovalEventInput(
+	parentID memory.EventID,
+	executionID memory.ExecutionID,
+	decision tools.Decision,
+	proposalSHA256 string,
+	preparedSHA256 string,
+) (memory.EventInput, error) {
+	if proposalSHA256 == "" || preparedSHA256 == "" {
+		return memory.EventInput{}, errors.New("semantic approval requires exact proposal and prepared hashes")
+	}
+	return approvalEventInputWithHashes(parentID, executionID, decision, proposalSHA256, preparedSHA256)
+}
+
+func approvalEventInputWithHashes(
+	parentID memory.EventID,
+	executionID memory.ExecutionID,
+	decision tools.Decision,
+	proposalSHA256 string,
+	preparedSHA256 string,
+) (memory.EventInput, error) {
 	var storedDecision memory.ApprovalDecision
 
 	switch decision {
@@ -429,7 +452,9 @@ func approvalEventInput(
 	}
 
 	payloadJSON, err := json.Marshal(memory.ApprovalPayload{
-		Decision: storedDecision,
+		Decision:       storedDecision,
+		ProposalSHA256: proposalSHA256,
+		PreparedSHA256: preparedSHA256,
 	})
 	if err != nil {
 		return memory.EventInput{}, fmt.Errorf("encode approval payload: %w", err)

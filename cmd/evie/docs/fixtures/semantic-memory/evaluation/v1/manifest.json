@@ -1,0 +1,1485 @@
+{
+  "manifest_version": 1,
+  "fixture_version": "semantic-stage-3-v1",
+  "dataset_sha256": "sha256:643cc01820592e63c8ba40ad1154ec4eed489d2aa07ec36e70846c2c2aabe4fd",
+  "imports": [
+    "../../v1/literal-claim.json",
+    "../../v2/claim-correction.json",
+    "../../v3/lifecycle.json",
+    "../../v4/scope-promotion.json",
+    "../../v4/all-reuse-scope-promotion.json",
+    "../../v5/graph-links.json",
+    "../../v5/compound-entity-lifecycle.json"
+  ],
+  "panels": [
+    "semantic_conformance",
+    "learned_extraction",
+    "retrieval_provenance",
+    "answer_abstention"
+  ],
+  "required_coverage": [
+    "global_scope",
+    "workspace_scope",
+    "project_scope",
+    "session_scope",
+    "same_name_entities",
+    "multiple_sources",
+    "correction_error",
+    "correction_changed",
+    "retire_restore",
+    "source_retract_restore",
+    "contradictions",
+    "promotion",
+    "temporal_boundaries",
+    "one_hop",
+    "two_hop",
+    "operation_outcomes",
+    "scope_revisions",
+    "replay",
+    "idempotence",
+    "scope_isolation",
+    "lifecycle",
+    "provenance",
+    "query_equivalence",
+    "restart",
+    "recovery"
+  ],
+  "cases": [
+    {
+      "id": "scope-identity-provenance",
+      "description": "Workspace-scoped same-name identities and two independent sources retain exact identity and provenance.",
+      "failure_taxonomy": "missing_or_wrong_provenance",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000001",
+            "scope_key": "global",
+            "revision": 0
+          },
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000101",
+            "scope_key": "workspace:20000000-0000-4000-8000-000000000101",
+            "revision": 0
+          }
+        ],
+        "workspaces": [
+          {
+            "workspace_id": "20000000-0000-4000-8000-000000000101",
+            "display_name": "Fixture workspace",
+            "current_revision_id": "21000000-0000-4000-8000-000000000101"
+          }
+        ],
+        "projects": [
+          {
+            "project_id": "30000000-0000-4000-8000-000000000101",
+            "display_name": "Fixture project",
+            "root": "/fixture/project-101"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000101",
+            "title": "Fixture scope session",
+            "status": "active",
+            "context_scope_key": "workspace:20000000-0000-4000-8000-000000000101",
+            "workspace_id": "20000000-0000-4000-8000-000000000101",
+            "workspace_revision_id": "21000000-0000-4000-8000-000000000101"
+          }
+        ]
+      },
+      "coverage": [
+        "global_scope",
+        "workspace_scope",
+        "same_name_entities",
+        "multiple_sources",
+        "operation_outcomes",
+        "scope_revisions",
+        "provenance"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000101",
+          "session_id": "40000000-0000-4000-8000-000000000101",
+          "scope_key": "workspace:20000000-0000-4000-8000-000000000101",
+          "recorded_at": "2026-09-02T12:00:00.000000000Z",
+          "evidence_sha256": "sha256:9707cd6d6d5f6d2192ef53c6a56989ff00ffe92456857d138fdc7f8bdfb24233",
+          "content": "Alex North works with Alex South."
+        },
+        {
+          "event_id": "50000000-0000-4000-8000-000000000102",
+          "session_id": "40000000-0000-4000-8000-000000000101",
+          "scope_key": "workspace:20000000-0000-4000-8000-000000000101",
+          "recorded_at": "2026-09-02T12:01:00.000000000Z",
+          "evidence_sha256": "sha256:cea2c5f1279c2e9d5ba30bba651f3458a039ff4cf2e2b119c05505f45e512ea9",
+          "content": "Alex North works with Alex South (confirmed)."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000101",
+          "schema_version": 1,
+          "kind": "remember_entity_claim",
+          "name": "remember-alex-north",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000101",
+            "predicate": "works_with",
+            "predicate_label": "works with",
+            "predicate_cardinality": "many",
+            "subject": {
+              "create": true,
+              "canonical_name": "Alex North",
+              "entity_type": "person",
+              "alias": "Alex"
+            },
+            "object": {
+              "create": true,
+              "canonical_name": "Alex South",
+              "entity_type": "person",
+              "alias": "Alex"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000101",
+          "clock": "2026-09-02T12:00:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000101"
+          ],
+          "generated_ids": {
+            "subject_entity_id": "61000000-0000-4000-8000-000000000101",
+            "object_entity_id": "61000000-0000-4000-8000-000000000102",
+            "owner_entity_id": "61000000-0000-4000-8000-000000000103",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000104",
+            "context_entity_id": "61000000-0000-4000-8000-000000000105",
+            "subject_alias_id": "62000000-0000-4000-8000-000000000101",
+            "object_alias_id": "62000000-0000-4000-8000-000000000102",
+            "predicate_id": "63000000-0000-4000-8000-000000000101",
+            "claim_id": "64000000-0000-4000-8000-000000000101",
+            "source_link_id": "65000000-0000-4000-8000-000000000101"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1,
+            "workspace:20000000-0000-4000-8000-000000000101": 1
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000102",
+          "schema_version": 1,
+          "kind": "remember_entity_claim",
+          "name": "corroborate-alex-relationship",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000101",
+            "predicate": "works_with",
+            "predicate_label": "works with",
+            "predicate_cardinality": "many",
+            "subject": {
+              "entity_id": "61000000-0000-4000-8000-000000000101"
+            },
+            "object": {
+              "entity_id": "61000000-0000-4000-8000-000000000102"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000102",
+          "clock": "2026-09-02T12:01:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000102"
+          ],
+          "generated_ids": {
+            "source_link_id": "65000000-0000-4000-8000-000000000102"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1,
+            "workspace:20000000-0000-4000-8000-000000000101": 2
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global",
+            "workspace:20000000-0000-4000-8000-000000000101"
+          ],
+          "scope_revisions": {
+            "global": 1,
+            "workspace:20000000-0000-4000-8000-000000000101": 2
+          },
+          "scope_hashes": {
+            "global": "sha256:4ef0f7f536d3a525535afb77cd15b04ba9dcfa5a807e14bb78181d858d51680a",
+            "workspace:20000000-0000-4000-8000-000000000101": "sha256:1f11318aae62912a747520a2a045d0f03bdc977edb2330f4c620d2f9bb335d9f"
+          },
+          "scope_frontiers": {
+            "global": "sha256:b65fc34b1ec75aab9df803da3a7accb0a352604d6c4084c077525a77af662604",
+            "workspace:20000000-0000-4000-8000-000000000101": "sha256:f5ccfd7698bd65e376302d8dc08fc26e848517b0a3623f66cf216c07be50799a"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000101"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000101",
+            "61000000-0000-4000-8000-000000000102",
+            "61000000-0000-4000-8000-000000000103",
+            "61000000-0000-4000-8000-000000000104",
+            "61000000-0000-4000-8000-000000000105"
+          ],
+          "alias_ids": [
+            "62000000-0000-4000-8000-000000000101",
+            "62000000-0000-4000-8000-000000000102"
+          ],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000101"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000101",
+            "65000000-0000-4000-8000-000000000102"
+          ],
+          "graph_link_ids": [],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000101"
+          ],
+          "superseded_claim_ids": []
+        },
+        "queries": [
+          {
+            "id": "workspace-current",
+            "kind": "current",
+            "session_id": "40000000-0000-4000-8000-000000000101",
+            "scope_key": "workspace:20000000-0000-4000-8000-000000000101",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000101"
+            ]
+          },
+          {
+            "id": "same-name-alias",
+            "kind": "alias",
+            "session_id": "40000000-0000-4000-8000-000000000101",
+            "alias": "Alex",
+            "expected_ids": [
+              "61000000-0000-4000-8000-000000000101",
+              "61000000-0000-4000-8000-000000000102"
+            ]
+          }
+        ],
+        "paths": [],
+        "rejections": [
+          {
+            "id": "sibling-workspace-read",
+            "kind": "inspect_claims",
+            "request": {
+              "session_id": "40000000-0000-4000-8000-000000000101",
+              "scope_key": "workspace:20000000-0000-4000-8000-000000000999"
+            },
+            "error_code": "scope_isolation",
+            "unchanged_revisions": {
+              "workspace:20000000-0000-4000-8000-000000000101": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "temporal-lifecycle",
+      "description": "Error and changed corrections, half-open time, reversible retirement, and source eligibility preserve history.",
+      "failure_taxonomy": "temporal_boundary_error",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000201",
+            "scope_key": "global",
+            "revision": 0
+          }
+        ],
+        "workspaces": [],
+        "projects": [],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "title": "Fixture temporal session",
+            "status": "active",
+            "context_scope_key": "global"
+          }
+        ]
+      },
+      "coverage": [
+        "correction_error",
+        "correction_changed",
+        "retire_restore",
+        "source_retract_restore",
+        "temporal_boundaries",
+        "lifecycle",
+        "idempotence"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000201",
+          "session_id": "40000000-0000-4000-8000-000000000201",
+          "scope_key": "global",
+          "recorded_at": "2026-09-02T13:00:00.000000000Z",
+          "evidence_sha256": "sha256:7d488ef069fbce038f6f392e10ab3b5f69b02c1a4ed5e243447f2ad4709185e5",
+          "content": "The location was Detroit."
+        },
+        {
+          "event_id": "50000000-0000-4000-8000-000000000202",
+          "session_id": "40000000-0000-4000-8000-000000000201",
+          "scope_key": "global",
+          "recorded_at": "2026-09-02T13:01:00.000000000Z",
+          "evidence_sha256": "sha256:7288dd848ce17d566b0fb91826ee7956684052a676965538febbfa521300f9bd",
+          "content": "Correction: it was Chicago."
+        },
+        {
+          "event_id": "50000000-0000-4000-8000-000000000203",
+          "session_id": "40000000-0000-4000-8000-000000000201",
+          "scope_key": "global",
+          "recorded_at": "2026-09-02T13:05:20.000000000Z",
+          "evidence_sha256": "sha256:2dfe1bc23283caf0ccfb767f123a4c8973e9b5cf0549e4aa5a4b1f7c6285fb5e",
+          "content": "The location changed to New York."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000201",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "remember-detroit",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "predicate": "location_name",
+            "predicate_label": "location name",
+            "predicate_cardinality": "one",
+            "literal": {
+              "kind": "text",
+              "value": "Detroit"
+            },
+            "valid_from": "2026-01-01T00:00:00.000000000Z",
+            "valid_to": "2027-01-01T00:00:00.000000000Z"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000201",
+          "clock": "2026-09-02T13:00:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000201"
+          ],
+          "generated_ids": {
+            "owner_entity_id": "61000000-0000-4000-8000-000000000201",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000202",
+            "predicate_id": "63000000-0000-4000-8000-000000000201",
+            "claim_id": "64000000-0000-4000-8000-000000000201",
+            "source_link_id": "65000000-0000-4000-8000-000000000201"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000202",
+          "schema_version": 2,
+          "kind": "correct_claim",
+          "name": "correct-detroit-to-chicago",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "old_claim_id": "64000000-0000-4000-8000-000000000201",
+            "mode": "error",
+            "replacement_literal": {
+              "kind": "text",
+              "value": "Chicago"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000202",
+          "clock": "2026-09-02T13:01:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000202"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000202",
+            "source_link_id": "65000000-0000-4000-8000-000000000202"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 2
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000203",
+          "schema_version": 3,
+          "kind": "retract_source",
+          "name": "retract-correction-source",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "action": "retract_source",
+            "object_kind": "source_link",
+            "object_id": "65000000-0000-4000-8000-000000000202"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000203",
+          "clock": "2026-09-02T13:02:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000202"
+          ],
+          "generated_ids": {},
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 3
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000204",
+          "schema_version": 3,
+          "kind": "restore_source",
+          "name": "restore-correction-source",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "action": "restore_source",
+            "object_kind": "source_link",
+            "object_id": "65000000-0000-4000-8000-000000000202"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000204",
+          "clock": "2026-09-02T13:03:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000202"
+          ],
+          "generated_ids": {},
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 4
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000205",
+          "schema_version": 3,
+          "kind": "retire_memory",
+          "name": "retire-corrected-claim",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "action": "retire",
+            "object_kind": "claim",
+            "object_id": "64000000-0000-4000-8000-000000000202"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000205",
+          "clock": "2026-09-02T13:04:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000202"
+          ],
+          "generated_ids": {},
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 5
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000206",
+          "schema_version": 3,
+          "kind": "restore_memory",
+          "name": "restore-corrected-claim",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "action": "restore",
+            "object_kind": "claim",
+            "object_id": "64000000-0000-4000-8000-000000000202"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000206",
+          "clock": "2026-09-02T13:05:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000202"
+          ],
+          "generated_ids": {},
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 6
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000208",
+          "schema_version": 2,
+          "kind": "correct_claim",
+          "name": "change-chicago-to-new-york",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "old_claim_id": "64000000-0000-4000-8000-000000000202",
+            "mode": "changed",
+            "effective_time": "2026-07-01T00:00:00.000000000Z",
+            "replacement_literal": {
+              "kind": "text",
+              "value": "New York"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000208",
+          "clock": "2026-09-02T13:05:21.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000203"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000208",
+            "source_link_id": "65000000-0000-4000-8000-000000000208"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 7
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000207",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "reject-stale-write",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "predicate": "location_name",
+            "predicate_label": "location name",
+            "predicate_cardinality": "one",
+            "literal": {
+              "kind": "text",
+              "value": "Rejected stale"
+            },
+            "force_prior_revision": 1
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000207",
+          "clock": "2026-09-02T13:06:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000203"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000207",
+            "source_link_id": "65000000-0000-4000-8000-000000000207"
+          },
+          "expected_outcome": "rejected",
+          "expected_revisions": {
+            "global": 7
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global"
+          ],
+          "scope_revisions": {
+            "global": 7
+          },
+          "scope_hashes": {
+            "global": "sha256:5b4469ad74df9e3ed9512a2ac55ce3839530b59d61d2d0d7eaac3d06a1230d77"
+          },
+          "scope_frontiers": {
+            "global": "sha256:48303ade0748bb1ca4d74983047df7d22b32bc826a956da6ea57ccb403d05576"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000201"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000201",
+            "61000000-0000-4000-8000-000000000202"
+          ],
+          "alias_ids": [],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000201",
+            "64000000-0000-4000-8000-000000000202",
+            "64000000-0000-4000-8000-000000000208"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000201",
+            "65000000-0000-4000-8000-000000000202",
+            "65000000-0000-4000-8000-000000000208"
+          ],
+          "graph_link_ids": [],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000208"
+          ],
+          "superseded_claim_ids": [
+            "64000000-0000-4000-8000-000000000201",
+            "64000000-0000-4000-8000-000000000202"
+          ]
+        },
+        "queries": [
+          {
+            "id": "before",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2025-12-31T23:59:59.999999999Z",
+            "expected_ids": []
+          },
+          {
+            "id": "start",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2026-01-01T00:00:00.000000000Z",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000202"
+            ]
+          },
+          {
+            "id": "inside",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2026-06-01T00:00:00.000000000Z",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000202"
+            ]
+          },
+          {
+            "id": "changed-start",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2026-07-01T00:00:00.000000000Z",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000208"
+            ]
+          },
+          {
+            "id": "end",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2027-01-01T00:00:00.000000000Z",
+            "expected_ids": []
+          },
+          {
+            "id": "after",
+            "kind": "valid_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "valid_at": "2027-01-01T00:00:00.000000001Z",
+            "expected_ids": []
+          },
+          {
+            "id": "as-known-before-correction",
+            "kind": "as_known_at",
+            "session_id": "40000000-0000-4000-8000-000000000201",
+            "as_known_at": "2026-09-02T13:00:30.000000000Z",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000201"
+            ]
+          }
+        ],
+        "paths": [],
+        "rejections": [
+          {
+            "id": "stale-write",
+            "kind": "remember_literal_claim",
+            "request": {
+              "operation_name": "reject-stale-write"
+            },
+            "error_code": "stale_scope_revision",
+            "unchanged_revisions": {
+              "global": 7
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "promotion-and-isolation",
+      "description": "Promotion is the only accepted narrower-to-broader copy and sibling scopes remain isolated.",
+      "failure_taxonomy": "scope_leakage",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000301",
+            "scope_key": "global",
+            "revision": 0
+          },
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000302",
+            "scope_key": "workspace:20000000-0000-4000-8000-000000000301",
+            "revision": 0
+          }
+        ],
+        "workspaces": [
+          {
+            "workspace_id": "20000000-0000-4000-8000-000000000301",
+            "display_name": "Fixture promotion workspace",
+            "current_revision_id": "21000000-0000-4000-8000-000000000301"
+          }
+        ],
+        "projects": [],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000301",
+            "title": "Fixture promotion session",
+            "status": "active",
+            "context_scope_key": "workspace:20000000-0000-4000-8000-000000000301",
+            "workspace_id": "20000000-0000-4000-8000-000000000301",
+            "workspace_revision_id": "21000000-0000-4000-8000-000000000301"
+          }
+        ]
+      },
+      "coverage": [
+        "promotion",
+        "scope_isolation",
+        "workspace_scope"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000301",
+          "session_id": "40000000-0000-4000-8000-000000000301",
+          "scope_key": "workspace:20000000-0000-4000-8000-000000000301",
+          "recorded_at": "2026-09-02T14:00:00.000000000Z",
+          "evidence_sha256": "sha256:24a3e3490a882b0dd054f5fd25c6e8ef950b212246959dab50f2294aa62a47d4",
+          "content": "Promote this workspace fact."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000301",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "remember-workspace-fact",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000301",
+            "predicate": "fixture_fact",
+            "predicate_label": "fixture fact",
+            "predicate_cardinality": "one",
+            "literal": {
+              "kind": "text",
+              "value": "Promote me"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000301",
+          "clock": "2026-09-02T14:00:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000301"
+          ],
+          "generated_ids": {
+            "owner_entity_id": "61000000-0000-4000-8000-000000000301",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000302",
+            "predicate_id": "63000000-0000-4000-8000-000000000301",
+            "claim_id": "64000000-0000-4000-8000-000000000301",
+            "source_link_id": "65000000-0000-4000-8000-000000000301"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1,
+            "workspace:20000000-0000-4000-8000-000000000301": 1
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000302",
+          "schema_version": 4,
+          "kind": "promote_claim",
+          "name": "promote-workspace-fact",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000301",
+            "source_claim_id": "64000000-0000-4000-8000-000000000301",
+            "destination_scope_key": "global"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000302",
+          "clock": "2026-09-02T14:01:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000301"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000302",
+            "source_link_id": "65000000-0000-4000-8000-000000000302"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 2,
+            "workspace:20000000-0000-4000-8000-000000000301": 1
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global",
+            "workspace:20000000-0000-4000-8000-000000000301"
+          ],
+          "scope_revisions": {
+            "global": 2,
+            "workspace:20000000-0000-4000-8000-000000000301": 1
+          },
+          "scope_hashes": {
+            "global": "sha256:94efd4b4e81c7db4c57d70bb466cfa892c63b0bd12a994c97e092d66d73a2645",
+            "workspace:20000000-0000-4000-8000-000000000301": "sha256:1dea5dbd4bd32924293fe22b297fe03afa306bcc5c69a432cf2261fad7db5a64"
+          },
+          "scope_frontiers": {
+            "global": "sha256:0593873166303200d654bc8bdf7402ada6adf3dd8a41e423d12c38198d48dc1b",
+            "workspace:20000000-0000-4000-8000-000000000301": "sha256:1fba9a8f7984ca4e03821f4851bc8a6890a6f428fe1b7551ee5c8cfdc19b80ed"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000301"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000301",
+            "61000000-0000-4000-8000-000000000302"
+          ],
+          "alias_ids": [],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000301",
+            "64000000-0000-4000-8000-000000000302"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000301",
+            "65000000-0000-4000-8000-000000000302"
+          ],
+          "graph_link_ids": [],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000301",
+            "64000000-0000-4000-8000-000000000302"
+          ],
+          "superseded_claim_ids": [],
+          "workspace_claim_id": "64000000-0000-4000-8000-000000000301",
+          "global_claim_id": "64000000-0000-4000-8000-000000000302",
+          "promotion_operation_id": "60000000-0000-4000-8000-000000000302"
+        },
+        "queries": [
+          {
+            "id": "source-scope",
+            "kind": "current",
+            "session_id": "40000000-0000-4000-8000-000000000301",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000301",
+              "64000000-0000-4000-8000-000000000302"
+            ]
+          }
+        ],
+        "paths": [],
+        "rejections": [
+          {
+            "id": "foreign-scope-read",
+            "kind": "inspect_claims",
+            "request": {
+              "session_id": "40000000-0000-4000-8000-000000000301",
+              "scope_key": "workspace:20000000-0000-4000-8000-000000000999"
+            },
+            "error_code": "scope_isolation",
+            "unchanged_revisions": {
+              "global": 2,
+              "workspace:20000000-0000-4000-8000-000000000301": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "project-scope-operation",
+      "description": "A project-bound source and accepted operation remain in the exact project scope.",
+      "failure_taxonomy": "scope_leakage",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000501",
+            "scope_key": "global",
+            "revision": 0
+          },
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000502",
+            "scope_key": "project:30000000-0000-4000-8000-000000000501",
+            "revision": 0
+          }
+        ],
+        "workspaces": [],
+        "projects": [
+          {
+            "project_id": "30000000-0000-4000-8000-000000000501",
+            "display_name": "Project Atlas",
+            "root": "/fixture/project-501"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000501",
+            "title": "Project fixture",
+            "status": "active",
+            "context_scope_key": "project:30000000-0000-4000-8000-000000000501",
+            "project_id": "30000000-0000-4000-8000-000000000501"
+          }
+        ]
+      },
+      "coverage": [
+        "project_scope",
+        "scope_isolation",
+        "operation_outcomes",
+        "scope_revisions",
+        "provenance",
+        "query_equivalence"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000501",
+          "session_id": "40000000-0000-4000-8000-000000000501",
+          "scope_key": "project:30000000-0000-4000-8000-000000000501",
+          "recorded_at": "2026-09-02T14:30:00.000000000Z",
+          "evidence_sha256": "sha256:b080b465f3ad8a23e9f64a5bf8206dd8003e3a7e63ac5359b3a2eda9cf67ea87",
+          "content": "Project Atlas uses Go."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000501",
+          "schema_version": 1,
+          "kind": "remember_entity_claim",
+          "name": "remember-project-relationship",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000501",
+            "predicate": "uses",
+            "predicate_label": "uses",
+            "predicate_cardinality": "many",
+            "subject": {
+              "create": true,
+              "canonical_name": "Project Atlas",
+              "entity_type": "project",
+              "alias": "Atlas"
+            },
+            "object": {
+              "create": true,
+              "canonical_name": "Go",
+              "entity_type": "technology",
+              "alias": "Go"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000501",
+          "clock": "2026-09-02T14:30:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000501"
+          ],
+          "generated_ids": {
+            "owner_entity_id": "61000000-0000-4000-8000-000000000501",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000502",
+            "context_entity_id": "61000000-0000-4000-8000-000000000503",
+            "subject_entity_id": "61000000-0000-4000-8000-000000000504",
+            "object_entity_id": "61000000-0000-4000-8000-000000000505",
+            "subject_alias_id": "62000000-0000-4000-8000-000000000501",
+            "object_alias_id": "62000000-0000-4000-8000-000000000502",
+            "predicate_id": "63000000-0000-4000-8000-000000000501",
+            "claim_id": "64000000-0000-4000-8000-000000000501",
+            "source_link_id": "65000000-0000-4000-8000-000000000501"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1,
+            "project:30000000-0000-4000-8000-000000000501": 1
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global",
+            "project:30000000-0000-4000-8000-000000000501"
+          ],
+          "scope_revisions": {
+            "global": 1,
+            "project:30000000-0000-4000-8000-000000000501": 1
+          },
+          "scope_hashes": {
+            "global": "sha256:27f910081ebbc7dfc5e356868b532bedf2c647e232e0e454df127aa07b3462b0",
+            "project:30000000-0000-4000-8000-000000000501": "sha256:432f84b45dfca2d193a08f92e4a8fbf4f195e5979ee70d5ee1c1cca03f702668"
+          },
+          "scope_frontiers": {
+            "global": "sha256:2ec8b22bcb56f221d37710eb5be6927c4b92ef3d8c63d4e2f3dd570284c73006",
+            "project:30000000-0000-4000-8000-000000000501": "sha256:2ec8b22bcb56f221d37710eb5be6927c4b92ef3d8c63d4e2f3dd570284c73006"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000501"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000501",
+            "61000000-0000-4000-8000-000000000502",
+            "61000000-0000-4000-8000-000000000503",
+            "61000000-0000-4000-8000-000000000504",
+            "61000000-0000-4000-8000-000000000505"
+          ],
+          "alias_ids": [
+            "62000000-0000-4000-8000-000000000501",
+            "62000000-0000-4000-8000-000000000502"
+          ],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000501"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000501"
+          ],
+          "graph_link_ids": [],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000501"
+          ],
+          "superseded_claim_ids": []
+        },
+        "queries": [
+          {
+            "id": "project-current",
+            "kind": "current",
+            "session_id": "40000000-0000-4000-8000-000000000501",
+            "scope_key": "project:30000000-0000-4000-8000-000000000501",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000501"
+            ]
+          }
+        ],
+        "paths": [],
+        "rejections": []
+      }
+    },
+    {
+      "id": "session-scope-operation",
+      "description": "A session-only source and accepted operation remain below their project scope.",
+      "failure_taxonomy": "scope_leakage",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000601",
+            "scope_key": "global",
+            "revision": 0
+          },
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000602",
+            "scope_key": "project:30000000-0000-4000-8000-000000000601",
+            "revision": 0
+          },
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000603",
+            "scope_key": "session:40000000-0000-4000-8000-000000000601",
+            "revision": 0
+          }
+        ],
+        "workspaces": [],
+        "projects": [
+          {
+            "project_id": "30000000-0000-4000-8000-000000000601",
+            "display_name": "Session project",
+            "root": "/fixture/project-601"
+          }
+        ],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000601",
+            "title": "Session fixture",
+            "status": "active",
+            "context_scope_key": "project:30000000-0000-4000-8000-000000000601",
+            "project_id": "30000000-0000-4000-8000-000000000601"
+          }
+        ]
+      },
+      "coverage": [
+        "session_scope",
+        "scope_isolation",
+        "operation_outcomes",
+        "scope_revisions",
+        "provenance",
+        "query_equivalence"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000601",
+          "session_id": "40000000-0000-4000-8000-000000000601",
+          "scope_key": "session:40000000-0000-4000-8000-000000000601",
+          "recorded_at": "2026-09-02T14:40:00.000000000Z",
+          "evidence_sha256": "sha256:cf1a998a225829098c4298b32a822bb1d3bded6823da4f1ad2609ddfb4d47fde",
+          "content": "This session scratch note links A to B."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000601",
+          "schema_version": 1,
+          "kind": "remember_entity_claim",
+          "name": "remember-session-relationship",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000601",
+            "predicate": "links",
+            "predicate_label": "links",
+            "predicate_cardinality": "many",
+            "use_session_scope": true,
+            "subject": {
+              "create": true,
+              "canonical_name": "A",
+              "entity_type": "concept",
+              "alias": "A"
+            },
+            "object": {
+              "create": true,
+              "canonical_name": "B",
+              "entity_type": "concept",
+              "alias": "B"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000601",
+          "clock": "2026-09-02T14:40:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000601"
+          ],
+          "generated_ids": {
+            "owner_entity_id": "61000000-0000-4000-8000-000000000601",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000602",
+            "context_entity_id": "61000000-0000-4000-8000-000000000603",
+            "subject_entity_id": "61000000-0000-4000-8000-000000000604",
+            "object_entity_id": "61000000-0000-4000-8000-000000000605",
+            "subject_alias_id": "62000000-0000-4000-8000-000000000601",
+            "object_alias_id": "62000000-0000-4000-8000-000000000602",
+            "predicate_id": "63000000-0000-4000-8000-000000000601",
+            "claim_id": "64000000-0000-4000-8000-000000000601",
+            "source_link_id": "65000000-0000-4000-8000-000000000601"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1,
+            "project:30000000-0000-4000-8000-000000000601": 0,
+            "session:40000000-0000-4000-8000-000000000601": 1
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global",
+            "project:30000000-0000-4000-8000-000000000601",
+            "session:40000000-0000-4000-8000-000000000601"
+          ],
+          "scope_revisions": {
+            "global": 1,
+            "project:30000000-0000-4000-8000-000000000601": 0,
+            "session:40000000-0000-4000-8000-000000000601": 1
+          },
+          "scope_hashes": {
+            "global": "sha256:18d21c2343a657ef33778eb3478ebbb81d8e6dab8437e0e381fbe0b23bad8b84",
+            "project:30000000-0000-4000-8000-000000000601": "sha256:eb091ab30a399ca17a515b5687403e64ee82419cf3b62bd4631873969b06f4b1",
+            "session:40000000-0000-4000-8000-000000000601": "sha256:821f962c726f40f81a1e2ce87c5061d7788629675ab081d1392603bb47ef97bf"
+          },
+          "scope_frontiers": {
+            "global": "sha256:b23721f7efbf028e0d898d65d5bba1a917fef30aa58f52caf30a146908a4da19",
+            "project:30000000-0000-4000-8000-000000000601": "sha256:41c11eb6fc1ccc8b986ca2e5fbd34930e2177c578db7c5a8a9ae358b2b80c201",
+            "session:40000000-0000-4000-8000-000000000601": "sha256:b23721f7efbf028e0d898d65d5bba1a917fef30aa58f52caf30a146908a4da19"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000601"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000601",
+            "61000000-0000-4000-8000-000000000602",
+            "61000000-0000-4000-8000-000000000603",
+            "61000000-0000-4000-8000-000000000604",
+            "61000000-0000-4000-8000-000000000605"
+          ],
+          "alias_ids": [
+            "62000000-0000-4000-8000-000000000601",
+            "62000000-0000-4000-8000-000000000602"
+          ],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000601"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000601"
+          ],
+          "graph_link_ids": [],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000601"
+          ],
+          "superseded_claim_ids": []
+        },
+        "queries": [
+          {
+            "id": "session-current",
+            "kind": "current",
+            "session_id": "40000000-0000-4000-8000-000000000601",
+            "scope_key": "session:40000000-0000-4000-8000-000000000601",
+            "expected_ids": [
+              "64000000-0000-4000-8000-000000000601"
+            ]
+          }
+        ],
+        "paths": [],
+        "rejections": []
+      }
+    },
+    {
+      "id": "graph-replay-recovery",
+      "description": "Contradiction and derivation links have exact one-/two-hop paths and survive restart, replay, and rebuild.",
+      "failure_taxonomy": "recovery",
+      "database": {
+        "reset": "new_empty_database",
+        "reuse_between_cases": false
+      },
+      "registry": {
+        "scopes": [
+          {
+            "scope_id": "10000000-0000-4000-8000-000000000401",
+            "scope_key": "global",
+            "revision": 0
+          }
+        ],
+        "workspaces": [],
+        "projects": [],
+        "sessions": [
+          {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "title": "Fixture graph session",
+            "status": "active",
+            "context_scope_key": "global"
+          }
+        ]
+      },
+      "coverage": [
+        "contradictions",
+        "one_hop",
+        "two_hop",
+        "replay",
+        "query_equivalence",
+        "restart",
+        "recovery"
+      ],
+      "sources": [
+        {
+          "event_id": "50000000-0000-4000-8000-000000000401",
+          "session_id": "40000000-0000-4000-8000-000000000401",
+          "scope_key": "global",
+          "recorded_at": "2026-09-02T15:00:00.000000000Z",
+          "evidence_sha256": "sha256:d255b83405a9fd8d11e2afae67e25fb2183fb742f722f158f1d06179346997ab",
+          "content": "Link the three accepted claims."
+        }
+      ],
+      "operations": [
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000410",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "seed-graph-claim-one",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "predicate": "graph_fixture",
+            "predicate_label": "graph fixture",
+            "predicate_cardinality": "many",
+            "literal": {
+              "kind": "text",
+              "value": "claim one"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000410",
+          "clock": "2026-09-02T15:00:00.100000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000401"
+          ],
+          "generated_ids": {
+            "owner_entity_id": "61000000-0000-4000-8000-000000000401",
+            "evie_entity_id": "61000000-0000-4000-8000-000000000402",
+            "predicate_id": "63000000-0000-4000-8000-000000000401",
+            "claim_id": "64000000-0000-4000-8000-000000000401",
+            "source_link_id": "65000000-0000-4000-8000-000000000410"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 1
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000411",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "seed-graph-claim-two",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "predicate": "graph_fixture",
+            "predicate_label": "graph fixture",
+            "predicate_cardinality": "many",
+            "literal": {
+              "kind": "text",
+              "value": "claim two"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000411",
+          "clock": "2026-09-02T15:00:00.200000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000401"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000402",
+            "source_link_id": "65000000-0000-4000-8000-000000000411"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 2
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000412",
+          "schema_version": 1,
+          "kind": "remember_literal_claim",
+          "name": "seed-graph-claim-three",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "predicate": "graph_fixture",
+            "predicate_label": "graph fixture",
+            "predicate_cardinality": "many",
+            "literal": {
+              "kind": "text",
+              "value": "claim three"
+            }
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000412",
+          "clock": "2026-09-02T15:00:00.300000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000401"
+          ],
+          "generated_ids": {
+            "claim_id": "64000000-0000-4000-8000-000000000403",
+            "source_link_id": "65000000-0000-4000-8000-000000000412"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 3
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000401",
+          "schema_version": 5,
+          "kind": "create_graph_link",
+          "name": "create-contradiction-link",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "relation": "contradiction",
+            "source_kind": "claim",
+            "source_id": "64000000-0000-4000-8000-000000000401",
+            "target_kind": "claim",
+            "target_id": "64000000-0000-4000-8000-000000000402"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000401",
+          "clock": "2026-09-02T15:00:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000401"
+          ],
+          "generated_ids": {
+            "graph_link_id": "66000000-0000-4000-8000-000000000401"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 4
+          }
+        },
+        {
+          "operation_id": "60000000-0000-4000-8000-000000000402",
+          "schema_version": 5,
+          "kind": "create_graph_link",
+          "name": "create-derivation-link",
+          "request": {
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "relation": "derivation",
+            "source_kind": "claim",
+            "source_id": "64000000-0000-4000-8000-000000000402",
+            "target_kind": "claim",
+            "target_id": "64000000-0000-4000-8000-000000000403"
+          },
+          "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000402",
+          "clock": "2026-09-02T15:01:01.000000000Z",
+          "source_event_ids": [
+            "50000000-0000-4000-8000-000000000401"
+          ],
+          "generated_ids": {
+            "graph_link_id": "66000000-0000-4000-8000-000000000402"
+          },
+          "expected_outcome": "accepted",
+          "expected_revisions": {
+            "global": 5
+          }
+        }
+      ],
+      "expected": {
+        "snapshot": {
+          "scope_keys": [
+            "global"
+          ],
+          "scope_revisions": {
+            "global": 5
+          },
+          "scope_hashes": {
+            "global": "sha256:ba8d720a7b261963067206747156b5ff172f78d811ee8b837d9502731cee3de5"
+          },
+          "scope_frontiers": {
+            "global": "sha256:36042a4e1b04b468f3c3fb825c6ecffc2a18a0c4a6760d9f10f214ffef445f12"
+          },
+          "predicate_ids": [
+            "63000000-0000-4000-8000-000000000401"
+          ],
+          "entity_ids": [
+            "61000000-0000-4000-8000-000000000401",
+            "61000000-0000-4000-8000-000000000402"
+          ],
+          "alias_ids": [],
+          "claim_ids": [
+            "64000000-0000-4000-8000-000000000401",
+            "64000000-0000-4000-8000-000000000402",
+            "64000000-0000-4000-8000-000000000403"
+          ],
+          "source_link_ids": [
+            "65000000-0000-4000-8000-000000000410",
+            "65000000-0000-4000-8000-000000000411",
+            "65000000-0000-4000-8000-000000000412"
+          ],
+          "graph_link_ids": [
+            "66000000-0000-4000-8000-000000000401",
+            "66000000-0000-4000-8000-000000000402"
+          ],
+          "active_claim_ids": [
+            "64000000-0000-4000-8000-000000000401",
+            "64000000-0000-4000-8000-000000000402",
+            "64000000-0000-4000-8000-000000000403"
+          ],
+          "superseded_claim_ids": []
+        },
+        "queries": [
+          {
+            "id": "canonical-projection",
+            "kind": "replay",
+            "session_id": "40000000-0000-4000-8000-000000000401",
+            "expected_ids": [
+              "66000000-0000-4000-8000-000000000401",
+              "66000000-0000-4000-8000-000000000402"
+            ]
+          }
+        ],
+        "paths": [
+          {
+            "id": "one-hop",
+            "depth": 1,
+            "expected_object_ids": [
+              "64000000-0000-4000-8000-000000000401",
+              "64000000-0000-4000-8000-000000000402"
+            ],
+            "expected_graph_link_ids": [
+              "66000000-0000-4000-8000-000000000401"
+            ]
+          },
+          {
+            "id": "two-hop",
+            "depth": 2,
+            "expected_object_ids": [
+              "64000000-0000-4000-8000-000000000401",
+              "64000000-0000-4000-8000-000000000402",
+              "64000000-0000-4000-8000-000000000403"
+            ],
+            "expected_graph_link_ids": [
+              "66000000-0000-4000-8000-000000000401",
+              "66000000-0000-4000-8000-000000000402"
+            ]
+          }
+        ],
+        "rejections": [
+          {
+            "id": "unknown-replay-version",
+            "kind": "replay_operation",
+            "request": {
+              "schema_version": 99
+            },
+            "error_code": "unsupported_operation_schema",
+            "unchanged_revisions": {
+              "global": 5
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidadel66/evie/blob/master/cmd/evie/docs/fixtures/semantic-memory/v1/manifest.schema.json",
+  "title": "Evie Semantic Memory conformance fixture manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixture_schema_version",
+    "name",
+    "scopes",
+    "source_evidence",
+    "generated_ids",
+    "operations",
+    "expected_projection",
+    "queries",
+    "paths",
+    "expected_failures"
+  ],
+  "properties": {
+    "fixture_schema_version": { "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scope" }
+    },
+    "source_evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceEvidence" }
+    },
+    "generated_ids": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/generatedID" }
+    },
+    "operations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/operation" }
+    },
+    "expected_projection": { "$ref": "#/$defs/projection" },
+    "queries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/queryExpectation" }
+    },
+    "paths": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pathExpectation" }
+    },
+    "expected_failures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/failure" }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{9}Z$"
+    },
+    "nullableTimestamp": {
+      "oneOf": [
+        { "$ref": "#/$defs/timestamp" },
+        { "type": "null" }
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scopeKey": {
+      "type": "string",
+      "pattern": "^(global|(workspace|project|session):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "pattern": "^idem:v1:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "predicateToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_id", "scope_key", "revision"],
+      "properties": {
+        "scope_id": { "$ref": "#/$defs/uuid" },
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_key", "revision"],
+      "properties": {
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sourceLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_part", "locator_kind", "locator_value", "evidence_sha256"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/uuid" },
+        "event_part": { "enum": ["content", "payload"] },
+        "locator_kind": { "enum": ["whole", "utf8_byte_range", "json_pointer"] },
+        "locator_value": { "type": "string" },
+        "evidence_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "locator_kind": { "const": "whole" } } },
+          "then": { "properties": { "locator_value": { "const": "" } } }
+        },
+        {
+          "if": { "properties": { "locator_kind": { "const": "utf8_byte_range" } } },
+          "then": { "properties": { "locator_value": { "type": "string", "pattern": "^(0|[1-9][0-9]*):(0|[1-9][0-9]*)$" } } }
+        },
+        {
+          "if": { "properties": { "locator_kind": { "const": "json_pointer" } } },
+          "then": { "properties": { "locator_value": { "type": "string", "pattern": "^(/([^~/]|~[01])*)*$" } } }
+        }
+      ]
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "session_id", "evidence", "actor", "source_type", "authority", "observed_at"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/sourceLocator" },
+        "session_id": { "$ref": "#/$defs/uuid" },
+        "evidence": { "type": "string" },
+        "actor": { "type": "string", "minLength": 1 },
+        "source_type": { "type": "string", "minLength": 1 },
+        "authority": { "type": "string", "minLength": 1 },
+        "observed_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "generatedID": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_index", "name", "value"],
+      "properties": {
+        "operation_index": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string", "minLength": 1 },
+        "value": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predicate_id", "token", "version", "label", "object_constraint", "cardinality"],
+      "properties": {
+        "predicate_id": { "$ref": "#/$defs/uuid" },
+        "token": { "$ref": "#/$defs/predicateToken" },
+        "version": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "object_constraint": { "enum": ["entity", "text", "integer", "decimal", "boolean", "date", "datetime"] },
+        "cardinality": { "enum": ["one", "many"] }
+      }
+    },
+    "typedLiteral": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "enum": ["text", "integer", "decimal", "boolean", "date", "datetime"] },
+        "value": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "integer" } } },
+          "then": { "properties": { "value": { "type": "string", "pattern": "^(0|-?[1-9][0-9]*)$" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "decimal" } } },
+          "then": { "properties": { "value": { "type": "string", "pattern": "^(0|-?[1-9][0-9]*|-?(0|[1-9][0-9]*)\\.[0-9]*[1-9])$" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "boolean" } } },
+          "then": { "properties": { "value": { "enum": ["true", "false"] } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "date" } } },
+          "then": { "properties": { "value": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])$" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "datetime" } } },
+          "then": { "properties": { "value": { "$ref": "#/$defs/timestamp" } } }
+        }
+      ]
+    },
+    "claimObject": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entity_id"],
+          "properties": { "entity_id": { "$ref": "#/$defs/uuid" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["literal"],
+          "properties": { "literal": { "$ref": "#/$defs/typedLiteral" } }
+        }
+      ]
+    },
+    "validTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/nullableTimestamp" },
+        "to": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_id", "scope_key", "canonical_name", "entity_type", "lifecycle"],
+      "properties": {
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "canonical_name": { "type": "string", "minLength": 1 },
+        "entity_type": { "type": "string", "minLength": 1 },
+        "lifecycle": { "enum": ["active", "retired"] }
+      }
+    },
+    "alias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alias_id", "entity_id", "scope_key", "value", "normalized_value", "lifecycle"],
+      "properties": {
+        "alias_id": { "$ref": "#/$defs/uuid" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "value": { "type": "string", "minLength": 1 },
+        "normalized_value": { "type": "string", "minLength": 1 },
+        "lifecycle": { "enum": ["active", "retired"] }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "scope_key", "subject_entity_id", "predicate_id", "predicate_token", "predicate_version", "object", "polarity", "valid_time", "lifecycle"],
+      "properties": {
+        "claim_id": { "$ref": "#/$defs/uuid" },
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "subject_entity_id": { "$ref": "#/$defs/uuid" },
+        "predicate_id": { "$ref": "#/$defs/uuid" },
+        "predicate_token": { "$ref": "#/$defs/predicateToken" },
+        "predicate_version": { "type": "integer", "minimum": 1 },
+        "object": { "$ref": "#/$defs/claimObject" },
+        "polarity": { "enum": ["affirmed", "denied"] },
+        "valid_time": { "$ref": "#/$defs/validTime" },
+        "lifecycle": { "enum": ["active", "retired", "superseded"] }
+      }
+    },
+    "sourceLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_link_id", "claim_id", "locator", "actor", "source_type", "authority", "observed_at", "eligibility"],
+      "properties": {
+        "source_link_id": { "$ref": "#/$defs/uuid" },
+        "claim_id": { "$ref": "#/$defs/uuid" },
+        "locator": { "$ref": "#/$defs/sourceLocator" },
+        "actor": { "type": "string", "minLength": 1 },
+        "source_type": { "type": "string", "minLength": 1 },
+        "authority": { "type": "string", "minLength": 1 },
+        "observed_at": { "$ref": "#/$defs/timestamp" },
+        "eligibility": { "enum": ["eligible", "retracted"] }
+      }
+    },
+    "graphLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["graph_link_id", "scope_key", "relation", "source_id", "target_id", "lifecycle"],
+      "properties": {
+        "graph_link_id": { "$ref": "#/$defs/uuid" },
+        "scope_key": { "$ref": "#/$defs/scopeKey" },
+        "relation": { "enum": ["derivation", "generalization", "contradiction"] },
+        "source_id": { "$ref": "#/$defs/uuid" },
+        "target_id": { "$ref": "#/$defs/uuid" },
+        "lifecycle": { "enum": ["active", "retired"] }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_kind", "object_id", "state"],
+      "properties": {
+        "object_kind": { "enum": ["entity", "alias", "claim", "source_link", "graph_link"] },
+        "object_id": { "$ref": "#/$defs/uuid" },
+        "state": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "items": { "$ref": "#/$defs/predicate" } },
+        "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+        "aliases": { "type": "array", "items": { "$ref": "#/$defs/alias" } },
+        "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" } },
+        "source_links": { "type": "array", "items": { "$ref": "#/$defs/sourceLink" } },
+        "graph_links": { "type": "array", "items": { "$ref": "#/$defs/graphLink" } },
+        "transitions": { "type": "array", "items": { "$ref": "#/$defs/transition" } }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "idempotency_key": { "$ref": "#/$defs/idempotencyKey" },
+        "actor": { "type": "string", "minLength": 1 },
+        "session_id": { "$ref": "#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/effect" }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/proposal" },
+        "proposal_sha256": { "$ref": "#/$defs/sha256" },
+        "transaction_time": { "$ref": "#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/revision" } },
+        "effect_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_revisions", "predicates", "entities", "aliases", "claims", "source_links", "graph_links"],
+      "properties": {
+        "scope_revisions": { "type": "array", "items": { "$ref": "#/$defs/revision" } },
+        "predicates": { "type": "array", "items": { "$ref": "#/$defs/predicate" } },
+        "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+        "aliases": { "type": "array", "items": { "$ref": "#/$defs/alias" } },
+        "claims": { "type": "array", "items": { "$ref": "#/$defs/claim" } },
+        "source_links": { "type": "array", "items": { "$ref": "#/$defs/sourceLink" } },
+        "graph_links": { "type": "array", "items": { "$ref": "#/$defs/graphLink" } }
+      }
+    },
+    "queryExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "request", "expected"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "scope_key", "valid_at", "as_known_at"],
+          "properties": {
+            "kind": { "type": "string", "minLength": 1 },
+            "scope_key": { "$ref": "#/$defs/scopeKey" },
+            "valid_at": { "$ref": "#/$defs/timestamp" },
+            "as_known_at": { "$ref": "#/$defs/timestamp" }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope_revision", "object_ids"],
+          "properties": {
+            "scope_revision": { "type": "integer", "minimum": 0 },
+            "object_ids": { "type": "array", "items": { "$ref": "#/$defs/uuid" } }
+          }
+        }
+      }
+    },
+    "pathExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "request", "expected"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_id", "max_hops", "scope_key", "valid_at", "as_known_at"],
+          "properties": {
+            "start_id": { "$ref": "#/$defs/uuid" },
+            "max_hops": { "type": "integer", "minimum": 1, "maximum": 2 },
+            "scope_key": { "$ref": "#/$defs/scopeKey" },
+            "valid_at": { "$ref": "#/$defs/timestamp" },
+            "as_known_at": { "$ref": "#/$defs/timestamp" }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["paths"],
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["object_ids", "relations"],
+                "properties": {
+                  "object_ids": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/uuid" } },
+                  "relations": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "attempt", "error_code", "unchanged_revisions"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "attempt": { "$ref": "#/$defs/proposal" },
+        "error_code": { "type": "string", "minLength": 1 },
+        "unchanged_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/revision" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,328 @@
+{
+  "fixture_schema_version": 1,
+  "name": "one source-linked literal claim with every canonical scope kind",
+  "scopes": [
+    {
+      "scope_id": "10000000-0000-4000-8000-000000000001",
+      "scope_key": "global",
+      "revision": 0
+    },
+    {
+      "scope_id": "10000000-0000-4000-8000-000000000002",
+      "scope_key": "workspace:20000000-0000-4000-8000-000000000001",
+      "revision": 0
+    },
+    {
+      "scope_id": "10000000-0000-4000-8000-000000000003",
+      "scope_key": "project:30000000-0000-4000-8000-000000000001",
+      "revision": 0
+    },
+    {
+      "scope_id": "10000000-0000-4000-8000-000000000004",
+      "scope_key": "session:40000000-0000-4000-8000-000000000001",
+      "revision": 0
+    }
+  ],
+  "source_evidence": [
+    {
+      "locator": {
+        "event_id": "50000000-0000-4000-8000-000000000001",
+        "event_part": "content",
+        "locator_kind": "utf8_byte_range",
+        "locator_value": "0:22",
+        "evidence_sha256": "sha256:a8e9e3c075dababbd40194c8d04a04c9fd21baf1823afeb58f8ae3fade598929"
+      },
+      "session_id": "40000000-0000-4000-8000-000000000001",
+      "evidence": "My timezone is Detroit",
+      "actor": "owner",
+      "source_type": "user_message",
+      "authority": "owner_statement",
+      "observed_at": "2026-09-01T12:00:00.000000000Z"
+    }
+  ],
+  "generated_ids": [
+    {
+      "operation_index": 0,
+      "name": "operation_id",
+      "value": "60000000-0000-4000-8000-000000000001"
+    },
+    {
+      "operation_index": 0,
+      "name": "predicate_id",
+      "value": "60000000-0000-4000-8000-000000000002"
+    },
+    {
+      "operation_index": 0,
+      "name": "owner_entity_id",
+      "value": "60000000-0000-4000-8000-000000000003"
+    },
+    {
+      "operation_index": 0,
+      "name": "claim_id",
+      "value": "60000000-0000-4000-8000-000000000004"
+    },
+    {
+      "operation_index": 0,
+      "name": "source_link_id",
+      "value": "60000000-0000-4000-8000-000000000005"
+    }
+  ],
+  "operations": [
+    {
+      "schema_version": 1,
+      "operation_id": "60000000-0000-4000-8000-000000000001",
+      "proposal": {
+        "kind": "remember_literal_claim",
+        "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000001",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [
+          {
+            "scope_key": "global",
+            "revision": 0
+          }
+        ],
+        "source_event_ids": [
+          "50000000-0000-4000-8000-000000000001"
+        ],
+        "effect": {
+          "scopes": [
+            "global"
+          ],
+          "predicates": [
+            {
+              "predicate_id": "60000000-0000-4000-8000-000000000002",
+              "token": "timezone_name",
+              "version": 1,
+              "label": "timezone name",
+              "object_constraint": "text",
+              "cardinality": "one"
+            }
+          ],
+          "entities": [
+            {
+              "entity_id": "60000000-0000-4000-8000-000000000003",
+              "scope_key": "global",
+              "canonical_name": "owner",
+              "entity_type": "person",
+              "lifecycle": "active"
+            }
+          ],
+          "aliases": [],
+          "claims": [
+            {
+              "claim_id": "60000000-0000-4000-8000-000000000004",
+              "scope_key": "global",
+              "subject_entity_id": "60000000-0000-4000-8000-000000000003",
+              "predicate_id": "60000000-0000-4000-8000-000000000002",
+              "predicate_token": "timezone_name",
+              "predicate_version": 1,
+              "object": {
+                "literal": {
+                  "kind": "text",
+                  "value": "Detroit"
+                }
+              },
+              "polarity": "affirmed",
+              "valid_time": {
+                "from": null,
+                "to": null
+              },
+              "lifecycle": "active"
+            }
+          ],
+          "source_links": [
+            {
+              "source_link_id": "60000000-0000-4000-8000-000000000005",
+              "claim_id": "60000000-0000-4000-8000-000000000004",
+              "locator": {
+                "event_id": "50000000-0000-4000-8000-000000000001",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "0:22",
+                "evidence_sha256": "sha256:a8e9e3c075dababbd40194c8d04a04c9fd21baf1823afeb58f8ae3fade598929"
+              },
+              "actor": "owner",
+              "source_type": "user_message",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-01T12:00:00.000000000Z",
+              "eligibility": "eligible"
+            }
+          ],
+          "graph_links": [],
+          "transitions": []
+        }
+      },
+      "proposal_sha256": "sha256:29f1fa4c17966dd1fd22e119b5dcca706e65ad0d066945429579b147bf609d20",
+      "transaction_time": "2026-09-01T12:00:01.000000000Z",
+      "resulting_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "effect_sha256": "sha256:60a41b9acdb5c8e85546097d5fe9a02cd85df67505dc41df828ab321c1520561"
+    }
+  ],
+  "expected_projection": {
+    "scope_revisions": [
+      {
+        "scope_key": "global",
+        "revision": 1
+      }
+    ],
+    "predicates": [
+      {
+        "predicate_id": "60000000-0000-4000-8000-000000000002",
+        "token": "timezone_name",
+        "version": 1,
+        "label": "timezone name",
+        "object_constraint": "text",
+        "cardinality": "one"
+      }
+    ],
+    "entities": [
+      {
+        "entity_id": "60000000-0000-4000-8000-000000000003",
+        "scope_key": "global",
+        "canonical_name": "owner",
+        "entity_type": "person",
+        "lifecycle": "active"
+      }
+    ],
+    "aliases": [],
+    "claims": [
+      {
+        "claim_id": "60000000-0000-4000-8000-000000000004",
+        "scope_key": "global",
+        "subject_entity_id": "60000000-0000-4000-8000-000000000003",
+        "predicate_id": "60000000-0000-4000-8000-000000000002",
+        "predicate_token": "timezone_name",
+        "predicate_version": 1,
+        "object": {
+          "literal": {
+            "kind": "text",
+            "value": "Detroit"
+          }
+        },
+        "polarity": "affirmed",
+        "valid_time": {
+          "from": null,
+          "to": null
+        },
+        "lifecycle": "active"
+      }
+    ],
+    "source_links": [
+      {
+        "source_link_id": "60000000-0000-4000-8000-000000000005",
+        "claim_id": "60000000-0000-4000-8000-000000000004",
+        "locator": {
+          "event_id": "50000000-0000-4000-8000-000000000001",
+          "event_part": "content",
+          "locator_kind": "utf8_byte_range",
+          "locator_value": "0:22",
+          "evidence_sha256": "sha256:a8e9e3c075dababbd40194c8d04a04c9fd21baf1823afeb58f8ae3fade598929"
+        },
+        "actor": "owner",
+        "source_type": "user_message",
+        "authority": "owner_statement",
+        "observed_at": "2026-09-01T12:00:00.000000000Z",
+        "eligibility": "eligible"
+      }
+    ],
+    "graph_links": []
+  },
+  "queries": [
+    {
+      "name": "current global claims",
+      "request": {
+        "kind": "claims",
+        "scope_key": "global",
+        "valid_at": "2026-09-01T12:00:02.000000000Z",
+        "as_known_at": "2026-09-01T12:00:02.000000000Z"
+      },
+      "expected": {
+        "scope_revision": 1,
+        "object_ids": [
+          "60000000-0000-4000-8000-000000000004"
+        ]
+      }
+    }
+  ],
+  "paths": [
+    {
+      "name": "zero structural paths from a literal claim",
+      "request": {
+        "start_id": "60000000-0000-4000-8000-000000000004",
+        "max_hops": 2,
+        "scope_key": "global",
+        "valid_at": "2026-09-01T12:00:02.000000000Z",
+        "as_known_at": "2026-09-01T12:00:02.000000000Z"
+      },
+      "expected": {
+        "paths": []
+      }
+    }
+  ],
+  "expected_failures": [
+    {
+      "name": "stale global revision",
+      "attempt": {
+        "kind": "remember_literal_claim",
+        "idempotency_key": "idem:v1:70000000-0000-4000-8000-000000000002",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [
+          {
+            "scope_key": "global",
+            "revision": 0
+          }
+        ],
+        "source_event_ids": [
+          "50000000-0000-4000-8000-000000000001"
+        ],
+        "effect": {
+          "scopes": [
+            "global"
+          ],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [
+            {
+              "claim_id": "60000000-0000-4000-8000-000000000004",
+              "scope_key": "global",
+              "subject_entity_id": "60000000-0000-4000-8000-000000000003",
+              "predicate_id": "60000000-0000-4000-8000-000000000002",
+              "predicate_token": "timezone_name",
+              "predicate_version": 1,
+              "object": {
+                "literal": {
+                  "kind": "text",
+                  "value": "Detroit"
+                }
+              },
+              "polarity": "affirmed",
+              "valid_time": {
+                "from": null,
+                "to": null
+              },
+              "lifecycle": "active"
+            }
+          ],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": []
+        }
+      },
+      "error_code": "stale_scope_revision",
+      "unchanged_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 )
 
@@ -96,7 +97,34 @@ func cloneProperty(property openrouter.Property) openrouter.Property {
 	return clone
 }
 
-type ApprovalObserver func(ctx context.Context, decision Decision) error
+// ApprovalMetadata is prepared, immutable evidence that a consequential tool
+// needs the harness to place in the durable Action Approval record. Ordinary
+// tools leave it empty. Semantic tools bind one exact prepared proposal to the
+// owner-visible approval without gaining access to event persistence.
+type ApprovalMetadata struct {
+	Arguments      string
+	ParentEventID  memory.EventID
+	ExecutionID    memory.ExecutionID
+	ProposalSHA256 string
+	PreparedSHA256 string
+}
+
+func (m ApprovalMetadata) empty() bool {
+	return m == (ApprovalMetadata{})
+}
+
+func (m ApprovalMetadata) validate() error {
+	if m.empty() {
+		return nil
+	}
+	if m.Arguments == "" || m.ParentEventID == "" || m.ExecutionID == "" ||
+		m.ProposalSHA256 == "" || m.PreparedSHA256 == "" {
+		return errors.New("prepared approval metadata must bind arguments, parent, execution, and both hashes")
+	}
+	return nil
+}
+
+type ApprovalObserver func(ctx context.Context, decision Decision, metadata ApprovalMetadata) error
 
 type AuthorizationBoundary int
 
@@ -108,8 +136,29 @@ const (
 type LifecycleAuthorizer func(context.Context, AuthorizationBoundary) error
 
 type PreparedTool struct {
-	Preview *FileChangePreview
-	Execute func(ctx context.Context) (string, error)
+	Preview  *FileChangePreview
+	Approval ApprovalMetadata
+	Execute  func(ctx context.Context) (string, error)
+}
+
+// InvocationContext is the harness-owned authority supplied to a tool call.
+// It is deliberately absent from model arguments: a Capability can use the
+// current scope, source event, and live turn fence but cannot choose them.
+type InvocationContext struct {
+	Scope         memory.ScopeContext
+	Lease         memory.TurnLease
+	SourceEventID memory.EventID
+}
+
+type invocationContextKey struct{}
+
+func WithInvocationContext(ctx context.Context, invocation InvocationContext) context.Context {
+	return context.WithValue(ctx, invocationContextKey{}, invocation)
+}
+
+func InvocationFromContext(ctx context.Context) (InvocationContext, bool) {
+	invocation, ok := ctx.Value(invocationContextKey{}).(InvocationContext)
+	return invocation, ok
 }
 
 type Approver func(ctx context.Context, name, args string, preview *FileChangePreview) Decision
@@ -297,6 +346,16 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 					}
 					prepared = &p
 				}
+				if prepared != nil {
+					if err := prepared.Approval.validate(); err != nil {
+						msg, isErr := toolError(call.ID, err)
+						return complete(msg, isErr)
+					}
+					if !prepared.Approval.empty() && observe == nil {
+						msg, isErr := toolError(call.ID, errors.New("prepared semantic mutation requires a durable approval observer"))
+						return complete(msg, isErr)
+					}
+				}
 
 				var preview *FileChangePreview
 				if prepared != nil {
@@ -306,10 +365,14 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 				if err := ctx.Err(); err != nil {
 					return openrouter.Message{}, false, err
 				}
+				approvalArguments := call.Function.Arguments
+				if prepared != nil && prepared.Approval.Arguments != "" {
+					approvalArguments = prepared.Approval.Arguments
+				}
 				decision = approve(
 					ctx,
 					call.Function.Name,
-					call.Function.Arguments,
+					approvalArguments,
 					preview,
 				)
 				if err := ctx.Err(); err != nil {
@@ -321,7 +384,11 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 				if err := ctx.Err(); err != nil {
 					return openrouter.Message{}, false, err
 				}
-				if err := observe(ctx, decision); err != nil {
+				metadata := ApprovalMetadata{}
+				if prepared != nil {
+					metadata = prepared.Approval
+				}
+				if err := observe(ctx, decision, metadata); err != nil {
 					if ctx.Err() != nil {
 						return openrouter.Message{}, false, ctx.Err()
 					}

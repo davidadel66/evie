@@ -49,22 +49,23 @@ func main() {
 		return
 	}
 
-	pluginManager, err := plugins.NewManager(
-		tools.KernelToolset(),
-		plugins.NewWeb(),
-		plugins.NewFinance(),
-	)
-	if err != nil {
-		log.Fatalf("failed to load compiled plugins: %v", err)
-	}
 	db, err := eviedb.OpenDB()
 	if err != nil {
 		log.Fatalf("failed to open Evie database: %v", err)
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	pluginManager, err := plugins.NewManager(
+		tools.KernelToolset(),
+		plugins.NewWeb(),
+		plugins.NewFinance(),
+		plugins.NewMemory(kernelStore),
+	)
+	if err != nil {
+		log.Fatalf("failed to load compiled plugins: %v", err)
+	}
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
-		plugins.WebPluginID: true, plugins.FinancePluginID: true,
+		plugins.WebPluginID: true, plugins.FinancePluginID: true, plugins.MemoryPluginID: true,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}
@@ -148,7 +149,7 @@ func main() {
 			)
 			return boundStore.selection(selected), err
 		})
-		runREPL(session, scanner)
+		runREPLWithMemory(session, scanner, kernelStore)
 	case "serve":
 		presetReport, err := pluginManager.ValidatePresetContext(context.Background(), "")
 		if err != nil {
@@ -161,16 +162,34 @@ func main() {
 			}
 			break
 		}
-		var managementStore *eviedb.Store
-		globalSession := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
-			managementStore = store
-			created, err := store.CreateGlobalSessionWithComposition(context.Background(), resolved.Receipt)
+		client, err := openrouter.NewClient(os.Getenv("OPENROUTER_API_KEY"))
+		if err != nil {
+			log.Fatalf("failed to create client: %v", err)
+		}
+		model := os.Getenv("EVIE_MODEL")
+		if model == "" {
+			model = agent.DefaultModel
+		}
+		profile, err := client.ResolveContextProfile(context.Background(), model)
+		if err != nil {
+			log.Fatalf("failed to resolve context profile: %v", err)
+		}
+		controller := newWebContextSessionController(kernelStore, pluginManager, func(
+			session memory.Session,
+			composition plugins.ResolvedComposition,
+		) (*agent.Session, error) {
+			holderUUID, err := uuid.NewRandom()
 			if err != nil {
-				return storedSessionSelection{}, err
+				return nil, err
 			}
-			return storedSessionSelection{Session: created, createdComposition: &resolved}, nil
+			holderID := memory.LeaseHolderID(holderUUID.String())
+			return agent.NewWithToolset(
+				client, profile,
+				kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(),
+				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
+			), nil
 		})
-		if err := web.ServeManaged(globalSession, pluginManager, managementStore); err != nil {
+		if err := web.ServeContextManaged(pluginManager, kernelStore, controller, kernelStore); err != nil {
 			log.Fatalf("serve: %v", err)
 		}
 	default:

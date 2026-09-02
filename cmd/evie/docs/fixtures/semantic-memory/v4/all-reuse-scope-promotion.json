@@ -1,0 +1,56 @@
+{
+  "fixture_schema_version": 4,
+  "name": "repeated Workspace to global Promotion reuses all broader objects",
+  "operations": [
+    {
+      "schema_version": 4,
+      "operation_id": "85000000-0000-4000-8000-000000000015",
+      "proposal": {
+        "kind": "promote_claim",
+        "idempotency_key": "idem:v1:85000000-0000-4000-8000-000000000016",
+        "actor": "owner",
+        "session_id": "85000000-0000-4000-8000-000000000003",
+        "prior_revisions": [
+          { "scope_key": "global", "revision": 3 },
+          { "scope_key": "workspace:85000000-0000-4000-8000-000000000004", "revision": 1 }
+        ],
+        "source_event_ids": ["85000000-0000-4000-8000-000000000017"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [],
+          "promotions": [
+            {
+              "source_scope_key": "workspace:85000000-0000-4000-8000-000000000004",
+              "destination_scope_key": "global",
+              "source_claim_id": "85000000-0000-4000-8000-000000000012",
+              "destination_claim_id": "85000000-0000-4000-8000-000000000008",
+              "entity_mappings": [
+                {
+                  "source_entity_id": "85000000-0000-4000-8000-000000000013",
+                  "destination_entity_id": "85000000-0000-4000-8000-000000000006"
+                },
+                {
+                  "source_entity_id": "85000000-0000-4000-8000-000000000014",
+                  "destination_entity_id": "85000000-0000-4000-8000-000000000007"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:3a8df2644937a3b15e7d489306da01535175075c34c08f2cd5a233ccab4785a6",
+      "transaction_time": "2026-09-02T18:00:02.000000000Z",
+      "resulting_revisions": [
+        { "scope_key": "global", "revision": 4 },
+        { "scope_key": "workspace:85000000-0000-4000-8000-000000000004", "revision": 1 }
+      ],
+      "effect_sha256": "sha256:5039a037b6fb2b876cc810a51fb91e2560c58d0a36d5712afc62f5eb845c448a"
+    }
+  ]
+}

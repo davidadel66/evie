@@ -308,10 +308,10 @@ func (s *Store) appendEvent(
 		FormatVersion: 1,
 	}
 
-	var projectID sql.NullString
+	var workspaceID, projectID sql.NullString
 	err = executor.queryRowContext(ctx, `
 		INSERT INTO events (
-		id, session_id, sequence, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version
+		id, session_id, sequence, workspace_id, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version
 		)
 		SELECT ?, sessions.id,
 		COALESCE((
@@ -319,6 +319,7 @@ func (s *Store) appendEvent(
 		FROM events AS existing
 		WHERE existing.session_id = sessions.id
 		), 0) + 1,
+		sessions.workspace_id,
 		sessions.project_id,
 		NULLIF(?, ''),
 		?,
@@ -330,7 +331,7 @@ func (s *Store) appendEvent(
 		1
 		FROM sessions
 		WHERE sessions.id = ? AND sessions.status = ?
-		RETURNING sequence, project_id
+		RETURNING sequence, workspace_id, project_id
 		`,
 		event.ID,
 		event.ParentID,
@@ -342,7 +343,7 @@ func (s *Store) appendEvent(
 		event.RecordedAt.Format(time.RFC3339Nano),
 		sessionID,
 		memory.SessionActive,
-	).Scan(&event.Sequence, &projectID)
+	).Scan(&event.Sequence, &workspaceID, &projectID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return memory.Event{}, fmt.Errorf("session %q is missing or closed: %w", sessionID, err)
 	}
@@ -360,6 +361,9 @@ func (s *Store) appendEvent(
 		}
 	}
 
+	if workspaceID.Valid {
+		event.WorkspaceID = memory.WorkspaceID(workspaceID.String)
+	}
 	if projectID.Valid {
 		event.ProjectID = memory.ProjectID(projectID.String)
 	}
@@ -678,7 +682,7 @@ func (s *Store) LoadEvents(
 	sessionID memory.SessionID,
 ) ([]memory.Event, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, session_id, sequence, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version FROM events WHERE session_id = ? 
+		SELECT id, session_id, sequence, workspace_id, project_id, parent_id, event_type, role, execution_id, content, payload_json, recorded_at, format_version FROM events WHERE session_id = ?
 		ORDER BY sequence
 		`, sessionID)
 	if err != nil {
@@ -703,17 +707,18 @@ func (s *Store) LoadEvents(
 
 func scanEvent(scanner rowScanner) (memory.Event, error) {
 	var (
-		id, sessionID, eventType               string
-		content, payloadText, recordedText     string
-		sequence                               int64
-		formatVersion                          int
-		projectID, parentID, role, executionID sql.NullString
+		id, sessionID, eventType                            string
+		content, payloadText, recordedText                  string
+		sequence                                            int64
+		formatVersion                                       int
+		workspaceID, projectID, parentID, role, executionID sql.NullString
 	)
 
 	if err := scanner.Scan(
 		&id,
 		&sessionID,
 		&sequence,
+		&workspaceID,
 		&projectID,
 		&parentID,
 		&eventType,
@@ -741,6 +746,9 @@ func scanEvent(scanner rowScanner) (memory.Event, error) {
 		Payload:       json.RawMessage([]byte(payloadText)),
 		RecordedAt:    recordedAt,
 		FormatVersion: formatVersion,
+	}
+	if workspaceID.Valid {
+		event.WorkspaceID = memory.WorkspaceID(workspaceID.String)
 	}
 	if projectID.Valid {
 		event.ProjectID = memory.ProjectID(projectID.String)
