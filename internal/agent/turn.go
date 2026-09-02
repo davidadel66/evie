@@ -479,7 +479,8 @@ func (s *Session) runOwnedTurn(
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),
-				ParentSessionID: string(s.scope.ParentSessionID),
+				ParentSessionID: string(s.scope.ParentSessionID), LeaseHolderID: string(lease.HolderID),
+				LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
 			})
 			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
 				toolCtx, call, wrappedApprover, observeApproval, authorize,

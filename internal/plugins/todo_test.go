@@ -19,7 +19,7 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.4.0",
+		ImplementationVersion: "1.5.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
@@ -27,8 +27,10 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 			{ID: TodoListCapabilityID, Version: "1.2.0"},
 			{ID: TodoAddCapabilityID, Version: "1.2.0"},
 			{ID: TodoGetCapabilityID, Version: "1.1.0"},
-			{ID: TodoUpdateCapabilityID, Version: "1.2.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.3.0"},
 			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
+			{ID: TodoClaimCapabilityID, Version: "1.0.0"},
+			{ID: TodoReleaseCapabilityID, Version: "1.0.0"},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -64,6 +66,16 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "050eab99a96a6d12aec9c920944a9a3a6985f966a540878336c1fd49133a2668"},
 				},
 			},
+			{
+				ImplementationVersion: "1.4.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: "f0862f14352b145fe5b4bdce0519142435da80b5fa5c4aaf2909b62609f8bfc7"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: "0b5d687951b3b73f9455b9f2bf3d258d4ad8f5e32e779a86098c720d0e9dbaf4"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "dd52b8e07189b5863170784d1e051ea75fbd451c214f556cd47443972e15cdba"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: "050eab99a96a6d12aec9c920944a9a3a6985f966a540878336c1fd49133a2668"},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "0dcda46f6f320e1afcf56f990c80196407d70da56401f70ecc320804cbd71b10"},
+				},
+			},
 		},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
@@ -89,8 +101,10 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_list"},
 		{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_add"},
 		{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_get"},
-		{ID: TodoUpdateCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_update"},
+		{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_update"},
 		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_decompose"},
+		{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_claim"},
+		{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_release"},
 	}
 	if !reflect.DeepEqual(gotAssociations, wantAssociations) {
 		t.Fatalf("Todo Capability associations\n got: %+v\nwant: %+v", gotAssociations, wantAssociations)
@@ -108,12 +122,13 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefinitions := []tools.Tool{
-		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoIdempotentUpdateTool(), tools.TodoDecomposeTool(),
+		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("Todo plugin schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
 	}
-	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose"}) {
+	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose", "todo_claim", "todo_release"}) {
 		t.Fatalf("Todo schema names = %v", got)
 	}
 }
@@ -161,6 +176,8 @@ func TestTodoManagerToolsetPreservesCancellation(t *testing.T) {
 		{ID: "get", Type: "function", Function: openrouter.FunctionCall{Name: "todo_get", Arguments: `{"task_id":"cancel-me"}`}},
 		{ID: "update", Type: "function", Function: openrouter.FunctionCall{Name: "todo_update", Arguments: `{"task_id":"cancel-me","expected_revision":1,"title":"cancel me"}`}},
 		{ID: "decompose", Type: "function", Function: openrouter.FunctionCall{Name: "todo_decompose", Arguments: `{"task_id":"cancel-me","expected_revision":1,"children":[{"title":"child"}],"idempotency_key":"cancel"}`}},
+		{ID: "claim", Type: "function", Function: openrouter.FunctionCall{Name: "todo_claim", Arguments: `{"task_id":"cancel-me","idempotency_key":"cancel"}`}},
+		{ID: "release", Type: "function", Function: openrouter.FunctionCall{Name: "todo_release", Arguments: `{"task_id":"cancel-me","idempotency_key":"cancel"}`}},
 	} {
 		t.Run(call.ID, func(t *testing.T) {
 			service := cancelingTaskService{started: make(chan struct{})}
@@ -234,6 +251,18 @@ func (s cancelingTaskService) UpdateGlobalTask(ctx context.Context, _ task.ID, _
 
 func (s cancelingTaskService) DecomposeGlobalTask(ctx context.Context, _ task.ID, _ task.DecomposeInput) (task.Decomposition, error) {
 	return task.Decomposition{}, s.wait(ctx)
+}
+
+func (s cancelingTaskService) ClaimGlobalTask(ctx context.Context, _ task.ID, _ task.ClaimInput) (task.Claim, error) {
+	return task.Claim{}, s.wait(ctx)
+}
+
+func (s cancelingTaskService) ReleaseGlobalTaskClaim(ctx context.Context, _ task.ID, _ task.ReleaseInput) (task.ClaimRelease, error) {
+	return task.ClaimRelease{}, s.wait(ctx)
+}
+
+func (s cancelingTaskService) GetGlobalTaskClaim(ctx context.Context, _ task.ID) (task.Claim, bool, error) {
+	return task.Claim{}, false, s.wait(ctx)
 }
 
 func (s cancelingTaskService) ListTaskEvents(ctx context.Context, _ task.ID) ([]task.Event, error) {
@@ -334,6 +363,11 @@ func executeTodoTool(t *testing.T, toolset tools.Toolset, name, arguments string
 	ctx := task.WithMutationAttribution(context.Background(), task.MutationAttribution{
 		ActorID: "local", SessionID: "plugin-test", RunID: "tool-test",
 	})
+	return executeTodoToolContext(t, ctx, toolset, name, arguments)
+}
+
+func executeTodoToolContext(t *testing.T, ctx context.Context, toolset tools.Toolset, name, arguments string) todoToolOutcome {
+	t.Helper()
 	message, isErr, err := toolset.ExecuteWithApprovalAuthorizedCompletion(
 		ctx, openrouter.ToolCall{
 			ID: "call-todo", Type: "function",

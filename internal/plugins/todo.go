@@ -19,18 +19,26 @@ const (
 	TodoGetCapabilityID       CapabilityID = "todo.get"
 	TodoUpdateCapabilityID    CapabilityID = "todo.update"
 	TodoDecomposeCapabilityID CapabilityID = "todo.decompose"
+	TodoClaimCapabilityID     CapabilityID = "todo.claim"
+	TodoReleaseCapabilityID   CapabilityID = "todo.release"
 
-	todoImplementationVersion    = "1.4.0"
+	todoImplementationVersion    = "1.5.0"
 	todoContractVersion          = "1.0.0"
 	todoListContractVersion      = "1.2.0"
 	todoAddContractVersion       = "1.2.0"
 	todoGetContractVersion       = "1.1.0"
-	todoUpdateContractVersion    = "1.2.0"
+	todoUpdateContractVersion    = "1.3.0"
 	todoDecomposeContractVersion = "1.0.0"
+	todoClaimContractVersion     = "1.0.0"
+	todoReleaseContractVersion   = "1.0.0"
 )
 
 type Todo struct {
 	service task.Service
+}
+
+type taskManagementService interface {
+	ManagementUpdateGlobalTask(context.Context, task.ID, task.UpdateInput, string) (task.Task, error)
 }
 
 // NewTodo binds the Kernel Task service used by every current Todo capability.
@@ -64,6 +72,8 @@ func (Todo) Manifest() Manifest {
 			{ID: TodoGetCapabilityID, Version: todoGetContractVersion},
 			{ID: TodoUpdateCapabilityID, Version: todoUpdateContractVersion},
 			{ID: TodoDecomposeCapabilityID, Version: todoDecomposeContractVersion},
+			{ID: TodoClaimCapabilityID, Version: todoClaimContractVersion},
+			{ID: TodoReleaseCapabilityID, Version: todoReleaseContractVersion},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -99,6 +109,16 @@ func (Todo) Manifest() Manifest {
 					{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: schemaHash(idempotentUpdate.Schema)},
 				},
 			},
+			{
+				ImplementationVersion: "1.4.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: schemaHash(tools.TodoTreeListTool().Schema)},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: schemaHash(tools.TodoTreeAddTool().Schema)},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: schemaHash(tools.TodoTreeGetTool().Schema)},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: schemaHash(tools.TodoIdempotentUpdateTool().Schema)},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoDecomposeTool().Schema)},
+				},
+			},
 		},
 	}
 }
@@ -110,16 +130,22 @@ func (t Todo) ToolCapabilities() []ToolCapability {
 	addTool.Execute = t.add
 	listTool.Execute = t.list
 	getTool.Execute = t.get
-	updateTool := tools.TodoIdempotentUpdateTool()
+	updateTool := tools.TodoClaimedUpdateTool()
 	updateTool.Execute = t.update
 	decomposeTool := tools.TodoDecomposeTool()
 	decomposeTool.Execute = t.decompose
+	claimTool := tools.TodoClaimTool()
+	claimTool.Execute = t.claim
+	releaseTool := tools.TodoReleaseTool()
+	releaseTool.Execute = t.release
 	return []ToolCapability{
 		{ID: TodoListCapabilityID, ContractVersion: todoListContractVersion, Tool: listTool},
 		{ID: TodoAddCapabilityID, ContractVersion: todoAddContractVersion, Tool: addTool},
 		{ID: TodoGetCapabilityID, ContractVersion: todoGetContractVersion, Tool: getTool},
 		{ID: TodoUpdateCapabilityID, ContractVersion: todoUpdateContractVersion, Tool: updateTool},
 		{ID: TodoDecomposeCapabilityID, ContractVersion: todoDecomposeContractVersion, Tool: decomposeTool},
+		{ID: TodoClaimCapabilityID, ContractVersion: todoClaimContractVersion, Tool: claimTool},
+		{ID: TodoReleaseCapabilityID, ContractVersion: todoReleaseContractVersion, Tool: releaseTool},
 	}
 }
 
@@ -161,7 +187,7 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		getTool := tools.TodoGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoIdempotentUpdateTool()
-		updateTool.Execute = t.update
+		updateTool.Execute = t.updateCompatibility
 		capabilities = []ToolCapability{
 			{ID: TodoListCapabilityID, ContractVersion: "1.1.0", Tool: listTool},
 			{ID: TodoAddCapabilityID, ContractVersion: "1.1.0", Tool: addTool},
@@ -169,7 +195,26 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 			{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", Tool: updateTool},
 		}
 	}
-	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" {
+	if version == "1.4.0" {
+		listTool := tools.TodoTreeListTool()
+		listTool.Execute = t.list
+		addTool := tools.TodoTreeAddTool()
+		addTool.Execute = t.add
+		getTool := tools.TodoTreeGetTool()
+		getTool.Execute = t.get
+		updateTool := tools.TodoIdempotentUpdateTool()
+		updateTool.Execute = t.updateCompatibility
+		decomposeTool := tools.TodoDecomposeTool()
+		decomposeTool.Execute = t.decompose
+		capabilities = []ToolCapability{
+			{ID: TodoListCapabilityID, ContractVersion: "1.2.0", Tool: listTool},
+			{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", Tool: addTool},
+			{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", Tool: getTool},
+			{ID: TodoUpdateCapabilityID, ContractVersion: "1.2.0", Tool: updateTool},
+			{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", Tool: decomposeTool},
+		}
+	}
+	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" && version != "1.4.0" {
 		return nil
 	}
 	return capabilities
@@ -341,6 +386,14 @@ func (t Todo) decompose(ctx context.Context, arguments string) (string, error) {
 }
 
 func (t Todo) update(ctx context.Context, arguments string) (string, error) {
+	return t.updateWithReason(ctx, arguments, "")
+}
+
+func (t Todo) updateCompatibility(ctx context.Context, arguments string) (string, error) {
+	return t.updateWithReason(ctx, arguments, "legacy_receipt")
+}
+
+func (t Todo) updateWithReason(ctx context.Context, arguments, managementReason string) (string, error) {
 	var input struct {
 		TaskID           string       `json:"task_id"`
 		ExpectedRevision uint64       `json:"expected_revision"`
@@ -348,6 +401,7 @@ func (t Todo) update(ctx context.Context, arguments string) (string, error) {
 		Description      *string      `json:"description"`
 		Priority         *int         `json:"priority"`
 		DueDate          *string      `json:"due"`
+		ResultSummary    *string      `json:"result_summary"`
 		Status           *task.Status `json:"status"`
 		IdempotencyKey   string       `json:"idempotency_key"`
 	}
@@ -360,11 +414,20 @@ func (t Todo) update(ctx context.Context, arguments string) (string, error) {
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	updated, err := t.service.UpdateGlobalTask(ctx, task.ID(input.TaskID), task.UpdateInput{
+	updateInput := task.UpdateInput{
 		ExpectedRevision: input.ExpectedRevision, Title: input.Title, Description: input.Description,
-		Priority: input.Priority, DueDate: input.DueDate, Status: input.Status,
+		Priority: input.Priority, DueDate: input.DueDate, ResultSummary: input.ResultSummary, Status: input.Status,
 		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
-	})
+	}
+	var updated task.Task
+	var err error
+	if managementReason == "" || (input.Status == nil && input.ResultSummary == nil) {
+		updated, err = t.service.UpdateGlobalTask(ctx, task.ID(input.TaskID), updateInput)
+	} else if management, ok := t.service.(taskManagementService); ok {
+		updated, err = management.ManagementUpdateGlobalTask(ctx, task.ID(input.TaskID), updateInput, managementReason)
+	} else {
+		return "", fmt.Errorf("Todo Task management service is unavailable")
+	}
 	if err != nil {
 		return "", err
 	}
@@ -390,15 +453,65 @@ func (t Todo) updateLegacy(ctx context.Context, arguments string) (string, error
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	updated, err := t.service.UpdateGlobalTask(ctx, task.ID(input.TaskID), task.UpdateInput{
+	management, ok := t.service.(taskManagementService)
+	if !ok {
+		return "", fmt.Errorf("Todo Task management service is unavailable")
+	}
+	updated, err := management.ManagementUpdateGlobalTask(ctx, task.ID(input.TaskID), task.UpdateInput{
 		ExpectedRevision: input.ExpectedRevision, Title: input.Title, Description: input.Description,
 		Priority: input.Priority, DueDate: input.DueDate, Status: input.Status,
 		IdempotencyKey: task.IdempotencyKey(uuid.NewString()),
-	})
+	}, "legacy_receipt")
 	if err != nil {
 		return "", err
 	}
 	return encodeTodoResult(updated)
+}
+
+func (t Todo) claim(ctx context.Context, arguments string) (string, error) {
+	var input struct {
+		TaskID         string `json:"task_id"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return "", fmt.Errorf("decode todo_claim arguments: %w", err)
+	}
+	if strings.TrimSpace(input.TaskID) == "" {
+		return "", &task.InputError{Field: "task_id", Message: "must not be blank"}
+	}
+	if t.service == nil {
+		return "", fmt.Errorf("Todo Task service is unavailable")
+	}
+	claimed, err := t.service.ClaimGlobalTask(ctx, task.ID(input.TaskID), task.ClaimInput{
+		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
+	})
+	if err != nil {
+		return "", err
+	}
+	return encodeTodoResult(claimed)
+}
+
+func (t Todo) release(ctx context.Context, arguments string) (string, error) {
+	var input struct {
+		TaskID         string `json:"task_id"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return "", fmt.Errorf("decode todo_release arguments: %w", err)
+	}
+	if strings.TrimSpace(input.TaskID) == "" {
+		return "", &task.InputError{Field: "task_id", Message: "must not be blank"}
+	}
+	if t.service == nil {
+		return "", fmt.Errorf("Todo Task service is unavailable")
+	}
+	released, err := t.service.ReleaseGlobalTaskClaim(ctx, task.ID(input.TaskID), task.ReleaseInput{
+		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
+	})
+	if err != nil {
+		return "", err
+	}
+	return encodeTodoResult(released)
 }
 
 func decodeTodoArguments(arguments string, destination any) error {

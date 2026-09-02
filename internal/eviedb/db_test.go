@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -75,6 +76,66 @@ func newTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func TestTaskResultSummaryUpgradeSerializesConcurrentLegacyOpeners(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	legacy, err := sql.Open("sqlite", path+dsnPragmas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`
+		CREATE TABLE tasks (id TEXT PRIMARY KEY);
+		CREATE TABLE task_revisions (task_id TEXT, revision INTEGER);
+	`); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	dbA, err := sql.Open("sqlite", path+dsnPragmas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbA.Close()
+	dbB, err := sql.Open("sqlite", path+dsnPragmas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbB.Close()
+
+	ready := make(chan struct{}, 2)
+	start := make(chan struct{})
+	hooks := taskResultSummaryUpgradeHooks{afterFastMissingCheck: func() {
+		ready <- struct{}{}
+		<-start
+	}}
+	errors := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, db := range []*sql.DB{dbA, dbB} {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errors <- ensureTaskResultSummaryWithHooks(context.Background(), db, hooks)
+		}()
+	}
+	<-ready
+	<-ready
+	close(start)
+	wait.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("concurrent result-summary upgrade: %v", err)
+		}
+	}
+	for _, table := range []string{"tasks", "task_revisions"} {
+		present, err := tableHasColumn(context.Background(), dbA, table, "result_summary")
+		if err != nil || !present {
+			t.Fatalf("%s result_summary present=%v err=%v", table, present, err)
+		}
+	}
 }
 
 // insertJob adds a minimal jobs row and returns its id.

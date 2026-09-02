@@ -141,3 +141,49 @@ func TestValidateTreeQueryBoundsDepth(t *testing.T) {
 		}
 	}
 }
+
+func TestClaimInputsAndLeaseAttributionValidation(t *testing.T) {
+	if err := ValidateClaimInput(ClaimInput{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("missing claim identity error = %v", err)
+	}
+	if err := ValidateClaimInput(ClaimInput{IdempotencyKey: "claim-1"}); err != nil {
+		t.Fatalf("valid claim input: %v", err)
+	}
+	if err := ValidateReleaseInput(ReleaseInput{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("missing release identity error = %v", err)
+	}
+	want := MutationAttribution{
+		ActorID: "local", SessionID: "session", RunID: "tool-execution",
+		LeaseHolderID: "holder", LeaseToken: 7, LeaseGeneration: 7,
+	}
+	if err := ValidateClaimAttribution(want); err != nil {
+		t.Fatalf("valid claim attribution: %v", err)
+	}
+	for _, invalid := range []MutationAttribution{
+		{ActorID: "local", SessionID: "session", RunID: "run"},
+		{ActorID: "local", SessionID: "session", RunID: "run", LeaseHolderID: "holder", LeaseToken: 1},
+	} {
+		if err := ValidateClaimAttribution(invalid); !errors.Is(err, ErrMissingAttribution) {
+			t.Fatalf("invalid claim attribution %+v error = %v", invalid, err)
+		}
+	}
+}
+
+func TestClaimErrorsAreTypedAndModelSafe(t *testing.T) {
+	for _, err := range []error{
+		&ClaimHeldError{TaskID: "task"},
+		&ClaimRequiredError{TaskID: "task"},
+		&ClaimNotOwnedError{TaskID: "task"},
+		&ClaimExecutionInactiveError{TaskID: "task"},
+	} {
+		if strings.Contains(err.Error(), "holder") || strings.Contains(err.Error(), "session") {
+			t.Fatalf("claim error leaks runtime identity: %v", err)
+		}
+	}
+	if !errors.Is(&ClaimHeldError{TaskID: "task"}, ErrClaimHeld) ||
+		!errors.Is(&ClaimRequiredError{TaskID: "task"}, ErrClaimRequired) ||
+		!errors.Is(&ClaimNotOwnedError{TaskID: "task"}, ErrClaimNotOwned) ||
+		!errors.Is(&ClaimExecutionInactiveError{TaskID: "task"}, ErrClaimExecutionInactive) {
+		t.Fatal("claim errors do not unwrap to stable sentinels")
+	}
+}

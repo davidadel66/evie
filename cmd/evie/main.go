@@ -55,6 +55,9 @@ func main() {
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	if _, err := kernelStore.RecoverInactiveTaskClaims(context.Background()); err != nil {
+		log.Fatalf("failed to recover inactive Task claims: %v", err)
+	}
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),

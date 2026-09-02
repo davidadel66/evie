@@ -71,6 +71,30 @@ func canonicalUpdateRequestSHA256(id task.ID, input task.UpdateInput) (string, e
 	priority, prioritySet := pointerValue(input.Priority)
 	dueDate, dueDateSet := pointerValue(input.DueDate)
 	status, statusSet := pointerValue(input.Status)
+	if input.ResultSummary == nil {
+		return canonicalMutationSHA256(struct {
+			Version          int         `json:"version"`
+			Operation        string      `json:"operation"`
+			Scope            task.Scope  `json:"scope"`
+			TaskID           task.ID     `json:"task_id"`
+			ExpectedRevision uint64      `json:"expected_revision"`
+			TitleSet         bool        `json:"title_set"`
+			Title            string      `json:"title"`
+			DescriptionSet   bool        `json:"description_set"`
+			Description      string      `json:"description"`
+			PrioritySet      bool        `json:"priority_set"`
+			Priority         int         `json:"priority"`
+			DueDateSet       bool        `json:"due_date_set"`
+			DueDate          string      `json:"due_date"`
+			StatusSet        bool        `json:"status_set"`
+			Status           task.Status `json:"status"`
+		}{
+			1, string(task.OperationUpdate), task.ScopeGlobal, id, input.ExpectedRevision,
+			titleSet, title, descriptionSet, description, prioritySet, priority,
+			dueDateSet, dueDate, statusSet, status,
+		})
+	}
+	resultSummary, resultSummarySet := pointerValue(input.ResultSummary)
 	return canonicalMutationSHA256(struct {
 		Version          int         `json:"version"`
 		Operation        string      `json:"operation"`
@@ -85,12 +109,14 @@ func canonicalUpdateRequestSHA256(id task.ID, input task.UpdateInput) (string, e
 		Priority         int         `json:"priority"`
 		DueDateSet       bool        `json:"due_date_set"`
 		DueDate          string      `json:"due_date"`
+		ResultSummarySet bool        `json:"result_summary_set"`
+		ResultSummary    string      `json:"result_summary"`
 		StatusSet        bool        `json:"status_set"`
 		Status           task.Status `json:"status"`
 	}{
-		1, string(task.OperationUpdate), task.ScopeGlobal, id, input.ExpectedRevision,
+		2, string(task.OperationUpdate), task.ScopeGlobal, id, input.ExpectedRevision,
 		titleSet, title, descriptionSet, description, prioritySet, priority,
-		dueDateSet, dueDate, statusSet, status,
+		dueDateSet, dueDate, resultSummarySet, resultSummary, statusSet, status,
 	})
 }
 
@@ -170,10 +196,17 @@ func readIdempotencyClaim(
 ) (idempotencyClaim, bool, error) {
 	var claim idempotencyClaim
 	err := conn.QueryRowContext(ctx, `
-		SELECT request_sha256, operation
-		FROM task_idempotency_claims
-		WHERE actor_id = ? AND session_id = ? AND identity_sha256 = ?
-	`, attribution.ActorID, attribution.SessionID, identitySHA256).Scan(&claim.RequestSHA256, &claim.Operation)
+		SELECT request_sha256, operation FROM (
+			SELECT request_sha256, operation
+			FROM task_idempotency_claims
+			WHERE actor_id = ? AND session_id = ? AND identity_sha256 = ?
+			UNION ALL
+			SELECT request_sha256, operation
+			FROM task_coordination_results
+			WHERE actor_id = ? AND session_id = ? AND identity_sha256 = ?
+		) LIMIT 1
+	`, attribution.ActorID, attribution.SessionID, identitySHA256,
+		attribution.ActorID, attribution.SessionID, identitySHA256).Scan(&claim.RequestSHA256, &claim.Operation)
 	if err == sql.ErrNoRows {
 		return idempotencyClaim{}, false, nil
 	}
@@ -249,11 +282,11 @@ func nullableUint64(value *uint64) any {
 func insertTaskRevision(ctx context.Context, conn *sql.Conn, value task.Task) error {
 	_, err := conn.ExecContext(ctx, `
 		INSERT INTO task_revisions (
-			task_id, revision, scope, title, description, priority, due_date,
+			task_id, revision, scope, title, description, priority, due_date, result_summary,
 			status, created_at, updated_at
-		) VALUES (?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), ?, ?, ?)
+		) VALUES (?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
 	`, value.ID, value.Revision, value.Scope, value.Title, value.Description, value.Priority, value.DueDate,
-		value.Status, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
+		value.ResultSummary, value.Status, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
 	if err != nil {
 		return fmt.Errorf("insert Task revision: %w", err)
 	}
@@ -263,7 +296,7 @@ func insertTaskRevision(ctx context.Context, conn *sql.Conn, value task.Task) er
 func getTaskRevision(ctx context.Context, conn *sql.Conn, id task.ID, revision uint64) (task.Task, error) {
 	return scanTask(conn.QueryRowContext(ctx, `
 		SELECT r.task_id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
-		       r.scope, r.title, r.description, r.priority, r.due_date,
+		       r.scope, r.title, r.description, r.priority, r.due_date, r.result_summary,
 		       r.status, r.revision, r.created_at, r.updated_at
 		FROM task_revisions r
 		JOIN task_hierarchy h ON h.task_id = r.task_id

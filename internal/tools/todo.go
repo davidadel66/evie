@@ -127,6 +127,45 @@ var todoIdempotentUpdateTool = func() openrouter.Tool {
 	return tool
 }()
 
+var todoClaimedUpdateTool = func() openrouter.Tool {
+	tool := cloneSchema(todoIdempotentUpdateTool)
+	tool.Function.Description = "Update claimed Task progress, result, metadata, or lifecycle state using its current revision"
+	tool.Function.Parameters.Properties["result_summary"] = openrouter.Property{
+		Type: "string", Description: "Concise durable result or progress summary; requires the caller's active Task claim",
+	}
+	return tool
+}()
+
+var todoClaimTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_claim",
+		Description: "Claim at most one Task for this active execution before reporting progress or completing it",
+		Parameters: openrouter.Parameter{
+			Type: "object", Required: []string{"task_id", "idempotency_key"},
+			Properties: map[string]openrouter.Property{
+				"task_id":         {Type: "string", Description: "The opaque durable Task identity"},
+				"idempotency_key": {Type: "string", Description: "Caller identity reused only when retrying this exact claim"},
+			},
+		},
+	},
+}
+
+var todoReleaseTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_release",
+		Description: "Release this active execution's Task claim without changing Task lifecycle state",
+		Parameters: openrouter.Parameter{
+			Type: "object", Required: []string{"task_id", "idempotency_key"},
+			Properties: map[string]openrouter.Property{
+				"task_id":         {Type: "string", Description: "The opaque durable Task identity"},
+				"idempotency_key": {Type: "string", Description: "Caller identity reused only when retrying this exact release"},
+			},
+		},
+	},
+}
+
 var todoTreeListTool = func() openrouter.Tool {
 	tool := cloneSchema(todoLifecycleListTool)
 	tool.Function.Description = "List durable Tasks with deterministic Task Tree filters"
@@ -232,6 +271,15 @@ func TodoIdempotentAddTool() Tool {
 
 // TodoIdempotentUpdateTool is the current revision-checked mutation schema.
 func TodoIdempotentUpdateTool() Tool { return Tool{Schema: cloneSchema(todoIdempotentUpdateTool)} }
+
+// TodoClaimedUpdateTool is the current claim-aware progress and result schema.
+func TodoClaimedUpdateTool() Tool { return Tool{Schema: cloneSchema(todoClaimedUpdateTool)} }
+
+// TodoClaimTool acquires or confirms one Task claim for the trusted execution.
+func TodoClaimTool() Tool { return Tool{Schema: cloneSchema(todoClaimTool)} }
+
+// TodoReleaseTool releases only the trusted execution's active Task claim.
+func TodoReleaseTool() Tool { return Tool{Schema: cloneSchema(todoReleaseTool)} }
 
 // TodoTreeListTool is the hierarchy-aware current list schema.
 func TodoTreeListTool() Tool { return Tool{Schema: cloneSchema(todoTreeListTool)} }

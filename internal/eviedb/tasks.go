@@ -86,11 +86,11 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 		}
 		if _, err := conn.ExecContext(ctx, `
 			INSERT INTO tasks (
-				id, scope, title, description, priority, due_date,
+				id, scope, title, description, priority, due_date, result_summary,
 				status, revision, created_at, updated_at
-			) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), ?, ?, ?, ?)
+			) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
 		`, created.ID, created.Scope, created.Title, created.Description, created.Priority, created.DueDate,
-			created.Status, created.Revision, formatTaskTime(created.CreatedAt), formatTaskTime(created.UpdatedAt)); err != nil {
+			created.ResultSummary, created.Status, created.Revision, formatTaskTime(created.CreatedAt), formatTaskTime(created.UpdatedAt)); err != nil {
 			return fmt.Errorf("insert global task: %w", err)
 		}
 		if _, err := conn.ExecContext(ctx, `
@@ -298,7 +298,7 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 			FROM task_hierarchy child JOIN tree ON child.parent_id = tree.task_id
 		)
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
-		       t.scope, t.title, t.description, t.priority, t.due_date,
+		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
 		       t.status, t.revision, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
@@ -362,6 +362,33 @@ func (s *Store) GetGlobalTask(ctx context.Context, id task.ID) (task.Task, error
 }
 
 func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.UpdateInput) (task.Task, error) {
+	return s.updateGlobalTask(ctx, id, input, "")
+}
+
+// ManagementUpdateGlobalTask is a Kernel-only compatibility and recovery seam.
+// It is deliberately absent from task.Service so model-facing capabilities
+// cannot request or forge an override. Every use is restricted to the primary
+// owner and recorded in the append-only Task claim audit.
+func (s *Store) ManagementUpdateGlobalTask(
+	ctx context.Context,
+	id task.ID,
+	input task.UpdateInput,
+	reason string,
+) (task.Task, error) {
+	if strings.TrimSpace(reason) == "" {
+		return task.Task{}, &task.InputError{Field: "management_reason", Message: "must not be blank"}
+	}
+	attribution, err := task.MutationAttributionFromContext(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	if attribution.ParentSessionID != "" {
+		return task.Task{}, task.ErrManagementOverrideDenied
+	}
+	return s.updateGlobalTask(ctx, id, input, reason)
+}
+
+func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.UpdateInput, managementReason string) (task.Task, error) {
 	if err := ctx.Err(); err != nil {
 		return task.Task{}, err
 	}
@@ -453,6 +480,35 @@ func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 				task.DiagnosticRevisionConflict, mutationRevisionConflict, "", current.Status, "",
 			)
 		}
+		activeClaim, activeClaimFound, claimErr := authorizeTaskUpdate(
+			ctx, conn, current, input, attribution, s.now().UTC(), managementReason != "",
+		)
+		if claimErr != nil {
+			field := "claim_required"
+			diagnostic := task.DiagnosticClaimRequired
+			switch {
+			case errors.Is(claimErr, task.ErrClaimNotOwned):
+				field = "claim_not_owned"
+				diagnostic = task.DiagnosticClaimNotOwned
+			case errors.Is(claimErr, task.ErrClaimExecutionInactive):
+				field = "execution_inactive"
+				diagnostic = task.DiagnosticExecutionInactive
+			case errors.Is(claimErr, task.ErrMissingAttribution):
+				field = "claim_attribution"
+			}
+			if err := reject(claimErr, task.DiagnosticInvalidTransition, mutationInvalidTransition,
+				field, current.Status, statusPatchOrCurrent(input, current.Status)); err != nil {
+				return err
+			}
+			_, err := appendClaimEvent(ctx, conn, task.Event{
+				TaskID: id, Operation: task.OperationUpdate, ActorID: attribution.ActorID,
+				SessionID: attribution.SessionID, RunID: attribution.RunID, RecordedAt: s.now().UTC(),
+				PreviousRevision: current.Revision, ResultingRevision: current.Revision,
+				Outcome: task.MutationRejected, DiagnosticCode: diagnostic, ClaimID: activeClaim.ID,
+				IdempotencySHA256: identitySHA256,
+			})
+			return err
+		}
 		if input.Status != nil && *input.Status == task.StatusCompleted {
 			active, err := countActiveDescendants(ctx, conn, current.ID)
 			if err != nil {
@@ -475,7 +531,7 @@ func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 			}
 		}
 		if input.Status != nil {
-			if *input.Status == current.Status && !hasTaskMetadataPatch(input) {
+			if *input.Status == current.Status && !hasTaskNonStatusPatch(input) {
 				return reject(&task.TransitionError{From: current.Status, To: *input.Status},
 					task.DiagnosticInvalidTransition, mutationInvalidTransition, "", current.Status, *input.Status)
 			}
@@ -494,10 +550,10 @@ func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 		updated.UpdatedAt = s.now().UTC()
 		outcome, err := conn.ExecContext(ctx, `
 			UPDATE tasks
-			SET title = ?, description = NULLIF(?, ''), priority = NULLIF(?, 0), due_date = NULLIF(?, ''),
+			SET title = ?, description = NULLIF(?, ''), priority = NULLIF(?, 0), due_date = NULLIF(?, ''), result_summary = NULLIF(?, ''),
 			    status = ?, revision = ?, updated_at = ?
 			WHERE id = ? AND scope = ? AND revision = ?
-		`, updated.Title, updated.Description, updated.Priority, updated.DueDate, updated.Status,
+		`, updated.Title, updated.Description, updated.Priority, updated.DueDate, updated.ResultSummary, updated.Status,
 			updated.Revision, formatTaskTime(updated.UpdatedAt), id, task.ScopeGlobal, current.Revision)
 		if err != nil {
 			return fmt.Errorf("update global task: %w", err)
@@ -528,6 +584,41 @@ func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 			FromStatus: current.Status, ToStatus: updated.Status,
 		}, updated.UpdatedAt); err != nil {
 			return err
+		}
+		if managementReason != "" {
+			if _, err := appendClaimEvent(ctx, conn, task.Event{
+				TaskID: id, Operation: task.OperationUpdate, ActorID: attribution.ActorID,
+				SessionID: attribution.SessionID, RunID: attribution.RunID, RecordedAt: updated.UpdatedAt,
+				PreviousRevision: updated.Revision, ResultingRevision: updated.Revision,
+				Outcome: task.MutationAccepted, ClaimID: activeClaim.ID, ClaimReason: managementReason,
+				ManagementOverride: true, ManagementReason: managementReason,
+				IdempotencySHA256: identitySHA256,
+			}); err != nil {
+				return err
+			}
+		} else if taskUpdateNeedsClaim(current, input) {
+			if _, err := appendClaimEvent(ctx, conn, task.Event{
+				TaskID: id, Operation: task.OperationUpdate, ActorID: attribution.ActorID,
+				SessionID: attribution.SessionID, RunID: attribution.RunID, RecordedAt: updated.UpdatedAt,
+				PreviousRevision: updated.Revision, ResultingRevision: updated.Revision,
+				Outcome: task.MutationAccepted, ClaimID: activeClaim.ID, ClaimReason: "authorized",
+				IdempotencySHA256: identitySHA256,
+			}); err != nil {
+				return err
+			}
+		}
+		if input.Status != nil && (*input.Status == task.StatusCompleted || *input.Status == task.StatusCancelled) && activeClaimFound {
+			reason := "task_completed"
+			if *input.Status == task.StatusCancelled {
+				reason = "task_cancelled"
+			}
+			if _, _, err := releaseStoredTaskClaim(ctx, conn, activeClaim, task.Event{
+				Operation: task.OperationRelease, ActorID: attribution.ActorID,
+				SessionID: attribution.SessionID, RunID: attribution.RunID, RecordedAt: updated.UpdatedAt,
+				ManagementReason: managementReason,
+			}, reason, managementReason != ""); err != nil {
+				return err
+			}
 		}
 		result = updated
 		return nil
@@ -563,6 +654,18 @@ func replayUpdateError(id task.ID, input task.UpdateInput, prior mutationResult)
 		}
 		return &task.ConflictError{ID: id, Expected: input.ExpectedRevision, Current: current}
 	case mutationInvalidTransition:
+		if prior.DiagnosticField == "claim_attribution" {
+			return task.ErrMissingAttribution
+		}
+		if prior.DiagnosticField == "claim_required" {
+			return &task.ClaimRequiredError{TaskID: id}
+		}
+		if prior.DiagnosticField == "claim_not_owned" {
+			return &task.ClaimNotOwnedError{TaskID: id}
+		}
+		if prior.DiagnosticField == "execution_inactive" {
+			return &task.ClaimExecutionInactiveError{TaskID: id}
+		}
 		if prior.DiagnosticField == "active_descendants" {
 			return &task.ActiveDescendantsError{ID: id}
 		}
@@ -570,6 +673,13 @@ func replayUpdateError(id task.ID, input task.UpdateInput, prior mutationResult)
 	default:
 		return fmt.Errorf("replay Task update outcome %q", prior.OutcomeCode)
 	}
+}
+
+func statusPatchOrCurrent(input task.UpdateInput, current task.Status) task.Status {
+	if input.Status != nil {
+		return *input.Status
+	}
+	return current
 }
 
 func countActiveDescendants(ctx context.Context, source queryRower, id task.ID) (uint64, error) {
@@ -610,8 +720,9 @@ func hasTerminalAncestor(ctx context.Context, source queryRower, parentID task.I
 	return count > 0, nil
 }
 
-func hasTaskMetadataPatch(input task.UpdateInput) bool {
-	return input.Title != nil || input.Description != nil || input.Priority != nil || input.DueDate != nil
+func hasTaskNonStatusPatch(input task.UpdateInput) bool {
+	return input.Title != nil || input.Description != nil || input.Priority != nil || input.DueDate != nil ||
+		input.ResultSummary != nil
 }
 
 func applyTaskPatch(current task.Task, input task.UpdateInput) task.Task {
@@ -627,6 +738,9 @@ func applyTaskPatch(current task.Task, input task.UpdateInput) task.Task {
 	}
 	if input.DueDate != nil {
 		updated.DueDate = *input.DueDate
+	}
+	if input.ResultSummary != nil {
+		updated.ResultSummary = *input.ResultSummary
 	}
 	if input.Status != nil {
 		updated.Status = *input.Status
@@ -647,15 +761,26 @@ func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, e
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT e.id, e.task_id, e.sequence, e.operation, e.actor_id, e.session_id, e.run_id, e.recorded_at,
 		       e.previous_revision, e.resulting_revision, e.outcome, e.diagnostic_code,
-		       COALESCE(i.identity_sha256, '')
+		       COALESCE(e.identity_sha256, i.identity_sha256, ''), e.claim_id,
+		       e.claim_reason, e.management_override, e.management_reason
 		FROM (
 			SELECT id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
-			       previous_revision, resulting_revision, outcome, diagnostic_code
+			       previous_revision, resulting_revision, outcome, diagnostic_code,
+			       NULL AS identity_sha256, '' AS claim_id, '' AS claim_reason, 0 AS management_override,
+			       '' AS management_reason
 			FROM task_events
 			UNION ALL
 			SELECT id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
-			       previous_revision, resulting_revision, outcome, diagnostic_code
+			       previous_revision, resulting_revision, outcome, diagnostic_code,
+			       NULL AS identity_sha256, '' AS claim_id, '' AS claim_reason, 0 AS management_override,
+			       '' AS management_reason
 			FROM task_hierarchy_events
+			UNION ALL
+			SELECT id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
+			       previous_revision, resulting_revision, outcome, diagnostic_code,
+			       identity_sha256, COALESCE(claim_id, ''), COALESCE(claim_reason, ''), management_override,
+			       COALESCE(management_reason, '')
+			FROM task_claim_events
 		) e
 		LEFT JOIN task_event_idempotency i ON i.event_id = e.id
 		WHERE e.task_id = ?
@@ -672,7 +797,8 @@ func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, e
 		var diagnostic sql.NullString
 		if err := rows.Scan(&event.ID, &event.TaskID, &event.Sequence, &event.Operation, &event.ActorID, &event.SessionID,
 			&event.RunID, &recorded, &event.PreviousRevision, &event.ResultingRevision, &event.Outcome, &diagnostic,
-			&event.IdempotencySHA256); err != nil {
+			&event.IdempotencySHA256, &event.ClaimID, &event.ClaimReason, &event.ManagementOverride,
+			&event.ManagementReason); err != nil {
 			return nil, fmt.Errorf("list task events: %w", err)
 		}
 		event.DiagnosticCode = task.DiagnosticCode(diagnostic.String)
@@ -695,7 +821,7 @@ type queryRower interface {
 func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Task, error) {
 	return scanTask(source.QueryRowContext(ctx, `
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
-		       t.scope, t.title, t.description, t.priority, t.due_date,
+		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
 		       t.status, t.revision, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
@@ -706,11 +832,11 @@ func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Tas
 func insertTaskState(ctx context.Context, conn *sql.Conn, value task.Task) error {
 	_, err := conn.ExecContext(ctx, `
 		INSERT INTO tasks (
-			id, scope, title, description, priority, due_date,
+			id, scope, title, description, priority, due_date, result_summary,
 			status, revision, created_at, updated_at
-		) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), ?, ?, ?, ?)
+		) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)
 	`, value.ID, value.Scope, value.Title, value.Description, value.Priority, value.DueDate,
-		value.Status, value.Revision, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
+		value.ResultSummary, value.Status, value.Revision, formatTaskTime(value.CreatedAt), formatTaskTime(value.UpdatedAt))
 	if err != nil {
 		return fmt.Errorf("insert Task state: %w", err)
 	}
@@ -789,8 +915,10 @@ func appendHierarchyEvent(ctx context.Context, conn *sql.Conn, event task.Event)
 			SELECT sequence FROM task_events WHERE task_id = ?
 			UNION ALL
 			SELECT sequence FROM task_hierarchy_events WHERE task_id = ?
+			UNION ALL
+			SELECT sequence FROM task_claim_events WHERE task_id = ?
 		)
-	`, event.TaskID, event.TaskID).Scan(&event.Sequence); err != nil {
+	`, event.TaskID, event.TaskID, event.TaskID).Scan(&event.Sequence); err != nil {
 		return "", fmt.Errorf("allocate Task hierarchy event sequence: %w", err)
 	}
 	if _, err := conn.ExecContext(ctx, `
@@ -817,8 +945,10 @@ func appendTaskEvent(ctx context.Context, conn *sql.Conn, event task.Event) (str
 			SELECT sequence FROM task_events WHERE task_id = ?
 			UNION ALL
 			SELECT sequence FROM task_hierarchy_events WHERE task_id = ?
+			UNION ALL
+			SELECT sequence FROM task_claim_events WHERE task_id = ?
 		)
-	`, event.TaskID, event.TaskID,
+	`, event.TaskID, event.TaskID, event.TaskID,
 	).Scan(&event.Sequence); err != nil {
 		return "", fmt.Errorf("allocate task event sequence: %w", err)
 	}
@@ -836,19 +966,20 @@ func appendTaskEvent(ctx context.Context, conn *sql.Conn, event task.Event) (str
 
 func scanTask(scanner rowScanner) (task.Task, error) {
 	var (
-		value                    task.Task
-		description, dueDate     sql.NullString
-		priority                 sql.NullInt64
-		createdText, updatedText string
+		value                               task.Task
+		description, dueDate, resultSummary sql.NullString
+		priority                            sql.NullInt64
+		createdText, updatedText            string
 	)
 	if err := scanner.Scan(&value.ID, &value.ParentID, &value.RootID, &value.SiblingOrder,
-		&value.Scope, &value.Title, &description, &priority, &dueDate,
+		&value.Scope, &value.Title, &description, &priority, &dueDate, &resultSummary,
 		&value.Status, &value.Revision, &createdText, &updatedText); err != nil {
 		return task.Task{}, err
 	}
 	value.Description = description.String
 	value.Priority = int(priority.Int64)
 	value.DueDate = dueDate.String
+	value.ResultSummary = resultSummary.String
 	var err error
 	value.CreatedAt, err = time.Parse(time.RFC3339Nano, createdText)
 	if err != nil {

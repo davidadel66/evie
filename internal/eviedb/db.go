@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
     priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
     due_date    TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+    result_summary TEXT CHECK (result_summary IS NULL OR typeof(result_summary) = 'text'),
     status      TEXT NOT NULL CHECK (typeof(status) = 'text' AND status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
     revision    INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
     created_at  TEXT NOT NULL CHECK (typeof(created_at) = 'text'),
@@ -157,6 +158,7 @@ CREATE TABLE IF NOT EXISTS task_revisions (
     description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
     priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
     due_date    TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+    result_summary TEXT CHECK (result_summary IS NULL OR typeof(result_summary) = 'text'),
     status      TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
     created_at  TEXT NOT NULL CHECK (typeof(created_at) = 'text'),
     updated_at  TEXT NOT NULL CHECK (typeof(updated_at) = 'text'),
@@ -554,6 +556,169 @@ CREATE TABLE IF NOT EXISTS session_turn_leases (
     )
 );
 
+CREATE TABLE IF NOT EXISTS task_claims (
+    task_id          TEXT PRIMARY KEY NOT NULL REFERENCES tasks(id),
+    claim_id         TEXT NOT NULL UNIQUE CHECK (length(trim(claim_id)) > 0),
+    actor_id         TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id       TEXT NOT NULL REFERENCES sessions(id),
+    lease_holder_id  TEXT NOT NULL CHECK (length(trim(lease_holder_id)) > 0),
+    lease_token      INTEGER NOT NULL CHECK (lease_token > 0),
+    lease_generation INTEGER NOT NULL CHECK (lease_generation > 0),
+    acquired_run_id  TEXT NOT NULL CHECK (length(trim(acquired_run_id)) > 0),
+    claimed_at       TEXT NOT NULL CHECK (typeof(claimed_at) = 'text'),
+    CHECK (lease_token = lease_generation)
+);
+
+CREATE INDEX IF NOT EXISTS task_claims_execution_idx
+ON task_claims(session_id, lease_holder_id, lease_token, lease_generation);
+
+CREATE TRIGGER IF NOT EXISTS task_claims_validate_execution
+BEFORE INSERT ON task_claims
+FOR EACH ROW
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM sessions s
+    JOIN session_turn_leases l ON l.session_id = s.id
+    WHERE s.id = NEW.session_id
+      AND s.status = 'active'
+      AND l.holder_id = NEW.lease_holder_id
+      AND l.fencing_token = NEW.lease_token
+      AND l.lease_generation = NEW.lease_generation
+      AND l.expires_at > NEW.claimed_at
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Task claim execution is not active');
+END;
+
+CREATE TABLE IF NOT EXISTS task_claim_events (
+    id                  TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    task_id             TEXT NOT NULL REFERENCES tasks(id),
+    sequence            INTEGER NOT NULL CHECK (sequence > 0),
+    operation           TEXT NOT NULL CHECK (operation IN ('update', 'claim', 'release')),
+    actor_id            TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id          TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    run_id              TEXT NOT NULL CHECK (length(trim(run_id)) > 0),
+    recorded_at         TEXT NOT NULL CHECK (typeof(recorded_at) = 'text'),
+    previous_revision   INTEGER NOT NULL CHECK (previous_revision > 0),
+    resulting_revision  INTEGER NOT NULL CHECK (resulting_revision = previous_revision),
+    outcome             TEXT NOT NULL CHECK (outcome IN ('accepted', 'rejected')),
+    diagnostic_code     TEXT CHECK (diagnostic_code IS NULL OR diagnostic_code IN (
+        'invalid_input', 'invalid_transition', 'claim_held', 'claim_required',
+        'claim_not_owned', 'execution_inactive'
+    )),
+    identity_sha256     TEXT CHECK (
+        identity_sha256 IS NULL OR
+        (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*')
+    ),
+    claim_id            TEXT,
+    claim_reason        TEXT,
+	management_override INTEGER NOT NULL DEFAULT 0 CHECK (management_override IN (0, 1)),
+	management_reason   TEXT,
+    UNIQUE (task_id, sequence),
+    CHECK (
+        (outcome = 'accepted' AND diagnostic_code IS NULL) OR
+        (outcome = 'rejected' AND diagnostic_code IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS task_claim_events_task_sequence_idx
+ON task_claim_events(task_id, sequence);
+
+CREATE TRIGGER IF NOT EXISTS task_claim_events_append_only_update
+BEFORE UPDATE ON task_claim_events
+BEGIN
+    SELECT RAISE(ABORT, 'task claim events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_claim_events_append_only_delete
+BEFORE DELETE ON task_claim_events
+BEGIN
+    SELECT RAISE(ABORT, 'task claim events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_claim_events_unique_sequence
+BEFORE INSERT ON task_claim_events
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM task_events WHERE task_id = NEW.task_id AND sequence = NEW.sequence)
+  OR EXISTS (SELECT 1 FROM task_hierarchy_events WHERE task_id = NEW.task_id AND sequence = NEW.sequence)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event sequence already exists');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_events_unique_claim_sequence
+BEFORE INSERT ON task_events
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM task_claim_events WHERE task_id = NEW.task_id AND sequence = NEW.sequence)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event sequence already exists');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_events_unique_claim_sequence
+BEFORE INSERT ON task_hierarchy_events
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM task_claim_events WHERE task_id = NEW.task_id AND sequence = NEW.sequence)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event sequence already exists');
+END;
+
+CREATE TABLE IF NOT EXISTS task_coordination_results (
+    actor_id         TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id       TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    run_id           TEXT NOT NULL CHECK (length(trim(run_id)) > 0),
+    identity_sha256  TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    request_sha256   TEXT NOT NULL CHECK (length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    operation        TEXT NOT NULL CHECK (operation IN ('claim', 'release')),
+    task_id          TEXT NOT NULL,
+    event_id         TEXT UNIQUE REFERENCES task_claim_events(id),
+    outcome_code     TEXT NOT NULL CHECK (outcome_code IN (
+        'accepted', 'not_found', 'invalid_transition', 'claim_held',
+        'claim_required', 'claim_not_owned', 'execution_inactive'
+    )),
+    claim_id         TEXT,
+    claimed_at       TEXT,
+    released_at      TEXT,
+	release_reason   TEXT,
+	from_status      TEXT CHECK (from_status IS NULL OR from_status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+	recorded_at      TEXT NOT NULL,
+    PRIMARY KEY (actor_id, session_id, identity_sha256)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_coordination_results_append_only_update
+BEFORE UPDATE ON task_coordination_results
+BEGIN
+    SELECT RAISE(ABORT, 'task coordination results are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_coordination_results_append_only_delete
+BEFORE DELETE ON task_coordination_results
+BEGIN
+    SELECT RAISE(ABORT, 'task coordination results are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_coordination_conflicts (
+    id                       TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    actor_id                 TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id               TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    identity_sha256          TEXT NOT NULL CHECK (length(identity_sha256) = 64),
+    original_request_sha256  TEXT NOT NULL CHECK (length(original_request_sha256) = 64),
+    attempted_request_sha256 TEXT NOT NULL CHECK (length(attempted_request_sha256) = 64),
+    operation                TEXT NOT NULL CHECK (operation IN ('create', 'update', 'decompose', 'claim', 'release')),
+    task_id                  TEXT,
+    recorded_at              TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS task_coordination_conflicts_append_only_update
+BEFORE UPDATE ON task_coordination_conflicts
+BEGIN
+    SELECT RAISE(ABORT, 'task coordination conflicts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_coordination_conflicts_append_only_delete
+BEFORE DELETE ON task_coordination_conflicts
+BEGIN
+    SELECT RAISE(ABORT, 'task coordination conflicts are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS events (
     id             TEXT PRIMARY KEY NOT NULL,
     session_id     TEXT NOT NULL REFERENCES sessions(id),
@@ -757,6 +922,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade plugin enabled configuration: %w", err)
 	}
+	if err := ensureTaskResultSummary(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Task result summary: %w", err)
+	}
 	if hooks.afterSchema != nil {
 		hooks.afterSchema()
 	}
@@ -804,12 +973,72 @@ func ensureWorkspaceScope(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
-func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
-	var count int
-	err := db.QueryRowContext(ctx, fmt.Sprintf(
-		"SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name = ?", table,
-	), column).Scan(&count)
-	return count == 1, err
+func ensureTaskResultSummary(ctx context.Context, db *sql.DB) error {
+	return ensureTaskResultSummaryWithHooks(ctx, db, taskResultSummaryUpgradeHooks{})
+}
+
+type taskResultSummaryUpgradeHooks struct {
+	afterFastMissingCheck func()
+}
+
+func ensureTaskResultSummaryWithHooks(
+	ctx context.Context,
+	db *sql.DB,
+	hooks taskResultSummaryUpgradeHooks,
+) error {
+	missing := false
+	for _, table := range []string{"tasks", "task_revisions"} {
+		present, err := tableHasColumn(ctx, db, table, "result_summary")
+		if err != nil {
+			return err
+		}
+		missing = missing || !present
+	}
+	if !missing {
+		return nil
+	}
+	if hooks.afterFastMissingCheck != nil {
+		hooks.afterFastMissingCheck()
+	}
+	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+		for _, table := range []string{"tasks", "task_revisions"} {
+			present, err := tableHasColumn(ctx, conn, table, "result_summary")
+			if err != nil {
+				return err
+			}
+			if present {
+				continue
+			}
+			if _, err := conn.ExecContext(ctx, `ALTER TABLE `+table+`
+				ADD COLUMN result_summary TEXT CHECK (result_summary IS NULL OR typeof(result_summary) = 'text')`); err != nil {
+				return fmt.Errorf("add %s.result_summary: %w", table, err)
+			}
+		}
+		return nil
+	})
+}
+
+func tableHasColumn(ctx context.Context, queryer rowsQueryer, table, column string) (bool, error) {
+	rows, err := queryer.QueryContext(ctx, `PRAGMA table_info(`+table+`)`)
+	if err != nil {
+		return false, fmt.Errorf("inspect %s schema: %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, fmt.Errorf("scan %s schema: %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("read %s schema: %w", table, err)
+	}
+	return false, nil
 }
 
 func ensurePluginConfigurationRevision(ctx context.Context, db *sql.DB) error {

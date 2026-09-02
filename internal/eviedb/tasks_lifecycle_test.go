@@ -12,6 +12,14 @@ import (
 	"github.com/davidadel66/evie/internal/task"
 )
 
+func preClaimLifecycleUpdate(store *Store, ctx context.Context, id task.ID, input task.UpdateInput) (task.Task, error) {
+	current, err := store.GetGlobalTask(context.Background(), id)
+	if err != nil || !taskUpdateNeedsClaim(current, input) {
+		return store.UpdateGlobalTask(ctx, id, input)
+	}
+	return store.ManagementUpdateGlobalTask(ctx, id, input, "pre-claim lifecycle contract test")
+}
+
 func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "evie.db")
 	db, err := OpenDBAt(path)
@@ -48,7 +56,7 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	title, description, priority, due := "Retained", "", 0, ""
-	updated, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	updated, err := preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &title, Description: &description, Priority: &priority, DueDate: &due,
 		IdempotencyKey: "metadata-update",
 	})
@@ -62,7 +70,7 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	completed := task.StatusCompleted
-	completedTask, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	completedTask, err := preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &completed, IdempotencyKey: "complete",
 	})
 	if err != nil {
@@ -84,14 +92,14 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	blocked := task.StatusBlocked
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 3, Status: &blocked, IdempotencyKey: "reject-transition",
 	})
 	var transitionErr *task.TransitionError
 	if !errors.Is(err, task.ErrInvalidTransition) || !errors.As(err, &transitionErr) {
 		t.Fatalf("completed -> blocked error = %v", err)
 	}
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 2, Title: &title, IdempotencyKey: "reject-stale",
 	})
 	var conflict *task.ConflictError
@@ -100,7 +108,7 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	reopenedStatus := task.StatusOpen
-	reopened, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	reopened, err := preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 3, Status: &reopenedStatus, IdempotencyKey: "reopen",
 	})
 	if err != nil {
@@ -113,19 +121,19 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 6 {
-		t.Fatalf("events = %+v, want create + 3 accepted updates + 2 rejected diagnostics", events)
+	if len(events) != 7 {
+		t.Fatalf("events = %+v, want lifecycle events plus one audited management override", events)
 	}
 	for i, event := range events {
 		if event.Sequence != uint64(i+1) || event.ActorID != "local" || event.SessionID != "session-120" || event.RunID != "run-120" {
 			t.Fatalf("event[%d] = %+v", i, event)
 		}
 	}
-	if got := events[3]; got.Outcome != task.MutationRejected || got.DiagnosticCode != task.DiagnosticInvalidTransition ||
+	if got := events[4]; got.Outcome != task.MutationRejected || got.DiagnosticCode != task.DiagnosticInvalidTransition ||
 		got.PreviousRevision != 3 || got.ResultingRevision != 3 {
 		t.Fatalf("transition diagnostic = %+v", got)
 	}
-	if got := events[4]; got.Outcome != task.MutationRejected || got.DiagnosticCode != task.DiagnosticRevisionConflict ||
+	if got := events[5]; got.Outcome != task.MutationRejected || got.DiagnosticCode != task.DiagnosticRevisionConflict ||
 		got.PreviousRevision != 3 || got.ResultingRevision != 3 {
 		t.Fatalf("conflict diagnostic = %+v", got)
 	}
@@ -173,7 +181,7 @@ func TestTaskLifecycleRejectsEveryIllegalEdgeWithoutChangingState(t *testing.T) 
 				}
 				if from != task.StatusOpen {
 					seed := from
-					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+					created, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 						ExpectedRevision: created.Revision, Status: &seed, IdempotencyKey: task.IdempotencyKey("reject-seed-" + key),
 					})
 					if err != nil {
@@ -182,7 +190,7 @@ func TestTaskLifecycleRejectsEveryIllegalEdgeWithoutChangingState(t *testing.T) 
 				}
 				before := created
 				target := to
-				_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+				_, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 					ExpectedRevision: created.Revision, Status: &target, IdempotencyKey: task.IdempotencyKey("reject-edge-" + key),
 				})
 				if !errors.Is(err, task.ErrInvalidTransition) {
@@ -221,7 +229,7 @@ func TestTaskLifecyclePersistsEveryAllowedEdge(t *testing.T) {
 				}
 				if from != task.StatusOpen {
 					seed := from
-					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+					created, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 						ExpectedRevision: 1, Status: &seed, IdempotencyKey: task.IdempotencyKey("allow-seed-" + key),
 					})
 					if err != nil {
@@ -229,16 +237,21 @@ func TestTaskLifecyclePersistsEveryAllowedEdge(t *testing.T) {
 					}
 				}
 				target := to
-				updated, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+				updated, err := preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 					ExpectedRevision: created.Revision, Status: &target, IdempotencyKey: task.IdempotencyKey("allow-edge-" + key),
 				})
 				if err != nil || updated.Status != to || updated.Revision != created.Revision+1 {
 					t.Fatalf("allowed update = %+v, %v", updated, err)
 				}
 				events, err := store.ListTaskEvents(context.Background(), created.ID)
-				if err != nil || events[len(events)-1].Outcome != task.MutationAccepted ||
-					events[len(events)-1].PreviousRevision != created.Revision ||
-					events[len(events)-1].ResultingRevision != updated.Revision {
+				var lifecycleEvent task.Event
+				for _, event := range events {
+					if event.Outcome == task.MutationAccepted && event.PreviousRevision == created.Revision &&
+						event.ResultingRevision == updated.Revision {
+						lifecycleEvent = event
+					}
+				}
+				if err != nil || lifecycleEvent.ID == "" {
 					t.Fatalf("allowed edge events = %+v, %v", events, err)
 				}
 			})
@@ -274,7 +287,7 @@ func TestTaskEventsAreAppendOnlyTasksCannotBeDeletedAndEventFailureRollsBack(t *
 		t.Fatal(err)
 	}
 	title := "must roll back"
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &title, IdempotencyKey: "forced-failure",
 	})
 	if err == nil || !strings.Contains(err.Error(), "forced event insert failure") {
@@ -301,7 +314,7 @@ func TestTaskUpdateCancellationAndInvalidFiltersLeaveNoEvidence(t *testing.T) {
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	title := "not written"
-	if _, err := store.UpdateGlobalTask(cancelled, created.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, cancelled, created.ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &title, IdempotencyKey: "cancel-update",
 	}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled update error = %v", err)
@@ -333,7 +346,7 @@ func TestTaskMutationRequiresTrustedAttributionAndInvalidPatchRecordsSafeDiagnos
 		t.Fatal(err)
 	}
 	blank := " \t"
-	if _, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &blank, IdempotencyKey: "diagnostic-update",
 	}); !errors.Is(err, task.ErrInvalidInput) {
 		t.Fatalf("invalid patch error = %v", err)

@@ -86,7 +86,7 @@ func TestTaskTreeDecompositionIsOrderedIdempotentAndDurable(t *testing.T) {
 		t.Fatalf("conflicting decomposition reuse error = %v", err)
 	}
 	changedTitle := "research done"
-	if _, err := store.UpdateGlobalTask(ctx, decomposed.Children[0].ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, decomposed.Children[0].ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &changedTitle, IdempotencyKey: "change-child",
 	}); err != nil {
 		t.Fatal(err)
@@ -166,7 +166,7 @@ func TestTaskTreeSupportsDeepChildrenTraversalFiltersAndBounds(t *testing.T) {
 		t.Fatalf("full tree = %+v, %v", full, err)
 	}
 	completed := task.StatusCompleted
-	if _, err := store.UpdateGlobalTask(ctx, greatGrandchild.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, greatGrandchild.ID, task.UpdateInput{
 		ExpectedRevision: 1, Status: &completed, IdempotencyKey: "complete-great-grandchild",
 	}); err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestChildCreationRejectsMissingStaleAndTerminalParents(t *testing.T) {
 		t.Fatalf("replayed stale parent error = %v", err)
 	}
 	completed := task.StatusCompleted
-	root, err = store.UpdateGlobalTask(ctx, root.ID, task.UpdateInput{
+	root, err = preClaimLifecycleUpdate(store, ctx, root.ID, task.UpdateInput{
 		ExpectedRevision: 1, Status: &completed, IdempotencyKey: "terminal-root",
 	})
 	if err != nil {
@@ -282,37 +282,37 @@ func TestParentCompletionRequiresEveryDescendantTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancelled := task.StatusCancelled
-	if _, err := store.UpdateGlobalTask(ctx, child.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, child.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &cancelled, IdempotencyKey: "cancel-direct-child",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	completed := task.StatusCompleted
-	_, err = store.UpdateGlobalTask(ctx, root.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, root.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &completed, IdempotencyKey: "complete-parent-too-early",
 	})
 	if !errors.Is(err, task.ErrActiveDescendants) {
 		t.Fatalf("active descendant completion error = %v", err)
 	}
-	if _, err := store.UpdateGlobalTask(ctx, grandchild.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, grandchild.ID, task.UpdateInput{
 		ExpectedRevision: 1, Status: &cancelled, IdempotencyKey: "cancel-grandchild-update",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	open := task.StatusOpen
-	_, err = store.UpdateGlobalTask(ctx, grandchild.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, grandchild.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &open, IdempotencyKey: "reopen-grandchild-too-early",
 	})
 	if !errors.Is(err, task.ErrInvalidInput) {
 		t.Fatalf("reopen beneath terminal ancestor error = %v", err)
 	}
-	parent, err := store.UpdateGlobalTask(ctx, root.ID, task.UpdateInput{
+	parent, err := preClaimLifecycleUpdate(store, ctx, root.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &completed, IdempotencyKey: "complete-parent",
 	})
 	if err != nil || parent.Status != task.StatusCompleted {
 		t.Fatalf("completed parent = %+v, %v", parent, err)
 	}
-	_, err = store.UpdateGlobalTask(ctx, child.ID, task.UpdateInput{
+	_, err = preClaimLifecycleUpdate(store, ctx, child.ID, task.UpdateInput{
 		ExpectedRevision: 3, Status: &open, IdempotencyKey: "reopen-child-too-early",
 	})
 	if !errors.Is(err, task.ErrInvalidInput) {
@@ -345,13 +345,13 @@ func TestTaskTreeKeepsActiveWorkVisibleThroughTerminalStructuralAncestor(t *test
 		t.Fatal(err)
 	}
 	blocked := task.StatusBlocked
-	if _, err := store.UpdateGlobalTask(ctx, grandchild.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, grandchild.ID, task.UpdateInput{
 		ExpectedRevision: 1, Status: &blocked, IdempotencyKey: "block-grandchild",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	cancelled := task.StatusCancelled
-	if _, err := store.UpdateGlobalTask(ctx, child.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, child.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &cancelled, IdempotencyKey: "cancel-child",
 	}); err != nil {
 		t.Fatal(err)
@@ -389,12 +389,12 @@ func TestTaskTreeDepthLookaheadDoesNotExposeTerminalOnlyHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	completed := task.StatusCompleted
-	if _, err := store.UpdateGlobalTask(ctx, grandchild.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, grandchild.ID, task.UpdateInput{
 		ExpectedRevision: 1, Status: &completed, IdempotencyKey: "lookahead-complete-grandchild",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.UpdateGlobalTask(ctx, child.ID, task.UpdateInput{
+	if _, err := preClaimLifecycleUpdate(store, ctx, child.ID, task.UpdateInput{
 		ExpectedRevision: 2, Status: &completed, IdempotencyKey: "lookahead-complete-child",
 	}); err != nil {
 		t.Fatal(err)

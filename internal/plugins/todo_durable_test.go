@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 )
@@ -21,6 +22,105 @@ type taskServiceFixture struct {
 	get       []task.ID
 	updates   []task.UpdateInput
 	decompose []task.DecomposeInput
+	claims    []task.ClaimInput
+	releases  []task.ReleaseInput
+}
+
+func todoClaimTestContext(t *testing.T, store *eviedb.Store, holder string) context.Context {
+	t.Helper()
+	session, err := store.CreateGlobalSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(context.Background(), session.ID, memory.LeaseHolderID(holder), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return task.WithMutationAttribution(context.Background(), task.MutationAttribution{
+		ActorID: string(memory.LocalOwnerID), SessionID: string(session.ID), RunID: holder + "-run",
+		LeaseHolderID: string(lease.HolderID), LeaseToken: uint64(lease.FencingToken),
+		LeaseGeneration: uint64(lease.Generation),
+	})
+}
+
+func TestTodoPluginClaimsProgressResultsAndReleasesThroughSQLite(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(context.Background(), session.ID, "plugin-claim-holder", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := task.WithMutationAttribution(context.Background(), task.MutationAttribution{
+		ActorID: string(memory.LocalOwnerID), SessionID: string(session.ID), RunID: "plugin-claim-run",
+		LeaseHolderID: string(lease.HolderID), LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
+	})
+	manager, err := NewManager(tools.NewToolset(nil), NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetEnabled(TodoPluginID, true); err != nil {
+		t.Fatal(err)
+	}
+	toolset, err := manager.NewSessionToolset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdOutcome := executeTodoToolContext(t, ctx, toolset, "todo_add", `{"title":"claimed work","idempotency_key":"claimed-root"}`)
+	var created task.Task
+	if createdOutcome.IsErr || json.Unmarshal([]byte(createdOutcome.Content), &created) != nil {
+		t.Fatalf("created outcome = %+v", createdOutcome)
+	}
+	withoutClaim := executeTodoToolContext(t, ctx, toolset, "todo_update",
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"in_progress","idempotency_key":"without-claim"}`)
+	if !withoutClaim.IsErr || !strings.Contains(withoutClaim.Content, "active claim is required") {
+		t.Fatalf("unclaimed progress outcome = %+v", withoutClaim)
+	}
+	claimArgs := `{"task_id":"` + string(created.ID) + `","idempotency_key":"claim-task"}`
+	claimedOutcome := executeTodoToolContext(t, ctx, toolset, "todo_claim", claimArgs)
+	claimedRetry := executeTodoToolContext(t, ctx, toolset, "todo_claim", claimArgs)
+	var claimed task.Claim
+	if claimedOutcome.IsErr || claimedRetry.IsErr || claimedOutcome.Content != claimedRetry.Content ||
+		json.Unmarshal([]byte(claimedOutcome.Content), &claimed) != nil || claimed.TaskID != created.ID {
+		t.Fatalf("claim outcomes = first %+v retry %+v decoded=%+v", claimedOutcome, claimedRetry, claimed)
+	}
+	progressedOutcome := executeTodoToolContext(t, ctx, toolset, "todo_update",
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"in_progress","result_summary":"focused checks passing","idempotency_key":"claimed-progress"}`)
+	var progressed task.Task
+	if progressedOutcome.IsErr || json.Unmarshal([]byte(progressedOutcome.Content), &progressed) != nil ||
+		progressed.ResultSummary != "focused checks passing" || progressed.Status != task.StatusInProgress {
+		t.Fatalf("claimed progress outcome = %+v decoded=%+v", progressedOutcome, progressed)
+	}
+	releaseArgs := `{"task_id":"` + string(created.ID) + `","idempotency_key":"release-task"}`
+	releasedOutcome := executeTodoToolContext(t, ctx, toolset, "todo_release", releaseArgs)
+	releasedRetry := executeTodoToolContext(t, ctx, toolset, "todo_release", releaseArgs)
+	if releasedOutcome.IsErr || releasedRetry.IsErr || releasedOutcome.Content != releasedRetry.Content {
+		t.Fatalf("release outcomes = first %+v retry %+v", releasedOutcome, releasedRetry)
+	}
+	for _, forged := range []struct{ name, arguments string }{
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","actor_id":"forged"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","session_id":"forged"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","run_id":"forged"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","claimant":"forged"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","duration":60}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","expires_at":"never"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","holder_id":"forged"}`},
+		{"todo_claim", `{"task_id":"x","idempotency_key":"x","fencing_token":99}`},
+		{"todo_release", `{"task_id":"x","idempotency_key":"x","override":true}`},
+		{"todo_release", `{"task_id":"x","idempotency_key":"x","claim_id":"forged"}`},
+	} {
+		outcome := executeTodoToolContext(t, ctx, toolset, forged.name, forged.arguments)
+		if !outcome.IsErr || !strings.Contains(outcome.Content, "unknown field") {
+			t.Fatalf("forged %s outcome = %+v", forged.name, outcome)
+		}
+	}
 }
 
 func TestTodoPluginRealSQLiteManagerPathCreatesListsAndGetsExactlyOnce(t *testing.T) {
@@ -79,6 +179,7 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 	}
 	defer db.Close()
 	store := eviedb.NewStore(db)
+	ctx := todoClaimTestContext(t, store, "lifecycle-holder")
 	manager, err := NewManager(tools.NewToolset(nil), NewTodo(store))
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +191,7 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdOutcome := executeTodoTool(t, toolset, "todo_add", `{"title":"progress me"}`)
+	createdOutcome := executeTodoToolContext(t, ctx, toolset, "todo_add", `{"title":"progress me"}`)
 	if createdOutcome.IsErr {
 		t.Fatalf("create outcome = %+v", createdOutcome)
 	}
@@ -98,7 +199,12 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 	if err := json.Unmarshal([]byte(createdOutcome.Content), &created); err != nil {
 		t.Fatal(err)
 	}
-	updatedOutcome := executeTodoTool(t, toolset, "todo_update",
+	claim := executeTodoToolContext(t, ctx, toolset, "todo_claim",
+		`{"task_id":"`+string(created.ID)+`","idempotency_key":"claim-completion"}`)
+	if claim.IsErr {
+		t.Fatalf("claim outcome = %+v", claim)
+	}
+	updatedOutcome := executeTodoToolContext(t, ctx, toolset, "todo_update",
 		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"completed","description":"retained","idempotency_key":"complete-task"}`)
 	if updatedOutcome.IsErr {
 		t.Fatalf("update outcome = %+v", updatedOutcome)
@@ -126,7 +232,7 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 	if !invalidFilter.IsErr || !strings.Contains(invalidFilter.Content, "invalid status") {
 		t.Fatalf("invalid filter outcome = %+v", invalidFilter)
 	}
-	stale := executeTodoTool(t, toolset, "todo_update",
+	stale := executeTodoToolContext(t, ctx, toolset, "todo_update",
 		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost","idempotency_key":"stale-task"}`)
 	if !stale.IsErr || !strings.Contains(stale.Content, "expected 1, current 2") {
 		t.Fatalf("stale outcome = %+v", stale)
@@ -136,8 +242,8 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 		t.Fatalf("stale update changed Task: %+v, %v", got, err)
 	}
 	events, err := store.ListTaskEvents(context.Background(), created.ID)
-	if err != nil || len(events) != 3 || events[2].Outcome != task.MutationRejected ||
-		events[2].DiagnosticCode != task.DiagnosticRevisionConflict {
+	if err != nil || len(events) != 6 || events[5].Outcome != task.MutationRejected ||
+		events[5].DiagnosticCode != task.DiagnosticRevisionConflict {
 		t.Fatalf("Task events = %+v, %v", events, err)
 	}
 	if deleted := executeTodoTool(t, toolset, "todo_delete", `{"task_id":"`+string(created.ID)+`"}`); !deleted.IsErr || !strings.Contains(deleted.Content, "Unknown Tool Call") {
@@ -152,6 +258,7 @@ func TestTodoPluginDispatchesIdempotentMutationsThroughSQLite(t *testing.T) {
 	}
 	defer db.Close()
 	store := eviedb.NewStore(db)
+	ctx := todoClaimTestContext(t, store, "idempotency-holder")
 	manager, err := NewManager(tools.NewToolset(nil), NewTodo(store))
 	if err != nil {
 		t.Fatal(err)
@@ -165,8 +272,8 @@ func TestTodoPluginDispatchesIdempotentMutationsThroughSQLite(t *testing.T) {
 	}
 
 	createArgs := `{"title":"one effect","idempotency_key":"plugin-create"}`
-	first := executeTodoTool(t, toolset, "todo_add", createArgs)
-	retry := executeTodoTool(t, toolset, "todo_add", createArgs)
+	first := executeTodoToolContext(t, ctx, toolset, "todo_add", createArgs)
+	retry := executeTodoToolContext(t, ctx, toolset, "todo_add", createArgs)
 	if first.IsErr || retry.IsErr || first.Content != retry.Content {
 		t.Fatalf("create outcomes = first %+v retry %+v", first, retry)
 	}
@@ -174,20 +281,25 @@ func TestTodoPluginDispatchesIdempotentMutationsThroughSQLite(t *testing.T) {
 	if err := json.Unmarshal([]byte(first.Content), &created); err != nil {
 		t.Fatal(err)
 	}
-	conflictingCreate := executeTodoTool(t, toolset, "todo_add",
+	conflictingCreate := executeTodoToolContext(t, ctx, toolset, "todo_add",
 		`{"title":"different","idempotency_key":"plugin-create"}`)
 	if !conflictingCreate.IsErr || !strings.Contains(conflictingCreate.Content, "idempotency identity was reused") {
 		t.Fatalf("conflicting create outcome = %+v", conflictingCreate)
 	}
 
 	updateArgs := `{"task_id":"` + string(created.ID) + `","expected_revision":1,"status":"in_progress","idempotency_key":"plugin-update"}`
-	updated := executeTodoTool(t, toolset, "todo_update", updateArgs)
-	updatedRetry := executeTodoTool(t, toolset, "todo_update", updateArgs)
+	claimed := executeTodoToolContext(t, ctx, toolset, "todo_claim",
+		`{"task_id":"`+string(created.ID)+`","idempotency_key":"plugin-claim"}`)
+	if claimed.IsErr {
+		t.Fatalf("claim outcome = %+v", claimed)
+	}
+	updated := executeTodoToolContext(t, ctx, toolset, "todo_update", updateArgs)
+	updatedRetry := executeTodoToolContext(t, ctx, toolset, "todo_update", updateArgs)
 	if updated.IsErr || updatedRetry.IsErr || updated.Content != updatedRetry.Content {
 		t.Fatalf("update outcomes = first %+v retry %+v", updated, updatedRetry)
 	}
 	events, err := store.ListTaskEvents(context.Background(), created.ID)
-	if err != nil || len(events) != 2 {
+	if err != nil || len(events) != 4 {
 		t.Fatalf("idempotent dispatcher events = %+v, %v", events, err)
 	}
 }
@@ -280,6 +392,20 @@ func (s *taskServiceFixture) UpdateGlobalTask(_ context.Context, _ task.ID, inpu
 func (s *taskServiceFixture) DecomposeGlobalTask(_ context.Context, _ task.ID, input task.DecomposeInput) (task.Decomposition, error) {
 	s.decompose = append(s.decompose, input)
 	return task.Decomposition{}, nil
+}
+
+func (s *taskServiceFixture) ClaimGlobalTask(_ context.Context, id task.ID, input task.ClaimInput) (task.Claim, error) {
+	s.claims = append(s.claims, input)
+	return task.Claim{ID: "claim", TaskID: id}, nil
+}
+
+func (s *taskServiceFixture) ReleaseGlobalTaskClaim(_ context.Context, id task.ID, input task.ReleaseInput) (task.ClaimRelease, error) {
+	s.releases = append(s.releases, input)
+	return task.ClaimRelease{Claim: task.Claim{ID: "claim", TaskID: id}, Reason: "explicit"}, nil
+}
+
+func (s *taskServiceFixture) GetGlobalTaskClaim(_ context.Context, id task.ID) (task.Claim, bool, error) {
+	return task.Claim{ID: "claim", TaskID: id}, true, nil
 }
 
 func (s *taskServiceFixture) ListTaskEvents(context.Context, task.ID) ([]task.Event, error) {
@@ -421,6 +547,18 @@ func (missingTaskService) UpdateGlobalTask(_ context.Context, id task.ID, _ task
 
 func (missingTaskService) DecomposeGlobalTask(_ context.Context, id task.ID, _ task.DecomposeInput) (task.Decomposition, error) {
 	return task.Decomposition{}, &task.NotFoundError{ID: id}
+}
+
+func (missingTaskService) ClaimGlobalTask(_ context.Context, id task.ID, _ task.ClaimInput) (task.Claim, error) {
+	return task.Claim{}, &task.NotFoundError{ID: id}
+}
+
+func (missingTaskService) ReleaseGlobalTaskClaim(_ context.Context, id task.ID, _ task.ReleaseInput) (task.ClaimRelease, error) {
+	return task.ClaimRelease{}, &task.NotFoundError{ID: id}
+}
+
+func (missingTaskService) GetGlobalTaskClaim(_ context.Context, id task.ID) (task.Claim, bool, error) {
+	return task.Claim{}, false, &task.NotFoundError{ID: id}
 }
 
 func (missingTaskService) ListTaskEvents(context.Context, task.ID) ([]task.Event, error) {

@@ -12,14 +12,19 @@ import (
 )
 
 var (
-	ErrInvalidInput        = errors.New("task: invalid input")
-	ErrNotFound            = errors.New("task: not found")
-	ErrConflict            = errors.New("task: revision conflict")
-	ErrInvalidTransition   = errors.New("task: invalid status transition")
-	ErrMissingAttribution  = errors.New("task: trusted mutation attribution is missing")
-	ErrIdempotencyConflict = errors.New("task: idempotency identity was reused for a different request")
-	ErrRootCreationDenied  = errors.New("task: delegated sessions cannot create Task Tree roots")
-	ErrActiveDescendants   = errors.New("task: active descendants prevent completion")
+	ErrInvalidInput             = errors.New("task: invalid input")
+	ErrNotFound                 = errors.New("task: not found")
+	ErrConflict                 = errors.New("task: revision conflict")
+	ErrInvalidTransition        = errors.New("task: invalid status transition")
+	ErrMissingAttribution       = errors.New("task: trusted mutation attribution is missing")
+	ErrIdempotencyConflict      = errors.New("task: idempotency identity was reused for a different request")
+	ErrRootCreationDenied       = errors.New("task: delegated sessions cannot create Task Tree roots")
+	ErrActiveDescendants        = errors.New("task: active descendants prevent completion")
+	ErrClaimHeld                = errors.New("task: claimed by another active execution")
+	ErrClaimRequired            = errors.New("task: an active claim is required")
+	ErrClaimNotOwned            = errors.New("task: active claim belongs to another execution")
+	ErrClaimExecutionInactive   = errors.New("task: claiming execution is not active")
+	ErrManagementOverrideDenied = errors.New("task: delegated sessions cannot use Task management overrides")
 )
 
 type ID string
@@ -45,6 +50,8 @@ const (
 	OperationCreate    Operation = "create"
 	OperationUpdate    Operation = "update"
 	OperationDecompose Operation = "decompose"
+	OperationClaim     Operation = "claim"
+	OperationRelease   Operation = "release"
 )
 
 type MutationOutcome string
@@ -61,30 +68,36 @@ const (
 	DiagnosticInvalidTransition DiagnosticCode = "invalid_transition"
 	DiagnosticRevisionConflict  DiagnosticCode = "revision_conflict"
 	DiagnosticActiveDescendants DiagnosticCode = "active_descendants"
+	DiagnosticClaimHeld         DiagnosticCode = "claim_held"
+	DiagnosticClaimRequired     DiagnosticCode = "claim_required"
+	DiagnosticClaimNotOwned     DiagnosticCode = "claim_not_owned"
+	DiagnosticExecutionInactive DiagnosticCode = "execution_inactive"
 )
 
 const (
-	DefaultTreeDepth     = 8
-	MaxTreeDepth         = 64
-	MaxTreeNodes         = 1000
-	MaxDecomposeChildren = 100
+	DefaultTreeDepth      = 8
+	MaxTreeDepth          = 64
+	MaxTreeNodes          = 1000
+	MaxDecomposeChildren  = 100
+	MaxResultSummaryBytes = 4000
 )
 
 // Task is the durable state of one owner-controlled unit of work.
 type Task struct {
-	ID           ID        `json:"id"`
-	ParentID     ID        `json:"parent_id,omitempty"`
-	RootID       ID        `json:"root_id"`
-	SiblingOrder uint64    `json:"sibling_order,omitempty"`
-	Scope        Scope     `json:"scope"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description,omitempty"`
-	Priority     int       `json:"priority,omitempty"`
-	DueDate      string    `json:"due_date,omitempty"`
-	Status       Status    `json:"status"`
-	Revision     uint64    `json:"revision"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            ID        `json:"id"`
+	ParentID      ID        `json:"parent_id,omitempty"`
+	RootID        ID        `json:"root_id"`
+	SiblingOrder  uint64    `json:"sibling_order,omitempty"`
+	Scope         Scope     `json:"scope"`
+	Title         string    `json:"title"`
+	Description   string    `json:"description,omitempty"`
+	Priority      int       `json:"priority,omitempty"`
+	DueDate       string    `json:"due_date,omitempty"`
+	ResultSummary string    `json:"result_summary,omitempty"`
+	Status        Status    `json:"status"`
+	Revision      uint64    `json:"revision"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // CreateInput deliberately excludes persistence, scope, owner, actor, and
@@ -117,6 +130,26 @@ type Decomposition struct {
 	Children []Task `json:"children"`
 }
 
+type Claim struct {
+	ID        string    `json:"id"`
+	TaskID    ID        `json:"task_id"`
+	ClaimedAt time.Time `json:"claimed_at"`
+}
+
+type ClaimInput struct {
+	IdempotencyKey IdempotencyKey
+}
+
+type ReleaseInput struct {
+	IdempotencyKey IdempotencyKey
+}
+
+type ClaimRelease struct {
+	Claim      Claim     `json:"claim"`
+	ReleasedAt time.Time `json:"released_at"`
+	Reason     string    `json:"reason"`
+}
+
 type TreeQuery struct {
 	MaxDepth       int
 	IncludeHistory bool
@@ -136,6 +169,7 @@ type UpdateInput struct {
 	Description      *string
 	Priority         *int
 	DueDate          *string
+	ResultSummary    *string
 	Status           *Status
 	IdempotencyKey   IdempotencyKey
 }
@@ -156,22 +190,29 @@ type MutationAttribution struct {
 	SessionID       string
 	RunID           string
 	ParentSessionID string
+	LeaseHolderID   string
+	LeaseToken      uint64
+	LeaseGeneration uint64
 }
 
 type Event struct {
-	ID                string          `json:"id"`
-	TaskID            ID              `json:"task_id"`
-	Sequence          uint64          `json:"sequence"`
-	Operation         Operation       `json:"operation"`
-	ActorID           string          `json:"actor_id"`
-	SessionID         string          `json:"session_id"`
-	RunID             string          `json:"run_id"`
-	RecordedAt        time.Time       `json:"recorded_at"`
-	PreviousRevision  uint64          `json:"previous_revision"`
-	ResultingRevision uint64          `json:"resulting_revision"`
-	Outcome           MutationOutcome `json:"outcome"`
-	DiagnosticCode    DiagnosticCode  `json:"diagnostic_code,omitempty"`
-	IdempotencySHA256 string          `json:"idempotency_sha256,omitempty"`
+	ID                 string          `json:"id"`
+	TaskID             ID              `json:"task_id"`
+	Sequence           uint64          `json:"sequence"`
+	Operation          Operation       `json:"operation"`
+	ActorID            string          `json:"actor_id"`
+	SessionID          string          `json:"session_id"`
+	RunID              string          `json:"run_id"`
+	RecordedAt         time.Time       `json:"recorded_at"`
+	PreviousRevision   uint64          `json:"previous_revision"`
+	ResultingRevision  uint64          `json:"resulting_revision"`
+	Outcome            MutationOutcome `json:"outcome"`
+	DiagnosticCode     DiagnosticCode  `json:"diagnostic_code,omitempty"`
+	IdempotencySHA256  string          `json:"idempotency_sha256,omitempty"`
+	ClaimID            string          `json:"claim_id,omitempty"`
+	ClaimReason        string          `json:"claim_reason,omitempty"`
+	ManagementOverride bool            `json:"management_override,omitempty"`
+	ManagementReason   string          `json:"management_reason,omitempty"`
 }
 
 // Service is the focused Task persistence boundary consumed by first-party
@@ -184,6 +225,9 @@ type Service interface {
 	GetGlobalTaskTree(context.Context, ID, TreeQuery) (Tree, error)
 	UpdateGlobalTask(context.Context, ID, UpdateInput) (Task, error)
 	DecomposeGlobalTask(context.Context, ID, DecomposeInput) (Decomposition, error)
+	ClaimGlobalTask(context.Context, ID, ClaimInput) (Claim, error)
+	ReleaseGlobalTaskClaim(context.Context, ID, ReleaseInput) (ClaimRelease, error)
+	GetGlobalTaskClaim(context.Context, ID) (Claim, bool, error)
 }
 
 type InputError struct {
@@ -248,6 +292,32 @@ func (e *ActiveDescendantsError) Error() string {
 
 func (e *ActiveDescendantsError) Unwrap() error { return ErrActiveDescendants }
 
+type ClaimHeldError struct{ TaskID ID }
+
+func (e *ClaimHeldError) Error() string { return fmt.Sprintf("%s: task %q", ErrClaimHeld, e.TaskID) }
+func (e *ClaimHeldError) Unwrap() error { return ErrClaimHeld }
+
+type ClaimRequiredError struct{ TaskID ID }
+
+func (e *ClaimRequiredError) Error() string {
+	return fmt.Sprintf("%s: task %q", ErrClaimRequired, e.TaskID)
+}
+func (e *ClaimRequiredError) Unwrap() error { return ErrClaimRequired }
+
+type ClaimNotOwnedError struct{ TaskID ID }
+
+func (e *ClaimNotOwnedError) Error() string {
+	return fmt.Sprintf("%s: task %q", ErrClaimNotOwned, e.TaskID)
+}
+func (e *ClaimNotOwnedError) Unwrap() error { return ErrClaimNotOwned }
+
+type ClaimExecutionInactiveError struct{ TaskID ID }
+
+func (e *ClaimExecutionInactiveError) Error() string {
+	return fmt.Sprintf("%s: task %q", ErrClaimExecutionInactive, e.TaskID)
+}
+func (e *ClaimExecutionInactiveError) Unwrap() error { return ErrClaimExecutionInactive }
+
 func ValidateCreateInput(input CreateInput) error {
 	if err := validateTaskContent("", ChildInput{
 		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
@@ -309,12 +379,28 @@ func ValidateTreeQuery(query TreeQuery) error {
 	return nil
 }
 
+func ValidateClaimInput(input ClaimInput) error { return ValidateIdempotencyKey(input.IdempotencyKey) }
+
+func ValidateReleaseInput(input ReleaseInput) error {
+	return ValidateIdempotencyKey(input.IdempotencyKey)
+}
+
+func ValidateClaimAttribution(value MutationAttribution) error {
+	if strings.TrimSpace(value.ActorID) == "" || strings.TrimSpace(value.SessionID) == "" ||
+		strings.TrimSpace(value.RunID) == "" || strings.TrimSpace(value.LeaseHolderID) == "" ||
+		value.LeaseToken == 0 || value.LeaseGeneration == 0 {
+		return ErrMissingAttribution
+	}
+	return nil
+}
+
 func ValidateUpdateInput(input UpdateInput) error {
 	if input.ExpectedRevision == 0 {
 		return &InputError{Field: "expected_revision", Message: "must be greater than zero"}
 	}
-	if input.Title == nil && input.Description == nil && input.Priority == nil && input.DueDate == nil && input.Status == nil {
-		return &InputError{Field: "patch", Message: "must change metadata or lifecycle status"}
+	if input.Title == nil && input.Description == nil && input.Priority == nil && input.DueDate == nil &&
+		input.ResultSummary == nil && input.Status == nil {
+		return &InputError{Field: "patch", Message: "must change metadata, result, or lifecycle status"}
 	}
 	if input.Title != nil && strings.TrimSpace(*input.Title) == "" {
 		return &InputError{Field: "title", Message: "must not be blank"}
@@ -327,6 +413,9 @@ func ValidateUpdateInput(input UpdateInput) error {
 		if err != nil || parsed.Format("2006-01-02") != *input.DueDate {
 			return &InputError{Field: "due", Message: "must be a valid YYYY-MM-DD owner-local date"}
 		}
+	}
+	if input.ResultSummary != nil && len(*input.ResultSummary) > MaxResultSummaryBytes {
+		return &InputError{Field: "result_summary", Message: fmt.Sprintf("must not exceed %d bytes", MaxResultSummaryBytes)}
 	}
 	if input.Status != nil && !ValidStatus(*input.Status) {
 		return &InputError{Field: "status", Message: "must be open, in_progress, blocked, completed, or cancelled"}

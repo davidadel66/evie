@@ -369,7 +369,7 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 			WHERE descendants.depth < ?
 		)
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
-		       t.scope, t.title, t.description, t.priority, t.due_date,
+		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
 		       t.status, t.revision, t.created_at, t.updated_at, descendants.depth,
 		       CASE WHEN descendants.depth = ? THEN EXISTS (
 		           WITH RECURSIVE below(task_id) AS (
@@ -400,17 +400,18 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 	var flat []flatNode
 	for rows.Next() {
 		var node flatNode
-		var description, dueDate sql.NullString
+		var description, dueDate, resultSummary sql.NullString
 		var priority sql.NullInt64
 		var createdText, updatedText string
 		if err := rows.Scan(&node.value.ID, &node.value.ParentID, &node.value.RootID, &node.value.SiblingOrder,
-			&node.value.Scope, &node.value.Title, &description, &priority, &dueDate, &node.value.Status,
+			&node.value.Scope, &node.value.Title, &description, &priority, &dueDate, &resultSummary, &node.value.Status,
 			&node.value.Revision, &createdText, &updatedText, &node.depth, &node.hasRelevantDescendants); err != nil {
 			return task.Tree{}, err
 		}
 		node.value.Description = description.String
 		node.value.Priority = int(priority.Int64)
 		node.value.DueDate = dueDate.String
+		node.value.ResultSummary = resultSummary.String
 		node.value.CreatedAt, err = time.Parse(time.RFC3339Nano, createdText)
 		if err != nil {
 			return task.Tree{}, err
