@@ -722,7 +722,8 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			return err
 		}
 		if err := recordAcceptedSemanticOperation(ctx, writer, acceptedSemanticOperation{
-			OperationID: proposal.OperationID, Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey,
+			SchemaVersion: proposal.SchemaVersion,
+			OperationID:   proposal.OperationID, Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey,
 			Actor: proposal.Actor, SessionID: proposal.SessionID, TargetScopeID: proposal.Scope.ID,
 			SourceEventID: proposal.Source.EventID, ProposalHash: proposalHash, EffectHash: effectHash,
 			ProposalJSON: proposalJSON, PreparedJSON: preparedProposalJSON, ResultJSON: resultJSON,

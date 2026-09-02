@@ -24,6 +24,9 @@ type SemanticMemory interface {
 	LookupEntitiesByAliasAtScope(context.Context, memory.ScopeContext, string, bool) ([]memory.AliasEntityMatch, error)
 	InspectSemanticEntity(context.Context, memory.ScopeContext, memory.SemanticID) (memory.SemanticEntity, error)
 	InspectSemanticEntityAtScope(context.Context, memory.ScopeContext, memory.SemanticID, bool) (memory.SemanticEntity, error)
+	PrepareCorrectClaim(context.Context, memory.ScopeContext, memory.CorrectClaimRequest) (memory.CorrectClaimProposal, error)
+	ApplyCorrectClaim(context.Context, memory.TurnLease, memory.CorrectClaimProposal) (memory.CorrectClaimResult, error)
+	InspectClaims(context.Context, memory.ScopeContext, memory.ClaimQuery) (memory.ClaimsInspection, error)
 }
 
 func (s *Session) beginLocalSemanticCommand(
@@ -205,4 +208,82 @@ func (s *Session) ResolveRememberEntity(
 		return result, fmt.Errorf("apply remember Entity proposal: %w", err)
 	}
 	return result, nil
+}
+
+// PrepareCorrectClaim records the explicit owner correction before preparing
+// its complete replacement, temporal effect, evidence, and lifecycle preview.
+func (s *Session) PrepareCorrectClaim(
+	ctx context.Context,
+	semantic SemanticMemory,
+	command string,
+	request memory.CorrectClaimRequest,
+) (proposal memory.CorrectClaimProposal, retErr error) {
+	if semantic == nil {
+		return proposal, errors.New("agent: Semantic Memory is not configured")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return proposal, err
+	}
+	defer finish(&retErr)
+	event, err := s.history.Append(ctx, lease, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: command,
+	})
+	if err != nil {
+		return proposal, fmt.Errorf("persist correction request: %w", err)
+	}
+	request.SourceEventID = event.ID
+	proposal, err = semantic.PrepareCorrectClaim(ctx, s.scope, request)
+	if err != nil {
+		return proposal, fmt.Errorf("prepare correction proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+// ResolveCorrectClaim records approval before applying the exact immutable
+// replacement and append-only supersession effect.
+func (s *Session) ResolveCorrectClaim(
+	ctx context.Context,
+	semantic SemanticMemory,
+	proposal memory.CorrectClaimProposal,
+	decision tools.Decision,
+) (result memory.CorrectClaimResult, retErr error) {
+	if semantic == nil {
+		return result, errors.New("agent: Semantic Memory is not configured")
+	}
+	if proposal.SessionID != s.scope.SessionID {
+		return result, errors.New("agent: memory proposal belongs to another session")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer finish(&retErr)
+	approval, err := approvalEventInput(proposal.Source.EventID, memory.ExecutionID(proposal.OperationID), decision)
+	if err != nil {
+		return result, err
+	}
+	if _, err := s.history.Append(ctx, lease, approval); err != nil {
+		return result, fmt.Errorf("persist memory approval: %w", err)
+	}
+	if decision != tools.Approved {
+		return result, nil
+	}
+	result, err = semantic.ApplyCorrectClaim(ctx, lease, proposal)
+	if err != nil {
+		return result, fmt.Errorf("apply correction proposal: %w", err)
+	}
+	return result, nil
+}
+
+// InspectSemanticClaims is eventless and preserves both bitemporal query axes.
+func (s *Session) InspectSemanticClaims(
+	ctx context.Context,
+	semantic SemanticMemory,
+	query memory.ClaimQuery,
+) (memory.ClaimsInspection, error) {
+	if semantic == nil {
+		return memory.ClaimsInspection{}, errors.New("agent: Semantic Memory is not configured")
+	}
+	return semantic.InspectClaims(ctx, s.scope, query)
 }

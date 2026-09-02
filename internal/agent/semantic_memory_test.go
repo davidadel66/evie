@@ -9,8 +9,10 @@ import (
 )
 
 type recordingSemanticMemory struct {
-	applyLiteralCalls int
-	literalProposal   memory.RememberLiteralProposal
+	applyLiteralCalls    int
+	literalProposal      memory.RememberLiteralProposal
+	applyCorrectionCalls int
+	correctionProposal   memory.CorrectClaimProposal
 }
 
 func (r *recordingSemanticMemory) PrepareRememberLiteral(context.Context, memory.ScopeContext, memory.RememberLiteralRequest) (memory.RememberLiteralProposal, error) {
@@ -59,6 +61,20 @@ func (r *recordingSemanticMemory) InspectSemanticEntityAtScope(context.Context, 
 	return memory.SemanticEntity{}, nil
 }
 
+func (r *recordingSemanticMemory) PrepareCorrectClaim(context.Context, memory.ScopeContext, memory.CorrectClaimRequest) (memory.CorrectClaimProposal, error) {
+	return memory.CorrectClaimProposal{}, nil
+}
+
+func (r *recordingSemanticMemory) ApplyCorrectClaim(_ context.Context, _ memory.TurnLease, proposal memory.CorrectClaimProposal) (memory.CorrectClaimResult, error) {
+	r.applyCorrectionCalls++
+	r.correctionProposal = proposal
+	return memory.CorrectClaimResult{OperationID: proposal.OperationID, ReplacementClaimID: proposal.ReplacementClaim.ID}, nil
+}
+
+func (r *recordingSemanticMemory) InspectClaims(context.Context, memory.ScopeContext, memory.ClaimQuery) (memory.ClaimsInspection, error) {
+	return memory.ClaimsInspection{}, nil
+}
+
 func TestRememberLiteralAppliesNewPredicateDefinitionAndClaimOnlyAfterApproval(t *testing.T) {
 	t.Parallel()
 
@@ -98,6 +114,40 @@ func TestRememberLiteralAppliesNewPredicateDefinitionAndClaimOnlyAfterApproval(t
 			if test.wantApply == 1 && (result.OperationID != proposal.OperationID ||
 				semantic.literalProposal.Predicate != proposal.Predicate || semantic.literalProposal.ClaimID != proposal.ClaimID) {
 				t.Fatalf("approved exact proposal changed: result=%+v applied=%+v", result, semantic.literalProposal)
+			}
+		})
+	}
+}
+
+func TestCorrectClaimAppliesExactProposalOnlyAfterApproval(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		decision  tools.Decision
+		wantApply int
+	}{
+		{name: "approved", decision: tools.Approved, wantApply: 1},
+		{name: "declined", decision: tools.Declined, wantApply: 0},
+		{name: "expired", decision: tools.Expired, wantApply: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			session := newTestSession(nil, "test-model")
+			semantic := &recordingSemanticMemory{}
+			proposal := memory.CorrectClaimProposal{
+				OperationID: "60000000-0000-4000-8000-000000000071", SessionID: "test-session",
+				OldClaim:         memory.SemanticClaim{ID: "60000000-0000-4000-8000-000000000072"},
+				ReplacementClaim: memory.SemanticClaim{ID: "60000000-0000-4000-8000-000000000073"},
+				Source:           memory.SemanticSource{EventID: "source-event"}, Mode: memory.CorrectionError,
+			}
+			result, err := session.ResolveCorrectClaim(context.Background(), semantic, proposal, test.decision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if semantic.applyCorrectionCalls != test.wantApply {
+				t.Fatalf("ApplyCorrectClaim calls = %d, want %d", semantic.applyCorrectionCalls, test.wantApply)
+			}
+			if test.wantApply == 1 && (result.ReplacementClaimID != proposal.ReplacementClaim.ID ||
+				semantic.correctionProposal.Mode != proposal.Mode || semantic.correctionProposal.OldClaim.ID != proposal.OldClaim.ID) {
+				t.Fatalf("approved exact correction changed: result=%+v applied=%+v", result, semantic.correctionProposal)
 			}
 		})
 	}

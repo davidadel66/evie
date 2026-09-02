@@ -93,6 +93,7 @@ func TestQueryDBEvieAllowsOnlyPublicTables(t *testing.T) {
 		{name: "semantic aliases", query: `SELECT normalized_value FROM semantic_aliases`},
 		{name: "semantic claims", query: `SELECT literal_value FROM semantic_claims`},
 		{name: "semantic source links", query: `SELECT evidence_sha256 FROM semantic_source_links`},
+		{name: "semantic claim corrections", query: `SELECT old_claim_id FROM semantic_claim_corrections`},
 		{name: "semantic state events", query: `SELECT state FROM semantic_state_events`},
 	}
 

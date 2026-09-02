@@ -16,6 +16,7 @@ type SemanticSourceType string
 type SourceAuthority string
 type EvidencePart string
 type EvidenceLocatorKind string
+type CorrectionMode string
 
 const (
 	LiteralText      LiteralKind               = "text"
@@ -52,6 +53,9 @@ const (
 	LocatorWhole         EvidenceLocatorKind = "whole"
 	LocatorUTF8ByteRange EvidenceLocatorKind = "utf8_byte_range"
 	LocatorJSONPointer   EvidenceLocatorKind = "json_pointer"
+
+	CorrectionError   CorrectionMode = "error"
+	CorrectionChanged CorrectionMode = "changed"
 )
 
 type TypedLiteral struct {
@@ -133,6 +137,110 @@ type ValidTime struct {
 	To   *time.Time `json:"to"`
 }
 
+// ClaimObject is the closed union used by correction and exact-query APIs.
+// Exactly one of EntityID and Literal is present.
+type ClaimObject struct {
+	EntityID SemanticID    `json:"entity_id,omitempty"`
+	Literal  *TypedLiteral `json:"literal,omitempty"`
+}
+
+type ClaimProposition struct {
+	SubjectEntityID SemanticID    `json:"subject_entity_id"`
+	PredicateID     SemanticID    `json:"predicate_id"`
+	Object          ClaimObject   `json:"object"`
+	Polarity        ClaimPolarity `json:"polarity"`
+}
+
+type SemanticClaim struct {
+	ID                 SemanticID        `json:"claim_id"`
+	ScopeKey           string            `json:"scope_key"`
+	SubjectEntityID    SemanticID        `json:"subject_entity_id"`
+	Predicate          SemanticPredicate `json:"predicate"`
+	Object             ClaimObject       `json:"object"`
+	Polarity           ClaimPolarity     `json:"polarity"`
+	ValidTime          ValidTime         `json:"valid_time"`
+	CreatedOperationID SemanticID        `json:"created_operation_id"`
+	TransactionTime    time.Time         `json:"transaction_time"`
+}
+
+type SemanticTransition struct {
+	ObjectKind string             `json:"object_kind"`
+	ObjectID   SemanticID         `json:"object_id"`
+	State      SemanticStateValue `json:"state"`
+}
+
+type CorrectionValidTimeEffect struct {
+	OldBefore   ValidTime `json:"old_before"`
+	OldAfter    ValidTime `json:"old_after"`
+	Replacement ValidTime `json:"replacement"`
+}
+
+type CorrectClaimRequest struct {
+	IdempotencyKey       string
+	SourceEventID        EventID
+	OldClaimID           SemanticID
+	Replacement          ClaimProposition
+	Mode                 CorrectionMode
+	EffectiveTime        *time.Time
+	ReplacementValidTime *ValidTime
+}
+
+type CorrectClaimProposal struct {
+	SchemaVersion    int                       `json:"schema_version"`
+	Kind             string                    `json:"kind"`
+	OperationID      SemanticID                `json:"operation_id"`
+	IdempotencyKey   string                    `json:"idempotency_key"`
+	Actor            SemanticActor             `json:"actor"`
+	SessionID        SessionID                 `json:"session_id"`
+	Scope            SemanticScope             `json:"scope"`
+	Scopes           []SemanticScope           `json:"scopes"`
+	PriorRevisions   []ScopeRevision           `json:"prior_revisions"`
+	ExpectedRevision int64                     `json:"expected_revision"`
+	OldClaim         SemanticClaim             `json:"old_claim"`
+	ReplacementClaim SemanticClaim             `json:"replacement_claim"`
+	Source           SemanticSource            `json:"source"`
+	Mode             CorrectionMode            `json:"mode"`
+	EffectiveTime    *time.Time                `json:"effective_time"`
+	ValidTimeEffect  CorrectionValidTimeEffect `json:"valid_time_effect"`
+	Transitions      []SemanticTransition      `json:"transitions"`
+	Request          CorrectClaimRequest       `json:"request"`
+	ProposalSHA256   string                    `json:"-"`
+	PreparedSHA256   string                    `json:"-"`
+}
+
+type CorrectClaimResult struct {
+	OperationID        SemanticID      `json:"operation_id"`
+	OldClaimID         SemanticID      `json:"old_claim_id"`
+	ReplacementClaimID SemanticID      `json:"replacement_claim_id"`
+	SourceLinkID       SemanticID      `json:"source_link_id"`
+	TransactionTime    time.Time       `json:"transaction_time"`
+	ResultingRevisions []ScopeRevision `json:"resulting_revisions"`
+	ScopeRevision      int64           `json:"scope_revision"`
+}
+
+type ClaimQuery struct {
+	ValidAt   *time.Time `json:"valid_at,omitempty"`
+	AsKnownAt *time.Time `json:"as_known_at,omitempty"`
+}
+
+type ClaimInspection struct {
+	SemanticClaim
+	Scope              SemanticScope    `json:"scope"`
+	Subject            SemanticEntity   `json:"subject"`
+	ObjectEntity       *SemanticEntity  `json:"object_entity,omitempty"`
+	Sources            []SemanticSource `json:"sources"`
+	Lifecycle          []SemanticState  `json:"lifecycle"`
+	EffectiveValidTime ValidTime        `json:"effective_valid_time"`
+}
+
+type ClaimsInspection struct {
+	Scope         SemanticScope     `json:"scope"`
+	ScopeRevision int64             `json:"scope_revision"`
+	ValidAt       time.Time         `json:"valid_at"`
+	AsKnownAt     time.Time         `json:"as_known_at"`
+	Claims        []ClaimInspection `json:"claims"`
+}
+
 type RememberLiteralRequest struct {
 	IdempotencyKey       string
 	SourceEventID        EventID
@@ -212,6 +320,8 @@ type LiteralClaimsInspection struct {
 	Scope          SemanticScope            `json:"scope"`
 	ScopeRevision  int64                    `json:"scope_revision"`
 	EffectiveAt    time.Time                `json:"effective_at"`
+	ValidAt        time.Time                `json:"valid_at"`
+	AsKnownAt      time.Time                `json:"as_known_at"`
 	Claims         []LiteralClaimInspection `json:"claims"`
 	Warnings       []ClaimConflictWarning   `json:"warnings"`
 	ConflictClaims []LiteralClaimInspection `json:"conflict_claims"`
@@ -303,6 +413,8 @@ type EntityClaimsInspection struct {
 	Scope          SemanticScope           `json:"scope"`
 	ScopeRevision  int64                   `json:"scope_revision"`
 	EffectiveAt    time.Time               `json:"effective_at"`
+	ValidAt        time.Time               `json:"valid_at"`
+	AsKnownAt      time.Time               `json:"as_known_at"`
 	Claims         []EntityClaimInspection `json:"claims"`
 	Warnings       []ClaimConflictWarning  `json:"warnings"`
 	ConflictClaims []EntityClaimInspection `json:"conflict_claims"`
