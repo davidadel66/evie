@@ -24,10 +24,11 @@ func TestTaskStoreCreatesListsGetsAndReopensGlobalTask(t *testing.T) {
 
 	ctx := attributedTaskContext()
 	created, err := store.CreateGlobalTask(ctx, task.CreateInput{
-		Title:       "Ship the durable path",
-		Description: "Keep the contract narrow",
-		Priority:    5,
-		DueDate:     "2026-09-03",
+		Title:          "Ship the durable path",
+		Description:    "Keep the contract narrow",
+		Priority:       5,
+		DueDate:        "2026-09-03",
+		IdempotencyKey: "create-round-trip",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +99,8 @@ func TestTaskStoreRejectsInvalidCreateWithoutPartialRows(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := store.CreateGlobalTask(context.Background(), tt.input)
+			tt.input.IdempotencyKey = task.IdempotencyKey("invalid-" + tt.name)
+			_, err := store.CreateGlobalTask(attributedTaskContext(), tt.input)
 			var inputErr *task.InputError
 			if !errors.Is(err, task.ErrInvalidInput) || !errors.As(err, &inputErr) || inputErr.Field != tt.field {
 				t.Fatalf("CreateGlobalTask error = %v, want typed %s input error", err, tt.field)

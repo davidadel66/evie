@@ -12,14 +12,16 @@ import (
 )
 
 var (
-	ErrInvalidInput       = errors.New("task: invalid input")
-	ErrNotFound           = errors.New("task: not found")
-	ErrConflict           = errors.New("task: revision conflict")
-	ErrInvalidTransition  = errors.New("task: invalid status transition")
-	ErrMissingAttribution = errors.New("task: trusted mutation attribution is missing")
+	ErrInvalidInput        = errors.New("task: invalid input")
+	ErrNotFound            = errors.New("task: not found")
+	ErrConflict            = errors.New("task: revision conflict")
+	ErrInvalidTransition   = errors.New("task: invalid status transition")
+	ErrMissingAttribution  = errors.New("task: trusted mutation attribution is missing")
+	ErrIdempotencyConflict = errors.New("task: idempotency identity was reused for a different request")
 )
 
 type ID string
+type IdempotencyKey string
 
 type Scope string
 
@@ -74,10 +76,11 @@ type Task struct {
 // CreateInput deliberately excludes persistence, scope, owner, actor, and
 // session identities. Those values belong to the trusted Kernel boundary.
 type CreateInput struct {
-	Title       string
-	Description string
-	Priority    int
-	DueDate     string
+	Title          string
+	Description    string
+	Priority       int
+	DueDate        string
+	IdempotencyKey IdempotencyKey
 }
 
 // UpdateInput is a compare-and-swap patch. Pointer fields distinguish omission
@@ -89,6 +92,7 @@ type UpdateInput struct {
 	Priority         *int
 	DueDate          *string
 	Status           *Status
+	IdempotencyKey   IdempotencyKey
 }
 
 // ListFilter defaults to open Tasks when neither Statuses nor IncludeHistory
@@ -119,6 +123,7 @@ type Event struct {
 	ResultingRevision uint64          `json:"resulting_revision"`
 	Outcome           MutationOutcome `json:"outcome"`
 	DiagnosticCode    DiagnosticCode  `json:"diagnostic_code,omitempty"`
+	IdempotencySHA256 string          `json:"idempotency_sha256,omitempty"`
 }
 
 // Service is the focused Task persistence boundary consumed by first-party
@@ -173,6 +178,16 @@ func (e *TransitionError) Error() string {
 
 func (e *TransitionError) Unwrap() error { return ErrInvalidTransition }
 
+type IdempotencyConflictError struct {
+	Operation Operation
+}
+
+func (e *IdempotencyConflictError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrIdempotencyConflict, e.Operation)
+}
+
+func (e *IdempotencyConflictError) Unwrap() error { return ErrIdempotencyConflict }
+
 func ValidateCreateInput(input CreateInput) error {
 	if strings.TrimSpace(input.Title) == "" {
 		return &InputError{Field: "title", Message: "must not be blank"}
@@ -186,7 +201,7 @@ func ValidateCreateInput(input CreateInput) error {
 			return &InputError{Field: "due", Message: "must be a valid YYYY-MM-DD owner-local date"}
 		}
 	}
-	return nil
+	return ValidateIdempotencyKey(input.IdempotencyKey)
 }
 
 func ValidateUpdateInput(input UpdateInput) error {
@@ -210,6 +225,16 @@ func ValidateUpdateInput(input UpdateInput) error {
 	}
 	if input.Status != nil && !ValidStatus(*input.Status) {
 		return &InputError{Field: "status", Message: "must be open, in_progress, blocked, completed, or cancelled"}
+	}
+	return ValidateIdempotencyKey(input.IdempotencyKey)
+}
+
+func ValidateIdempotencyKey(key IdempotencyKey) error {
+	if strings.TrimSpace(string(key)) == "" {
+		return &InputError{Field: "idempotency_key", Message: "must not be blank"}
+	}
+	if len(key) > 256 {
+		return &InputError{Field: "idempotency_key", Message: "must not exceed 256 bytes"}
 	}
 	return nil
 }

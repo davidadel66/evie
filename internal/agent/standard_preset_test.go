@@ -57,14 +57,16 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 
-	wantTodo := []tools.Tool{tools.TodoLifecycleListTool(), tools.TodoTools()[1], tools.TodoGetTool(), tools.TodoUpdateTool()}
+	wantTodo := []tools.Tool{
+		tools.TodoLifecycleListTool(), tools.TodoIdempotentAddTool(), tools.TodoGetTool(), tools.TodoIdempotentUpdateTool(),
+	}
 	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.2.0"},
+		{ID: "todo", ImplementationVersion: "1.3.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -75,7 +77,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.1.0", "todo.add@1.0.0", "todo.get@1.0.0", "todo.update@1.0.0",
+		"todo.list@1.1.0", "todo.add@1.1.0", "todo.get@1.0.0", "todo.update@1.1.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -187,12 +189,14 @@ func TestStandardAgentRecordsRejectedTaskMutationWithoutInventingTransition(t *t
 	seedCtx := task.WithMutationAttribution(ctx, task.MutationAttribution{
 		ActorID: "local", SessionID: string(storedSession.ID), RunID: "seed",
 	})
-	created, err := store.CreateGlobalTask(seedCtx, task.CreateInput{Title: "protect revision"})
+	created, err := store.CreateGlobalTask(seedCtx, task.CreateInput{Title: "protect revision", IdempotencyKey: "seed-create"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	seedTitle := "revision two"
-	created, err = store.UpdateGlobalTask(seedCtx, created.ID, task.UpdateInput{ExpectedRevision: 1, Title: &seedTitle})
+	created, err = store.UpdateGlobalTask(seedCtx, created.ID, task.UpdateInput{
+		ExpectedRevision: 1, Title: &seedTitle, IdempotencyKey: "seed-update",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +207,7 @@ func TestStandardAgentRecordsRejectedTaskMutationWithoutInventingTransition(t *t
 	}
 	client := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("stale-call", "todo_update",
-			`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost"}`)),
+			`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost","idempotency_key":"stale-agent"}`)),
 		assistantStep("done", nil),
 	}}
 	session := NewWithToolset(

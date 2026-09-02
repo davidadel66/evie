@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -33,19 +34,36 @@ func TestValidateStatusTransitionCompleteMatrix(t *testing.T) {
 func TestValidateUpdateInputRequiresRevisionAndRealPatch(t *testing.T) {
 	for _, input := range []UpdateInput{
 		{},
-		{ExpectedRevision: 1},
+		{ExpectedRevision: 1, IdempotencyKey: "request-1"},
 	} {
 		if err := ValidateUpdateInput(input); !errors.Is(err, ErrInvalidInput) {
 			t.Fatalf("ValidateUpdateInput(%+v) = %v, want invalid input", input, err)
 		}
 	}
 	title := "updated"
-	if err := ValidateUpdateInput(UpdateInput{ExpectedRevision: 1, Title: &title}); err != nil {
+	if err := ValidateUpdateInput(UpdateInput{ExpectedRevision: 1, IdempotencyKey: "request-1", Title: &title}); err != nil {
 		t.Fatalf("valid metadata patch rejected: %v", err)
 	}
 	status := StatusCompleted
-	if err := ValidateUpdateInput(UpdateInput{ExpectedRevision: 1, Status: &status}); err != nil {
+	if err := ValidateUpdateInput(UpdateInput{ExpectedRevision: 1, IdempotencyKey: "request-1", Status: &status}); err != nil {
 		t.Fatalf("valid lifecycle patch rejected: %v", err)
+	}
+}
+
+func TestMutationInputsRequireBoundedIdempotencyIdentity(t *testing.T) {
+	if err := ValidateCreateInput(CreateInput{Title: "missing identity"}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("missing create identity error = %v", err)
+	}
+	if err := ValidateCreateInput(CreateInput{Title: "valid", IdempotencyKey: "request-1"}); err != nil {
+		t.Fatalf("valid create rejected: %v", err)
+	}
+	title := "change"
+	if err := ValidateUpdateInput(UpdateInput{ExpectedRevision: 1, Title: &title}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("missing update identity error = %v", err)
+	}
+	tooLong := strings.Repeat("x", 257)
+	if err := ValidateIdempotencyKey(IdempotencyKey(tooLong)); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("long identity error = %v", err)
 	}
 }
 

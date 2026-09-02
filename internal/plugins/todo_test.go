@@ -19,15 +19,15 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.2.0",
+		ImplementationVersion: "1.3.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
 			{ID: TodoListCapabilityID, Version: "1.1.0"},
-			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+			{ID: TodoAddCapabilityID, Version: "1.1.0"},
 			{ID: TodoGetCapabilityID, Version: "1.0.0"},
-			{ID: TodoUpdateCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.1.0"},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -43,6 +43,15 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoListCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "1067181de346c6ec2da9f9fe91b365d9502bfa559e9edc31e9a40c22efcd41ca"},
 					{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "b96146bbfb232ae6217946e7149c0781d8f1bbe923456d7230ed5fc8f270655c"},
 					{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "e8a5f4275a66af258670d4f1d46cf04fb22cf107c5026509bbd48f923d8fc2dd"},
+				},
+			},
+			{
+				ImplementationVersion: "1.2.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "ac6b85700a29bccb66fb2cafab22a662f149dca8f7bddeeda0f41d1894323ebb"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "b96146bbfb232ae6217946e7149c0781d8f1bbe923456d7230ed5fc8f270655c"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "e8a5f4275a66af258670d4f1d46cf04fb22cf107c5026509bbd48f923d8fc2dd"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "f01e96d1f2d60c5df5f39e058c991857240b008d20523e23014a82b5320de04a"},
 				},
 			},
 		},
@@ -68,9 +77,9 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	}
 	wantAssociations := []association{
 		{ID: TodoListCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_list"},
-		{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_add"},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_add"},
 		{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_get"},
-		{ID: TodoUpdateCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_update"},
+		{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_update"},
 	}
 	if !reflect.DeepEqual(gotAssociations, wantAssociations) {
 		t.Fatalf("Todo Capability associations\n got: %+v\nwant: %+v", gotAssociations, wantAssociations)
@@ -87,7 +96,9 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantDefinitions := []tools.Tool{tools.TodoLifecycleListTool(), tools.TodoTools()[1], tools.TodoGetTool(), tools.TodoUpdateTool()}
+	wantDefinitions := []tools.Tool{
+		tools.TodoLifecycleListTool(), tools.TodoIdempotentAddTool(), tools.TodoGetTool(), tools.TodoIdempotentUpdateTool(),
+	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("Todo plugin schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
 	}

@@ -118,6 +118,15 @@ var todoUpdateTool = openrouter.Tool{
 	},
 }
 
+var todoIdempotentUpdateTool = func() openrouter.Tool {
+	tool := cloneSchema(todoUpdateTool)
+	tool.Function.Parameters.Required = append(tool.Function.Parameters.Required, "idempotency_key")
+	tool.Function.Parameters.Properties["idempotency_key"] = openrouter.Property{
+		Type: "string", Description: "Caller-provided identity reused only when retrying this exact mutation",
+	}
+	return tool
+}()
+
 // TodoTools returns fresh definitions for the existing model-facing Todo
 // tools. The Todo first-party plugin attaches canonical Capability identities
 // while preserving these schemas and execution functions unchanged.
@@ -142,6 +151,19 @@ func TodoLifecycleListTool() Tool { return Tool{Schema: cloneSchema(todoLifecycl
 // TodoUpdateTool returns the lifecycle mutation schema. Execution is supplied
 // only by the first-party Todo plugin.
 func TodoUpdateTool() Tool { return Tool{Schema: cloneSchema(todoUpdateTool)} }
+
+// TodoIdempotentAddTool is the current add schema. The identity remains
+// optional so existing valid add calls continue to create independent Tasks.
+func TodoIdempotentAddTool() Tool {
+	tool := TodoTools()[1]
+	tool.Schema.Function.Parameters.Properties["idempotency_key"] = openrouter.Property{
+		Type: "string", Description: "Optional caller identity reused only when retrying this exact creation",
+	}
+	return tool
+}
+
+// TodoIdempotentUpdateTool is the current revision-checked mutation schema.
+func TodoIdempotentUpdateTool() Tool { return Tool{Schema: cloneSchema(todoIdempotentUpdateTool)} }
 
 // toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.

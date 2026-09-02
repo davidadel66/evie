@@ -325,7 +325,7 @@ func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *tes
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 }
@@ -409,11 +409,80 @@ func TestPreLifecycleTodoStandardReceiptResumesWithExactFrozenTools(t *testing.T
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_update") != 0 {
 		t.Fatal("#119 receipt unexpectedly gained todo_update")
+	}
+}
+
+type preIdempotentTodoPlugin struct{ service task.Service }
+
+func (preIdempotentTodoPlugin) Start(context.Context) error { return nil }
+func (preIdempotentTodoPlugin) Stop(context.Context) error  { return nil }
+func (preIdempotentTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.2.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.1.0"},
+			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+func (p preIdempotentTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.2.0")
+}
+
+func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
+	service := &taskServiceFixture{}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preIdempotentTodoPlugin{service: service},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.ResolvePreset("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(service))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #120 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+	for _, schema := range resumed.Toolset.Schemas() {
+		if schema.Function.Name != "todo_add" && schema.Function.Name != "todo_update" {
+			continue
+		}
+		if _, exists := schema.Function.Parameters.Properties["idempotency_key"]; exists {
+			t.Fatalf("#120 receipt gained idempotency input in %s", schema.Function.Name)
+		}
 	}
 }
 

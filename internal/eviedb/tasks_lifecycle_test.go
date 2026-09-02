@@ -30,7 +30,7 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	})
 
 	created, err := store.CreateGlobalTask(ctx, task.CreateInput{
-		Title: "Retain lifecycle", Description: "before", Priority: 4, DueDate: "2026-09-05",
+		Title: "Retain lifecycle", Description: "before", Priority: 4, DueDate: "2026-09-05", IdempotencyKey: "create-lifecycle",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -50,6 +50,7 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	title, description, priority, due := "Retained", "", 0, ""
 	updated, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
 		ExpectedRevision: 1, Title: &title, Description: &description, Priority: &priority, DueDate: &due,
+		IdempotencyKey: "metadata-update",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +62,9 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	completed := task.StatusCompleted
-	completedTask, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 2, Status: &completed})
+	completedTask, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 2, Status: &completed, IdempotencyKey: "complete",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,19 +84,25 @@ func TestTaskLifecycleStateEventsFiltersAndRestart(t *testing.T) {
 	}
 
 	blocked := task.StatusBlocked
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 3, Status: &blocked})
+	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 3, Status: &blocked, IdempotencyKey: "reject-transition",
+	})
 	var transitionErr *task.TransitionError
 	if !errors.Is(err, task.ErrInvalidTransition) || !errors.As(err, &transitionErr) {
 		t.Fatalf("completed -> blocked error = %v", err)
 	}
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 2, Title: &title})
+	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 2, Title: &title, IdempotencyKey: "reject-stale",
+	})
 	var conflict *task.ConflictError
 	if !errors.Is(err, task.ErrConflict) || !errors.As(err, &conflict) || conflict.Expected != 2 || conflict.Current != 3 {
 		t.Fatalf("stale update error = %#v", err)
 	}
 
 	reopenedStatus := task.StatusOpen
-	reopened, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 3, Status: &reopenedStatus})
+	reopened, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 3, Status: &reopenedStatus, IdempotencyKey: "reopen",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,20 +164,27 @@ func TestTaskLifecycleRejectsEveryIllegalEdgeWithoutChangingState(t *testing.T) 
 				continue
 			}
 			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
-				created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "edge " + string(from) + " " + string(to)})
+				key := string(from) + "-" + string(to)
+				created, err := store.CreateGlobalTask(ctx, task.CreateInput{
+					Title: "edge " + string(from) + " " + string(to), IdempotencyKey: task.IdempotencyKey("reject-create-" + key),
+				})
 				if err != nil {
 					t.Fatal(err)
 				}
 				if from != task.StatusOpen {
 					seed := from
-					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: created.Revision, Status: &seed})
+					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+						ExpectedRevision: created.Revision, Status: &seed, IdempotencyKey: task.IdempotencyKey("reject-seed-" + key),
+					})
 					if err != nil {
 						t.Fatal(err)
 					}
 				}
 				before := created
 				target := to
-				_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: created.Revision, Status: &target})
+				_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+					ExpectedRevision: created.Revision, Status: &target, IdempotencyKey: task.IdempotencyKey("reject-edge-" + key),
+				})
 				if !errors.Is(err, task.ErrInvalidTransition) {
 					t.Fatalf("UpdateGlobalTask error = %v", err)
 				}
@@ -196,19 +212,26 @@ func TestTaskLifecyclePersistsEveryAllowedEdge(t *testing.T) {
 				continue
 			}
 			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
-				created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "allowed " + string(from) + " " + string(to)})
+				key := string(from) + "-" + string(to)
+				created, err := store.CreateGlobalTask(ctx, task.CreateInput{
+					Title: "allowed " + string(from) + " " + string(to), IdempotencyKey: task.IdempotencyKey("allow-create-" + key),
+				})
 				if err != nil {
 					t.Fatal(err)
 				}
 				if from != task.StatusOpen {
 					seed := from
-					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 1, Status: &seed})
+					created, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+						ExpectedRevision: 1, Status: &seed, IdempotencyKey: task.IdempotencyKey("allow-seed-" + key),
+					})
 					if err != nil {
 						t.Fatal(err)
 					}
 				}
 				target := to
-				updated, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: created.Revision, Status: &target})
+				updated, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+					ExpectedRevision: created.Revision, Status: &target, IdempotencyKey: task.IdempotencyKey("allow-edge-" + key),
+				})
 				if err != nil || updated.Status != to || updated.Revision != created.Revision+1 {
 					t.Fatalf("allowed update = %+v, %v", updated, err)
 				}
@@ -231,7 +254,7 @@ func TestTaskEventsAreAppendOnlyTasksCannotBeDeletedAndEventFailureRollsBack(t *
 	defer db.Close()
 	store := NewStore(db)
 	ctx := attributedTaskContext()
-	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "immutable history"})
+	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "immutable history", IdempotencyKey: "immutable-create"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +274,9 @@ func TestTaskEventsAreAppendOnlyTasksCannotBeDeletedAndEventFailureRollsBack(t *
 		t.Fatal(err)
 	}
 	title := "must roll back"
-	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 1, Title: &title})
+	_, err = store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 1, Title: &title, IdempotencyKey: "forced-failure",
+	})
 	if err == nil || !strings.Contains(err.Error(), "forced event insert failure") {
 		t.Fatalf("event failure update error = %v", err)
 	}
@@ -269,14 +294,16 @@ func TestTaskUpdateCancellationAndInvalidFiltersLeaveNoEvidence(t *testing.T) {
 	defer db.Close()
 	store := NewStore(db)
 	ctx := attributedTaskContext()
-	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "cancel update"})
+	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "cancel update", IdempotencyKey: "cancel-create"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	title := "not written"
-	if _, err := store.UpdateGlobalTask(cancelled, created.ID, task.UpdateInput{ExpectedRevision: 1, Title: &title}); !errors.Is(err, context.Canceled) {
+	if _, err := store.UpdateGlobalTask(cancelled, created.ID, task.UpdateInput{
+		ExpectedRevision: 1, Title: &title, IdempotencyKey: "cancel-update",
+	}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled update error = %v", err)
 	}
 	if _, err := store.ListGlobalTasks(context.Background(), task.ListFilter{Statuses: []task.Status{"forged"}}); !errors.Is(err, task.ErrInvalidInput) {
@@ -295,16 +322,20 @@ func TestTaskMutationRequiresTrustedAttributionAndInvalidPatchRecordsSafeDiagnos
 	}
 	defer db.Close()
 	store := NewStore(db)
-	if _, err := store.CreateGlobalTask(context.Background(), task.CreateInput{Title: "unattributed"}); !errors.Is(err, task.ErrMissingAttribution) {
+	if _, err := store.CreateGlobalTask(context.Background(), task.CreateInput{
+		Title: "unattributed", IdempotencyKey: "unattributed-create",
+	}); !errors.Is(err, task.ErrMissingAttribution) {
 		t.Fatalf("unattributed create error = %v", err)
 	}
 	ctx := attributedTaskContext()
-	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "safe diagnostic"})
+	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "safe diagnostic", IdempotencyKey: "diagnostic-create"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	blank := " \t"
-	if _, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{ExpectedRevision: 1, Title: &blank}); !errors.Is(err, task.ErrInvalidInput) {
+	if _, err := store.UpdateGlobalTask(ctx, created.ID, task.UpdateInput{
+		ExpectedRevision: 1, Title: &blank, IdempotencyKey: "diagnostic-update",
+	}); !errors.Is(err, task.ErrInvalidInput) {
 		t.Fatalf("invalid patch error = %v", err)
 	}
 	events, err := store.ListTaskEvents(context.Background(), created.ID)

@@ -98,7 +98,7 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 		t.Fatal(err)
 	}
 	updatedOutcome := executeTodoTool(t, toolset, "todo_update",
-		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"completed","description":"retained"}`)
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"completed","description":"retained","idempotency_key":"complete-task"}`)
 	if updatedOutcome.IsErr {
 		t.Fatalf("update outcome = %+v", updatedOutcome)
 	}
@@ -126,7 +126,7 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 		t.Fatalf("invalid filter outcome = %+v", invalidFilter)
 	}
 	stale := executeTodoTool(t, toolset, "todo_update",
-		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost"}`)
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost","idempotency_key":"stale-task"}`)
 	if !stale.IsErr || !strings.Contains(stale.Content, "expected 1, current 2") {
 		t.Fatalf("stale outcome = %+v", stale)
 	}
@@ -141,6 +141,53 @@ func TestTodoPluginUpdatesLifecycleListsHistoryAndReportsStaleRevision(t *testin
 	}
 	if deleted := executeTodoTool(t, toolset, "todo_delete", `{"task_id":"`+string(created.ID)+`"}`); !deleted.IsErr || !strings.Contains(deleted.Content, "Unknown Tool Call") {
 		t.Fatalf("delete capability unexpectedly exists: %+v", deleted)
+	}
+}
+
+func TestTodoPluginDispatchesIdempotentMutationsThroughSQLite(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager, err := NewManager(tools.NewToolset(nil), NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetEnabled(TodoPluginID, true); err != nil {
+		t.Fatal(err)
+	}
+	toolset, err := manager.NewSessionToolset()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createArgs := `{"title":"one effect","idempotency_key":"plugin-create"}`
+	first := executeTodoTool(t, toolset, "todo_add", createArgs)
+	retry := executeTodoTool(t, toolset, "todo_add", createArgs)
+	if first.IsErr || retry.IsErr || first.Content != retry.Content {
+		t.Fatalf("create outcomes = first %+v retry %+v", first, retry)
+	}
+	var created task.Task
+	if err := json.Unmarshal([]byte(first.Content), &created); err != nil {
+		t.Fatal(err)
+	}
+	conflictingCreate := executeTodoTool(t, toolset, "todo_add",
+		`{"title":"different","idempotency_key":"plugin-create"}`)
+	if !conflictingCreate.IsErr || !strings.Contains(conflictingCreate.Content, "idempotency identity was reused") {
+		t.Fatalf("conflicting create outcome = %+v", conflictingCreate)
+	}
+
+	updateArgs := `{"task_id":"` + string(created.ID) + `","expected_revision":1,"status":"in_progress","idempotency_key":"plugin-update"}`
+	updated := executeTodoTool(t, toolset, "todo_update", updateArgs)
+	updatedRetry := executeTodoTool(t, toolset, "todo_update", updateArgs)
+	if updated.IsErr || updatedRetry.IsErr || updated.Content != updatedRetry.Content {
+		t.Fatalf("update outcomes = first %+v retry %+v", updated, updatedRetry)
+	}
+	events, err := store.ListTaskEvents(context.Background(), created.ID)
+	if err != nil || len(events) != 2 {
+		t.Fatalf("idempotent dispatcher events = %+v, %v", events, err)
 	}
 }
 
@@ -206,6 +253,9 @@ func TestTodoPluginDispatchesDurableTaskServiceWithoutShell(t *testing.T) {
 	}
 	wantInput := task.CreateInput{
 		Title: "durable task", Description: "through the plugin", Priority: 4, DueDate: "2026-09-03",
+	}
+	if len(service.create) == 1 {
+		service.create[0].IdempotencyKey = ""
 	}
 	if !reflect.DeepEqual(service.create, []task.CreateInput{wantInput}) ||
 		!reflect.DeepEqual(service.get, []task.ID{"opaque-task"}) {

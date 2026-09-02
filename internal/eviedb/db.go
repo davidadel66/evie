@@ -98,6 +98,102 @@ BEGIN
     SELECT RAISE(ABORT, 'task events are append-only');
 END;
 
+CREATE TABLE IF NOT EXISTS task_revisions (
+    task_id     TEXT NOT NULL REFERENCES tasks(id),
+    revision    INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
+    scope       TEXT NOT NULL CHECK (scope = 'global'),
+    title       TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
+    description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
+    priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
+    due_date    TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+    status      TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    created_at  TEXT NOT NULL CHECK (typeof(created_at) = 'text'),
+    updated_at  TEXT NOT NULL CHECK (typeof(updated_at) = 'text'),
+    PRIMARY KEY (task_id, revision)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_revisions_append_only_update
+BEFORE UPDATE ON task_revisions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task revisions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_revisions_append_only_delete
+BEFORE DELETE ON task_revisions
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task revisions are append-only');
+END;
+
+INSERT OR IGNORE INTO task_revisions (
+    task_id, revision, scope, title, description, priority, due_date,
+    status, created_at, updated_at
+)
+SELECT id, revision, scope, title, description, priority, due_date,
+       status, created_at, updated_at
+FROM tasks;
+
+CREATE TABLE IF NOT EXISTS task_mutation_results (
+    actor_id            TEXT NOT NULL CHECK (typeof(actor_id) = 'text' AND length(trim(actor_id)) > 0),
+    session_id          TEXT NOT NULL CHECK (typeof(session_id) = 'text' AND length(trim(session_id)) > 0),
+    run_id              TEXT NOT NULL CHECK (typeof(run_id) = 'text' AND length(trim(run_id)) > 0),
+    identity_sha256     TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    request_sha256      TEXT NOT NULL CHECK (length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    operation           TEXT NOT NULL CHECK (operation IN ('create', 'update')),
+    task_id             TEXT,
+    event_id            TEXT UNIQUE REFERENCES task_events(id),
+    outcome_code        TEXT NOT NULL CHECK (outcome_code IN ('accepted', 'invalid_input', 'not_found', 'revision_conflict', 'invalid_transition')),
+    diagnostic_field    TEXT,
+    previous_revision   INTEGER CHECK (previous_revision IS NULL OR (typeof(previous_revision) = 'integer' AND previous_revision >= 0)),
+    resulting_revision  INTEGER CHECK (resulting_revision IS NULL OR (typeof(resulting_revision) = 'integer' AND resulting_revision >= 0)),
+    from_status         TEXT CHECK (from_status IS NULL OR from_status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    to_status           TEXT CHECK (to_status IS NULL OR to_status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    recorded_at         TEXT NOT NULL CHECK (typeof(recorded_at) = 'text'),
+    PRIMARY KEY (actor_id, session_id, identity_sha256),
+    CHECK ((outcome_code = 'accepted' AND task_id IS NOT NULL AND event_id IS NOT NULL AND resulting_revision > 0) OR outcome_code <> 'accepted')
+);
+
+CREATE TRIGGER IF NOT EXISTS task_mutation_results_append_only_update
+BEFORE UPDATE ON task_mutation_results
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task mutation results are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_mutation_results_append_only_delete
+BEFORE DELETE ON task_mutation_results
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task mutation results are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_idempotency_conflicts (
+    id                      TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    actor_id                TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id              TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    identity_sha256         TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    original_request_sha256 TEXT NOT NULL CHECK (length(original_request_sha256) = 64 AND original_request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    attempted_request_sha256 TEXT NOT NULL CHECK (length(attempted_request_sha256) = 64 AND attempted_request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    operation               TEXT NOT NULL CHECK (operation IN ('create', 'update')),
+    task_id                 TEXT,
+    recorded_at             TEXT NOT NULL CHECK (typeof(recorded_at) = 'text')
+);
+
+CREATE TRIGGER IF NOT EXISTS task_idempotency_conflicts_append_only_update
+BEFORE UPDATE ON task_idempotency_conflicts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task idempotency conflicts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_idempotency_conflicts_append_only_delete
+BEFORE DELETE ON task_idempotency_conflicts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task idempotency conflicts are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS projects (
     id             TEXT PRIMARY KEY NOT NULL,
     display_name   TEXT NOT NULL,
