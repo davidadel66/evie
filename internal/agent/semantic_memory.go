@@ -16,6 +16,14 @@ type SemanticMemory interface {
 	PrepareRememberLiteral(context.Context, memory.ScopeContext, memory.RememberLiteralRequest) (memory.RememberLiteralProposal, error)
 	ApplyRememberLiteral(context.Context, memory.TurnLease, memory.RememberLiteralProposal) (memory.RememberLiteralResult, error)
 	InspectLiteralClaims(context.Context, memory.ScopeContext) (memory.LiteralClaimsInspection, error)
+	PrepareRememberEntity(context.Context, memory.ScopeContext, memory.RememberEntityRequest) (memory.RememberEntityProposal, error)
+	ApplyRememberEntity(context.Context, memory.TurnLease, memory.RememberEntityProposal) (memory.RememberEntityResult, error)
+	InspectEntityClaims(context.Context, memory.ScopeContext) (memory.EntityClaimsInspection, error)
+	InspectEntityClaimsAtScope(context.Context, memory.ScopeContext, bool) (memory.EntityClaimsInspection, error)
+	LookupEntitiesByAlias(context.Context, memory.ScopeContext, string) ([]memory.AliasEntityMatch, error)
+	LookupEntitiesByAliasAtScope(context.Context, memory.ScopeContext, string, bool) ([]memory.AliasEntityMatch, error)
+	InspectSemanticEntity(context.Context, memory.ScopeContext, memory.SemanticID) (memory.SemanticEntity, error)
+	InspectSemanticEntityAtScope(context.Context, memory.ScopeContext, memory.SemanticID, bool) (memory.SemanticEntity, error)
 }
 
 func (s *Session) beginLocalSemanticCommand(
@@ -132,4 +140,69 @@ func (s *Session) InspectSemanticMemory(ctx context.Context, semantic SemanticMe
 		return memory.LiteralClaimsInspection{}, errors.New("agent: Semantic Memory is not configured")
 	}
 	return semantic.InspectLiteralClaims(ctx, s.scope)
+}
+
+// PrepareRememberEntity records the owner request before resolving the complete
+// Entity/Alias/Claim proposal through the shared Kernel seam.
+func (s *Session) PrepareRememberEntity(
+	ctx context.Context,
+	semantic SemanticMemory,
+	command string,
+	request memory.RememberEntityRequest,
+) (proposal memory.RememberEntityProposal, retErr error) {
+	if semantic == nil {
+		return proposal, errors.New("agent: Semantic Memory is not configured")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return proposal, err
+	}
+	defer finish(&retErr)
+	event, err := s.history.Append(ctx, lease, memory.EventInput{
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: command,
+	})
+	if err != nil {
+		return proposal, fmt.Errorf("persist remember request: %w", err)
+	}
+	request.SourceEventID = event.ID
+	proposal, err = semantic.PrepareRememberEntity(ctx, s.scope, request)
+	if err != nil {
+		return proposal, fmt.Errorf("prepare remember Entity proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+// ResolveRememberEntity records approval before applying the exact prepared compound effect.
+func (s *Session) ResolveRememberEntity(
+	ctx context.Context,
+	semantic SemanticMemory,
+	proposal memory.RememberEntityProposal,
+	decision tools.Decision,
+) (result memory.RememberEntityResult, retErr error) {
+	if semantic == nil {
+		return result, errors.New("agent: Semantic Memory is not configured")
+	}
+	if proposal.SessionID != s.scope.SessionID {
+		return result, errors.New("agent: memory proposal belongs to another session")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer finish(&retErr)
+	approval, err := approvalEventInput(proposal.Source.EventID, memory.ExecutionID(proposal.OperationID), decision)
+	if err != nil {
+		return result, err
+	}
+	if _, err := s.history.Append(ctx, lease, approval); err != nil {
+		return result, fmt.Errorf("persist memory approval: %w", err)
+	}
+	if decision != tools.Approved {
+		return result, nil
+	}
+	result, err = semantic.ApplyRememberEntity(ctx, lease, proposal)
+	if err != nil {
+		return result, fmt.Errorf("apply remember Entity proposal: %w", err)
+	}
+	return result, nil
 }

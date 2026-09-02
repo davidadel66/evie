@@ -85,6 +85,17 @@ CREATE TABLE IF NOT EXISTS semantic_entities (
     UNIQUE (scope_id, anchor_kind)
 );
 
+CREATE TABLE IF NOT EXISTS semantic_aliases (
+    alias_id              TEXT PRIMARY KEY NOT NULL,
+    entity_id             TEXT NOT NULL REFERENCES semantic_entities(entity_id),
+    scope_id              TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    value                 TEXT NOT NULL,
+    normalized_value      TEXT NOT NULL,
+    lifecycle             TEXT NOT NULL CHECK (lifecycle IN ('active', 'retired')),
+    source_event_id       TEXT NOT NULL REFERENCES events(id),
+    created_operation_id  TEXT NOT NULL REFERENCES semantic_operations(operation_id)
+);
+
 CREATE TABLE IF NOT EXISTS semantic_claims (
     claim_id              TEXT PRIMARY KEY NOT NULL,
     scope_id              TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
@@ -92,15 +103,19 @@ CREATE TABLE IF NOT EXISTS semantic_claims (
     predicate_id          TEXT NOT NULL REFERENCES semantic_predicates(predicate_id),
     predicate_token       TEXT NOT NULL,
     predicate_version     INTEGER NOT NULL CHECK (predicate_version > 0),
-    literal_kind          TEXT NOT NULL CHECK (literal_kind IN ('text', 'integer', 'decimal', 'boolean', 'date', 'datetime')),
-    literal_value         TEXT NOT NULL,
+	object_kind           TEXT NOT NULL CHECK (object_kind IN ('entity', 'literal')),
+	object_entity_id      TEXT REFERENCES semantic_entities(entity_id),
+	literal_kind          TEXT CHECK (literal_kind IN ('text', 'integer', 'decimal', 'boolean', 'date', 'datetime')),
+	literal_value         TEXT,
     polarity              TEXT NOT NULL CHECK (polarity IN ('affirmed', 'denied')),
     valid_from            TEXT,
     valid_to              TEXT,
     lifecycle             TEXT NOT NULL CHECK (lifecycle IN ('active', 'retired', 'superseded')),
     created_operation_id  TEXT NOT NULL REFERENCES semantic_operations(operation_id),
     transaction_time      TEXT NOT NULL,
-    CHECK (valid_from IS NULL OR valid_to IS NULL OR valid_from < valid_to)
+	CHECK (valid_from IS NULL OR valid_to IS NULL OR valid_from < valid_to),
+	CHECK ((object_kind = 'entity' AND object_entity_id IS NOT NULL AND literal_kind IS NULL AND literal_value IS NULL)
+	    OR (object_kind = 'literal' AND object_entity_id IS NULL AND literal_kind IS NOT NULL AND literal_value IS NOT NULL))
 );
 
 CREATE TABLE IF NOT EXISTS semantic_source_links (
@@ -134,6 +149,7 @@ CREATE TABLE IF NOT EXISTS semantic_state_events (
 );
 
 CREATE INDEX IF NOT EXISTS semantic_claims_scope_idx ON semantic_claims(scope_id, lifecycle, claim_id);
+CREATE INDEX IF NOT EXISTS semantic_aliases_exact_idx ON semantic_aliases(scope_id, normalized_value, lifecycle, entity_id, alias_id);
 CREATE INDEX IF NOT EXISTS semantic_source_links_claim_idx ON semantic_source_links(claim_id, eligibility, source_link_id);
 CREATE INDEX IF NOT EXISTS semantic_state_events_object_idx ON semantic_state_events(object_kind, object_id, scope_revision);
 
@@ -145,6 +161,8 @@ CREATE TRIGGER IF NOT EXISTS semantic_predicates_append_only_update BEFORE UPDAT
 CREATE TRIGGER IF NOT EXISTS semantic_predicates_append_only_delete BEFORE DELETE ON semantic_predicates BEGIN SELECT RAISE(ABORT, 'semantic predicates are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_entities_append_only_update BEFORE UPDATE ON semantic_entities BEGIN SELECT RAISE(ABORT, 'semantic entities are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_entities_append_only_delete BEFORE DELETE ON semantic_entities BEGIN SELECT RAISE(ABORT, 'semantic entities are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_aliases_append_only_update BEFORE UPDATE ON semantic_aliases BEGIN SELECT RAISE(ABORT, 'semantic aliases are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_aliases_append_only_delete BEFORE DELETE ON semantic_aliases BEGIN SELECT RAISE(ABORT, 'semantic aliases are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claims_append_only_update BEFORE UPDATE ON semantic_claims BEGIN SELECT RAISE(ABORT, 'semantic claims are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claims_append_only_delete BEFORE DELETE ON semantic_claims BEGIN SELECT RAISE(ABORT, 'semantic claims are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_source_links_append_only_update BEFORE UPDATE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
@@ -157,9 +175,100 @@ BEGIN SELECT RAISE(ABORT, 'semantic scope identity is immutable'); END;
 `
 
 func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, semanticSchema)
-	return err
+	if _, err := db.ExecContext(ctx, semanticSchema); err != nil {
+		return err
+	}
+	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
+	if err != nil || present {
+		return err
+	}
+	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+		var count int
+		if err := conn.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM pragma_table_info('semantic_claims') WHERE name = 'object_kind'
+		`).Scan(&count); err != nil {
+			return err
+		}
+		if count == 1 {
+			return nil
+		}
+		if _, err := conn.ExecContext(ctx, semanticClaimsObjectMigration); err != nil {
+			return fmt.Errorf("migrate Semantic Memory Claim objects: %w", err)
+		}
+		return nil
+	})
 }
+
+const semanticClaimsObjectMigration = `
+DROP TRIGGER IF EXISTS semantic_source_links_append_only_update;
+DROP TRIGGER IF EXISTS semantic_source_links_append_only_delete;
+DROP TRIGGER IF EXISTS semantic_claims_append_only_update;
+DROP TRIGGER IF EXISTS semantic_claims_append_only_delete;
+
+CREATE TABLE semantic_claims_v1 (
+    claim_id              TEXT PRIMARY KEY NOT NULL,
+    scope_id              TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    subject_entity_id     TEXT NOT NULL REFERENCES semantic_entities(entity_id),
+    predicate_id          TEXT NOT NULL REFERENCES semantic_predicates(predicate_id),
+    predicate_token       TEXT NOT NULL,
+    predicate_version     INTEGER NOT NULL CHECK (predicate_version > 0),
+    object_kind           TEXT NOT NULL CHECK (object_kind IN ('entity', 'literal')),
+    object_entity_id      TEXT REFERENCES semantic_entities(entity_id),
+    literal_kind          TEXT CHECK (literal_kind IN ('text', 'integer', 'decimal', 'boolean', 'date', 'datetime')),
+    literal_value         TEXT,
+    polarity              TEXT NOT NULL CHECK (polarity IN ('affirmed', 'denied')),
+    valid_from            TEXT,
+    valid_to              TEXT,
+    lifecycle             TEXT NOT NULL CHECK (lifecycle IN ('active', 'retired', 'superseded')),
+    created_operation_id  TEXT NOT NULL REFERENCES semantic_operations(operation_id),
+    transaction_time      TEXT NOT NULL,
+    CHECK (valid_from IS NULL OR valid_to IS NULL OR valid_from < valid_to),
+    CHECK ((object_kind = 'entity' AND object_entity_id IS NOT NULL AND literal_kind IS NULL AND literal_value IS NULL)
+        OR (object_kind = 'literal' AND object_entity_id IS NULL AND literal_kind IS NOT NULL AND literal_value IS NOT NULL))
+);
+
+INSERT INTO semantic_claims_v1 (
+    claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
+    object_kind, object_entity_id, literal_kind, literal_value, polarity, valid_from, valid_to,
+    lifecycle, created_operation_id, transaction_time
+)
+SELECT claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
+       'literal', NULL, literal_kind, literal_value, polarity, valid_from, valid_to,
+       lifecycle, created_operation_id, transaction_time
+FROM semantic_claims;
+
+CREATE TABLE semantic_source_links_v1 (
+    source_link_id       TEXT PRIMARY KEY NOT NULL,
+    claim_id             TEXT NOT NULL REFERENCES semantic_claims_v1(claim_id),
+    event_id             TEXT NOT NULL REFERENCES events(id),
+    source_session_id    TEXT NOT NULL REFERENCES sessions(id),
+    source_scope_key     TEXT NOT NULL,
+    event_part           TEXT NOT NULL CHECK (event_part IN ('content', 'payload')),
+    locator_kind         TEXT NOT NULL CHECK (locator_kind IN ('whole', 'utf8_byte_range', 'json_pointer')),
+    locator_value        TEXT NOT NULL,
+    evidence_sha256      TEXT NOT NULL,
+    source_actor         TEXT NOT NULL,
+    source_type          TEXT NOT NULL,
+    authority            TEXT NOT NULL,
+    observed_at          TEXT NOT NULL,
+    eligibility          TEXT NOT NULL CHECK (eligibility IN ('eligible', 'retracted')),
+    created_operation_id TEXT NOT NULL REFERENCES semantic_operations(operation_id),
+    UNIQUE (claim_id, event_id, event_part, locator_kind, locator_value, evidence_sha256)
+);
+
+INSERT INTO semantic_source_links_v1 SELECT * FROM semantic_source_links;
+DROP TABLE semantic_source_links;
+DROP TABLE semantic_claims;
+ALTER TABLE semantic_claims_v1 RENAME TO semantic_claims;
+ALTER TABLE semantic_source_links_v1 RENAME TO semantic_source_links;
+
+CREATE INDEX semantic_claims_scope_idx ON semantic_claims(scope_id, lifecycle, claim_id);
+CREATE INDEX semantic_source_links_claim_idx ON semantic_source_links(claim_id, eligibility, source_link_id);
+CREATE TRIGGER semantic_claims_append_only_update BEFORE UPDATE ON semantic_claims BEGIN SELECT RAISE(ABORT, 'semantic claims are append-only'); END;
+CREATE TRIGGER semantic_claims_append_only_delete BEFORE DELETE ON semantic_claims BEGIN SELECT RAISE(ABORT, 'semantic claims are append-only'); END;
+CREATE TRIGGER semantic_source_links_append_only_update BEFORE UPDATE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
+CREATE TRIGGER semantic_source_links_append_only_delete BEFORE DELETE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
+`
 
 func newSemanticID() (memory.SemanticID, error) {
 	id, err := uuid.NewRandom()
@@ -324,6 +433,26 @@ func (s *Store) PrepareRememberLiteral(
 		if err := json.Unmarshal([]byte(priorProposalJSON), &proposal); err != nil {
 			return memory.RememberLiteralProposal{}, fmt.Errorf("decode accepted proposal: %w", err)
 		}
+		var acceptedShape struct {
+			ClaimCreate *bool `json:"claim_create"`
+			Source      struct {
+				Create *bool `json:"create"`
+			} `json:"source"`
+		}
+		if err := json.Unmarshal([]byte(priorProposalJSON), &acceptedShape); err != nil {
+			return memory.RememberLiteralProposal{}, fmt.Errorf("decode accepted proposal shape: %w", err)
+		}
+		// Stage 2 always created both rows and predates the explicit preview flags.
+		// Recover that accepted meaning when reopening its stored proposal JSON.
+		if acceptedShape.ClaimCreate == nil {
+			proposal.ClaimCreate = true
+		}
+		if acceptedShape.Source.Create == nil {
+			proposal.Source.Create = true
+		}
+		if proposal.Source.OperationID == "" {
+			proposal.Source.OperationID = proposal.OperationID
+		}
 		if proposal.SessionID != scope.SessionID || proposal.Source.EventID != request.SourceEventID ||
 			proposal.Predicate.Token != request.Predicate || proposal.Predicate.Label != request.PredicateLabel ||
 			proposal.Literal != request.Literal {
@@ -366,7 +495,7 @@ func (s *Store) PrepareRememberLiteral(
 	}
 
 	predicate := memory.SemanticPredicate{Token: request.Predicate, Version: 1, Label: request.PredicateLabel,
-		ObjectConstraint: request.Literal.Kind, Cardinality: "one"}
+		ObjectConstraint: memory.PredicateObjectConstraint(request.Literal.Kind), Cardinality: "one"}
 	err = s.db.QueryRowContext(ctx, `
 		SELECT predicate_id, label, object_constraint, cardinality
 		FROM semantic_predicates WHERE token = ? AND version = 1
@@ -374,7 +503,7 @@ func (s *Store) PrepareRememberLiteral(
 	if errors.Is(err, sql.ErrNoRows) {
 		predicate.ID, err = newSemanticID()
 		predicate.Create = true
-	} else if err == nil && (predicate.ObjectConstraint != request.Literal.Kind || predicate.Cardinality != "one") {
+	} else if err == nil && (predicate.ObjectConstraint != memory.PredicateObjectConstraint(request.Literal.Kind) || predicate.Cardinality != "one") {
 		return memory.RememberLiteralProposal{}, errors.New("Predicate definition does not accept this literal")
 	}
 	if err != nil {
@@ -414,15 +543,39 @@ func (s *Store) PrepareRememberLiteral(
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
-	claimID, err := newSemanticID()
-	if err != nil {
-		return memory.RememberLiteralProposal{}, err
+	var claimID memory.SemanticID
+	claimCreate := false
+	err = s.db.QueryRowContext(ctx, `
+		SELECT claim_id FROM semantic_claims
+		WHERE scope_id = ? AND subject_entity_id = ? AND predicate_id = ? AND object_kind = 'literal'
+		  AND literal_kind = ? AND literal_value = ? AND polarity = 'affirmed'
+		  AND valid_from IS NULL AND valid_to IS NULL
+	`, target.ID, subject.ID, predicate.ID, request.Literal.Kind, request.Literal.Value).Scan(&claimID)
+	if errors.Is(err, sql.ErrNoRows) {
+		claimID, err = newSemanticID()
+		claimCreate = true
 	}
-	sourceLinkID, err := newSemanticID()
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
 	digest := sha256.Sum256([]byte(content))
+	evidenceHash := fmt.Sprintf("sha256:%x", digest)
+	var sourceLinkID memory.SemanticID
+	var sourceOperationID memory.SemanticID
+	sourceCreate := false
+	err = s.db.QueryRowContext(ctx, `
+		SELECT source_link_id, created_operation_id FROM semantic_source_links
+		WHERE claim_id = ? AND event_id = ? AND event_part = 'content' AND locator_kind = 'whole'
+		  AND locator_value = '' AND evidence_sha256 = ?
+	`, claimID, request.SourceEventID, evidenceHash).Scan(&sourceLinkID, &sourceOperationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		sourceLinkID, err = newSemanticID()
+		sourceOperationID = operationID
+		sourceCreate = true
+	}
+	if err != nil {
+		return memory.RememberLiteralProposal{}, err
+	}
 
 	scopes := []memory.SemanticScope{global.SemanticScope}
 	if targetKey != "global" {
@@ -437,13 +590,13 @@ func (s *Store) PrepareRememberLiteral(
 		SchemaVersion: 1, Kind: "remember_literal_claim", OperationID: operationID,
 		IdempotencyKey: request.IdempotencyKey, Actor: "owner", SessionID: scope.SessionID,
 		Scope: target.SemanticScope, Scopes: scopes, PriorRevisions: prior, ExpectedRevision: target.Revision,
-		Predicate: predicate, Subject: subject, Evie: evie, ClaimID: claimID, SourceLinkID: sourceLinkID,
+		Predicate: predicate, Subject: subject, Evie: evie, ClaimID: claimID, ClaimCreate: claimCreate, SourceLinkID: sourceLinkID,
 		Literal: request.Literal, Polarity: "affirmed", ValidTime: memory.ValidTime{},
 		Source: memory.SemanticSource{
-			EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: targetKey,
+			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: targetKey,
 			EventPart: "content", LocatorKind: "whole", LocatorValue: "",
-			EvidenceSHA256: fmt.Sprintf("sha256:%x", digest), Actor: "owner", SourceType: "user_message",
-			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content,
+			EvidenceSHA256: evidenceHash, Actor: "owner", SourceType: "user_message",
+			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content, Create: sourceCreate,
 		},
 	}
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalRememberLiteralProposal(proposal))
@@ -490,47 +643,187 @@ func validateProposalSessionScope(
 	writer turnLeaseWriteExecutor,
 	proposal memory.RememberLiteralProposal,
 ) error {
+	expectedTarget, expectedScopes, err := authorizedSemanticScopes(ctx, writer, proposal.SessionID, false)
+	if err != nil {
+		return err
+	}
+	return validateAuthorizedSemanticScopes(expectedTarget, expectedScopes, proposal.SessionID, proposal.Source.SessionID,
+		proposal.Source.ScopeKey, proposal.Scopes)
+}
+
+func authorizedSemanticScopes(
+	ctx context.Context,
+	writer turnLeaseWriteExecutor,
+	sessionID memory.SessionID,
+	useSessionScope bool,
+) (string, []string, error) {
 	var workspaceID, projectID sql.NullString
 	if err := writer.queryRowContext(ctx, `
 		SELECT workspace_id, project_id FROM sessions WHERE id = ? AND status = ?
-	`, proposal.SessionID, memory.SessionActive).Scan(&workspaceID, &projectID); err != nil {
-		return fmt.Errorf("load active proposal session: %w", err)
+	`, sessionID, memory.SessionActive).Scan(&workspaceID, &projectID); err != nil {
+		return "", nil, fmt.Errorf("load active proposal session: %w", err)
 	}
-	expectedTarget := "global"
+	contextScope := "global"
 	if workspaceID.Valid {
-		expectedTarget = "workspace:" + workspaceID.String
+		contextScope = "workspace:" + workspaceID.String
 	} else if projectID.Valid {
-		expectedTarget = "project:" + projectID.String
+		contextScope = "project:" + projectID.String
 	}
-	if proposal.Scope.Key != expectedTarget || proposal.Source.ScopeKey != expectedTarget ||
-		proposal.Source.SessionID != proposal.SessionID {
+	expectedTarget := contextScope
+	if useSessionScope {
+		expectedTarget = "session:" + string(sessionID)
+	}
+	expectedScopes := []string{"global"}
+	if contextScope != "global" {
+		expectedScopes = append(expectedScopes, contextScope)
+	}
+	if expectedTarget != contextScope {
+		expectedScopes = append(expectedScopes, expectedTarget)
+	}
+	sort.Strings(expectedScopes)
+	return expectedTarget, expectedScopes, nil
+}
+
+func validateAuthorizedSemanticScopes(
+	expectedTarget string,
+	expectedScopes []string,
+	proposalSessionID, sourceSessionID memory.SessionID,
+	sourceScopeKey string,
+	scopes []memory.SemanticScope,
+) error {
+	if sourceScopeKey != expectedTarget || sourceSessionID != proposalSessionID {
 		return errors.New("semantic proposal is outside its immutable session Context Scope")
 	}
-	expectedScopeCount := 1
-	if expectedTarget != "global" {
-		expectedScopeCount = 2
-	}
-	if len(proposal.Scopes) != expectedScopeCount {
+	if len(scopes) != len(expectedScopes) {
 		return errors.New("semantic proposal contains an unauthorized scope")
 	}
-	seenScopes := make(map[string]struct{}, len(proposal.Scopes))
-	for index, scope := range proposal.Scopes {
-		if scope.Key != "global" && scope.Key != expectedTarget {
+	for index, scope := range scopes {
+		if scope.Key != expectedScopes[index] {
 			return errors.New("semantic proposal contains an unauthorized scope")
 		}
-		if index > 0 && proposal.Scopes[index-1].Key >= scope.Key {
-			return errors.New("semantic proposal scopes are not in canonical order")
-		}
-		if _, duplicate := seenScopes[scope.Key]; duplicate {
-			return errors.New("semantic proposal contains a duplicate scope")
-		}
-		seenScopes[scope.Key] = struct{}{}
 	}
-	if _, ok := seenScopes["global"]; !ok {
-		return errors.New("semantic proposal omits the global scope")
+	return nil
+}
+
+func validateSemanticScopeVector(
+	ctx context.Context,
+	writer turnLeaseWriteExecutor,
+	scopes []memory.SemanticScope,
+	priors []memory.ScopeRevision,
+) (map[string]memory.SemanticScope, error) {
+	byKey := make(map[string]memory.SemanticScope, len(scopes))
+	for index, scope := range scopes {
+		if index > 0 && scopes[index-1].Key >= scope.Key {
+			return nil, errors.New("semantic proposal scopes are not in canonical order")
+		}
+		if _, duplicate := byKey[scope.Key]; duplicate {
+			return nil, errors.New("semantic proposal contains a duplicate scope")
+		}
+		byKey[scope.Key] = scope
+		if err := validateScopeBacking(ctx, writer, scope); err != nil {
+			return nil, err
+		}
+		var storedID string
+		var storedRevision int64
+		err := writer.queryRowContext(ctx, `SELECT scope_id, revision FROM semantic_scopes WHERE scope_key = ?`, scope.Key).Scan(&storedID, &storedRevision)
+		switch {
+		case errors.Is(err, sql.ErrNoRows) && scope.Revision == 0:
+			kind, registryID, splitErr := splitScopeKey(scope.Key)
+			if splitErr != nil {
+				return nil, splitErr
+			}
+			if _, err := writer.execContext(ctx, `
+				INSERT INTO semantic_scopes (scope_id, scope_key, scope_kind, registry_id, revision)
+				VALUES (?, ?, ?, NULLIF(?, ''), 0)
+			`, scope.ID, scope.Key, kind, registryID); err != nil {
+				return nil, fmt.Errorf("create semantic scope: %w", err)
+			}
+		case err != nil:
+			return nil, err
+		case storedID != string(scope.ID) || storedRevision != scope.Revision:
+			return nil, ErrStaleScopeRevision
+		}
 	}
-	if _, ok := seenScopes[expectedTarget]; !ok {
-		return errors.New("semantic proposal omits its target scope")
+	if len(priors) != len(byKey) {
+		return nil, errors.New("semantic proposal revision vector is incomplete")
+	}
+	seenPriors := make(map[string]struct{}, len(priors))
+	for index, prior := range priors {
+		if index > 0 && priors[index-1].ScopeKey >= prior.ScopeKey {
+			return nil, errors.New("semantic proposal revision vector is not in canonical order")
+		}
+		if _, duplicate := seenPriors[prior.ScopeKey]; duplicate {
+			return nil, errors.New("semantic proposal revision vector contains a duplicate scope")
+		}
+		seenPriors[prior.ScopeKey] = struct{}{}
+		scope, ok := byKey[prior.ScopeKey]
+		if !ok || scope.Revision != prior.Revision {
+			return nil, errors.New("semantic proposal revision vector does not match its scopes")
+		}
+	}
+	return byKey, nil
+}
+
+func nextSemanticTransactionTime(ctx context.Context, writer turnLeaseWriteExecutor, clock time.Time) (time.Time, error) {
+	now := clock.UTC()
+	var latest sql.NullString
+	if err := writer.queryRowContext(ctx, `SELECT MAX(transaction_time) FROM semantic_operations`).Scan(&latest); err != nil {
+		return time.Time{}, err
+	}
+	if latest.Valid {
+		priorTime, err := parseSemanticTime(latest.String)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("parse latest semantic transaction time: %w", err)
+		}
+		if priorTime.After(now) {
+			now = priorTime
+		}
+	}
+	return now, nil
+}
+
+type acceptedSemanticOperation struct {
+	OperationID     memory.SemanticID
+	Kind            string
+	IdempotencyKey  string
+	Actor           memory.SemanticActor
+	SessionID       memory.SessionID
+	TargetScopeID   memory.SemanticID
+	SourceEventID   memory.EventID
+	ProposalHash    string
+	EffectHash      string
+	ProposalJSON    []byte
+	PreparedJSON    []byte
+	ResultJSON      []byte
+	TransactionTime time.Time
+	ResultRevisions []memory.ScopeRevision
+	ScopesByKey     map[string]memory.SemanticScope
+}
+
+func recordAcceptedSemanticOperation(ctx context.Context, writer turnLeaseWriteExecutor, operation acceptedSemanticOperation) error {
+	if _, err := writer.execContext(ctx, `
+		INSERT INTO semantic_operations (
+			operation_id, schema_version, operation_kind, idempotency_key, actor, session_id,
+			target_scope_id, source_event_id, proposal_sha256, effect_sha256,
+			proposal_json, prepared_proposal_json, result_json, transaction_time
+		) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, operation.OperationID, operation.Kind, operation.IdempotencyKey, operation.Actor, operation.SessionID,
+		operation.TargetScopeID, operation.SourceEventID, operation.ProposalHash, operation.EffectHash,
+		string(operation.ProposalJSON), string(operation.PreparedJSON), string(operation.ResultJSON),
+		formatSemanticTime(operation.TransactionTime)); err != nil {
+		return fmt.Errorf("record semantic operation: %w", err)
+	}
+	for _, revision := range operation.ResultRevisions {
+		scope, ok := operation.ScopesByKey[revision.ScopeKey]
+		if !ok {
+			return errors.New("semantic result contains a scope outside its proposal")
+		}
+		if _, err := writer.execContext(ctx, `
+			INSERT INTO semantic_operation_scopes (operation_id, scope_id, prior_revision, resulting_revision, written)
+			VALUES (?, ?, ?, ?, ?)
+		`, operation.OperationID, scope.ID, scope.Revision, revision.Revision, revision.Revision != scope.Revision); err != nil {
+			return fmt.Errorf("record semantic operation scope: %w", err)
+		}
 	}
 	return nil
 }
@@ -543,7 +836,7 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 		return errors.New("remember literal proposals must be timeless affirmed Claims")
 	}
 	if proposal.ExpectedRevision != proposal.Scope.Revision || proposal.Predicate.Version != 1 ||
-		proposal.Predicate.ObjectConstraint != proposal.Literal.Kind || proposal.Predicate.Cardinality != "one" ||
+		proposal.Predicate.ObjectConstraint != memory.PredicateObjectConstraint(proposal.Literal.Kind) || proposal.Predicate.Cardinality != "one" ||
 		len(proposal.Predicate.Token) > 64 || !predicateTokenPattern.MatchString(proposal.Predicate.Token) ||
 		strings.TrimSpace(proposal.Predicate.Label) == "" {
 		return errors.New("remember literal proposal Predicate or revision is invalid")
@@ -560,6 +853,13 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 		proposal.Source.LocatorValue != "" || proposal.Source.Actor != "owner" ||
 		proposal.Source.SourceType != "user_message" || proposal.Source.Authority != "owner_statement" {
 		return errors.New("remember literal proposal source attributes are invalid")
+	}
+	if proposal.Source.Create {
+		if proposal.Source.OperationID != proposal.OperationID {
+			return errors.New("new literal Source Link does not name its creating operation")
+		}
+	} else if proposal.Source.OperationID == "" {
+		return errors.New("reused literal Source Link omits its creating operation")
 	}
 	return validateLiteral(proposal.Literal)
 }
@@ -587,7 +887,7 @@ func (s *Store) ApplyRememberLiteral(
 		return result, err
 	}
 	for _, id := range []string{string(proposal.OperationID), string(proposal.Predicate.ID), string(proposal.Subject.ID),
-		string(proposal.Evie.ID), string(proposal.ClaimID), string(proposal.SourceLinkID), string(proposal.Scope.ID)} {
+		string(proposal.Evie.ID), string(proposal.ClaimID), string(proposal.SourceLinkID), string(proposal.Source.OperationID), string(proposal.Scope.ID)} {
 		if err := validateSemanticUUID(id); err != nil {
 			return result, err
 		}
@@ -639,68 +939,18 @@ func (s *Store) ApplyRememberLiteral(
 			return errors.New("semantic source observation time changed")
 		}
 
-		byKey := make(map[string]memory.SemanticScope, len(proposal.Scopes))
-		for _, scope := range proposal.Scopes {
-			byKey[scope.Key] = scope
-			if err := validateScopeBacking(ctx, writer, scope); err != nil {
-				return err
-			}
-			var storedID string
-			var storedRevision int64
-			err := writer.queryRowContext(ctx, `SELECT scope_id, revision FROM semantic_scopes WHERE scope_key = ?`, scope.Key).Scan(&storedID, &storedRevision)
-			switch {
-			case errors.Is(err, sql.ErrNoRows) && scope.Revision == 0:
-				kind, registryID, splitErr := splitScopeKey(scope.Key)
-				if splitErr != nil {
-					return splitErr
-				}
-				if _, err := writer.execContext(ctx, `
-					INSERT INTO semantic_scopes (scope_id, scope_key, scope_kind, registry_id, revision)
-					VALUES (?, ?, ?, NULLIF(?, ''), 0)
-				`, scope.ID, scope.Key, kind, registryID); err != nil {
-					return fmt.Errorf("create semantic scope: %w", err)
-				}
-			case err != nil:
-				return err
-			case storedID != string(scope.ID) || storedRevision != scope.Revision:
-				return ErrStaleScopeRevision
-			}
+		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions)
+		if err != nil {
+			return err
 		}
 		targetScope, ok := byKey[proposal.Scope.Key]
 		if !ok || targetScope != proposal.Scope {
 			return errors.New("semantic proposal target scope does not match its revision vector")
 		}
-		seenPriors := make(map[string]struct{}, len(proposal.PriorRevisions))
-		for index, prior := range proposal.PriorRevisions {
-			if index > 0 && proposal.PriorRevisions[index-1].ScopeKey >= prior.ScopeKey {
-				return errors.New("semantic proposal revision vector is not in canonical order")
-			}
-			if _, duplicate := seenPriors[prior.ScopeKey]; duplicate {
-				return errors.New("semantic proposal revision vector contains a duplicate scope")
-			}
-			seenPriors[prior.ScopeKey] = struct{}{}
-			scope, ok := byKey[prior.ScopeKey]
-			if !ok || scope.Revision != prior.Revision {
-				return errors.New("semantic proposal revision vector does not match its scopes")
-			}
-		}
-		if len(seenPriors) != len(byKey) {
-			return errors.New("semantic proposal revision vector is incomplete")
-		}
 
-		now := s.now().UTC()
-		var latest sql.NullString
-		if err := writer.queryRowContext(ctx, `SELECT MAX(transaction_time) FROM semantic_operations`).Scan(&latest); err != nil {
+		now, err := nextSemanticTransactionTime(ctx, writer, s.now())
+		if err != nil {
 			return err
-		}
-		if latest.Valid {
-			priorTime, err := parseSemanticTime(latest.String)
-			if err != nil {
-				return fmt.Errorf("parse latest semantic transaction time: %w", err)
-			}
-			if priorTime.After(now) {
-				now = priorTime
-			}
 		}
 		transactionText := formatSemanticTime(now)
 		writeGlobal := proposalWritesGlobal(proposal)
@@ -726,26 +976,14 @@ func (s *Store) ApplyRememberLiteral(
 		if err != nil {
 			return err
 		}
-		if _, err := writer.execContext(ctx, `
-			INSERT INTO semantic_operations (
-				operation_id, schema_version, operation_kind, idempotency_key, actor, session_id,
-				target_scope_id, source_event_id, proposal_sha256, effect_sha256,
-				proposal_json, prepared_proposal_json, result_json, transaction_time
-			) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, proposal.OperationID, proposal.Kind, proposal.IdempotencyKey, proposal.Actor, proposal.SessionID,
-			proposal.Scope.ID, proposal.Source.EventID, proposalHash, effectHash, string(proposalJSON),
-			string(preparedProposalJSON), string(resultJSON), transactionText); err != nil {
-			return fmt.Errorf("record semantic operation: %w", err)
-		}
-		for _, revision := range result.ResultingRevisions {
-			scope := byKey[revision.ScopeKey]
-			written := revision.Revision != scope.Revision
-			if _, err := writer.execContext(ctx, `
-				INSERT INTO semantic_operation_scopes (operation_id, scope_id, prior_revision, resulting_revision, written)
-				VALUES (?, ?, ?, ?, ?)
-			`, proposal.OperationID, scope.ID, scope.Revision, revision.Revision, written); err != nil {
-				return err
-			}
+		if err := recordAcceptedSemanticOperation(ctx, writer, acceptedSemanticOperation{
+			OperationID: proposal.OperationID, Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey,
+			Actor: proposal.Actor, SessionID: proposal.SessionID, TargetScopeID: proposal.Scope.ID,
+			SourceEventID: proposal.Source.EventID, ProposalHash: proposalHash, EffectHash: effectHash,
+			ProposalJSON: proposalJSON, PreparedJSON: preparedProposalJSON, ResultJSON: resultJSON,
+			TransactionTime: now, ResultRevisions: result.ResultingRevisions, ScopesByKey: byKey,
+		}); err != nil {
+			return err
 		}
 		if proposal.Predicate.Create {
 			if _, err := writer.execContext(ctx, `
@@ -804,35 +1042,81 @@ func (s *Store) ApplyRememberLiteral(
 				return errors.New("semantic Evie anchor changed after preparation")
 			}
 		}
-		if _, err := writer.execContext(ctx, `
-			INSERT INTO semantic_claims (
-				claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
-				literal_kind, literal_value, polarity, valid_from, valid_to, lifecycle,
-				created_operation_id, transaction_time
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'active', ?, ?)
-		`, proposal.ClaimID, proposal.Scope.ID, proposal.Subject.ID, proposal.Predicate.ID,
-			proposal.Predicate.Token, proposal.Predicate.Version, proposal.Literal.Kind, proposal.Literal.Value,
-			proposal.Polarity, proposal.OperationID, transactionText); err != nil {
-			return fmt.Errorf("create semantic Claim: %w", err)
+		if proposal.ClaimCreate {
+			if _, err := writer.execContext(ctx, `
+				INSERT INTO semantic_claims (
+					claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
+					object_kind, literal_kind, literal_value, polarity, valid_from, valid_to, lifecycle,
+					created_operation_id, transaction_time
+				) VALUES (?, ?, ?, ?, ?, ?, 'literal', ?, ?, ?, NULL, NULL, 'active', ?, ?)
+			`, proposal.ClaimID, proposal.Scope.ID, proposal.Subject.ID, proposal.Predicate.ID,
+				proposal.Predicate.Token, proposal.Predicate.Version, proposal.Literal.Kind, proposal.Literal.Value,
+				proposal.Polarity, proposal.OperationID, transactionText); err != nil {
+				return fmt.Errorf("create semantic Claim: %w", err)
+			}
+		} else {
+			var id string
+			if err := writer.queryRowContext(ctx, `
+				SELECT claim_id FROM semantic_claims
+				WHERE claim_id = ? AND scope_id = ? AND subject_entity_id = ? AND predicate_id = ?
+				  AND object_kind = 'literal' AND literal_kind = ? AND literal_value = ?
+				  AND polarity = 'affirmed' AND valid_from IS NULL AND valid_to IS NULL
+			`, proposal.ClaimID, proposal.Scope.ID, proposal.Subject.ID, proposal.Predicate.ID,
+				proposal.Literal.Kind, proposal.Literal.Value).Scan(&id); err != nil {
+				return errors.New("semantic Claim changed after preparation")
+			}
 		}
-		if _, err := writer.execContext(ctx, `
-			INSERT INTO semantic_source_links (
-				source_link_id, claim_id, event_id, source_session_id, source_scope_key,
-				event_part, locator_kind, locator_value, evidence_sha256, source_actor,
-				source_type, authority, observed_at, eligibility, created_operation_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
-		`, proposal.SourceLinkID, proposal.ClaimID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
-			proposal.Source.EventPart, proposal.Source.LocatorKind, proposal.Source.LocatorValue,
-			proposal.Source.EvidenceSHA256, proposal.Source.Actor, proposal.Source.SourceType,
-			proposal.Source.Authority, proposal.Source.ObservedAt, proposal.OperationID); err != nil {
-			return fmt.Errorf("create semantic Source Link: %w", err)
+		if proposal.Source.Create {
+			if _, err := writer.execContext(ctx, `
+				INSERT INTO semantic_source_links (
+					source_link_id, claim_id, event_id, source_session_id, source_scope_key,
+					event_part, locator_kind, locator_value, evidence_sha256, source_actor,
+					source_type, authority, observed_at, eligibility, created_operation_id
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)
+			`, proposal.SourceLinkID, proposal.ClaimID, proposal.Source.EventID, proposal.SessionID, proposal.Source.ScopeKey,
+				proposal.Source.EventPart, proposal.Source.LocatorKind, proposal.Source.LocatorValue,
+				proposal.Source.EvidenceSHA256, proposal.Source.Actor, proposal.Source.SourceType,
+				proposal.Source.Authority, proposal.Source.ObservedAt, proposal.OperationID); err != nil {
+				return fmt.Errorf("create semantic Source Link: %w", err)
+			}
+		} else {
+			var id, claimID, eventID, sessionID, scopeKey, eventPart, locatorKind, locatorValue string
+			var evidenceHash, actor, sourceType, authority, observedAt, eligibility, operationID string
+			if err := writer.queryRowContext(ctx, `
+				SELECT source_link_id, claim_id, event_id, source_session_id, source_scope_key,
+				       event_part, locator_kind, locator_value, evidence_sha256, source_actor,
+				       source_type, authority, observed_at, eligibility, created_operation_id
+				FROM semantic_source_links WHERE source_link_id = ?
+			`, proposal.SourceLinkID).Scan(&id, &claimID, &eventID, &sessionID, &scopeKey, &eventPart,
+				&locatorKind, &locatorValue, &evidenceHash, &actor, &sourceType, &authority,
+				&observedAt, &eligibility, &operationID); err != nil || id != string(proposal.SourceLinkID) ||
+				claimID != string(proposal.ClaimID) || eventID != string(proposal.Source.EventID) ||
+				sessionID != string(proposal.Source.SessionID) || scopeKey != proposal.Source.ScopeKey ||
+				eventPart != string(proposal.Source.EventPart) || locatorKind != string(proposal.Source.LocatorKind) ||
+				locatorValue != proposal.Source.LocatorValue || evidenceHash != proposal.Source.EvidenceSHA256 ||
+				actor != string(proposal.Source.Actor) || sourceType != string(proposal.Source.SourceType) ||
+				authority != string(proposal.Source.Authority) || observedAt != proposal.Source.ObservedAt ||
+				eligibility != "eligible" || operationID != string(proposal.Source.OperationID) {
+				return errors.New("semantic Source Link changed after preparation")
+			}
 		}
-		if _, err := writer.execContext(ctx, `
-			INSERT INTO semantic_state_events (
-				scope_id, object_kind, object_id, state, operation_id, scope_revision, transaction_time
-			) VALUES (?, 'claim', ?, 'active', ?, ?, ?)
-		`, proposal.Scope.ID, proposal.ClaimID, proposal.OperationID, result.ScopeRevision, transactionText); err != nil {
-			return fmt.Errorf("create semantic state event: %w", err)
+		if proposal.ClaimCreate {
+			if _, err := writer.execContext(ctx, `
+				INSERT INTO semantic_state_events (
+					scope_id, object_kind, object_id, state, operation_id, scope_revision, transaction_time
+				) VALUES (?, 'claim', ?, 'active', ?, ?, ?)
+			`, proposal.Scope.ID, proposal.ClaimID, proposal.OperationID, result.ScopeRevision, transactionText); err != nil {
+				return fmt.Errorf("create semantic state event: %w", err)
+			}
+		}
+		if proposal.Source.Create {
+			if _, err := writer.execContext(ctx, `
+				INSERT INTO semantic_state_events (
+					scope_id, object_kind, object_id, state, operation_id, scope_revision, transaction_time
+				) VALUES (?, 'source_link', ?, 'eligible', ?, ?, ?)
+			`, proposal.Scope.ID, proposal.SourceLinkID, proposal.OperationID, result.ScopeRevision, transactionText); err != nil {
+				return fmt.Errorf("create semantic source state event: %w", err)
+			}
 		}
 		for _, revision := range result.ResultingRevisions {
 			if revision.Revision == byKey[revision.ScopeKey].Revision {
