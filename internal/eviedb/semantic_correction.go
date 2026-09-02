@@ -960,9 +960,15 @@ func loadEligibleSourcesAt(ctx context.Context, queryer semanticInspectionQuerye
 		FROM semantic_source_links AS sources
 		JOIN semantic_operations AS operations ON operations.operation_id = sources.created_operation_id
 		JOIN events ON events.id = sources.event_id
-		WHERE sources.claim_id = ? AND sources.eligibility = 'eligible' AND operations.transaction_time <= ?
+		WHERE sources.claim_id = ? AND operations.transaction_time <= ?
+		  AND (SELECT state FROM semantic_state_events AS source_states
+		       WHERE source_states.object_kind = 'source_link'
+		         AND source_states.object_id = sources.source_link_id
+		         AND source_states.transaction_time <= ?
+		       ORDER BY source_states.transaction_time DESC, source_states.scope_revision DESC,
+		                source_states.operation_id DESC, source_states.state DESC LIMIT 1) = 'eligible'
 		ORDER BY sources.source_link_id
-	`, claimID, formatSemanticTime(asKnownAt))
+	`, claimID, formatSemanticTime(asKnownAt), formatSemanticTime(asKnownAt))
 	if err != nil {
 		return nil, err
 	}

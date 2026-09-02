@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS semantic_scopes (
 
 CREATE TABLE IF NOT EXISTS semantic_operations (
     operation_id       TEXT PRIMARY KEY NOT NULL,
-    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2)),
+    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3)),
     operation_kind     TEXT NOT NULL,
     idempotency_key    TEXT NOT NULL UNIQUE,
     actor               TEXT NOT NULL,
@@ -207,6 +207,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureSemanticOperationSchemaV2(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureSemanticOperationSchemaV3(ctx, db); err != nil {
+		return err
+	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
 	if err != nil || present {
 		return err
@@ -233,7 +236,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2)") {
+	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -282,6 +285,60 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
+	var definition string
+	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+		return err
+	}
+	if strings.Contains(definition, "schema_version IN (1, 2, 3)") {
+		return nil
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`)
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, semanticOperationsV3Migration); err != nil {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v3: %w", err)
+	}
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	violations := 0
+	for rows.Next() {
+		violations++
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if violations != 0 {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v3: %d foreign-key violations", violations)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
 const semanticOperationsV2Migration = `
 DROP TRIGGER IF EXISTS semantic_operations_append_only_update;
 DROP TRIGGER IF EXISTS semantic_operations_append_only_delete;
@@ -304,6 +361,32 @@ CREATE TABLE semantic_operations_v2 (
 INSERT INTO semantic_operations_v2 SELECT * FROM semantic_operations;
 DROP TABLE semantic_operations;
 ALTER TABLE semantic_operations_v2 RENAME TO semantic_operations;
+CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+`
+
+const semanticOperationsV3Migration = `
+DROP TRIGGER IF EXISTS semantic_operations_append_only_update;
+DROP TRIGGER IF EXISTS semantic_operations_append_only_delete;
+CREATE TABLE semantic_operations_v3 (
+    operation_id       TEXT PRIMARY KEY NOT NULL,
+    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3)),
+    operation_kind     TEXT NOT NULL,
+    idempotency_key    TEXT NOT NULL UNIQUE,
+    actor               TEXT NOT NULL,
+    session_id          TEXT NOT NULL REFERENCES sessions(id),
+    target_scope_id     TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    source_event_id     TEXT NOT NULL REFERENCES events(id),
+    proposal_sha256     TEXT NOT NULL,
+    effect_sha256       TEXT NOT NULL,
+    proposal_json       TEXT NOT NULL CHECK (json_valid(proposal_json) AND json_type(proposal_json) = 'object'),
+    prepared_proposal_json TEXT NOT NULL CHECK (json_valid(prepared_proposal_json) AND json_type(prepared_proposal_json) = 'object'),
+    result_json         TEXT NOT NULL CHECK (json_valid(result_json) AND json_type(result_json) = 'object'),
+    transaction_time    TEXT NOT NULL
+);
+INSERT INTO semantic_operations_v3 SELECT * FROM semantic_operations;
+DROP TABLE semantic_operations;
+ALTER TABLE semantic_operations_v3 RENAME TO semantic_operations;
 CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 `
@@ -787,6 +870,14 @@ func (s *Store) PrepareRememberLiteral(
 		sourceLinkID, err = newSemanticID()
 		sourceOperationID = operationID
 		sourceCreate = true
+	} else if err == nil {
+		state, stateErr := loadLatestState(ctx, dbLifecycleQueryer{s.db}, memory.SemanticObjectSourceLink, sourceLinkID)
+		if stateErr != nil {
+			return memory.RememberLiteralProposal{}, stateErr
+		}
+		if state.State != memory.SemanticStateEligible {
+			return memory.RememberLiteralProposal{}, errors.New("retracted Source Link requires explicit restoration")
+		}
 	}
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
@@ -1350,6 +1441,10 @@ func (s *Store) ApplyRememberLiteral(
 				authority != string(proposal.Source.Authority) || observedAt != proposal.Source.ObservedAt ||
 				eligibility != "eligible" || operationID != string(proposal.Source.OperationID) {
 				return errors.New("semantic Source Link changed after preparation")
+			}
+			state, err := loadLatestState(ctx, writer, memory.SemanticObjectSourceLink, proposal.SourceLinkID)
+			if err != nil || state.State != memory.SemanticStateEligible {
+				return errors.New("semantic Source Link eligibility changed after preparation")
 			}
 		}
 		if proposal.ClaimCreate {

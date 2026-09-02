@@ -1,0 +1,147 @@
+{
+  "fixture_schema_version": 3,
+  "name": "append-only retirement restoration and source eligibility lifecycle",
+  "preexisting_object_ids": [
+    "97000000-0000-4000-8000-000000000004",
+    "97000000-0000-4000-8000-000000000005",
+    "97000000-0000-4000-8000-000000000006",
+    "97000000-0000-4000-8000-000000000007"
+  ],
+  "operations": [
+    {
+      "schema_version": 3,
+      "operation_id": "97000000-0000-4000-8000-000000000001",
+      "proposal": {
+        "kind": "retire_memory",
+        "idempotency_key": "idem:v1:97000000-0000-4000-8000-000000000011",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [{ "scope_key": "global", "revision": 10 }],
+        "source_event_ids": ["97000000-0000-4000-8000-000000000021"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [
+            { "object_kind": "entity", "object_id": "97000000-0000-4000-8000-000000000004", "state": "retired" },
+            { "object_kind": "alias", "object_id": "97000000-0000-4000-8000-000000000005", "state": "retired" },
+            { "object_kind": "claim", "object_id": "97000000-0000-4000-8000-000000000006", "state": "retired" }
+          ],
+          "lifecycle_changes": [
+            { "action": "retire", "object_kind": "entity", "object_id": "97000000-0000-4000-8000-000000000004", "expected_state": "active" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:884799c31aa736eff302faa846d2365a5e2a435c8082e1088de58b436b505725",
+      "transaction_time": "2026-09-02T16:00:01.000000000Z",
+      "resulting_revisions": [{ "scope_key": "global", "revision": 11 }],
+      "effect_sha256": "sha256:c928692ae110f37d13a405e695e0f106a247116fadbe12ccce6f36aec050639b"
+    },
+    {
+      "schema_version": 3,
+      "operation_id": "97000000-0000-4000-8000-000000000002",
+      "proposal": {
+        "kind": "restore_memory",
+        "idempotency_key": "idem:v1:97000000-0000-4000-8000-000000000012",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [{ "scope_key": "global", "revision": 11 }],
+        "source_event_ids": ["97000000-0000-4000-8000-000000000022"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [
+            { "object_kind": "entity", "object_id": "97000000-0000-4000-8000-000000000004", "state": "active" },
+            { "object_kind": "alias", "object_id": "97000000-0000-4000-8000-000000000005", "state": "active" },
+            { "object_kind": "claim", "object_id": "97000000-0000-4000-8000-000000000006", "state": "active" }
+          ],
+          "lifecycle_changes": [
+            { "action": "restore", "object_kind": "entity", "object_id": "97000000-0000-4000-8000-000000000004", "expected_state": "retired" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:f98d8be51d55fe8d322819f48854204cc82fbf4ae7c8abc8325028d49438fd13",
+      "transaction_time": "2026-09-02T16:00:02.000000000Z",
+      "resulting_revisions": [{ "scope_key": "global", "revision": 12 }],
+      "effect_sha256": "sha256:67a66846b1d134786efe47769e11adc6a19206876278a3df82a5a3b948a62244"
+    },
+    {
+      "schema_version": 3,
+      "operation_id": "97000000-0000-4000-8000-000000000003",
+      "proposal": {
+        "kind": "retract_source",
+        "idempotency_key": "idem:v1:97000000-0000-4000-8000-000000000013",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [{ "scope_key": "global", "revision": 12 }],
+        "source_event_ids": ["97000000-0000-4000-8000-000000000023"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [
+            { "object_kind": "source_link", "object_id": "97000000-0000-4000-8000-000000000007", "state": "retracted" }
+          ],
+          "lifecycle_changes": [
+            { "action": "retract_source", "object_kind": "source_link", "object_id": "97000000-0000-4000-8000-000000000007", "expected_state": "eligible" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:4f745a7dd679521cf5895aa86129aea98129203c1b3604d5f9b24bdc3ae48be7",
+      "transaction_time": "2026-09-02T16:00:03.000000000Z",
+      "resulting_revisions": [{ "scope_key": "global", "revision": 13 }],
+      "effect_sha256": "sha256:a458e43a50fa994ec5c9b6526ccf12a9660f25066ed4a74a62fa06b901bebc06"
+    },
+    {
+      "schema_version": 3,
+      "operation_id": "97000000-0000-4000-8000-000000000008",
+      "proposal": {
+        "kind": "restore_source",
+        "idempotency_key": "idem:v1:97000000-0000-4000-8000-000000000014",
+        "actor": "owner",
+        "session_id": "40000000-0000-4000-8000-000000000001",
+        "prior_revisions": [{ "scope_key": "global", "revision": 13 }],
+        "source_event_ids": ["97000000-0000-4000-8000-000000000024"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [
+            { "object_kind": "source_link", "object_id": "97000000-0000-4000-8000-000000000007", "state": "eligible" }
+          ],
+          "lifecycle_changes": [
+            { "action": "restore_source", "object_kind": "source_link", "object_id": "97000000-0000-4000-8000-000000000007", "expected_state": "retracted" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:eb8872037a0d2b2efce4a2d3d331006955cbb94591b52fefb75b66473b538421",
+      "transaction_time": "2026-09-02T16:00:04.000000000Z",
+      "resulting_revisions": [{ "scope_key": "global", "revision": 14 }],
+      "effect_sha256": "sha256:b5178ea3af6adb1762203c6dcfd885ba02486001bc7e20d75c9baf4cc8e5330f"
+    }
+  ],
+  "expected_statuses": [
+    { "after_operation": 0, "object_id": "97000000-0000-4000-8000-000000000004", "status": "retired" },
+    { "after_operation": 1, "object_id": "97000000-0000-4000-8000-000000000004", "status": "active" },
+    { "after_operation": 2, "object_id": "97000000-0000-4000-8000-000000000006", "status": "unsupported" },
+    { "after_operation": 2, "object_id": "97000000-0000-4000-8000-000000000007", "status": "source_retracted" },
+    { "after_operation": 3, "object_id": "97000000-0000-4000-8000-000000000006", "status": "active" }
+  ]
+}

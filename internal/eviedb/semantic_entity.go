@@ -127,6 +127,9 @@ func loadEntityByID(ctx context.Context, query interface {
 		JOIN semantic_scopes AS scopes ON scopes.scope_id = entities.scope_id
 		WHERE entities.entity_id = ? AND entities.lifecycle = 'active'
 		  AND (scopes.scope_key = 'global' OR scopes.scope_key = ? OR scopes.scope_key = ?)
+		  AND COALESCE((SELECT state FROM semantic_state_events
+		       WHERE object_kind = 'entity' AND object_id = entities.entity_id
+		       ORDER BY scope_revision DESC, transaction_time DESC, operation_id DESC, state DESC LIMIT 1), entities.lifecycle) = 'active'
 	`, id, targetScope, contextScope).Scan(&entity.ID, &entity.ScopeKey, &entity.CanonicalName, &entity.EntityType, &entity.AnchorKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return entity, fmt.Errorf("semantic Entity %s is not eligible in scope %s", id, targetScope)
@@ -146,6 +149,12 @@ func lookupAliases(ctx context.Context, query interface {
 		JOIN semantic_scopes AS scopes ON scopes.scope_id = aliases.scope_id
 		WHERE (scopes.scope_key = ? OR scopes.scope_key = ? OR scopes.scope_key = 'global') AND aliases.normalized_value = ?
 		  AND aliases.lifecycle = 'active' AND entities.lifecycle = 'active'
+		  AND COALESCE((SELECT state FROM semantic_state_events
+		       WHERE object_kind = 'alias' AND object_id = aliases.alias_id
+		       ORDER BY scope_revision DESC, transaction_time DESC, operation_id DESC, state DESC LIMIT 1), aliases.lifecycle) = 'active'
+		  AND COALESCE((SELECT state FROM semantic_state_events
+		       WHERE object_kind = 'entity' AND object_id = entities.entity_id
+		       ORDER BY scope_revision DESC, transaction_time DESC, operation_id DESC, state DESC LIMIT 1), entities.lifecycle) = 'active'
 		ORDER BY scopes.scope_key, entities.entity_id, aliases.alias_id
 	`, targetScope, contextScope, normalized)
 	if err != nil {
@@ -416,6 +425,13 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		source.ID, err = newSemanticID()
 		source.Create = true
 	} else if err == nil {
+		state, stateErr := loadLatestState(ctx, dbLifecycleQueryer{s.db}, memory.SemanticObjectSourceLink, source.ID)
+		if stateErr != nil {
+			return memory.RememberEntityProposal{}, stateErr
+		}
+		if state.State != memory.SemanticStateEligible {
+			return memory.RememberEntityProposal{}, errors.New("retracted Source Link requires explicit restoration")
+		}
 		source.Create = false
 	}
 	if err != nil {
@@ -856,6 +872,10 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 				authority != string(proposal.Source.Authority) || observedAt != proposal.Source.ObservedAt ||
 				eligibility != "eligible" || operationID != string(proposal.Source.OperationID) {
 				return errors.New("semantic Source Link changed after preparation")
+			}
+			state, err := loadLatestState(ctx, writer, memory.SemanticObjectSourceLink, proposal.Source.ID)
+			if err != nil || state.State != memory.SemanticStateEligible {
+				return errors.New("semantic Source Link eligibility changed after preparation")
 			}
 		}
 		stateRevision := result.ScopeRevision

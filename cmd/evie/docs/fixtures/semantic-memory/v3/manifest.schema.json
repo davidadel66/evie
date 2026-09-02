@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidadel66/evie/blob/master/cmd/evie/docs/fixtures/semantic-memory/v3/manifest.schema.json",
+  "title": "Evie Semantic Memory lifecycle fixture manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fixture_schema_version", "name", "preexisting_object_ids", "operations", "expected_statuses"],
+  "properties": {
+    "fixture_schema_version": { "const": 3 },
+    "name": { "type": "string", "minLength": 1 },
+    "preexisting_object_ids": { "type": "array", "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+    "operations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/operation" } },
+    "expected_statuses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["after_operation", "object_id", "status"],
+        "properties": {
+          "after_operation": { "type": "integer", "minimum": 0 },
+          "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+          "status": { "enum": ["active", "retired", "superseded", "unsupported", "source_retracted"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "lifecycleChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "object_kind", "object_id", "expected_state"],
+      "properties": {
+        "action": { "enum": ["retire", "restore", "retract_source", "restore_source"] },
+        "object_kind": { "enum": ["entity", "alias", "claim", "source_link"] },
+        "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "expected_state": { "enum": ["active", "retired", "eligible", "retracted"] }
+      }
+    },
+    "effectV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions", "lifecycle_changes"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "maxItems": 0 },
+        "entities": { "type": "array", "maxItems": 0 },
+        "aliases": { "type": "array", "maxItems": 0 },
+        "claims": { "type": "array", "maxItems": 0 },
+        "source_links": { "type": "array", "maxItems": 0 },
+        "graph_links": { "type": "array", "maxItems": 0 },
+        "transitions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/transition" } },
+        "lifecycle_changes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/lifecycleChange" } }
+      }
+    },
+    "proposalV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "enum": ["retire_memory", "restore_memory", "retract_source", "restore_source"] },
+        "idempotency_key": { "$ref": "../v1/manifest.schema.json#/$defs/idempotencyKey" },
+        "actor": { "const": "owner" },
+        "session_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/effectV3" }
+      }
+    },
+    "operationV3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 3 },
+        "operation_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/proposalV3" },
+        "proposal_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" },
+        "transaction_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "effect_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        { "$ref": "../v1/manifest.schema.json#/$defs/operation" },
+        { "$ref": "../v2/manifest.schema.json#/$defs/operationV2" },
+        { "$ref": "#/$defs/operationV3" }
+      ]
+    }
+  }
+}

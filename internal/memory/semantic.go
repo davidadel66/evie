@@ -17,6 +17,9 @@ type SourceAuthority string
 type EvidencePart string
 type EvidenceLocatorKind string
 type CorrectionMode string
+type SemanticObjectKind string
+type MemoryLifecycleAction string
+type SemanticObjectStatus string
 
 const (
 	LiteralText      LiteralKind               = "text"
@@ -56,6 +59,23 @@ const (
 
 	CorrectionError   CorrectionMode = "error"
 	CorrectionChanged CorrectionMode = "changed"
+
+	SemanticObjectEntity     SemanticObjectKind = "entity"
+	SemanticObjectAlias      SemanticObjectKind = "alias"
+	SemanticObjectClaim      SemanticObjectKind = "claim"
+	SemanticObjectSourceLink SemanticObjectKind = "source_link"
+
+	LifecycleRetire        MemoryLifecycleAction = "retire"
+	LifecycleRestore       MemoryLifecycleAction = "restore"
+	LifecycleRetractSource MemoryLifecycleAction = "retract_source"
+	LifecycleRestoreSource MemoryLifecycleAction = "restore_source"
+
+	SemanticStatusActive          SemanticObjectStatus = "active"
+	SemanticStatusRetired         SemanticObjectStatus = "retired"
+	SemanticStatusSuperseded      SemanticObjectStatus = "superseded"
+	SemanticStatusUnsupported     SemanticObjectStatus = "unsupported"
+	SemanticStatusEligible        SemanticObjectStatus = "eligible"
+	SemanticStatusSourceRetracted SemanticObjectStatus = "source_retracted"
 )
 
 type TypedLiteral struct {
@@ -308,6 +328,92 @@ type SemanticState struct {
 	OperationID     SemanticID         `json:"operation_id"`
 	ScopeRevision   int64              `json:"scope_revision"`
 	TransactionTime time.Time          `json:"transaction_time"`
+}
+
+// MemoryLifecycleRequest identifies one explicit reversible lifecycle change.
+// Prepare expands an Entity target into every active dependent Alias and Claim.
+type MemoryLifecycleRequest struct {
+	IdempotencyKey  string
+	SourceEventID   EventID
+	Action          MemoryLifecycleAction
+	ObjectKind      SemanticObjectKind
+	ObjectID        SemanticID
+	UseSessionScope bool
+}
+
+type SemanticOperationEvidence struct {
+	EventID        EventID            `json:"event_id"`
+	SessionID      SessionID          `json:"session_id"`
+	ScopeKey       string             `json:"scope_key"`
+	Actor          SemanticActor      `json:"actor"`
+	SourceType     SemanticSourceType `json:"source_type"`
+	ObservedAt     string             `json:"observed_at"`
+	EvidenceSHA256 string             `json:"evidence_sha256"`
+	Evidence       string             `json:"evidence"`
+}
+
+type MemoryLifecycleProposal struct {
+	SchemaVersion  int                       `json:"schema_version"`
+	Kind           string                    `json:"kind"`
+	OperationID    SemanticID                `json:"operation_id"`
+	IdempotencyKey string                    `json:"idempotency_key"`
+	Actor          SemanticActor             `json:"actor"`
+	SessionID      SessionID                 `json:"session_id"`
+	Scope          SemanticScope             `json:"scope"`
+	Scopes         []SemanticScope           `json:"scopes"`
+	PriorRevisions []ScopeRevision           `json:"prior_revisions"`
+	ObjectKind     SemanticObjectKind        `json:"object_kind"`
+	ObjectID       SemanticID                `json:"object_id"`
+	ExpectedState  SemanticStateValue        `json:"expected_state"`
+	Transitions    []SemanticTransition      `json:"transitions"`
+	EffectScopes   []string                  `json:"effect_scopes"`
+	Evidence       SemanticOperationEvidence `json:"evidence"`
+	Request        MemoryLifecycleRequest    `json:"request"`
+	ProposalSHA256 string                    `json:"-"`
+	PreparedSHA256 string                    `json:"-"`
+}
+
+type MemoryLifecycleResult struct {
+	OperationID        SemanticID         `json:"operation_id"`
+	ObjectKind         SemanticObjectKind `json:"object_kind"`
+	ObjectID           SemanticID         `json:"object_id"`
+	TransactionTime    time.Time          `json:"transaction_time"`
+	ResultingRevisions []ScopeRevision    `json:"resulting_revisions"`
+	ScopeRevision      int64              `json:"scope_revision"`
+}
+
+type SemanticSourceInspection struct {
+	Source    SemanticSource  `json:"source"`
+	Lifecycle []SemanticState `json:"lifecycle"`
+}
+
+type SemanticOperationInspection struct {
+	OperationID        SemanticID      `json:"operation_id"`
+	SchemaVersion      int             `json:"schema_version"`
+	Kind               string          `json:"kind"`
+	SourceEventID      EventID         `json:"source_event_id"`
+	ProposalSHA256     string          `json:"proposal_sha256"`
+	EffectSHA256       string          `json:"effect_sha256"`
+	ProposalJSON       string          `json:"proposal_json"`
+	PreparedJSON       string          `json:"prepared_proposal_json"`
+	ResultJSON         string          `json:"result_json"`
+	TransactionTime    time.Time       `json:"transaction_time"`
+	PriorRevisions     []ScopeRevision `json:"prior_revisions"`
+	ResultingRevisions []ScopeRevision `json:"resulting_revisions"`
+}
+
+type SemanticObjectInspection struct {
+	ObjectKind SemanticObjectKind            `json:"object_kind"`
+	ObjectID   SemanticID                    `json:"object_id"`
+	Scope      SemanticScope                 `json:"scope"`
+	Status     SemanticObjectStatus          `json:"status"`
+	Entity     *SemanticEntity               `json:"entity,omitempty"`
+	Alias      *SemanticAlias                `json:"alias,omitempty"`
+	Claim      *SemanticClaim                `json:"claim,omitempty"`
+	Source     *SemanticSource               `json:"source,omitempty"`
+	Lifecycle  []SemanticState               `json:"lifecycle"`
+	Sources    []SemanticSourceInspection    `json:"sources"`
+	Operations []SemanticOperationInspection `json:"operations"`
 }
 
 type ClaimConflictWarning struct {

@@ -13,6 +13,8 @@ import (
 const (
 	v1ManifestSHA256 = "7e125fcdbe4a89abb48a7861ef51552dcb5d88d20896e516e3f912677b933510"
 	v1FixtureSHA256  = "d5b77d3204310fc9a4eb22a038738faac8551b4989dc28c15b453fbb73db0b56"
+	v2ManifestSHA256 = "65d2e91245d037d500a7f4d22de00938ed2e98f70bd48ffd45af3f58c0ca47e2"
+	v2FixtureSHA256  = "b87b5e7501ab14bd4d0c61e32b5edc88e77ac2487a9b155ba6cac34e200feb05"
 )
 
 func TestSemanticCorrectionEncodingV2FixtureAndFrozenV1Contract(t *testing.T) {
@@ -114,6 +116,83 @@ func TestSemanticCorrectionEncodingV2FixtureAndFrozenV1Contract(t *testing.T) {
 	if proposalHash != operation.ProposalSHA256 || effectHash != operation.EffectSHA256 {
 		t.Fatalf("v2 canonical hashes = %s / %s, fixture = %s / %s",
 			proposalHash, effectHash, operation.ProposalSHA256, operation.EffectSHA256)
+	}
+}
+
+func TestSemanticLifecycleEncodingV3FixtureAndFrozenPriorContracts(t *testing.T) {
+	fixtures := filepath.Join("..", "..", "cmd", "evie", "docs", "fixtures", "semantic-memory")
+	assertFileSHA256(t, filepath.Join(fixtures, "v1", "manifest.schema.json"), v1ManifestSHA256)
+	assertFileSHA256(t, filepath.Join(fixtures, "v1", "literal-claim.json"), v1FixtureSHA256)
+	assertFileSHA256(t, filepath.Join(fixtures, "v2", "manifest.schema.json"), v2ManifestSHA256)
+	assertFileSHA256(t, filepath.Join(fixtures, "v2", "claim-correction.json"), v2FixtureSHA256)
+
+	schemaBytes, err := os.ReadFile(filepath.Join(fixtures, "v3", "manifest.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Const int `json:"const"`
+		} `json:"properties"`
+		Definitions map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
+		t.Fatalf("parse v3 schema: %v", err)
+	}
+	if schema.Properties["fixture_schema_version"].Const != 3 {
+		t.Fatal("v3 fixture schema does not require version 3")
+	}
+	for _, definition := range []string{"lifecycleChange", "effectV3", "proposalV3", "operationV3", "operation"} {
+		if len(schema.Definitions[definition]) == 0 {
+			t.Fatalf("v3 fixture schema omits %s", definition)
+		}
+	}
+	assertJSONContains(t, schema.Definitions["operation"], `../v1/manifest.schema.json#/$defs/operation`)
+	assertJSONContains(t, schema.Definitions["operation"], `../v2/manifest.schema.json#/$defs/operationV2`)
+
+	fixtureBytes, err := os.ReadFile(filepath.Join(fixtures, "v3", "lifecycle.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		SchemaVersion int `json:"fixture_schema_version"`
+		Operations    []struct {
+			SchemaVersion  int                        `json:"schema_version"`
+			Proposal       canonicalLifecycleProposal `json:"proposal"`
+			ProposalSHA256 string                     `json:"proposal_sha256"`
+			EffectSHA256   string                     `json:"effect_sha256"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(fixtureBytes, &fixture); err != nil {
+		t.Fatalf("parse v3 lifecycle fixture: %v", err)
+	}
+	if fixture.SchemaVersion != 3 || len(fixture.Operations) != 4 {
+		t.Fatalf("v3 fixture envelope = %+v", fixture)
+	}
+	wantKinds := []string{"retire_memory", "restore_memory", "retract_source", "restore_source"}
+	for index, operation := range fixture.Operations {
+		if operation.SchemaVersion != 3 || operation.Proposal.Kind != wantKinds[index] ||
+			len(operation.Proposal.Effect.Transitions) == 0 || len(operation.Proposal.Effect.LifecycleChange) != 1 {
+			t.Fatalf("v3 operation %d is incomplete: %+v", index, operation)
+		}
+		change := operation.Proposal.Effect.LifecycleChange[0]
+		if kind, err := lifecycleKind(change.Action); err != nil || kind != operation.Proposal.Kind ||
+			operation.Proposal.Effect.Transitions[0].ObjectKind != string(change.ObjectKind) ||
+			operation.Proposal.Effect.Transitions[0].ObjectID != change.ObjectID {
+			t.Fatalf("v3 operation %d target/action mismatch: %+v", index, operation)
+		}
+		proposalHash, _, err := semanticHash(operation.Proposal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		effectHash, _, err := semanticHash(operation.Proposal.Effect)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if proposalHash != operation.ProposalSHA256 || effectHash != operation.EffectSHA256 {
+			t.Fatalf("v3 operation %d canonical hashes = %s / %s, fixture = %s / %s",
+				index, proposalHash, effectHash, operation.ProposalSHA256, operation.EffectSHA256)
+		}
 	}
 }
 
