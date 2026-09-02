@@ -180,7 +180,7 @@ not change identity.
 
 ## Accepted operation and idempotency encoding
 
-Operation schema versions `1`, `2`, and `3` are defined here. They are positive
+Operation schema versions `1` through `5` are defined here. They are positive
 JSON integers stored beside every accepted operation. Version `1` remains the frozen
 contract for `remember_literal_claim` and `remember_entity_claim`. Version `2`
 adds only the `correct_claim` effect below. Version `3` adds only the reversible
@@ -298,6 +298,41 @@ byte-for-byte and retains its original dispatcher, IDs, hashes, JSON, results,
 times, revisions, and idempotent retry result. The v3 dispatcher never
 reinterprets a v1 creation state or v2 supersession.
 
+### Structural Graph Link operation encoding v5
+
+Version `5` adds `create_graph_link` and permits `retire_memory` and
+`restore_memory` when their target kind is `graph_link` or when a compound
+Entity lifecycle effect contains an enumerated Graph Link transition. Version
+`4` remains exclusively the Promotion encoding. Versions `1` through `4`,
+including their empty Graph Link arrays and lifecycle target and transition
+sets, are not widened or reinterpreted.
+
+A v5 Graph Link uses exactly one closed relation: `derivation`,
+`generalization`, or `contradiction`. Each endpoint is the ordered pair
+`{kind,id}`, where kind is `entity`, `alias`, `claim`, or `source_link` and ID is
+the stable object ID. Contradiction requires two Claims; derivation requires a
+Claim target and a Claim or Source Link source; generalization requires two
+Claims or two Entities. No free-form relation is accepted, so an ordinary
+Entity relationship remains a Claim.
+
+The `create_graph_link` effect retains the canonical array order from v1. Every
+array is empty except `graph_links`, which contains exactly one complete Graph
+Link, and `transitions`, which contains its one `active` transition. The Graph
+Link records its stable ID, scope, relation, typed source and target endpoints,
+and initial lifecycle. Its proposal records the exact owner-request event and
+the sorted authorization revision vector. Apply requires the exact hash-bound
+approval event and atomically records the accepted operation, Graph Link,
+transition, provenance, and one revision increment in the Link's scope.
+
+Graph Link retirement and restoration use the lifecycle envelope shape with
+schema version `5`, target kind `graph_link`, and the corresponding `retired` or
+`active` transition. Entity retirement enumerates active dependent Graph Links
+after its Aliases and Claims; that compound lifecycle operation also uses schema
+version `5` so the frozen v3 transition set is never widened. Restoration
+remains valid only while the same retirement operation is the latest state of
+every enumerated dependency and every Claim endpoint remains supported by an
+eligible Source Link.
+
 ## Versioned fixture manifest
 
 The v1 machine-readable contract is
@@ -339,6 +374,17 @@ including complete transitions, expected prior states, proposal and effect
 hashes, Transaction Times, resulting revisions, and expected active, retired,
 unsupported, and recovered statuses.
 
+The narrow v5 structural-link contract is
+[`manifest.schema.json`](../fixtures/semantic-memory/v5/manifest.schema.json).
+It composes the frozen v1 through v4 operation definitions and adds only v5
+Graph Link creation and lifecycle shapes. Its companion
+[`graph-links.json`](../fixtures/semantic-memory/v5/graph-links.json) fixes one
+approved contradiction Link, typed endpoints, hashes, transition, revision, and
+canonical one-hop path. The companion
+[`compound-entity-lifecycle.json`](../fixtures/semantic-memory/v5/compound-entity-lifecycle.json)
+fixes a compound Entity retirement whose canonical transition sequence ends in
+the dependent Graph Link.
+
 ## Reconciliation with existing decisions
 
 No binding conflict was found. This contract resolves details that the Stage 3
@@ -357,6 +403,6 @@ specification intentionally required before DDL:
 
 Later implementation may add bounds such as maximum text or decimal length, but
 must do so as explicit validation limits without changing canonical equality.
-Changing any v1, v2, or v3 encoding or equality rule above requires a new operation
-and fixture schema version plus a migration/replay decision; a DDL-only change
-may not reinterpret accepted v1, v2, or v3 history.
+Changing any v1 through v5 encoding or equality rule above requires a new
+operation and fixture schema version plus a migration/replay decision; a
+DDL-only change may not reinterpret accepted prior-version history.

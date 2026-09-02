@@ -17,6 +17,9 @@ const (
 	v2FixtureSHA256  = "b87b5e7501ab14bd4d0c61e32b5edc88e77ac2487a9b155ba6cac34e200feb05"
 	v3ManifestSHA256 = "39b31c674edd5f3646ebbca6bd7758c4030ee9fa964aa3adfeb7ffb9599bda97"
 	v3FixtureSHA256  = "e8d76202fc041aa62fe5eb8ebf4423f3fc3e62609a9bc73abce26ece47e7794e"
+	v4ManifestSHA256 = "ff38511891b0ad885dd9e58bc782780b8beefad5d40d2cbcee12be5a043e802c"
+	v4FixtureSHA256  = "85809af1b4af6580bee822138c6b31e889acc877d7f5d1b3887199cf096abc75"
+	v4ReuseSHA256    = "88c181d1e9016278fb4682874257fbb79f478676f1f470f5b27769b221f7ba76"
 )
 
 func TestSemanticCorrectionEncodingV2FixtureAndFrozenV1Contract(t *testing.T) {
@@ -331,6 +334,117 @@ func TestSemanticPromotionEncodingV4FixtureAndFrozenPriorContracts(t *testing.T)
 	if reuseProposalHash != reuse.ProposalSHA256 || reuseEffectHash != reuse.EffectSHA256 {
 		t.Fatalf("v4 all-reuse canonical hashes = %s / %s, fixture = %s / %s",
 			reuseProposalHash, reuseEffectHash, reuse.ProposalSHA256, reuse.EffectSHA256)
+	}
+}
+
+func TestSemanticGraphLinkEncodingV5FixtureAndFrozenPriorContracts(t *testing.T) {
+	fixtures := filepath.Join("..", "..", "cmd", "evie", "docs", "fixtures", "semantic-memory")
+	for path, want := range map[string]string{
+		filepath.Join(fixtures, "v1", "manifest.schema.json"):           v1ManifestSHA256,
+		filepath.Join(fixtures, "v1", "literal-claim.json"):             v1FixtureSHA256,
+		filepath.Join(fixtures, "v2", "manifest.schema.json"):           v2ManifestSHA256,
+		filepath.Join(fixtures, "v2", "claim-correction.json"):          v2FixtureSHA256,
+		filepath.Join(fixtures, "v3", "manifest.schema.json"):           v3ManifestSHA256,
+		filepath.Join(fixtures, "v3", "lifecycle.json"):                 v3FixtureSHA256,
+		filepath.Join(fixtures, "v4", "manifest.schema.json"):           v4ManifestSHA256,
+		filepath.Join(fixtures, "v4", "scope-promotion.json"):           v4FixtureSHA256,
+		filepath.Join(fixtures, "v4", "all-reuse-scope-promotion.json"): v4ReuseSHA256,
+	} {
+		assertFileSHA256(t, path, want)
+	}
+	schemaBytes, err := os.ReadFile(filepath.Join(fixtures, "v5", "manifest.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Const int `json:"const"`
+		} `json:"properties"`
+		Definitions map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Properties["fixture_schema_version"].Const != 5 {
+		t.Fatal("v5 fixture schema does not require version 5")
+	}
+	for _, definition := range []string{"endpoint", "graphLinkV5", "effectV5", "proposalV5", "operationV5", "graphLifecycleChangeV5", "graphLifecycleEffectV5", "graphLifecycleProposalV5", "graphLifecycleOperationV5", "compoundGraphLifecycleChangeV5", "compoundGraphLifecycleEffectV5", "compoundGraphLifecycleProposalV5", "compoundGraphLifecycleOperationV5", "operation"} {
+		if len(schema.Definitions[definition]) == 0 {
+			t.Fatalf("v5 fixture schema omits %s", definition)
+		}
+	}
+	for _, prior := range []string{`../v1/manifest.schema.json#/$defs/operation`, `../v2/manifest.schema.json#/$defs/operationV2`, `../v3/manifest.schema.json#/$defs/operationV3`, `../v4/manifest.schema.json#/$defs/operationV4`} {
+		assertJSONContains(t, schema.Definitions["operation"], prior)
+	}
+	fixtureBytes, err := os.ReadFile(filepath.Join(fixtures, "v5", "graph-links.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		SchemaVersion int `json:"fixture_schema_version"`
+		Operations    []struct {
+			SchemaVersion  int                    `json:"schema_version"`
+			Proposal       canonicalGraphProposal `json:"proposal"`
+			ProposalSHA256 string                 `json:"proposal_sha256"`
+			EffectSHA256   string                 `json:"effect_sha256"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(fixtureBytes, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.SchemaVersion != 5 || len(fixture.Operations) != 1 || fixture.Operations[0].SchemaVersion != 5 {
+		t.Fatalf("v5 fixture envelope = %+v", fixture)
+	}
+	operation := fixture.Operations[0]
+	if operation.Proposal.Kind != "create_graph_link" || len(operation.Proposal.Effect.GraphLinks) != 1 || len(operation.Proposal.Effect.Transitions) != 1 || operation.Proposal.Effect.GraphLinks[0].Relation != "contradiction" {
+		t.Fatalf("v5 Graph Link effect is incomplete: %+v", operation.Proposal.Effect)
+	}
+	proposalHash, _, err := semanticHash(operation.Proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	effectHash, _, err := semanticHash(operation.Proposal.Effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposalHash != operation.ProposalSHA256 || effectHash != operation.EffectSHA256 {
+		t.Fatalf("v5 canonical hashes = %s / %s, fixture = %s / %s", proposalHash, effectHash, operation.ProposalSHA256, operation.EffectSHA256)
+	}
+	compoundBytes, err := os.ReadFile(filepath.Join(fixtures, "v5", "compound-entity-lifecycle.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compound struct {
+		SchemaVersion int `json:"fixture_schema_version"`
+		Operations    []struct {
+			SchemaVersion  int                        `json:"schema_version"`
+			Proposal       canonicalLifecycleProposal `json:"proposal"`
+			ProposalSHA256 string                     `json:"proposal_sha256"`
+			EffectSHA256   string                     `json:"effect_sha256"`
+		} `json:"operations"`
+	}
+	if err := json.Unmarshal(compoundBytes, &compound); err != nil {
+		t.Fatal(err)
+	}
+	if compound.SchemaVersion != 5 || len(compound.Operations) != 1 || compound.Operations[0].SchemaVersion != 5 {
+		t.Fatalf("v5 compound lifecycle fixture envelope = %+v", compound)
+	}
+	compoundOperation := compound.Operations[0]
+	if compoundOperation.Proposal.Kind != "retire_memory" || len(compoundOperation.Proposal.Effect.Transitions) != 4 ||
+		compoundOperation.Proposal.Effect.Transitions[0].ObjectKind != "entity" ||
+		compoundOperation.Proposal.Effect.Transitions[3].ObjectKind != "graph_link" {
+		t.Fatalf("v5 compound lifecycle effect is incomplete: %+v", compoundOperation.Proposal.Effect)
+	}
+	compoundProposalHash, _, err := semanticHash(compoundOperation.Proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compoundEffectHash, _, err := semanticHash(compoundOperation.Proposal.Effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compoundProposalHash != compoundOperation.ProposalSHA256 || compoundEffectHash != compoundOperation.EffectSHA256 {
+		t.Fatalf("v5 compound lifecycle hashes = %s / %s, fixture = %s / %s", compoundProposalHash, compoundEffectHash, compoundOperation.ProposalSHA256, compoundOperation.EffectSHA256)
 	}
 }
 

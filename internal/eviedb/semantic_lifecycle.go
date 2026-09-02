@@ -102,8 +102,8 @@ func validateLifecycleActionTarget(request memory.MemoryLifecycleRequest) error 
 	switch request.Action {
 	case memory.LifecycleRetire, memory.LifecycleRestore:
 		if request.ObjectKind != memory.SemanticObjectEntity && request.ObjectKind != memory.SemanticObjectAlias &&
-			request.ObjectKind != memory.SemanticObjectClaim {
-			return errors.New("retirement and restoration require an Entity, Alias, or Claim")
+			request.ObjectKind != memory.SemanticObjectClaim && request.ObjectKind != memory.SemanticObjectGraphLink {
+			return errors.New("retirement and restoration require an Entity, Alias, Claim, or Graph Link")
 		}
 	case memory.LifecycleRetractSource, memory.LifecycleRestoreSource:
 		if request.ObjectKind != memory.SemanticObjectSourceLink {
@@ -145,6 +145,12 @@ func loadLifecycleTargetScope(ctx context.Context, query lifecycleQueryer, kind 
 			JOIN semantic_claims AS claims ON claims.claim_id = sources.claim_id
 			JOIN semantic_scopes AS scopes ON scopes.scope_id = claims.scope_id
 			WHERE sources.source_link_id = ?
+		`, id).Scan(&scope.ID, &scope.Key, &registry, &scope.Revision)
+	case memory.SemanticObjectGraphLink:
+		err = query.queryRowContext(ctx, `
+			SELECT scopes.scope_id, scopes.scope_key, scopes.registry_id, scopes.revision
+			FROM semantic_graph_links AS objects JOIN semantic_scopes AS scopes ON scopes.scope_id = objects.scope_id
+			WHERE objects.graph_link_id = ?
 		`, id).Scan(&scope.ID, &scope.Key, &registry, &scope.Revision)
 	default:
 		return scope, fmt.Errorf("unsupported semantic object kind %q", kind)
@@ -299,6 +305,26 @@ func currentEntityDependents(ctx context.Context, query lifecycleQueryer, entity
 	if err != nil {
 		return nil, err
 	}
+	graphLinks, err := lifecycleIDs(ctx, query, `
+		SELECT links.graph_link_id FROM semantic_graph_links AS links
+		WHERE (
+		  (links.source_kind = 'entity' AND links.source_id = ?) OR
+		  (links.target_kind = 'entity' AND links.target_id = ?) OR
+		  (links.source_kind = 'alias' AND EXISTS (SELECT 1 FROM semantic_aliases WHERE alias_id = links.source_id AND entity_id = ?)) OR
+		  (links.target_kind = 'alias' AND EXISTS (SELECT 1 FROM semantic_aliases WHERE alias_id = links.target_id AND entity_id = ?)) OR
+		  (links.source_kind = 'claim' AND EXISTS (SELECT 1 FROM semantic_claims WHERE claim_id = links.source_id AND (subject_entity_id = ? OR object_entity_id = ?))) OR
+		  (links.target_kind = 'claim' AND EXISTS (SELECT 1 FROM semantic_claims WHERE claim_id = links.target_id AND (subject_entity_id = ? OR object_entity_id = ?))) OR
+		  (links.source_kind = 'source_link' AND EXISTS (SELECT 1 FROM semantic_source_links AS sources JOIN semantic_claims AS claims ON claims.claim_id = sources.claim_id WHERE sources.source_link_id = links.source_id AND (claims.subject_entity_id = ? OR claims.object_entity_id = ?))) OR
+		  (links.target_kind = 'source_link' AND EXISTS (SELECT 1 FROM semantic_source_links AS sources JOIN semantic_claims AS claims ON claims.claim_id = sources.claim_id WHERE sources.source_link_id = links.target_id AND (claims.subject_entity_id = ? OR claims.object_entity_id = ?)))
+		)
+		  AND (SELECT state FROM semantic_state_events
+		       WHERE object_kind = 'graph_link' AND object_id = links.graph_link_id
+		       ORDER BY scope_revision DESC, transaction_time DESC, operation_id DESC, state DESC LIMIT 1) = 'active'
+		ORDER BY links.graph_link_id
+	`, entityID, entityID, entityID, entityID, entityID, entityID, entityID, entityID, entityID, entityID, entityID, entityID)
+	if err != nil {
+		return nil, err
+	}
 	var transitions []memory.SemanticTransition
 	for _, aliasID := range aliases {
 		state, err := loadLatestState(ctx, query, memory.SemanticObjectAlias, aliasID)
@@ -318,14 +344,17 @@ func currentEntityDependents(ctx context.Context, query lifecycleQueryer, entity
 			transitions = append(transitions, memory.SemanticTransition{ObjectKind: "claim", ObjectID: claimID, State: memory.SemanticStateRetired})
 		}
 	}
+	for _, linkID := range graphLinks {
+		transitions = append(transitions, memory.SemanticTransition{ObjectKind: "graph_link", ObjectID: linkID, State: memory.SemanticStateRetired})
+	}
 	return transitions, nil
 }
 
 func retiredEntityOperationTransitions(ctx context.Context, query lifecycleQueryer, target memory.SemanticID, retirement memory.SemanticState) ([]memory.SemanticTransition, error) {
 	rows, err := query.queryContext(ctx, `
 		SELECT object_kind, object_id FROM semantic_state_events
-		WHERE operation_id = ? AND state = 'retired' AND object_kind IN ('entity', 'alias', 'claim')
-		ORDER BY CASE object_kind WHEN 'entity' THEN 0 WHEN 'alias' THEN 1 ELSE 2 END, object_id
+		WHERE operation_id = ? AND state = 'retired' AND object_kind IN ('entity', 'alias', 'claim', 'graph_link')
+		ORDER BY CASE object_kind WHEN 'entity' THEN 0 WHEN 'alias' THEN 1 WHEN 'claim' THEN 2 ELSE 3 END, object_id
 	`, retirement.OperationID)
 	if err != nil {
 		return nil, err
@@ -373,7 +402,9 @@ func requireActiveEntity(ctx context.Context, query lifecycleQueryer, id memory.
 
 func validateRestorationDependencies(ctx context.Context, query lifecycleQueryer, transitions []memory.SemanticTransition) error {
 	restoringEntities := make(map[memory.SemanticID]struct{})
+	restoringObjects := make(map[semanticNodeKey]struct{})
 	for _, transition := range transitions {
+		restoringObjects[semanticNodeKey{Kind: memory.SemanticObjectKind(transition.ObjectKind), ID: transition.ObjectID}] = struct{}{}
 		if transition.ObjectKind == "entity" {
 			restoringEntities[transition.ObjectID] = struct{}{}
 		}
@@ -400,6 +431,46 @@ func validateRestorationDependencies(ctx context.Context, query lifecycleQueryer
 			if object.Valid {
 				if err := requireActiveEntity(ctx, query, memory.SemanticID(object.String), restoringEntities); err != nil {
 					return err
+				}
+			}
+		case "graph_link":
+			var sourceKind, targetKind memory.SemanticObjectKind
+			var sourceID, targetID memory.SemanticID
+			if err := query.queryRowContext(ctx, `SELECT source_kind, source_id, target_kind, target_id FROM semantic_graph_links WHERE graph_link_id = ?`, transition.ObjectID).Scan(&sourceKind, &sourceID, &targetKind, &targetID); err != nil {
+				return err
+			}
+			for _, endpoint := range []memory.GraphEndpoint{{Kind: sourceKind, ID: sourceID}, {Kind: targetKind, ID: targetID}} {
+				if endpoint.Kind == memory.SemanticObjectEntity {
+					if err := requireActiveEntity(ctx, query, endpoint.ID, restoringEntities); err != nil {
+						return err
+					}
+					continue
+				}
+				state, err := loadLatestState(ctx, query, endpoint.Kind, endpoint.ID)
+				if err != nil {
+					return err
+				}
+				want := memory.SemanticStateActive
+				if endpoint.Kind == memory.SemanticObjectSourceLink {
+					want = memory.SemanticStateEligible
+				}
+				_, restoring := restoringObjects[semanticNodeKey(endpoint)]
+				if state.State != want && !restoring {
+					return errors.New("Graph Link restoration has an incompatible endpoint dependency")
+				}
+				if endpoint.Kind == memory.SemanticObjectClaim {
+					var eligible int
+					if err := query.queryRowContext(ctx, `
+							SELECT COUNT(*) FROM semantic_source_links AS sources
+							WHERE sources.claim_id = ? AND (SELECT state FROM semantic_state_events
+							 WHERE object_kind = 'source_link' AND object_id = sources.source_link_id
+							 ORDER BY scope_revision DESC, transaction_time DESC, operation_id DESC, state DESC LIMIT 1) = 'eligible'
+						`, endpoint.ID).Scan(&eligible); err != nil {
+						return err
+					}
+					if eligible == 0 {
+						return errors.New("Graph Link restoration has an unsupported Claim endpoint")
+					}
 				}
 			}
 		}
@@ -509,6 +580,15 @@ func loadLifecycleEvidence(row rowScanner, sessionID memory.SessionID, eventID m
 
 func lifecycleRequestsEqual(left, right memory.MemoryLifecycleRequest) bool { return left == right }
 
+func lifecycleIncludesGraphLink(transitions []memory.SemanticTransition) bool {
+	for _, transition := range transitions {
+		if transition.ObjectKind == string(memory.SemanticObjectGraphLink) {
+			return true
+		}
+	}
+	return false
+}
+
 // PrepareMemoryLifecycle expands and freezes one complete lifecycle operation
 // without changing Semantic Memory.
 func (s *Store) PrepareMemoryLifecycle(ctx context.Context, scope memory.ScopeContext, request memory.MemoryLifecycleRequest) (memory.MemoryLifecycleProposal, error) {
@@ -587,8 +667,12 @@ func (s *Store) PrepareMemoryLifecycle(ctx context.Context, scope memory.ScopeCo
 	if err != nil {
 		return memory.MemoryLifecycleProposal{}, err
 	}
+	schemaVersion := 3
+	if lifecycleIncludesGraphLink(transitions) {
+		schemaVersion = 5
+	}
 	proposal := memory.MemoryLifecycleProposal{
-		SchemaVersion: 3, Kind: kind, OperationID: operationID, IdempotencyKey: request.IdempotencyKey,
+		SchemaVersion: schemaVersion, Kind: kind, OperationID: operationID, IdempotencyKey: request.IdempotencyKey,
 		Actor: memory.SemanticActorOwner, SessionID: scope.SessionID, Scope: target, Scopes: scopes,
 		PriorRevisions: priors, ObjectKind: request.ObjectKind, ObjectID: request.ObjectID,
 		ExpectedState: expectedState, Transitions: transitions, EffectScopes: sortedStringSet(writtenScopes),
@@ -603,7 +687,11 @@ func (s *Store) PrepareMemoryLifecycle(ctx context.Context, scope memory.ScopeCo
 
 func validateLifecycleProposal(proposal memory.MemoryLifecycleProposal) error {
 	kind, err := lifecycleKind(proposal.Request.Action)
-	if err != nil || proposal.SchemaVersion != 3 || proposal.Kind != kind || proposal.Actor != memory.SemanticActorOwner ||
+	wantVersion := 3
+	if lifecycleIncludesGraphLink(proposal.Transitions) {
+		wantVersion = 5
+	}
+	if err != nil || proposal.SchemaVersion != wantVersion || proposal.Kind != kind || proposal.Actor != memory.SemanticActorOwner ||
 		proposal.IdempotencyKey != proposal.Request.IdempotencyKey || proposal.ObjectKind != proposal.Request.ObjectKind ||
 		proposal.ObjectID != proposal.Request.ObjectID || proposal.Evidence.EventID != proposal.Request.SourceEventID ||
 		proposal.Evidence.SessionID != proposal.SessionID || proposal.Evidence.ScopeKey != proposal.Scope.Key ||
@@ -683,6 +771,11 @@ func (s *Store) ApplyMemoryLifecycle(ctx context.Context, lease memory.TurnLease
 		}
 		if !errors.Is(existingErr, sql.ErrNoRows) {
 			return existingErr
+		}
+		if proposal.SchemaVersion == 5 {
+			if err := validateExactSemanticApproval(ctx, writer, proposal.SessionID, proposal.OperationID, proposal.Evidence.EventID, proposalHash, preparedHash); err != nil {
+				return err
+			}
 		}
 		expectedTarget, baseScopeKeys, err := authorizedSemanticScopes(ctx, writer, proposal.SessionID, proposal.Request.UseSessionScope)
 		if err != nil {
@@ -841,6 +934,9 @@ func loadAllSourceInspections(ctx context.Context, queryer semanticInspectionQue
 		if err != nil {
 			return nil, err
 		}
+		if len(lifecycle) == 0 {
+			continue
+		}
 		if len(lifecycle) != 0 && lifecycle[len(lifecycle)-1].State == memory.SemanticStateRetracted {
 			source.Eligibility = memory.EligibilityRetracted
 		} else {
@@ -920,13 +1016,26 @@ func semanticStatus(state memory.SemanticStateValue) memory.SemanticObjectStatus
 // superseded, unsupported, or source-retracted, together with full provenance
 // and accepted operation history.
 func (s *Store) InspectSemanticObject(ctx context.Context, scope memory.ScopeContext, kind memory.SemanticObjectKind, id memory.SemanticID) (memory.SemanticObjectInspection, error) {
-	return s.InspectSemanticObjectAtScope(ctx, scope, kind, id, false)
+	return s.InspectSemanticObjectAt(ctx, scope, kind, id, memory.ClaimQuery{})
+}
+
+// InspectSemanticObjectAt preserves the caller-selected Valid and Transaction
+// Time axes while retaining the same exact, scope-bound inspection contract.
+func (s *Store) InspectSemanticObjectAt(ctx context.Context, scope memory.ScopeContext, kind memory.SemanticObjectKind, id memory.SemanticID, temporal memory.ClaimQuery) (memory.SemanticObjectInspection, error) {
+	return s.InspectSemanticObjectAtScopeAndTime(ctx, scope, kind, id, false, temporal)
 }
 
 // InspectSemanticObjectAtScope performs exact inspection in the session's
 // Context Scope or, when requested, its current-session scope. Global and
 // Context objects remain eligible dependencies in a session-scope view.
 func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.ScopeContext, kind memory.SemanticObjectKind, id memory.SemanticID, useSessionScope bool) (memory.SemanticObjectInspection, error) {
+	return s.InspectSemanticObjectAtScopeAndTime(ctx, scope, kind, id, useSessionScope, memory.ClaimQuery{})
+}
+
+// InspectSemanticObjectAtScopeAndTime is the complete local exact-inspection
+// primitive. Convenience wrappers keep current-time and Context-scope callers
+// compact without hiding either temporal axis from callers that need history.
+func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope memory.ScopeContext, kind memory.SemanticObjectKind, id memory.SemanticID, useSessionScope bool, temporal memory.ClaimQuery) (memory.SemanticObjectInspection, error) {
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.SemanticObjectInspection{}, err
 	}
@@ -953,20 +1062,11 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 		return memory.SemanticObjectInspection{}, errors.New("semantic inspection target is outside the session-bound scope")
 	}
 	result := memory.SemanticObjectInspection{ObjectKind: kind, ObjectID: id, Scope: target}
-	at := s.now().UTC()
-	var latestAccepted sql.NullString
-	if err := query.QueryRowContext(ctx, `SELECT MAX(transaction_time) FROM semantic_operations`).Scan(&latestAccepted); err != nil {
+	result.Metadata, err = s.exactReadMetadata(ctx, query, scope, temporal, nil)
+	if err != nil {
 		return result, err
 	}
-	if latestAccepted.Valid {
-		latest, err := parseSemanticTime(latestAccepted.String)
-		if err != nil {
-			return result, err
-		}
-		if latest.After(at) {
-			at = latest
-		}
-	}
+	at := result.Metadata.AsKnownAt
 	result.Lifecycle, err = loadSemanticLifecycleAt(ctx, query, string(kind), id, at)
 	if err != nil || len(result.Lifecycle) == 0 {
 		return result, errors.New("semantic object has no accepted lifecycle")
@@ -1027,12 +1127,33 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 		if _, allowed := allowedScopes[source.ScopeKey]; !allowed {
 			result.Source.Evidence = ""
 		}
+	case memory.SemanticObjectGraphLink:
+		link, err := loadGraphLink(ctx, query, id)
+		if err != nil {
+			return result, err
+		}
+		result.GraphLink = &link
 	}
 	operationIDs := make(map[memory.SemanticID]struct{})
+	redactedOperationIDs := make(map[memory.SemanticID]struct{})
 	for _, state := range result.Lifecycle {
 		operationIDs[state.OperationID] = struct{}{}
 	}
+	if result.Source != nil {
+		if _, allowed := allowedScopes[result.Source.ScopeKey]; !allowed {
+			redactedOperationIDs[result.Source.OperationID] = struct{}{}
+			for _, state := range result.Lifecycle {
+				redactedOperationIDs[state.OperationID] = struct{}{}
+			}
+		}
+	}
 	for _, source := range result.Sources {
+		if _, allowed := allowedScopes[source.Source.ScopeKey]; !allowed {
+			redactedOperationIDs[source.Source.OperationID] = struct{}{}
+			for _, state := range source.Lifecycle {
+				redactedOperationIDs[state.OperationID] = struct{}{}
+			}
+		}
 		for _, state := range source.Lifecycle {
 			operationIDs[state.OperationID] = struct{}{}
 		}
@@ -1054,10 +1175,17 @@ func (s *Store) InspectSemanticObjectAtScope(ctx context.Context, scope memory.S
 		`, operationID).Scan(&promotionSourceScope)
 		if err == nil {
 			if _, allowed := allowedScopes[promotionSourceScope]; !allowed {
+				operation.ProposalJSON = ""
 				operation.PreparedJSON = ""
+				operation.ResultJSON = ""
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return result, err
+		}
+		if _, redacted := redactedOperationIDs[operationID]; redacted {
+			operation.ProposalJSON = ""
+			operation.PreparedJSON = ""
+			operation.ResultJSON = ""
 		}
 		result.Operations = append(result.Operations, operation)
 	}

@@ -1,0 +1,45 @@
+{
+  "fixture_schema_version": 5,
+  "name": "one approved compound Entity retirement containing a Graph Link transition",
+  "operations": [
+    {
+      "schema_version": 5,
+      "operation_id": "99000000-0000-4000-8000-000000000108",
+      "proposal": {
+        "kind": "retire_memory",
+        "idempotency_key": "idem:v1:99000000-0000-4000-8000-000000000109",
+        "actor": "owner",
+        "session_id": "99000000-0000-4000-8000-000000000103",
+        "prior_revisions": [
+          { "scope_key": "global", "revision": 3 }
+        ],
+        "source_event_ids": ["99000000-0000-4000-8000-000000000110"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [],
+          "transitions": [
+            { "object_kind": "entity", "object_id": "99000000-0000-4000-8000-000000000111", "state": "retired" },
+            { "object_kind": "alias", "object_id": "99000000-0000-4000-8000-000000000112", "state": "retired" },
+            { "object_kind": "claim", "object_id": "99000000-0000-4000-8000-000000000106", "state": "retired" },
+            { "object_kind": "graph_link", "object_id": "99000000-0000-4000-8000-000000000105", "state": "retired" }
+          ],
+          "lifecycle_changes": [
+            { "action": "retire", "object_kind": "entity", "object_id": "99000000-0000-4000-8000-000000000111", "expected_state": "active" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:d73fa704f646d6867a5fe79ae9bef399c638a7d30066465f0d302fd3b2c184f0",
+      "transaction_time": "2026-09-02T22:00:01.000000000Z",
+      "resulting_revisions": [
+        { "scope_key": "global", "revision": 4 }
+      ],
+      "effect_sha256": "sha256:d8fcfb508ce40170312be15279cb73892bef4c69f029243966ddaed1305d2535"
+    }
+  ],
+  "expected_paths": []
+}

@@ -20,6 +20,7 @@ type CorrectionMode string
 type SemanticObjectKind string
 type MemoryLifecycleAction string
 type SemanticObjectStatus string
+type GraphRelation string
 
 const (
 	LiteralText      LiteralKind               = "text"
@@ -64,6 +65,11 @@ const (
 	SemanticObjectAlias      SemanticObjectKind = "alias"
 	SemanticObjectClaim      SemanticObjectKind = "claim"
 	SemanticObjectSourceLink SemanticObjectKind = "source_link"
+	SemanticObjectGraphLink  SemanticObjectKind = "graph_link"
+
+	GraphRelationDerivation     GraphRelation = "derivation"
+	GraphRelationGeneralization GraphRelation = "generalization"
+	GraphRelationContradiction  GraphRelation = "contradiction"
 
 	LifecycleRetire        MemoryLifecycleAction = "retire"
 	LifecycleRestore       MemoryLifecycleAction = "restore"
@@ -239,8 +245,20 @@ type CorrectClaimResult struct {
 }
 
 type ClaimQuery struct {
-	ValidAt   *time.Time `json:"valid_at,omitempty"`
-	AsKnownAt *time.Time `json:"as_known_at,omitempty"`
+	ValidAt         *time.Time    `json:"valid_at,omitempty"`
+	AsKnownAt       *time.Time    `json:"as_known_at,omitempty"`
+	PredicateToken  string        `json:"predicate_token,omitempty"`
+	Polarity        ClaimPolarity `json:"polarity,omitempty"`
+	SubjectEntityID SemanticID    `json:"subject_entity_id,omitempty"`
+	ObjectEntityID  SemanticID    `json:"object_entity_id,omitempty"`
+}
+
+// ExactReadMetadata pins one exact read to its temporal and authorization context.
+type ExactReadMetadata struct {
+	ValidAt        time.Time       `json:"valid_at"`
+	AsKnownAt      time.Time       `json:"as_known_at"`
+	AllowedScopes  []string        `json:"allowed_scopes"`
+	ScopeRevisions []ScopeRevision `json:"scope_revisions"`
 }
 
 type ClaimInspection struct {
@@ -261,6 +279,109 @@ type ClaimsInspection struct {
 	ValidAt        time.Time         `json:"valid_at"`
 	AsKnownAt      time.Time         `json:"as_known_at"`
 	Claims         []ClaimInspection `json:"claims"`
+	AllowedScopes  []string          `json:"allowed_scopes"`
+}
+
+type GraphEndpoint struct {
+	Kind SemanticObjectKind `json:"kind"`
+	ID   SemanticID         `json:"id"`
+}
+
+type SemanticGraphLink struct {
+	ID                 SemanticID    `json:"graph_link_id"`
+	ScopeKey           string        `json:"scope_key"`
+	Relation           GraphRelation `json:"relation"`
+	Source             GraphEndpoint `json:"source"`
+	Target             GraphEndpoint `json:"target"`
+	CreatedOperationID SemanticID    `json:"created_operation_id"`
+	TransactionTime    time.Time     `json:"transaction_time"`
+}
+
+type CreateGraphLinkRequest struct {
+	IdempotencyKey  string
+	SourceEventID   EventID
+	Relation        GraphRelation
+	Source          GraphEndpoint
+	Target          GraphEndpoint
+	UseSessionScope bool
+}
+
+type CreateGraphLinkProposal struct {
+	SchemaVersion  int                       `json:"schema_version"`
+	Kind           string                    `json:"kind"`
+	OperationID    SemanticID                `json:"operation_id"`
+	IdempotencyKey string                    `json:"idempotency_key"`
+	Actor          SemanticActor             `json:"actor"`
+	SessionID      SessionID                 `json:"session_id"`
+	Scope          SemanticScope             `json:"scope"`
+	Scopes         []SemanticScope           `json:"scopes"`
+	PriorRevisions []ScopeRevision           `json:"prior_revisions"`
+	Link           SemanticGraphLink         `json:"graph_link"`
+	Evidence       SemanticOperationEvidence `json:"evidence"`
+	Request        CreateGraphLinkRequest    `json:"request"`
+	ProposalSHA256 string                    `json:"-"`
+	PreparedSHA256 string                    `json:"-"`
+}
+
+type CreateGraphLinkResult struct {
+	OperationID        SemanticID      `json:"operation_id"`
+	GraphLinkID        SemanticID      `json:"graph_link_id"`
+	TransactionTime    time.Time       `json:"transaction_time"`
+	ResultingRevisions []ScopeRevision `json:"resulting_revisions"`
+	ScopeRevision      int64           `json:"scope_revision"`
+}
+
+type SemanticObjectSummary struct {
+	ObjectKind SemanticObjectKind   `json:"object_kind"`
+	ObjectID   SemanticID           `json:"object_id"`
+	ScopeKey   string               `json:"scope_key"`
+	Status     SemanticObjectStatus `json:"status"`
+	Claim      *SemanticClaim       `json:"claim,omitempty"`
+	GraphLink  *SemanticGraphLink   `json:"graph_link,omitempty"`
+}
+
+type SemanticObjectListQuery struct {
+	ClaimQuery
+	Kinds     []SemanticObjectKind `json:"kinds,omitempty"`
+	Relations []GraphRelation      `json:"relations,omitempty"`
+	PageSize  int                  `json:"page_size"`
+	Cursor    string               `json:"cursor,omitempty"`
+}
+
+type SemanticObjectPage struct {
+	Metadata   ExactReadMetadata       `json:"metadata"`
+	Objects    []SemanticObjectSummary `json:"objects"`
+	NextCursor string                  `json:"next_cursor,omitempty"`
+}
+
+type SemanticScopeListQuery struct {
+	ClaimQuery
+	PageSize int    `json:"page_size"`
+	Cursor   string `json:"cursor,omitempty"`
+}
+
+type SemanticScopePage struct {
+	Metadata   ExactReadMetadata `json:"metadata"`
+	Scopes     []SemanticScope   `json:"scopes"`
+	NextCursor string            `json:"next_cursor,omitempty"`
+}
+
+type SemanticPath struct {
+	Nodes []GraphEndpoint     `json:"nodes"`
+	Links []SemanticGraphLink `json:"links"`
+}
+
+type SemanticTraversalQuery struct {
+	ClaimQuery
+	Start     GraphEndpoint   `json:"start"`
+	Depth     int             `json:"depth"`
+	Relations []GraphRelation `json:"relations,omitempty"`
+}
+
+type SemanticNeighborhood struct {
+	Metadata ExactReadMetadata       `json:"metadata"`
+	Objects  []SemanticObjectSummary `json:"objects"`
+	Paths    []SemanticPath          `json:"paths"`
 }
 
 type RememberLiteralRequest struct {
@@ -413,9 +534,11 @@ type SemanticObjectInspection struct {
 	Alias      *SemanticAlias                `json:"alias,omitempty"`
 	Claim      *SemanticClaim                `json:"claim,omitempty"`
 	Source     *SemanticSource               `json:"source,omitempty"`
+	GraphLink  *SemanticGraphLink            `json:"graph_link,omitempty"`
 	Lifecycle  []SemanticState               `json:"lifecycle"`
 	Sources    []SemanticSourceInspection    `json:"sources"`
 	Operations []SemanticOperationInspection `json:"operations"`
+	Metadata   ExactReadMetadata             `json:"metadata"`
 }
 
 type ClaimConflictWarning struct {

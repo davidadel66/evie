@@ -2,6 +2,7 @@ package eviedb
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
@@ -20,6 +21,8 @@ import (
 var (
 	ErrStaleScopeRevision  = errors.New("semantic memory: stale scope revision")
 	ErrIdempotencyConflict = errors.New("semantic memory: idempotency conflict")
+	ErrStaleCursor         = errors.New("semantic memory: stale cursor")
+	ErrInvalidCursor       = errors.New("semantic memory: invalid cursor")
 	predicateTokenPattern  = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`)
 	integerPattern         = regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`)
 	decimalPattern         = regexp.MustCompile(`^(0|-?[1-9][0-9]*|-?(0|[1-9][0-9]*)\.[0-9]*[1-9])$`)
@@ -40,7 +43,7 @@ CREATE TABLE IF NOT EXISTS semantic_scopes (
 
 CREATE TABLE IF NOT EXISTS semantic_operations (
     operation_id       TEXT PRIMARY KEY NOT NULL,
-    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3, 4)),
+    schema_version     INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3, 4, 5)),
     operation_kind     TEXT NOT NULL,
     idempotency_key    TEXT NOT NULL UNIQUE,
     actor               TEXT NOT NULL,
@@ -62,6 +65,11 @@ CREATE TABLE IF NOT EXISTS semantic_operation_scopes (
     resulting_revision  INTEGER NOT NULL CHECK (resulting_revision >= prior_revision),
     written             INTEGER NOT NULL CHECK (written IN (0, 1)),
     PRIMARY KEY (operation_id, scope_id)
+);
+
+CREATE TABLE IF NOT EXISTS semantic_cursor_auth (
+    singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
+    hmac_key  BLOB NOT NULL CHECK (length(hmac_key) = 32)
 );
 
 CREATE TABLE IF NOT EXISTS semantic_predicates (
@@ -140,6 +148,20 @@ CREATE TABLE IF NOT EXISTS semantic_source_links (
     UNIQUE (claim_id, event_id, event_part, locator_kind, locator_value, evidence_sha256)
 );
 
+CREATE TABLE IF NOT EXISTS semantic_graph_links (
+    graph_link_id       TEXT PRIMARY KEY NOT NULL,
+    scope_id            TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    relation            TEXT NOT NULL CHECK (relation IN ('derivation', 'generalization', 'contradiction')),
+    source_kind         TEXT NOT NULL CHECK (source_kind IN ('entity', 'alias', 'claim', 'source_link')),
+    source_id           TEXT NOT NULL,
+    target_kind         TEXT NOT NULL CHECK (target_kind IN ('entity', 'alias', 'claim', 'source_link')),
+    target_id           TEXT NOT NULL,
+    lifecycle           TEXT NOT NULL CHECK (lifecycle IN ('active', 'retired')),
+    created_operation_id TEXT NOT NULL REFERENCES semantic_operations(operation_id),
+    transaction_time    TEXT NOT NULL,
+    UNIQUE (scope_id, relation, source_kind, source_id, target_kind, target_id)
+);
+
 CREATE TABLE IF NOT EXISTS semantic_claim_corrections (
     operation_id          TEXT PRIMARY KEY NOT NULL REFERENCES semantic_operations(operation_id),
     scope_id              TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
@@ -192,6 +214,8 @@ CREATE TABLE IF NOT EXISTS semantic_state_events (
 CREATE INDEX IF NOT EXISTS semantic_claims_scope_idx ON semantic_claims(scope_id, lifecycle, claim_id);
 CREATE INDEX IF NOT EXISTS semantic_aliases_exact_idx ON semantic_aliases(scope_id, normalized_value, lifecycle, entity_id, alias_id);
 CREATE INDEX IF NOT EXISTS semantic_source_links_claim_idx ON semantic_source_links(claim_id, eligibility, source_link_id);
+CREATE INDEX IF NOT EXISTS semantic_graph_links_source_idx ON semantic_graph_links(source_kind, source_id, relation, graph_link_id);
+CREATE INDEX IF NOT EXISTS semantic_graph_links_target_idx ON semantic_graph_links(target_kind, target_id, relation, graph_link_id);
 CREATE INDEX IF NOT EXISTS semantic_state_events_object_idx ON semantic_state_events(object_kind, object_id, scope_revision);
 CREATE INDEX IF NOT EXISTS semantic_claim_corrections_scope_idx ON semantic_claim_corrections(scope_id, transaction_time, scope_revision);
 
@@ -209,6 +233,10 @@ CREATE TRIGGER IF NOT EXISTS semantic_claims_append_only_update BEFORE UPDATE ON
 CREATE TRIGGER IF NOT EXISTS semantic_claims_append_only_delete BEFORE DELETE ON semantic_claims BEGIN SELECT RAISE(ABORT, 'semantic claims are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_source_links_append_only_update BEFORE UPDATE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_source_links_append_only_delete BEFORE DELETE ON semantic_source_links BEGIN SELECT RAISE(ABORT, 'semantic source links are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_graph_links_append_only_update BEFORE UPDATE ON semantic_graph_links BEGIN SELECT RAISE(ABORT, 'semantic graph links are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_graph_links_append_only_delete BEFORE DELETE ON semantic_graph_links BEGIN SELECT RAISE(ABORT, 'semantic graph links are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_cursor_auth_append_only_update BEFORE UPDATE ON semantic_cursor_auth BEGIN SELECT RAISE(ABORT, 'semantic cursor authentication is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS semantic_cursor_auth_append_only_delete BEFORE DELETE ON semantic_cursor_auth BEGIN SELECT RAISE(ABORT, 'semantic cursor authentication is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_update BEFORE UPDATE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_delete BEFORE DELETE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_promotions_append_only_update BEFORE UPDATE ON semantic_promotions BEGIN SELECT RAISE(ABORT, 'semantic promotions are append-only'); END;
@@ -226,6 +254,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, semanticSchema); err != nil {
 		return err
 	}
+	if err := ensureSemanticCursorAuth(ctx, db); err != nil {
+		return err
+	}
 	if err := ensureSemanticOperationSchemaV2(ctx, db); err != nil {
 		return err
 	}
@@ -233,6 +264,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureSemanticOperationSchemaV4(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureSemanticOperationSchemaV5(ctx, db); err != nil {
 		return err
 	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
@@ -259,6 +293,34 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	return ensureSemanticObjectScopeColumns(ctx, db)
+}
+
+func ensureSemanticCursorAuth(ctx context.Context, db *sql.DB) error {
+	var existing []byte
+	err := db.QueryRowContext(ctx, `SELECT hmac_key FROM semantic_cursor_auth WHERE singleton = 1`).Scan(&existing)
+	if err == nil {
+		if len(existing) != 32 {
+			return errors.New("semantic cursor authentication key is invalid")
+		}
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return fmt.Errorf("generate semantic cursor authentication key: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO semantic_cursor_auth (singleton, hmac_key) VALUES (1, ?)`, key); err != nil {
+		return err
+	}
+	if err := db.QueryRowContext(ctx, `SELECT hmac_key FROM semantic_cursor_auth WHERE singleton = 1`).Scan(&existing); err != nil {
+		return err
+	}
+	if len(existing) != 32 {
+		return errors.New("semantic cursor authentication key is invalid")
+	}
+	return nil
 }
 
 func ensureSemanticObjectScopeColumns(ctx context.Context, db *sql.DB) error {
@@ -351,7 +413,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
-		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
+		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -405,7 +467,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -459,7 +521,7 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -500,6 +562,60 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
 	}
 	if violations != 0 {
 		return fmt.Errorf("migrate Semantic Memory operation encoding v4: %d foreign-key violations", violations)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func ensureSemanticOperationSchemaV5(ctx context.Context, db *sql.DB) error {
+	var definition string
+	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+		return err
+	}
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+		return nil
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`)
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, semanticOperationsV5Migration); err != nil {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v5: %w", err)
+	}
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	violations := 0
+	for rows.Next() {
+		violations++
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if violations != 0 {
+		return fmt.Errorf("migrate Semantic Memory operation encoding v5: %d foreign-key violations", violations)
 	}
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return err
@@ -582,6 +698,32 @@ CREATE TABLE semantic_operations_v4 (
 INSERT INTO semantic_operations_v4 SELECT * FROM semantic_operations;
 DROP TABLE semantic_operations;
 ALTER TABLE semantic_operations_v4 RENAME TO semantic_operations;
+CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
+`
+
+const semanticOperationsV5Migration = `
+DROP TRIGGER IF EXISTS semantic_operations_append_only_update;
+DROP TRIGGER IF EXISTS semantic_operations_append_only_delete;
+CREATE TABLE semantic_operations_v5 (
+    operation_id TEXT PRIMARY KEY NOT NULL,
+    schema_version INTEGER NOT NULL CHECK (schema_version IN (1, 2, 3, 4, 5)),
+    operation_kind TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    actor TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    target_scope_id TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
+    source_event_id TEXT NOT NULL REFERENCES events(id),
+    proposal_sha256 TEXT NOT NULL,
+    effect_sha256 TEXT NOT NULL,
+    proposal_json TEXT NOT NULL CHECK (json_valid(proposal_json) AND json_type(proposal_json) = 'object'),
+    prepared_proposal_json TEXT NOT NULL CHECK (json_valid(prepared_proposal_json) AND json_type(prepared_proposal_json) = 'object'),
+    result_json TEXT NOT NULL CHECK (json_valid(result_json) AND json_type(result_json) = 'object'),
+    transaction_time TEXT NOT NULL
+);
+INSERT INTO semantic_operations_v5 SELECT * FROM semantic_operations;
+DROP TABLE semantic_operations;
+ALTER TABLE semantic_operations_v5 RENAME TO semantic_operations;
 CREATE TRIGGER semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 CREATE TRIGGER semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 `

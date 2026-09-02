@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidadel66/evie/blob/master/cmd/evie/docs/fixtures/semantic-memory/v5/manifest.schema.json",
+  "title": "Evie Semantic Memory Graph Link fixture manifest v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fixture_schema_version", "name", "operations", "expected_paths"],
+  "properties": {
+    "fixture_schema_version": { "const": 5 },
+    "name": { "type": "string", "minLength": 1 },
+    "operations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/operation" } },
+    "expected_paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "depth", "object_ids", "graph_link_ids"],
+        "properties": {
+          "start": { "$ref": "#/$defs/endpoint" },
+          "depth": { "enum": [1, 2] },
+          "object_ids": { "type": "array", "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+          "graph_link_ids": { "type": "array", "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["entity", "alias", "claim", "source_link"] },
+        "id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" }
+      }
+    },
+    "graphLinkV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["graph_link_id", "scope_key", "relation", "source", "target", "lifecycle"],
+      "properties": {
+        "graph_link_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "scope_key": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" },
+        "relation": { "enum": ["derivation", "generalization", "contradiction"] },
+        "source": { "$ref": "#/$defs/endpoint" },
+        "target": { "$ref": "#/$defs/endpoint" },
+        "lifecycle": { "const": "active" }
+      }
+    },
+    "effectV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "maxItems": 0 },
+        "entities": { "type": "array", "maxItems": 0 },
+        "aliases": { "type": "array", "maxItems": 0 },
+        "claims": { "type": "array", "maxItems": 0 },
+        "source_links": { "type": "array", "maxItems": 0 },
+        "graph_links": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/graphLinkV5" } },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["object_kind", "object_id", "state"],
+            "properties": {
+              "object_kind": { "const": "graph_link" },
+              "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+              "state": { "const": "active" }
+            }
+          }
+        }
+      }
+    },
+    "proposalV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "const": "create_graph_link" },
+        "idempotency_key": { "$ref": "../v1/manifest.schema.json#/$defs/idempotencyKey" },
+        "actor": { "const": "owner" },
+        "session_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/effectV5" }
+      }
+    },
+    "operationV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 5 },
+        "operation_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/proposalV5" },
+        "proposal_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" },
+        "transaction_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "effect_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" }
+      }
+    },
+    "graphLifecycleChangeV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "object_kind", "object_id", "expected_state"],
+      "properties": {
+        "action": { "enum": ["retire", "restore"] },
+        "object_kind": { "const": "graph_link" },
+        "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "expected_state": { "enum": ["active", "retired"] }
+      }
+    },
+    "graphLifecycleEffectV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions", "lifecycle_changes"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "maxItems": 0 },
+        "entities": { "type": "array", "maxItems": 0 },
+        "aliases": { "type": "array", "maxItems": 0 },
+        "claims": { "type": "array", "maxItems": 0 },
+        "source_links": { "type": "array", "maxItems": 0 },
+        "graph_links": { "type": "array", "maxItems": 0 },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["object_kind", "object_id", "state"],
+            "properties": {
+              "object_kind": { "const": "graph_link" },
+              "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+              "state": { "enum": ["active", "retired"] }
+            }
+          }
+        },
+        "lifecycle_changes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/graphLifecycleChangeV5" } }
+      }
+    },
+    "graphLifecycleProposalV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "enum": ["retire_memory", "restore_memory"] },
+        "idempotency_key": { "$ref": "../v1/manifest.schema.json#/$defs/idempotencyKey" },
+        "actor": { "const": "owner" },
+        "session_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/graphLifecycleEffectV5" }
+      }
+    },
+    "graphLifecycleOperationV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 5 },
+        "operation_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/graphLifecycleProposalV5" },
+        "proposal_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" },
+        "transaction_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "effect_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" }
+      }
+    },
+    "compoundGraphLifecycleChangeV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "object_kind", "object_id", "expected_state"],
+      "properties": {
+        "action": { "enum": ["retire", "restore"] },
+        "object_kind": { "const": "entity" },
+        "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "expected_state": { "enum": ["active", "retired"] }
+      }
+    },
+    "compoundGraphLifecycleEffectV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopes", "predicates", "entities", "aliases", "claims", "source_links", "graph_links", "transitions", "lifecycle_changes"],
+      "properties": {
+        "scopes": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/scopeKey" } },
+        "predicates": { "type": "array", "maxItems": 0 },
+        "entities": { "type": "array", "maxItems": 0 },
+        "aliases": { "type": "array", "maxItems": 0 },
+        "claims": { "type": "array", "maxItems": 0 },
+        "source_links": { "type": "array", "maxItems": 0 },
+        "graph_links": { "type": "array", "maxItems": 0 },
+        "transitions": {
+          "type": "array",
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["object_kind", "object_id", "state"],
+              "properties": {
+                "object_kind": { "const": "entity" },
+                "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+                "state": { "enum": ["active", "retired"] }
+              }
+            }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["object_kind", "object_id", "state"],
+            "properties": {
+              "object_kind": { "enum": ["alias", "claim", "graph_link"] },
+              "object_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+              "state": { "enum": ["active", "retired"] }
+            }
+          },
+          "contains": {
+            "type": "object",
+            "required": ["object_kind"],
+            "properties": { "object_kind": { "const": "graph_link" } }
+          },
+          "minContains": 1
+        },
+        "lifecycle_changes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/compoundGraphLifecycleChangeV5" } }
+      }
+    },
+    "compoundGraphLifecycleProposalV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "idempotency_key", "actor", "session_id", "prior_revisions", "source_event_ids", "effect"],
+      "properties": {
+        "kind": { "enum": ["retire_memory", "restore_memory"] },
+        "idempotency_key": { "$ref": "../v1/manifest.schema.json#/$defs/idempotencyKey" },
+        "actor": { "const": "owner" },
+        "session_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "prior_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "source_event_ids": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" } },
+        "effect": { "$ref": "#/$defs/compoundGraphLifecycleEffectV5" }
+      }
+    },
+    "compoundGraphLifecycleOperationV5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "proposal", "proposal_sha256", "transaction_time", "resulting_revisions", "effect_sha256"],
+      "properties": {
+        "schema_version": { "const": 5 },
+        "operation_id": { "$ref": "../v1/manifest.schema.json#/$defs/uuid" },
+        "proposal": { "$ref": "#/$defs/compoundGraphLifecycleProposalV5" },
+        "proposal_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" },
+        "transaction_time": { "$ref": "../v1/manifest.schema.json#/$defs/timestamp" },
+        "resulting_revisions": { "type": "array", "minItems": 1, "items": { "$ref": "../v1/manifest.schema.json#/$defs/revision" } },
+        "effect_sha256": { "$ref": "../v1/manifest.schema.json#/$defs/sha256" }
+      }
+    },
+    "operation": {
+      "oneOf": [
+        { "$ref": "../v1/manifest.schema.json#/$defs/operation" },
+        { "$ref": "../v2/manifest.schema.json#/$defs/operationV2" },
+        { "$ref": "../v3/manifest.schema.json#/$defs/operationV3" },
+        { "$ref": "../v4/manifest.schema.json#/$defs/operationV4" },
+        { "$ref": "#/$defs/operationV5" },
+        { "$ref": "#/$defs/graphLifecycleOperationV5" },
+        { "$ref": "#/$defs/compoundGraphLifecycleOperationV5" }
+      ]
+    }
+  }
+}

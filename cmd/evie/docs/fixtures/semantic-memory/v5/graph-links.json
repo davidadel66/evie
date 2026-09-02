@@ -1,0 +1,58 @@
+{
+  "fixture_schema_version": 5,
+  "name": "one approved contradiction Graph Link and its deterministic path",
+  "operations": [
+    {
+      "schema_version": 5,
+      "operation_id": "99000000-0000-4000-8000-000000000101",
+      "proposal": {
+        "kind": "create_graph_link",
+        "idempotency_key": "idem:v1:99000000-0000-4000-8000-000000000102",
+        "actor": "owner",
+        "session_id": "99000000-0000-4000-8000-000000000103",
+        "prior_revisions": [
+          { "scope_key": "global", "revision": 2 }
+        ],
+        "source_event_ids": ["99000000-0000-4000-8000-000000000104"],
+        "effect": {
+          "scopes": ["global"],
+          "predicates": [],
+          "entities": [],
+          "aliases": [],
+          "claims": [],
+          "source_links": [],
+          "graph_links": [
+            {
+              "graph_link_id": "99000000-0000-4000-8000-000000000105",
+              "scope_key": "global",
+              "relation": "contradiction",
+              "source": { "kind": "claim", "id": "99000000-0000-4000-8000-000000000106" },
+              "target": { "kind": "claim", "id": "99000000-0000-4000-8000-000000000107" },
+              "lifecycle": "active"
+            }
+          ],
+          "transitions": [
+            { "object_kind": "graph_link", "object_id": "99000000-0000-4000-8000-000000000105", "state": "active" }
+          ]
+        }
+      },
+      "proposal_sha256": "sha256:ca42f1451be395ce5fc8675fb6d3ec6d0d6b728d9bff8922767ba1e4911e747b",
+      "transaction_time": "2026-09-02T22:00:00.000000000Z",
+      "resulting_revisions": [
+        { "scope_key": "global", "revision": 3 }
+      ],
+      "effect_sha256": "sha256:fec62d88c8f84bcbffcd9b0f8cf9f9eedad0300bce7b15ebeaf8945778752e96"
+    }
+  ],
+  "expected_paths": [
+    {
+      "start": { "kind": "claim", "id": "99000000-0000-4000-8000-000000000106" },
+      "depth": 1,
+      "object_ids": [
+        "99000000-0000-4000-8000-000000000106",
+        "99000000-0000-4000-8000-000000000107"
+      ],
+      "graph_link_ids": ["99000000-0000-4000-8000-000000000105"]
+    }
+  ]
+}

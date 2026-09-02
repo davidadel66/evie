@@ -37,6 +37,142 @@ type SemanticPromotionMemory interface {
 	ApplyPromotion(context.Context, memory.TurnLease, memory.PromotionProposal) (memory.PromotionResult, error)
 }
 
+// SemanticGraphMemory is the narrow Stage 3 structural-link and exact-read
+// extension of the Kernel-owned Semantic Memory seam.
+type SemanticGraphMemory interface {
+	PrepareCreateGraphLink(context.Context, memory.ScopeContext, memory.CreateGraphLinkRequest) (memory.CreateGraphLinkProposal, error)
+	ApplyCreateGraphLink(context.Context, memory.TurnLease, memory.CreateGraphLinkProposal) (memory.CreateGraphLinkResult, error)
+	PrepareMemoryLifecycle(context.Context, memory.ScopeContext, memory.MemoryLifecycleRequest) (memory.MemoryLifecycleProposal, error)
+	ApplyMemoryLifecycle(context.Context, memory.TurnLease, memory.MemoryLifecycleProposal) (memory.MemoryLifecycleResult, error)
+	ListSemanticScopes(context.Context, memory.ScopeContext, memory.SemanticScopeListQuery) (memory.SemanticScopePage, error)
+	ListSemanticObjects(context.Context, memory.ScopeContext, memory.SemanticObjectListQuery) (memory.SemanticObjectPage, error)
+	InspectSemanticObject(context.Context, memory.ScopeContext, memory.SemanticObjectKind, memory.SemanticID) (memory.SemanticObjectInspection, error)
+	InspectSemanticObjectAt(context.Context, memory.ScopeContext, memory.SemanticObjectKind, memory.SemanticID, memory.ClaimQuery) (memory.SemanticObjectInspection, error)
+	TraverseSemanticNeighborhood(context.Context, memory.ScopeContext, memory.SemanticTraversalQuery) (memory.SemanticNeighborhood, error)
+}
+
+func (s *Session) PrepareCreateGraphLink(ctx context.Context, semantic SemanticGraphMemory, command string, request memory.CreateGraphLinkRequest) (proposal memory.CreateGraphLinkProposal, retErr error) {
+	if semantic == nil {
+		return proposal, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return proposal, err
+	}
+	defer finish(&retErr)
+	event, err := s.history.Append(ctx, lease, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: command})
+	if err != nil {
+		return proposal, fmt.Errorf("persist Graph Link request: %w", err)
+	}
+	request.SourceEventID = event.ID
+	proposal, err = semantic.PrepareCreateGraphLink(ctx, s.scope, request)
+	if err != nil {
+		return proposal, fmt.Errorf("prepare Graph Link proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+func (s *Session) ResolveCreateGraphLink(ctx context.Context, semantic SemanticGraphMemory, proposal memory.CreateGraphLinkProposal, decision tools.Decision) (result memory.CreateGraphLinkResult, retErr error) {
+	if semantic == nil {
+		return result, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	if proposal.SessionID != s.scope.SessionID {
+		return result, errors.New("agent: Graph Link proposal belongs to another session")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer finish(&retErr)
+	approval, err := semanticApprovalEventInput(proposal.Evidence.EventID, memory.ExecutionID(proposal.OperationID), decision, proposal.ProposalSHA256, proposal.PreparedSHA256)
+	if err != nil {
+		return result, err
+	}
+	if _, err := s.history.Append(ctx, lease, approval); err != nil {
+		return result, fmt.Errorf("persist Graph Link approval: %w", err)
+	}
+	if decision != tools.Approved {
+		return result, nil
+	}
+	result, err = semantic.ApplyCreateGraphLink(ctx, lease, proposal)
+	if err != nil {
+		return result, fmt.Errorf("apply Graph Link proposal: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Session) PrepareGraphLinkLifecycle(ctx context.Context, semantic SemanticGraphMemory, command string, request memory.MemoryLifecycleRequest) (proposal memory.MemoryLifecycleProposal, retErr error) {
+	if semantic == nil {
+		return proposal, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	request.ObjectKind = memory.SemanticObjectGraphLink
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return proposal, err
+	}
+	defer finish(&retErr)
+	event, err := s.history.Append(ctx, lease, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: command})
+	if err != nil {
+		return proposal, fmt.Errorf("persist Graph Link lifecycle request: %w", err)
+	}
+	request.SourceEventID = event.ID
+	proposal, err = semantic.PrepareMemoryLifecycle(ctx, s.scope, request)
+	if err != nil {
+		return proposal, fmt.Errorf("prepare Graph Link lifecycle proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+func (s *Session) ResolveGraphLinkLifecycle(ctx context.Context, semantic SemanticGraphMemory, proposal memory.MemoryLifecycleProposal, decision tools.Decision) (result memory.MemoryLifecycleResult, retErr error) {
+	if semantic == nil {
+		return result, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	if proposal.SessionID != s.scope.SessionID || proposal.ObjectKind != memory.SemanticObjectGraphLink {
+		return result, errors.New("agent: Graph Link lifecycle proposal belongs to another target")
+	}
+	lease, finish, err := s.beginLocalSemanticCommand(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer finish(&retErr)
+	approval, err := semanticApprovalEventInput(proposal.Evidence.EventID, memory.ExecutionID(proposal.OperationID), decision, proposal.ProposalSHA256, proposal.PreparedSHA256)
+	if err != nil {
+		return result, err
+	}
+	if _, err := s.history.Append(ctx, lease, approval); err != nil {
+		return result, fmt.Errorf("persist Graph Link lifecycle approval: %w", err)
+	}
+	if decision != tools.Approved {
+		return result, nil
+	}
+	result, err = semantic.ApplyMemoryLifecycle(ctx, lease, proposal)
+	if err != nil {
+		return result, fmt.Errorf("apply Graph Link lifecycle proposal: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Session) ListSemanticObjects(ctx context.Context, semantic SemanticGraphMemory, query memory.SemanticObjectListQuery) (memory.SemanticObjectPage, error) {
+	if semantic == nil {
+		return memory.SemanticObjectPage{}, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	return semantic.ListSemanticObjects(ctx, s.scope, query)
+}
+
+func (s *Session) InspectSemanticObjectAt(ctx context.Context, semantic SemanticGraphMemory, kind memory.SemanticObjectKind, id memory.SemanticID, temporal memory.ClaimQuery) (memory.SemanticObjectInspection, error) {
+	if semantic == nil {
+		return memory.SemanticObjectInspection{}, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	return semantic.InspectSemanticObjectAt(ctx, s.scope, kind, id, temporal)
+}
+
+func (s *Session) TraverseSemanticNeighborhood(ctx context.Context, semantic SemanticGraphMemory, query memory.SemanticTraversalQuery) (memory.SemanticNeighborhood, error) {
+	if semantic == nil {
+		return memory.SemanticNeighborhood{}, errors.New("agent: Semantic Graph Memory is not configured")
+	}
+	return semantic.TraverseSemanticNeighborhood(ctx, s.scope, query)
+}
+
 func (s *Session) beginLocalSemanticCommand(
 	ctx context.Context,
 ) (memory.TurnLease, func(*error), error) {

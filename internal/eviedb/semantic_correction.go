@@ -826,6 +826,29 @@ func (s *Store) inspectClaimsSnapshot(
 	if result.Scope.Key == "" {
 		result.Scope.Key = targetKey
 	}
+	if query.Polarity != "" && query.Polarity != memory.PolarityAffirmed && query.Polarity != memory.PolarityDenied {
+		return result, errors.New("semantic Claim polarity filter is invalid")
+	}
+	if query.PredicateToken != "" || query.Polarity != "" || query.SubjectEntityID != "" || query.ObjectEntityID != "" {
+		filtered := result.Claims[:0]
+		for _, claim := range result.Claims {
+			if query.PredicateToken != "" && claim.Predicate.Token != query.PredicateToken {
+				continue
+			}
+			if query.Polarity != "" && claim.Polarity != query.Polarity {
+				continue
+			}
+			if query.SubjectEntityID != "" && claim.SubjectEntityID != query.SubjectEntityID {
+				continue
+			}
+			if query.ObjectEntityID != "" && claim.Object.EntityID != query.ObjectEntityID {
+				continue
+			}
+			filtered = append(filtered, claim)
+		}
+		result.Claims = filtered
+	}
+	result.AllowedScopes = append([]string(nil), keys...)
 	return result, nil
 }
 
