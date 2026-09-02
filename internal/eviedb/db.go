@@ -59,6 +59,57 @@ BEGIN
     SELECT RAISE(ABORT, 'tasks cannot be hard deleted');
 END;
 
+CREATE TABLE IF NOT EXISTS task_hierarchy (
+    task_id       TEXT PRIMARY KEY NOT NULL REFERENCES tasks(id),
+    parent_id     TEXT REFERENCES tasks(id),
+    root_id       TEXT NOT NULL REFERENCES tasks(id),
+    sibling_order INTEGER NOT NULL CHECK (typeof(sibling_order) = 'integer' AND sibling_order >= 0),
+    CHECK (
+        (parent_id IS NULL AND root_id = task_id AND sibling_order = 0) OR
+        (parent_id IS NOT NULL AND root_id <> task_id AND sibling_order > 0)
+    )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS task_hierarchy_parent_order_idx
+ON task_hierarchy(parent_id, sibling_order)
+WHERE parent_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS task_hierarchy_root_idx
+ON task_hierarchy(root_id, parent_id, sibling_order, task_id);
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_validate_child
+BEFORE INSERT ON task_hierarchy
+FOR EACH ROW
+WHEN NEW.parent_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM task_hierarchy parent_h
+    JOIN tasks parent_t ON parent_t.id = parent_h.task_id
+    JOIN tasks child_t ON child_t.id = NEW.task_id
+    WHERE parent_h.task_id = NEW.parent_id
+      AND parent_h.root_id = NEW.root_id
+      AND parent_t.scope = child_t.scope
+)
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy parent, root, and scope must agree');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_append_only_update
+BEFORE UPDATE ON task_hierarchy
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_append_only_delete
+BEFORE DELETE ON task_hierarchy
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy is append-only');
+END;
+
+INSERT OR IGNORE INTO task_hierarchy (task_id, parent_id, root_id, sibling_order)
+SELECT id, NULL, id, 0 FROM tasks;
+
 CREATE TABLE IF NOT EXISTS task_events (
     id                 TEXT PRIMARY KEY NOT NULL CHECK (typeof(id) = 'text' AND length(trim(id)) > 0),
     task_id            TEXT NOT NULL REFERENCES tasks(id),
@@ -192,6 +243,211 @@ BEFORE DELETE ON task_idempotency_conflicts
 FOR EACH ROW
 BEGIN
     SELECT RAISE(ABORT, 'task idempotency conflicts are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_decomposition_conflicts (
+    id                       TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    actor_id                 TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id               TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    identity_sha256          TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    original_request_sha256  TEXT NOT NULL CHECK (length(original_request_sha256) = 64 AND original_request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    attempted_request_sha256 TEXT NOT NULL CHECK (length(attempted_request_sha256) = 64 AND attempted_request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    parent_id                TEXT,
+    recorded_at              TEXT NOT NULL CHECK (typeof(recorded_at) = 'text')
+);
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_conflicts_append_only_update
+BEFORE UPDATE ON task_decomposition_conflicts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition conflicts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_conflicts_append_only_delete
+BEFORE DELETE ON task_decomposition_conflicts
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition conflicts are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_idempotency_claims (
+    actor_id        TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id      TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    identity_sha256 TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*'),
+    request_sha256  TEXT NOT NULL CHECK (length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'),
+    operation       TEXT NOT NULL CHECK (operation IN ('create', 'update', 'decompose')),
+    recorded_at     TEXT NOT NULL CHECK (typeof(recorded_at) = 'text'),
+    PRIMARY KEY (actor_id, session_id, identity_sha256)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_idempotency_claims_append_only_update
+BEFORE UPDATE ON task_idempotency_claims
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task idempotency claims are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_idempotency_claims_append_only_delete
+BEFORE DELETE ON task_idempotency_claims
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task idempotency claims are append-only');
+END;
+
+INSERT OR IGNORE INTO task_idempotency_claims (
+    actor_id, session_id, identity_sha256, request_sha256, operation, recorded_at
+)
+SELECT actor_id, session_id, identity_sha256, request_sha256, operation, recorded_at
+FROM task_mutation_results;
+
+CREATE TABLE IF NOT EXISTS task_hierarchy_events (
+    id                 TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    task_id            TEXT NOT NULL REFERENCES tasks(id),
+    sequence           INTEGER NOT NULL CHECK (typeof(sequence) = 'integer' AND sequence > 0),
+    actor_id           TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
+    session_id         TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
+    run_id             TEXT NOT NULL CHECK (length(trim(run_id)) > 0),
+    recorded_at        TEXT NOT NULL CHECK (typeof(recorded_at) = 'text'),
+    previous_revision  INTEGER NOT NULL CHECK (typeof(previous_revision) = 'integer' AND previous_revision > 0),
+    resulting_revision INTEGER NOT NULL CHECK (typeof(resulting_revision) = 'integer' AND resulting_revision >= previous_revision),
+    operation           TEXT NOT NULL CHECK (operation IN ('create', 'decompose')),
+    outcome            TEXT NOT NULL CHECK (outcome IN ('accepted', 'rejected')),
+    diagnostic_code    TEXT CHECK (diagnostic_code IS NULL OR diagnostic_code IN ('invalid_input', 'invalid_transition', 'revision_conflict')),
+    UNIQUE (task_id, sequence),
+    CHECK (
+        (outcome = 'accepted' AND diagnostic_code IS NULL AND resulting_revision = previous_revision + 1) OR
+        (outcome = 'rejected' AND diagnostic_code IS NOT NULL AND resulting_revision = previous_revision)
+    )
+);
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_events_append_only_update
+BEFORE UPDATE ON task_hierarchy_events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_events_append_only_delete
+BEFORE DELETE ON task_hierarchy_events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_events_unique_sequence
+BEFORE INSERT ON task_hierarchy_events
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM task_events
+    WHERE task_id = NEW.task_id AND sequence = NEW.sequence
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event sequence already exists');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_events_unique_hierarchy_sequence
+BEFORE INSERT ON task_events
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM task_hierarchy_events
+    WHERE task_id = NEW.task_id AND sequence = NEW.sequence
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event sequence already exists');
+END;
+
+CREATE TABLE IF NOT EXISTS task_event_idempotency (
+    event_id        TEXT PRIMARY KEY NOT NULL,
+    identity_sha256 TEXT NOT NULL CHECK (length(identity_sha256) = 64 AND identity_sha256 NOT GLOB '*[^0-9a-f]*')
+);
+
+CREATE TRIGGER IF NOT EXISTS task_event_idempotency_requires_event
+BEFORE INSERT ON task_event_idempotency
+FOR EACH ROW
+WHEN NOT EXISTS (SELECT 1 FROM task_events WHERE id = NEW.event_id)
+ AND NOT EXISTS (SELECT 1 FROM task_hierarchy_events WHERE id = NEW.event_id)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event idempotency requires an event');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_event_idempotency_append_only_update
+BEFORE UPDATE ON task_event_idempotency
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task event idempotency is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_event_idempotency_append_only_delete
+BEFORE DELETE ON task_event_idempotency
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task event idempotency is append-only');
+END;
+
+INSERT OR IGNORE INTO task_event_idempotency (event_id, identity_sha256)
+SELECT event_id, identity_sha256 FROM task_mutation_results WHERE event_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS task_decomposition_results (
+    actor_id            TEXT NOT NULL,
+    session_id          TEXT NOT NULL,
+    identity_sha256     TEXT NOT NULL,
+    parent_id           TEXT NOT NULL,
+    event_id            TEXT UNIQUE REFERENCES task_hierarchy_events(id),
+    outcome_code        TEXT NOT NULL CHECK (outcome_code IN ('accepted', 'invalid_input', 'not_found', 'revision_conflict', 'invalid_transition')),
+    diagnostic_field    TEXT,
+    previous_revision   INTEGER CHECK (previous_revision IS NULL OR previous_revision > 0),
+    resulting_revision  INTEGER CHECK (resulting_revision IS NULL OR resulting_revision >= previous_revision),
+    from_status         TEXT CHECK (from_status IS NULL OR from_status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    to_status           TEXT CHECK (to_status IS NULL OR to_status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    PRIMARY KEY (actor_id, session_id, identity_sha256),
+    FOREIGN KEY (actor_id, session_id, identity_sha256)
+        REFERENCES task_idempotency_claims(actor_id, session_id, identity_sha256),
+    CHECK (
+        (outcome_code = 'accepted' AND event_id IS NOT NULL AND resulting_revision = previous_revision + 1) OR
+        outcome_code <> 'accepted'
+    )
+);
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_results_append_only_update
+BEFORE UPDATE ON task_decomposition_results
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition results are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_results_append_only_delete
+BEFORE DELETE ON task_decomposition_results
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition results are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS task_decomposition_children (
+    actor_id        TEXT NOT NULL,
+    session_id      TEXT NOT NULL,
+    identity_sha256 TEXT NOT NULL,
+    child_order     INTEGER NOT NULL CHECK (child_order >= 0),
+    child_task_id   TEXT NOT NULL,
+    child_revision  INTEGER NOT NULL CHECK (child_revision > 0),
+    PRIMARY KEY (actor_id, session_id, identity_sha256, child_order),
+    FOREIGN KEY (actor_id, session_id, identity_sha256)
+        REFERENCES task_decomposition_results(actor_id, session_id, identity_sha256),
+    FOREIGN KEY (child_task_id, child_revision)
+        REFERENCES task_revisions(task_id, revision)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_children_append_only_update
+BEFORE UPDATE ON task_decomposition_children
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition children are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_decomposition_children_append_only_delete
+BEFORE DELETE ON task_decomposition_children
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task decomposition children are append-only');
 END;
 
 CREATE TABLE IF NOT EXISTS projects (

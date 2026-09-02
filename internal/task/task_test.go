@@ -68,7 +68,7 @@ func TestMutationInputsRequireBoundedIdempotencyIdentity(t *testing.T) {
 }
 
 func TestMutationAttributionIsTrustedContextOnly(t *testing.T) {
-	want := MutationAttribution{ActorID: "local", SessionID: "session-1", RunID: "run-1"}
+	want := MutationAttribution{ActorID: "local", SessionID: "session-1", RunID: "run-1", ParentSessionID: "parent-1"}
 	ctx := WithMutationAttribution(t.Context(), want)
 	got, err := MutationAttributionFromContext(ctx)
 	if err != nil || got != want {
@@ -76,5 +76,68 @@ func TestMutationAttributionIsTrustedContextOnly(t *testing.T) {
 	}
 	if _, err := MutationAttributionFromContext(t.Context()); !errors.Is(err, ErrMissingAttribution) {
 		t.Fatalf("missing attribution error = %v", err)
+	}
+}
+
+func TestValidateCreateInputRequiresParentRevisionOnlyForChildren(t *testing.T) {
+	validRoot := CreateInput{Title: "root", IdempotencyKey: "root"}
+	if err := ValidateCreateInput(validRoot); err != nil {
+		t.Fatalf("valid root: %v", err)
+	}
+	validChild := CreateInput{
+		Title: "child", ParentID: "parent", ExpectedParentRevision: 2, IdempotencyKey: "child",
+	}
+	if err := ValidateCreateInput(validChild); err != nil {
+		t.Fatalf("valid child: %v", err)
+	}
+	for _, input := range []CreateInput{
+		{Title: "child", ParentID: "parent", IdempotencyKey: "missing-parent-revision"},
+		{Title: "root", ExpectedParentRevision: 1, IdempotencyKey: "root-with-parent-revision"},
+	} {
+		if err := ValidateCreateInput(input); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("ValidateCreateInput(%+v) error = %v, want invalid input", input, err)
+		}
+	}
+}
+
+func TestValidateDecomposeInput(t *testing.T) {
+	valid := DecomposeInput{
+		ExpectedRevision: 3,
+		Children:         []ChildInput{{Title: "research"}, {Title: "implement", Priority: 4, DueDate: "2026-09-03"}},
+		IdempotencyKey:   "decompose",
+	}
+	if err := ValidateDecomposeInput(valid); err != nil {
+		t.Fatalf("valid decomposition: %v", err)
+	}
+	for _, tt := range []struct {
+		name  string
+		input DecomposeInput
+		field string
+	}{
+		{name: "revision", input: DecomposeInput{Children: []ChildInput{{Title: "child"}}, IdempotencyKey: "k"}, field: "expected_revision"},
+		{name: "children", input: DecomposeInput{ExpectedRevision: 1, IdempotencyKey: "k"}, field: "children"},
+		{name: "child", input: DecomposeInput{ExpectedRevision: 1, Children: []ChildInput{{Title: "ok"}, {Title: " "}}, IdempotencyKey: "k"}, field: "children[1].title"},
+		{name: "identity", input: DecomposeInput{ExpectedRevision: 1, Children: []ChildInput{{Title: "child"}}}, field: "idempotency_key"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDecomposeInput(tt.input)
+			var inputErr *InputError
+			if !errors.As(err, &inputErr) || inputErr.Field != tt.field {
+				t.Fatalf("error = %#v, want field %q", err, tt.field)
+			}
+		})
+	}
+}
+
+func TestValidateTreeQueryBoundsDepth(t *testing.T) {
+	for _, depth := range []int{1, MaxTreeDepth} {
+		if err := ValidateTreeQuery(TreeQuery{MaxDepth: depth}); err != nil {
+			t.Fatalf("depth %d: %v", depth, err)
+		}
+	}
+	for _, depth := range []int{-1, MaxTreeDepth + 1} {
+		if err := ValidateTreeQuery(TreeQuery{MaxDepth: depth}); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("depth %d error = %v, want invalid input", depth, err)
+		}
 	}
 }

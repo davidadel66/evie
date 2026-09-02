@@ -12,6 +12,7 @@ type Store struct {
 	resolveImmediateTransaction immediateTransactionResolver
 	newResolutionContext        immediateTransactionContextFactory
 	semanticMaintenance         semanticMaintenanceHooks
+	afterTaskTreeRead           func()
 }
 
 type semanticMaintenanceHooks struct {

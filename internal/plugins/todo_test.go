@@ -19,15 +19,16 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.3.0",
+		ImplementationVersion: "1.4.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
-			{ID: TodoListCapabilityID, Version: "1.1.0"},
-			{ID: TodoAddCapabilityID, Version: "1.1.0"},
-			{ID: TodoGetCapabilityID, Version: "1.0.0"},
-			{ID: TodoUpdateCapabilityID, Version: "1.1.0"},
+			{ID: TodoListCapabilityID, Version: "1.2.0"},
+			{ID: TodoAddCapabilityID, Version: "1.2.0"},
+			{ID: TodoGetCapabilityID, Version: "1.1.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.2.0"},
+			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
 		},
 		ResumableFrom: []ImplementationCompatibility{
 			{
@@ -54,6 +55,15 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoUpdateCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "f01e96d1f2d60c5df5f39e058c991857240b008d20523e23014a82b5320de04a"},
 				},
 			},
+			{
+				ImplementationVersion: "1.3.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "ac6b85700a29bccb66fb2cafab22a662f149dca8f7bddeeda0f41d1894323ebb"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "1c1b8f76973d1d0a156d045542977cabb4af0c13120a03dce6004f28eb2c2e39"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "e8a5f4275a66af258670d4f1d46cf04fb22cf107c5026509bbd48f923d8fc2dd"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "050eab99a96a6d12aec9c920944a9a3a6985f966a540878336c1fd49133a2668"},
+				},
+			},
 		},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
@@ -76,10 +86,11 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		}
 	}
 	wantAssociations := []association{
-		{ID: TodoListCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_list"},
-		{ID: TodoAddCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_add"},
-		{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_get"},
-		{ID: TodoUpdateCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_update"},
+		{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_list"},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_add"},
+		{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_get"},
+		{ID: TodoUpdateCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_update"},
+		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_decompose"},
 	}
 	if !reflect.DeepEqual(gotAssociations, wantAssociations) {
 		t.Fatalf("Todo Capability associations\n got: %+v\nwant: %+v", gotAssociations, wantAssociations)
@@ -97,12 +108,12 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefinitions := []tools.Tool{
-		tools.TodoLifecycleListTool(), tools.TodoIdempotentAddTool(), tools.TodoGetTool(), tools.TodoIdempotentUpdateTool(),
+		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoIdempotentUpdateTool(), tools.TodoDecomposeTool(),
 	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("Todo plugin schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
 	}
-	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update"}) {
+	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose"}) {
 		t.Fatalf("Todo schema names = %v", got)
 	}
 }
@@ -149,6 +160,7 @@ func TestTodoManagerToolsetPreservesCancellation(t *testing.T) {
 		{ID: "add", Type: "function", Function: openrouter.FunctionCall{Name: "todo_add", Arguments: `{"title":"cancel me"}`}},
 		{ID: "get", Type: "function", Function: openrouter.FunctionCall{Name: "todo_get", Arguments: `{"task_id":"cancel-me"}`}},
 		{ID: "update", Type: "function", Function: openrouter.FunctionCall{Name: "todo_update", Arguments: `{"task_id":"cancel-me","expected_revision":1,"title":"cancel me"}`}},
+		{ID: "decompose", Type: "function", Function: openrouter.FunctionCall{Name: "todo_decompose", Arguments: `{"task_id":"cancel-me","expected_revision":1,"children":[{"title":"child"}],"idempotency_key":"cancel"}`}},
 	} {
 		t.Run(call.ID, func(t *testing.T) {
 			service := cancelingTaskService{started: make(chan struct{})}
@@ -212,8 +224,16 @@ func (s cancelingTaskService) GetGlobalTask(ctx context.Context, _ task.ID) (tas
 	return task.Task{}, s.wait(ctx)
 }
 
+func (s cancelingTaskService) GetGlobalTaskTree(ctx context.Context, _ task.ID, _ task.TreeQuery) (task.Tree, error) {
+	return task.Tree{}, s.wait(ctx)
+}
+
 func (s cancelingTaskService) UpdateGlobalTask(ctx context.Context, _ task.ID, _ task.UpdateInput) (task.Task, error) {
 	return task.Task{}, s.wait(ctx)
+}
+
+func (s cancelingTaskService) DecomposeGlobalTask(ctx context.Context, _ task.ID, _ task.DecomposeInput) (task.Decomposition, error) {
+	return task.Decomposition{}, s.wait(ctx)
 }
 
 func (s cancelingTaskService) ListTaskEvents(ctx context.Context, _ task.ID) ([]task.Event, error) {

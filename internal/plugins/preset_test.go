@@ -57,7 +57,9 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if composition.Receipt.EvieVersion != EvieVersion {
 		t.Fatalf("Evie version = %q, want %q", composition.Receipt.EvieVersion, EvieVersion)
 	}
-	wantTodo := []tools.Tool{tools.TodoLifecycleListTool(), tools.TodoTools()[1], tools.TodoGetTool(), tools.TodoUpdateTool()}
+	wantTodo := []tools.Tool{
+		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoIdempotentUpdateTool(), tools.TodoDecomposeTool(),
+	}
 	wantSchemas := schemaNames(tools.KernelToolset().
 		WithTools(tools.FinanceTools()).
 		WithTools(tools.WebTools()).
@@ -325,7 +327,7 @@ func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *tes
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.4.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 }
@@ -409,7 +411,7 @@ func TestPreLifecycleTodoStandardReceiptResumesWithExactFrozenTools(t *testing.T
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.4.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_update") != 0 {
@@ -450,7 +452,7 @@ func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	legacy, err := legacyManager.ResolvePreset("")
+	legacy, err := legacyManager.resolvePreset(preTreeTodoStandardPreset())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +475,7 @@ func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) 
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.4.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	for _, schema := range resumed.Toolset.Schemas() {
@@ -483,6 +485,69 @@ func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) 
 		if _, exists := schema.Function.Parameters.Properties["idempotency_key"]; exists {
 			t.Fatalf("#120 receipt gained idempotency input in %s", schema.Function.Name)
 		}
+	}
+}
+
+type preTreeTodoPlugin struct{ service task.Service }
+
+func (preTreeTodoPlugin) Start(context.Context) error { return nil }
+func (preTreeTodoPlugin) Stop(context.Context) error  { return nil }
+func (preTreeTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.3.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.1.0"},
+			{ID: TodoAddCapabilityID, Version: "1.1.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.1.0"},
+		},
+	}
+}
+func (p preTreeTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.3.0")
+}
+
+func TestPreTreeStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
+	service := &taskServiceFixture{}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preTreeTodoPlugin{service: service},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preTreeTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(service))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #121 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.4.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+	if countSchema(resumed.Toolset, "todo_decompose") != 0 {
+		t.Fatal("#121 receipt unexpectedly gained todo_decompose")
 	}
 }
 

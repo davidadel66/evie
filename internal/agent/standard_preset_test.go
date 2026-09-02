@@ -58,7 +58,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 
 	wantTodo := []tools.Tool{
-		tools.TodoLifecycleListTool(), tools.TodoIdempotentAddTool(), tools.TodoGetTool(), tools.TodoIdempotentUpdateTool(),
+		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoIdempotentUpdateTool(), tools.TodoDecomposeTool(),
 	}
 	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
@@ -66,7 +66,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.3.0"},
+		{ID: "todo", ImplementationVersion: "1.4.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -77,7 +77,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.1.0", "todo.add@1.1.0", "todo.get@1.0.0", "todo.update@1.1.0",
+		"todo.list@1.2.0", "todo.add@1.2.0", "todo.get@1.1.0", "todo.update@1.2.0", "todo.decompose@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -240,6 +240,74 @@ func TestStandardAgentRecordsRejectedTaskMutationWithoutInventingTransition(t *t
 		last.DiagnosticCode != task.DiagnosticRevisionConflict || last.PreviousRevision != 2 ||
 		last.ResultingRevision != 2 || last.RunID != string(failedExecution) {
 		t.Fatalf("rejected evidence = episodic execution %q Task events %+v", failedExecution, taskEvents)
+	}
+}
+
+func TestStandardAgentDecomposesTaskTreeThroughNormalDispatcher(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	storedSession, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedCtx := task.WithMutationAttribution(ctx, task.MutationAttribution{
+		ActorID: "local", SessionID: string(storedSession.ID), RunID: "seed",
+	})
+	root, err := store.CreateGlobalTask(seedCtx, task.CreateInput{Title: "agent tree", IdempotencyKey: "agent-tree-root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := standardManager(t, store)
+	resolved, err := manager.ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("decompose-call", "todo_decompose",
+			`{"task_id":"`+string(root.ID)+`","expected_revision":1,"children":[{"title":"research"},{"title":"verify"}],"idempotency_key":"agent-decompose"}`)),
+		assistantStep("done", nil),
+	}}
+	session := NewWithToolset(
+		client, testContextProfile("test-model"), store.BindHistory(storedSession.ID, "holder"),
+		storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, "holder"), resolved.Toolset,
+	)
+	if err := session.Send(ctx, "decompose it", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	children, err := store.ListGlobalTasks(ctx, task.ListFilter{ParentID: root.ID})
+	if err != nil || len(children) != 2 || children[0].Title != "research" || children[1].Title != "verify" {
+		t.Fatalf("agent decomposition children = %+v, %v", children, err)
+	}
+	durable, err := store.LoadEvents(ctx, storedSession.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var executionID memory.ExecutionID
+	var succeeded bool
+	for _, event := range durable {
+		if event.Type == memory.EventToolIntent {
+			var payload memory.ToolIntentPayload
+			if json.Unmarshal(event.Payload, &payload) == nil && payload.Call.Name == "todo_decompose" {
+				executionID = event.ExecutionID
+			}
+		}
+		if event.Type == memory.EventToolSucceeded && event.ExecutionID == executionID {
+			succeeded = true
+		}
+	}
+	taskEvents, err := store.ListTaskEvents(ctx, root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := taskEvents[len(taskEvents)-1]
+	if executionID == "" || !succeeded || last.Operation != task.OperationDecompose ||
+		last.ActorID != string(memory.LocalOwnerID) || last.SessionID != string(storedSession.ID) || last.RunID != string(executionID) {
+		t.Fatalf("decomposition evidence = execution %q succeeded=%v events=%+v", executionID, succeeded, taskEvents)
 	}
 }
 

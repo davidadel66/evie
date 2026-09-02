@@ -18,6 +18,8 @@ var (
 	ErrInvalidTransition   = errors.New("task: invalid status transition")
 	ErrMissingAttribution  = errors.New("task: trusted mutation attribution is missing")
 	ErrIdempotencyConflict = errors.New("task: idempotency identity was reused for a different request")
+	ErrRootCreationDenied  = errors.New("task: delegated sessions cannot create Task Tree roots")
+	ErrActiveDescendants   = errors.New("task: active descendants prevent completion")
 )
 
 type ID string
@@ -40,8 +42,9 @@ const (
 type Operation string
 
 const (
-	OperationCreate Operation = "create"
-	OperationUpdate Operation = "update"
+	OperationCreate    Operation = "create"
+	OperationUpdate    Operation = "update"
+	OperationDecompose Operation = "decompose"
 )
 
 type MutationOutcome string
@@ -57,30 +60,72 @@ const (
 	DiagnosticInvalidInput      DiagnosticCode = "invalid_input"
 	DiagnosticInvalidTransition DiagnosticCode = "invalid_transition"
 	DiagnosticRevisionConflict  DiagnosticCode = "revision_conflict"
+	DiagnosticActiveDescendants DiagnosticCode = "active_descendants"
+)
+
+const (
+	DefaultTreeDepth     = 8
+	MaxTreeDepth         = 64
+	MaxTreeNodes         = 1000
+	MaxDecomposeChildren = 100
 )
 
 // Task is the durable state of one owner-controlled unit of work.
 type Task struct {
-	ID          ID        `json:"id"`
-	Scope       Scope     `json:"scope"`
-	Title       string    `json:"title"`
-	Description string    `json:"description,omitempty"`
-	Priority    int       `json:"priority,omitempty"`
-	DueDate     string    `json:"due_date,omitempty"`
-	Status      Status    `json:"status"`
-	Revision    uint64    `json:"revision"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           ID        `json:"id"`
+	ParentID     ID        `json:"parent_id,omitempty"`
+	RootID       ID        `json:"root_id"`
+	SiblingOrder uint64    `json:"sibling_order,omitempty"`
+	Scope        Scope     `json:"scope"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description,omitempty"`
+	Priority     int       `json:"priority,omitempty"`
+	DueDate      string    `json:"due_date,omitempty"`
+	Status       Status    `json:"status"`
+	Revision     uint64    `json:"revision"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // CreateInput deliberately excludes persistence, scope, owner, actor, and
 // session identities. Those values belong to the trusted Kernel boundary.
 type CreateInput struct {
-	Title          string
-	Description    string
-	Priority       int
-	DueDate        string
-	IdempotencyKey IdempotencyKey
+	Title                  string
+	Description            string
+	Priority               int
+	DueDate                string
+	ParentID               ID
+	ExpectedParentRevision uint64
+	IdempotencyKey         IdempotencyKey
+}
+
+type ChildInput struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Priority    int    `json:"priority,omitempty"`
+	DueDate     string `json:"due_date,omitempty"`
+}
+
+type DecomposeInput struct {
+	ExpectedRevision uint64
+	Children         []ChildInput
+	IdempotencyKey   IdempotencyKey
+}
+
+type Decomposition struct {
+	Parent   Task   `json:"parent"`
+	Children []Task `json:"children"`
+}
+
+type TreeQuery struct {
+	MaxDepth       int
+	IncludeHistory bool
+}
+
+type Tree struct {
+	Task      Task   `json:"task"`
+	Children  []Tree `json:"children"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 // UpdateInput is a compare-and-swap patch. Pointer fields distinguish omission
@@ -100,14 +145,17 @@ type UpdateInput struct {
 type ListFilter struct {
 	Statuses       []Status
 	IncludeHistory bool
+	RootID         ID
+	ParentID       ID
 }
 
 // MutationAttribution is installed by the trusted runtime immediately before
 // tool execution. It is intentionally absent from model-facing arguments.
 type MutationAttribution struct {
-	ActorID   string
-	SessionID string
-	RunID     string
+	ActorID         string
+	SessionID       string
+	RunID           string
+	ParentSessionID string
 }
 
 type Event struct {
@@ -133,7 +181,9 @@ type Service interface {
 	ListOpenGlobalTasks(context.Context) ([]Task, error)
 	ListGlobalTasks(context.Context, ListFilter) ([]Task, error)
 	GetGlobalTask(context.Context, ID) (Task, error)
+	GetGlobalTaskTree(context.Context, ID, TreeQuery) (Tree, error)
 	UpdateGlobalTask(context.Context, ID, UpdateInput) (Task, error)
+	DecomposeGlobalTask(context.Context, ID, DecomposeInput) (Decomposition, error)
 }
 
 type InputError struct {
@@ -188,20 +238,75 @@ func (e *IdempotencyConflictError) Error() string {
 
 func (e *IdempotencyConflictError) Unwrap() error { return ErrIdempotencyConflict }
 
+type ActiveDescendantsError struct {
+	ID ID
+}
+
+func (e *ActiveDescendantsError) Error() string {
+	return fmt.Sprintf("%s: task %q", ErrActiveDescendants, e.ID)
+}
+
+func (e *ActiveDescendantsError) Unwrap() error { return ErrActiveDescendants }
+
 func ValidateCreateInput(input CreateInput) error {
+	if err := validateTaskContent("", ChildInput{
+		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
+	}); err != nil {
+		return err
+	}
+	if input.ParentID == "" && input.ExpectedParentRevision != 0 {
+		return &InputError{Field: "expected_parent_revision", Message: "must be zero when parent_id is omitted"}
+	}
+	if input.ParentID != "" {
+		if strings.TrimSpace(string(input.ParentID)) == "" {
+			return &InputError{Field: "parent_id", Message: "must not be blank"}
+		}
+		if input.ExpectedParentRevision == 0 {
+			return &InputError{Field: "expected_parent_revision", Message: "must be greater than zero for a child Task"}
+		}
+	}
+	return ValidateIdempotencyKey(input.IdempotencyKey)
+}
+
+func ValidateDecomposeInput(input DecomposeInput) error {
+	if input.ExpectedRevision == 0 {
+		return &InputError{Field: "expected_revision", Message: "must be greater than zero"}
+	}
+	if len(input.Children) == 0 {
+		return &InputError{Field: "children", Message: "must contain at least one child"}
+	}
+	if len(input.Children) > MaxDecomposeChildren {
+		return &InputError{Field: "children", Message: fmt.Sprintf("must not exceed %d children", MaxDecomposeChildren)}
+	}
+	for i, child := range input.Children {
+		if err := validateTaskContent(fmt.Sprintf("children[%d].", i), child); err != nil {
+			return err
+		}
+	}
+	return ValidateIdempotencyKey(input.IdempotencyKey)
+}
+
+func validateTaskContent(prefix string, input ChildInput) error {
 	if strings.TrimSpace(input.Title) == "" {
-		return &InputError{Field: "title", Message: "must not be blank"}
+		return &InputError{Field: prefix + "title", Message: "must not be blank"}
 	}
 	if input.Priority < 0 || input.Priority > 5 {
-		return &InputError{Field: "priority", Message: "must be zero or between one and five"}
+		return &InputError{Field: prefix + "priority", Message: "must be zero or between one and five"}
 	}
 	if input.DueDate != "" {
 		parsed, err := time.Parse("2006-01-02", input.DueDate)
 		if err != nil || parsed.Format("2006-01-02") != input.DueDate {
-			return &InputError{Field: "due", Message: "must be a valid YYYY-MM-DD owner-local date"}
+			return &InputError{Field: prefix + "due", Message: "must be a valid YYYY-MM-DD owner-local date"}
 		}
 	}
-	return ValidateIdempotencyKey(input.IdempotencyKey)
+	return nil
+}
+
+func ValidateTreeQuery(query TreeQuery) error {
+	if query.MaxDepth < 0 || query.MaxDepth > MaxTreeDepth {
+		return &InputError{Field: "max_depth", Message: fmt.Sprintf("must be between zero and %d", MaxTreeDepth)}
+	}
+	return nil
 }
 
 func ValidateUpdateInput(input UpdateInput) error {

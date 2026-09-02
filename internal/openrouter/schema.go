@@ -64,10 +64,12 @@ type Parameter struct {
 // Property describes a single tool argument. Items is only set when Type is
 // "array" (the element type); Enum restricts a string to fixed values.
 type Property struct {
-	Type        string    `json:"type"`
-	Items       *Property `json:"items,omitempty"`
-	Description string    `json:"description,omitempty"`
-	Enum        []string  `json:"enum,omitempty"`
+	Type        string              `json:"type"`
+	Items       *Property           `json:"items,omitempty"`
+	Properties  map[string]Property `json:"properties,omitempty"`
+	Required    []string            `json:"required,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Enum        []string            `json:"enum,omitempty"`
 }
 
 // ToolCall is the model asking for one tool to be run. Its ID must be

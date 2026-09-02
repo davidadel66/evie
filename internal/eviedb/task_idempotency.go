@@ -41,14 +41,28 @@ func idempotencySHA256(key task.IdempotencyKey) string {
 
 func canonicalCreateRequestSHA256(input task.CreateInput) (string, error) {
 	return canonicalMutationSHA256(struct {
-		Version     int        `json:"version"`
-		Operation   string     `json:"operation"`
-		Scope       task.Scope `json:"scope"`
-		Title       string     `json:"title"`
-		Description string     `json:"description"`
-		Priority    int        `json:"priority"`
-		DueDate     string     `json:"due_date"`
-	}{1, string(task.OperationCreate), task.ScopeGlobal, input.Title, input.Description, input.Priority, input.DueDate})
+		Version                int        `json:"version"`
+		Operation              string     `json:"operation"`
+		Scope                  task.Scope `json:"scope"`
+		Title                  string     `json:"title"`
+		Description            string     `json:"description"`
+		Priority               int        `json:"priority"`
+		DueDate                string     `json:"due_date"`
+		ParentID               task.ID    `json:"parent_id"`
+		ExpectedParentRevision uint64     `json:"expected_parent_revision"`
+	}{1, string(task.OperationCreate), task.ScopeGlobal, input.Title, input.Description, input.Priority, input.DueDate,
+		input.ParentID, input.ExpectedParentRevision})
+}
+
+func canonicalDecomposeRequestSHA256(id task.ID, input task.DecomposeInput) (string, error) {
+	return canonicalMutationSHA256(struct {
+		Version          int               `json:"version"`
+		Operation        string            `json:"operation"`
+		Scope            task.Scope        `json:"scope"`
+		TaskID           task.ID           `json:"task_id"`
+		ExpectedRevision uint64            `json:"expected_revision"`
+		Children         []task.ChildInput `json:"children"`
+	}{1, string(task.OperationDecompose), task.ScopeGlobal, id, input.ExpectedRevision, input.Children})
 }
 
 func canonicalUpdateRequestSHA256(id task.ID, input task.UpdateInput) (string, error) {
@@ -103,12 +117,19 @@ func readMutationResult(
 	attribution task.MutationAttribution,
 	identitySHA256 string,
 ) (mutationResult, bool, error) {
+	claim, found, err := readIdempotencyClaim(ctx, conn, attribution, identitySHA256)
+	if err != nil || !found {
+		return mutationResult{}, found, err
+	}
+	if claim.Operation != task.OperationCreate && claim.Operation != task.OperationUpdate {
+		return mutationResult{RequestSHA256: claim.RequestSHA256, Operation: claim.Operation}, true, nil
+	}
 	var (
 		result                                       mutationResult
 		taskID, eventID, field, fromStatus, toStatus sql.NullString
 		previous, resulting                          sql.NullInt64
 	)
-	err := conn.QueryRowContext(ctx, `
+	err = conn.QueryRowContext(ctx, `
 		SELECT request_sha256, operation, task_id, event_id, outcome_code, diagnostic_field,
 		       previous_revision, resulting_revision, from_status, to_status
 		FROM task_mutation_results
@@ -117,9 +138,6 @@ func readMutationResult(
 		&result.RequestSHA256, &result.Operation, &taskID, &eventID, &result.OutcomeCode, &field,
 		&previous, &resulting, &fromStatus, &toStatus,
 	)
-	if err == sql.ErrNoRows {
-		return mutationResult{}, false, nil
-	}
 	if err != nil {
 		return mutationResult{}, false, fmt.Errorf("read Task mutation result: %w", err)
 	}
@@ -139,6 +157,51 @@ func readMutationResult(
 	return result, true, nil
 }
 
+type idempotencyClaim struct {
+	RequestSHA256 string
+	Operation     task.Operation
+}
+
+func readIdempotencyClaim(
+	ctx context.Context,
+	conn *sql.Conn,
+	attribution task.MutationAttribution,
+	identitySHA256 string,
+) (idempotencyClaim, bool, error) {
+	var claim idempotencyClaim
+	err := conn.QueryRowContext(ctx, `
+		SELECT request_sha256, operation
+		FROM task_idempotency_claims
+		WHERE actor_id = ? AND session_id = ? AND identity_sha256 = ?
+	`, attribution.ActorID, attribution.SessionID, identitySHA256).Scan(&claim.RequestSHA256, &claim.Operation)
+	if err == sql.ErrNoRows {
+		return idempotencyClaim{}, false, nil
+	}
+	if err != nil {
+		return idempotencyClaim{}, false, fmt.Errorf("read Task idempotency claim: %w", err)
+	}
+	return claim, true, nil
+}
+
+func insertIdempotencyClaim(
+	ctx context.Context,
+	conn *sql.Conn,
+	attribution task.MutationAttribution,
+	identitySHA256, requestSHA256 string,
+	operation task.Operation,
+	recordedAt time.Time,
+) error {
+	_, err := conn.ExecContext(ctx, `
+		INSERT INTO task_idempotency_claims (
+			actor_id, session_id, identity_sha256, request_sha256, operation, recorded_at
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`, attribution.ActorID, attribution.SessionID, identitySHA256, requestSHA256, operation, formatTaskTime(recordedAt))
+	if err != nil {
+		return fmt.Errorf("insert Task idempotency claim: %w", err)
+	}
+	return nil
+}
+
 func insertMutationResult(
 	ctx context.Context,
 	conn *sql.Conn,
@@ -147,6 +210,9 @@ func insertMutationResult(
 	result mutationResult,
 	recordedAt time.Time,
 ) error {
+	if err := insertIdempotencyClaim(ctx, conn, attribution, identitySHA256, requestSHA256, result.Operation, recordedAt); err != nil {
+		return err
+	}
 	_, err := conn.ExecContext(ctx, `
 		INSERT INTO task_mutation_results (
 			actor_id, session_id, run_id, identity_sha256, request_sha256, operation,
@@ -159,6 +225,16 @@ func insertMutationResult(
 		formatTaskTime(recordedAt))
 	if err != nil {
 		return fmt.Errorf("insert Task mutation result: %w", err)
+	}
+	return nil
+}
+
+func linkTaskEventIdempotency(ctx context.Context, conn *sql.Conn, eventID, identitySHA256 string) error {
+	_, err := conn.ExecContext(ctx, `
+		INSERT INTO task_event_idempotency (event_id, identity_sha256) VALUES (?, ?)
+	`, eventID, identitySHA256)
+	if err != nil {
+		return fmt.Errorf("link Task event idempotency: %w", err)
 	}
 	return nil
 }
@@ -186,10 +262,12 @@ func insertTaskRevision(ctx context.Context, conn *sql.Conn, value task.Task) er
 
 func getTaskRevision(ctx context.Context, conn *sql.Conn, id task.ID, revision uint64) (task.Task, error) {
 	return scanTask(conn.QueryRowContext(ctx, `
-		SELECT task_id, scope, title, description, priority, due_date,
-		       status, revision, created_at, updated_at
-		FROM task_revisions
-		WHERE task_id = ? AND revision = ?
+		SELECT r.task_id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
+		       r.scope, r.title, r.description, r.priority, r.due_date,
+		       r.status, r.revision, r.created_at, r.updated_at
+		FROM task_revisions r
+		JOIN task_hierarchy h ON h.task_id = r.task_id
+		WHERE r.task_id = ? AND r.revision = ?
 	`, id, revision))
 }
 
@@ -205,6 +283,19 @@ func insertIdempotencyConflict(
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return fmt.Errorf("generate Task idempotency conflict ID: %w", err)
+	}
+	if operation == task.OperationDecompose {
+		_, err = conn.ExecContext(ctx, `
+			INSERT INTO task_decomposition_conflicts (
+				id, actor_id, session_id, identity_sha256, original_request_sha256,
+				attempted_request_sha256, parent_id, recorded_at
+			) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)
+		`, id.String(), attribution.ActorID, attribution.SessionID, identitySHA256, originalRequestSHA256,
+			attemptedRequestSHA256, taskID, formatTaskTime(recordedAt))
+		if err != nil {
+			return fmt.Errorf("insert Task decomposition idempotency conflict: %w", err)
+		}
+		return nil
 	}
 	_, err = conn.ExecContext(ctx, `
 		INSERT INTO task_idempotency_conflicts (

@@ -15,11 +15,12 @@ import (
 )
 
 type taskServiceFixture struct {
-	created task.Task
-	listed  []task.Task
-	create  []task.CreateInput
-	get     []task.ID
-	updates []task.UpdateInput
+	created   task.Task
+	listed    []task.Task
+	create    []task.CreateInput
+	get       []task.ID
+	updates   []task.UpdateInput
+	decompose []task.DecomposeInput
 }
 
 func TestTodoPluginRealSQLiteManagerPathCreatesListsAndGetsExactlyOnce(t *testing.T) {
@@ -191,6 +192,64 @@ func TestTodoPluginDispatchesIdempotentMutationsThroughSQLite(t *testing.T) {
 	}
 }
 
+func TestTodoPluginDispatchesOrderedTaskTreesThroughSQLite(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager, err := NewManager(tools.NewToolset(nil), NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetEnabled(TodoPluginID, true); err != nil {
+		t.Fatal(err)
+	}
+	toolset, err := manager.NewSessionToolset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootOutcome := executeTodoTool(t, toolset, "todo_add", `{"title":"tree root","idempotency_key":"tree-root"}`)
+	var root task.Task
+	if rootOutcome.IsErr || json.Unmarshal([]byte(rootOutcome.Content), &root) != nil {
+		t.Fatalf("root outcome = %+v", rootOutcome)
+	}
+	childOutcome := executeTodoTool(t, toolset, "todo_add",
+		`{"title":"single child","parent_id":"`+string(root.ID)+`","expected_parent_revision":1,"idempotency_key":"single-child"}`)
+	var child task.Task
+	if childOutcome.IsErr || json.Unmarshal([]byte(childOutcome.Content), &child) != nil || child.ParentID != root.ID {
+		t.Fatalf("child outcome = %+v child=%+v", childOutcome, child)
+	}
+	arguments := `{"task_id":"` + string(root.ID) + `","expected_revision":2,"children":[{"title":"research"},{"title":"verify"}],"idempotency_key":"tree-batch"}`
+	first := executeTodoTool(t, toolset, "todo_decompose", arguments)
+	retry := executeTodoTool(t, toolset, "todo_decompose", arguments)
+	var decomposed task.Decomposition
+	if first.IsErr || retry.IsErr || first.Content != retry.Content || json.Unmarshal([]byte(first.Content), &decomposed) != nil ||
+		pluginTaskTitles(decomposed.Children) != "research,verify" || decomposed.Parent.Revision != 3 {
+		t.Fatalf("decomposition outcomes = first %+v retry %+v decoded=%+v", first, retry, decomposed)
+	}
+	list := executeTodoTool(t, toolset, "todo_list", `{"root_id":"`+string(root.ID)+`"}`)
+	var listed []task.Task
+	if list.IsErr || json.Unmarshal([]byte(list.Content), &listed) != nil || pluginTaskTitles(listed) != "tree root,single child,research,verify" {
+		t.Fatalf("tree list = %+v decoded=%+v", list, listed)
+	}
+	treeOutcome := executeTodoTool(t, toolset, "todo_get",
+		`{"task_id":"`+string(root.ID)+`","include_tree":true,"max_depth":4}`)
+	var tree task.Tree
+	if treeOutcome.IsErr || json.Unmarshal([]byte(treeOutcome.Content), &tree) != nil || len(tree.Children) != 3 || tree.Truncated {
+		t.Fatalf("tree get = %+v decoded=%+v", treeOutcome, tree)
+	}
+}
+
+func pluginTaskTitles(values []task.Task) string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = value.Title
+	}
+	return strings.Join(result, ",")
+}
+
 func (s *taskServiceFixture) CreateGlobalTask(_ context.Context, input task.CreateInput) (task.Task, error) {
 	s.create = append(s.create, input)
 	return s.created, nil
@@ -209,9 +268,18 @@ func (s *taskServiceFixture) GetGlobalTask(_ context.Context, id task.ID) (task.
 	return s.created, nil
 }
 
+func (s *taskServiceFixture) GetGlobalTaskTree(_ context.Context, _ task.ID, _ task.TreeQuery) (task.Tree, error) {
+	return task.Tree{Task: s.created}, nil
+}
+
 func (s *taskServiceFixture) UpdateGlobalTask(_ context.Context, _ task.ID, input task.UpdateInput) (task.Task, error) {
 	s.updates = append(s.updates, input)
 	return s.created, nil
+}
+
+func (s *taskServiceFixture) DecomposeGlobalTask(_ context.Context, _ task.ID, input task.DecomposeInput) (task.Decomposition, error) {
+	s.decompose = append(s.decompose, input)
+	return task.Decomposition{}, nil
 }
 
 func (s *taskServiceFixture) ListTaskEvents(context.Context, task.ID) ([]task.Event, error) {
@@ -293,6 +361,7 @@ func TestTodoPluginRejectsForgedIdentitiesAndUnknownInputBeforeService(t *testin
 		{name: "update run", tool: "todo_update", args: `{"task_id":"x","expected_revision":1,"run_id":"forged","title":"x"}`},
 		{name: "update event", tool: "todo_update", args: `{"task_id":"x","expected_revision":1,"event_id":"forged","title":"x"}`},
 		{name: "list run", tool: "todo_list", args: `{"run_id":"forged"}`},
+		{name: "decompose actor", tool: "todo_decompose", args: `{"task_id":"x","expected_revision":1,"children":[{"title":"child"}],"idempotency_key":"key","actor_id":"forged"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -302,8 +371,8 @@ func TestTodoPluginRejectsForgedIdentitiesAndUnknownInputBeforeService(t *testin
 			}
 		})
 	}
-	if len(service.create) != 0 || len(service.get) != 0 {
-		t.Fatalf("forged input reached service: create %#v get %#v", service.create, service.get)
+	if len(service.create) != 0 || len(service.get) != 0 || len(service.decompose) != 0 {
+		t.Fatalf("forged input reached service: create %#v get %#v decompose %#v", service.create, service.get, service.decompose)
 	}
 }
 
@@ -342,8 +411,16 @@ func (missingTaskService) GetGlobalTask(_ context.Context, id task.ID) (task.Tas
 	return task.Task{}, &task.NotFoundError{ID: id}
 }
 
+func (missingTaskService) GetGlobalTaskTree(_ context.Context, id task.ID, _ task.TreeQuery) (task.Tree, error) {
+	return task.Tree{}, &task.NotFoundError{ID: id}
+}
+
 func (missingTaskService) UpdateGlobalTask(_ context.Context, id task.ID, _ task.UpdateInput) (task.Task, error) {
 	return task.Task{}, &task.NotFoundError{ID: id}
+}
+
+func (missingTaskService) DecomposeGlobalTask(_ context.Context, id task.ID, _ task.DecomposeInput) (task.Decomposition, error) {
+	return task.Decomposition{}, &task.NotFoundError{ID: id}
 }
 
 func (missingTaskService) ListTaskEvents(context.Context, task.ID) ([]task.Event, error) {

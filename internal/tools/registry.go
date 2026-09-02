@@ -89,6 +89,11 @@ func cloneSchema(schema openrouter.Tool) openrouter.Tool {
 
 func cloneProperty(property openrouter.Property) openrouter.Property {
 	clone := property
+	clone.Properties = make(map[string]openrouter.Property, len(property.Properties))
+	for name, nested := range property.Properties {
+		clone.Properties[name] = cloneProperty(nested)
+	}
+	clone.Required = append([]string(nil), property.Required...)
 	clone.Enum = append([]string(nil), property.Enum...)
 	if property.Items != nil {
 		items := cloneProperty(*property.Items)

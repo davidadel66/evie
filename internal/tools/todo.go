@@ -127,6 +127,74 @@ var todoIdempotentUpdateTool = func() openrouter.Tool {
 	return tool
 }()
 
+var todoTreeListTool = func() openrouter.Tool {
+	tool := cloneSchema(todoLifecycleListTool)
+	tool.Function.Description = "List durable Tasks with deterministic Task Tree filters"
+	tool.Function.Parameters.Properties["root_id"] = openrouter.Property{
+		Type: "string", Description: "Optional Task Tree root identity; returns that root and its descendants",
+	}
+	tool.Function.Parameters.Properties["parent_id"] = openrouter.Property{
+		Type: "string", Description: "Optional parent Task identity; returns its direct children",
+	}
+	return tool
+}()
+
+var todoTreeAddTool = func() openrouter.Tool {
+	tool := TodoIdempotentAddTool().Schema
+	tool.Function.Description = "Create a durable Task Tree root or one child beneath an existing Task"
+	tool.Function.Parameters.Properties["parent_id"] = openrouter.Property{
+		Type: "string", Description: "Parent Task identity when creating a child",
+	}
+	tool.Function.Parameters.Properties["expected_parent_revision"] = openrouter.Property{
+		Type: "integer", Description: "Exact parent revision required when parent_id is supplied",
+	}
+	return tool
+}()
+
+var todoTreeGetTool = func() openrouter.Tool {
+	tool := cloneSchema(todoGetTool)
+	tool.Function.Description = "Retrieve one durable Task or a bounded recursive Task Tree"
+	tool.Function.Parameters.Properties["include_tree"] = openrouter.Property{
+		Type: "boolean", Description: "Return the selected Task and bounded descendants as a recursive tree",
+	}
+	tool.Function.Parameters.Properties["max_depth"] = openrouter.Property{
+		Type: "integer", Description: "Maximum descendant depth from one to 64; defaults to eight",
+	}
+	tool.Function.Parameters.Properties["include_history"] = openrouter.Property{
+		Type: "boolean", Description: "Include completed and cancelled descendants in a tree result",
+	}
+	return tool
+}()
+
+var todoDecomposeTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_decompose",
+		Description: "Atomically create an ordered batch of child Tasks beneath one parent",
+		Parameters: openrouter.Parameter{
+			Type:     "object",
+			Required: []string{"task_id", "expected_revision", "children", "idempotency_key"},
+			Properties: map[string]openrouter.Property{
+				"task_id":           {Type: "string", Description: "Parent Task identity"},
+				"expected_revision": {Type: "integer", Description: "Exact current parent revision"},
+				"idempotency_key":   {Type: "string", Description: "Caller identity reused only when retrying this exact decomposition"},
+				"children": {
+					Type: "array", Description: "Ordered child Tasks to create",
+					Items: &openrouter.Property{
+						Type: "object", Required: []string{"title"},
+						Properties: map[string]openrouter.Property{
+							"title":       {Type: "string", Description: "Concise child Task title"},
+							"description": {Type: "string", Description: "Optional child Task description"},
+							"priority":    {Type: "integer", Description: "Optional priority from zero to five"},
+							"due":         {Type: "string", Description: "Optional YYYY-MM-DD due date"},
+						},
+					},
+				},
+			},
+		},
+	},
+}
+
 // TodoTools returns fresh definitions for the existing model-facing Todo
 // tools. The Todo first-party plugin attaches canonical Capability identities
 // while preserving these schemas and execution functions unchanged.
@@ -164,6 +232,18 @@ func TodoIdempotentAddTool() Tool {
 
 // TodoIdempotentUpdateTool is the current revision-checked mutation schema.
 func TodoIdempotentUpdateTool() Tool { return Tool{Schema: cloneSchema(todoIdempotentUpdateTool)} }
+
+// TodoTreeListTool is the hierarchy-aware current list schema.
+func TodoTreeListTool() Tool { return Tool{Schema: cloneSchema(todoTreeListTool)} }
+
+// TodoTreeAddTool is the hierarchy-aware current add schema.
+func TodoTreeAddTool() Tool { return Tool{Schema: cloneSchema(todoTreeAddTool)} }
+
+// TodoTreeGetTool is the bounded recursive current get schema.
+func TodoTreeGetTool() Tool { return Tool{Schema: cloneSchema(todoTreeGetTool)} }
+
+// TodoDecomposeTool is the atomic ordered child-batch schema.
+func TodoDecomposeTool() Tool { return Tool{Schema: cloneSchema(todoDecomposeTool)} }
 
 // toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.
