@@ -44,6 +44,19 @@ type canonicalValidTime struct {
 	To   *string `json:"to"`
 }
 
+func encodeCanonicalValidTime(value memory.ValidTime) canonicalValidTime {
+	encoded := canonicalValidTime{}
+	if value.From != nil {
+		from := formatSemanticTime(*value.From)
+		encoded.From = &from
+	}
+	if value.To != nil {
+		to := formatSemanticTime(*value.To)
+		encoded.To = &to
+	}
+	return encoded
+}
+
 type canonicalClaim struct {
 	ClaimID          memory.SemanticID    `json:"claim_id"`
 	ScopeKey         string               `json:"scope_key"`
@@ -73,7 +86,7 @@ type canonicalSourceLink struct {
 	SourceType   memory.SemanticSourceType `json:"source_type"`
 	Authority    memory.SourceAuthority    `json:"authority"`
 	ObservedAt   string                    `json:"observed_at"`
-	Eligibility  string                    `json:"eligibility"`
+	Eligibility  memory.SourceEligibility  `json:"eligibility"`
 }
 
 type canonicalEffect struct {
@@ -174,7 +187,7 @@ func canonicalRememberLiteralProposal(proposal memory.RememberLiteralProposal) c
 			ClaimID: proposal.ClaimID, ScopeKey: proposal.Scope.Key, SubjectEntityID: proposal.Subject.ID,
 			PredicateID: proposal.Predicate.ID, PredicateToken: proposal.Predicate.Token,
 			PredicateVersion: proposal.Predicate.Version, Object: canonicalClaimObject{Literal: proposal.Literal},
-			Polarity: proposal.Polarity, ValidTime: canonicalValidTime{}, Lifecycle: "active",
+			Polarity: proposal.Polarity, ValidTime: encodeCanonicalValidTime(proposal.ValidTime), Lifecycle: "active",
 		}}
 	} else {
 		effect.Claims = []canonicalClaim{}
@@ -186,7 +199,7 @@ func canonicalRememberLiteralProposal(proposal memory.RememberLiteralProposal) c
 				LocatorKind: proposal.Source.LocatorKind, LocatorValue: proposal.Source.LocatorValue,
 				EvidenceSHA256: proposal.Source.EvidenceSHA256},
 			Actor: proposal.Source.Actor, SourceType: proposal.Source.SourceType, Authority: proposal.Source.Authority,
-			ObservedAt: proposal.Source.ObservedAt, Eligibility: "eligible",
+			ObservedAt: proposal.Source.ObservedAt, Eligibility: memory.EligibilityEligible,
 		}}
 	} else {
 		effect.SourceLinks = []canonicalSourceLink{}
@@ -238,7 +251,7 @@ func canonicalRememberEntityProposal(proposal memory.RememberEntityProposal) can
 			SubjectEntityID: proposal.Claim.SubjectEntityID, PredicateID: proposal.Claim.PredicateID,
 			PredicateToken: proposal.Claim.PredicateToken, PredicateVersion: proposal.Claim.PredicateVersion,
 			Object:   canonicalEntityClaimObject{EntityID: proposal.Claim.ObjectEntityID},
-			Polarity: proposal.Claim.Polarity, ValidTime: canonicalValidTime{}, Lifecycle: "active",
+			Polarity: proposal.Claim.Polarity, ValidTime: encodeCanonicalValidTime(proposal.Claim.ValidTime), Lifecycle: "active",
 		})
 	}
 	if proposal.Source.Create {
@@ -248,7 +261,7 @@ func canonicalRememberEntityProposal(proposal memory.RememberEntityProposal) can
 				LocatorKind: proposal.Source.LocatorKind, LocatorValue: proposal.Source.LocatorValue,
 				EvidenceSHA256: proposal.Source.EvidenceSHA256},
 			Actor: proposal.Source.Actor, SourceType: proposal.Source.SourceType,
-			Authority: proposal.Source.Authority, ObservedAt: proposal.Source.ObservedAt, Eligibility: "eligible",
+			Authority: proposal.Source.Authority, ObservedAt: proposal.Source.ObservedAt, Eligibility: memory.EligibilityEligible,
 		})
 	}
 	return canonicalEntityProposal{

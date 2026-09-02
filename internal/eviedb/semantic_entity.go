@@ -28,6 +28,25 @@ func targetScopeKey(scope memory.ScopeContext, useSession bool) string {
 	return scopeKeyForContext(scope)
 }
 
+func normalizeEntityRequest(request memory.RememberEntityRequest) (memory.RememberEntityRequest, error) {
+	cardinality, polarity, validTime, err := normalizeClaimSemantics(
+		request.PredicateCardinality, memory.CardinalityMany, request.Polarity, request.ValidTime,
+	)
+	if err != nil {
+		return memory.RememberEntityRequest{}, err
+	}
+	request.PredicateCardinality, request.Polarity, request.ValidTime = cardinality, polarity, validTime
+	return request, nil
+}
+
+func entityRequestsEqual(left, right memory.RememberEntityRequest) bool {
+	return left.IdempotencyKey == right.IdempotencyKey && left.SourceEventID == right.SourceEventID &&
+		left.Predicate == right.Predicate && left.PredicateLabel == right.PredicateLabel &&
+		left.PredicateCardinality == right.PredicateCardinality && left.Polarity == right.Polarity &&
+		validTimesEqual(left.ValidTime, right.ValidTime) && left.Subject == right.Subject && left.Object == right.Object &&
+		left.UseSessionScope == right.UseSessionScope
+}
+
 func loadOwnerSource(row rowScanner, sessionID memory.SessionID, eventID memory.EventID, scopeKey string) (memory.SemanticSource, error) {
 	var source memory.SemanticSource
 	var eventSession, eventType, role, content, recordedAt string
@@ -47,7 +66,7 @@ func loadOwnerSource(row rowScanner, sessionID memory.SessionID, eventID memory.
 		EventPart: memory.EvidenceContent, LocatorKind: memory.LocatorWhole,
 		EvidenceSHA256: fmt.Sprintf("sha256:%x", digest), Actor: memory.SemanticActorOwner,
 		SourceType: memory.SourceTypeUserMessage, Authority: memory.AuthorityOwnerStatement,
-		ObservedAt: formatSemanticTime(observed), Evidence: content, Create: true,
+		ObservedAt: formatSemanticTime(observed), Evidence: content, Eligibility: memory.EligibilityEligible, Create: true,
 	}, nil
 }
 
@@ -242,6 +261,11 @@ func validateEntityIdentity(entity memory.SemanticEntity) error {
 // PrepareRememberEntity resolves all canonical anchors, ordinary Entities,
 // Aliases, the Entity-object Claim, and its Source Link for one approval preview.
 func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeContext, request memory.RememberEntityRequest) (memory.RememberEntityProposal, error) {
+	var err error
+	request, err = normalizeEntityRequest(request)
+	if err != nil {
+		return memory.RememberEntityProposal{}, err
+	}
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
@@ -254,13 +278,16 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		return memory.RememberEntityProposal{}, errors.New("entity Claim requires a valid Predicate token and label")
 	}
 	var priorJSON, priorHash string
-	err := s.db.QueryRowContext(ctx, `SELECT prepared_proposal_json, proposal_sha256 FROM semantic_operations WHERE idempotency_key = ?`, request.IdempotencyKey).Scan(&priorJSON, &priorHash)
+	err = s.db.QueryRowContext(ctx, `SELECT prepared_proposal_json, proposal_sha256 FROM semantic_operations WHERE idempotency_key = ?`, request.IdempotencyKey).Scan(&priorJSON, &priorHash)
 	if err == nil {
 		var proposal memory.RememberEntityProposal
 		if decodeErr := json.Unmarshal([]byte(priorJSON), &proposal); decodeErr != nil {
 			return proposal, decodeErr
 		}
-		if proposal.Request != request || proposal.SessionID != scope.SessionID {
+		if proposal.Source.Eligibility == "" {
+			proposal.Source.Eligibility = memory.EligibilityEligible
+		}
+		if !entityRequestsEqual(proposal.Request, request) || proposal.SessionID != scope.SessionID {
 			return memory.RememberEntityProposal{}, ErrIdempotencyConflict
 		}
 		proposal.ProposalSHA256 = priorHash
@@ -302,16 +329,24 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 			return memory.RememberEntityProposal{}, err
 		}
 	}
-	predicate := memory.SemanticPredicate{Token: request.Predicate, Version: 1, Label: request.PredicateLabel,
-		ObjectConstraint: memory.ConstraintEntity, Cardinality: memory.CardinalityMany}
+	predicate := memory.SemanticPredicate{Token: request.Predicate, Label: request.PredicateLabel,
+		ObjectConstraint: memory.ConstraintEntity, Cardinality: request.PredicateCardinality}
 	err = s.db.QueryRowContext(ctx, `
-		SELECT predicate_id, label, object_constraint, cardinality FROM semantic_predicates WHERE token = ? AND version = 1
-	`, predicate.Token).Scan(&predicate.ID, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
+		SELECT predicate_id, version, label, object_constraint, cardinality
+		FROM semantic_predicates WHERE token = ? ORDER BY version DESC LIMIT 1
+	`, predicate.Token).Scan(&predicate.ID, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
 	if errors.Is(err, sql.ErrNoRows) {
 		predicate.ID, err = newSemanticID()
+		predicate.Version = 1
 		predicate.Create = true
-	} else if err == nil && predicate.ObjectConstraint != memory.ConstraintEntity {
-		return memory.RememberEntityProposal{}, errors.New("Predicate definition does not accept an Entity object")
+	} else if err == nil && (predicate.Label != request.PredicateLabel || predicate.ObjectConstraint != memory.ConstraintEntity ||
+		predicate.Cardinality != request.PredicateCardinality) {
+		predicate.ID, err = newSemanticID()
+		predicate.Version++
+		predicate.Label = request.PredicateLabel
+		predicate.ObjectConstraint = memory.ConstraintEntity
+		predicate.Cardinality = request.PredicateCardinality
+		predicate.Create = true
 	}
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
@@ -357,12 +392,13 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 
 	claim := memory.SemanticEntityClaim{ScopeKey: targetKey, SubjectEntityID: subject.ID, PredicateID: predicate.ID,
 		PredicateToken: predicate.Token, PredicateVersion: predicate.Version, ObjectEntityID: object.ID,
-		Polarity: memory.PolarityAffirmed}
+		Polarity: request.Polarity, ValidTime: request.ValidTime}
 	err = s.db.QueryRowContext(ctx, `
 		SELECT claim_id FROM semantic_claims
 		WHERE scope_id = ? AND subject_entity_id = ? AND predicate_id = ? AND object_kind = 'entity'
-		  AND object_entity_id = ? AND polarity = 'affirmed' AND valid_from IS NULL AND valid_to IS NULL
-	`, target.ID, subject.ID, predicate.ID, object.ID).Scan(&claim.ID)
+		  AND object_entity_id = ? AND polarity = ? AND valid_from IS ? AND valid_to IS ?
+	`, target.ID, subject.ID, predicate.ID, object.ID, request.Polarity,
+		semanticTimeArgument(request.ValidTime.From), semanticTimeArgument(request.ValidTime.To)).Scan(&claim.ID)
 	if errors.Is(err, sql.ErrNoRows) {
 		claim.ID, err = newSemanticID()
 		claim.Create = true
@@ -474,7 +510,8 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 		validateSemanticUUID(strings.TrimPrefix(proposal.IdempotencyKey, "idem:v1:")) != nil {
 		return errors.New("Entity proposal idempotency key is invalid")
 	}
-	if proposal.Predicate.Version != 1 || proposal.Predicate.Cardinality != memory.CardinalityMany ||
+	if proposal.Predicate.Version < 1 ||
+		(proposal.Predicate.Cardinality != memory.CardinalityOne && proposal.Predicate.Cardinality != memory.CardinalityMany) ||
 		len(proposal.Predicate.Token) > 64 || !predicateTokenPattern.MatchString(proposal.Predicate.Token) ||
 		strings.TrimSpace(proposal.Predicate.Label) == "" || !utf8.ValidString(proposal.Predicate.Label) ||
 		!utf8.ValidString(proposal.Request.PredicateLabel) || strings.TrimSpace(proposal.Request.PredicateLabel) == "" {
@@ -504,14 +541,18 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 	if proposal.Claim.ScopeKey != proposal.Scope.Key ||
 		proposal.Claim.PredicateID != proposal.Predicate.ID ||
 		proposal.Claim.PredicateToken != proposal.Predicate.Token ||
-		proposal.Claim.PredicateVersion != proposal.Predicate.Version {
+		proposal.Claim.PredicateVersion != proposal.Predicate.Version ||
+		proposal.Claim.Polarity != proposal.Request.Polarity ||
+		!validTimesEqual(proposal.Claim.ValidTime, proposal.Request.ValidTime) ||
+		proposal.Predicate.Cardinality != proposal.Request.PredicateCardinality ||
+		proposal.Predicate.Label != proposal.Request.PredicateLabel {
 		return errors.New("Entity Claim does not match its prepared scope or Predicate")
 	}
 	if proposal.Source.EventID != proposal.Request.SourceEventID || proposal.Source.SessionID != proposal.SessionID ||
 		proposal.Source.ScopeKey != proposal.Scope.Key || proposal.Source.EventPart != memory.EvidenceContent ||
 		proposal.Source.LocatorKind != memory.LocatorWhole || proposal.Source.LocatorValue != "" ||
 		proposal.Source.Actor != memory.SemanticActorOwner || proposal.Source.SourceType != memory.SourceTypeUserMessage ||
-		proposal.Source.Authority != memory.AuthorityOwnerStatement {
+		proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Eligibility != memory.EligibilityEligible {
 		return errors.New("Entity proposal Source is not canonical owner-message provenance")
 	}
 	if proposal.Source.Create {
@@ -582,10 +623,14 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 		return result, errors.New("semantic proposal hash changed")
 	}
 	if proposal.SchemaVersion != 1 || proposal.Kind != "remember_entity_claim" || proposal.Actor != memory.SemanticActorOwner ||
-		proposal.Claim.Polarity != memory.PolarityAffirmed || proposal.Claim.ValidTime.From != nil || proposal.Claim.ValidTime.To != nil ||
+		(proposal.Claim.Polarity != memory.PolarityAffirmed && proposal.Claim.Polarity != memory.PolarityDenied) ||
 		proposal.Predicate.ObjectConstraint != memory.ConstraintEntity || proposal.ResultingRevision != proposal.Scope.Revision+1 ||
 		len(proposal.ResultingRevisions) != len(proposal.Scopes) {
 		return result, errors.New("invalid Entity-object Claim proposal")
+	}
+	if normalized, validTimeErr := normalizeValidTime(proposal.Claim.ValidTime); validTimeErr != nil ||
+		!validTimesEqual(normalized, proposal.Claim.ValidTime) {
+		return result, errors.New("invalid Entity-object Claim Valid Time")
 	}
 	ids := []memory.SemanticID{proposal.OperationID, proposal.Predicate.ID, proposal.Claim.ID, proposal.Source.ID, proposal.Scope.ID}
 	for _, entity := range proposal.Entities {
@@ -633,7 +678,8 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			source.LocatorKind != proposal.Source.LocatorKind || source.LocatorValue != proposal.Source.LocatorValue ||
 			source.Evidence != proposal.Source.Evidence || source.EvidenceSHA256 != proposal.Source.EvidenceSHA256 ||
 			source.Actor != proposal.Source.Actor || source.SourceType != proposal.Source.SourceType ||
-			source.Authority != proposal.Source.Authority || source.ObservedAt != proposal.Source.ObservedAt {
+			source.Authority != proposal.Source.Authority || source.ObservedAt != proposal.Source.ObservedAt ||
+			source.Eligibility != proposal.Source.Eligibility {
 			return errors.New("semantic source evidence changed")
 		}
 
@@ -685,6 +731,17 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			return err
 		}
 		if proposal.Predicate.Create {
+			var latest int64
+			err := writer.queryRowContext(ctx, `SELECT version FROM semantic_predicates WHERE token = ? ORDER BY version DESC LIMIT 1`,
+				proposal.Predicate.Token).Scan(&latest)
+			if errors.Is(err, sql.ErrNoRows) {
+				latest = 0
+			} else if err != nil {
+				return err
+			}
+			if proposal.Predicate.Version != latest+1 {
+				return errors.New("semantic Predicate version changed after preparation")
+			}
 			if _, err := writer.execContext(ctx, `INSERT INTO semantic_predicates (predicate_id, token, version, label, object_constraint, cardinality, created_operation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				proposal.Predicate.ID, proposal.Predicate.Token, proposal.Predicate.Version, proposal.Predicate.Label,
 				proposal.Predicate.ObjectConstraint, proposal.Predicate.Cardinality, proposal.OperationID); err != nil {
@@ -750,15 +807,19 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 				INSERT INTO semantic_claims (
 					claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
 					object_kind, object_entity_id, polarity, valid_from, valid_to, lifecycle, created_operation_id, transaction_time
-				) VALUES (?, ?, ?, ?, ?, ?, 'entity', ?, 'affirmed', NULL, NULL, 'active', ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, 'entity', ?, ?, ?, ?, 'active', ?, ?)
 			`, proposal.Claim.ID, proposal.Scope.ID, proposal.Claim.SubjectEntityID, proposal.Predicate.ID,
-				proposal.Predicate.Token, proposal.Predicate.Version, proposal.Claim.ObjectEntityID, proposal.OperationID, transactionText); err != nil {
+				proposal.Predicate.Token, proposal.Predicate.Version, proposal.Claim.ObjectEntityID, proposal.Claim.Polarity,
+				semanticTimeArgument(proposal.Claim.ValidTime.From), semanticTimeArgument(proposal.Claim.ValidTime.To),
+				proposal.OperationID, transactionText); err != nil {
 				return err
 			}
 		} else {
 			var id string
-			if err := writer.queryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE claim_id = ? AND scope_id = ? AND subject_entity_id = ? AND predicate_id = ? AND object_kind = 'entity' AND object_entity_id = ? AND polarity = 'affirmed' AND valid_from IS NULL AND valid_to IS NULL`,
-				proposal.Claim.ID, proposal.Scope.ID, proposal.Claim.SubjectEntityID, proposal.Predicate.ID, proposal.Claim.ObjectEntityID).Scan(&id); err != nil {
+			if err := writer.queryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE claim_id = ? AND scope_id = ? AND subject_entity_id = ? AND predicate_id = ? AND object_kind = 'entity' AND object_entity_id = ? AND polarity = ? AND valid_from IS ? AND valid_to IS ?`,
+				proposal.Claim.ID, proposal.Scope.ID, proposal.Claim.SubjectEntityID, proposal.Predicate.ID,
+				proposal.Claim.ObjectEntityID, proposal.Claim.Polarity,
+				semanticTimeArgument(proposal.Claim.ValidTime.From), semanticTimeArgument(proposal.Claim.ValidTime.To)).Scan(&id); err != nil {
 				return errors.New("semantic Claim changed after preparation")
 			}
 		}

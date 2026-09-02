@@ -8,6 +8,9 @@ type LiteralKind string
 type PredicateObjectConstraint string
 type PredicateCardinality string
 type ClaimPolarity string
+type ClaimConflictCode string
+type SourceEligibility string
+type SemanticStateValue string
 type SemanticActor string
 type SemanticSourceType string
 type SourceAuthority string
@@ -28,6 +31,16 @@ const (
 
 	PolarityAffirmed ClaimPolarity = "affirmed"
 	PolarityDenied   ClaimPolarity = "denied"
+
+	ConflictOppositePolarity ClaimConflictCode  = "opposite_polarity"
+	ConflictOneCardinality   ClaimConflictCode  = "one_cardinality_overlap"
+	EligibilityEligible      SourceEligibility  = "eligible"
+	EligibilityRetracted     SourceEligibility  = "retracted"
+	SemanticStateActive      SemanticStateValue = "active"
+	SemanticStateRetired     SemanticStateValue = "retired"
+	SemanticStateSuperseded  SemanticStateValue = "superseded"
+	SemanticStateEligible    SemanticStateValue = "eligible"
+	SemanticStateRetracted   SemanticStateValue = "retracted"
 
 	SemanticActorOwner      SemanticActor      = "owner"
 	SourceTypeUserMessage   SemanticSourceType = "user_message"
@@ -111,6 +124,7 @@ type SemanticSource struct {
 	Authority      SourceAuthority     `json:"authority"`
 	ObservedAt     string              `json:"observed_at"`
 	Evidence       string              `json:"evidence"`
+	Eligibility    SourceEligibility   `json:"eligibility"`
 	Create         bool                `json:"create"`
 }
 
@@ -120,35 +134,40 @@ type ValidTime struct {
 }
 
 type RememberLiteralRequest struct {
-	IdempotencyKey string
-	SourceEventID  EventID
-	Predicate      string
-	PredicateLabel string
-	Literal        TypedLiteral
+	IdempotencyKey       string
+	SourceEventID        EventID
+	Predicate            string
+	PredicateLabel       string
+	PredicateCardinality PredicateCardinality
+	Literal              TypedLiteral
+	Polarity             ClaimPolarity
+	ValidTime            ValidTime
 }
 
 type RememberLiteralProposal struct {
-	SchemaVersion    int               `json:"schema_version"`
-	Kind             string            `json:"kind"`
-	OperationID      SemanticID        `json:"operation_id"`
-	IdempotencyKey   string            `json:"idempotency_key"`
-	Actor            SemanticActor     `json:"actor"`
-	SessionID        SessionID         `json:"session_id"`
-	Scope            SemanticScope     `json:"scope"`
-	Scopes           []SemanticScope   `json:"scopes"`
-	PriorRevisions   []ScopeRevision   `json:"prior_revisions"`
-	ExpectedRevision int64             `json:"expected_revision"`
-	Predicate        SemanticPredicate `json:"predicate"`
-	Subject          SemanticEntity    `json:"subject"`
-	Evie             SemanticEntity    `json:"evie"`
-	ClaimID          SemanticID        `json:"claim_id"`
-	ClaimCreate      bool              `json:"claim_create"`
-	SourceLinkID     SemanticID        `json:"source_link_id"`
-	Literal          TypedLiteral      `json:"literal"`
-	Polarity         ClaimPolarity     `json:"polarity"`
-	ValidTime        ValidTime         `json:"valid_time"`
-	Source           SemanticSource    `json:"source"`
-	ProposalSHA256   string            `json:"-"`
+	SchemaVersion    int                    `json:"schema_version"`
+	Kind             string                 `json:"kind"`
+	OperationID      SemanticID             `json:"operation_id"`
+	IdempotencyKey   string                 `json:"idempotency_key"`
+	Actor            SemanticActor          `json:"actor"`
+	SessionID        SessionID              `json:"session_id"`
+	Scope            SemanticScope          `json:"scope"`
+	Scopes           []SemanticScope        `json:"scopes"`
+	PriorRevisions   []ScopeRevision        `json:"prior_revisions"`
+	ExpectedRevision int64                  `json:"expected_revision"`
+	Predicate        SemanticPredicate      `json:"predicate"`
+	Subject          SemanticEntity         `json:"subject"`
+	Evie             SemanticEntity         `json:"evie"`
+	ClaimID          SemanticID             `json:"claim_id"`
+	ClaimCreate      bool                   `json:"claim_create"`
+	SourceLinkID     SemanticID             `json:"source_link_id"`
+	Literal          TypedLiteral           `json:"literal"`
+	Polarity         ClaimPolarity          `json:"polarity"`
+	ValidTime        ValidTime              `json:"valid_time"`
+	Source           SemanticSource         `json:"source"`
+	Request          RememberLiteralRequest `json:"request"`
+	ProposalSHA256   string                 `json:"-"`
+	PreparedSHA256   string                 `json:"-"`
 }
 
 type RememberLiteralResult struct {
@@ -173,13 +192,29 @@ type LiteralClaimInspection struct {
 	EffectiveAt     time.Time         `json:"effective_at"`
 	Source          SemanticSource    `json:"source"`
 	Sources         []SemanticSource  `json:"sources,omitempty"`
+	Lifecycle       []SemanticState   `json:"lifecycle"`
+}
+
+type SemanticState struct {
+	State           SemanticStateValue `json:"state"`
+	OperationID     SemanticID         `json:"operation_id"`
+	ScopeRevision   int64              `json:"scope_revision"`
+	TransactionTime time.Time          `json:"transaction_time"`
+}
+
+type ClaimConflictWarning struct {
+	Code           ClaimConflictCode `json:"code"`
+	PredicateToken string            `json:"predicate_token"`
+	ClaimIDs       []SemanticID      `json:"claim_ids"`
 }
 
 type LiteralClaimsInspection struct {
-	Scope         SemanticScope            `json:"scope"`
-	ScopeRevision int64                    `json:"scope_revision"`
-	EffectiveAt   time.Time                `json:"effective_at"`
-	Claims        []LiteralClaimInspection `json:"claims"`
+	Scope          SemanticScope            `json:"scope"`
+	ScopeRevision  int64                    `json:"scope_revision"`
+	EffectiveAt    time.Time                `json:"effective_at"`
+	Claims         []LiteralClaimInspection `json:"claims"`
+	Warnings       []ClaimConflictWarning   `json:"warnings"`
+	ConflictClaims []LiteralClaimInspection `json:"conflict_claims"`
 }
 
 type EntitySelector struct {
@@ -191,13 +226,16 @@ type EntitySelector struct {
 }
 
 type RememberEntityRequest struct {
-	IdempotencyKey  string
-	SourceEventID   EventID
-	Predicate       string
-	PredicateLabel  string
-	Subject         EntitySelector
-	Object          EntitySelector
-	UseSessionScope bool
+	IdempotencyKey       string
+	SourceEventID        EventID
+	Predicate            string
+	PredicateLabel       string
+	PredicateCardinality PredicateCardinality
+	Polarity             ClaimPolarity
+	ValidTime            ValidTime
+	Subject              EntitySelector
+	Object               EntitySelector
+	UseSessionScope      bool
 }
 
 type SemanticEntityClaim struct {
@@ -258,11 +296,14 @@ type EntityClaimInspection struct {
 	OperationID     SemanticID          `json:"operation_id"`
 	TransactionTime time.Time           `json:"transaction_time"`
 	Sources         []SemanticSource    `json:"sources"`
+	Lifecycle       []SemanticState     `json:"lifecycle"`
 }
 
 type EntityClaimsInspection struct {
-	Scope         SemanticScope           `json:"scope"`
-	ScopeRevision int64                   `json:"scope_revision"`
-	EffectiveAt   time.Time               `json:"effective_at"`
-	Claims        []EntityClaimInspection `json:"claims"`
+	Scope          SemanticScope           `json:"scope"`
+	ScopeRevision  int64                   `json:"scope_revision"`
+	EffectiveAt    time.Time               `json:"effective_at"`
+	Claims         []EntityClaimInspection `json:"claims"`
+	Warnings       []ClaimConflictWarning  `json:"warnings"`
+	ConflictClaims []EntityClaimInspection `json:"conflict_claims"`
 }

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/google/uuid"
@@ -297,7 +298,9 @@ func validateSemanticUUID(value string) error {
 func validateLiteral(literal memory.TypedLiteral) error {
 	switch literal.Kind {
 	case memory.LiteralText:
-		return nil
+		if utf8.ValidString(literal.Value) {
+			return nil
+		}
 	case memory.LiteralInteger:
 		if integerPattern.MatchString(literal.Value) {
 			return nil
@@ -323,6 +326,84 @@ func validateLiteral(literal memory.TypedLiteral) error {
 		return fmt.Errorf("unsupported literal kind %q", literal.Kind)
 	}
 	return fmt.Errorf("literal %q is not canonical for kind %q", literal.Value, literal.Kind)
+}
+
+func normalizeValidTime(value memory.ValidTime) (memory.ValidTime, error) {
+	normalizeBound := func(source *time.Time) (*time.Time, error) {
+		if source == nil {
+			return nil, nil
+		}
+		utc := source.UTC()
+		encoded := formatSemanticTime(utc)
+		parsed, err := parseSemanticTime(encoded)
+		if err != nil || !parsed.Equal(utc) {
+			return nil, errors.New("Valid Time bound is outside the canonical UTC datetime encoding")
+		}
+		return &utc, nil
+	}
+	from, err := normalizeBound(value.From)
+	if err != nil {
+		return memory.ValidTime{}, err
+	}
+	to, err := normalizeBound(value.To)
+	if err != nil {
+		return memory.ValidTime{}, err
+	}
+	normalized := memory.ValidTime{From: from, To: to}
+	if normalized.From != nil && normalized.To != nil && !normalized.From.Before(*normalized.To) {
+		return memory.ValidTime{}, errors.New("Valid Time must be a non-empty half-open interval")
+	}
+	return normalized, nil
+}
+
+func semanticTimeArgument(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return formatSemanticTime(*value)
+}
+
+func validTimesEqual(left, right memory.ValidTime) bool {
+	return nullableTimesEqual(left.From, right.From) && nullableTimesEqual(left.To, right.To)
+}
+
+func nullableTimesEqual(left, right *time.Time) bool {
+	return left == nil && right == nil || left != nil && right != nil && left.Equal(*right)
+}
+
+func normalizeClaimSemantics(
+	cardinality, defaultCardinality memory.PredicateCardinality,
+	polarity memory.ClaimPolarity,
+	validTime memory.ValidTime,
+) (memory.PredicateCardinality, memory.ClaimPolarity, memory.ValidTime, error) {
+	if cardinality == "" {
+		cardinality = defaultCardinality
+	}
+	if cardinality != memory.CardinalityOne && cardinality != memory.CardinalityMany {
+		return "", "", memory.ValidTime{}, fmt.Errorf("unsupported Predicate cardinality %q", cardinality)
+	}
+	if polarity == "" {
+		polarity = memory.PolarityAffirmed
+	}
+	if polarity != memory.PolarityAffirmed && polarity != memory.PolarityDenied {
+		return "", "", memory.ValidTime{}, fmt.Errorf("unsupported Claim polarity %q", polarity)
+	}
+	normalizedTime, err := normalizeValidTime(validTime)
+	if err != nil {
+		return "", "", memory.ValidTime{}, err
+	}
+	return cardinality, polarity, normalizedTime, nil
+}
+
+func normalizeLiteralRequest(request memory.RememberLiteralRequest) (memory.RememberLiteralRequest, error) {
+	cardinality, polarity, validTime, err := normalizeClaimSemantics(
+		request.PredicateCardinality, memory.CardinalityOne, request.Polarity, request.ValidTime,
+	)
+	if err != nil {
+		return memory.RememberLiteralRequest{}, err
+	}
+	request.PredicateCardinality, request.Polarity, request.ValidTime = cardinality, polarity, validTime
+	return request, nil
 }
 
 type semanticScopeDraft struct {
@@ -408,6 +489,11 @@ func (s *Store) PrepareRememberLiteral(
 	scope memory.ScopeContext,
 	request memory.RememberLiteralRequest,
 ) (memory.RememberLiteralProposal, error) {
+	var err error
+	request, err = normalizeLiteralRequest(request)
+	if err != nil {
+		return memory.RememberLiteralProposal{}, err
+	}
 	if err := validateSessionScope(ctx, s.db, scope); err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
@@ -426,7 +512,7 @@ func (s *Store) PrepareRememberLiteral(
 	}
 
 	var priorProposalJSON, priorHash string
-	err := s.db.QueryRowContext(ctx, `SELECT prepared_proposal_json, proposal_sha256 FROM semantic_operations WHERE idempotency_key = ?`,
+	err = s.db.QueryRowContext(ctx, `SELECT prepared_proposal_json, proposal_sha256 FROM semantic_operations WHERE idempotency_key = ?`,
 		request.IdempotencyKey).Scan(&priorProposalJSON, &priorHash)
 	if err == nil {
 		var proposal memory.RememberLiteralProposal
@@ -453,12 +539,21 @@ func (s *Store) PrepareRememberLiteral(
 		if proposal.Source.OperationID == "" {
 			proposal.Source.OperationID = proposal.OperationID
 		}
+		if proposal.Source.Eligibility == "" {
+			proposal.Source.Eligibility = memory.EligibilityEligible
+		}
+		proposal.Request = request
 		if proposal.SessionID != scope.SessionID || proposal.Source.EventID != request.SourceEventID ||
 			proposal.Predicate.Token != request.Predicate || proposal.Predicate.Label != request.PredicateLabel ||
-			proposal.Literal != request.Literal {
+			proposal.Predicate.Cardinality != request.PredicateCardinality || proposal.Literal != request.Literal ||
+			proposal.Polarity != request.Polarity || !validTimesEqual(proposal.ValidTime, request.ValidTime) {
 			return memory.RememberLiteralProposal{}, ErrIdempotencyConflict
 		}
 		proposal.ProposalSHA256 = priorHash
+		proposal.PreparedSHA256, _, err = semanticHash(proposal)
+		if err != nil {
+			return memory.RememberLiteralProposal{}, fmt.Errorf("hash accepted prepared proposal: %w", err)
+		}
 		return proposal, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -494,17 +589,25 @@ func (s *Store) PrepareRememberLiteral(
 		}
 	}
 
-	predicate := memory.SemanticPredicate{Token: request.Predicate, Version: 1, Label: request.PredicateLabel,
-		ObjectConstraint: memory.PredicateObjectConstraint(request.Literal.Kind), Cardinality: "one"}
+	predicate := memory.SemanticPredicate{Token: request.Predicate, Label: request.PredicateLabel,
+		ObjectConstraint: memory.PredicateObjectConstraint(request.Literal.Kind), Cardinality: request.PredicateCardinality}
 	err = s.db.QueryRowContext(ctx, `
-		SELECT predicate_id, label, object_constraint, cardinality
-		FROM semantic_predicates WHERE token = ? AND version = 1
-	`, predicate.Token).Scan(&predicate.ID, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
+		SELECT predicate_id, version, label, object_constraint, cardinality
+		FROM semantic_predicates WHERE token = ? ORDER BY version DESC LIMIT 1
+	`, predicate.Token).Scan(&predicate.ID, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
 	if errors.Is(err, sql.ErrNoRows) {
 		predicate.ID, err = newSemanticID()
+		predicate.Version = 1
 		predicate.Create = true
-	} else if err == nil && (predicate.ObjectConstraint != memory.PredicateObjectConstraint(request.Literal.Kind) || predicate.Cardinality != "one") {
-		return memory.RememberLiteralProposal{}, errors.New("Predicate definition does not accept this literal")
+	} else if err == nil && (predicate.Label != request.PredicateLabel ||
+		predicate.ObjectConstraint != memory.PredicateObjectConstraint(request.Literal.Kind) ||
+		predicate.Cardinality != request.PredicateCardinality) {
+		predicate.ID, err = newSemanticID()
+		predicate.Version++
+		predicate.Label = request.PredicateLabel
+		predicate.ObjectConstraint = memory.PredicateObjectConstraint(request.Literal.Kind)
+		predicate.Cardinality = request.PredicateCardinality
+		predicate.Create = true
 	}
 	if err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("resolve Predicate: %w", err)
@@ -545,12 +648,14 @@ func (s *Store) PrepareRememberLiteral(
 	}
 	var claimID memory.SemanticID
 	claimCreate := false
+	validFrom, validTo := semanticTimeArgument(request.ValidTime.From), semanticTimeArgument(request.ValidTime.To)
 	err = s.db.QueryRowContext(ctx, `
 		SELECT claim_id FROM semantic_claims
 		WHERE scope_id = ? AND subject_entity_id = ? AND predicate_id = ? AND object_kind = 'literal'
-		  AND literal_kind = ? AND literal_value = ? AND polarity = 'affirmed'
-		  AND valid_from IS NULL AND valid_to IS NULL
-	`, target.ID, subject.ID, predicate.ID, request.Literal.Kind, request.Literal.Value).Scan(&claimID)
+		  AND literal_kind = ? AND literal_value = ? AND polarity = ?
+		  AND valid_from IS ? AND valid_to IS ?
+	`, target.ID, subject.ID, predicate.ID, request.Literal.Kind, request.Literal.Value, request.Polarity,
+		validFrom, validTo).Scan(&claimID)
 	if errors.Is(err, sql.ErrNoRows) {
 		claimID, err = newSemanticID()
 		claimCreate = true
@@ -591,17 +696,22 @@ func (s *Store) PrepareRememberLiteral(
 		IdempotencyKey: request.IdempotencyKey, Actor: "owner", SessionID: scope.SessionID,
 		Scope: target.SemanticScope, Scopes: scopes, PriorRevisions: prior, ExpectedRevision: target.Revision,
 		Predicate: predicate, Subject: subject, Evie: evie, ClaimID: claimID, ClaimCreate: claimCreate, SourceLinkID: sourceLinkID,
-		Literal: request.Literal, Polarity: "affirmed", ValidTime: memory.ValidTime{},
+		Literal: request.Literal, Polarity: request.Polarity, ValidTime: request.ValidTime,
 		Source: memory.SemanticSource{
 			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: targetKey,
 			EventPart: "content", LocatorKind: "whole", LocatorValue: "",
 			EvidenceSHA256: evidenceHash, Actor: "owner", SourceType: "user_message",
-			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content, Create: sourceCreate,
-		},
+			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content,
+			Eligibility: memory.EligibilityEligible, Create: sourceCreate,
+		}, Request: request,
 	}
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalRememberLiteralProposal(proposal))
 	if err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("hash proposal: %w", err)
+	}
+	proposal.PreparedSHA256, _, err = semanticHash(proposal)
+	if err != nil {
+		return memory.RememberLiteralProposal{}, fmt.Errorf("hash prepared proposal: %w", err)
 	}
 	return proposal, nil
 }
@@ -832,14 +942,22 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 	if proposal.SchemaVersion != 1 || proposal.Kind != "remember_literal_claim" || proposal.Actor != "owner" {
 		return errors.New("unsupported semantic proposal")
 	}
-	if proposal.Polarity != "affirmed" || proposal.ValidTime.From != nil || proposal.ValidTime.To != nil {
-		return errors.New("remember literal proposals must be timeless affirmed Claims")
+	if proposal.Polarity != memory.PolarityAffirmed && proposal.Polarity != memory.PolarityDenied {
+		return errors.New("remember literal proposal Claim polarity is invalid")
 	}
-	if proposal.ExpectedRevision != proposal.Scope.Revision || proposal.Predicate.Version != 1 ||
-		proposal.Predicate.ObjectConstraint != memory.PredicateObjectConstraint(proposal.Literal.Kind) || proposal.Predicate.Cardinality != "one" ||
+	normalizedValidTime, err := normalizeValidTime(proposal.ValidTime)
+	if err != nil || !validTimesEqual(normalizedValidTime, proposal.ValidTime) {
+		return errors.New("remember literal proposal Valid Time is invalid")
+	}
+	if proposal.ExpectedRevision != proposal.Scope.Revision || proposal.Predicate.Version < 1 ||
+		proposal.Predicate.ObjectConstraint != memory.PredicateObjectConstraint(proposal.Literal.Kind) ||
+		(proposal.Predicate.Cardinality != memory.CardinalityOne && proposal.Predicate.Cardinality != memory.CardinalityMany) ||
 		len(proposal.Predicate.Token) > 64 || !predicateTokenPattern.MatchString(proposal.Predicate.Token) ||
-		strings.TrimSpace(proposal.Predicate.Label) == "" {
+		strings.TrimSpace(proposal.Predicate.Label) == "" || !utf8.ValidString(proposal.Predicate.Label) {
 		return errors.New("remember literal proposal Predicate or revision is invalid")
+	}
+	if proposal.Request.IdempotencyKey != "" && !literalRequestMatchesProposal(proposal.Request, proposal) {
+		return fmt.Errorf("%w: remember literal proposal differs from its prepared request", ErrIdempotencyConflict)
 	}
 	if proposal.Subject.ScopeKey != "global" || proposal.Subject.CanonicalName != "owner" ||
 		proposal.Subject.EntityType != "person" || proposal.Subject.AnchorKind != "owner" {
@@ -851,7 +969,8 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 	}
 	if proposal.Source.EventPart != "content" || proposal.Source.LocatorKind != "whole" ||
 		proposal.Source.LocatorValue != "" || proposal.Source.Actor != "owner" ||
-		proposal.Source.SourceType != "user_message" || proposal.Source.Authority != "owner_statement" {
+		proposal.Source.SourceType != "user_message" || proposal.Source.Authority != "owner_statement" ||
+		proposal.Source.Eligibility != memory.EligibilityEligible {
 		return errors.New("remember literal proposal source attributes are invalid")
 	}
 	if proposal.Source.Create {
@@ -862,6 +981,13 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 		return errors.New("reused literal Source Link omits its creating operation")
 	}
 	return validateLiteral(proposal.Literal)
+}
+
+func literalRequestMatchesProposal(request memory.RememberLiteralRequest, proposal memory.RememberLiteralProposal) bool {
+	return request.IdempotencyKey == proposal.IdempotencyKey && request.SourceEventID == proposal.Source.EventID &&
+		request.Predicate == proposal.Predicate.Token && request.PredicateLabel == proposal.Predicate.Label &&
+		request.PredicateCardinality == proposal.Predicate.Cardinality && request.Literal == proposal.Literal &&
+		request.Polarity == proposal.Polarity && validTimesEqual(request.ValidTime, proposal.ValidTime)
 }
 
 // ApplyRememberLiteral revalidates the complete proposal and commits its
@@ -879,12 +1005,16 @@ func (s *Store) ApplyRememberLiteral(
 	if err != nil {
 		return result, err
 	}
-	_, preparedProposalJSON, err := semanticHash(proposal)
+	preparedHash, preparedProposalJSON, err := semanticHash(proposal)
 	if err != nil {
 		return result, err
 	}
 	if err := validateRememberLiteralProposal(proposal); err != nil {
 		return result, err
+	}
+	if proposal.ProposalSHA256 == "" || proposal.ProposalSHA256 != proposalHash ||
+		proposal.PreparedSHA256 == "" || proposal.PreparedSHA256 != preparedHash {
+		return result, errors.New("semantic proposal hash changed")
 	}
 	for _, id := range []string{string(proposal.OperationID), string(proposal.Predicate.ID), string(proposal.Subject.ID),
 		string(proposal.Evie.ID), string(proposal.ClaimID), string(proposal.SourceLinkID), string(proposal.Source.OperationID), string(proposal.Scope.ID)} {
@@ -914,9 +1044,6 @@ func (s *Store) ApplyRememberLiteral(
 		}
 		if !errors.Is(existingErr, sql.ErrNoRows) {
 			return existingErr
-		}
-		if proposal.ProposalSHA256 != "" && proposal.ProposalSHA256 != proposalHash {
-			return errors.New("semantic proposal hash changed")
 		}
 		if err := validateProposalSessionScope(ctx, writer, proposal); err != nil {
 			return err
@@ -986,6 +1113,17 @@ func (s *Store) ApplyRememberLiteral(
 			return err
 		}
 		if proposal.Predicate.Create {
+			var latest int64
+			err := writer.queryRowContext(ctx, `SELECT version FROM semantic_predicates WHERE token = ? ORDER BY version DESC LIMIT 1`,
+				proposal.Predicate.Token).Scan(&latest)
+			if errors.Is(err, sql.ErrNoRows) {
+				latest = 0
+			} else if err != nil {
+				return err
+			}
+			if proposal.Predicate.Version != latest+1 {
+				return errors.New("semantic Predicate version changed after preparation")
+			}
 			if _, err := writer.execContext(ctx, `
 				INSERT INTO semantic_predicates (predicate_id, token, version, label, object_constraint, cardinality, created_operation_id)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1048,10 +1186,11 @@ func (s *Store) ApplyRememberLiteral(
 					claim_id, scope_id, subject_entity_id, predicate_id, predicate_token, predicate_version,
 					object_kind, literal_kind, literal_value, polarity, valid_from, valid_to, lifecycle,
 					created_operation_id, transaction_time
-				) VALUES (?, ?, ?, ?, ?, ?, 'literal', ?, ?, ?, NULL, NULL, 'active', ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, 'literal', ?, ?, ?, ?, ?, 'active', ?, ?)
 			`, proposal.ClaimID, proposal.Scope.ID, proposal.Subject.ID, proposal.Predicate.ID,
 				proposal.Predicate.Token, proposal.Predicate.Version, proposal.Literal.Kind, proposal.Literal.Value,
-				proposal.Polarity, proposal.OperationID, transactionText); err != nil {
+				proposal.Polarity, semanticTimeArgument(proposal.ValidTime.From), semanticTimeArgument(proposal.ValidTime.To),
+				proposal.OperationID, transactionText); err != nil {
 				return fmt.Errorf("create semantic Claim: %w", err)
 			}
 		} else {
@@ -1060,9 +1199,10 @@ func (s *Store) ApplyRememberLiteral(
 				SELECT claim_id FROM semantic_claims
 				WHERE claim_id = ? AND scope_id = ? AND subject_entity_id = ? AND predicate_id = ?
 				  AND object_kind = 'literal' AND literal_kind = ? AND literal_value = ?
-				  AND polarity = 'affirmed' AND valid_from IS NULL AND valid_to IS NULL
+				  AND polarity = ? AND valid_from IS ? AND valid_to IS ?
 			`, proposal.ClaimID, proposal.Scope.ID, proposal.Subject.ID, proposal.Predicate.ID,
-				proposal.Literal.Kind, proposal.Literal.Value).Scan(&id); err != nil {
+				proposal.Literal.Kind, proposal.Literal.Value, proposal.Polarity,
+				semanticTimeArgument(proposal.ValidTime.From), semanticTimeArgument(proposal.ValidTime.To)).Scan(&id); err != nil {
 				return errors.New("semantic Claim changed after preparation")
 			}
 		}
