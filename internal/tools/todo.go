@@ -58,6 +58,24 @@ var todoAddTool = openrouter.Tool{
 	},
 }
 
+var todoGetTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_get",
+		Description: "Retrieve one durable task by its stable identity",
+		Parameters: openrouter.Parameter{
+			Type:     "object",
+			Required: []string{"task_id"},
+			Properties: map[string]openrouter.Property{
+				"task_id": {
+					Type:        "string",
+					Description: "The opaque task identity returned by todo_add or todo_list",
+				},
+			},
+		},
+	},
+}
+
 // TodoTools returns fresh definitions for the existing model-facing Todo
 // tools. The Todo first-party plugin attaches canonical Capability identities
 // while preserving these schemas and execution functions unchanged.
@@ -66,6 +84,13 @@ func TodoTools() []Tool {
 		{Schema: cloneSchema(todoListTool), Execute: toDoList},
 		{Schema: cloneSchema(todoAddTool), Execute: toDoAdd},
 	}
+}
+
+// TodoGetTool returns the durable task identity lookup schema. Unlike the two
+// legacy Todo definitions, its execution behavior is supplied only by the
+// first-party Todo plugin.
+func TodoGetTool() Tool {
+	return Tool{Schema: cloneSchema(todoGetTool)}
 }
 
 // toDoList shells out to `todo list` and returns its output verbatim for

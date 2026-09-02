@@ -20,11 +20,12 @@ import (
 const (
 	EvieVersion                    = "1.0.0"
 	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:6490dc45771d4fc2d865fa9c3380d660b8100ad2c77bc79007c8d4e7b2053694"
+	StandardPresetVersion          = "sha256:d3bb965df9ac07057a94b4816e42e072130335422baa0f0ce3d38cffa8702554"
 
 	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
 	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
 	preTodoStandardPresetVersion    = "sha256:8149efdcc636e89d8c404c181cfa595bfe8ab09b38bffbefb756f73e99e5d6c0"
+	preDurableTodoPresetVersion     = "sha256:6490dc45771d4fc2d865fa9c3380d660b8100ad2c77bc79007c8d4e7b2053694"
 )
 
 type PresetID string
@@ -82,6 +83,27 @@ func standardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	return Preset{
 		ID: StandardPresetID,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+			{ID: TodoListCapabilityID, Compatibility: compatibility},
+			{ID: TodoAddCapabilityID, Compatibility: compatibility},
+			{ID: TodoGetCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preDurableTodoStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preDurableTodoPresetVersion,
 		RequiredCapabilities: []CapabilityRequirement{
 			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
 			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
@@ -522,6 +544,9 @@ func (m *Manager) ResumeCompositionContext(
 		return m.resumePresetWithBase(
 			preTodoStandardPreset(), tools.PreTodoExtractionKernelToolset(), receipt, TodoPluginID,
 		)
+	}
+	if receipt.Preset.Version == preDurableTodoPresetVersion {
+		return m.resumePreset(preDurableTodoStandardPreset(), receipt)
 	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }

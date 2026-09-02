@@ -35,7 +35,7 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if got := canonicalPresetVersion(standardPresetContent()); got != StandardPresetVersion {
 		t.Fatalf("standard canonical version = %q, want reserved %q", got, StandardPresetVersion)
 	}
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 		WithTools(tools.FinanceTools()).
 		WithTools(tools.WebTools()).
 		WithTools(tools.YouTubeTools()).
-		WithTools(tools.TodoTools()))
+		WithTools(append(tools.TodoTools(), tools.TodoGetTool())))
 	if got := schemaNames(composition.Toolset); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("standard schemas = %v, want %v", got, wantSchemas)
 	}
@@ -130,7 +130,7 @@ func TestPreYouTubeExtractionStandardReceiptResumesWithoutMutation(t *testing.T)
 		t.Fatal(err)
 	}
 
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestPostMemoryPreYouTubeStandardReceiptResumesWithoutMutation(t *testing.T)
 		t.Fatal(err)
 	}
 
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestPreTodoExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,6 +256,75 @@ func TestPreTodoExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
 		if countSchema(resumed.Toolset, name) != 1 {
 			t.Fatalf("pre-Todo resume exposes %q %d times", name, countSchema(resumed.Toolset, name))
 		}
+	}
+}
+
+type preDurableTodoPlugin struct{}
+
+func (preDurableTodoPlugin) Start(context.Context) error { return nil }
+
+func (preDurableTodoPlugin) Stop(context.Context) error { return nil }
+
+func (preDurableTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.0.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.0.0"},
+			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+
+func (preDurableTodoPlugin) ToolCapabilities() []ToolCapability {
+	definitions := tools.TodoTools()
+	return []ToolCapability{
+		{ID: TodoListCapabilityID, ContractVersion: "1.0.0", Tool: definitions[0]},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", Tool: definitions[1]},
+	}
+}
+
+func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *testing.T) {
+	if got := canonicalPresetVersion(preDurableTodoStandardPreset()); got != preDurableTodoPresetVersion {
+		t.Fatalf("pre-durable-Todo canonical version = %q, want frozen %q", got, preDurableTodoPresetVersion)
+	}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preDurableTodoPlugin{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preDurableTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) ||
+		!reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed frozen composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.1.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 }
 
@@ -371,7 +440,7 @@ func TestReceiptRejectsContentThatCouldCarryCredentials(t *testing.T) {
 }
 
 func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +480,7 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 }
 
 func TestResumeCompositionContextCancelsEnabledStateRefresh(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}

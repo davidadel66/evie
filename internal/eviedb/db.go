@@ -36,6 +36,22 @@ CREATE TABLE IF NOT EXISTS plugin_enabled_configuration (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tasks (
+    id          TEXT PRIMARY KEY NOT NULL CHECK (typeof(id) = 'text' AND length(trim(id)) > 0),
+    scope       TEXT NOT NULL CHECK (typeof(scope) = 'text' AND scope = 'global'),
+    title       TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
+    description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
+    priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
+    due_date    TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+    status      TEXT NOT NULL CHECK (typeof(status) = 'text' AND status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')),
+    revision    INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
+    created_at  TEXT NOT NULL CHECK (typeof(created_at) = 'text'),
+    updated_at  TEXT NOT NULL CHECK (typeof(updated_at) = 'text')
+);
+
+CREATE INDEX IF NOT EXISTS tasks_scope_status_created_idx
+ON tasks(scope, status, created_at, id);
+
 CREATE TABLE IF NOT EXISTS projects (
     id             TEXT PRIMARY KEY NOT NULL,
     display_name   TEXT NOT NULL,

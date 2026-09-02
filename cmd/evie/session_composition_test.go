@@ -456,7 +456,7 @@ func TestSessionCompositionRealSQLiteReopenBlocksEveryIncompatibleReplacement(t 
 			defer db.Close()
 			store := eviedb.NewStore(db)
 			session := onlySession(t, ctx, db)
-			manager, managerErr := newReplacementSessionCompositionManager(pinned.Receipt, tc.mutation)
+			manager, managerErr := newReplacementSessionCompositionManager(t, pinned.Receipt, tc.mutation)
 			if tc.managerErr {
 				if managerErr == nil || !strings.Contains(managerErr.Error(), tc.want) {
 					t.Fatalf("replacement Manager error = %v, want containing %q", managerErr, tc.want)
@@ -552,7 +552,7 @@ func replacementSessionCompositionManager(
 	mutation replacementMutation,
 ) *plugins.Manager {
 	t.Helper()
-	manager, err := newReplacementSessionCompositionManager(receipt, mutation)
+	manager, err := newReplacementSessionCompositionManager(t, receipt, mutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,9 +565,11 @@ func replacementSessionCompositionManager(
 }
 
 func newReplacementSessionCompositionManager(
+	t *testing.T,
 	receipt composition.Receipt,
 	mutation replacementMutation,
 ) (*plugins.Manager, error) {
+	t.Helper()
 	finance := plugins.NewFinance()
 	manifest := finance.Manifest()
 	manifest.ImplementationVersion = "1.1.0"
@@ -599,7 +601,7 @@ func newReplacementSessionCompositionManager(
 		manifest.ResumableFrom = []plugins.ImplementationCompatibility{declaration}
 	}
 	return plugins.NewManager(
-		tools.KernelToolset(), plugins.NewWeb(), plugins.NewYouTube(), plugins.NewTodo(),
+		tools.KernelToolset(), plugins.NewWeb(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)),
 		compatibilityTestPlugin{manifest: manifest, capabilities: capabilities},
 	)
 }
@@ -767,7 +769,7 @@ func (s barrierCompositionStore) GetCompositionReceipt(
 
 func sessionCompositionManager(t *testing.T) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo())
+	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

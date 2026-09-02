@@ -2,12 +2,15 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -23,7 +26,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstManager := standardManager(t)
+	firstManager := standardManager(t, store)
 	first, err := firstManager.ResolvePreset("")
 	if err != nil {
 		t.Fatal(err)
@@ -48,19 +51,20 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if !reflect.DeepEqual(receipt, first.Receipt) {
 		t.Fatalf("reopened receipt = %#v, want %#v", receipt, first.Receipt)
 	}
-	secondManager := standardManager(t)
+	secondManager := standardManager(t, store)
 	resumed, err := secondManager.ResumeComposition(receipt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(tools.TodoTools()).Schemas()
+	wantTodo := append(tools.TodoTools(), tools.TodoGetTool())
+	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.0.0"},
+		{ID: "todo", ImplementationVersion: "1.1.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -71,7 +75,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.0.0", "todo.add@1.0.0",
+		"todo.list@1.0.0", "todo.add@1.0.0", "todo.get@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -83,7 +87,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 
 	client := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("selected-call", "youtube_transcript", `{}`)),
-		assistantStep("", nil, toolCall("todo-call", "todo_list", `{}`)),
+		assistantStep("", nil, toolCall("todo-call", "todo_add", `{"title":"created through standard","priority":5,"due":"2026-09-03"}`)),
 		assistantStep("", nil, toolCall("absent-call", "absent_standard_tool", `{}`)),
 		assistantStep("done", nil),
 	}}
@@ -107,13 +111,25 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 			t.Fatalf("scripted request %d schemas = %#v, want %#v", i, request.Tools, wantSchemas)
 		}
 	}
+	created, err := store.ListOpenGlobalTasks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 1 || created[0].Title != "created through standard" || created[0].Priority != 5 ||
+		created[0].DueDate != "2026-09-03" || created[0].Scope != task.ScopeGlobal {
+		t.Fatalf("standard Todo Task = %+v", created)
+	}
+	encodedTask, err := json.Marshal(created[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	wantEvents := []string{
 		"done:",
 		`call:selected-call:youtube_transcript:{}`,
 		"result:selected-call:false:deterministic youtube.transcript result",
 		"done:",
-		`call:todo-call:todo_list:{}`,
-		"result:todo-call:false:deterministic todo.list result",
+		`call:todo-call:todo_add:{"title":"created through standard","priority":5,"due":"2026-09-03"}`,
+		"result:todo-call:false:" + string(encodedTask),
 		"done:",
 		`call:absent-call:absent_standard_tool:{}`,
 		"result:absent-call:true:Unknown Tool Call: absent_standard_tool",
@@ -125,9 +141,28 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if len(client.reqs) != 4 || !reflect.DeepEqual(client.reqs[0].Tools, wantSchemas) {
 		t.Fatalf("scripted request schemas = %#v, want %#v", client.reqs, wantSchemas)
 	}
+	durableEvents, err := store.LoadEvents(ctx, storedSession.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var todoIntent, todoOutcome bool
+	for _, event := range durableEvents {
+		if event.Type == memory.EventToolIntent {
+			var payload memory.ToolIntentPayload
+			if json.Unmarshal(event.Payload, &payload) == nil && payload.Call.Name == "todo_add" {
+				todoIntent = true
+			}
+		}
+		if event.Type == memory.EventToolSucceeded && event.Content == string(encodedTask) {
+			todoOutcome = true
+		}
+	}
+	if !todoIntent || !todoOutcome {
+		t.Fatalf("Todo episodic evidence missing: intent=%v outcome=%v events=%+v", todoIntent, todoOutcome, durableEvents)
+	}
 }
 
-func standardManager(t *testing.T) *plugins.Manager {
+func standardManager(t *testing.T, taskService task.Service) *plugins.Manager {
 	t.Helper()
 	web := plugins.NewWeb()
 	webCapabilities := web.ToolCapabilities()
@@ -153,20 +188,13 @@ func standardManager(t *testing.T) *plugins.Manager {
 			return "deterministic " + string(capabilityID) + " result", nil
 		}
 	}
-	todo := plugins.NewTodo()
-	todoCapabilities := todo.ToolCapabilities()
-	for i := range todoCapabilities {
-		capabilityID := todoCapabilities[i].ID
-		todoCapabilities[i].Tool.Execute = func(context.Context, string) (string, error) {
-			return "deterministic " + string(capabilityID) + " result", nil
-		}
-	}
+	todo := plugins.NewTodo(taskService)
 	manager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities},
 		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities},
 		deterministicToolPlugin{manifest: youtube.Manifest(), capabilities: youtubeCapabilities},
-		deterministicToolPlugin{manifest: todo.Manifest(), capabilities: todoCapabilities},
+		todo,
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -11,24 +11,36 @@ import (
 	"time"
 
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
 func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
-	todo := NewTodo()
+	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.0.0",
+		ImplementationVersion: "1.1.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
 			{ID: TodoListCapabilityID, Version: "1.0.0"},
 			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
 		},
+		ResumableFrom: []ImplementationCompatibility{{
+			ImplementationVersion: "1.0.0",
+			Capabilities: []CapabilityCompatibility{
+				{ID: TodoListCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "1067181de346c6ec2da9f9fe91b365d9502bfa559e9edc31e9a40c22efcd41ca"},
+				{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "b96146bbfb232ae6217946e7149c0781d8f1bbe923456d7230ed5fc8f270655c"},
+			},
+		}},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Todo manifest\n got: %+v\nwant: %+v", got, want)
+	}
+	if err := todo.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "service is unavailable") {
+		t.Fatalf("Todo without Task service started: %v", err)
 	}
 	type association struct {
 		ID              CapabilityID
@@ -46,12 +58,13 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	wantAssociations := []association{
 		{ID: TodoListCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_list"},
 		{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_add"},
+		{ID: TodoGetCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_get"},
 	}
 	if !reflect.DeepEqual(gotAssociations, wantAssociations) {
 		t.Fatalf("Todo Capability associations\n got: %+v\nwant: %+v", gotAssociations, wantAssociations)
 	}
 
-	manager, err := NewManager(tools.NewToolset(nil), todo)
+	manager, err := NewManager(tools.NewToolset(nil), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,16 +75,17 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, wantSchemas := toolset.Schemas(), todoSchemasNamed(tools.BuiltinToolset(), "todo_list", "todo_add"); !reflect.DeepEqual(got, wantSchemas) {
+	wantDefinitions := append(tools.TodoTools(), tools.TodoGetTool())
+	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("Todo plugin schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
 	}
-	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add"}) {
+	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get"}) {
 		t.Fatalf("Todo schema names = %v", got)
 	}
 }
 
 func TestStandardPresetRequiresTodoAndRestoresItAfterReenable(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,32 +121,24 @@ func TestStandardPresetRequiresTodoAndRestoresItAfterReenable(t *testing.T) {
 }
 
 func TestTodoManagerToolsetPreservesCancellation(t *testing.T) {
-	dir := t.TempDir()
-	command := filepath.Join(dir, "todo")
-	if err := os.WriteFile(command, []byte("#!/bin/sh\nprintf started > \"$TODO_STARTED\"\nexec sleep 30\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	manager, err := NewManager(tools.NewToolset(nil), NewTodo())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.SetEnabled(TodoPluginID, true); err != nil {
-		t.Fatal(err)
-	}
-	toolset, err := manager.NewSessionToolset()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	for _, call := range []openrouter.ToolCall{
 		{ID: "list", Type: "function", Function: openrouter.FunctionCall{Name: "todo_list", Arguments: `{}`}},
 		{ID: "add", Type: "function", Function: openrouter.FunctionCall{Name: "todo_add", Arguments: `{"title":"cancel me"}`}},
+		{ID: "get", Type: "function", Function: openrouter.FunctionCall{Name: "todo_get", Arguments: `{"task_id":"cancel-me"}`}},
 	} {
 		t.Run(call.ID, func(t *testing.T) {
-			started := filepath.Join(t.TempDir(), "started")
-			t.Setenv("TODO_STARTED", started)
+			service := cancelingTaskService{started: make(chan struct{})}
+			manager, err := NewManager(tools.NewToolset(nil), NewTodo(service))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := manager.SetEnabled(TodoPluginID, true); err != nil {
+				t.Fatal(err)
+			}
+			toolset, err := manager.NewSessionToolset()
+			if err != nil {
+				t.Fatal(err)
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			t.Cleanup(cancel)
 			done := make(chan error, 1)
@@ -141,18 +147,7 @@ func TestTodoManagerToolsetPreservesCancellation(t *testing.T) {
 				done <- err
 			}()
 
-			deadline := time.Now().Add(time.Second)
-			for {
-				if _, err := os.Stat(started); err == nil {
-					break
-				} else if !os.IsNotExist(err) {
-					t.Fatal(err)
-				}
-				if time.Now().After(deadline) {
-					t.Fatal("Todo subprocess did not reach the execution barrier")
-				}
-				time.Sleep(time.Millisecond)
-			}
+			<-service.started
 
 			cancel()
 			select {
@@ -161,10 +156,32 @@ func TestTodoManagerToolsetPreservesCancellation(t *testing.T) {
 					t.Fatalf("Todo dispatcher error = %v, want context.Canceled", err)
 				}
 			case <-time.After(time.Second):
-				t.Fatal("Todo subprocess did not stop after parent cancellation")
+				t.Fatal("Todo service did not stop after parent cancellation")
 			}
 		})
 	}
+}
+
+type cancelingTaskService struct {
+	started chan struct{}
+}
+
+func (s cancelingTaskService) wait(ctx context.Context) error {
+	close(s.started)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (s cancelingTaskService) CreateGlobalTask(ctx context.Context, _ task.CreateInput) (task.Task, error) {
+	return task.Task{}, s.wait(ctx)
+}
+
+func (s cancelingTaskService) ListOpenGlobalTasks(ctx context.Context) ([]task.Task, error) {
+	return nil, s.wait(ctx)
+}
+
+func (s cancelingTaskService) GetGlobalTask(ctx context.Context, _ task.ID) (task.Task, error) {
+	return task.Task{}, s.wait(ctx)
 }
 
 type todoToolOutcome struct {
@@ -172,21 +189,8 @@ type todoToolOutcome struct {
 	IsErr   bool
 }
 
-func TestTodoManagerToolsetPreservesLegacyBehavior(t *testing.T) {
-	manager, err := NewManager(tools.NewToolset(nil), NewTodo())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.SetEnabled(TodoPluginID, true); err != nil {
-		t.Fatal(err)
-	}
-	managerToolset, err := manager.NewSessionToolset()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func TestFrozenLegacyTodoToolsetPreservesCLIBehavior(t *testing.T) {
 	legacyOutcomes, legacyCalls := exerciseTodoToolset(t, tools.BuiltinToolset())
-	composedOutcomes, composedCalls := exerciseTodoToolset(t, managerToolset)
 	wantOutcomes := map[string]todoToolOutcome{
 		"list": {
 			Content: "[ ] #7 preserve Todo behavior\n",
@@ -210,9 +214,6 @@ func TestTodoManagerToolsetPreservesLegacyBehavior(t *testing.T) {
 	if !reflect.DeepEqual(legacyOutcomes, wantOutcomes) {
 		t.Fatalf("legacy Todo behavior\n got: %#v\nwant: %#v", legacyOutcomes, wantOutcomes)
 	}
-	if !reflect.DeepEqual(composedOutcomes, legacyOutcomes) {
-		t.Fatalf("Manager-composed Todo behavior\n got: %#v\nlegacy: %#v", composedOutcomes, legacyOutcomes)
-	}
 	wantCalls := strings.Join([]string{
 		"list",
 		"add|preserve Todo behavior|--priority|3|--desc|two steps|--due|2026-09-03",
@@ -221,9 +222,6 @@ func TestTodoManagerToolsetPreservesLegacyBehavior(t *testing.T) {
 	}, "\n")
 	if legacyCalls != wantCalls {
 		t.Fatalf("legacy Todo CLI calls = %q, want %q", legacyCalls, wantCalls)
-	}
-	if composedCalls != legacyCalls {
-		t.Fatalf("Manager-composed Todo CLI calls = %q, legacy = %q", composedCalls, legacyCalls)
 	}
 }
 

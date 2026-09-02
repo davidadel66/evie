@@ -325,7 +325,7 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	store := eviedb.NewStore(db)
 	plugin := plugins.NewMemory(store)
 	manager, err := plugins.NewManager(
-		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(), plugin,
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store), plugin,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -645,7 +645,7 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	}
 	restartedPlugin := plugins.NewMemory(store)
 	restartedManager, err := plugins.NewManager(
-		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(), restartedPlugin,
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store), restartedPlugin,
 	)
 	if err != nil {
 		t.Fatal(err)

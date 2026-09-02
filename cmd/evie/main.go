@@ -60,7 +60,7 @@ func main() {
 		plugins.NewWeb(),
 		plugins.NewFinance(),
 		plugins.NewYouTube(),
-		plugins.NewTodo(),
+		plugins.NewTodo(kernelStore),
 		plugins.NewMemory(kernelStore),
 	)
 	if err != nil {

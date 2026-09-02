@@ -41,7 +41,7 @@ func managementRequest(path, body string) *http.Request {
 
 func managedBuiltinServer(t *testing.T) (*plugins.Manager, http.Handler) {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo())
+	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

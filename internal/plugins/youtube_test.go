@@ -11,7 +11,7 @@ import (
 )
 
 func TestStandardPresetRequiresYouTubeWhileKernelKeepsTranscriptInspection(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestLegacyResumeFailsClosedDuringConcurrentYouTubeDisable(t *testing.T) {
 		stopStarted: make(chan struct{}),
 		releaseStop: make(chan struct{}),
 	}
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), youtube, NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), youtube, NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}

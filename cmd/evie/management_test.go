@@ -32,7 +32,7 @@ func (cliReceiptStore) GetCompatibilityResolutions(context.Context, memory.Sessi
 
 func cliManager(t *testing.T) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo())
+	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(testTaskStore(t)))
 	if err != nil {
 		t.Fatal(err)
 	}

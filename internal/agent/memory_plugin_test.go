@@ -49,7 +49,7 @@ func TestMemoryPluginCompositionReceiptSurvivesProcessReopen(t *testing.T) {
 	}
 	newManager := func() *plugins.Manager {
 		manager, err := plugins.NewManager(
-			tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(),
+			tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store),
 			plugins.NewMemory(&agentMemoryKernel{}),
 		)
 		if err != nil {

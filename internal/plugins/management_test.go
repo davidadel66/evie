@@ -441,7 +441,7 @@ func TestLifecycleManagementReturnsTransitionAndAffectedDependents(t *testing.T)
 }
 
 func TestDisableBlocksNewDependentSessionsButPreservesExistingComposition(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1084,11 +1084,11 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 	}
 	defer dbB.Close()
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1240,11 +1240,11 @@ func TestResumeCompositionRefreshesExternalDurableConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
