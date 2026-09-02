@@ -165,8 +165,6 @@ type Approver func(ctx context.Context, name, args string, preview *FileChangePr
 
 var kernelToolsBeforeFinance = []Tool{
 	{Schema: getTimeTool, Execute: getTime},
-	{Schema: todoListTool, Execute: toDoList},
-	{Schema: todoAddTool, Execute: toDoAdd},
 }
 
 var kernelToolsAfterYouTube = []Tool{
@@ -183,9 +181,11 @@ var kernelToolsAfterYouTube = []Tool{
 var kernelTools = append(append([]Tool(nil), kernelToolsBeforeFinance...), kernelToolsAfterYouTube...)
 
 var legacyBuiltinTools = func() []Tool {
+	todo := TodoTools()
 	youtube := YouTubeTools()
-	definitions := make([]Tool, 0, len(kernelTools)+len(youtube)+len(FinanceTools())+len(WebTools()))
+	definitions := make([]Tool, 0, len(kernelTools)+len(todo)+len(youtube)+len(FinanceTools())+len(WebTools()))
 	definitions = append(definitions, kernelToolsBeforeFinance...)
+	definitions = append(definitions, todo...)
 	definitions = append(definitions, FinanceTools()...)
 	definitions = append(definitions, youtube...)
 	definitions = append(definitions, kernelToolsAfterYouTube...)
@@ -203,10 +203,24 @@ func KernelToolset() Toolset {
 // only to reconstruct Composition Receipts created before Todo and YouTube
 // had provider identities. New sessions must use KernelToolset.
 func LegacyKernelToolset() Toolset {
+	todo := TodoTools()
 	youtube := YouTubeTools()
-	definitions := make([]Tool, 0, len(kernelToolsBeforeFinance)+len(youtube)+len(kernelToolsAfterYouTube))
+	definitions := make([]Tool, 0, len(kernelToolsBeforeFinance)+len(todo)+len(youtube)+len(kernelToolsAfterYouTube))
 	definitions = append(definitions, kernelToolsBeforeFinance...)
+	definitions = append(definitions, todo...)
 	definitions = append(definitions, youtube...)
+	definitions = append(definitions, kernelToolsAfterYouTube...)
+	return NewToolset(definitions)
+}
+
+// PreTodoExtractionKernelToolset returns the frozen intermediate Kernel
+// surface used only for receipts created after YouTube extraction and before
+// Todo extraction. New sessions must use KernelToolset.
+func PreTodoExtractionKernelToolset() Toolset {
+	todo := TodoTools()
+	definitions := make([]Tool, 0, len(kernelToolsBeforeFinance)+len(todo)+len(kernelToolsAfterYouTube))
+	definitions = append(definitions, kernelToolsBeforeFinance...)
+	definitions = append(definitions, todo...)
 	definitions = append(definitions, kernelToolsAfterYouTube...)
 	return NewToolset(definitions)
 }

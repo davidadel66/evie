@@ -325,13 +325,13 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	store := eviedb.NewStore(db)
 	plugin := plugins.NewMemory(store)
 	manager, err := plugins.NewManager(
-		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugin,
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(), plugin,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []plugins.PluginID{
-		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.MemoryPluginID,
+		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID, plugins.MemoryPluginID,
 	} {
 		if err := manager.Enable(ctx, id); err != nil {
 			t.Fatal(err)
@@ -645,13 +645,13 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	}
 	restartedPlugin := plugins.NewMemory(store)
 	restartedManager, err := plugins.NewManager(
-		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), restartedPlugin,
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(), restartedPlugin,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []plugins.PluginID{
-		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.MemoryPluginID,
+		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID, plugins.MemoryPluginID,
 	} {
 		if err := restartedManager.Enable(ctx, id); err != nil {
 			t.Fatal(err)

@@ -5,9 +5,41 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/davidadel66/evie/internal/openrouter"
 )
+
+func TestTodoToolsReturnFreshLegacyDefinitions(t *testing.T) {
+	wantNames := []string{"todo_list", "todo_add"}
+	wantSchemas := todoSchemasNamed(BuiltinToolset().Schemas(), wantNames)
+	first := TodoTools()
+	if got := NewToolset(first).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
+		t.Fatalf("Todo schemas changed\n got: %#v\nwant: %#v", got, wantSchemas)
+	}
+
+	first[0].Schema.Function.Name = "changed"
+	first[1].Schema.Function.Parameters.Required[0] = "changed"
+	first[1].Schema.Function.Parameters.Properties["title"] = first[1].Schema.Function.Parameters.Properties["priority"]
+	if got := NewToolset(TodoTools()).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
+		t.Fatalf("mutating one Todo definition snapshot changed the next\n got: %#v\nwant: %#v", got, wantSchemas)
+	}
+}
+
+func todoSchemasNamed(schemas []openrouter.Tool, names []string) []openrouter.Tool {
+	selected := make([]openrouter.Tool, 0, len(names))
+	for _, name := range names {
+		for _, schema := range schemas {
+			if schema.Function.Name == name {
+				selected = append(selected, schema)
+				break
+			}
+		}
+	}
+	return selected
+}
 
 func TestTodoSubprocessesHonorParentCancellation(t *testing.T) {
 	dir := t.TempDir()

@@ -58,6 +58,16 @@ var todoAddTool = openrouter.Tool{
 	},
 }
 
+// TodoTools returns fresh definitions for the existing model-facing Todo
+// tools. The Todo first-party plugin attaches canonical Capability identities
+// while preserving these schemas and execution functions unchanged.
+func TodoTools() []Tool {
+	return []Tool{
+		{Schema: cloneSchema(todoListTool), Execute: toDoList},
+		{Schema: cloneSchema(todoAddTool), Execute: toDoAdd},
+	}
+}
+
 // toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.
 func toDoList(ctx context.Context, _ string) (string, error) {

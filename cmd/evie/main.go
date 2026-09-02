@@ -60,6 +60,7 @@ func main() {
 		plugins.NewWeb(),
 		plugins.NewFinance(),
 		plugins.NewYouTube(),
+		plugins.NewTodo(),
 		plugins.NewMemory(kernelStore),
 	)
 	if err != nil {
@@ -67,7 +68,7 @@ func main() {
 	}
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
 		plugins.WebPluginID: true, plugins.FinancePluginID: true,
-		plugins.YouTubePluginID: true, plugins.MemoryPluginID: true,
+		plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}

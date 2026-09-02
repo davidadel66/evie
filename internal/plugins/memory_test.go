@@ -100,11 +100,11 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 		t.Fatalf("optional Memory Capabilities = %v, want %v", optional, want)
 	}
 
-	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewMemory(&stubSemanticKernel{}))
+	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewTodo(), NewMemory(&stubSemanticKernel{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -136,11 +136,11 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 
 func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "off")
-	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewMemory(&stubSemanticKernel{}))
+	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewTodo(), NewMemory(&stubSemanticKernel{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, MemoryPluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -533,11 +533,11 @@ func (p changedMemorySchema) ToolCapabilities() []ToolCapability {
 func TestMemoryCompositionResumeFailsClosedWithoutRewritingReceipt(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	newManager := func(memoryPlugin Plugin) *Manager {
-		manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), memoryPlugin)
+		manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(), memoryPlugin)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, MemoryPluginID} {
+		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
 			if err := manager.Enable(context.Background(), id); err != nil {
 				t.Fatal(err)
 			}
@@ -575,11 +575,11 @@ func TestMemoryCompositionResumeFailsClosedWithoutRewritingReceipt(t *testing.T)
 func TestDisablingMemoryPluginLeavesKernelSemanticInterfaceUsable(t *testing.T) {
 	kernel := &behaviorSemanticKernel{object: memory.SemanticObjectInspection{ObjectID: "claim-1"}}
 	plugin := NewMemory(kernel)
-	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), plugin)
+	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewTodo(), plugin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, MemoryPluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -601,11 +601,11 @@ func TestDisablingMemoryPluginLeavesKernelSemanticInterfaceUsable(t *testing.T) 
 }
 
 func TestFailedMemoryPluginStaysOutOfComposition(t *testing.T) {
-	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewMemory(nil))
+	manager, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewTodo(), NewMemory(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}

@@ -466,7 +466,7 @@ func TestSessionCompositionRealSQLiteReopenBlocksEveryIncompatibleReplacement(t 
 			if managerErr != nil {
 				t.Fatal(managerErr)
 			}
-			for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
+			for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID} {
 				if err := manager.SetEnabled(id, true); err != nil {
 					t.Fatal(err)
 				}
@@ -556,7 +556,7 @@ func replacementSessionCompositionManager(
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -599,7 +599,7 @@ func newReplacementSessionCompositionManager(
 		manifest.ResumableFrom = []plugins.ImplementationCompatibility{declaration}
 	}
 	return plugins.NewManager(
-		tools.KernelToolset(), plugins.NewWeb(), plugins.NewYouTube(),
+		tools.KernelToolset(), plugins.NewWeb(), plugins.NewYouTube(), plugins.NewTodo(),
 		compatibilityTestPlugin{manifest: manifest, capabilities: capabilities},
 	)
 }
@@ -767,11 +767,11 @@ func (s barrierCompositionStore) GetCompositionReceipt(
 
 func sessionCompositionManager(t *testing.T) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube())
+	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}

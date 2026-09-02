@@ -30,6 +30,17 @@ func mustInspect(t *testing.T, manager *Manager) Inspection {
 	return inspection
 }
 
+func mustPluginStatus(t *testing.T, inspection Inspection, id PluginID) PluginStatus {
+	t.Helper()
+	for _, status := range inspection.Plugins {
+		if status.ID == id {
+			return status
+		}
+	}
+	t.Fatalf("plugin %q missing from inspection: %+v", id, inspection)
+	return PluginStatus{}
+}
+
 func mustInspectPresets(t *testing.T, manager *Manager) []PresetInspection {
 	t.Helper()
 	presets, err := manager.InspectPresets()
@@ -430,11 +441,11 @@ func TestLifecycleManagementReturnsTransitionAndAffectedDependents(t *testing.T)
 }
 
 func TestDisableBlocksNewDependentSessionsButPreservesExistingComposition(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -1073,15 +1084,15 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 	}
 	defer dbB.Close()
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true}
+	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true, TodoPluginID: true}
 	for _, configured := range []struct {
 		manager *Manager
 		store   EnabledStateStore
@@ -1095,7 +1106,7 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 		t.Fatal(err)
 	}
 	inspection, err := managerB.InspectContext(context.Background())
-	if err != nil || inspection.Plugins[1].ID != WebPluginID || inspection.Plugins[1].Enabled {
+	if err != nil || mustPluginStatus(t, inspection, WebPluginID).Enabled {
 		t.Fatalf("running Manager did not observe durable CLI disable: %+v err=%v", inspection, err)
 	}
 	if _, err := managerB.ResolvePreset(StandardPresetID); err == nil {
@@ -1106,7 +1117,7 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 		t.Fatal(err)
 	}
 	inspection, err = managerA.InspectContext(context.Background())
-	if err != nil || !inspection.Plugins[1].Enabled {
+	if err != nil || !mustPluginStatus(t, inspection, WebPluginID).Enabled {
 		t.Fatalf("CLI Manager did not observe durable web enable: %+v err=%v", inspection, err)
 	}
 
@@ -1136,8 +1147,9 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 	}
 	for name, manager := range map[string]*Manager{"A": managerA, "B": managerB} {
 		inspection, err := manager.InspectContext(context.Background())
-		if err != nil || inspection.Plugins[1].Enabled != durable {
-			t.Fatalf("Manager %s enabled=%v durable=%v err=%v", name, inspection.Plugins[1].Enabled, durable, err)
+		web := mustPluginStatus(t, inspection, WebPluginID)
+		if err != nil || web.Enabled != durable {
+			t.Fatalf("Manager %s enabled=%v durable=%v err=%v", name, web.Enabled, durable, err)
 		}
 	}
 }
@@ -1228,15 +1240,15 @@ func TestResumeCompositionRefreshesExternalDurableConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true}
+	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true, TodoPluginID: true}
 	if err := managerA.ConfigureEnabledState(context.Background(), storeA, defaults); err != nil {
 		t.Fatal(err)
 	}

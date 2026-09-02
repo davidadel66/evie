@@ -11,11 +11,11 @@ import (
 )
 
 func TestStandardPresetRequiresYouTubeWhileKernelKeepsTranscriptInspection(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -83,11 +83,11 @@ func TestLegacyResumeFailsClosedDuringConcurrentYouTubeDisable(t *testing.T) {
 		stopStarted: make(chan struct{}),
 		releaseStop: make(chan struct{}),
 	}
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), youtube)
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), youtube, NewTodo())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}

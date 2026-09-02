@@ -54,12 +54,13 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 
-	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).Schemas()
+	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(tools.TodoTools()).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
+		{ID: "todo", ImplementationVersion: "1.0.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -70,6 +71,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
+		"todo.list@1.0.0", "todo.add@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -81,6 +83,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 
 	client := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("selected-call", "youtube_transcript", `{}`)),
+		assistantStep("", nil, toolCall("todo-call", "todo_list", `{}`)),
 		assistantStep("", nil, toolCall("absent-call", "absent_standard_tool", `{}`)),
 		assistantStep("done", nil),
 	}}
@@ -96,8 +99,8 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if err := session.Send(ctx, "hello", recorded, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(client.reqs) != 3 {
-		t.Fatalf("scripted requests = %d, want three", len(client.reqs))
+	if len(client.reqs) != 4 {
+		t.Fatalf("scripted requests = %d, want four", len(client.reqs))
 	}
 	for i, request := range client.reqs {
 		if !reflect.DeepEqual(request.Tools, wantSchemas) {
@@ -109,6 +112,9 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		`call:selected-call:youtube_transcript:{}`,
 		"result:selected-call:false:deterministic youtube.transcript result",
 		"done:",
+		`call:todo-call:todo_list:{}`,
+		"result:todo-call:false:deterministic todo.list result",
+		"done:",
 		`call:absent-call:absent_standard_tool:{}`,
 		"result:absent-call:true:Unknown Tool Call: absent_standard_tool",
 		"done:done",
@@ -116,7 +122,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if !reflect.DeepEqual(recorded.events, wantEvents) {
 		t.Fatalf("scripted public events = %#v, want %#v", recorded.events, wantEvents)
 	}
-	if len(client.reqs) != 3 || !reflect.DeepEqual(client.reqs[0].Tools, wantSchemas) {
+	if len(client.reqs) != 4 || !reflect.DeepEqual(client.reqs[0].Tools, wantSchemas) {
 		t.Fatalf("scripted request schemas = %#v, want %#v", client.reqs, wantSchemas)
 	}
 }
@@ -147,16 +153,25 @@ func standardManager(t *testing.T) *plugins.Manager {
 			return "deterministic " + string(capabilityID) + " result", nil
 		}
 	}
+	todo := plugins.NewTodo()
+	todoCapabilities := todo.ToolCapabilities()
+	for i := range todoCapabilities {
+		capabilityID := todoCapabilities[i].ID
+		todoCapabilities[i].Tool.Execute = func(context.Context, string) (string, error) {
+			return "deterministic " + string(capabilityID) + " result", nil
+		}
+	}
 	manager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities},
 		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities},
 		deterministicToolPlugin{manifest: youtube.Manifest(), capabilities: youtubeCapabilities},
+		deterministicToolPlugin{manifest: todo.Manifest(), capabilities: todoCapabilities},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
