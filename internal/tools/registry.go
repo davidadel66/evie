@@ -169,9 +169,7 @@ var kernelToolsBeforeFinance = []Tool{
 	{Schema: todoAddTool, Execute: toDoAdd},
 }
 
-var kernelToolsAfterFinance = []Tool{
-	{Schema: youtubeTranscriptTool, Execute: youtubeTranscript},
-	{Schema: youtubeScrapeChannelTool, Execute: youtubeScrapeChannel},
+var kernelToolsAfterYouTube = []Tool{
 	{Schema: queryDBTool, Execute: queryDB},
 	{Schema: editDBTool, Execute: editDB, NeedsApproval: true},
 	{Schema: readFileTool, Execute: readFile},
@@ -182,13 +180,15 @@ var kernelToolsAfterFinance = []Tool{
 	{Schema: cronRemoveTool, Execute: cronRemove},
 }
 
-var kernelTools = append(append([]Tool(nil), kernelToolsBeforeFinance...), kernelToolsAfterFinance...)
+var kernelTools = append(append([]Tool(nil), kernelToolsBeforeFinance...), kernelToolsAfterYouTube...)
 
 var legacyBuiltinTools = func() []Tool {
-	definitions := make([]Tool, 0, len(kernelTools)+len(FinanceTools())+len(WebTools()))
+	youtube := YouTubeTools()
+	definitions := make([]Tool, 0, len(kernelTools)+len(youtube)+len(FinanceTools())+len(WebTools()))
 	definitions = append(definitions, kernelToolsBeforeFinance...)
 	definitions = append(definitions, FinanceTools()...)
-	definitions = append(definitions, kernelToolsAfterFinance...)
+	definitions = append(definitions, youtube...)
+	definitions = append(definitions, kernelToolsAfterYouTube...)
 	definitions = append(definitions, WebTools()...)
 	return definitions
 }()
@@ -197,6 +197,18 @@ var legacyBuiltinTools = func() []Tool {
 // composition adds enabled plugin contributions to this immutable base.
 func KernelToolset() Toolset {
 	return NewToolset(kernelTools)
+}
+
+// LegacyKernelToolset returns the frozen pre-extraction Kernel surface used
+// only to reconstruct Composition Receipts created before Todo and YouTube
+// had provider identities. New sessions must use KernelToolset.
+func LegacyKernelToolset() Toolset {
+	youtube := YouTubeTools()
+	definitions := make([]Tool, 0, len(kernelToolsBeforeFinance)+len(youtube)+len(kernelToolsAfterYouTube))
+	definitions = append(definitions, kernelToolsBeforeFinance...)
+	definitions = append(definitions, youtube...)
+	definitions = append(definitions, kernelToolsAfterYouTube...)
+	return NewToolset(definitions)
 }
 
 // WebTools returns fresh definitions for the existing model-facing Web tools.

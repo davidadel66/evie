@@ -430,11 +430,11 @@ func TestLifecycleManagementReturnsTransitionAndAffectedDependents(t *testing.T)
 }
 
 func TestDisableBlocksNewDependentSessionsButPreservesExistingComposition(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -1073,15 +1073,15 @@ func TestAttachedManagersConvergeOnLatestDurableSQLiteConfiguration(t *testing.T
 	}
 	defer dbB.Close()
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true}
+	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true}
 	for _, configured := range []struct {
 		manager *Manager
 		store   EnabledStateStore
@@ -1228,15 +1228,15 @@ func TestResumeCompositionRefreshesExternalDurableConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	storeA, storeB := eviedb.NewStore(dbA), eviedb.NewStore(dbB)
-	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	managerA, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	managerB, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true}
+	defaults := map[PluginID]bool{WebPluginID: true, FinancePluginID: true, YouTubePluginID: true}
 	if err := managerA.ConfigureEnabledState(context.Background(), storeA, defaults); err != nil {
 		t.Fatal(err)
 	}

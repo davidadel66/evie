@@ -466,7 +466,7 @@ func TestSessionCompositionRealSQLiteReopenBlocksEveryIncompatibleReplacement(t 
 			if managerErr != nil {
 				t.Fatal(managerErr)
 			}
-			for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+			for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 				if err := manager.SetEnabled(id, true); err != nil {
 					t.Fatal(err)
 				}
@@ -556,7 +556,7 @@ func replacementSessionCompositionManager(
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -599,7 +599,7 @@ func newReplacementSessionCompositionManager(
 		manifest.ResumableFrom = []plugins.ImplementationCompatibility{declaration}
 	}
 	return plugins.NewManager(
-		tools.KernelToolset(), plugins.NewWeb(),
+		tools.KernelToolset(), plugins.NewWeb(), plugins.NewYouTube(),
 		compatibilityTestPlugin{manifest: manifest, capabilities: capabilities},
 	)
 }
@@ -767,11 +767,11 @@ func (s barrierCompositionStore) GetCompositionReceipt(
 
 func sessionCompositionManager(t *testing.T) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance())
+	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}

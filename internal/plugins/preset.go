@@ -20,7 +20,10 @@ import (
 const (
 	EvieVersion                    = "1.0.0"
 	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
+	StandardPresetVersion          = "sha256:8149efdcc636e89d8c404c181cfa595bfe8ab09b38bffbefb756f73e99e5d6c0"
+
+	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
+	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
 )
 
 type PresetID string
@@ -84,8 +87,41 @@ func standardPresetContent() Preset {
 			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
 			{ID: WebFetchCapabilityID, Compatibility: compatibility},
 			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
 		},
 		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preYouTubeStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preYouTubeStandardPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preMemoryStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preMemoryStandardPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
 	}
 }
 
@@ -451,10 +487,29 @@ func (m *Manager) ResumeCompositionContext(
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return ResolvedComposition{}, err
 	}
+	switch receipt.Preset.Version {
+	case preMemoryStandardPresetVersion:
+		return m.resumePresetWithBase(
+			preMemoryStandardPreset(), tools.LegacyKernelToolset(), receipt, YouTubePluginID,
+		)
+	case preYouTubeStandardPresetVersion:
+		return m.resumePresetWithBase(
+			preYouTubeStandardPreset(), tools.LegacyKernelToolset(), receipt, YouTubePluginID,
+		)
+	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }
 
 func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (ResolvedComposition, error) {
+	return m.resumePresetWithBase(preset, m.base, receipt)
+}
+
+func (m *Manager) resumePresetWithBase(
+	preset Preset,
+	base tools.Toolset,
+	receipt CompositionReceipt,
+	legacyProviderIDs ...PluginID,
+) (ResolvedComposition, error) {
 	if err := ValidateCompositionReceipt(receipt); err != nil {
 		return ResolvedComposition{}, err
 	}
@@ -470,6 +525,15 @@ func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (Resol
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	for _, id := range legacyProviderIDs {
+		entry, exists := m.plugins[id]
+		if !exists {
+			return ResolvedComposition{}, fmt.Errorf("legacy provider plugin %q is not compiled into Evie", id)
+		}
+		if entry.state != StateReady {
+			return ResolvedComposition{}, fmt.Errorf("legacy provider plugin %q is %s", id, entry.state)
+		}
+	}
 	providerReceipts := make(map[PluginID]ProviderReceipt, len(receipt.Providers))
 	for _, provider := range receipt.Providers {
 		providerReceipts[PluginID(provider.ID)] = provider
@@ -562,7 +626,7 @@ func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (Resol
 		resolutions = append(resolutions, resolution)
 	}
 
-	toolset := m.base.WithTools(definitions)
+	toolset := base.WithTools(definitions)
 	if err := validatePinnedToolSchemas(receipt.ToolSchemas, toolSchemaReceipts(toolset.Schemas())); err != nil {
 		return ResolvedComposition{}, err
 	}

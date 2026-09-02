@@ -32,7 +32,7 @@ func (cliReceiptStore) GetCompatibilityResolutions(context.Context, memory.Sessi
 
 func cliManager(t *testing.T) *plugins.Manager {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance())
+	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestManagementCLIValidationFailurePrintsEveryDiagnostic(t *testing.T) {
 
 func TestManagementCLISessionInspectionShowsPinnedAuditData(t *testing.T) {
 	manager := cliManager(t)
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}

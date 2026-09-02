@@ -59,13 +59,15 @@ func main() {
 		tools.KernelToolset(),
 		plugins.NewWeb(),
 		plugins.NewFinance(),
+		plugins.NewYouTube(),
 		plugins.NewMemory(kernelStore),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
 	}
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
-		plugins.WebPluginID: true, plugins.FinancePluginID: true, plugins.MemoryPluginID: true,
+		plugins.WebPluginID: true, plugins.FinancePluginID: true,
+		plugins.YouTubePluginID: true, plugins.MemoryPluginID: true,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}

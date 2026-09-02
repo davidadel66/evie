@@ -41,7 +41,7 @@ func managementRequest(path, body string) *http.Request {
 
 func managedBuiltinServer(t *testing.T) (*plugins.Manager, http.Handler) {
 	t.Helper()
-	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance())
+	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestHTTPManagementListsAndValidatesWithoutNeedingAChatSession(t *testing.T)
 			t.Fatalf("unavailable standard omitted %q: %s", requirement.ID, missingResponse.Body.String())
 		}
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}
@@ -278,7 +278,7 @@ func TestRunningHTTPManagerRefreshesExternalSQLiteChangesAndPublishesItsOwn(t *t
 
 func TestHTTPSessionInspectionReturnsReceiptAndResolutionsWithoutSecrets(t *testing.T) {
 	manager, _ := managedBuiltinServer(t)
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.Enable(context.Background(), id); err != nil {
 			t.Fatal(err)
 		}

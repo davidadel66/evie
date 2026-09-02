@@ -88,6 +88,28 @@ func TestPreparedApprovalMetadataRequiresDurableObserver(t *testing.T) {
 	}
 }
 
+func TestKernelToolsetLeavesYouTubeCollectionToItsPlugin(t *testing.T) {
+	wantAbsent := map[string]bool{
+		"youtube_transcript":     true,
+		"youtube_scrape_channel": true,
+	}
+	for _, schema := range KernelToolset().Schemas() {
+		if wantAbsent[schema.Function.Name] {
+			t.Fatalf("Kernel Toolset still exposes plugin-owned schema %q", schema.Function.Name)
+		}
+	}
+
+	var legacyNames []string
+	for _, schema := range BuiltinToolset().Schemas() {
+		if wantAbsent[schema.Function.Name] {
+			legacyNames = append(legacyNames, schema.Function.Name)
+		}
+	}
+	if want := []string{"youtube_transcript", "youtube_scrape_channel"}; !reflect.DeepEqual(legacyNames, want) {
+		t.Fatalf("legacy YouTube schemas = %v, want frozen compatibility schemas %v", legacyNames, want)
+	}
+}
+
 // extraTool builds a per-turn tool for tests, the way a frontend would:
 // a closure constructed at call time, not a registry entry.
 func extraTool(name string, gated bool, execute func(context.Context, string) (string, error)) Tool {

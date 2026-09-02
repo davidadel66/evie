@@ -54,13 +54,14 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 
-	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).Schemas()
+	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
+		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
 	if !reflect.DeepEqual(receipt.Providers, wantProviders) {
 		t.Fatalf("receipt providers = %#v, want %#v", receipt.Providers, wantProviders)
@@ -68,6 +69,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	wantCapabilities := []string{
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
+		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -78,7 +80,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 
 	client := &fakeClient{steps: []step{
-		assistantStep("", nil, toolCall("selected-call", "web_fetch", `{}`)),
+		assistantStep("", nil, toolCall("selected-call", "youtube_transcript", `{}`)),
 		assistantStep("", nil, toolCall("absent-call", "absent_standard_tool", `{}`)),
 		assistantStep("done", nil),
 	}}
@@ -104,8 +106,8 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	wantEvents := []string{
 		"done:",
-		`call:selected-call:web_fetch:{}`,
-		"result:selected-call:false:deterministic web.fetch result",
+		`call:selected-call:youtube_transcript:{}`,
+		"result:selected-call:false:deterministic youtube.transcript result",
 		"done:",
 		`call:absent-call:absent_standard_tool:{}`,
 		"result:absent-call:true:Unknown Tool Call: absent_standard_tool",
@@ -137,15 +139,24 @@ func standardManager(t *testing.T) *plugins.Manager {
 			return "deterministic " + string(capabilityID) + " result", nil
 		}
 	}
+	youtube := plugins.NewYouTube()
+	youtubeCapabilities := youtube.ToolCapabilities()
+	for i := range youtubeCapabilities {
+		capabilityID := youtubeCapabilities[i].ID
+		youtubeCapabilities[i].Tool.Execute = func(context.Context, string) (string, error) {
+			return "deterministic " + string(capabilityID) + " result", nil
+		}
+	}
 	manager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities},
 		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities},
+		deterministicToolPlugin{manifest: youtube.Manifest(), capabilities: youtubeCapabilities},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID} {
+	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}

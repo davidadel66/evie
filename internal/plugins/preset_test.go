@@ -3,11 +3,13 @@ package plugins
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	kernelcomposition "github.com/davidadel66/evie/internal/composition"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -33,11 +35,11 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if got := canonicalPresetVersion(standardPresetContent()); got != StandardPresetVersion {
 		t.Fatalf("standard canonical version = %q, want reserved %q", got, StandardPresetVersion)
 	}
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -54,9 +56,10 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if composition.Receipt.EvieVersion != EvieVersion {
 		t.Fatalf("Evie version = %q, want %q", composition.Receipt.EvieVersion, EvieVersion)
 	}
-	wantSchemas := schemaNames(
-		tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()),
-	)
+	wantSchemas := schemaNames(tools.KernelToolset().
+		WithTools(tools.FinanceTools()).
+		WithTools(tools.WebTools()).
+		WithTools(tools.YouTubeTools()))
 	if got := schemaNames(composition.Toolset); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("standard schemas = %v, want %v", got, wantSchemas)
 	}
@@ -70,6 +73,116 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if _, err := manager.ResolvePreset("missing"); err == nil ||
 		!strings.Contains(err.Error(), `Agent Preset "missing" is not allowed`) {
 		t.Fatalf("unknown explicit preset error = %v", err)
+	}
+}
+
+func TestPreYouTubeExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	legacyPreset := Preset{
+		ID:      StandardPresetID,
+		Version: "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734",
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
+	}
+	legacyManager, err := NewManager(tools.LegacyKernelToolset(), NewWeb(), NewFinance())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(legacyPreset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSessionWithComposition(context.Background(), legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store = eviedb.NewStore(db)
+	storedReceipt, err := store.GetCompositionReceipt(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(storedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) {
+		t.Fatalf("resume mutated legacy receipt\n got: %#v\nwant: %#v", resumed.Receipt, legacy.Receipt)
+	}
+	if !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("resumed legacy schemas changed\n got: %#v\nwant: %#v", resumed.Toolset.Schemas(), legacy.Toolset.Schemas())
+	}
+	for _, name := range []string{"youtube_transcript", "youtube_scrape_channel"} {
+		if countSchema(resumed.Toolset, name) != 1 {
+			t.Fatalf("legacy resume exposes %q %d times", name, countSchema(resumed.Toolset, name))
+		}
+	}
+}
+
+func TestPostMemoryPreYouTubeStandardReceiptResumesWithoutMutation(t *testing.T) {
+	legacyManager, err := NewManager(tools.LegacyKernelToolset(), NewWeb(), NewFinance())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preYouTubeStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) ||
+		!reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("post-Memory pre-YouTube receipt changed: got=%+v want=%+v", resumed.Receipt, legacy.Receipt)
 	}
 }
 
@@ -185,11 +298,11 @@ func TestReceiptRejectsContentThatCouldCarryCredentials(t *testing.T) {
 }
 
 func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -225,15 +338,15 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 }
 
 func TestResumeCompositionContextCancelsEnabledStateRefresh(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube())
 	if err != nil {
 		t.Fatal(err)
 	}
 	store := &cancelingEnabledStateStore{enabledStateMemoryStore: &enabledStateMemoryStore{
-		values: map[string]bool{string(WebPluginID): true, string(FinancePluginID): true},
+		values: map[string]bool{string(WebPluginID): true, string(FinancePluginID): true, string(YouTubePluginID): true},
 	}}
 	if err := manager.ConfigureEnabledState(context.Background(), store, map[PluginID]bool{
-		WebPluginID: true, FinancePluginID: true,
+		WebPluginID: true, FinancePluginID: true, YouTubePluginID: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
