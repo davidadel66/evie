@@ -1,6 +1,6 @@
-// The composer. Enter sends, Shift+Enter newlines. Never disabled: a message
-// sent mid-turn joins the queue (useSession) and fires when the turn ends,
-// so the bar stays live while Evie responds.
+// The composer. Enter sends, Shift+Enter newlines. It stays live while Evie
+// responds so a message can join the queue, but a Context Scope transition
+// disables it until the server and displayed scope agree.
 
 import { useEffect, useRef } from "react";
 import { ArrowUp } from "../ui/Icon";
@@ -10,9 +10,10 @@ type Props = {
   onChange: (v: string) => void;
   onSend: () => void;
   streaming: boolean;
+  disabled?: boolean;
 };
 
-export function Composer({ value, onChange, onSend, streaming }: Props) {
+export function Composer({ value, onChange, onSend, streaming, disabled = false }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // Grow with the content instead of scrolling inside one row. Reset to auto
@@ -37,19 +38,24 @@ export function Composer({ value, onChange, onSend, streaming }: Props) {
           ref={ref}
           rows={1}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
+            if (disabled) return;
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               onSend();
             }
           }}
-          placeholder={streaming ? "Queue a message…" : "Message Evie…"}
+          placeholder={disabled ? "Switching Context Scope…" : streaming ? "Queue a message…" : "Message Evie…"}
           className="text-ink placeholder:text-fainter flex-1 resize-none border-none bg-transparent py-1 font-sans text-[length:var(--chat-text-size)] leading-[1.5]"
         />
         <div
-          onClick={onSend}
-          className="bg-teal flex h-[30px] w-[30px] flex-none cursor-pointer items-center justify-center rounded-[7px]"
+          onClick={disabled ? undefined : onSend}
+          aria-disabled={disabled}
+          className={`bg-teal flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[7px] ${
+            disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+          }`}
         >
           <ArrowUp size={14} stroke="#0a0c0d" />
         </div>

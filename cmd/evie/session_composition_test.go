@@ -101,6 +101,22 @@ func TestReceiptBoundREPLStoreCreatesSessionAndReceiptAtomically(t *testing.T) {
 	if selection.createdComposition == nil || !reflect.DeepEqual(selection.createdComposition.Receipt, standard.Receipt) {
 		t.Fatalf("creation handoff = %#v, want original resolved composition", selection.createdComposition)
 	}
+
+	workspace, err := store.RegisterWorkspace(ctx, "Cairo's Kitchen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceSession, err := boundStore.CreateWorkspaceSessionForChooser(ctx, workspace.ID, workspace.CurrentRevisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceReceipt, err := store.GetCompositionReceipt(ctx, workspaceSession.ID)
+	if err != nil || !reflect.DeepEqual(workspaceReceipt, standard.Receipt) {
+		t.Fatalf("Workspace receipt = %#v, %v; want %#v", workspaceReceipt, err, standard.Receipt)
+	}
+	if workspaceSession.WorkspaceID != workspace.ID || workspaceSession.WorkspaceRevisionSnapshot != workspace.CurrentRevisionID {
+		t.Fatalf("Workspace session=%+v, want %q at %q", workspaceSession, workspace.ID, workspace.CurrentRevisionID)
+	}
 }
 
 func TestNewlyCreatedSessionUsesOriginalSnapshotWithoutSecondResolution(t *testing.T) {

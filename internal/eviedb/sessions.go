@@ -16,12 +16,14 @@ import (
 var (
 	ErrChooserStateChanged = errors.New("eviedb: chooser state changed")
 	ErrProjectNotActive    = errors.New("eviedb: project is missing or archived")
+	ErrWorkspaceNotActive  = errors.New("eviedb: Workspace is missing or archived")
 	ErrSessionNotActive    = errors.New("eviedb: session is missing or inactive")
 )
 
 func (s *Store) GetSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, project_id, project_root_snapshot, parent_session_id, COALESCE(title, ''), status, created_at, updated_at FROM sessions WHERE id = ?
+		SELECT id, workspace_id, workspace_revision_snapshot, project_id, project_root_snapshot,
+		       parent_session_id, COALESCE(title, ''), status, created_at, updated_at FROM sessions WHERE id = ?
 		`, id)
 	session, err := scanSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -35,7 +37,8 @@ func (s *Store) GetSession(ctx context.Context, id memory.SessionID) (memory.Ses
 
 func (s *Store) GetActiveSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
 	session, err := scanSession(s.db.QueryRowContext(ctx, `
-		SELECT id, project_id, project_root_snapshot, parent_session_id, COALESCE(title, ''), status, created_at, updated_at
+		SELECT id, workspace_id, workspace_revision_snapshot, project_id, project_root_snapshot,
+		       parent_session_id, COALESCE(title, ''), status, created_at, updated_at
 		FROM sessions
 		WHERE id = ? AND status = ?
 	`, id, memory.SessionActive))
@@ -64,7 +67,7 @@ func (s *Store) GetActiveSessionForChooser(
 		}
 		var err error
 		session, err = scanSession(conn.QueryRowContext(ctx, `
-			SELECT id, project_id, project_root_snapshot, parent_session_id,
+			SELECT id, workspace_id, workspace_revision_snapshot, project_id, project_root_snapshot, parent_session_id,
 			       COALESCE(title, ''), status, created_at, updated_at
 			FROM sessions
 			WHERE id = ? AND status = ?
@@ -86,7 +89,8 @@ func (s *Store) GetActiveSessionForChooser(
 // sequence, with creation time as the empty-history fallback.
 func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT sessions.id, sessions.project_id, sessions.project_root_snapshot,
+		SELECT sessions.id, sessions.workspace_id, sessions.workspace_revision_snapshot,
+		       sessions.project_id, sessions.project_root_snapshot,
 		       sessions.parent_session_id, COALESCE(sessions.title, ''), sessions.status,
 		       sessions.created_at, sessions.updated_at,
 		       (
@@ -134,26 +138,28 @@ func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing
 
 func scanSessionWithActivity(scanner rowScanner, activity *sql.NullString) (memory.Session, error) {
 	var (
-		id, title, status, createdText, updatedText string
-		projectID, rootSnapshot, parentID           sql.NullString
+		id, title, status, createdText, updatedText                       string
+		workspaceID, workspaceRevision, projectID, rootSnapshot, parentID sql.NullString
 	)
 	if err := scanner.Scan(
-		&id, &projectID, &rootSnapshot, &parentID, &title, &status,
+		&id, &workspaceID, &workspaceRevision, &projectID, &rootSnapshot, &parentID, &title, &status,
 		&createdText, &updatedText, activity,
 	); err != nil {
 		return memory.Session{}, err
 	}
-	return sessionFromScanned(id, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
+	return sessionFromScanned(id, workspaceID, workspaceRevision, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
 }
 
 func scanSession(scanner rowScanner) (memory.Session, error) {
 	var (
-		id, title, status, createdText, updatedText string
-		projectID, rootSnapshot, parentID           sql.NullString
+		id, title, status, createdText, updatedText                       string
+		workspaceID, workspaceRevision, projectID, rootSnapshot, parentID sql.NullString
 	)
 
 	if err := scanner.Scan(
 		&id,
+		&workspaceID,
+		&workspaceRevision,
 		&projectID,
 		&rootSnapshot,
 		&parentID,
@@ -165,12 +171,12 @@ func scanSession(scanner rowScanner) (memory.Session, error) {
 		return memory.Session{}, err
 	}
 
-	return sessionFromScanned(id, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
+	return sessionFromScanned(id, workspaceID, workspaceRevision, projectID, rootSnapshot, parentID, title, status, createdText, updatedText)
 }
 
 func sessionFromScanned(
 	id string,
-	projectID, rootSnapshot, parentID sql.NullString,
+	workspaceID, workspaceRevision, projectID, rootSnapshot, parentID sql.NullString,
 	title, status, createdText, updatedText string,
 ) (memory.Session, error) {
 	createdAt, err := time.Parse(time.RFC3339Nano, createdText)
@@ -189,6 +195,12 @@ func sessionFromScanned(
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 	}
+	if workspaceID.Valid {
+		session.WorkspaceID = memory.WorkspaceID(workspaceID.String)
+	}
+	if workspaceRevision.Valid {
+		session.WorkspaceRevisionSnapshot = memory.WorkspaceRevisionID(workspaceRevision.String)
+	}
 
 	if projectID.Valid {
 		session.ProjectID = memory.ProjectID(projectID.String)
@@ -204,8 +216,86 @@ func sessionFromScanned(
 	return session, nil
 }
 
+func (s *Store) CreateWorkspaceSessionWithComposition(
+	ctx context.Context,
+	workspaceID memory.WorkspaceID,
+	revisionID memory.WorkspaceRevisionID,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createWorkspaceSession(ctx, workspaceID, revisionID, receipt, false)
+}
+
+func (s *Store) CreateWorkspaceSessionForChooserWithComposition(
+	ctx context.Context,
+	workspaceID memory.WorkspaceID,
+	expectedRevisionID memory.WorkspaceRevisionID,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createWorkspaceSession(ctx, workspaceID, expectedRevisionID, receipt, true)
+}
+
+func (s *Store) createWorkspaceSession(
+	ctx context.Context,
+	workspaceID memory.WorkspaceID,
+	revisionID memory.WorkspaceRevisionID,
+	receipt composition.Receipt,
+	chooser bool,
+) (memory.Session, error) {
+	encodedReceipt, err := composition.Marshal(receipt)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("validate Composition Receipt: %w", err)
+	}
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("generate session ID: %w", err)
+	}
+	now := s.now().UTC()
+	session := memory.Session{ID: memory.SessionID(id.String()), Status: memory.SessionActive, CreatedAt: now, UpdatedAt: now}
+	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		var storedWorkspaceID, storedRevisionID string
+		err := conn.QueryRowContext(ctx, `
+			INSERT INTO sessions (
+				id, workspace_id, workspace_revision_snapshot, status, created_at, updated_at
+			)
+			SELECT ?, id, current_revision_id, ?, ?, ?
+			FROM workspaces
+			WHERE id = ? AND lifecycle_state = ? AND current_revision_id = ?
+			RETURNING workspace_id, workspace_revision_snapshot
+		`, session.ID, session.Status, session.CreatedAt.Format(time.RFC3339Nano),
+			session.UpdatedAt.Format(time.RFC3339Nano), workspaceID, memory.WorkspaceActive, revisionID,
+		).Scan(&storedWorkspaceID, &storedRevisionID)
+		if errors.Is(err, sql.ErrNoRows) {
+			if chooser {
+				return fmt.Errorf("%w: Workspace %q", ErrChooserStateChanged, workspaceID)
+			}
+			return fmt.Errorf("%w: Workspace %q", ErrWorkspaceNotActive, workspaceID)
+		}
+		if err != nil {
+			return fmt.Errorf("insert Workspace session: %w", err)
+		}
+		session.WorkspaceID = memory.WorkspaceID(storedWorkspaceID)
+		session.WorkspaceRevisionSnapshot = memory.WorkspaceRevisionID(storedRevisionID)
+		if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
+			return fmt.Errorf("insert Workspace session Composition Receipt: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return memory.Session{}, err
+	}
+	return session, nil
+}
+
 func (s *Store) CreateProjectSession(ctx context.Context, projectID memory.ProjectID) (memory.Session, error) {
 	return s.createProjectSession(ctx, projectID, "", "", "", false, nil)
+}
+
+func (s *Store) CreateProjectSessionWithComposition(
+	ctx context.Context,
+	projectID memory.ProjectID,
+	receipt composition.Receipt,
+) (memory.Session, error) {
+	return s.createProjectSession(ctx, projectID, "", "", "", false, &receipt)
 }
 
 // CreateProjectSessionForChooser atomically requires the rendered project root,
@@ -294,6 +384,35 @@ func (s *Store) createProjectSession(
 				if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
 					return fmt.Errorf("insert project session Composition Receipt: %w", err)
 				}
+			}
+			return nil
+		})
+		if err != nil {
+			return memory.Session{}, err
+		}
+		return session, nil
+	}
+	if receipt != nil {
+		err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+			var storedProjectID string
+			if err := conn.QueryRowContext(ctx, `
+				INSERT INTO sessions (
+					id, project_id, project_root_snapshot, status, created_at, updated_at
+				)
+				SELECT ?, id, canonical_root, ?, ?, ?
+				FROM projects
+				WHERE id = ? AND archived = 0
+				RETURNING project_id, project_root_snapshot
+			`, session.ID, session.Status, session.CreatedAt.Format(time.RFC3339Nano),
+				session.UpdatedAt.Format(time.RFC3339Nano), projectID,
+			).Scan(&storedProjectID, &session.ProjectRootSnapshot); errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("%w: project %q", ErrProjectNotActive, projectID)
+			} else if err != nil {
+				return fmt.Errorf("insert project session: %w", err)
+			}
+			session.ProjectID = memory.ProjectID(storedProjectID)
+			if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
+				return fmt.Errorf("insert project session Composition Receipt: %w", err)
 			}
 			return nil
 		})

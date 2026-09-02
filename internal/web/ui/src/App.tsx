@@ -8,6 +8,8 @@ import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { useSession } from "./store/useSession";
 import { Management } from "./management/Management";
+import { ContextChooser } from "./context/ContextChooser";
+import { useContextSessions } from "./store/useContextSessions";
 import { Banner } from "./ui/Banner";
 import { TextSizeMenu } from "./ui/TextSizeMenu";
 import {
@@ -20,7 +22,8 @@ export type Tab = "chat" | "board" | "reports" | "system";
 const textSizeStorageKey = "evie.chatTextSize";
 
 export default function App() {
-  const { items, status, queue, problem, send, answer, dismissProblem } = useSession();
+  const { items, status, queue, problem, send, answer, dismissProblem, reset } = useSession();
+  const contextSessions = useContextSessions();
   const [tab, setTab] = useState<Tab>("chat");
   const [draft, setDraft] = useState("");
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
@@ -75,25 +78,53 @@ export default function App() {
       {problem && <Banner message={problem} onDismiss={dismissProblem} />}
 
       {tab === "chat" && (
-        <div className="flex min-h-0 flex-1">
-          <div className="border-hair flex min-w-0 flex-1 flex-col border-r">
-            <Chat
-              items={items}
-              queued={queue}
-              streaming={status === "streaming"}
-              onAnswer={answer}
-            />
-            <Composer
-              value={draft}
-              onChange={setDraft}
-              streaming={status === "streaming"}
-              onSend={() => {
-                send(draft);
-                setDraft("");
-              }}
-            />
-          </div>
-          <Panel open={panelOpen} onToggle={() => setPanelOpen(!panelOpen)} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ContextChooser
+            snapshot={contextSessions.snapshot}
+            busy={contextSessions.busy || status === "streaming"}
+            problem={contextSessions.problem}
+            onRegister={(name) => {
+              void contextSessions
+                .register(name)
+                .then(() => {
+                  reset();
+                  setDraft("");
+                })
+                .catch(() => undefined);
+            }}
+            onSelect={(selection) => {
+              void contextSessions
+                .select(selection)
+                .then(() => {
+                  reset();
+                  setDraft("");
+                })
+                .catch(() => undefined);
+            }}
+          />
+          {contextSessions.snapshot?.activeScope && (
+            <div className="flex min-h-0 flex-1">
+              <div className="border-hair flex min-w-0 flex-1 flex-col border-r">
+                <Chat
+                  items={items}
+                  queued={queue}
+                  streaming={status === "streaming"}
+                  onAnswer={answer}
+                />
+                <Composer
+                  value={draft}
+                  onChange={setDraft}
+                  streaming={status === "streaming"}
+                  disabled={contextSessions.busy}
+                  onSend={() => {
+                    send(draft);
+                    setDraft("");
+                  }}
+                />
+              </div>
+              <Panel open={panelOpen} onToggle={() => setPanelOpen(!panelOpen)} />
+            </div>
+          )}
         </div>
       )}
 

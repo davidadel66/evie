@@ -45,6 +45,15 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at     TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS workspaces (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    display_name        TEXT NOT NULL,
+    lifecycle_state     TEXT NOT NULL CHECK (lifecycle_state IN ('active', 'archived')),
+    current_revision_id TEXT NOT NULL CHECK (length(trim(current_revision_id)) > 0),
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id                    TEXT PRIMARY KEY NOT NULL,
     project_id            TEXT REFERENCES projects(id),
@@ -181,6 +190,50 @@ BEGIN
 END;
 `
 
+const workspaceScopeSchema = `
+CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions(workspace_id);
+CREATE INDEX IF NOT EXISTS events_workspace_id_idx ON events(workspace_id);
+
+CREATE TRIGGER IF NOT EXISTS sessions_context_scope_valid_insert
+BEFORE INSERT ON sessions
+FOR EACH ROW
+WHEN ((NEW.workspace_id IS NULL) <> (NEW.workspace_revision_snapshot IS NULL))
+  OR (NEW.workspace_id IS NOT NULL AND NEW.project_id IS NOT NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'session Context Scope must be exactly one Workspace, project, or neither');
+END;
+
+CREATE TRIGGER IF NOT EXISTS sessions_context_scope_valid_update
+BEFORE UPDATE OF workspace_id, workspace_revision_snapshot, project_id, project_root_snapshot ON sessions
+FOR EACH ROW
+WHEN ((NEW.workspace_id IS NULL) <> (NEW.workspace_revision_snapshot IS NULL))
+  OR (NEW.workspace_id IS NOT NULL AND NEW.project_id IS NOT NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'session Context Scope must be exactly one Workspace, project, or neither');
+END;
+
+CREATE TRIGGER IF NOT EXISTS sessions_workspace_scope_immutable
+BEFORE UPDATE OF workspace_id, workspace_revision_snapshot ON sessions
+FOR EACH ROW
+WHEN NEW.workspace_id IS NOT OLD.workspace_id
+  OR NEW.workspace_revision_snapshot IS NOT OLD.workspace_revision_snapshot
+BEGIN
+    SELECT RAISE(ABORT, 'session scope is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS events_workspace_scope_matches_session
+BEFORE INSERT ON events
+FOR EACH ROW
+WHEN NOT EXISTS (
+    SELECT 1 FROM sessions
+    WHERE sessions.id = NEW.session_id
+      AND sessions.workspace_id IS NEW.workspace_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'event scope does not match session scope');
+END;
+`
+
 const (
 	dsnPragmas        = "?" + connectionPragmas
 	connectionPragmas = "_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
@@ -274,6 +327,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+	if err := ensureWorkspaceScope(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Workspace Context Scope: %w", err)
+	}
 	if err := ensurePluginConfigurationRevision(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("upgrade plugin enabled configuration: %w", err)
@@ -294,6 +351,43 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		return nil, err
 	}
 	return db, nil
+}
+
+func ensureWorkspaceScope(ctx context.Context, db *sql.DB) error {
+	columns := []struct {
+		table, name, definition string
+	}{
+		{"sessions", "workspace_id", "TEXT REFERENCES workspaces(id)"},
+		{"sessions", "workspace_revision_snapshot", "TEXT"},
+		{"events", "workspace_id", "TEXT REFERENCES workspaces(id)"},
+	}
+	for _, column := range columns {
+		present, err := tableHasColumn(ctx, db, column.table, column.name)
+		if err != nil {
+			return err
+		}
+		if present {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, fmt.Sprintf(
+			"ALTER TABLE %s ADD COLUMN %s %s", column.table, column.name, column.definition,
+		)); err != nil {
+			present, checkErr := tableHasColumn(ctx, db, column.table, column.name)
+			if checkErr != nil || !present {
+				return err
+			}
+		}
+	}
+	_, err := db.ExecContext(ctx, workspaceScopeSchema)
+	return err
+}
+
+func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	var count int
+	err := db.QueryRowContext(ctx, fmt.Sprintf(
+		"SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name = ?", table,
+	), column).Scan(&count)
+	return count == 1, err
 }
 
 func ensurePluginConfigurationRevision(ctx context.Context, db *sql.DB) error {

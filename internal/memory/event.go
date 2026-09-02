@@ -459,6 +459,7 @@ type Event struct {
 	ID            EventID
 	SessionID     SessionID
 	Sequence      int64
+	WorkspaceID   WorkspaceID
 	ProjectID     ProjectID
 	ParentID      EventID
 	Type          EventType

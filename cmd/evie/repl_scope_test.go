@@ -19,19 +19,50 @@ import (
 )
 
 type fakeREPLSessionStore struct {
-	projects        []memory.Project
-	sessions        []memory.SessionListing
-	findProject     memory.Project
-	findErr         error
-	registerErr     error
-	registerCalls   int
-	registeredNames []string
-	createdProject  []memory.ProjectID
-	createdGlobal   int
-	activeGets      []memory.SessionID
-	createHook      func(memory.ProjectID) (memory.Session, error)
-	getHook         func(memory.SessionID) (memory.Session, error)
-	listHook        func() ([]memory.Project, []memory.SessionListing)
+	projects                 []memory.Project
+	workspaces               []memory.Workspace
+	sessions                 []memory.SessionListing
+	findProject              memory.Project
+	findErr                  error
+	registerErr              error
+	registerCalls            int
+	registeredNames          []string
+	createdProject           []memory.ProjectID
+	createdGlobal            int
+	createdWorkspace         []memory.WorkspaceID
+	registeredWorkspaceNames []string
+	activeGets               []memory.SessionID
+	createHook               func(memory.ProjectID) (memory.Session, error)
+	getHook                  func(memory.SessionID) (memory.Session, error)
+	listHook                 func() ([]memory.Project, []memory.SessionListing)
+}
+
+type withoutWorkspaceREPLStore struct {
+	*eviedb.Store
+}
+
+func (s *withoutWorkspaceREPLStore) CreateWorkspaceSessionForChooser(
+	context.Context, memory.WorkspaceID, memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	return memory.Session{}, errors.New("unexpected Workspace session selection")
+}
+
+func (f *fakeREPLSessionStore) ListWorkspaces(context.Context, bool) ([]memory.Workspace, error) {
+	return append([]memory.Workspace(nil), f.workspaces...), nil
+}
+
+func (f *fakeREPLSessionStore) RegisterWorkspace(_ context.Context, displayName string) (memory.Workspace, error) {
+	f.registeredWorkspaceNames = append(f.registeredWorkspaceNames, displayName)
+	workspace := memory.Workspace{ID: "workspace-registered", DisplayName: displayName, State: memory.WorkspaceActive, CurrentRevisionID: "revision-1"}
+	f.workspaces = append(f.workspaces, workspace)
+	return workspace, nil
+}
+
+func (f *fakeREPLSessionStore) CreateWorkspaceSessionForChooser(
+	_ context.Context, id memory.WorkspaceID, revision memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	f.createdWorkspace = append(f.createdWorkspace, id)
+	return memory.Session{ID: "new-workspace", WorkspaceID: id, WorkspaceRevisionSnapshot: revision, Status: memory.SessionActive}, nil
 }
 
 type relocatingREPLStore struct {
@@ -41,6 +72,12 @@ type relocatingREPLStore struct {
 	relocateNext     bool
 	relocatedRoot    string
 	sessionsAtReject int
+}
+
+func (s *relocatingREPLStore) CreateWorkspaceSessionForChooser(
+	context.Context, memory.WorkspaceID, memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	return memory.Session{}, errors.New("unexpected Workspace session selection")
 }
 
 func (s *relocatingREPLStore) CreateProjectSessionForChooser(
@@ -75,11 +112,23 @@ type concurrentCWDREPLStore struct {
 	sessionsAtReject int
 }
 
+func (s *concurrentCWDREPLStore) CreateWorkspaceSessionForChooser(
+	context.Context, memory.WorkspaceID, memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	return memory.Session{}, errors.New("unexpected Workspace session selection")
+}
+
 type deletingProjectREPLStore struct {
 	*eviedb.Store
 	db               *sql.DB
 	deleteNext       bool
 	sessionsAtReject int
+}
+
+func (s *deletingProjectREPLStore) CreateWorkspaceSessionForChooser(
+	context.Context, memory.WorkspaceID, memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	return memory.Session{}, errors.New("unexpected Workspace session selection")
 }
 
 func (s *deletingProjectREPLStore) CreateProjectSessionForChooser(
@@ -395,6 +444,44 @@ func TestSelectREPLSessionExplicitNumberedPaths(t *testing.T) {
 	}
 }
 
+func TestSelectREPLSessionRegistersEntersAndResumesWorkspaceExplicitly(t *testing.T) {
+	root := t.TempDir()
+	store := &fakeREPLSessionStore{}
+	var out bytes.Buffer
+	created, err := selectREPLSession(
+		context.Background(), store, root,
+		bufio.NewScanner(strings.NewReader("3\nCairo's Kitchen\n")), &out,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.WorkspaceID != "workspace-registered" || created.WorkspaceRevisionSnapshot != "revision-1" ||
+		len(store.createdWorkspace) != 1 || len(store.registeredWorkspaceNames) != 1 {
+		t.Fatalf("created=%+v registered=%v entered=%v", created, store.registeredWorkspaceNames, store.createdWorkspace)
+	}
+	if !strings.Contains(out.String(), "Register Workspace") ||
+		!strings.Contains(out.String(), "Context Scope: Workspace — Cairo's Kitchen") {
+		t.Fatalf("Workspace selection was not explicit and visible: %q", out.String())
+	}
+
+	store.sessions = []memory.SessionListing{{Session: created}}
+	out.Reset()
+	resumed, err := selectREPLSession(
+		context.Background(), store, root,
+		bufio.NewScanner(strings.NewReader("4\n")), &out,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.ID != created.ID || resumed.WorkspaceID != created.WorkspaceID {
+		t.Fatalf("resumed=%+v, want %+v", resumed, created)
+	}
+	if !strings.Contains(out.String(), "Cairo's Kitchen") ||
+		!strings.Contains(out.String(), "Context Scope: Workspace — Cairo's Kitchen") {
+		t.Fatalf("resumed Workspace scope not displayed: %q", out.String())
+	}
+}
+
 func TestSelectREPLSessionRegistrationIsExplicit(t *testing.T) {
 	root := t.TempDir()
 	store := &fakeREPLSessionStore{findErr: eviedb.ErrProjectNotFound}
@@ -422,9 +509,10 @@ func TestSelectREPLSessionPersistsTimestampedFallbackForUnsafeCWDBasename(t *tes
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	store := eviedb.NewStore(db)
+	chooserStore := &withoutWorkspaceREPLStore{Store: store}
 	var out bytes.Buffer
 	session, err := selectREPLSession(
-		context.Background(), store, root,
+		context.Background(), chooserStore, root,
 		bufio.NewScanner(strings.NewReader("2\n\n")), &out,
 	)
 	if err != nil {
@@ -698,7 +786,7 @@ func TestSelectREPLSessionRealStoreResumesArchivedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	selected, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("1\n")), &out)
+	selected, err := selectREPLSession(context.Background(), &withoutWorkspaceREPLStore{Store: store}, root, bufio.NewScanner(strings.NewReader("1\n")), &out)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,27 +24,35 @@ import (
 
 type replSessionStore interface {
 	ListProjects(context.Context, bool) ([]memory.Project, error)
+	ListWorkspaces(context.Context, bool) ([]memory.Workspace, error)
 	ListActiveSessions(context.Context) ([]memory.SessionListing, error)
 	FindProjectByRoot(context.Context, string) (memory.Project, error)
 	RegisterProject(context.Context, string, string) (memory.Project, error)
+	RegisterWorkspace(context.Context, string) (memory.Workspace, error)
 	CreateProjectSessionForChooser(context.Context, memory.ProjectID, string, string, memory.ProjectID) (memory.Session, error)
+	CreateWorkspaceSessionForChooser(context.Context, memory.WorkspaceID, memory.WorkspaceRevisionID) (memory.Session, error)
 	CreateGlobalSessionForChooser(context.Context, string, memory.ProjectID) (memory.Session, error)
 	GetActiveSessionForChooser(context.Context, memory.SessionID, string, memory.ProjectID) (memory.Session, error)
 }
 
 type replChooserAction struct {
-	kind        string
-	projectID   memory.ProjectID
-	projectRoot string
-	sessionID   memory.SessionID
+	kind              string
+	projectID         memory.ProjectID
+	projectRoot       string
+	workspaceID       memory.WorkspaceID
+	workspaceRevision memory.WorkspaceRevisionID
+	workspaceLabel    string
+	sessionID         memory.SessionID
 }
 
 const (
-	replActionNewProject = "new-project"
-	replActionNewGlobal  = "new-global"
-	replActionResume     = "resume"
-	replActionRegister   = "register"
-	replStateChanged     = "Session choices changed; refreshing."
+	replActionNewProject        = "new-project"
+	replActionNewGlobal         = "new-global"
+	replActionResume            = "resume"
+	replActionRegister          = "register"
+	replActionNewWorkspace      = "new-workspace"
+	replActionRegisterWorkspace = "register-workspace"
+	replStateChanged            = "Session choices changed; refreshing."
 )
 
 func selectREPLSession(
@@ -68,7 +76,11 @@ func selectREPLSession(
 			return memory.Session{}, fmt.Errorf("list active sessions: %w", err)
 		}
 		renderedCWDProjectID := projectOwningRoot(projects, canonicalRoot)
-		actions, err := renderREPLChooser(out, canonicalRoot, projects, sessions)
+		workspaces, err := store.ListWorkspaces(ctx, true)
+		if err != nil {
+			return memory.Session{}, fmt.Errorf("list Workspaces: %w", err)
+		}
+		actions, err := renderREPLChooserWithWorkspaces(out, canonicalRoot, projects, workspaces, sessions)
 		if err != nil {
 			return memory.Session{}, err
 		}
@@ -100,6 +112,26 @@ func selectREPLSession(
 			}
 			if err != nil {
 				return memory.Session{}, fmt.Errorf("resume session: %w", err)
+			}
+			if session.WorkspaceID != "" {
+				if _, err := fmt.Fprintf(out, "Context Scope: Workspace — %s\n", action.workspaceLabel); err != nil {
+					return memory.Session{}, fmt.Errorf("write selected Workspace scope: %w", err)
+				}
+			}
+			return session, nil
+		case replActionNewWorkspace:
+			session, err := store.CreateWorkspaceSessionForChooser(ctx, action.workspaceID, action.workspaceRevision)
+			if errors.Is(err, eviedb.ErrChooserStateChanged) {
+				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write stale Workspace notice: %w", writeErr)
+				}
+				continue
+			}
+			if err != nil {
+				return memory.Session{}, fmt.Errorf("create Workspace session: %w", err)
+			}
+			if _, err := fmt.Fprintf(out, "Context Scope: Workspace — %s\n", action.workspaceLabel); err != nil {
+				return memory.Session{}, fmt.Errorf("write selected Workspace scope: %w", err)
 			}
 			return session, nil
 		case replActionNewProject:
@@ -134,8 +166,108 @@ func selectREPLSession(
 				continue
 			}
 			return session, nil
+		case replActionRegisterWorkspace:
+			session, err := registerREPLWorkspace(ctx, store, scanner, out)
+			if err != nil {
+				return memory.Session{}, err
+			}
+			return session, nil
 		}
 	}
+}
+
+func renderREPLChooserWithWorkspaces(
+	out io.Writer,
+	canonicalRoot string,
+	projects []memory.Project,
+	workspaces []memory.Workspace,
+	sessions []memory.SessionListing,
+) ([]replChooserAction, error) {
+	var ordinarySessions []memory.SessionListing
+	workspaceSessions := make(map[memory.WorkspaceID][]memory.SessionListing)
+	for _, session := range sessions {
+		if session.WorkspaceID == "" {
+			ordinarySessions = append(ordinarySessions, session)
+		} else {
+			workspaceSessions[session.WorkspaceID] = append(workspaceSessions[session.WorkspaceID], session)
+		}
+	}
+	actions, err := renderREPLChooser(out, canonicalRoot, projects, ordinarySessions)
+	if err != nil {
+		return actions, err
+	}
+	sort.Slice(workspaces, func(i, j int) bool {
+		left, right := replWorkspaceLabel(workspaces[i]), replWorkspaceLabel(workspaces[j])
+		if left != right {
+			return left < right
+		}
+		return workspaces[i].ID < workspaces[j].ID
+	})
+	if _, err := fmt.Fprintln(out, "Workspaces"); err != nil {
+		return nil, fmt.Errorf("write Workspace chooser heading: %w", err)
+	}
+	for _, workspace := range workspaces {
+		workspaceSessions := workspaceSessions[workspace.ID]
+		if workspace.State == memory.WorkspaceArchived && len(workspaceSessions) == 0 {
+			continue
+		}
+		label := replWorkspaceLabel(workspace)
+		archived := ""
+		if workspace.State == memory.WorkspaceArchived {
+			archived = " (archived)"
+		}
+		if _, err := fmt.Fprintf(out, "%s%s\n", label, archived); err != nil {
+			return nil, fmt.Errorf("write Workspace heading: %w", err)
+		}
+		if workspace.State == memory.WorkspaceActive {
+			actions = append(actions, replChooserAction{kind: replActionNewWorkspace, workspaceID: workspace.ID, workspaceRevision: workspace.CurrentRevisionID, workspaceLabel: label})
+			if _, err := fmt.Fprintf(out, "  %d. New session\n", len(actions)); err != nil {
+				return nil, fmt.Errorf("write Workspace new-session action: %w", err)
+			}
+		}
+		for _, session := range workspaceSessions {
+			actions = append(actions, replChooserAction{kind: replActionResume, sessionID: session.ID, workspaceLabel: label})
+			if _, err := fmt.Fprintf(out, "  %d. %s\n", len(actions), replSessionLabel(session.Session)); err != nil {
+				return nil, fmt.Errorf("write Workspace session action: %w", err)
+			}
+		}
+	}
+	actions = append(actions, replChooserAction{kind: replActionRegisterWorkspace})
+	if _, err := fmt.Fprintf(out, "  %d. Register Workspace\n", len(actions)); err != nil {
+		return nil, fmt.Errorf("write Workspace registration action: %w", err)
+	}
+	return actions, nil
+}
+
+func replWorkspaceLabel(workspace memory.Workspace) string {
+	return memory.WorkspaceDisplayLabel(workspace.DisplayName, workspace.CreatedAt)
+}
+
+func registerREPLWorkspace(
+	ctx context.Context,
+	store replSessionStore,
+	scanner *bufio.Scanner,
+	out io.Writer,
+) (memory.Session, error) {
+	if _, err := fmt.Fprint(out, "Workspace name: "); err != nil {
+		return memory.Session{}, fmt.Errorf("write Workspace-name prompt: %w", err)
+	}
+	displayName, err := scanREPLLine(scanner)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("read Workspace name: %w", err)
+	}
+	workspace, err := store.RegisterWorkspace(ctx, strings.TrimSpace(displayName))
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("register Workspace: %w", err)
+	}
+	session, err := store.CreateWorkspaceSessionForChooser(ctx, workspace.ID, workspace.CurrentRevisionID)
+	if err != nil {
+		return memory.Session{}, fmt.Errorf("create registered Workspace session: %w", err)
+	}
+	if _, err := fmt.Fprintf(out, "Context Scope: Workspace — %s\n", replWorkspaceLabel(workspace)); err != nil {
+		return memory.Session{}, fmt.Errorf("write selected Workspace scope: %w", err)
+	}
+	return session, nil
 }
 
 func renderREPLChooser(

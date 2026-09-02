@@ -19,6 +19,15 @@ func ProjectDisplayLabel(displayName string, createdAt time.Time) string {
 	return "Untitled project — " + createdAt.UTC().Format(time.RFC3339Nano)
 }
 
+// WorkspaceDisplayLabel returns the safe owner-visible identity label while
+// keeping the durable Workspace identity independent from its name.
+func WorkspaceDisplayLabel(displayName string, createdAt time.Time) string {
+	if label := TerminalSafeLine(displayName); label != "" {
+		return label
+	}
+	return "Untitled workspace — " + createdAt.UTC().Format(time.RFC3339Nano)
+}
+
 // SessionTitleCandidate returns normalized title evidence only for an accepted
 // root user event. Live appends and legacy backfill share this eligibility rule.
 func SessionTitleCandidate(eventType EventType, role EventRole, parentID EventID, content string) string {

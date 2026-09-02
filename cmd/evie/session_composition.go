@@ -73,6 +73,20 @@ func (s *receiptBoundREPLStore) CreateGlobalSessionForChooser(
 	return session, err
 }
 
+func (s *receiptBoundREPLStore) CreateWorkspaceSessionForChooser(
+	ctx context.Context,
+	workspaceID memory.WorkspaceID,
+	revisionID memory.WorkspaceRevisionID,
+) (memory.Session, error) {
+	session, err := s.Store.CreateWorkspaceSessionForChooserWithComposition(
+		ctx, workspaceID, revisionID, s.composition.Receipt,
+	)
+	if err == nil {
+		s.createdSessionID = session.ID
+	}
+	return session, err
+}
+
 func (s *receiptBoundREPLStore) selection(session memory.Session) storedSessionSelection {
 	selection := storedSessionSelection{Session: session}
 	if session.ID != "" && session.ID == s.createdSessionID {

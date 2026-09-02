@@ -78,7 +78,7 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var chooser bytes.Buffer
-			selected, err := selectREPLSession(context.Background(), store, newRoot, bufio.NewScanner(strings.NewReader(tt.input)), &chooser)
+			selected, err := selectREPLSession(context.Background(), &withoutWorkspaceREPLStore{Store: store}, newRoot, bufio.NewScanner(strings.NewReader(tt.input)), &chooser)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,6 +113,87 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 				}
 			}
 		})
+	}
+}
+
+func TestWorkspaceREPLRegistersConversesAndResumesAcrossRestart(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	manager := sessionCompositionManager(t)
+	standard, err := manager.ResolvePreset("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundStore := &receiptBoundREPLStore{Store: store, composition: standard}
+	launchDir := t.TempDir()
+	var entered bytes.Buffer
+	selected, err := selectREPLSession(
+		ctx, boundStore, launchDir,
+		bufio.NewScanner(strings.NewReader("3\nCairo's Kitchen\n")), &entered,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.WorkspaceID == "" || !strings.Contains(entered.String(), "Context Scope: Workspace — Cairo's Kitchen") {
+		t.Fatalf("selected=%+v chooser=%q", selected, entered.String())
+	}
+
+	client := &resumeCaptureClient{}
+	holder := memory.LeaseHolderID("workspace-first-process")
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 300000, 200000, 12000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := agent.New(
+		client,
+		profile,
+		store.BindHistory(selected.ID, holder),
+		selected.ScopeContext(),
+		store.BindTurnOwner(selected.ID, holder),
+	)
+	if err := session.Send(ctx, "prepare dinner", &replEvents{out: io.Discard}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store = eviedb.NewStore(db)
+	boundStore = &receiptBoundREPLStore{Store: store, composition: standard}
+	var resumedOutput bytes.Buffer
+	resumed, err := selectREPLSession(
+		ctx, boundStore, launchDir,
+		bufio.NewScanner(strings.NewReader("4\n")), &resumedOutput,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.ID != selected.ID || resumed.ScopeContext() != selected.ScopeContext() ||
+		!strings.Contains(resumedOutput.String(), "Context Scope: Workspace — Cairo's Kitchen") {
+		t.Fatalf("resumed=%+v output=%q, want %+v", resumed, resumedOutput.String(), selected)
+	}
+	events, err := store.LoadEvents(ctx, resumed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var messages []memory.Event
+	for _, event := range events {
+		if event.Type == memory.EventUserMessage || event.Type == memory.EventAssistantMessage {
+			messages = append(messages, event)
+		}
+	}
+	if len(messages) != 2 || messages[0].Content != "prepare dinner" || messages[1].Content != "resumed" {
+		t.Fatalf("resumed events=%+v", events)
 	}
 }
 
