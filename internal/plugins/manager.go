@@ -86,6 +86,13 @@ type ToolProvider interface {
 	ToolCapabilities() []ToolCapability
 }
 
+// ResumableToolProvider supplies frozen contract/schema variants for prior
+// implementation receipts while retaining the current provider's execution.
+// These variants never participate in new composition.
+type ResumableToolProvider interface {
+	ResumableToolCapabilities(implementationVersion string) []ToolCapability
+}
+
 type ToolCapability struct {
 	ID              CapabilityID
 	ContractVersion string
@@ -93,22 +100,23 @@ type ToolCapability struct {
 }
 
 type compiledPlugin struct {
-	callbackMu          sync.Mutex
-	plugin              Plugin
-	manifest            Manifest
-	capabilities        []ToolCapability
-	activeCapabilities  []ToolCapability
-	enabled             bool
-	manualStopped       bool
-	started             bool
-	cleanupPending      bool
-	cleanupRetryAllowed bool
-	retryRequested      bool
-	loadedOptional      map[PluginID]bool
-	state               LifecycleState
-	diagnostic          string
-	warnings            []string
-	connectionReadiness ConnectionReadiness
+	callbackMu            sync.Mutex
+	plugin                Plugin
+	manifest              Manifest
+	capabilities          []ToolCapability
+	resumableCapabilities map[string][]ToolCapability
+	activeCapabilities    []ToolCapability
+	enabled               bool
+	manualStopped         bool
+	started               bool
+	cleanupPending        bool
+	cleanupRetryAllowed   bool
+	retryRequested        bool
+	loadedOptional        map[PluginID]bool
+	state                 LifecycleState
+	diagnostic            string
+	warnings              []string
+	connectionReadiness   ConnectionReadiness
 }
 
 // LifecycleState is the complete externally observable Plugin Lifecycle.
@@ -277,7 +285,18 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 			return nil, err
 		}
 		manager.plugins[manifest.ID].capabilities = capabilities
-		if err := validateImplementationCompatibility(manifest, capabilities); err != nil {
+		resumable := make(map[string][]ToolCapability)
+		if resumableProvider, ok := plugin.(ResumableToolProvider); ok {
+			for _, declaration := range manifest.ResumableFrom {
+				variants, err := snapshotResumableToolCapabilities(manifest, declaration, resumableProvider.ResumableToolCapabilities(declaration.ImplementationVersion))
+				if err != nil {
+					return nil, err
+				}
+				resumable[declaration.ImplementationVersion] = variants
+			}
+		}
+		manager.plugins[manifest.ID].resumableCapabilities = resumable
+		if err := validateImplementationCompatibility(manifest, capabilities, resumable); err != nil {
 			return nil, err
 		}
 	}
@@ -293,7 +312,7 @@ func NewManager(base tools.Toolset, compiled ...Plugin) (*Manager, error) {
 	return manager, nil
 }
 
-func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability) error {
+func validateImplementationCompatibility(manifest Manifest, capabilities []ToolCapability, resumable map[string][]ToolCapability) error {
 	current, err := parseManifestVersion(manifest.ImplementationVersion)
 	if err != nil {
 		return err
@@ -318,6 +337,13 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 			return fmt.Errorf("plugin %q repeats resumable implementation version %s", manifest.ID, declaration.ImplementationVersion)
 		}
 		seenVersions[declaration.ImplementationVersion] = struct{}{}
+		available := active
+		if variants, exists := resumable[declaration.ImplementationVersion]; exists {
+			available = make(map[CapabilityID]ToolCapability, len(variants))
+			for _, capability := range variants {
+				available[capability.ID] = capability
+			}
+		}
 		seenCapabilities := make(map[CapabilityID]struct{}, len(declaration.Capabilities))
 		for _, evidence := range declaration.Capabilities {
 			if _, duplicate := seenCapabilities[evidence.ID]; duplicate {
@@ -327,7 +353,7 @@ func validateImplementationCompatibility(manifest Manifest, capabilities []ToolC
 				)
 			}
 			seenCapabilities[evidence.ID] = struct{}{}
-			capability, exists := active[evidence.ID]
+			capability, exists := available[evidence.ID]
 			if !exists {
 				return fmt.Errorf(
 					"plugin %q compatibility for implementation %s names unavailable Capability %q",
@@ -617,6 +643,56 @@ func snapshotToolCapabilities(manifest Manifest, supplied []ToolCapability) ([]T
 		}
 	}
 	return capabilities, nil
+}
+
+func snapshotResumableToolCapabilities(
+	manifest Manifest,
+	declaration ImplementationCompatibility,
+	supplied []ToolCapability,
+) ([]ToolCapability, error) {
+	contracts := make(map[CapabilityID]CapabilityCompatibility, len(declaration.Capabilities))
+	for _, evidence := range declaration.Capabilities {
+		contracts[evidence.ID] = evidence
+	}
+	if len(supplied) != len(contracts) {
+		return nil, fmt.Errorf(
+			"plugin %q resumable implementation %s supplied %d tool variants, want %d",
+			manifest.ID, declaration.ImplementationVersion, len(supplied), len(contracts),
+		)
+	}
+	variants := make([]ToolCapability, len(supplied))
+	seen := make(map[CapabilityID]struct{}, len(supplied))
+	for i, capability := range supplied {
+		evidence, exists := contracts[capability.ID]
+		if !exists {
+			return nil, fmt.Errorf(
+				"plugin %q resumable implementation %s contributes undeclared Capability %q",
+				manifest.ID, declaration.ImplementationVersion, capability.ID,
+			)
+		}
+		if _, duplicate := seen[capability.ID]; duplicate {
+			return nil, fmt.Errorf(
+				"plugin %q resumable implementation %s repeats Capability %q",
+				manifest.ID, declaration.ImplementationVersion, capability.ID,
+			)
+		}
+		if capability.ContractVersion != evidence.ContractVersion || schemaHash(capability.Tool.Schema) != evidence.SchemaSHA256 {
+			return nil, fmt.Errorf(
+				"plugin %q resumable implementation %s Capability %q does not match declared contract/schema evidence",
+				manifest.ID, declaration.ImplementationVersion, capability.ID,
+			)
+		}
+		if capability.Tool.Schema.Function.Name == "" || (capability.Tool.Execute == nil && capability.Tool.Prepare == nil) {
+			return nil, fmt.Errorf(
+				"plugin %q resumable implementation %s Capability %q lacks schema or execution behavior",
+				manifest.ID, declaration.ImplementationVersion, capability.ID,
+			)
+		}
+		capability.Tool.Schema = tools.NewToolset([]tools.Tool{capability.Tool}).Schemas()[0]
+		variants[i] = capability
+		seen[capability.ID] = struct{}{}
+	}
+	return variants, nil
 }
 
 func cloneManifest(manifest Manifest) Manifest {

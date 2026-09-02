@@ -20,12 +20,13 @@ import (
 const (
 	EvieVersion                    = "1.0.0"
 	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:d3bb965df9ac07057a94b4816e42e072130335422baa0f0ce3d38cffa8702554"
+	StandardPresetVersion          = "sha256:3a40a38be361fc81f2e6e4bfa33621b452e3f749fd8b9661a6766810f3e0cf67"
 
 	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
 	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
 	preTodoStandardPresetVersion    = "sha256:8149efdcc636e89d8c404c181cfa595bfe8ab09b38bffbefb756f73e99e5d6c0"
 	preDurableTodoPresetVersion     = "sha256:6490dc45771d4fc2d865fa9c3380d660b8100ad2c77bc79007c8d4e7b2053694"
+	preLifecycleTodoPresetVersion   = "sha256:d3bb965df9ac07057a94b4816e42e072130335422baa0f0ce3d38cffa8702554"
 )
 
 type PresetID string
@@ -83,6 +84,28 @@ func standardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	return Preset{
 		ID: StandardPresetID,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+			{ID: TodoListCapabilityID, Compatibility: compatibility},
+			{ID: TodoAddCapabilityID, Compatibility: compatibility},
+			{ID: TodoGetCapabilityID, Compatibility: compatibility},
+			{ID: TodoUpdateCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preLifecycleTodoStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preLifecycleTodoPresetVersion,
 		RequiredCapabilities: []CapabilityRequirement{
 			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
 			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
@@ -548,6 +571,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preDurableTodoPresetVersion {
 		return m.resumePreset(preDurableTodoStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preLifecycleTodoPresetVersion {
+		return m.resumePreset(preLifecycleTodoStandardPreset(), receipt)
+	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }
 
@@ -609,6 +635,11 @@ func (m *Manager) resumePresetWithBase(
 			)
 		}
 		capability, exists := activeCapability(entry, CapabilityID(pinnedCapability.ID))
+		if provider := providerReceipts[providerID]; provider.ImplementationVersion != entry.manifest.ImplementationVersion {
+			if resumable, found := resumableCapability(entry, provider.ImplementationVersion, CapabilityID(pinnedCapability.ID)); found {
+				capability, exists = resumable, true
+			}
+		}
 		if !exists {
 			return ResolvedComposition{}, fmt.Errorf(
 				"pinned Capability %q is not exposed by provider plugin %q version %q",
@@ -775,6 +806,15 @@ func validatePinnedToolSchemas(pinned, loaded []ToolSchemaReceipt) error {
 
 func activeCapability(entry *compiledPlugin, id CapabilityID) (ToolCapability, bool) {
 	for _, capability := range entry.activeCapabilities {
+		if capability.ID == id {
+			return capability, true
+		}
+	}
+	return ToolCapability{}, false
+}
+
+func resumableCapability(entry *compiledPlugin, version string, id CapabilityID) (ToolCapability, bool) {
+	for _, capability := range entry.resumableCapabilities[version] {
 		if capability.ID == id {
 			return capability, true
 		}

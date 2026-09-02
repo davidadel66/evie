@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -21,74 +22,111 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	if err := task.ValidateCreateInput(input); err != nil {
 		return task.Task{}, err
 	}
+	attribution, err := task.MutationAttributionFromContext(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return task.Task{}, fmt.Errorf("generate task ID: %w", err)
 	}
 	now := s.now().UTC()
 	created := task.Task{
-		ID:          task.ID(id.String()),
-		Scope:       task.ScopeGlobal,
-		Title:       input.Title,
-		Description: input.Description,
-		Priority:    input.Priority,
-		DueDate:     input.DueDate,
-		Status:      task.StatusOpen,
-		Revision:    1,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID: task.ID(id.String()), Scope: task.ScopeGlobal,
+		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
+		Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
-	if _, err := s.db.ExecContext(ctx, `
-		INSERT INTO tasks (
-			id, scope, title, description, priority, due_date,
-			status, revision, created_at, updated_at
-		) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), ?, ?, ?, ?)
-	`,
-		created.ID, created.Scope, created.Title, created.Description, created.Priority, created.DueDate,
-		created.Status, created.Revision, formatTaskTime(created.CreatedAt), formatTaskTime(created.UpdatedAt),
-	); err != nil {
-		return task.Task{}, fmt.Errorf("insert global task: %w", err)
+	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		if _, err := conn.ExecContext(ctx, `
+			INSERT INTO tasks (
+				id, scope, title, description, priority, due_date,
+				status, revision, created_at, updated_at
+			) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, ''), ?, ?, ?, ?)
+		`, created.ID, created.Scope, created.Title, created.Description, created.Priority, created.DueDate,
+			created.Status, created.Revision, formatTaskTime(created.CreatedAt), formatTaskTime(created.UpdatedAt)); err != nil {
+			return fmt.Errorf("insert global task: %w", err)
+		}
+		return appendTaskEvent(ctx, conn, task.Event{
+			TaskID: created.ID, Operation: task.OperationCreate,
+			ActorID: attribution.ActorID, SessionID: attribution.SessionID, RunID: attribution.RunID,
+			RecordedAt: now, PreviousRevision: 0, ResultingRevision: 1, Outcome: task.MutationAccepted,
+		})
+	})
+	if err != nil {
+		return task.Task{}, err
 	}
 	return created, nil
 }
 
 func (s *Store) ListOpenGlobalTasks(ctx context.Context) ([]task.Task, error) {
+	return s.ListGlobalTasks(ctx, task.ListFilter{})
+}
+
+func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]task.Task, error) {
+	statuses, err := listStatuses(filter)
+	if err != nil {
+		return nil, err
+	}
+	placeholders := make([]string, len(statuses))
+	arguments := make([]any, 0, len(statuses)+1)
+	arguments = append(arguments, task.ScopeGlobal)
+	for i, status := range statuses {
+		placeholders[i] = "?"
+		arguments = append(arguments, status)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, scope, title, description, priority, due_date,
 		       status, revision, created_at, updated_at
 		FROM tasks
-		WHERE scope = ? AND status = ?
+		WHERE scope = ? AND status IN (`+strings.Join(placeholders, ",")+`)
 		ORDER BY created_at, id
-	`, task.ScopeGlobal, task.StatusOpen)
+	`, arguments...)
 	if err != nil {
-		return nil, fmt.Errorf("list open global tasks: %w", err)
+		return nil, fmt.Errorf("list global tasks: %w", err)
 	}
 	defer rows.Close()
 
-	var tasks []task.Task
+	var values []task.Task
 	for rows.Next() {
 		value, err := scanTask(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list open global tasks: %w", err)
+			return nil, fmt.Errorf("list global tasks: %w", err)
 		}
-		tasks = append(tasks, value)
+		values = append(values, value)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list open global tasks: %w", err)
+		return nil, fmt.Errorf("list global tasks: %w", err)
 	}
-	return tasks, nil
+	return values, nil
+}
+
+func listStatuses(filter task.ListFilter) ([]task.Status, error) {
+	if len(filter.Statuses) == 0 {
+		if filter.IncludeHistory {
+			return []task.Status{task.StatusOpen, task.StatusInProgress, task.StatusBlocked, task.StatusCompleted, task.StatusCancelled}, nil
+		}
+		return []task.Status{task.StatusOpen}, nil
+	}
+	seen := make(map[task.Status]struct{}, len(filter.Statuses))
+	statuses := make([]task.Status, 0, len(filter.Statuses))
+	for _, status := range filter.Statuses {
+		if !task.ValidStatus(status) {
+			return nil, &task.InputError{Field: "statuses", Message: fmt.Sprintf("contains invalid status %q", status)}
+		}
+		if _, exists := seen[status]; exists {
+			continue
+		}
+		seen[status] = struct{}{}
+		statuses = append(statuses, status)
+	}
+	return statuses, nil
 }
 
 func (s *Store) GetGlobalTask(ctx context.Context, id task.ID) (task.Task, error) {
 	if strings.TrimSpace(string(id)) == "" {
 		return task.Task{}, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
-	value, err := scanTask(s.db.QueryRowContext(ctx, `
-		SELECT id, scope, title, description, priority, due_date,
-		       status, revision, created_at, updated_at
-		FROM tasks
-		WHERE id = ? AND scope = ?
-	`, id, task.ScopeGlobal))
+	value, err := getGlobalTask(ctx, s.db, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return task.Task{}, &task.NotFoundError{ID: id}
 	}
@@ -98,6 +136,196 @@ func (s *Store) GetGlobalTask(ctx context.Context, id task.ID) (task.Task, error
 	return value, nil
 }
 
+func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.UpdateInput) (task.Task, error) {
+	if err := ctx.Err(); err != nil {
+		return task.Task{}, err
+	}
+	if strings.TrimSpace(string(id)) == "" {
+		return task.Task{}, &task.InputError{Field: "task_id", Message: "must not be blank"}
+	}
+	attribution, err := task.MutationAttributionFromContext(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	var result task.Task
+	var businessErr error
+	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		current, err := getGlobalTask(ctx, conn, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return &task.NotFoundError{ID: id}
+		}
+		if err != nil {
+			return fmt.Errorf("get global task for update: %w", err)
+		}
+		result = current
+		reject := func(cause error, code task.DiagnosticCode) error {
+			businessErr = cause
+			return appendTaskEvent(ctx, conn, task.Event{
+				TaskID: id, Operation: task.OperationUpdate,
+				ActorID: attribution.ActorID, SessionID: attribution.SessionID, RunID: attribution.RunID,
+				RecordedAt: s.now().UTC(), PreviousRevision: current.Revision, ResultingRevision: current.Revision,
+				Outcome: task.MutationRejected, DiagnosticCode: code,
+			})
+		}
+		if err := task.ValidateUpdateInput(input); err != nil {
+			return reject(err, task.DiagnosticInvalidInput)
+		}
+		if input.ExpectedRevision != current.Revision {
+			return reject(&task.ConflictError{ID: id, Expected: input.ExpectedRevision, Current: current.Revision}, task.DiagnosticRevisionConflict)
+		}
+		if input.Status != nil {
+			if *input.Status == current.Status && !hasTaskMetadataPatch(input) {
+				return reject(&task.TransitionError{From: current.Status, To: *input.Status}, task.DiagnosticInvalidTransition)
+			}
+			if *input.Status != current.Status {
+				if err := task.ValidateStatusTransition(current.Status, *input.Status); err != nil {
+					return reject(err, task.DiagnosticInvalidTransition)
+				}
+			}
+		}
+		updated := applyTaskPatch(current, input)
+		if taskStateEqual(current, updated) {
+			return reject(&task.InputError{Field: "patch", Message: "must change task state"}, task.DiagnosticInvalidInput)
+		}
+		updated.Revision++
+		updated.UpdatedAt = s.now().UTC()
+		outcome, err := conn.ExecContext(ctx, `
+			UPDATE tasks
+			SET title = ?, description = NULLIF(?, ''), priority = NULLIF(?, 0), due_date = NULLIF(?, ''),
+			    status = ?, revision = ?, updated_at = ?
+			WHERE id = ? AND scope = ? AND revision = ?
+		`, updated.Title, updated.Description, updated.Priority, updated.DueDate, updated.Status,
+			updated.Revision, formatTaskTime(updated.UpdatedAt), id, task.ScopeGlobal, current.Revision)
+		if err != nil {
+			return fmt.Errorf("update global task: %w", err)
+		}
+		rows, err := outcome.RowsAffected()
+		if err != nil || rows != 1 {
+			return fmt.Errorf("update global task revision predicate affected %d rows: %w", rows, err)
+		}
+		if err := appendTaskEvent(ctx, conn, task.Event{
+			TaskID: id, Operation: task.OperationUpdate,
+			ActorID: attribution.ActorID, SessionID: attribution.SessionID, RunID: attribution.RunID,
+			RecordedAt: updated.UpdatedAt, PreviousRevision: current.Revision, ResultingRevision: updated.Revision,
+			Outcome: task.MutationAccepted,
+		}); err != nil {
+			return err
+		}
+		result = updated
+		return nil
+	})
+	if err != nil {
+		return task.Task{}, err
+	}
+	if businessErr != nil {
+		return task.Task{}, businessErr
+	}
+	return result, nil
+}
+
+func hasTaskMetadataPatch(input task.UpdateInput) bool {
+	return input.Title != nil || input.Description != nil || input.Priority != nil || input.DueDate != nil
+}
+
+func applyTaskPatch(current task.Task, input task.UpdateInput) task.Task {
+	updated := current
+	if input.Title != nil {
+		updated.Title = *input.Title
+	}
+	if input.Description != nil {
+		updated.Description = *input.Description
+	}
+	if input.Priority != nil {
+		updated.Priority = *input.Priority
+	}
+	if input.DueDate != nil {
+		updated.DueDate = *input.DueDate
+	}
+	if input.Status != nil {
+		updated.Status = *input.Status
+	}
+	return updated
+}
+
+func taskStateEqual(left, right task.Task) bool {
+	left.Revision, right.Revision = 0, 0
+	left.UpdatedAt, right.UpdatedAt = time.Time{}, time.Time{}
+	return reflect.DeepEqual(left, right)
+}
+
+func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, error) {
+	if strings.TrimSpace(string(id)) == "" {
+		return nil, &task.InputError{Field: "task_id", Message: "must not be blank"}
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
+		       previous_revision, resulting_revision, outcome, diagnostic_code
+		FROM task_events
+		WHERE task_id = ?
+		ORDER BY sequence
+	`, id)
+	if err != nil {
+		return nil, fmt.Errorf("list task events: %w", err)
+	}
+	defer rows.Close()
+	var events []task.Event
+	for rows.Next() {
+		var event task.Event
+		var recorded string
+		var diagnostic sql.NullString
+		if err := rows.Scan(&event.ID, &event.TaskID, &event.Sequence, &event.Operation, &event.ActorID, &event.SessionID,
+			&event.RunID, &recorded, &event.PreviousRevision, &event.ResultingRevision, &event.Outcome, &diagnostic); err != nil {
+			return nil, fmt.Errorf("list task events: %w", err)
+		}
+		event.DiagnosticCode = task.DiagnosticCode(diagnostic.String)
+		event.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
+		if err != nil {
+			return nil, fmt.Errorf("parse task event recorded_at: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list task events: %w", err)
+	}
+	return events, nil
+}
+
+type queryRower interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Task, error) {
+	return scanTask(source.QueryRowContext(ctx, `
+		SELECT id, scope, title, description, priority, due_date,
+		       status, revision, created_at, updated_at
+		FROM tasks
+		WHERE id = ? AND scope = ?
+	`, id, task.ScopeGlobal))
+}
+
+func appendTaskEvent(ctx context.Context, conn *sql.Conn, event task.Event) error {
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("generate task event ID: %w", err)
+	}
+	event.ID = id.String()
+	if err := conn.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(sequence), 0) + 1 FROM task_events WHERE task_id = ?`, event.TaskID,
+	).Scan(&event.Sequence); err != nil {
+		return fmt.Errorf("allocate task event sequence: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `
+		INSERT INTO task_events (
+			id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
+			previous_revision, resulting_revision, outcome, diagnostic_code
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''))
+	`, event.ID, event.TaskID, event.Sequence, event.Operation, event.ActorID, event.SessionID, event.RunID,
+		formatTaskTime(event.RecordedAt), event.PreviousRevision, event.ResultingRevision, event.Outcome, event.DiagnosticCode); err != nil {
+		return fmt.Errorf("append task event: %w", err)
+	}
+	return nil
+}
+
 func scanTask(scanner rowScanner) (task.Task, error) {
 	var (
 		value                    task.Task
@@ -105,10 +333,8 @@ func scanTask(scanner rowScanner) (task.Task, error) {
 		priority                 sql.NullInt64
 		createdText, updatedText string
 	)
-	if err := scanner.Scan(
-		&value.ID, &value.Scope, &value.Title, &description, &priority, &dueDate,
-		&value.Status, &value.Revision, &createdText, &updatedText,
-	); err != nil {
+	if err := scanner.Scan(&value.ID, &value.Scope, &value.Title, &description, &priority, &dueDate,
+		&value.Status, &value.Revision, &createdText, &updatedText); err != nil {
 		return task.Task{}, err
 	}
 	value.Description = description.String
@@ -126,6 +352,4 @@ func scanTask(scanner rowScanner) (task.Task, error) {
 	return value, nil
 }
 
-func formatTaskTime(value time.Time) string {
-	return value.UTC().Format(time.RFC3339Nano)
-}
+func formatTaskTime(value time.Time) string { return value.UTC().Format(time.RFC3339Nano) }

@@ -57,14 +57,14 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 
-	wantTodo := append(tools.TodoTools(), tools.TodoGetTool())
+	wantTodo := []tools.Tool{tools.TodoLifecycleListTool(), tools.TodoTools()[1], tools.TodoGetTool(), tools.TodoUpdateTool()}
 	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.1.0"},
+		{ID: "todo", ImplementationVersion: "1.2.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -75,7 +75,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.0.0", "todo.add@1.0.0", "todo.get@1.0.0",
+		"todo.list@1.1.0", "todo.add@1.0.0", "todo.get@1.0.0", "todo.update@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
 	for i, capability := range receipt.Capabilities {
@@ -146,11 +146,13 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		t.Fatal(err)
 	}
 	var todoIntent, todoOutcome bool
+	var todoExecutionID memory.ExecutionID
 	for _, event := range durableEvents {
 		if event.Type == memory.EventToolIntent {
 			var payload memory.ToolIntentPayload
 			if json.Unmarshal(event.Payload, &payload) == nil && payload.Call.Name == "todo_add" {
 				todoIntent = true
+				todoExecutionID = event.ExecutionID
 			}
 		}
 		if event.Type == memory.EventToolSucceeded && event.Content == string(encodedTask) {
@@ -159,6 +161,81 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	if !todoIntent || !todoOutcome {
 		t.Fatalf("Todo episodic evidence missing: intent=%v outcome=%v events=%+v", todoIntent, todoOutcome, durableEvents)
+	}
+	taskEvents, err := store.ListTaskEvents(ctx, created[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(taskEvents) != 1 || taskEvents[0].ActorID != string(memory.LocalOwnerID) ||
+		taskEvents[0].SessionID != string(storedSession.ID) || taskEvents[0].RunID != string(todoExecutionID) {
+		t.Fatalf("Task event attribution = %+v, episodic execution = %q", taskEvents, todoExecutionID)
+	}
+}
+
+func TestStandardAgentRecordsRejectedTaskMutationWithoutInventingTransition(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	storedSession, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedCtx := task.WithMutationAttribution(ctx, task.MutationAttribution{
+		ActorID: "local", SessionID: string(storedSession.ID), RunID: "seed",
+	})
+	created, err := store.CreateGlobalTask(seedCtx, task.CreateInput{Title: "protect revision"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedTitle := "revision two"
+	created, err = store.UpdateGlobalTask(seedCtx, created.ID, task.UpdateInput{ExpectedRevision: 1, Title: &seedTitle})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := standardManager(t, store)
+	resolved, err := manager.ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("stale-call", "todo_update",
+			`{"task_id":"`+string(created.ID)+`","expected_revision":1,"title":"lost"}`)),
+		assistantStep("done", nil),
+	}}
+	session := NewWithToolset(
+		client, testContextProfile("test-model"), store.BindHistory(storedSession.ID, "holder"),
+		storedSession.ScopeContext(), store.BindTurnOwner(storedSession.ID, "holder"), resolved.Toolset,
+	)
+	if err := session.Send(ctx, "stale update", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetGlobalTask(ctx, created.ID)
+	if err != nil || !reflect.DeepEqual(got, created) {
+		t.Fatalf("rejected update changed Task: %+v, %v", got, err)
+	}
+	durable, err := store.LoadEvents(ctx, storedSession.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failedExecution memory.ExecutionID
+	for _, event := range durable {
+		if event.Type == memory.EventToolFailed && event.ExecutionID != "" {
+			failedExecution = event.ExecutionID
+		}
+	}
+	taskEvents, err := store.ListTaskEvents(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := taskEvents[len(taskEvents)-1]
+	if failedExecution == "" || len(taskEvents) != 3 || last.Outcome != task.MutationRejected ||
+		last.DiagnosticCode != task.DiagnosticRevisionConflict || last.PreviousRevision != 2 ||
+		last.ResultingRevision != 2 || last.RunID != string(failedExecution) {
+		t.Fatalf("rejected evidence = episodic execution %q Task events %+v", failedExecution, taskEvents)
 	}
 }
 

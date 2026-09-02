@@ -9,6 +9,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/google/uuid"
 )
@@ -476,8 +477,11 @@ func (s *Session) runOwnedTurn(
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
 				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
 			})
+			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
+				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),
+			})
 			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
-				invocationCtx, call, wrappedApprover, observeApproval, authorize,
+				toolCtx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {
 						s.timing.beforeToolResultHandoff()

@@ -22,7 +22,8 @@ func TestTaskStoreCreatesListsGetsAndReopensGlobalTask(t *testing.T) {
 		return time.Date(2026, time.September, 2, 16, 30, 0, 123, time.FixedZone("owner", -4*60*60))
 	}
 
-	created, err := store.CreateGlobalTask(context.Background(), task.CreateInput{
+	ctx := attributedTaskContext()
+	created, err := store.CreateGlobalTask(ctx, task.CreateInput{
 		Title:       "Ship the durable path",
 		Description: "Keep the contract narrow",
 		Priority:    5,
@@ -67,6 +68,12 @@ func TestTaskStoreCreatesListsGetsAndReopensGlobalTask(t *testing.T) {
 	if !reflect.DeepEqual(reopened, created) {
 		t.Fatalf("reopened Task = %#v, want %#v", reopened, created)
 	}
+}
+
+func attributedTaskContext() context.Context {
+	return task.WithMutationAttribution(context.Background(), task.MutationAttribution{
+		ActorID: "local", SessionID: "session-test", RunID: "run-test",
+	})
 }
 
 func TestTaskStoreRejectsInvalidCreateWithoutPartialRows(t *testing.T) {

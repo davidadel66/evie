@@ -52,6 +52,52 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS tasks_scope_status_created_idx
 ON tasks(scope, status, created_at, id);
 
+CREATE TRIGGER IF NOT EXISTS tasks_no_hard_delete
+BEFORE DELETE ON tasks
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'tasks cannot be hard deleted');
+END;
+
+CREATE TABLE IF NOT EXISTS task_events (
+    id                 TEXT PRIMARY KEY NOT NULL CHECK (typeof(id) = 'text' AND length(trim(id)) > 0),
+    task_id            TEXT NOT NULL REFERENCES tasks(id),
+    sequence           INTEGER NOT NULL CHECK (typeof(sequence) = 'integer' AND sequence > 0),
+    operation          TEXT NOT NULL CHECK (operation IN ('create', 'update')),
+    actor_id           TEXT NOT NULL CHECK (typeof(actor_id) = 'text' AND length(trim(actor_id)) > 0),
+    session_id         TEXT NOT NULL CHECK (typeof(session_id) = 'text' AND length(trim(session_id)) > 0),
+    run_id             TEXT NOT NULL CHECK (typeof(run_id) = 'text' AND length(trim(run_id)) > 0),
+    recorded_at        TEXT NOT NULL CHECK (typeof(recorded_at) = 'text'),
+    previous_revision  INTEGER NOT NULL CHECK (typeof(previous_revision) = 'integer' AND previous_revision >= 0),
+    resulting_revision INTEGER NOT NULL CHECK (typeof(resulting_revision) = 'integer' AND resulting_revision > 0),
+    outcome            TEXT NOT NULL CHECK (outcome IN ('accepted', 'rejected')),
+    diagnostic_code    TEXT CHECK (
+        diagnostic_code IS NULL OR diagnostic_code IN ('invalid_input', 'invalid_transition', 'revision_conflict')
+    ),
+    UNIQUE (task_id, sequence),
+    CHECK (
+        (outcome = 'accepted' AND diagnostic_code IS NULL AND resulting_revision = previous_revision + 1) OR
+        (outcome = 'rejected' AND diagnostic_code IS NOT NULL AND resulting_revision = previous_revision)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS task_events_task_sequence_idx
+ON task_events(task_id, sequence);
+
+CREATE TRIGGER IF NOT EXISTS task_events_append_only_update
+BEFORE UPDATE ON task_events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_events_append_only_delete
+BEFORE DELETE ON task_events
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'task events are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS projects (
     id             TEXT PRIMARY KEY NOT NULL,
     display_name   TEXT NOT NULL,

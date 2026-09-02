@@ -23,6 +23,24 @@ var todoListTool = openrouter.Tool{
 	},
 }
 
+var todoLifecycleListTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_list",
+		Description: "List durable tasks; defaults to open tasks and can explicitly include lifecycle history",
+		Parameters: openrouter.Parameter{
+			Type: "object",
+			Properties: map[string]openrouter.Property{
+				"statuses": {
+					Type: "array", Description: "Optional lifecycle statuses to return",
+					Items: &openrouter.Property{Type: "string", Enum: []string{"open", "in_progress", "blocked", "completed", "cancelled"}},
+				},
+				"include_history": {Type: "boolean", Description: "Return every retained lifecycle state when statuses are omitted"},
+			},
+		},
+	},
+}
+
 // todoAddTool describes todo_add to the model: create a task with a
 // required title and optional priority, description, and due date —
 // mirroring the flags of the todo CLI it shells out to.
@@ -76,6 +94,30 @@ var todoGetTool = openrouter.Tool{
 	},
 }
 
+var todoUpdateTool = openrouter.Tool{
+	Type: "function",
+	Function: openrouter.Function{
+		Name:        "todo_update",
+		Description: "Update task metadata or lifecycle state using its current revision",
+		Parameters: openrouter.Parameter{
+			Type:     "object",
+			Required: []string{"task_id", "expected_revision"},
+			Properties: map[string]openrouter.Property{
+				"task_id":           {Type: "string", Description: "The opaque durable task identity"},
+				"expected_revision": {Type: "integer", Description: "The exact current revision returned by Todo"},
+				"title":             {Type: "string", Description: "Replacement non-blank title"},
+				"description":       {Type: "string", Description: "Replacement description; empty clears it"},
+				"priority":          {Type: "integer", Description: "Replacement priority from one to five; zero clears it"},
+				"due":               {Type: "string", Description: "Replacement YYYY-MM-DD due date; empty clears it"},
+				"status": {
+					Type: "string", Description: "Replacement lifecycle status",
+					Enum: []string{"open", "in_progress", "blocked", "completed", "cancelled"},
+				},
+			},
+		},
+	},
+}
+
 // TodoTools returns fresh definitions for the existing model-facing Todo
 // tools. The Todo first-party plugin attaches canonical Capability identities
 // while preserving these schemas and execution functions unchanged.
@@ -92,6 +134,14 @@ func TodoTools() []Tool {
 func TodoGetTool() Tool {
 	return Tool{Schema: cloneSchema(todoGetTool)}
 }
+
+// TodoLifecycleListTool is the current history-aware Todo list definition.
+// TodoTools remains frozen for legacy receipts and CLI compatibility.
+func TodoLifecycleListTool() Tool { return Tool{Schema: cloneSchema(todoLifecycleListTool)} }
+
+// TodoUpdateTool returns the lifecycle mutation schema. Execution is supplied
+// only by the first-party Todo plugin.
+func TodoUpdateTool() Tool { return Tool{Schema: cloneSchema(todoUpdateTool)} }
 
 // toDoList shells out to `todo list` and returns its output verbatim for
 // the model to read. Ignores args — the tool has no parameters.
