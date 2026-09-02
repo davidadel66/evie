@@ -235,7 +235,7 @@ func TestLifecycleCancellationExpiresPendingApprovalBeforeObservationOrExecution
 			[]tools.Tool{tool},
 			openrouter.ToolCall{ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: "gated", Arguments: `{}`}},
 			srv.approver(context.Background(), ev),
-			func(context.Context, tools.Decision) error {
+			func(context.Context, tools.Decision, tools.ApprovalMetadata) error {
 				observed = true
 				return nil
 			},

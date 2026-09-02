@@ -3,12 +3,90 @@ package tools
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 )
+
+func TestPreparedToolSuppliesHarnessInvocationAndExactApprovalMetadata(t *testing.T) {
+	invocation := InvocationContext{
+		Scope:         memory.ScopeContext{SessionID: "session-1", ProjectID: "project-1"},
+		Lease:         memory.TurnLease{SessionID: "session-1", HolderID: "holder-1", FencingToken: 4, Generation: 4},
+		SourceEventID: "owner-event-1",
+	}
+	metadata := ApprovalMetadata{
+		Arguments:      `{"kind":"remember_literal"}`,
+		ParentEventID:  "owner-event-1",
+		ExecutionID:    "60000000-0000-4000-8000-000000000001",
+		ProposalSHA256: "sha256:proposal",
+		PreparedSHA256: "sha256:prepared",
+	}
+	var preparedInvocation, executedInvocation InvocationContext
+	var approvedArguments string
+	var observed ApprovalMetadata
+	tool := Tool{
+		Schema: callSchema("semantic"), NeedsApproval: true,
+		Prepare: func(ctx context.Context, _ string) (PreparedTool, error) {
+			preparedInvocation, _ = InvocationFromContext(ctx)
+			return PreparedTool{Approval: metadata, Execute: func(ctx context.Context) (string, error) {
+				executedInvocation, _ = InvocationFromContext(ctx)
+				return "accepted", nil
+			}}, nil
+		},
+	}
+	ctx := WithInvocationContext(context.Background(), invocation)
+	msg, isErr, err := ExecuteWithApproval(
+		ctx, []Tool{tool}, callFor("semantic", `{"untrusted":"args"}`),
+		func(_ context.Context, _ string, args string, _ *FileChangePreview) Decision {
+			approvedArguments = args
+			return Approved
+		},
+		func(_ context.Context, decision Decision, metadata ApprovalMetadata) error {
+			if decision != Approved {
+				t.Fatalf("decision = %v", decision)
+			}
+			observed = metadata
+			return nil
+		},
+	)
+	if err != nil || isErr || msg.Content != "accepted" {
+		t.Fatalf("execution = (%+v, %v, %v)", msg, isErr, err)
+	}
+	if approvedArguments != metadata.Arguments || !reflect.DeepEqual(observed, metadata) {
+		t.Fatalf("approval arguments/metadata = %q / %+v", approvedArguments, observed)
+	}
+	if !reflect.DeepEqual(preparedInvocation, invocation) || !reflect.DeepEqual(executedInvocation, invocation) {
+		t.Fatalf("invocations = prepared %+v executed %+v, want %+v", preparedInvocation, executedInvocation, invocation)
+	}
+}
+
+func TestPreparedApprovalMetadataRequiresDurableObserver(t *testing.T) {
+	executed := false
+	tool := Tool{
+		Schema: callSchema("semantic"), NeedsApproval: true,
+		Prepare: func(context.Context, string) (PreparedTool, error) {
+			return PreparedTool{
+				Approval: ApprovalMetadata{
+					Arguments: `{"kind":"remember_literal"}`, ParentEventID: "owner-event-1",
+					ExecutionID:    "60000000-0000-4000-8000-000000000001",
+					ProposalSHA256: "sha256:proposal", PreparedSHA256: "sha256:prepared",
+				},
+				Execute: func(context.Context) (string, error) { executed = true; return "accepted", nil },
+			}, nil
+		},
+	}
+	message, isErr, err := ExecuteWithApproval(
+		context.Background(), []Tool{tool}, callFor("semantic", `{}`),
+		func(context.Context, string, string, *FileChangePreview) Decision { return Approved }, nil,
+	)
+	if err != nil || !isErr || executed || !strings.Contains(message.Content, "durable approval observer") {
+		t.Fatalf("missing observer result = (%+v, %v, %v), executed=%v", message, isErr, err, executed)
+	}
+}
 
 // extraTool builds a per-turn tool for tests, the way a frontend would:
 // a closure constructed at call time, not a registry entry.
@@ -60,7 +138,10 @@ func TestExecuteWithApprovalCancellationMatrix(t *testing.T) {
 				return func(context.Context, string, string, *FileChangePreview) Decision { cancel(); return Approved }
 			},
 			observe: func(context.CancelFunc) ApprovalObserver {
-				return func(context.Context, Decision) error { t.Fatal("observer started after cancellation"); return nil }
+				return func(context.Context, Decision, ApprovalMetadata) error {
+					t.Fatal("observer started after cancellation")
+					return nil
+				}
 			},
 		},
 		{
@@ -75,7 +156,7 @@ func TestExecuteWithApprovalCancellationMatrix(t *testing.T) {
 				return func(context.Context, string, string, *FileChangePreview) Decision { return Approved }
 			},
 			observe: func(cancel context.CancelFunc) ApprovalObserver {
-				return func(context.Context, Decision) error { cancel(); return nil }
+				return func(context.Context, Decision, ApprovalMetadata) error { cancel(); return nil }
 			},
 		},
 	}
@@ -185,7 +266,7 @@ func TestExecuteWithApprovalCancellationDuringPreparedExecuteIsLifecycleError(t 
 			}
 			return Approved
 		},
-		func(got context.Context, _ Decision) error {
+		func(got context.Context, _ Decision, _ ApprovalMetadata) error {
 			if got != ctx {
 				t.Fatal("observer did not receive the caller context")
 			}
@@ -389,7 +470,7 @@ func TestExecuteWithApprovalObservesDecisionBeforeExecution(t *testing.T) {
 		return "ran", nil
 	})
 	approve := func(_ context.Context, name, args string, _ *FileChangePreview) Decision { return Approved }
-	observe := func(_ context.Context, decision Decision) error {
+	observe := func(_ context.Context, decision Decision, _ ApprovalMetadata) error {
 		if decision != Approved {
 			t.Fatalf("observed decision = %v, want Approved", decision)
 		}
@@ -422,7 +503,9 @@ func TestExecuteWithApprovalObserverFailurePreventsExecution(t *testing.T) {
 		[]Tool{extra},
 		callFor("dangerous", "{}"),
 		approve,
-		func(context.Context, Decision) error { return errors.New("persist approval: disk full") },
+		func(context.Context, Decision, ApprovalMetadata) error {
+			return errors.New("persist approval: disk full")
+		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
 		t.Fatalf("observer error = %v, want disk full", err)
@@ -446,7 +529,7 @@ func TestExecuteWithApprovalObservesDecline(t *testing.T) {
 		[]Tool{extra},
 		callFor("dangerous", "{}"),
 		func(context.Context, string, string, *FileChangePreview) Decision { return Declined },
-		func(_ context.Context, decision Decision) error {
+		func(_ context.Context, decision Decision, _ ApprovalMetadata) error {
 			observed = decision
 			observedDecision = true
 			return nil

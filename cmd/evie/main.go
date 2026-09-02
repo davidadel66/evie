@@ -49,22 +49,23 @@ func main() {
 		return
 	}
 
-	pluginManager, err := plugins.NewManager(
-		tools.KernelToolset(),
-		plugins.NewWeb(),
-		plugins.NewFinance(),
-	)
-	if err != nil {
-		log.Fatalf("failed to load compiled plugins: %v", err)
-	}
 	db, err := eviedb.OpenDB()
 	if err != nil {
 		log.Fatalf("failed to open Evie database: %v", err)
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	pluginManager, err := plugins.NewManager(
+		tools.KernelToolset(),
+		plugins.NewWeb(),
+		plugins.NewFinance(),
+		plugins.NewMemory(kernelStore),
+	)
+	if err != nil {
+		log.Fatalf("failed to load compiled plugins: %v", err)
+	}
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
-		plugins.WebPluginID: true, plugins.FinancePluginID: true,
+		plugins.WebPluginID: true, plugins.FinancePluginID: true, plugins.MemoryPluginID: true,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}

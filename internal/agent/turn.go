@@ -420,8 +420,16 @@ func (s *Session) runOwnedTurn(
 				}
 				return admitApproval(coordinator, approve, approvalCtx, name, args, preview)
 			}
-			observeApproval := func(observeCtx context.Context, decision tools.Decision) error {
+			observeApproval := func(observeCtx context.Context, decision tools.Decision, metadata tools.ApprovalMetadata) error {
 				input, err := approvalEventInput(intentEvent.ID, executionID, decision)
+				var semanticInput memory.EventInput
+				hasSemanticInput := metadata != (tools.ApprovalMetadata{})
+				if hasSemanticInput {
+					semanticInput, err = semanticApprovalEventInput(
+						metadata.ParentEventID, metadata.ExecutionID, decision,
+						metadata.ProposalSHA256, metadata.PreparedSHA256,
+					)
+				}
 				if err != nil {
 					return err
 				}
@@ -434,6 +442,12 @@ func (s *Session) runOwnedTurn(
 					return fmt.Errorf("persist approval: %w", err)
 				}
 				approvalEventID = approvalEvent.ID
+				if hasSemanticInput {
+					if _, err := s.history.Append(observeCtx, lease, semanticInput); err != nil {
+						coordinator.abortCommitBoundary()
+						return fmt.Errorf("persist semantic approval: %w", err)
+					}
+				}
 				approvalDecision = decision
 				if decision == tools.Approved {
 					coordinator.finishCommitBoundary(memory.StageToolExecute)
@@ -459,8 +473,11 @@ func (s *Session) runOwnedTurn(
 			if !coordinator.beginToolPhase() {
 				return s.observeTurnContext(coordinator)
 			}
+			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
+				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
+			})
 			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
-				coordinator.ctx, call, wrappedApprover, observeApproval, authorize,
+				invocationCtx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {
 						s.timing.beforeToolResultHandoff()
