@@ -76,6 +76,7 @@ type ContextComposeInput struct {
 	Iteration      int
 	Tools          []openrouter.Tool
 	Reasoning      *openrouter.ReasoningConfig
+	WorkingContext string
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -202,6 +203,9 @@ func (c *ContextComposer) projectAtStart(
 		if input.Summary != nil {
 			messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
 		}
+		if input.WorkingContext != "" {
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.WorkingContext})
+		}
 		messages = append(messages, projection.conversation...)
 		projection.request = openrouter.ChatRequest{
 			Model:     profile.ConfiguredModel,
@@ -276,7 +280,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		canonicalModel = profile.ConfiguredModel
 	}
 	systemBytes, summaryBytes, historyBytes, toolBytes, settingsBytes, err := contextByteBreakdown(
-		projection.request, len(projection.conversation), input.Summary != nil,
+		projection.request, len(projection.conversation), input.WorkingContext != "", input.Summary != nil,
 	)
 	if err != nil {
 		return ComposedContext{}, err
@@ -380,10 +384,17 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if latest != nil {
 		iteration = latest.Manifest.Iteration + 1
 	}
+	workingContext := ""
+	if provider, ok := s.history.(workingContextProvider); ok {
+		workingContext, err = provider.WorkingContext(ctx)
+		if err != nil {
+			return ContextDiagnostics{}, fmt.Errorf("load working context: %w", err)
+		}
+	}
 	composed, err := s.composer.Compose(ContextComposeInput{
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
-		Tools: s.toolset.Schemas(), Reasoning: s.reasoning,
+		Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 	})
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)
@@ -499,19 +510,23 @@ func cloneReasoning(reasoning *openrouter.ReasoningConfig) *openrouter.Reasoning
 func contextByteBreakdown(
 	request openrouter.ChatRequest,
 	historyMessages int,
+	hasWorkingContext bool,
 	hasSummary bool,
 ) (int64, int64, int64, int64, int64, error) {
 	system, err := json.Marshal(request.Messages[0])
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
 	}
+	systemBytes := int64(len(system))
+	nextSystem := 1
 	summaryBytes := int64(0)
 	if hasSummary {
-		summary, err := json.Marshal(request.Messages[1])
+		summary, err := json.Marshal(request.Messages[nextSystem])
 		if err != nil {
 			return 0, 0, 0, 0, 0, err
 		}
 		summaryBytes = int64(len(summary))
+		nextSystem++
 	}
 	history, err := json.Marshal(request.Messages[len(request.Messages)-historyMessages:])
 	if err != nil {
@@ -534,7 +549,15 @@ func contextByteBreakdown(
 	if len(request.Tools) > 0 {
 		toolBytes = int64(len(tools))
 	}
-	return int64(len(system)), summaryBytes, int64(len(history)), toolBytes, int64(len(settings)), nil
+	historyBytes := int64(len(history))
+	if hasWorkingContext {
+		working, err := json.Marshal(request.Messages[nextSystem])
+		if err != nil {
+			return 0, 0, 0, 0, 0, err
+		}
+		historyBytes += int64(len(working))
+	}
+	return systemBytes, summaryBytes, historyBytes, toolBytes, int64(len(settings)), nil
 }
 
 func validateDurableContextHistory(events []memory.Event) error {

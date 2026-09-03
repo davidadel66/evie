@@ -25,6 +25,7 @@ var (
 	ErrClaimNotOwned            = errors.New("task: active claim belongs to another execution")
 	ErrClaimExecutionInactive   = errors.New("task: claiming execution is not active")
 	ErrManagementOverrideDenied = errors.New("task: delegated sessions cannot use Task management overrides")
+	ErrScopeDenied              = errors.New("task: Context Scope does not authorize this Task")
 )
 
 type ID string
@@ -33,6 +34,26 @@ type IdempotencyKey string
 type Scope string
 
 const ScopeGlobal Scope = "global"
+
+type ScopeSelection string
+
+const (
+	ScopeSelectionDefault ScopeSelection = ""
+	ScopeSelectionContext ScopeSelection = "context"
+	ScopeSelectionGlobal  ScopeSelection = "global"
+)
+
+func WorkspaceScope(id string) Scope { return Scope("workspace:" + id) }
+func ProjectScope(id string) Scope   { return Scope("project:" + id) }
+
+func ValidateScopeSelection(selection ScopeSelection) error {
+	switch selection {
+	case ScopeSelectionDefault, ScopeSelectionContext, ScopeSelectionGlobal:
+		return nil
+	default:
+		return &InputError{Field: "scope", Message: "must be context or global"}
+	}
+}
 
 type Status string
 
@@ -100,8 +121,9 @@ type Task struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// CreateInput deliberately excludes persistence, scope, owner, actor, and
-// session identities. Those values belong to the trusted Kernel boundary.
+// CreateInput deliberately excludes persistence, scope identities, owner,
+// actor, and session identities. Scope is only a bounded context/global
+// selection; the trusted Kernel derives the stable identity.
 type CreateInput struct {
 	Title                  string
 	Description            string
@@ -110,6 +132,7 @@ type CreateInput struct {
 	ParentID               ID
 	ExpectedParentRevision uint64
 	IdempotencyKey         IdempotencyKey
+	Scope                  ScopeSelection
 }
 
 type ChildInput struct {
@@ -181,6 +204,12 @@ type ListFilter struct {
 	IncludeHistory bool
 	RootID         ID
 	ParentID       ID
+	Scope          ScopeSelection
+	// FocusID is a trusted session projection anchor. Model-facing schemas do
+	// not expose it; ordinary callers select focus through the session API.
+	FocusID ID
+	// Limit is a trusted projection bound and is not model-facing.
+	Limit int
 }
 
 // MutationAttribution is installed by the trusted runtime immediately before
@@ -190,6 +219,8 @@ type MutationAttribution struct {
 	SessionID       string
 	RunID           string
 	ParentSessionID string
+	WorkspaceID     string
+	ProjectID       string
 	LeaseHolderID   string
 	LeaseToken      uint64
 	LeaseGeneration uint64
@@ -319,6 +350,9 @@ func (e *ClaimExecutionInactiveError) Error() string {
 func (e *ClaimExecutionInactiveError) Unwrap() error { return ErrClaimExecutionInactive }
 
 func ValidateCreateInput(input CreateInput) error {
+	if err := ValidateScopeSelection(input.Scope); err != nil {
+		return err
+	}
 	if err := validateTaskContent("", ChildInput{
 		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
 	}); err != nil {
@@ -328,6 +362,9 @@ func ValidateCreateInput(input CreateInput) error {
 		return &InputError{Field: "expected_parent_revision", Message: "must be zero when parent_id is omitted"}
 	}
 	if input.ParentID != "" {
+		if input.Scope != ScopeSelectionDefault {
+			return &InputError{Field: "scope", Message: "must be omitted when parent_id is supplied"}
+		}
 		if strings.TrimSpace(string(input.ParentID)) == "" {
 			return &InputError{Field: "parent_id", Message: "must not be blank"}
 		}
@@ -455,6 +492,7 @@ func ValidateStatusTransition(from, to Status) error {
 }
 
 type mutationAttributionKey struct{}
+type globalScopeCompatibilityKey struct{}
 
 func WithMutationAttribution(ctx context.Context, attribution MutationAttribution) context.Context {
 	return context.WithValue(ctx, mutationAttributionKey{}, attribution)
@@ -466,4 +504,18 @@ func MutationAttributionFromContext(ctx context.Context) (MutationAttribution, e
 		return MutationAttribution{}, ErrMissingAttribution
 	}
 	return attribution, nil
+}
+
+func MutationAttributionContext(ctx context.Context) (MutationAttribution, bool) {
+	attribution, ok := ctx.Value(mutationAttributionKey{}).(MutationAttribution)
+	return attribution, ok
+}
+
+func WithGlobalScopeCompatibility(ctx context.Context) context.Context {
+	return context.WithValue(ctx, globalScopeCompatibilityKey{}, true)
+}
+
+func GlobalScopeCompatibility(ctx context.Context) bool {
+	compatible, _ := ctx.Value(globalScopeCompatibilityKey{}).(bool)
+	return compatible
 }

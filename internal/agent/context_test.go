@@ -98,6 +98,31 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 	}
 }
 
+func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 8000, 8000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile:        profile,
+		Summary:        &ContextSummary{CompactionEventID: "compaction-1", Content: "prior summary"},
+		WorkingContext: "# Task Focus\n- id=task-1 title=\"ship\"",
+		Events:         []memory.Event{{ID: "active-user", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "continue"}},
+		ActiveRootID:   "active-user", TriggerEventID: "active-user", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := result.Request.Messages
+	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != "prior summary" ||
+		messages[2].Role != "user" || messages[2].Content != "# Task Focus\n- id=task-1 title=\"ship\"" || messages[3].Content != "continue" {
+		t.Fatalf("messages = %+v", messages)
+	}
+	if result.Snapshot.SystemMessageBytes == 0 || result.Snapshot.HistoryMessageBytes == 0 || result.Snapshot.SummaryMessageBytes == 0 {
+		t.Fatalf("snapshot does not account for working context and summary: %+v", result.Snapshot)
+	}
+}
+
 func TestContextComposerRejectsAnActiveTurnThatCannotFit(t *testing.T) {
 	profile, err := openrouter.NewExplicitContextProfile("test/model", 8000, 8000, 1)
 	if err != nil {

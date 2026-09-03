@@ -19,13 +19,13 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.5.0",
+		ImplementationVersion: "1.6.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
-			{ID: TodoListCapabilityID, Version: "1.2.0"},
-			{ID: TodoAddCapabilityID, Version: "1.2.0"},
+			{ID: TodoListCapabilityID, Version: "1.3.0"},
+			{ID: TodoAddCapabilityID, Version: "1.3.0"},
 			{ID: TodoGetCapabilityID, Version: "1.1.0"},
 			{ID: TodoUpdateCapabilityID, Version: "1.3.0"},
 			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
@@ -76,6 +76,18 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "0dcda46f6f320e1afcf56f990c80196407d70da56401f70ecc320804cbd71b10"},
 				},
 			},
+			{
+				ImplementationVersion: "1.5.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: "f0862f14352b145fe5b4bdce0519142435da80b5fa5c4aaf2909b62609f8bfc7"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaSHA256: "0b5d687951b3b73f9455b9f2bf3d258d4ad8f5e32e779a86098c720d0e9dbaf4"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "dd52b8e07189b5863170784d1e051ea75fbd451c214f556cd47443972e15cdba"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "b9d4f8c01243220efb0b81ec60583eb7393b6660110e6539fd2ea58a11a9157c"},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "0dcda46f6f320e1afcf56f990c80196407d70da56401f70ecc320804cbd71b10"},
+					{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "718dbd187e037db724b67d5ad075c294256c118e903201831120d0e63884acef"},
+					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "69d3046efcb2b32995358856de6f0106c06adff7b173254f385e509efd2d15f9"},
+				},
+			},
 		},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
@@ -98,8 +110,8 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		}
 	}
 	wantAssociations := []association{
-		{ID: TodoListCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_list"},
-		{ID: TodoAddCapabilityID, ContractVersion: "1.2.0", SchemaName: "todo_add"},
+		{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_list"},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_add"},
 		{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_get"},
 		{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_update"},
 		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_decompose"},
@@ -122,7 +134,7 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefinitions := []tools.Tool{
-		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
 		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {

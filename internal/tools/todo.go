@@ -190,6 +190,26 @@ var todoTreeAddTool = func() openrouter.Tool {
 	return tool
 }()
 
+var todoScopedListTool = func() openrouter.Tool {
+	tool := cloneSchema(todoTreeListTool)
+	tool.Function.Description = "List durable Tasks in the current session's authorized Context Scopes"
+	tool.Function.Parameters.Properties["scope"] = openrouter.Property{
+		Type: "string", Description: "Optional scope view: context selects the active Workspace/project; global selects owner-wide work",
+		Enum: []string{"context", "global"},
+	}
+	return tool
+}()
+
+var todoScopedAddTool = func() openrouter.Tool {
+	tool := cloneSchema(todoTreeAddTool)
+	tool.Function.Description = "Create a Task Tree in the active Context Scope, an explicitly global root, or a child inheriting its parent scope"
+	tool.Function.Parameters.Properties["scope"] = openrouter.Property{
+		Type: "string", Description: "Optional root scope: defaults to context; use global only for genuinely owner-wide or personal work",
+		Enum: []string{"context", "global"},
+	}
+	return tool
+}()
+
 var todoTreeGetTool = func() openrouter.Tool {
 	tool := cloneSchema(todoGetTool)
 	tool.Function.Description = "Retrieve one durable Task or a bounded recursive Task Tree"
@@ -286,6 +306,10 @@ func TodoTreeListTool() Tool { return Tool{Schema: cloneSchema(todoTreeListTool)
 
 // TodoTreeAddTool is the hierarchy-aware current add schema.
 func TodoTreeAddTool() Tool { return Tool{Schema: cloneSchema(todoTreeAddTool)} }
+
+func TodoScopedListTool() Tool { return Tool{Schema: cloneSchema(todoScopedListTool)} }
+
+func TodoScopedAddTool() Tool { return Tool{Schema: cloneSchema(todoScopedAddTool)} }
 
 // TodoTreeGetTool is the bounded recursive current get schema.
 func TodoTreeGetTool() Tool { return Tool{Schema: cloneSchema(todoTreeGetTool)} }

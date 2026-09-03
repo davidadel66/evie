@@ -39,7 +39,7 @@ func idempotencySHA256(key task.IdempotencyKey) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func canonicalCreateRequestSHA256(input task.CreateInput) (string, error) {
+func canonicalCreateRequestSHA256(input task.CreateInput, scope task.Scope) (string, error) {
 	return canonicalMutationSHA256(struct {
 		Version                int        `json:"version"`
 		Operation              string     `json:"operation"`
@@ -50,7 +50,7 @@ func canonicalCreateRequestSHA256(input task.CreateInput) (string, error) {
 		DueDate                string     `json:"due_date"`
 		ParentID               task.ID    `json:"parent_id"`
 		ExpectedParentRevision uint64     `json:"expected_parent_revision"`
-	}{1, string(task.OperationCreate), task.ScopeGlobal, input.Title, input.Description, input.Priority, input.DueDate,
+	}{1, string(task.OperationCreate), scope, input.Title, input.Description, input.Priority, input.DueDate,
 		input.ParentID, input.ExpectedParentRevision})
 }
 
@@ -294,14 +294,21 @@ func insertTaskRevision(ctx context.Context, conn *sql.Conn, value task.Task) er
 }
 
 func getTaskRevision(ctx context.Context, conn *sql.Conn, id task.ID, revision uint64) (task.Task, error) {
+	access, err := taskAccessFromContext(ctx, conn)
+	if err != nil {
+		return task.Task{}, err
+	}
+	scopeSQL, scopeArgs := scopePlaceholders(access.scopes)
+	args := []any{id, revision}
+	args = append(args, scopeArgs...)
 	return scanTask(conn.QueryRowContext(ctx, `
 		SELECT r.task_id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       r.scope, r.title, r.description, r.priority, r.due_date, r.result_summary,
 		       r.status, r.revision, r.created_at, r.updated_at
 		FROM task_revisions r
 		JOIN task_hierarchy h ON h.task_id = r.task_id
-		WHERE r.task_id = ? AND r.revision = ?
-	`, id, revision))
+		WHERE r.task_id = ? AND r.revision = ? AND r.scope IN (`+scopeSQL+`)
+	`, args...))
 }
 
 func insertIdempotencyConflict(

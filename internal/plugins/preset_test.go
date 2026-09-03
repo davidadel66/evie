@@ -60,7 +60,7 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 		t.Fatalf("Evie version = %q, want %q", composition.Receipt.EvieVersion, EvieVersion)
 	}
 	wantTodo := []tools.Tool{
-		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
 		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
 	wantSchemas := schemaNames(tools.KernelToolset().
@@ -330,7 +330,7 @@ func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *tes
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 }
@@ -414,7 +414,7 @@ func TestPreLifecycleTodoStandardReceiptResumesWithExactFrozenTools(t *testing.T
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_update") != 0 {
@@ -478,7 +478,7 @@ func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) 
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	for _, schema := range resumed.Toolset.Schemas() {
@@ -546,7 +546,7 @@ func TestPreTreeStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
 	}
 	if countSchema(resumed.Toolset, "todo_decompose") != 0 {
@@ -674,7 +674,7 @@ func TestPreClaimsStandardReceiptResumesFrozenUpdateWithAuditedCompatibility(t *
 	}
 	if len(resumed.CompatibilityResolutions) != 1 ||
 		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.4.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" ||
 		countSchema(resumed.Toolset, "todo_claim") != 0 || countSchema(resumed.Toolset, "todo_release") != 0 {
 		t.Fatalf("pre-claims compatibility = %+v", resumed.CompatibilityResolutions)
 	}

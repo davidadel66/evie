@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/eviedb"
@@ -79,7 +80,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 
 	wantTodo := []tools.Tool{
-		tools.TodoTreeListTool(), tools.TodoTreeAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
 		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
 	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
@@ -88,7 +89,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
-		{ID: "todo", ImplementationVersion: "1.5.0"},
+		{ID: "todo", ImplementationVersion: "1.6.0"},
 		{ID: "web", ImplementationVersion: "1.0.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
@@ -99,7 +100,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
 		"web.fetch@1.0.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
-		"todo.list@1.2.0", "todo.add@1.2.0", "todo.get@1.1.0", "todo.update@1.3.0", "todo.decompose@1.0.0",
+		"todo.list@1.3.0", "todo.add@1.3.0", "todo.get@1.1.0", "todo.update@1.3.0", "todo.decompose@1.0.0",
 		"todo.claim@1.0.0", "todo.release@1.0.0",
 	}
 	gotCapabilities := make([]string, len(receipt.Capabilities))
@@ -194,6 +195,60 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	if len(taskEvents) != 1 || taskEvents[0].ActorID != string(memory.LocalOwnerID) ||
 		taskEvents[0].SessionID != string(storedSession.ID) || taskEvents[0].RunID != string(todoExecutionID) {
 		t.Fatalf("Task event attribution = %+v, episodic execution = %q", taskEvents, todoExecutionID)
+	}
+}
+
+func TestStandardWorkspaceTodoDefaultsScopeAndProjectsDurableFocus(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager := standardManager(t, store)
+	resolved, err := manager.ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := store.RegisterWorkspace(ctx, "Scoped agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("add", "todo_add", `{"title":"workspace work","idempotency_key":"workspace-work"}`)),
+		assistantStep("created", nil), assistantStep("continuing", nil),
+	}}
+	session := NewWithToolset(client, testContextProfile("test-model"), store.BindHistory(stored.ID, "holder"),
+		stored.ScopeContext(), store.BindTurnOwner(stored.ID, "holder"), resolved.Toolset)
+	if err := session.Send(ctx, "track this", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	bound := task.WithMutationAttribution(ctx, task.MutationAttribution{
+		ActorID: string(memory.LocalOwnerID), SessionID: string(stored.ID), RunID: "inspect", WorkspaceID: string(workspace.ID),
+	})
+	values, err := store.ListGlobalTasks(bound, task.ListFilter{Scope: task.ScopeSelectionContext})
+	if err != nil || len(values) != 1 || values[0].Scope != task.WorkspaceScope(string(workspace.ID)) {
+		t.Fatalf("Workspace Tasks = %+v, %v", values, err)
+	}
+	if err := store.SelectTaskFocus(bound, values[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Send(ctx, "continue", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.reqs) != 3 || len(client.reqs[2].Messages) < 2 ||
+		client.reqs[2].Messages[1].Role != "user" ||
+		!strings.Contains(client.reqs[2].Messages[1].Content, "<task-focus-data>") ||
+		!strings.Contains(client.reqs[2].Messages[1].Content, "workspace work") {
+		t.Fatalf("focused request = %+v", client.reqs)
+	}
+	if stored.ScopeContext().WorkspaceID != workspace.ID || stored.ScopeContext().ProjectID != "" {
+		t.Fatalf("Task Focus changed session Context Scope: %+v", stored.ScopeContext())
 	}
 }
 

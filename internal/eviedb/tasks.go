@@ -29,7 +29,15 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	if input.ParentID == "" && attribution.ParentSessionID != "" {
 		return task.Task{}, task.ErrRootCreationDenied
 	}
-	requestSHA256, err := canonicalCreateRequestSHA256(input)
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return task.Task{}, err
+	}
+	targetScope, err := access.selected(input.Scope)
+	if err != nil {
+		return task.Task{}, err
+	}
+	requestSHA256, err := canonicalCreateRequestSHA256(input, targetScope)
 	if err != nil {
 		return task.Task{}, err
 	}
@@ -80,7 +88,7 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 			return fmt.Errorf("generate task ID: %w", err)
 		}
 		created = task.Task{
-			ID: task.ID(id.String()), RootID: task.ID(id.String()), Scope: task.ScopeGlobal,
+			ID: task.ID(id.String()), RootID: task.ID(id.String()), Scope: targetScope,
 			Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
 			Status: task.StatusOpen, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		}
@@ -267,19 +275,43 @@ func (s *Store) ListOpenGlobalTasks(ctx context.Context) ([]task.Task, error) {
 }
 
 func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]task.Task, error) {
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return nil, err
+	}
 	statuses, err := listStatuses(filter)
 	if err != nil {
 		return nil, err
 	}
+	selectedScopes := access.scopes
+	if filter.Scope != task.ScopeSelectionDefault {
+		scope, err := access.selected(filter.Scope)
+		if err != nil {
+			return nil, err
+		}
+		selectedScopes = []task.Scope{scope}
+	}
+	if filter.Scope == task.ScopeSelectionDefault && filter.RootID == "" && filter.ParentID == "" {
+		if focusID, found, err := s.focusedTaskID(ctx, access); err != nil {
+			return nil, err
+		} else if found {
+			filter.FocusID = focusID
+			if len(filter.Statuses) == 0 && !filter.IncludeHistory {
+				statuses = []task.Status{task.StatusOpen, task.StatusInProgress, task.StatusBlocked}
+			}
+		}
+	}
 	placeholders := make([]string, len(statuses))
-	arguments := make([]any, 0, len(statuses)+3)
-	arguments = append(arguments, task.ScopeGlobal)
+	scopeSQL, scopeArgs := scopePlaceholders(selectedScopes)
+	arguments := make([]any, 0, len(statuses)+len(scopeArgs)+3)
+	arguments = append(arguments, scopeArgs...)
 	for i, status := range statuses {
 		placeholders[i] = "?"
 		arguments = append(arguments, status)
 	}
-	where := `t.scope = ? AND t.status IN (` + strings.Join(placeholders, ",") + `)`
+	where := `t.scope IN (` + scopeSQL + `) AND t.status IN (` + strings.Join(placeholders, ",") + `)`
 	order := `t.created_at, t.id`
+	limit := ""
 	if filter.RootID != "" {
 		where += ` AND h.root_id = ?`
 		arguments = append(arguments, filter.RootID)
@@ -289,6 +321,22 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 		where += ` AND h.parent_id = ?`
 		arguments = append(arguments, filter.ParentID)
 		order = `h.sibling_order, t.id`
+	}
+	if filter.FocusID != "" {
+		where += ` AND t.id IN (
+			WITH RECURSIVE focused(task_id) AS (
+				SELECT ?
+				UNION ALL
+				SELECT child.task_id FROM task_hierarchy child JOIN focused ON child.parent_id = focused.task_id
+			)
+			SELECT task_id FROM focused
+		)`
+		arguments = append(arguments, filter.FocusID)
+		order = `tree.path, t.id`
+	}
+	if filter.Limit > 0 {
+		limit = `LIMIT ?`
+		arguments = append(arguments, filter.Limit)
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		WITH RECURSIVE tree(task_id, path) AS (
@@ -304,7 +352,7 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 		JOIN task_hierarchy h ON h.task_id = t.id
 		JOIN tree ON tree.task_id = t.id
 		WHERE `+where+`
-		ORDER BY `+order+`
+		ORDER BY `+order+` `+limit+`
 	`, arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("list global tasks: %w", err)
@@ -554,7 +602,7 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 			    status = ?, revision = ?, updated_at = ?
 			WHERE id = ? AND scope = ? AND revision = ?
 		`, updated.Title, updated.Description, updated.Priority, updated.DueDate, updated.ResultSummary, updated.Status,
-			updated.Revision, formatTaskTime(updated.UpdatedAt), id, task.ScopeGlobal, current.Revision)
+			updated.Revision, formatTaskTime(updated.UpdatedAt), id, current.Scope, current.Revision)
 		if err != nil {
 			return fmt.Errorf("update global task: %w", err)
 		}
@@ -819,14 +867,21 @@ type queryRower interface {
 }
 
 func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Task, error) {
+	access, err := taskAccessFromContext(ctx, source)
+	if err != nil {
+		return task.Task{}, err
+	}
+	scopeSQL, scopeArgs := scopePlaceholders(access.scopes)
+	args := []any{id}
+	args = append(args, scopeArgs...)
 	return scanTask(source.QueryRowContext(ctx, `
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
 		       t.status, t.revision, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
-		WHERE t.id = ? AND t.scope = ?
-	`, id, task.ScopeGlobal))
+		WHERE t.id = ? AND t.scope IN (`+scopeSQL+`)
+	`, args...))
 }
 
 func insertTaskState(ctx context.Context, conn *sql.Conn, value task.Task) error {

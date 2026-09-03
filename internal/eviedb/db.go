@@ -3,9 +3,11 @@ package eviedb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -38,7 +40,11 @@ CREATE TABLE IF NOT EXISTS plugin_enabled_configuration (
 
 CREATE TABLE IF NOT EXISTS tasks (
     id          TEXT PRIMARY KEY NOT NULL CHECK (typeof(id) = 'text' AND length(trim(id)) > 0),
-    scope       TEXT NOT NULL CHECK (typeof(scope) = 'text' AND scope = 'global'),
+    scope       TEXT NOT NULL CHECK (
+        typeof(scope) = 'text' AND (
+            scope = 'global' OR scope GLOB 'workspace:*' OR scope GLOB 'project:*'
+        )
+    ),
     title       TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
     description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
     priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
@@ -153,7 +159,7 @@ END;
 CREATE TABLE IF NOT EXISTS task_revisions (
     task_id     TEXT NOT NULL REFERENCES tasks(id),
     revision    INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
-    scope       TEXT NOT NULL CHECK (scope = 'global'),
+    scope       TEXT NOT NULL CHECK (scope = 'global' OR scope GLOB 'workspace:*' OR scope GLOB 'project:*'),
     title       TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
     description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
     priority    INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
@@ -487,6 +493,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS sessions_parent_session_id_idx ON sessions(parent_session_id);
+
+CREATE TABLE IF NOT EXISTS session_task_focus (
+    session_id  TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
+    task_id     TEXT NOT NULL REFERENCES tasks(id),
+    selected_at TEXT NOT NULL
+);
 
 CREATE TRIGGER IF NOT EXISTS sessions_scope_immutable
 BEFORE UPDATE OF project_id, project_root_snapshot, parent_session_id ON sessions
@@ -853,6 +865,72 @@ WHEN NOT EXISTS (
 BEGIN
     SELECT RAISE(ABORT, 'event scope does not match session scope');
 END;
+
+CREATE TRIGGER IF NOT EXISTS tasks_scope_identity_insert
+BEFORE INSERT ON tasks
+FOR EACH ROW
+WHEN (NEW.scope GLOB 'workspace:*' AND NOT EXISTS (
+        SELECT 1 FROM workspaces WHERE id = substr(NEW.scope, length('workspace:') + 1)
+    ))
+  OR (NEW.scope GLOB 'project:*' AND NOT EXISTS (
+        SELECT 1 FROM projects WHERE id = substr(NEW.scope, length('project:') + 1)
+    ))
+BEGIN
+    SELECT RAISE(ABORT, 'Task Context Scope identity is missing');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_hierarchy_validate_child
+BEFORE INSERT ON task_hierarchy
+FOR EACH ROW
+WHEN NEW.parent_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM task_hierarchy parent_h
+    JOIN tasks parent_t ON parent_t.id = parent_h.task_id
+    JOIN tasks child_t ON child_t.id = NEW.task_id
+    WHERE parent_h.task_id = NEW.parent_id
+      AND parent_h.root_id = NEW.root_id
+      AND parent_t.scope = child_t.scope
+)
+BEGIN
+    SELECT RAISE(ABORT, 'task hierarchy parent, root, and scope must agree');
+END;
+
+CREATE TRIGGER IF NOT EXISTS tasks_scope_immutable
+BEFORE UPDATE OF scope ON tasks
+FOR EACH ROW
+WHEN NEW.scope <> OLD.scope
+BEGIN
+    SELECT RAISE(ABORT, 'Task Context Scope is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_task_focus_authorized_insert
+BEFORE INSERT ON session_task_focus
+FOR EACH ROW
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM sessions s JOIN tasks t ON t.id = NEW.task_id
+    WHERE s.id = NEW.session_id AND s.status = 'active'
+      AND (t.scope = 'global'
+        OR t.scope = 'workspace:' || s.workspace_id
+        OR t.scope = 'project:' || s.project_id)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Task Focus is outside the session Context Scope');
+END;
+
+CREATE TRIGGER IF NOT EXISTS session_task_focus_authorized_update
+BEFORE UPDATE OF task_id ON session_task_focus
+FOR EACH ROW
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM sessions s JOIN tasks t ON t.id = NEW.task_id
+    WHERE s.id = NEW.session_id AND s.status = 'active'
+      AND (t.scope = 'global'
+        OR t.scope = 'workspace:' || s.workspace_id
+        OR t.scope = 'project:' || s.project_id)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Task Focus is outside the session Context Scope');
+END;
 `
 
 const (
@@ -968,6 +1046,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade Task result summary: %w", err)
 	}
+	if err := ensureTaskContextScopes(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Task Context Scopes: %w", err)
+	}
 	if hooks.afterSchema != nil {
 		hooks.afterSchema()
 	}
@@ -984,6 +1066,103 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		return nil, err
 	}
 	return db, nil
+}
+
+func ensureTaskContextScopes(ctx context.Context, db *sql.DB) error {
+	var definition string
+	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'`).Scan(&definition); err != nil {
+		return err
+	}
+	legacyGlobalOnly := strings.Contains(definition, "scope = 'global'") || strings.Contains(definition, "scope='global'")
+	if !legacyGlobalOnly || strings.Contains(definition, "workspace:*") {
+		return nil
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), `PRAGMA foreign_keys = ON`)
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
+	upgrade := `
+		DROP TRIGGER IF EXISTS tasks_no_hard_delete;
+		DROP TRIGGER IF EXISTS task_hierarchy_validate_child;
+		DROP TRIGGER IF EXISTS session_task_focus_authorized_insert;
+		DROP TRIGGER IF EXISTS session_task_focus_authorized_update;
+		DROP TRIGGER IF EXISTS task_revisions_append_only_update;
+		DROP TRIGGER IF EXISTS task_revisions_append_only_delete;
+		CREATE TABLE tasks_scope_upgrade (
+			id TEXT PRIMARY KEY NOT NULL CHECK (typeof(id) = 'text' AND length(trim(id)) > 0),
+			scope TEXT NOT NULL CHECK (typeof(scope) = 'text' AND (scope = 'global' OR scope GLOB 'workspace:*' OR scope GLOB 'project:*')),
+			title TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
+			description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
+			priority INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
+			due_date TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+			result_summary TEXT CHECK (result_summary IS NULL OR typeof(result_summary) = 'text'),
+			status TEXT NOT NULL CHECK (typeof(status) = 'text' AND status IN ('open','in_progress','blocked','completed','cancelled')),
+			revision INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
+			created_at TEXT NOT NULL CHECK (typeof(created_at) = 'text'), updated_at TEXT NOT NULL CHECK (typeof(updated_at) = 'text')
+		);
+		INSERT INTO tasks_scope_upgrade SELECT id, scope, title, description, priority, due_date, result_summary, status, revision, created_at, updated_at FROM tasks;
+		DROP TABLE tasks;
+		ALTER TABLE tasks_scope_upgrade RENAME TO tasks;
+		CREATE INDEX tasks_scope_status_created_idx ON tasks(scope, status, created_at, id);
+		CREATE TRIGGER tasks_no_hard_delete BEFORE DELETE ON tasks BEGIN SELECT RAISE(ABORT, 'tasks cannot be hard deleted'); END;
+		CREATE TABLE task_revisions_scope_upgrade (
+			task_id TEXT NOT NULL REFERENCES tasks(id), revision INTEGER NOT NULL CHECK (typeof(revision) = 'integer' AND revision > 0),
+			scope TEXT NOT NULL CHECK (scope = 'global' OR scope GLOB 'workspace:*' OR scope GLOB 'project:*'),
+			title TEXT NOT NULL CHECK (typeof(title) = 'text' AND length(trim(title)) > 0),
+			description TEXT CHECK (description IS NULL OR typeof(description) = 'text'),
+			priority INTEGER CHECK (priority IS NULL OR (typeof(priority) = 'integer' AND priority BETWEEN 1 AND 5)),
+			due_date TEXT CHECK (due_date IS NULL OR typeof(due_date) = 'text'),
+			result_summary TEXT CHECK (result_summary IS NULL OR typeof(result_summary) = 'text'),
+			status TEXT NOT NULL CHECK (status IN ('open','in_progress','blocked','completed','cancelled')),
+			created_at TEXT NOT NULL CHECK (typeof(created_at) = 'text'), updated_at TEXT NOT NULL CHECK (typeof(updated_at) = 'text'), PRIMARY KEY(task_id, revision)
+		);
+		INSERT INTO task_revisions_scope_upgrade SELECT task_id, revision, scope, title, description, priority, due_date, result_summary, status, created_at, updated_at FROM task_revisions;
+		DROP TABLE task_revisions;
+		ALTER TABLE task_revisions_scope_upgrade RENAME TO task_revisions;
+		CREATE TRIGGER task_revisions_append_only_update BEFORE UPDATE ON task_revisions BEGIN SELECT RAISE(ABORT, 'task revisions are append-only'); END;
+		CREATE TRIGGER task_revisions_append_only_delete BEFORE DELETE ON task_revisions BEGIN SELECT RAISE(ABORT, 'task revisions are append-only'); END;
+	`
+	if _, err := conn.ExecContext(ctx, upgrade); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return err
+	}
+	committed = true
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		return err
+	}
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	if rows.Next() {
+		_ = rows.Close()
+		return errors.New("Task Context Scope upgrade violates foreign keys")
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, workspaceScopeSchema)
+	return err
 }
 
 func ensureWorkspaceScope(ctx context.Context, db *sql.DB) error {

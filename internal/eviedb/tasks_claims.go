@@ -410,6 +410,9 @@ func (s *Store) GetGlobalTaskClaim(ctx context.Context, id task.ID) (task.Claim,
 	if strings.TrimSpace(string(id)) == "" {
 		return task.Claim{}, false, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
+	if _, err := s.GetGlobalTask(ctx, id); err != nil {
+		return task.Claim{}, false, err
+	}
 	claim, found, err := getStoredTaskClaim(ctx, s.db, id)
 	if err != nil {
 		return task.Claim{}, false, err

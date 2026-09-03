@@ -472,15 +472,16 @@ func TestTodoPluginRejectsForgedIdentitiesAndUnknownInputBeforeService(t *testin
 	}
 
 	tests := []struct {
-		name string
-		tool string
-		args string
+		name    string
+		tool    string
+		args    string
+		message string
 	}{
 		{name: "persistence identity", tool: "todo_add", args: `{"title":"x","id":"forged"}`},
 		{name: "owner identity", tool: "todo_add", args: `{"title":"x","owner_id":"forged"}`},
 		{name: "actor identity", tool: "todo_add", args: `{"title":"x","actor_id":"forged"}`},
 		{name: "session identity", tool: "todo_add", args: `{"title":"x","session_id":"forged"}`},
-		{name: "scope", tool: "todo_add", args: `{"title":"x","scope":"project"}`},
+		{name: "scope", tool: "todo_add", args: `{"title":"x","scope":"project"}`, message: "invalid task scope"},
 		{name: "list identity", tool: "todo_list", args: `{"owner_id":"forged"}`},
 		{name: "get extra identity", tool: "todo_get", args: `{"task_id":"x","session_id":"forged"}`},
 		{name: "update actor", tool: "todo_update", args: `{"task_id":"x","expected_revision":1,"actor_id":"forged","title":"x"}`},
@@ -492,7 +493,11 @@ func TestTodoPluginRejectsForgedIdentitiesAndUnknownInputBeforeService(t *testin
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outcome := executeTodoTool(t, toolset, tt.tool, tt.args)
-			if !outcome.IsErr || !strings.Contains(outcome.Content, "unknown field") {
+			message := tt.message
+			if message == "" {
+				message = "unknown field"
+			}
+			if !outcome.IsErr || !strings.Contains(outcome.Content, message) {
 				t.Fatalf("forged input outcome = %+v", outcome)
 			}
 		})
