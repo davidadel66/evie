@@ -26,6 +26,7 @@ var (
 	ErrClaimExecutionInactive   = errors.New("task: claiming execution is not active")
 	ErrManagementOverrideDenied = errors.New("task: delegated sessions cannot use Task management overrides")
 	ErrScopeDenied              = errors.New("task: Context Scope does not authorize this Task")
+	ErrAccessDenied             = errors.New("task: delegated Task access denied")
 )
 
 type ID string
@@ -45,6 +46,64 @@ const (
 
 func WorkspaceScope(id string) Scope { return Scope("workspace:" + id) }
 func ProjectScope(id string) Scope   { return Scope("project:" + id) }
+
+// Capability names the pinned Todo contract required for one Task service
+// operation. The persistence boundary uses these canonical identities when a
+// delegated session intersects its Composition Receipt with a subtree grant.
+type Capability string
+
+const (
+	CapabilityList      Capability = "todo.list"
+	CapabilityAdd       Capability = "todo.add"
+	CapabilityGet       Capability = "todo.get"
+	CapabilityUpdate    Capability = "todo.update"
+	CapabilityDecompose Capability = "todo.decompose"
+	CapabilityClaim     Capability = "todo.claim"
+	CapabilityRelease   Capability = "todo.release"
+)
+
+type AccessLevel string
+
+const (
+	AccessRead       AccessLevel = "read"
+	AccessContribute AccessLevel = "contribute"
+	AccessManage     AccessLevel = "manage"
+)
+
+func ValidateAccessLevel(level AccessLevel) error {
+	switch level {
+	case AccessRead, AccessContribute, AccessManage:
+		return nil
+	default:
+		return &InputError{Field: "access_level", Message: "must be read, contribute, or manage"}
+	}
+}
+
+// GrantInput contains only the bounded target of a Kernel-issued grant. The
+// issuing actor, primary session, and run are derived from trusted attribution.
+type GrantInput struct {
+	GranteeSessionID string
+	RootID           ID
+	Level            AccessLevel
+}
+
+// AccessGrant is the retained audit record for one delegated child-session
+// execution. Ended grants remain inspectable but never authorize access.
+type AccessGrant struct {
+	ID               string      `json:"id"`
+	GranteeSessionID string      `json:"grantee_session_id"`
+	RootID           ID          `json:"root_task_id"`
+	Level            AccessLevel `json:"access_level"`
+	IssuerActorID    string      `json:"issuer_actor_id"`
+	IssuerSessionID  string      `json:"issuer_session_id"`
+	IssuerRunID      string      `json:"issuer_run_id"`
+	IssuedAt         time.Time   `json:"issued_at"`
+	EndedAt          *time.Time  `json:"ended_at,omitempty"`
+	EndReason        string      `json:"end_reason,omitempty"`
+	EndedByActorID   string      `json:"ended_by_actor_id,omitempty"`
+	EndedBySessionID string      `json:"ended_by_session_id,omitempty"`
+	EndedByRunID     string      `json:"ended_by_run_id,omitempty"`
+}
 
 func ValidateScopeSelection(selection ScopeSelection) error {
 	switch selection {
@@ -242,6 +301,7 @@ type Event struct {
 	IdempotencySHA256  string          `json:"idempotency_sha256,omitempty"`
 	ClaimID            string          `json:"claim_id,omitempty"`
 	ClaimReason        string          `json:"claim_reason,omitempty"`
+	GrantID            string          `json:"grant_id,omitempty"`
 	ManagementOverride bool            `json:"management_override,omitempty"`
 	ManagementReason   string          `json:"management_reason,omitempty"`
 }

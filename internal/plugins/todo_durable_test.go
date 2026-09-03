@@ -115,6 +115,9 @@ func TestTodoPluginClaimsProgressResultsAndReleasesThroughSQLite(t *testing.T) {
 		{"todo_claim", `{"task_id":"x","idempotency_key":"x","fencing_token":99}`},
 		{"todo_release", `{"task_id":"x","idempotency_key":"x","override":true}`},
 		{"todo_release", `{"task_id":"x","idempotency_key":"x","claim_id":"forged"}`},
+		{"todo_add", `{"title":"x","grant_id":"forged"}`},
+		{"todo_add", `{"title":"x","access_level":"manage"}`},
+		{"todo_list", `{"grantee_session_id":"forged"}`},
 	} {
 		outcome := executeTodoToolContext(t, ctx, toolset, forged.name, forged.arguments)
 		if !outcome.IsErr || !strings.Contains(outcome.Content, "unknown field") {

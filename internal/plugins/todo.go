@@ -14,13 +14,13 @@ import (
 
 const (
 	TodoPluginID              PluginID     = "todo"
-	TodoListCapabilityID      CapabilityID = "todo.list"
-	TodoAddCapabilityID       CapabilityID = "todo.add"
-	TodoGetCapabilityID       CapabilityID = "todo.get"
-	TodoUpdateCapabilityID    CapabilityID = "todo.update"
-	TodoDecomposeCapabilityID CapabilityID = "todo.decompose"
-	TodoClaimCapabilityID     CapabilityID = "todo.claim"
-	TodoReleaseCapabilityID   CapabilityID = "todo.release"
+	TodoListCapabilityID      CapabilityID = CapabilityID(task.CapabilityList)
+	TodoAddCapabilityID       CapabilityID = CapabilityID(task.CapabilityAdd)
+	TodoGetCapabilityID       CapabilityID = CapabilityID(task.CapabilityGet)
+	TodoUpdateCapabilityID    CapabilityID = CapabilityID(task.CapabilityUpdate)
+	TodoDecomposeCapabilityID CapabilityID = CapabilityID(task.CapabilityDecompose)
+	TodoClaimCapabilityID     CapabilityID = CapabilityID(task.CapabilityClaim)
+	TodoReleaseCapabilityID   CapabilityID = CapabilityID(task.CapabilityRelease)
 
 	todoImplementationVersion    = "1.6.0"
 	todoContractVersion          = "1.0.0"

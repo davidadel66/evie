@@ -512,6 +512,136 @@ func TestStandardAgentDecomposesTaskTreeThroughNormalDispatcher(t *testing.T) {
 	}
 }
 
+func TestStandardDelegatedSessionsIntersectTodoCompositionWithTaskGrants(t *testing.T) {
+	ctx := context.Background()
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := eviedb.NewStore(db)
+	manager := standardManager(t, store)
+	resolved, err := manager.ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := store.CreateGlobalSessionWithComposition(ctx, resolved.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerCtx := task.WithMutationAttribution(ctx, task.MutationAttribution{
+		ActorID: string(memory.LocalOwnerID), SessionID: string(owner.ID), RunID: "delegate",
+	})
+	root, err := store.CreateGlobalTask(ownerCtx, task.CreateInput{Title: "shared root", IdempotencyKey: "shared-root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decomposed, err := store.DecomposeGlobalTask(ownerCtx, root.ID, task.DecomposeInput{
+		ExpectedRevision: root.Revision, IdempotencyKey: "shared-children",
+		Children: []task.ChildInput{{Title: "child A"}, {Title: "child B"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type delegatedFixture struct {
+		session memory.Session
+		grant   task.AccessGrant
+	}
+	makeDelegated := func(level task.AccessLevel, grantedRoot task.ID) delegatedFixture {
+		t.Helper()
+		stored, err := store.CreateDelegatedSessionWithComposition(ctx, owner.ID, resolved.Receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		grant, err := store.IssueTaskAccessGrant(ownerCtx, task.GrantInput{
+			GranteeSessionID: string(stored.ID), RootID: grantedRoot, Level: level,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return delegatedFixture{session: stored, grant: grant}
+	}
+	workerA := makeDelegated(task.AccessContribute, decomposed.Children[0].ID)
+	workerB := makeDelegated(task.AccessContribute, decomposed.Children[1].ID)
+	reader := makeDelegated(task.AccessRead, decomposed.Children[0].ID)
+	withoutGrant, err := store.CreateDelegatedSessionWithComposition(ctx, owner.ID, resolved.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(stored memory.Session, holder string, steps []step) *recorder {
+		t.Helper()
+		client := &fakeClient{steps: steps}
+		recorded := &recorder{}
+		session := NewWithToolset(
+			client, testContextProfile("test-model"), store.BindHistory(stored.ID, memory.LeaseHolderID(holder)),
+			stored.ScopeContext(), store.BindTurnOwner(stored.ID, memory.LeaseHolderID(holder)), resolved.Toolset,
+		)
+		if err := session.Send(ctx, "work the granted Task", recorded, nil); err != nil {
+			t.Fatal(err)
+		}
+		return recorded
+	}
+	for i, worker := range []delegatedFixture{workerA, workerB} {
+		value := decomposed.Children[i]
+		run(worker.session, "worker-"+string(rune('a'+i)), []step{
+			assistantStep("", nil, toolCall("claim", "todo_claim",
+				`{"task_id":"`+string(value.ID)+`","idempotency_key":"claim-`+string(rune('a'+i))+`"}`)),
+			assistantStep("", nil, toolCall("complete", "todo_update",
+				`{"task_id":"`+string(value.ID)+`","expected_revision":1,"status":"completed","result_summary":"done","idempotency_key":"complete-`+string(rune('a'+i))+`"}`)),
+			assistantStep("done", nil),
+		})
+	}
+
+	readOnlyEvents := run(reader.session, "reader", []step{
+		assistantStep("", nil, toolCall("forbidden", "todo_add",
+			`{"title":"forbidden","parent_id":"`+string(decomposed.Children[0].ID)+`","expected_parent_revision":2,"idempotency_key":"reader-add"}`)),
+		assistantStep("done", nil),
+	}).events
+	if !slicesContainSubstring(readOnlyEvents, "result:forbidden:true:") ||
+		!slicesContainSubstring(readOnlyEvents, "task: delegated Task access denied") {
+		t.Fatalf("read-only dispatcher events = %#v", readOnlyEvents)
+	}
+	noGrantEvents := run(withoutGrant, "without-grant", []step{
+		assistantStep("", nil, toolCall("withheld", "todo_get",
+			`{"task_id":"`+string(decomposed.Children[0].ID)+`"}`)),
+		assistantStep("", nil, toolCall("withheld-mutation", "todo_add",
+			`{"title":"forbidden","parent_id":"`+string(decomposed.Children[0].ID)+`","expected_parent_revision":2,"idempotency_key":"without-grant-add"}`)),
+		assistantStep("done", nil),
+	}).events
+	if !slicesContainSubstring(noGrantEvents, "result:withheld:true:") ||
+		!slicesContainSubstring(noGrantEvents, "result:withheld-mutation:true:") ||
+		!slicesContainSubstring(noGrantEvents, "task: delegated Task access denied") {
+		t.Fatalf("no-grant dispatcher events = %#v", noGrantEvents)
+	}
+
+	for i, worker := range []delegatedFixture{workerA, workerB} {
+		value, err := store.GetGlobalTask(ctx, decomposed.Children[i].ID)
+		if err != nil || value.Status != task.StatusCompleted || value.ResultSummary != "done" {
+			t.Fatalf("worker %d result = %+v, %v", i, value, err)
+		}
+		events, err := store.ListTaskEvents(ctx, value.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range events {
+			if event.SessionID == string(worker.session.ID) && event.GrantID != worker.grant.ID {
+				t.Fatalf("worker %d event missing grant: %+v", i, event)
+			}
+		}
+	}
+}
+
+func slicesContainSubstring(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
+}
+
 func standardManager(t *testing.T, taskService task.Service) *plugins.Manager {
 	t.Helper()
 	web := plugins.NewWeb()

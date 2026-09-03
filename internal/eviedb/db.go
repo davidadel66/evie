@@ -500,6 +500,78 @@ CREATE TABLE IF NOT EXISTS session_task_focus (
     selected_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS task_access_grants (
+    id                    TEXT PRIMARY KEY NOT NULL CHECK (length(trim(id)) > 0),
+    grantee_session_id    TEXT NOT NULL REFERENCES sessions(id),
+    root_task_id          TEXT NOT NULL REFERENCES tasks(id),
+    access_level          TEXT NOT NULL CHECK (access_level IN ('read', 'contribute', 'manage')),
+    issuer_actor_id       TEXT NOT NULL CHECK (length(trim(issuer_actor_id)) > 0),
+    issuer_session_id     TEXT NOT NULL REFERENCES sessions(id),
+    issuer_run_id         TEXT NOT NULL CHECK (length(trim(issuer_run_id)) > 0),
+    issued_at             TEXT NOT NULL,
+    ended_at              TEXT,
+    end_reason            TEXT,
+	ended_by_actor_id      TEXT,
+	ended_by_session_id    TEXT,
+	ended_by_run_id        TEXT,
+	CHECK ((ended_at IS NULL AND end_reason IS NULL AND ended_by_actor_id IS NULL AND
+	        ended_by_session_id IS NULL AND ended_by_run_id IS NULL) OR
+	       (ended_at IS NOT NULL AND length(trim(end_reason)) > 0 AND
+	        length(trim(ended_by_actor_id)) > 0 AND length(trim(ended_by_session_id)) > 0 AND
+	        length(trim(ended_by_run_id)) > 0))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS task_access_grants_one_active_execution
+ON task_access_grants(grantee_session_id) WHERE ended_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS task_access_grants_root_idx
+ON task_access_grants(root_task_id, grantee_session_id);
+
+CREATE TRIGGER IF NOT EXISTS task_access_grants_immutable_identity
+BEFORE UPDATE OF id, grantee_session_id, root_task_id, access_level,
+                 issuer_actor_id, issuer_session_id, issuer_run_id, issued_at
+ON task_access_grants
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Task Access Grant identity is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_access_grants_no_hard_delete
+BEFORE DELETE ON task_access_grants
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Task Access Grants are retained');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_access_grants_end_once
+BEFORE UPDATE OF ended_at, end_reason, ended_by_actor_id, ended_by_session_id, ended_by_run_id ON task_access_grants
+FOR EACH ROW
+WHEN OLD.ended_at IS NOT NULL
+  OR NEW.ended_at IS NULL
+  OR NEW.end_reason IS NULL
+  OR length(trim(NEW.end_reason)) = 0
+	OR NEW.ended_by_actor_id IS NULL OR length(trim(NEW.ended_by_actor_id)) = 0
+	OR NEW.ended_by_session_id IS NULL OR length(trim(NEW.ended_by_session_id)) = 0
+	OR NEW.ended_by_run_id IS NULL OR length(trim(NEW.ended_by_run_id)) = 0
+BEGIN
+    SELECT RAISE(ABORT, 'Task Access Grant termination is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS sessions_end_task_access_grants
+AFTER UPDATE OF status ON sessions
+FOR EACH ROW
+WHEN OLD.status = 'active' AND NEW.status = 'closed'
+BEGIN
+    UPDATE task_access_grants
+	SET ended_at = CASE WHEN NEW.updated_at > issued_at THEN NEW.updated_at ELSE issued_at END,
+	    end_reason = 'session_closed',
+	    ended_by_actor_id = 'kernel', ended_by_session_id = NEW.id, ended_by_run_id = 'session-close'
+    WHERE (grantee_session_id = NEW.id OR issuer_session_id = NEW.id) AND ended_at IS NULL;
+    DELETE FROM session_task_focus
+    WHERE session_id = NEW.id
+       OR session_id IN (SELECT grantee_session_id FROM task_access_grants WHERE issuer_session_id = NEW.id);
+END;
+
 CREATE TRIGGER IF NOT EXISTS sessions_scope_immutable
 BEFORE UPDATE OF project_id, project_root_snapshot, parent_session_id ON sessions
 FOR EACH ROW
@@ -673,6 +745,35 @@ BEGIN
     SELECT RAISE(ABORT, 'Task event sequence already exists');
 END;
 
+CREATE TABLE IF NOT EXISTS task_event_grants (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    grant_id TEXT NOT NULL REFERENCES task_access_grants(id)
+);
+
+CREATE TRIGGER IF NOT EXISTS task_event_grants_requires_event
+BEFORE INSERT ON task_event_grants
+FOR EACH ROW
+WHEN NOT EXISTS (SELECT 1 FROM task_events WHERE id = NEW.event_id)
+ AND NOT EXISTS (SELECT 1 FROM task_hierarchy_events WHERE id = NEW.event_id)
+ AND NOT EXISTS (SELECT 1 FROM task_claim_events WHERE id = NEW.event_id)
+BEGIN
+    SELECT RAISE(ABORT, 'Task event grant link requires an event');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_event_grants_append_only_update
+BEFORE UPDATE ON task_event_grants
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Task event grant links are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS task_event_grants_append_only_delete
+BEFORE DELETE ON task_event_grants
+FOR EACH ROW
+BEGIN
+    SELECT RAISE(ABORT, 'Task event grant links are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS task_coordination_results (
     actor_id         TEXT NOT NULL CHECK (length(trim(actor_id)) > 0),
     session_id       TEXT NOT NULL CHECK (length(trim(session_id)) > 0),
@@ -827,6 +928,9 @@ const workspaceScopeSchema = `
 CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions(workspace_id);
 CREATE INDEX IF NOT EXISTS events_workspace_id_idx ON events(workspace_id);
 
+DROP TRIGGER IF EXISTS session_task_focus_authorized_insert;
+DROP TRIGGER IF EXISTS session_task_focus_authorized_update;
+
 CREATE TRIGGER IF NOT EXISTS sessions_context_scope_valid_insert
 BEFORE INSERT ON sessions
 FOR EACH ROW
@@ -912,6 +1016,18 @@ WHEN NOT EXISTS (
       AND (t.scope = 'global'
         OR t.scope = 'workspace:' || s.workspace_id
         OR t.scope = 'project:' || s.project_id)
+      AND (s.parent_session_id IS NULL OR EXISTS (
+        SELECT 1 FROM task_access_grants g
+        WHERE g.grantee_session_id = s.id AND g.ended_at IS NULL
+          AND NEW.task_id IN (
+            WITH RECURSIVE granted(task_id) AS (
+              SELECT g.root_task_id
+              UNION ALL
+              SELECT child.task_id FROM task_hierarchy child JOIN granted ON child.parent_id = granted.task_id
+            )
+            SELECT task_id FROM granted
+          )
+      ))
 )
 BEGIN
     SELECT RAISE(ABORT, 'Task Focus is outside the session Context Scope');
@@ -927,6 +1043,18 @@ WHEN NOT EXISTS (
       AND (t.scope = 'global'
         OR t.scope = 'workspace:' || s.workspace_id
         OR t.scope = 'project:' || s.project_id)
+      AND (s.parent_session_id IS NULL OR EXISTS (
+        SELECT 1 FROM task_access_grants g
+        WHERE g.grantee_session_id = s.id AND g.ended_at IS NULL
+          AND NEW.task_id IN (
+            WITH RECURSIVE granted(task_id) AS (
+              SELECT g.root_task_id
+              UNION ALL
+              SELECT child.task_id FROM task_hierarchy child JOIN granted ON child.parent_id = granted.task_id
+            )
+            SELECT task_id FROM granted
+          )
+      ))
 )
 BEGIN
     SELECT RAISE(ABORT, 'Task Focus is outside the session Context Scope');

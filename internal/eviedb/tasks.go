@@ -16,6 +16,7 @@ import (
 var _ task.Service = (*Store)(nil)
 
 func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (task.Task, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityAdd, task.AccessContribute)
 	if err := ctx.Err(); err != nil {
 		return task.Task{}, err
 	}
@@ -33,6 +34,9 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	if err != nil {
 		return task.Task{}, err
 	}
+	if input.ParentID == "" && access.delegated {
+		return task.Task{}, task.ErrRootCreationDenied
+	}
 	targetScope, err := access.selected(input.Scope)
 	if err != nil {
 		return task.Task{}, err
@@ -45,6 +49,21 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	var created task.Task
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if input.ParentID == "" && transactionAccess.delegated {
+			return task.ErrRootCreationDenied
+		}
+		if input.ParentID != "" && transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, input.ParentID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: input.ParentID}
+				}
+				return err
+			}
+		}
 		prior, found, err := readMutationResult(ctx, conn, attribution, identitySHA256)
 		if err != nil {
 			return err
@@ -133,7 +152,7 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	if businessErr != nil {
 		return task.Task{}, businessErr
 	}
-	return created, nil
+	return access.project(created), nil
 }
 
 func replayCreateError(input task.CreateInput, prior mutationResult) error {
@@ -275,6 +294,7 @@ func (s *Store) ListOpenGlobalTasks(ctx context.Context) ([]task.Task, error) {
 }
 
 func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]task.Task, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityList, task.AccessRead)
 	access, err := taskAccessFromContext(ctx, s.db)
 	if err != nil {
 		return nil, err
@@ -313,13 +333,30 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 	order := `t.created_at, t.id`
 	limit := ""
 	if filter.RootID != "" {
-		where += ` AND h.root_id = ?`
-		arguments = append(arguments, filter.RootID)
+		if access.delegated {
+			if filter.RootID != access.grant.RootID {
+				return []task.Task{}, nil
+			}
+		} else {
+			where += ` AND h.root_id = ?`
+			arguments = append(arguments, filter.RootID)
+		}
 		order = `tree.path, t.id`
 	}
 	if filter.ParentID != "" {
 		where += ` AND h.parent_id = ?`
 		arguments = append(arguments, filter.ParentID)
+		if access.delegated {
+			where += ` AND ? IN (
+				WITH RECURSIVE granted_parent(task_id) AS (
+					SELECT ?
+					UNION ALL
+					SELECT child.task_id FROM task_hierarchy child JOIN granted_parent ON child.parent_id = granted_parent.task_id
+				)
+				SELECT task_id FROM granted_parent
+			)`
+			arguments = append(arguments, filter.ParentID, access.grant.RootID)
+		}
 		order = `h.sibling_order, t.id`
 	}
 	if filter.FocusID != "" {
@@ -334,6 +371,23 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 		arguments = append(arguments, filter.FocusID)
 		order = `tree.path, t.id`
 	}
+	if access.delegated {
+		where += ` AND t.id IN (
+			WITH RECURSIVE granted(task_id) AS (
+				SELECT ?
+				UNION ALL
+				SELECT child.task_id FROM task_hierarchy child JOIN granted ON child.parent_id = granted.task_id
+			)
+			SELECT task_id FROM granted
+		)`
+		arguments = append(arguments, access.grant.RootID)
+		if filter.Limit == 0 || filter.Limit > task.MaxTreeNodes {
+			filter.Limit = task.MaxTreeNodes
+		}
+	}
+	activeGrantSQL, activeGrantArgs := access.activeGrantPredicate()
+	where += activeGrantSQL
+	arguments = append(arguments, activeGrantArgs...)
 	if filter.Limit > 0 {
 		limit = `LIMIT ?`
 		arguments = append(arguments, filter.Limit)
@@ -365,7 +419,7 @@ func (s *Store) ListGlobalTasks(ctx context.Context, filter task.ListFilter) ([]
 		if err != nil {
 			return nil, fmt.Errorf("list global tasks: %w", err)
 		}
-		values = append(values, value)
+		values = append(values, access.project(value))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list global tasks: %w", err)
@@ -396,6 +450,7 @@ func listStatuses(filter task.ListFilter) ([]task.Status, error) {
 }
 
 func (s *Store) GetGlobalTask(ctx context.Context, id task.ID) (task.Task, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
 	if strings.TrimSpace(string(id)) == "" {
 		return task.Task{}, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
@@ -406,11 +461,15 @@ func (s *Store) GetGlobalTask(ctx context.Context, id task.ID) (task.Task, error
 	if err != nil {
 		return task.Task{}, fmt.Errorf("get global task: %w", err)
 	}
-	return value, nil
+	access, accessErr := taskAccessFromContext(ctx, s.db)
+	if accessErr != nil {
+		return task.Task{}, accessErr
+	}
+	return access.project(value), nil
 }
 
 func (s *Store) UpdateGlobalTask(ctx context.Context, id task.ID, input task.UpdateInput) (task.Task, error) {
-	return s.updateGlobalTask(ctx, id, input, "")
+	return s.updateGlobalTask(withTaskAuthorization(ctx, task.CapabilityUpdate, task.AccessContribute), id, input, "")
 }
 
 // ManagementUpdateGlobalTask is a Kernel-only compatibility and recovery seam.
@@ -431,9 +490,19 @@ func (s *Store) ManagementUpdateGlobalTask(
 		return task.Task{}, err
 	}
 	if attribution.ParentSessionID != "" {
-		return task.Task{}, task.ErrManagementOverrideDenied
+		authorizedCtx := withTaskAuthorization(ctx, task.CapabilityUpdate, task.AccessManage)
+		access, accessErr := taskAccessFromContext(authorizedCtx, s.db)
+		if accessErr != nil {
+			if errors.Is(accessErr, task.ErrAccessDenied) || errors.Is(accessErr, task.ErrScopeDenied) {
+				return task.Task{}, task.ErrManagementOverrideDenied
+			}
+			return task.Task{}, accessErr
+		}
+		if !access.delegated || !grantAllows(access.grant.Level, task.AccessManage) {
+			return task.Task{}, task.ErrManagementOverrideDenied
+		}
 	}
-	return s.updateGlobalTask(ctx, id, input, reason)
+	return s.updateGlobalTask(withTaskAuthorization(ctx, task.CapabilityUpdate, task.AccessManage), id, input, reason)
 }
 
 func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.UpdateInput, managementReason string) (task.Task, error) {
@@ -450,6 +519,10 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 	if err != nil {
 		return task.Task{}, err
 	}
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return task.Task{}, err
+	}
 	requestSHA256, err := canonicalUpdateRequestSHA256(id, input)
 	if err != nil {
 		return task.Task{}, err
@@ -458,6 +531,18 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 	var result task.Task
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: id}
+				}
+				return err
+			}
+		}
 		prior, found, err := readMutationResult(ctx, conn, attribution, identitySHA256)
 		if err != nil {
 			return err
@@ -495,6 +580,15 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 		}
 		if err != nil {
 			return fmt.Errorf("get global task for update: %w", err)
+		}
+		if transactionAccess.delegated && input.Status != nil &&
+			(*input.Status == task.StatusCancelled ||
+				(*input.Status == task.StatusOpen &&
+					(current.Status == task.StatusCompleted || current.Status == task.StatusCancelled))) {
+			manageCtx := withTaskAuthorization(ctx, task.CapabilityUpdate, task.AccessManage)
+			if _, err := taskAccessFromContext(manageCtx, conn); err != nil {
+				return err
+			}
 		}
 		result = current
 		reject := func(cause error, code task.DiagnosticCode, outcomeCode, field string, from, to task.Status) error {
@@ -677,7 +771,7 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 	if businessErr != nil {
 		return task.Task{}, businessErr
 	}
-	return result, nil
+	return access.project(result), nil
 }
 
 func replayUpdateError(id task.ID, input task.UpdateInput, prior mutationResult) error {
@@ -803,14 +897,25 @@ func taskStateEqual(left, right task.Task) bool {
 }
 
 func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
 	if strings.TrimSpace(string(id)) == "" {
 		return nil, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
+	if _, err := s.GetGlobalTask(ctx, id); err != nil {
+		return nil, err
+	}
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return nil, err
+	}
+	activeGrantSQL, activeGrantArgs := access.activeGrantPredicate()
+	arguments := []any{id}
+	arguments = append(arguments, activeGrantArgs...)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT e.id, e.task_id, e.sequence, e.operation, e.actor_id, e.session_id, e.run_id, e.recorded_at,
 		       e.previous_revision, e.resulting_revision, e.outcome, e.diagnostic_code,
 		       COALESCE(e.identity_sha256, i.identity_sha256, ''), e.claim_id,
-		       e.claim_reason, e.management_override, e.management_reason
+		       e.claim_reason, COALESCE(g.grant_id, ''), e.management_override, e.management_reason
 		FROM (
 			SELECT id, task_id, sequence, operation, actor_id, session_id, run_id, recorded_at,
 			       previous_revision, resulting_revision, outcome, diagnostic_code,
@@ -831,9 +936,10 @@ func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, e
 			FROM task_claim_events
 		) e
 		LEFT JOIN task_event_idempotency i ON i.event_id = e.id
-		WHERE e.task_id = ?
+		LEFT JOIN task_event_grants g ON g.event_id = e.id
+		WHERE e.task_id = ?`+activeGrantSQL+`
 		ORDER BY e.sequence
-	`, id)
+	`, arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("list task events: %w", err)
 	}
@@ -845,7 +951,7 @@ func (s *Store) ListTaskEvents(ctx context.Context, id task.ID) ([]task.Event, e
 		var diagnostic sql.NullString
 		if err := rows.Scan(&event.ID, &event.TaskID, &event.Sequence, &event.Operation, &event.ActorID, &event.SessionID,
 			&event.RunID, &recorded, &event.PreviousRevision, &event.ResultingRevision, &event.Outcome, &diagnostic,
-			&event.IdempotencySHA256, &event.ClaimID, &event.ClaimReason, &event.ManagementOverride,
+			&event.IdempotencySHA256, &event.ClaimID, &event.ClaimReason, &event.GrantID, &event.ManagementOverride,
 			&event.ManagementReason); err != nil {
 			return nil, fmt.Errorf("list task events: %w", err)
 		}
@@ -874,13 +980,28 @@ func getGlobalTask(ctx context.Context, source queryRower, id task.ID) (task.Tas
 	scopeSQL, scopeArgs := scopePlaceholders(access.scopes)
 	args := []any{id}
 	args = append(args, scopeArgs...)
+	grantSQL := ""
+	if access.delegated {
+		grantSQL = ` AND t.id IN (
+			WITH RECURSIVE granted(task_id) AS (
+				SELECT ?
+				UNION ALL
+				SELECT child.task_id FROM task_hierarchy child JOIN granted ON child.parent_id = granted.task_id
+			)
+			SELECT task_id FROM granted
+		)`
+		args = append(args, access.grant.RootID)
+	}
+	activeGrantSQL, activeGrantArgs := access.activeGrantPredicate()
+	grantSQL += activeGrantSQL
+	args = append(args, activeGrantArgs...)
 	return scanTask(source.QueryRowContext(ctx, `
 		SELECT t.id, COALESCE(h.parent_id, ''), h.root_id, h.sibling_order,
 		       t.scope, t.title, t.description, t.priority, t.due_date, t.result_summary,
 		       t.status, t.revision, t.created_at, t.updated_at
 		FROM tasks t
 		JOIN task_hierarchy h ON h.task_id = t.id
-		WHERE t.id = ? AND t.scope IN (`+scopeSQL+`)
+		WHERE t.id = ? AND t.scope IN (`+scopeSQL+`)`+grantSQL+`
 	`, args...))
 }
 
@@ -986,6 +1107,9 @@ func appendHierarchyEvent(ctx context.Context, conn *sql.Conn, event task.Event)
 		event.Outcome, event.DiagnosticCode); err != nil {
 		return "", fmt.Errorf("append Task hierarchy event: %w", err)
 	}
+	if err := linkActiveTaskGrant(ctx, conn, event.ID, event.SessionID); err != nil {
+		return "", err
+	}
 	return event.ID, nil
 }
 
@@ -1016,7 +1140,21 @@ func appendTaskEvent(ctx context.Context, conn *sql.Conn, event task.Event) (str
 		formatTaskTime(event.RecordedAt), event.PreviousRevision, event.ResultingRevision, event.Outcome, event.DiagnosticCode); err != nil {
 		return "", fmt.Errorf("append task event: %w", err)
 	}
+	if err := linkActiveTaskGrant(ctx, conn, event.ID, event.SessionID); err != nil {
+		return "", err
+	}
 	return event.ID, nil
+}
+
+func linkActiveTaskGrant(ctx context.Context, conn *sql.Conn, eventID, sessionID string) error {
+	if _, err := conn.ExecContext(ctx, `
+		INSERT INTO task_event_grants (event_id, grant_id)
+		SELECT ?, id FROM task_access_grants
+		WHERE grantee_session_id = ? AND ended_at IS NULL
+	`, eventID, sessionID); err != nil {
+		return fmt.Errorf("link Task event to access grant: %w", err)
+	}
+	return nil
 }
 
 func scanTask(scanner rowScanner) (task.Task, error) {

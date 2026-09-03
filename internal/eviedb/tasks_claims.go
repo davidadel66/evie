@@ -108,11 +108,15 @@ func canonicalClaimRequestSHA256(id task.ID, operation task.Operation) (string, 
 }
 
 func (s *Store) ClaimGlobalTask(ctx context.Context, id task.ID, input task.ClaimInput) (task.Claim, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityClaim, task.AccessContribute)
 	if err := validateClaimMutation(ctx, id, input.IdempotencyKey); err != nil {
 		return task.Claim{}, err
 	}
 	attribution, _ := task.MutationAttributionFromContext(ctx)
 	if err := task.ValidateClaimAttribution(attribution); err != nil {
+		return task.Claim{}, err
+	}
+	if _, err := taskAccessFromContext(ctx, s.db); err != nil {
 		return task.Claim{}, err
 	}
 	requestSHA256, err := canonicalClaimRequestSHA256(id, task.OperationClaim)
@@ -123,6 +127,18 @@ func (s *Store) ClaimGlobalTask(ctx context.Context, id task.ID, input task.Clai
 	var result task.Claim
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: id}
+				}
+				return err
+			}
+		}
 		priorClaim, found, err := readIdempotencyClaim(ctx, conn, attribution, identitySHA256)
 		if err != nil {
 			return err
@@ -233,11 +249,15 @@ func (s *Store) ClaimGlobalTask(ctx context.Context, id task.ID, input task.Clai
 }
 
 func (s *Store) ReleaseGlobalTaskClaim(ctx context.Context, id task.ID, input task.ReleaseInput) (task.ClaimRelease, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityRelease, task.AccessContribute)
 	if err := validateClaimMutation(ctx, id, input.IdempotencyKey); err != nil {
 		return task.ClaimRelease{}, err
 	}
 	attribution, _ := task.MutationAttributionFromContext(ctx)
 	if err := task.ValidateClaimAttribution(attribution); err != nil {
+		return task.ClaimRelease{}, err
+	}
+	if _, err := taskAccessFromContext(ctx, s.db); err != nil {
 		return task.ClaimRelease{}, err
 	}
 	requestSHA256, err := canonicalClaimRequestSHA256(id, task.OperationRelease)
@@ -248,6 +268,18 @@ func (s *Store) ReleaseGlobalTaskClaim(ctx context.Context, id task.ID, input ta
 	var result task.ClaimRelease
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: id}
+				}
+				return err
+			}
+		}
 		priorClaim, found, err := readIdempotencyClaim(ctx, conn, attribution, identitySHA256)
 		if err != nil {
 			return err
@@ -407,17 +439,39 @@ func getStoredTaskClaim(ctx context.Context, source queryRower, id task.ID) (sto
 }
 
 func (s *Store) GetGlobalTaskClaim(ctx context.Context, id task.ID) (task.Claim, bool, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
 	if strings.TrimSpace(string(id)) == "" {
 		return task.Claim{}, false, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
 	if _, err := s.GetGlobalTask(ctx, id); err != nil {
 		return task.Claim{}, false, err
 	}
-	claim, found, err := getStoredTaskClaim(ctx, s.db, id)
+	access, err := taskAccessFromContext(ctx, s.db)
 	if err != nil {
 		return task.Claim{}, false, err
 	}
-	return claim.Claim, found, nil
+	activeGrantSQL, activeGrantArgs := access.activeGrantPredicate()
+	arguments := []any{id}
+	arguments = append(arguments, activeGrantArgs...)
+	var claim storedTaskClaim
+	var claimedAt string
+	err = s.db.QueryRowContext(ctx, `
+		SELECT claim_id, task_id, claimed_at, actor_id, session_id, lease_holder_id,
+		       lease_token, lease_generation
+		FROM task_claims WHERE task_id = ?`+activeGrantSQL+`
+	`, arguments...).Scan(&claim.ID, &claim.TaskID, &claimedAt, &claim.ActorID, &claim.SessionID,
+		&claim.LeaseHolderID, &claim.LeaseToken, &claim.LeaseGeneration)
+	if errors.Is(err, sql.ErrNoRows) {
+		return task.Claim{}, false, nil
+	}
+	if err != nil {
+		return task.Claim{}, false, fmt.Errorf("read active Task claim: %w", err)
+	}
+	claim.ClaimedAt, err = time.Parse(time.RFC3339Nano, claimedAt)
+	if err != nil {
+		return task.Claim{}, false, fmt.Errorf("parse Task claim claimed_at: %w", err)
+	}
+	return claim.Claim, true, nil
 }
 
 func appendClaimEvent(ctx context.Context, conn *sql.Conn, event task.Event) (string, error) {
@@ -448,6 +502,9 @@ func appendClaimEvent(ctx context.Context, conn *sql.Conn, event task.Event) (st
 		event.ClaimReason, event.ManagementOverride, event.ManagementReason)
 	if err != nil {
 		return "", fmt.Errorf("append Task claim event: %w", err)
+	}
+	if err := linkActiveTaskGrant(ctx, conn, event.ID, event.SessionID); err != nil {
+		return "", err
 	}
 	return event.ID, nil
 }
@@ -585,6 +642,7 @@ func releaseStoredTaskClaim(ctx context.Context, conn *sql.Conn, claim storedTas
 // OverrideReleaseGlobalTaskClaim is a Kernel-only recovery boundary. It is not
 // exposed through task.Service or model-facing tool arguments.
 func (s *Store) OverrideReleaseGlobalTaskClaim(ctx context.Context, id task.ID, reason string) (task.ClaimRelease, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityUpdate, task.AccessManage)
 	if strings.TrimSpace(string(id)) == "" {
 		return task.ClaimRelease{}, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
@@ -596,10 +654,38 @@ func (s *Store) OverrideReleaseGlobalTaskClaim(ctx context.Context, id task.ID, 
 		return task.ClaimRelease{}, err
 	}
 	if attribution.ParentSessionID != "" {
+		access, accessErr := taskAccessFromContext(ctx, s.db)
+		if accessErr != nil {
+			if errors.Is(accessErr, task.ErrAccessDenied) || errors.Is(accessErr, task.ErrScopeDenied) {
+				return task.ClaimRelease{}, task.ErrManagementOverrideDenied
+			}
+			return task.ClaimRelease{}, accessErr
+		}
+		if !access.delegated || !grantAllows(access.grant.Level, task.AccessManage) {
+			return task.ClaimRelease{}, task.ErrManagementOverrideDenied
+		}
+	}
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return task.ClaimRelease{}, err
+	}
+	if access.delegated && !grantAllows(access.grant.Level, task.AccessManage) {
 		return task.ClaimRelease{}, task.ErrManagementOverrideDenied
 	}
 	var released task.ClaimRelease
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: id}
+				}
+				return err
+			}
+		}
 		claim, found, err := getStoredTaskClaim(ctx, conn, id)
 		if err != nil {
 			return err

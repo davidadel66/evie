@@ -100,6 +100,17 @@ func TestValidateCreateInputRequiresParentRevisionOnlyForChildren(t *testing.T) 
 	}
 }
 
+func TestValidateTaskAccessLevels(t *testing.T) {
+	for _, level := range []AccessLevel{AccessRead, AccessContribute, AccessManage} {
+		if err := ValidateAccessLevel(level); err != nil {
+			t.Fatalf("ValidateAccessLevel(%q): %v", level, err)
+		}
+	}
+	if err := ValidateAccessLevel("owner"); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("invalid access level error = %v", err)
+	}
+}
+
 func TestValidateDecomposeInput(t *testing.T) {
 	valid := DecomposeInput{
 		ExpectedRevision: 3,

@@ -15,35 +15,61 @@ type taskAccess struct {
 	sessionID memory.SessionID
 	context   task.Scope
 	scopes    []task.Scope
+	delegated bool
+	grant     task.AccessGrant
+}
+
+func (a taskAccess) activeGrantPredicate() (string, []any) {
+	if !a.delegated {
+		return "", nil
+	}
+	return ` AND EXISTS (
+		SELECT 1 FROM task_access_grants active_grant
+		WHERE active_grant.id = ? AND active_grant.grantee_session_id = ?
+		  AND active_grant.ended_at IS NULL
+	)`, []any{a.grant.ID, a.sessionID}
 }
 
 func taskAccessFromContext(ctx context.Context, source queryRower) (taskAccess, error) {
 	attribution, ok := task.MutationAttributionContext(ctx)
-	if task.GlobalScopeCompatibility(ctx) || !ok || (attribution.WorkspaceID == "" && attribution.ProjectID == "") {
+	if !ok {
 		return taskAccess{sessionID: memory.SessionID(attribution.SessionID), context: task.ScopeGlobal, scopes: []task.Scope{task.ScopeGlobal}}, nil
 	}
 	if attribution.WorkspaceID != "" && attribution.ProjectID != "" {
 		return taskAccess{}, task.ErrScopeDenied
 	}
-	return persistedTaskAccess(ctx, source, attribution)
+	access, found, err := persistedTaskAccess(ctx, source, attribution)
+	if err != nil {
+		return taskAccess{}, err
+	}
+	if found {
+		return access, nil
+	}
+	// Historical direct callers predate durable sessions. Preserve that owner
+	// compatibility only when the caller does not claim to be delegated.
+	if attribution.ParentSessionID == "" && (task.GlobalScopeCompatibility(ctx) ||
+		(attribution.WorkspaceID == "" && attribution.ProjectID == "")) {
+		return taskAccess{sessionID: memory.SessionID(attribution.SessionID), context: task.ScopeGlobal, scopes: []task.Scope{task.ScopeGlobal}}, nil
+	}
+	return taskAccess{}, task.ErrAccessDenied
 }
 
-func persistedTaskAccess(ctx context.Context, source queryRower, attribution task.MutationAttribution) (taskAccess, error) {
+func persistedTaskAccess(ctx context.Context, source queryRower, attribution task.MutationAttribution) (taskAccess, bool, error) {
 	if attribution.SessionID == "" || (attribution.WorkspaceID != "" && attribution.ProjectID != "") {
-		return taskAccess{}, task.ErrScopeDenied
+		return taskAccess{}, false, task.ErrScopeDenied
 	}
-	var workspaceID, projectID sql.NullString
+	var workspaceID, projectID, parentSessionID sql.NullString
 	var status string
-	err := source.QueryRowContext(ctx, `SELECT workspace_id, project_id, status FROM sessions WHERE id = ?`, attribution.SessionID).
-		Scan(&workspaceID, &projectID, &status)
+	err := source.QueryRowContext(ctx, `SELECT workspace_id, project_id, parent_session_id, status FROM sessions WHERE id = ?`, attribution.SessionID).
+		Scan(&workspaceID, &projectID, &parentSessionID, &status)
 	if errors.Is(err, sql.ErrNoRows) {
-		return taskAccess{}, task.ErrScopeDenied
+		return taskAccess{}, false, nil
 	}
 	if err != nil {
-		return taskAccess{}, fmt.Errorf("validate Task session scope: %w", err)
+		return taskAccess{}, false, fmt.Errorf("validate Task session scope: %w", err)
 	}
 	if status != string(memory.SessionActive) {
-		return taskAccess{}, task.ErrScopeDenied
+		return taskAccess{}, true, task.ErrAccessDenied
 	}
 	access := taskAccess{sessionID: memory.SessionID(attribution.SessionID)}
 	switch {
@@ -54,13 +80,108 @@ func persistedTaskAccess(ctx context.Context, source queryRower, attribution tas
 	case attribution.ProjectID != "" && projectID.Valid && projectID.String == attribution.ProjectID && !workspaceID.Valid:
 		access.context = task.ProjectScope(attribution.ProjectID)
 	default:
-		return taskAccess{}, task.ErrScopeDenied
+		return taskAccess{}, true, task.ErrScopeDenied
 	}
 	access.scopes = []task.Scope{task.ScopeGlobal}
 	if access.context != task.ScopeGlobal {
 		access.scopes = append(access.scopes, access.context)
 	}
-	return access, nil
+	if !parentSessionID.Valid {
+		return access, true, nil
+	}
+	access.delegated = true
+	required := taskAuthorizationFromContext(ctx)
+	if required.capability == "" {
+		return taskAccess{}, true, task.ErrAccessDenied
+	}
+	capable, err := sessionHasTaskCapability(ctx, source, access.sessionID, required.capability)
+	if err != nil {
+		return taskAccess{}, true, err
+	}
+	if !capable {
+		return taskAccess{}, true, task.ErrAccessDenied
+	}
+	grant, found, err := activeTaskAccessGrant(ctx, source, access.sessionID)
+	if err != nil {
+		return taskAccess{}, true, err
+	}
+	if !found || !grantAllows(grant.Level, required.level) {
+		return taskAccess{}, true, task.ErrAccessDenied
+	}
+	access.grant = grant
+	var grantScope task.Scope
+	if err := source.QueryRowContext(ctx, `SELECT scope FROM tasks WHERE id = ?`, grant.RootID).Scan(&grantScope); errors.Is(err, sql.ErrNoRows) {
+		return taskAccess{}, true, task.ErrAccessDenied
+	} else if err != nil {
+		return taskAccess{}, true, fmt.Errorf("read Task Access Grant root scope: %w", err)
+	}
+	access.context = grantScope
+	access.scopes = []task.Scope{grantScope}
+	return access, true, nil
+}
+
+type taskAuthorization struct {
+	capability task.Capability
+	level      task.AccessLevel
+}
+
+type taskAuthorizationContextKey struct{}
+
+func withTaskAuthorization(ctx context.Context, capability task.Capability, level task.AccessLevel) context.Context {
+	return context.WithValue(ctx, taskAuthorizationContextKey{}, taskAuthorization{capability: capability, level: level})
+}
+
+func taskAuthorizationFromContext(ctx context.Context) taskAuthorization {
+	value, _ := ctx.Value(taskAuthorizationContextKey{}).(taskAuthorization)
+	return value
+}
+
+func grantAllows(actual, required task.AccessLevel) bool {
+	rank := map[task.AccessLevel]int{task.AccessRead: 1, task.AccessContribute: 2, task.AccessManage: 3}
+	return rank[actual] >= rank[required]
+}
+
+func sessionHasTaskCapability(ctx context.Context, source queryRower, sessionID memory.SessionID, capability task.Capability) (bool, error) {
+	var found int
+	err := source.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM session_composition_receipts receipt, json_each(receipt.receipt_json, '$.capabilities') capability
+			WHERE receipt.session_id = ? AND json_extract(capability.value, '$.id') = ?
+		)
+	`, sessionID, capability).Scan(&found)
+	if err != nil {
+		return false, fmt.Errorf("check delegated Task Capability: %w", err)
+	}
+	return found == 1, nil
+}
+
+func activeTaskAccessGrant(ctx context.Context, source queryRower, sessionID memory.SessionID) (task.AccessGrant, bool, error) {
+	grant, err := scanTaskAccessGrant(source.QueryRowContext(ctx, `
+		SELECT id, grantee_session_id, root_task_id, access_level, issuer_actor_id,
+		       issuer_session_id, issuer_run_id, issued_at, ended_at, COALESCE(end_reason, ''),
+		       COALESCE(ended_by_actor_id, ''), COALESCE(ended_by_session_id, ''), COALESCE(ended_by_run_id, '')
+		FROM task_access_grants WHERE grantee_session_id = ? AND ended_at IS NULL
+	`, sessionID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return task.AccessGrant{}, false, nil
+	}
+	if err != nil {
+		return task.AccessGrant{}, false, fmt.Errorf("read active Task Access Grant: %w", err)
+	}
+	return grant, true, nil
+}
+
+func (a taskAccess) project(value task.Task) task.Task {
+	if !a.delegated {
+		return value
+	}
+	value.RootID = a.grant.RootID
+	if value.ID == a.grant.RootID {
+		value.ParentID = ""
+		value.SiblingOrder = 0
+	}
+	return value
 }
 
 func (a taskAccess) selected(selection task.ScopeSelection) (task.Scope, error) {
@@ -90,11 +211,15 @@ func (s *Store) SelectTaskFocus(ctx context.Context, id task.ID) error {
 	}
 	var businessErr error
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		access, err := persistedTaskAccess(ctx, conn, attribution)
+		authorizedCtx := withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
+		access, found, err := persistedTaskAccess(authorizedCtx, conn, attribution)
 		if err != nil {
 			return err
 		}
-		value, err := getGlobalTask(ctx, conn, id)
+		if !found {
+			return task.ErrScopeDenied
+		}
+		value, err := getGlobalTask(authorizedCtx, conn, id)
 		if errors.Is(err, sql.ErrNoRows) {
 			businessErr = &task.NotFoundError{ID: id}
 			return nil
@@ -120,9 +245,13 @@ func (s *Store) ClearTaskFocus(ctx context.Context) error {
 		return task.ErrScopeDenied
 	}
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		access, err := persistedTaskAccess(ctx, conn, attribution)
+		authorizedCtx := withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
+		access, found, err := persistedTaskAccess(authorizedCtx, conn, attribution)
 		if err != nil {
 			return err
+		}
+		if !found {
+			return task.ErrScopeDenied
 		}
 		_, err = conn.ExecContext(ctx, `DELETE FROM session_task_focus WHERE session_id = ?`, access.sessionID)
 		return err
@@ -162,7 +291,11 @@ func (s *Store) workingTaskContext(ctx context.Context, sessionID memory.Session
 		ActorID: string(memory.LocalOwnerID), SessionID: string(session.ID), RunID: "context-projection",
 		WorkspaceID: string(session.WorkspaceID), ProjectID: string(session.ProjectID), ParentSessionID: string(session.ParentSessionID),
 	})
+	bound = withTaskAuthorization(bound, task.CapabilityList, task.AccessRead)
 	access, err := taskAccessFromContext(bound, s.db)
+	if errors.Is(err, task.ErrAccessDenied) {
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +304,7 @@ func (s *Store) workingTaskContext(ctx context.Context, sessionID memory.Session
 		return "", err
 	}
 	focus, err := s.GetGlobalTask(bound, focusID)
-	if errors.Is(err, task.ErrNotFound) {
+	if errors.Is(err, task.ErrNotFound) || errors.Is(err, task.ErrAccessDenied) {
 		return "", nil
 	}
 	if err != nil {
@@ -181,6 +314,9 @@ func (s *Store) workingTaskContext(ctx context.Context, sessionID memory.Session
 		FocusID: focus.ID, Limit: focusedTaskProjectionMaxNodes + 1,
 		Statuses: []task.Status{task.StatusOpen, task.StatusInProgress, task.StatusBlocked},
 	})
+	if errors.Is(err, task.ErrAccessDenied) {
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}

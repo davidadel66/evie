@@ -28,6 +28,7 @@ func (s *Store) DecomposeGlobalTask(
 	id task.ID,
 	input task.DecomposeInput,
 ) (task.Decomposition, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityDecompose, task.AccessContribute)
 	if err := ctx.Err(); err != nil {
 		return task.Decomposition{}, err
 	}
@@ -41,6 +42,10 @@ func (s *Store) DecomposeGlobalTask(
 	if err != nil {
 		return task.Decomposition{}, err
 	}
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return task.Decomposition{}, err
+	}
 	requestSHA256, err := canonicalDecomposeRequestSHA256(id, input)
 	if err != nil {
 		return task.Decomposition{}, err
@@ -49,6 +54,18 @@ func (s *Store) DecomposeGlobalTask(
 	var result task.Decomposition
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		transactionAccess, err := taskAccessFromContext(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if transactionAccess.delegated {
+			if _, err := getGlobalTask(ctx, conn, id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &task.NotFoundError{ID: id}
+				}
+				return err
+			}
+		}
 		claim, found, err := readIdempotencyClaim(ctx, conn, attribution, identitySHA256)
 		if err != nil {
 			return err
@@ -199,6 +216,10 @@ func (s *Store) DecomposeGlobalTask(
 	if businessErr != nil {
 		return task.Decomposition{}, businessErr
 	}
+	result.Parent = access.project(result.Parent)
+	for i := range result.Children {
+		result.Children[i] = access.project(result.Children[i])
+	}
 	return result, nil
 }
 
@@ -345,6 +366,7 @@ func replayDecompositionError(id task.ID, input task.DecomposeInput, stored deco
 }
 
 func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.TreeQuery) (task.Tree, error) {
+	ctx = withTaskAuthorization(ctx, task.CapabilityGet, task.AccessRead)
 	if strings.TrimSpace(string(id)) == "" {
 		return task.Tree{}, &task.InputError{Field: "task_id", Message: "must not be blank"}
 	}
@@ -355,10 +377,18 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 	if err != nil {
 		return task.Tree{}, err
 	}
+	access, err := taskAccessFromContext(ctx, s.db)
+	if err != nil {
+		return task.Tree{}, err
+	}
 	maxDepth := query.MaxDepth
 	if maxDepth == 0 {
 		maxDepth = task.DefaultTreeDepth
 	}
+	activeGrantSQL, activeGrantArgs := access.activeGrantPredicate()
+	arguments := []any{id, maxDepth, maxDepth, query.IncludeHistory}
+	arguments = append(arguments, activeGrantArgs...)
+	arguments = append(arguments, task.MaxTreeNodes+1)
 	rows, err := s.db.QueryContext(ctx, `
 		WITH RECURSIVE descendants(task_id, depth, path) AS (
 			SELECT task_id, 0, printf('%020d', sibling_order) FROM task_hierarchy WHERE task_id = ?
@@ -385,9 +415,10 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 		FROM descendants
 		JOIN tasks t ON t.id = descendants.task_id
 		JOIN task_hierarchy h ON h.task_id = t.id
+		WHERE 1 = 1`+activeGrantSQL+`
 		ORDER BY descendants.path, t.id
 		LIMIT ?
-	`, id, maxDepth, maxDepth, query.IncludeHistory, task.MaxTreeNodes+1)
+	`, arguments...)
 	if err != nil {
 		return task.Tree{}, fmt.Errorf("read Task tree: %w", err)
 	}
@@ -420,6 +451,7 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 		if err != nil {
 			return task.Tree{}, err
 		}
+		node.value = access.project(node.value)
 		flat = append(flat, node)
 	}
 	if err := rows.Err(); err != nil {
@@ -432,6 +464,9 @@ func (s *Store) GetGlobalTaskTree(ctx context.Context, id task.ID, query task.Tr
 		s.afterTaskTreeRead()
 	}
 	if len(flat) == 0 {
+		if access.delegated {
+			return task.Tree{}, task.ErrAccessDenied
+		}
 		return task.Tree{Task: root}, nil
 	}
 	truncatedByNodes := len(flat) > task.MaxTreeNodes
