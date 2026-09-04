@@ -16,6 +16,18 @@ import (
 // IssueTaskAccessGrant is a Kernel-only orchestration seam. It is intentionally
 // absent from task.Service and every model-facing capability.
 func (s *Store) IssueTaskAccessGrant(ctx context.Context, input task.GrantInput) (task.AccessGrant, error) {
+	return s.issueTaskAccessGrant(ctx, input, false)
+}
+
+// IssueFocusedTaskAccessGrant atomically gives an existing direct child
+// session one bounded subtree grant and selects that granted root as its Task
+// Focus. It is a Kernel-only orchestration seam and is intentionally absent
+// from model-facing Todo capabilities.
+func (s *Store) IssueFocusedTaskAccessGrant(ctx context.Context, input task.GrantInput) (task.AccessGrant, error) {
+	return s.issueTaskAccessGrant(ctx, input, true)
+}
+
+func (s *Store) issueTaskAccessGrant(ctx context.Context, input task.GrantInput, focus bool) (task.AccessGrant, error) {
 	if strings.TrimSpace(input.GranteeSessionID) == "" {
 		return task.AccessGrant{}, &task.InputError{Field: "grantee_session_id", Message: "must not be blank"}
 	}
@@ -88,6 +100,11 @@ func (s *Store) IssueTaskAccessGrant(ctx context.Context, input task.GrantInput)
 			grant.IssuerSessionID, grant.IssuerRunID, formatTaskTime(grant.IssuedAt))
 		if err != nil {
 			return fmt.Errorf("insert Task Access Grant: %w", err)
+		}
+		if focus {
+			if err := upsertTaskFocus(ctx, conn, grantee.ID, grant.RootID, grant.IssuedAt); err != nil {
+				return fmt.Errorf("focus granted Task subtree: %w", err)
+			}
 		}
 		return nil
 	})

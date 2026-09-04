@@ -100,7 +100,10 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 			created, businessErr, createErr = s.createChildTask(
 				ctx, conn, attribution, identitySHA256, requestSHA256, input, now,
 			)
-			return createErr
+			if createErr != nil || businessErr != nil || !input.Focus {
+				return createErr
+			}
+			return upsertTaskFocus(ctx, conn, transactionAccess.sessionID, created.ID, now)
 		}
 		id, err := uuid.NewRandom()
 		if err != nil {
@@ -141,10 +144,16 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 			return err
 		}
 		previous, resulting := uint64(0), uint64(1)
-		return insertMutationResult(ctx, conn, attribution, identitySHA256, requestSHA256, mutationResult{
+		if err := insertMutationResult(ctx, conn, attribution, identitySHA256, requestSHA256, mutationResult{
 			Operation: task.OperationCreate, TaskID: created.ID, EventID: eventID, OutcomeCode: mutationAccepted,
 			PreviousRevision: &previous, ResultingRevision: &resulting,
-		}, now)
+		}, now); err != nil {
+			return err
+		}
+		if input.Focus {
+			return upsertTaskFocus(ctx, conn, transactionAccess.sessionID, created.ID, now)
+		}
+		return nil
 	})
 	if err != nil {
 		return task.Task{}, err

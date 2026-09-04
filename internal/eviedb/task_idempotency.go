@@ -40,6 +40,21 @@ func idempotencySHA256(key task.IdempotencyKey) string {
 }
 
 func canonicalCreateRequestSHA256(input task.CreateInput, scope task.Scope) (string, error) {
+	if input.Focus {
+		return canonicalMutationSHA256(struct {
+			Version                int        `json:"version"`
+			Operation              string     `json:"operation"`
+			Scope                  task.Scope `json:"scope"`
+			Title                  string     `json:"title"`
+			Description            string     `json:"description"`
+			Priority               int        `json:"priority"`
+			DueDate                string     `json:"due_date"`
+			ParentID               task.ID    `json:"parent_id"`
+			ExpectedParentRevision uint64     `json:"expected_parent_revision"`
+			Focus                  bool       `json:"focus"`
+		}{2, string(task.OperationCreate), scope, input.Title, input.Description, input.Priority, input.DueDate,
+			input.ParentID, input.ExpectedParentRevision, true})
+	}
 	return canonicalMutationSHA256(struct {
 		Version                int        `json:"version"`
 		Operation              string     `json:"operation"`

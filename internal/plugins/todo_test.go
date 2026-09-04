@@ -19,13 +19,13 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	todo := NewTodo(nil)
 	want := Manifest{
 		ID:                    TodoPluginID,
-		ImplementationVersion: "1.6.0",
+		ImplementationVersion: "1.7.0",
 		KernelCompatibility: VersionRange{
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
 			{ID: TodoListCapabilityID, Version: "1.3.0"},
-			{ID: TodoAddCapabilityID, Version: "1.3.0"},
+			{ID: TodoAddCapabilityID, Version: "1.4.0"},
 			{ID: TodoGetCapabilityID, Version: "1.1.0"},
 			{ID: TodoUpdateCapabilityID, Version: "1.3.0"},
 			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
@@ -88,6 +88,18 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "69d3046efcb2b32995358856de6f0106c06adff7b173254f385e509efd2d15f9"},
 				},
 			},
+			{
+				ImplementationVersion: "1.6.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "418a5881bba8ee80fed0c67c2dd98f83768f025eeb5491975b7d9d3a8964dc28"},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "0189ba3060bb512d6918a37d9175536f6d904974cdb2b25c3842b852a310a48a"},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: "dd52b8e07189b5863170784d1e051ea75fbd451c214f556cd47443972e15cdba"},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: "b9d4f8c01243220efb0b81ec60583eb7393b6660110e6539fd2ea58a11a9157c"},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "0dcda46f6f320e1afcf56f990c80196407d70da56401f70ecc320804cbd71b10"},
+					{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "718dbd187e037db724b67d5ad075c294256c118e903201831120d0e63884acef"},
+					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: "69d3046efcb2b32995358856de6f0106c06adff7b173254f385e509efd2d15f9"},
+				},
+			},
 		},
 	}
 	if got := todo.Manifest(); !reflect.DeepEqual(got, want) {
@@ -111,7 +123,7 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	}
 	wantAssociations := []association{
 		{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_list"},
-		{ID: TodoAddCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_add"},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.4.0", SchemaName: "todo_add"},
 		{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaName: "todo_get"},
 		{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaName: "todo_update"},
 		{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaName: "todo_decompose"},
@@ -134,7 +146,7 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantDefinitions := []tools.Tool{
-		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoScopedListTool(), tools.TodoFocusedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
 		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
 	if got, wantSchemas := toolset.Schemas(), tools.NewToolset(wantDefinitions).Schemas(); !reflect.DeepEqual(got, wantSchemas) {
@@ -142,6 +154,33 @@ func TestTodoManifestAndToolContractsAreStable(t *testing.T) {
 	}
 	if got := schemaNames(toolset); !reflect.DeepEqual(got, []string{"todo_list", "todo_add", "todo_get", "todo_update", "todo_decompose", "todo_claim", "todo_release"}) {
 		t.Fatalf("Todo schema names = %v", got)
+	}
+}
+
+func TestTodoFocusedAddIsCurrentOnlyAndFrozenReceiptsRejectIt(t *testing.T) {
+	service := &taskServiceFixture{created: task.Task{ID: "created", Title: "tracked", Status: task.StatusOpen, Revision: 1}}
+	current := NewTodo(service).ToolCapabilities()
+	currentTools := make([]tools.Tool, len(current))
+	for i := range current {
+		currentTools[i] = current[i].Tool
+	}
+	outcome := executeTodoTool(t, tools.NewToolset(currentTools), "todo_add", `{"title":"tracked","focus":true}`)
+	if outcome.IsErr || len(service.create) != 1 || !service.create[0].Focus {
+		t.Fatalf("current focused add = %+v, service calls %#v", outcome, service.create)
+	}
+
+	for _, version := range []string{"1.3.0", "1.4.0", "1.5.0", "1.6.0"} {
+		t.Run(version, func(t *testing.T) {
+			capabilities := NewTodo(&taskServiceFixture{}).ResumableToolCapabilities(version)
+			frozenTools := make([]tools.Tool, len(capabilities))
+			for i := range capabilities {
+				frozenTools[i] = capabilities[i].Tool
+			}
+			frozen := executeTodoTool(t, tools.NewToolset(frozenTools), "todo_add", `{"title":"tracked","focus":true}`)
+			if !frozen.IsErr || !strings.Contains(frozen.Content, "unknown field") {
+				t.Fatalf("frozen receipt accepted current focus argument: %+v", frozen)
+			}
+		})
 	}
 }
 

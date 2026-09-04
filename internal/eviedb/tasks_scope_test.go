@@ -315,6 +315,45 @@ func TestTaskFocusPersistsAndProjectsBoundedOpenTree(t *testing.T) {
 	}
 }
 
+func TestCreateTaskCanAtomicallySelectFocusWithoutReplayStealingIt(t *testing.T) {
+	db, err := OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewStore(db)
+	session, err := store.CreateGlobalSessionWithComposition(context.Background(), standardReceipt(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstInput := task.CreateInput{Title: "first focus", IdempotencyKey: "first-focus", Focus: true}
+	first, err := store.CreateGlobalTask(scopedTaskContext(session, "first"), firstInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.CreateGlobalTask(scopedTaskContext(session, "second"), task.CreateInput{
+		Title: "second focus", IdempotencyKey: "second-focus", Focus: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replayed, err := store.CreateGlobalTask(scopedTaskContext(session, "first"), firstInput)
+	if err != nil || replayed.ID != first.ID {
+		t.Fatalf("replayed create = %+v, %v", replayed, err)
+	}
+	working, err := store.BindHistory(session.ID, "holder").WorkingContext(context.Background())
+	if err != nil || !strings.Contains(working, string(second.ID)) || strings.Contains(working, string(first.ID)) {
+		t.Fatalf("working context after replay = %q, %v", working, err)
+	}
+
+	withoutFocus := firstInput
+	withoutFocus.Focus = false
+	if _, err := store.CreateGlobalTask(scopedTaskContext(session, "first"), withoutFocus); !errors.Is(err, task.ErrIdempotencyConflict) {
+		t.Fatalf("create with changed focus error = %v, want idempotency conflict", err)
+	}
+}
+
 func taskTitles(values []task.Task) []string {
 	result := make([]string, len(values))
 	for i := range values {

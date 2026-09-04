@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/task"
@@ -227,16 +228,26 @@ func (s *Store) SelectTaskFocus(ctx context.Context, id task.ID) error {
 		if err != nil {
 			return err
 		}
-		_, err = conn.ExecContext(ctx, `
-		INSERT INTO session_task_focus (session_id, task_id, selected_at) VALUES (?, ?, ?)
-		ON CONFLICT(session_id) DO UPDATE SET task_id = excluded.task_id, selected_at = excluded.selected_at
-	`, access.sessionID, value.ID, formatTaskTime(s.now().UTC()))
-		return err
+		return upsertTaskFocus(ctx, conn, access.sessionID, value.ID, s.now().UTC())
 	})
 	if err != nil {
 		return fmt.Errorf("select Task focus: %w", err)
 	}
 	return businessErr
+}
+
+func upsertTaskFocus(
+	ctx context.Context,
+	conn *sql.Conn,
+	sessionID memory.SessionID,
+	id task.ID,
+	selectedAt time.Time,
+) error {
+	_, err := conn.ExecContext(ctx, `
+		INSERT INTO session_task_focus (session_id, task_id, selected_at) VALUES (?, ?, ?)
+		ON CONFLICT(session_id) DO UPDATE SET task_id = excluded.task_id, selected_at = excluded.selected_at
+	`, sessionID, id, formatTaskTime(selectedAt))
+	return err
 }
 
 func (s *Store) ClearTaskFocus(ctx context.Context) error {

@@ -22,10 +22,10 @@ const (
 	TodoClaimCapabilityID     CapabilityID = CapabilityID(task.CapabilityClaim)
 	TodoReleaseCapabilityID   CapabilityID = CapabilityID(task.CapabilityRelease)
 
-	todoImplementationVersion    = "1.6.0"
+	todoImplementationVersion    = "1.7.0"
 	todoContractVersion          = "1.0.0"
 	todoListContractVersion      = "1.3.0"
-	todoAddContractVersion       = "1.3.0"
+	todoAddContractVersion       = "1.4.0"
 	todoGetContractVersion       = "1.1.0"
 	todoUpdateContractVersion    = "1.3.0"
 	todoDecomposeContractVersion = "1.0.0"
@@ -131,12 +131,24 @@ func (Todo) Manifest() Manifest {
 					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoReleaseTool().Schema)},
 				},
 			},
+			{
+				ImplementationVersion: "1.6.0",
+				Capabilities: []CapabilityCompatibility{
+					{ID: TodoListCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: schemaHash(tools.TodoScopedListTool().Schema)},
+					{ID: TodoAddCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: schemaHash(tools.TodoScopedAddTool().Schema)},
+					{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", SchemaSHA256: schemaHash(tools.TodoTreeGetTool().Schema)},
+					{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", SchemaSHA256: schemaHash(tools.TodoClaimedUpdateTool().Schema)},
+					{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoDecomposeTool().Schema)},
+					{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoClaimTool().Schema)},
+					{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.TodoReleaseTool().Schema)},
+				},
+			},
 		},
 	}
 }
 
 func (t Todo) ToolCapabilities() []ToolCapability {
-	addTool := tools.TodoScopedAddTool()
+	addTool := tools.TodoFocusedAddTool()
 	listTool := tools.TodoScopedListTool()
 	getTool := tools.TodoTreeGetTool()
 	addTool.Execute = t.add
@@ -195,7 +207,7 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		listTool := tools.TodoLifecycleListTool()
 		listTool.Execute = t.list
 		addTool := tools.TodoIdempotentAddTool()
-		addTool.Execute = t.add
+		addTool.Execute = t.addCompatibility
 		getTool := tools.TodoGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoIdempotentUpdateTool()
@@ -211,7 +223,7 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		listTool := tools.TodoTreeListTool()
 		listTool.Execute = t.list
 		addTool := tools.TodoTreeAddTool()
-		addTool.Execute = t.add
+		addTool.Execute = t.addCompatibility
 		getTool := tools.TodoTreeGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoIdempotentUpdateTool()
@@ -230,7 +242,7 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 		listTool := tools.TodoTreeListTool()
 		listTool.Execute = t.list
 		addTool := tools.TodoTreeAddTool()
-		addTool.Execute = t.add
+		addTool.Execute = t.addCompatibility
 		getTool := tools.TodoTreeGetTool()
 		getTool.Execute = t.get
 		updateTool := tools.TodoClaimedUpdateTool()
@@ -251,7 +263,32 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 			{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", Tool: releaseTool},
 		}
 	}
-	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" && version != "1.4.0" && version != "1.5.0" {
+	if version == "1.6.0" {
+		listTool := tools.TodoScopedListTool()
+		listTool.Execute = t.list
+		addTool := tools.TodoScopedAddTool()
+		addTool.Execute = t.addCompatibility
+		getTool := tools.TodoTreeGetTool()
+		getTool.Execute = t.get
+		updateTool := tools.TodoClaimedUpdateTool()
+		updateTool.Execute = t.update
+		decomposeTool := tools.TodoDecomposeTool()
+		decomposeTool.Execute = t.decompose
+		claimTool := tools.TodoClaimTool()
+		claimTool.Execute = t.claim
+		releaseTool := tools.TodoReleaseTool()
+		releaseTool.Execute = t.release
+		capabilities = []ToolCapability{
+			{ID: TodoListCapabilityID, ContractVersion: "1.3.0", Tool: listTool},
+			{ID: TodoAddCapabilityID, ContractVersion: "1.3.0", Tool: addTool},
+			{ID: TodoGetCapabilityID, ContractVersion: "1.1.0", Tool: getTool},
+			{ID: TodoUpdateCapabilityID, ContractVersion: "1.3.0", Tool: updateTool},
+			{ID: TodoDecomposeCapabilityID, ContractVersion: "1.0.0", Tool: decomposeTool},
+			{ID: TodoClaimCapabilityID, ContractVersion: "1.0.0", Tool: claimTool},
+			{ID: TodoReleaseCapabilityID, ContractVersion: "1.0.0", Tool: releaseTool},
+		}
+	}
+	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" && version != "1.4.0" && version != "1.5.0" && version != "1.6.0" {
 		return nil
 	}
 	for i := range capabilities {
@@ -273,10 +310,42 @@ func (t Todo) add(ctx context.Context, arguments string) (string, error) {
 		ParentID               string              `json:"parent_id"`
 		ExpectedParentRevision uint64              `json:"expected_parent_revision"`
 		Scope                  task.ScopeSelection `json:"scope"`
+		Focus                  bool                `json:"focus"`
 	}
 	if err := decodeTodoArguments(arguments, &input); err != nil {
 		return "", fmt.Errorf("decode todo_add arguments: %w", err)
 	}
+	return t.createTask(ctx, task.CreateInput{
+		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
+		ParentID: task.ID(input.ParentID), ExpectedParentRevision: input.ExpectedParentRevision,
+		Scope:          input.Scope,
+		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
+		Focus:          input.Focus,
+	})
+}
+
+func (t Todo) addCompatibility(ctx context.Context, arguments string) (string, error) {
+	var input struct {
+		Title                  string              `json:"title"`
+		Description            string              `json:"description"`
+		DueDate                string              `json:"due"`
+		Priority               int                 `json:"priority"`
+		IdempotencyKey         string              `json:"idempotency_key"`
+		ParentID               string              `json:"parent_id"`
+		ExpectedParentRevision uint64              `json:"expected_parent_revision"`
+		Scope                  task.ScopeSelection `json:"scope"`
+	}
+	if err := decodeTodoArguments(arguments, &input); err != nil {
+		return "", fmt.Errorf("decode todo_add arguments: %w", err)
+	}
+	return t.createTask(ctx, task.CreateInput{
+		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
+		ParentID: task.ID(input.ParentID), ExpectedParentRevision: input.ExpectedParentRevision,
+		Scope: input.Scope, IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
+	})
+}
+
+func (t Todo) createTask(ctx context.Context, input task.CreateInput) (string, error) {
 	if err := task.ValidateScopeSelection(input.Scope); err != nil {
 		return "", err
 	}
@@ -284,14 +353,9 @@ func (t Todo) add(ctx context.Context, arguments string) (string, error) {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
 	if input.IdempotencyKey == "" {
-		input.IdempotencyKey = uuid.NewString()
+		input.IdempotencyKey = task.IdempotencyKey(uuid.NewString())
 	}
-	created, err := t.service.CreateGlobalTask(ctx, task.CreateInput{
-		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
-		ParentID: task.ID(input.ParentID), ExpectedParentRevision: input.ExpectedParentRevision,
-		Scope:          input.Scope,
-		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
-	})
+	created, err := t.service.CreateGlobalTask(ctx, input)
 	if err != nil {
 		return "", err
 	}

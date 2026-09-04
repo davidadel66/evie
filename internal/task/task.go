@@ -192,6 +192,7 @@ type CreateInput struct {
 	ExpectedParentRevision uint64
 	IdempotencyKey         IdempotencyKey
 	Scope                  ScopeSelection
+	Focus                  bool
 }
 
 type ChildInput struct {

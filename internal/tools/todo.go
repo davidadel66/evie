@@ -210,6 +210,14 @@ var todoScopedAddTool = func() openrouter.Tool {
 	return tool
 }()
 
+var todoFocusedAddTool = func() openrouter.Tool {
+	tool := cloneSchema(todoScopedAddTool)
+	tool.Function.Parameters.Properties["focus"] = openrouter.Property{
+		Type: "boolean", Description: "Select the created Task as this session's Task Focus for subsequent turns",
+	}
+	return tool
+}()
+
 var todoTreeGetTool = func() openrouter.Tool {
 	tool := cloneSchema(todoGetTool)
 	tool.Function.Description = "Retrieve one durable Task or a bounded recursive Task Tree"
@@ -310,6 +318,10 @@ func TodoTreeAddTool() Tool { return Tool{Schema: cloneSchema(todoTreeAddTool)} 
 func TodoScopedListTool() Tool { return Tool{Schema: cloneSchema(todoScopedListTool)} }
 
 func TodoScopedAddTool() Tool { return Tool{Schema: cloneSchema(todoScopedAddTool)} }
+
+// TodoFocusedAddTool is the current create-and-focus schema. TodoScopedAddTool
+// remains frozen for sessions pinned before focus was added.
+func TodoFocusedAddTool() Tool { return Tool{Schema: cloneSchema(todoFocusedAddTool)} }
 
 // TodoTreeGetTool is the bounded recursive current get schema.
 func TodoTreeGetTool() Tool { return Tool{Schema: cloneSchema(todoTreeGetTool)} }

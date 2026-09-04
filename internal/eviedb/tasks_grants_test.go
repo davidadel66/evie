@@ -539,6 +539,45 @@ func TestTaskAccessGrantFocusTerminationAndSessionLifecycle(t *testing.T) {
 	}
 }
 
+func TestIssueFocusedTaskAccessGrantAtomicallyProjectsGrantedSubtree(t *testing.T) {
+	db, err := OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewStore(db)
+	owner, err := store.CreateGlobalSessionWithComposition(context.Background(), standardReceipt(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := store.CreateGlobalTask(scopedTaskContext(owner, "seed"), task.CreateInput{
+		Title: "delegated focus", IdempotencyKey: "delegated-focus",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := store.CreateDelegatedSessionWithComposition(
+		context.Background(), owner.ID, todoCapabilityReceipt(t, task.CapabilityList, task.CapabilityGet),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := store.IssueFocusedTaskAccessGrant(scopedTaskContext(owner, "delegate"), task.GrantInput{
+		GranteeSessionID: string(child.ID), RootID: root.ID, Level: task.AccessRead,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.GetTaskAccessGrant(context.Background(), grant.ID)
+	if err != nil || stored.RootID != root.ID || stored.GranteeSessionID != string(child.ID) {
+		t.Fatalf("stored grant = %+v, %v", stored, err)
+	}
+	working, err := store.BindHistory(child.ID, "holder").WorkingContext(context.Background())
+	if err != nil || !strings.Contains(working, string(root.ID)) || !strings.Contains(working, "delegated focus") {
+		t.Fatalf("delegated working context = %q, %v", working, err)
+	}
+}
+
 func TestTaskAccessGrantIssuanceRejectsUnrelatedAndCrossScopeTargets(t *testing.T) {
 	db, err := OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
 	if err != nil {
