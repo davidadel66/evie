@@ -301,27 +301,11 @@ func (t Todo) ResumableToolCapabilities(version string) []ToolCapability {
 }
 
 func (t Todo) add(ctx context.Context, arguments string) (string, error) {
-	var input struct {
-		Title                  string              `json:"title"`
-		Description            string              `json:"description"`
-		DueDate                string              `json:"due"`
-		Priority               int                 `json:"priority"`
-		IdempotencyKey         string              `json:"idempotency_key"`
-		ParentID               string              `json:"parent_id"`
-		ExpectedParentRevision uint64              `json:"expected_parent_revision"`
-		Scope                  task.ScopeSelection `json:"scope"`
-		Focus                  bool                `json:"focus"`
-	}
-	if err := decodeTodoArguments(arguments, &input); err != nil {
+	input, err := decodeTodoAddArguments(arguments)
+	if err != nil {
 		return "", fmt.Errorf("decode todo_add arguments: %w", err)
 	}
-	return t.createTask(ctx, task.CreateInput{
-		Title: input.Title, Description: input.Description, Priority: input.Priority, DueDate: input.DueDate,
-		ParentID: task.ID(input.ParentID), ExpectedParentRevision: input.ExpectedParentRevision,
-		Scope:          input.Scope,
-		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
-		Focus:          input.Focus,
-	})
+	return t.createTask(ctx, input.taskInput())
 }
 
 func (t Todo) addCompatibility(ctx context.Context, arguments string) (string, error) {
@@ -465,18 +449,8 @@ func (t Todo) get(ctx context.Context, arguments string) (string, error) {
 }
 
 func (t Todo) decompose(ctx context.Context, arguments string) (string, error) {
-	var input struct {
-		TaskID           string `json:"task_id"`
-		ExpectedRevision uint64 `json:"expected_revision"`
-		Children         []struct {
-			Title       string `json:"title"`
-			Description string `json:"description"`
-			Priority    int    `json:"priority"`
-			DueDate     string `json:"due"`
-		} `json:"children"`
-		IdempotencyKey string `json:"idempotency_key"`
-	}
-	if err := decodeTodoArguments(arguments, &input); err != nil {
+	input, err := decodeTodoDecomposeArguments(arguments)
+	if err != nil {
 		return "", fmt.Errorf("decode todo_decompose arguments: %w", err)
 	}
 	if strings.TrimSpace(input.TaskID) == "" {
@@ -485,16 +459,7 @@ func (t Todo) decompose(ctx context.Context, arguments string) (string, error) {
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	children := make([]task.ChildInput, len(input.Children))
-	for i, child := range input.Children {
-		children[i] = task.ChildInput{
-			Title: child.Title, Description: child.Description, Priority: child.Priority, DueDate: child.DueDate,
-		}
-	}
-	result, err := t.service.DecomposeGlobalTask(ctx, task.ID(input.TaskID), task.DecomposeInput{
-		ExpectedRevision: input.ExpectedRevision, Children: children,
-		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
-	})
+	result, err := t.service.DecomposeGlobalTask(ctx, task.ID(input.TaskID), input.taskInput())
 	if err != nil {
 		return "", err
 	}
@@ -510,18 +475,8 @@ func (t Todo) updateCompatibility(ctx context.Context, arguments string) (string
 }
 
 func (t Todo) updateWithReason(ctx context.Context, arguments, managementReason string) (string, error) {
-	var input struct {
-		TaskID           string       `json:"task_id"`
-		ExpectedRevision uint64       `json:"expected_revision"`
-		Title            *string      `json:"title"`
-		Description      *string      `json:"description"`
-		Priority         *int         `json:"priority"`
-		DueDate          *string      `json:"due"`
-		ResultSummary    *string      `json:"result_summary"`
-		Status           *task.Status `json:"status"`
-		IdempotencyKey   string       `json:"idempotency_key"`
-	}
-	if err := decodeTodoArguments(arguments, &input); err != nil {
+	input, err := decodeTodoUpdateArguments(arguments)
+	if err != nil {
 		return "", fmt.Errorf("decode todo_update arguments: %w", err)
 	}
 	if strings.TrimSpace(input.TaskID) == "" {
@@ -530,13 +485,8 @@ func (t Todo) updateWithReason(ctx context.Context, arguments, managementReason 
 	if t.service == nil {
 		return "", fmt.Errorf("Todo Task service is unavailable")
 	}
-	updateInput := task.UpdateInput{
-		ExpectedRevision: input.ExpectedRevision, Title: input.Title, Description: input.Description,
-		Priority: input.Priority, DueDate: input.DueDate, ResultSummary: input.ResultSummary, Status: input.Status,
-		IdempotencyKey: task.IdempotencyKey(input.IdempotencyKey),
-	}
+	updateInput := input.taskInput()
 	var updated task.Task
-	var err error
 	if managementReason == "" || (input.Status == nil && input.ResultSummary == nil) {
 		updated, err = t.service.UpdateGlobalTask(ctx, task.ID(input.TaskID), updateInput)
 	} else if management, ok := t.service.(taskManagementService); ok {
@@ -585,11 +535,8 @@ func (t Todo) updateLegacy(ctx context.Context, arguments string) (string, error
 }
 
 func (t Todo) claim(ctx context.Context, arguments string) (string, error) {
-	var input struct {
-		TaskID         string `json:"task_id"`
-		IdempotencyKey string `json:"idempotency_key"`
-	}
-	if err := decodeTodoArguments(arguments, &input); err != nil {
+	input, err := decodeTodoCoordinationArguments(arguments)
+	if err != nil {
 		return "", fmt.Errorf("decode todo_claim arguments: %w", err)
 	}
 	if strings.TrimSpace(input.TaskID) == "" {
@@ -608,11 +555,8 @@ func (t Todo) claim(ctx context.Context, arguments string) (string, error) {
 }
 
 func (t Todo) release(ctx context.Context, arguments string) (string, error) {
-	var input struct {
-		TaskID         string `json:"task_id"`
-		IdempotencyKey string `json:"idempotency_key"`
-	}
-	if err := decodeTodoArguments(arguments, &input); err != nil {
+	input, err := decodeTodoCoordinationArguments(arguments)
+	if err != nil {
 		return "", fmt.Errorf("decode todo_release arguments: %w", err)
 	}
 	if strings.TrimSpace(input.TaskID) == "" {

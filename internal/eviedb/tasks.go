@@ -41,11 +41,11 @@ func (s *Store) CreateGlobalTask(ctx context.Context, input task.CreateInput) (t
 	if err != nil {
 		return task.Task{}, err
 	}
-	requestSHA256, err := canonicalCreateRequestSHA256(input, targetScope)
+	requestSHA256, err := task.CanonicalCreateRequestSHA256(input, targetScope)
 	if err != nil {
 		return task.Task{}, err
 	}
-	identitySHA256 := idempotencySHA256(input.IdempotencyKey)
+	identitySHA256 := task.IdempotencySHA256(input.IdempotencyKey)
 	var created task.Task
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
@@ -532,11 +532,11 @@ func (s *Store) updateGlobalTask(ctx context.Context, id task.ID, input task.Upd
 	if err != nil {
 		return task.Task{}, err
 	}
-	requestSHA256, err := canonicalUpdateRequestSHA256(id, input)
+	requestSHA256, err := task.CanonicalUpdateRequestSHA256(id, input)
 	if err != nil {
 		return task.Task{}, err
 	}
-	identitySHA256 := idempotencySHA256(input.IdempotencyKey)
+	identitySHA256 := task.IdempotencySHA256(input.IdempotencyKey)
 	var result task.Task
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {

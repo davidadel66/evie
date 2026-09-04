@@ -54,7 +54,7 @@ func TestTaskTreeDecompositionIsOrderedIdempotentAndDurable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantIdentity := idempotencySHA256(input.IdempotencyKey)
+	wantIdentity := task.IdempotencySHA256(input.IdempotencyKey)
 	if len(rootEvents) != 2 || rootEvents[1].Operation != task.OperationDecompose ||
 		rootEvents[1].PreviousRevision != 1 || rootEvents[1].ResultingRevision != 2 ||
 		rootEvents[1].IdempotencySHA256 != wantIdentity {

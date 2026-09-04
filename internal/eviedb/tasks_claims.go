@@ -98,15 +98,6 @@ func authorizeTaskUpdate(ctx context.Context, conn *sql.Conn, current task.Task,
 	return claim, found, nil
 }
 
-func canonicalClaimRequestSHA256(id task.ID, operation task.Operation) (string, error) {
-	return canonicalMutationSHA256(struct {
-		Version   int            `json:"version"`
-		Operation task.Operation `json:"operation"`
-		Scope     task.Scope     `json:"scope"`
-		TaskID    task.ID        `json:"task_id"`
-	}{1, operation, task.ScopeGlobal, id})
-}
-
 func (s *Store) ClaimGlobalTask(ctx context.Context, id task.ID, input task.ClaimInput) (task.Claim, error) {
 	ctx = withTaskAuthorization(ctx, task.CapabilityClaim, task.AccessContribute)
 	if err := validateClaimMutation(ctx, id, input.IdempotencyKey); err != nil {
@@ -119,11 +110,11 @@ func (s *Store) ClaimGlobalTask(ctx context.Context, id task.ID, input task.Clai
 	if _, err := taskAccessFromContext(ctx, s.db); err != nil {
 		return task.Claim{}, err
 	}
-	requestSHA256, err := canonicalClaimRequestSHA256(id, task.OperationClaim)
+	requestSHA256, err := task.CanonicalCoordinationRequestSHA256(id, task.OperationClaim)
 	if err != nil {
 		return task.Claim{}, err
 	}
-	identitySHA256 := idempotencySHA256(input.IdempotencyKey)
+	identitySHA256 := task.IdempotencySHA256(input.IdempotencyKey)
 	var result task.Claim
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
@@ -260,11 +251,11 @@ func (s *Store) ReleaseGlobalTaskClaim(ctx context.Context, id task.ID, input ta
 	if _, err := taskAccessFromContext(ctx, s.db); err != nil {
 		return task.ClaimRelease{}, err
 	}
-	requestSHA256, err := canonicalClaimRequestSHA256(id, task.OperationRelease)
+	requestSHA256, err := task.CanonicalCoordinationRequestSHA256(id, task.OperationRelease)
 	if err != nil {
 		return task.ClaimRelease{}, err
 	}
-	identitySHA256 := idempotencySHA256(input.IdempotencyKey)
+	identitySHA256 := task.IdempotencySHA256(input.IdempotencyKey)
 	var result task.ClaimRelease
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {

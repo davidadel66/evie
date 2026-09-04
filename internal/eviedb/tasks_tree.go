@@ -46,11 +46,11 @@ func (s *Store) DecomposeGlobalTask(
 	if err != nil {
 		return task.Decomposition{}, err
 	}
-	requestSHA256, err := canonicalDecomposeRequestSHA256(id, input)
+	requestSHA256, err := task.CanonicalDecomposeRequestSHA256(id, input)
 	if err != nil {
 		return task.Decomposition{}, err
 	}
-	identitySHA256 := idempotencySHA256(input.IdempotencyKey)
+	identitySHA256 := task.IdempotencySHA256(input.IdempotencyKey)
 	var result task.Decomposition
 	var businessErr error
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {

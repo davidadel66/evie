@@ -242,7 +242,7 @@ func importLegacyTodoTask(
 	if err != nil {
 		return LegacyTodoImportedTask{}, fmt.Errorf("audit legacy Todo ID %d: %w", legacy.ID, err)
 	}
-	identity := idempotencySHA256(task.IdempotencyKey(legacyTodoMigrationID + ":" + strconv.Itoa(legacy.ID)))
+	identity := task.IdempotencySHA256(task.IdempotencyKey(legacyTodoMigrationID + ":" + strconv.Itoa(legacy.ID)))
 	if err := linkTaskEventIdempotency(ctx, conn, eventID, identity); err != nil {
 		return LegacyTodoImportedTask{}, err
 	}

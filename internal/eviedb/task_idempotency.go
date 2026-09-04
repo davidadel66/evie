@@ -2,10 +2,7 @@ package eviedb
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,124 +29,6 @@ type mutationResult struct {
 	ResultingRevision *uint64
 	FromStatus        task.Status
 	ToStatus          task.Status
-}
-
-func idempotencySHA256(key task.IdempotencyKey) string {
-	digest := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(digest[:])
-}
-
-func canonicalCreateRequestSHA256(input task.CreateInput, scope task.Scope) (string, error) {
-	if input.Focus {
-		return canonicalMutationSHA256(struct {
-			Version                int        `json:"version"`
-			Operation              string     `json:"operation"`
-			Scope                  task.Scope `json:"scope"`
-			Title                  string     `json:"title"`
-			Description            string     `json:"description"`
-			Priority               int        `json:"priority"`
-			DueDate                string     `json:"due_date"`
-			ParentID               task.ID    `json:"parent_id"`
-			ExpectedParentRevision uint64     `json:"expected_parent_revision"`
-			Focus                  bool       `json:"focus"`
-		}{2, string(task.OperationCreate), scope, input.Title, input.Description, input.Priority, input.DueDate,
-			input.ParentID, input.ExpectedParentRevision, true})
-	}
-	return canonicalMutationSHA256(struct {
-		Version                int        `json:"version"`
-		Operation              string     `json:"operation"`
-		Scope                  task.Scope `json:"scope"`
-		Title                  string     `json:"title"`
-		Description            string     `json:"description"`
-		Priority               int        `json:"priority"`
-		DueDate                string     `json:"due_date"`
-		ParentID               task.ID    `json:"parent_id"`
-		ExpectedParentRevision uint64     `json:"expected_parent_revision"`
-	}{1, string(task.OperationCreate), scope, input.Title, input.Description, input.Priority, input.DueDate,
-		input.ParentID, input.ExpectedParentRevision})
-}
-
-func canonicalDecomposeRequestSHA256(id task.ID, input task.DecomposeInput) (string, error) {
-	return canonicalMutationSHA256(struct {
-		Version          int               `json:"version"`
-		Operation        string            `json:"operation"`
-		Scope            task.Scope        `json:"scope"`
-		TaskID           task.ID           `json:"task_id"`
-		ExpectedRevision uint64            `json:"expected_revision"`
-		Children         []task.ChildInput `json:"children"`
-	}{1, string(task.OperationDecompose), task.ScopeGlobal, id, input.ExpectedRevision, input.Children})
-}
-
-func canonicalUpdateRequestSHA256(id task.ID, input task.UpdateInput) (string, error) {
-	title, titleSet := pointerValue(input.Title)
-	description, descriptionSet := pointerValue(input.Description)
-	priority, prioritySet := pointerValue(input.Priority)
-	dueDate, dueDateSet := pointerValue(input.DueDate)
-	status, statusSet := pointerValue(input.Status)
-	if input.ResultSummary == nil {
-		return canonicalMutationSHA256(struct {
-			Version          int         `json:"version"`
-			Operation        string      `json:"operation"`
-			Scope            task.Scope  `json:"scope"`
-			TaskID           task.ID     `json:"task_id"`
-			ExpectedRevision uint64      `json:"expected_revision"`
-			TitleSet         bool        `json:"title_set"`
-			Title            string      `json:"title"`
-			DescriptionSet   bool        `json:"description_set"`
-			Description      string      `json:"description"`
-			PrioritySet      bool        `json:"priority_set"`
-			Priority         int         `json:"priority"`
-			DueDateSet       bool        `json:"due_date_set"`
-			DueDate          string      `json:"due_date"`
-			StatusSet        bool        `json:"status_set"`
-			Status           task.Status `json:"status"`
-		}{
-			1, string(task.OperationUpdate), task.ScopeGlobal, id, input.ExpectedRevision,
-			titleSet, title, descriptionSet, description, prioritySet, priority,
-			dueDateSet, dueDate, statusSet, status,
-		})
-	}
-	resultSummary, resultSummarySet := pointerValue(input.ResultSummary)
-	return canonicalMutationSHA256(struct {
-		Version          int         `json:"version"`
-		Operation        string      `json:"operation"`
-		Scope            task.Scope  `json:"scope"`
-		TaskID           task.ID     `json:"task_id"`
-		ExpectedRevision uint64      `json:"expected_revision"`
-		TitleSet         bool        `json:"title_set"`
-		Title            string      `json:"title"`
-		DescriptionSet   bool        `json:"description_set"`
-		Description      string      `json:"description"`
-		PrioritySet      bool        `json:"priority_set"`
-		Priority         int         `json:"priority"`
-		DueDateSet       bool        `json:"due_date_set"`
-		DueDate          string      `json:"due_date"`
-		ResultSummarySet bool        `json:"result_summary_set"`
-		ResultSummary    string      `json:"result_summary"`
-		StatusSet        bool        `json:"status_set"`
-		Status           task.Status `json:"status"`
-	}{
-		2, string(task.OperationUpdate), task.ScopeGlobal, id, input.ExpectedRevision,
-		titleSet, title, descriptionSet, description, prioritySet, priority,
-		dueDateSet, dueDate, resultSummarySet, resultSummary, statusSet, status,
-	})
-}
-
-func pointerValue[T any](value *T) (T, bool) {
-	if value == nil {
-		var zero T
-		return zero, false
-	}
-	return *value, true
-}
-
-func canonicalMutationSHA256(value any) (string, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return "", fmt.Errorf("encode canonical Task mutation: %w", err)
-	}
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:]), nil
 }
 
 func readMutationResult(
