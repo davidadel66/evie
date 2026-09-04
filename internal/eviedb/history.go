@@ -40,3 +40,7 @@ func (h *SessionHistory) Append(
 func (h *SessionHistory) Events(ctx context.Context) ([]memory.Event, error) {
 	return h.store.LoadEvents(ctx, h.sessionID)
 }
+
+func (h *SessionHistory) WorkingContext(ctx context.Context) (string, error) {
+	return h.store.workingTaskContext(ctx, h.sessionID)
+}

@@ -2,12 +2,17 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	kernelcomposition "github.com/davidadel66/evie/internal/composition"
+	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 )
 
@@ -33,11 +38,11 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if got := canonicalPresetVersion(standardPresetContent()); got != StandardPresetVersion {
 		t.Fatalf("standard canonical version = %q, want reserved %q", got, StandardPresetVersion)
 	}
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -54,9 +59,15 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if composition.Receipt.EvieVersion != EvieVersion {
 		t.Fatalf("Evie version = %q, want %q", composition.Receipt.EvieVersion, EvieVersion)
 	}
-	wantSchemas := schemaNames(
-		tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()),
-	)
+	wantTodo := []tools.Tool{
+		tools.TodoScopedListTool(), tools.TodoScopedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
+		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
+	}
+	wantSchemas := schemaNames(tools.KernelToolset().
+		WithTools(tools.FinanceTools()).
+		WithTools(tools.WebTools()).
+		WithTools(tools.YouTubeTools()).
+		WithTools(wantTodo))
 	if got := schemaNames(composition.Toolset); !reflect.DeepEqual(got, wantSchemas) {
 		t.Fatalf("standard schemas = %v, want %v", got, wantSchemas)
 	}
@@ -70,6 +81,622 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	if _, err := manager.ResolvePreset("missing"); err == nil ||
 		!strings.Contains(err.Error(), `Agent Preset "missing" is not allowed`) {
 		t.Fatalf("unknown explicit preset error = %v", err)
+	}
+}
+
+func TestPreYouTubeExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
+	if got := canonicalPresetVersion(preYouTubeStandardPreset()); got != preYouTubeStandardPresetVersion {
+		t.Fatalf("pre-YouTube canonical version = %q, want frozen %q", got, preYouTubeStandardPresetVersion)
+	}
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	legacyPreset := Preset{
+		ID:      StandardPresetID,
+		Version: "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734",
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
+	}
+	legacyManager, err := NewManager(tools.LegacyKernelToolset(), NewWeb(), NewFinance())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(legacyPreset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSessionWithComposition(context.Background(), legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store = eviedb.NewStore(db)
+	storedReceipt, err := store.GetCompositionReceipt(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(storedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) {
+		t.Fatalf("resume mutated legacy receipt\n got: %#v\nwant: %#v", resumed.Receipt, legacy.Receipt)
+	}
+	if !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("resumed legacy schemas changed\n got: %#v\nwant: %#v", resumed.Toolset.Schemas(), legacy.Toolset.Schemas())
+	}
+	for _, name := range []string{"youtube_transcript", "youtube_scrape_channel"} {
+		if countSchema(resumed.Toolset, name) != 1 {
+			t.Fatalf("legacy resume exposes %q %d times", name, countSchema(resumed.Toolset, name))
+		}
+	}
+}
+
+func TestPostMemoryPreYouTubeStandardReceiptResumesWithoutMutation(t *testing.T) {
+	legacyManager, err := NewManager(tools.LegacyKernelToolset(), NewWeb(), NewFinance())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preYouTubeStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) ||
+		!reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("post-Memory pre-YouTube receipt changed: got=%+v want=%+v", resumed.Receipt, legacy.Receipt)
+	}
+}
+
+func TestPreTodoExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
+	if got := canonicalPresetVersion(preTodoStandardPreset()); got != preTodoStandardPresetVersion {
+		t.Fatalf("pre-Todo canonical version = %q, want frozen %q", got, preTodoStandardPresetVersion)
+	}
+	legacyManager, err := NewManager(
+		tools.PreTodoExtractionKernelToolset(), NewWeb(), NewFinance(), NewYouTube(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSessionWithComposition(context.Background(), legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store = eviedb.NewStore(db)
+	storedReceipt, err := store.GetCompositionReceipt(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(storedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) {
+		t.Fatalf("resume mutated pre-Todo receipt\n got: %#v\nwant: %#v", resumed.Receipt, legacy.Receipt)
+	}
+	if !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("resumed pre-Todo schemas changed\n got: %#v\nwant: %#v", resumed.Toolset.Schemas(), legacy.Toolset.Schemas())
+	}
+	for _, name := range []string{"todo_list", "todo_add"} {
+		if countSchema(resumed.Toolset, name) != 1 {
+			t.Fatalf("pre-Todo resume exposes %q %d times", name, countSchema(resumed.Toolset, name))
+		}
+	}
+}
+
+type preDurableTodoPlugin struct{}
+
+func (preDurableTodoPlugin) Start(context.Context) error { return nil }
+
+func (preDurableTodoPlugin) Stop(context.Context) error { return nil }
+
+func (preDurableTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.0.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.0.0"},
+			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+
+func (preDurableTodoPlugin) ToolCapabilities() []ToolCapability {
+	definitions := tools.TodoTools()
+	return []ToolCapability{
+		{ID: TodoListCapabilityID, ContractVersion: "1.0.0", Tool: definitions[0]},
+		{ID: TodoAddCapabilityID, ContractVersion: "1.0.0", Tool: definitions[1]},
+	}
+}
+
+func TestPreDurableTodoStandardReceiptResumesThroughDeclaredCompatibility(t *testing.T) {
+	if got := canonicalPresetVersion(preDurableTodoStandardPreset()); got != preDurableTodoPresetVersion {
+		t.Fatalf("pre-durable-Todo canonical version = %q, want frozen %q", got, preDurableTodoPresetVersion)
+	}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preDurableTodoPlugin{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preDurableTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) ||
+		!reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed frozen composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ID != string(TodoPluginID) ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+}
+
+type preLifecycleTodoPlugin struct{ service task.Service }
+
+func (preLifecycleTodoPlugin) Start(context.Context) error { return nil }
+func (preLifecycleTodoPlugin) Stop(context.Context) error  { return nil }
+func (preLifecycleTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.1.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.0.0"},
+			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+func (p preLifecycleTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.1.0")
+}
+
+func TestPreLifecycleTodoStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
+	if got := canonicalPresetVersion(preLifecycleTodoStandardPreset()); got != preLifecycleTodoPresetVersion {
+		t.Fatalf("pre-lifecycle-Todo canonical version = %q, want frozen %q", got, preLifecycleTodoPresetVersion)
+	}
+	service := &taskServiceFixture{}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preLifecycleTodoPlugin{service: service},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preLifecycleTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSessionWithComposition(context.Background(), legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	storedReceipt, err := eviedb.NewStore(db).GetCompositionReceipt(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(service))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(storedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #119 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+	if countSchema(resumed.Toolset, "todo_update") != 0 {
+		t.Fatal("#119 receipt unexpectedly gained todo_update")
+	}
+}
+
+type preIdempotentTodoPlugin struct{ service task.Service }
+
+func (preIdempotentTodoPlugin) Start(context.Context) error { return nil }
+func (preIdempotentTodoPlugin) Stop(context.Context) error  { return nil }
+func (preIdempotentTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.2.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.1.0"},
+			{ID: TodoAddCapabilityID, Version: "1.0.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+func (p preIdempotentTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.2.0")
+}
+
+func TestPreIdempotencyStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
+	service := &taskServiceFixture{}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preIdempotentTodoPlugin{service: service},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preTreeTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(service))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #120 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+	for _, schema := range resumed.Toolset.Schemas() {
+		if schema.Function.Name != "todo_add" && schema.Function.Name != "todo_update" {
+			continue
+		}
+		if _, exists := schema.Function.Parameters.Properties["idempotency_key"]; exists {
+			t.Fatalf("#120 receipt gained idempotency input in %s", schema.Function.Name)
+		}
+	}
+}
+
+type preTreeTodoPlugin struct{ service task.Service }
+
+func (preTreeTodoPlugin) Start(context.Context) error { return nil }
+func (preTreeTodoPlugin) Stop(context.Context) error  { return nil }
+func (preTreeTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.3.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.1.0"},
+			{ID: TodoAddCapabilityID, Version: "1.1.0"},
+			{ID: TodoGetCapabilityID, Version: "1.0.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.1.0"},
+		},
+	}
+}
+func (p preTreeTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.3.0")
+}
+
+func TestPreTreeStandardReceiptResumesWithExactFrozenTools(t *testing.T) {
+	service := &taskServiceFixture{}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preTreeTodoPlugin{service: service},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preTreeTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(service))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resumed, err := manager.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #121 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" {
+		t.Fatalf("Todo compatibility resolutions = %+v", resumed.CompatibilityResolutions)
+	}
+	if countSchema(resumed.Toolset, "todo_decompose") != 0 {
+		t.Fatal("#121 receipt unexpectedly gained todo_decompose")
+	}
+}
+
+type preClaimsTodoPlugin struct{ service task.Service }
+
+func (preClaimsTodoPlugin) Start(context.Context) error { return nil }
+func (preClaimsTodoPlugin) Stop(context.Context) error  { return nil }
+func (preClaimsTodoPlugin) Manifest() Manifest {
+	return Manifest{
+		ID: TodoPluginID, ImplementationVersion: "1.4.0",
+		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
+		Capabilities: []CapabilityContract{
+			{ID: TodoListCapabilityID, Version: "1.2.0"},
+			{ID: TodoAddCapabilityID, Version: "1.2.0"},
+			{ID: TodoGetCapabilityID, Version: "1.1.0"},
+			{ID: TodoUpdateCapabilityID, Version: "1.2.0"},
+			{ID: TodoDecomposeCapabilityID, Version: "1.0.0"},
+		},
+	}
+}
+func (p preClaimsTodoPlugin) ToolCapabilities() []ToolCapability {
+	return NewTodo(p.service).ResumableToolCapabilities("1.4.0")
+}
+
+func TestPreClaimsStandardReceiptResumesFrozenUpdateWithAuditedCompatibility(t *testing.T) {
+	if got := canonicalPresetVersion(preClaimsTodoStandardPreset()); got != preClaimsTodoPresetVersion {
+		t.Fatalf("pre-claims canonical version = %q, want %q", got, preClaimsTodoPresetVersion)
+	}
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := eviedb.NewStore(db)
+	session, err := store.CreateGlobalSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTurnLease(context.Background(), session.ID, "frozen-holder", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := task.WithMutationAttribution(context.Background(), task.MutationAttribution{
+		ActorID: "local", SessionID: string(session.ID), RunID: "frozen-run",
+		LeaseHolderID: string(lease.HolderID), LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
+	})
+	created, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "frozen claim compatibility", IdempotencyKey: "frozen-root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retryTask, err := store.CreateGlobalTask(ctx, task.CreateInput{Title: "pre-claims retry", IdempotencyKey: "frozen-retry-root"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := task.StatusBlocked
+	preUpgrade, err := store.ManagementUpdateGlobalTask(ctx, retryTask.ID, task.UpdateInput{
+		ExpectedRevision: 1, Status: &blocked, IdempotencyKey: "frozen-retry-update",
+	}, "pre-claims fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preUpgradeEvents, err := store.ListTaskEvents(context.Background(), retryTask.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyManager, err := NewManager(
+		tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), preClaimsTodoPlugin{service: store},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := legacyManager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy, err := legacyManager.resolvePreset(preClaimsTodoStandardPreset())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveCompositionReceipt(context.Background(), session.ID, legacy.Receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = eviedb.OpenDBAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store = eviedb.NewStore(db)
+	storedReceipt, err := store.GetCompositionReceipt(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(store))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
+		if err := manager.SetEnabled(id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	current, err := manager.NewSessionToolset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutClaim := executeTodoToolContext(t, ctx, current, "todo_update",
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"in_progress","idempotency_key":"current-without-claim"}`)
+	if !withoutClaim.IsErr || !strings.Contains(withoutClaim.Content, "active claim is required") {
+		t.Fatalf("current update without claim = %+v", withoutClaim)
+	}
+	resumed, err := manager.ResumeComposition(storedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatalf("compatible resume changed #122 composition: %+v", resumed)
+	}
+	if len(resumed.CompatibilityResolutions) != 1 ||
+		resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.4.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.7.0" ||
+		countSchema(resumed.Toolset, "todo_claim") != 0 || countSchema(resumed.Toolset, "todo_release") != 0 {
+		t.Fatalf("pre-claims compatibility = %+v", resumed.CompatibilityResolutions)
+	}
+	updated := executeTodoToolContext(t, ctx, resumed.Toolset, "todo_update",
+		`{"task_id":"`+string(created.ID)+`","expected_revision":1,"status":"in_progress","idempotency_key":"frozen-update"}`)
+	if updated.IsErr {
+		t.Fatalf("frozen update required new claim: %+v", updated)
+	}
+	events, err := store.ListTaskEvents(context.Background(), created.ID)
+	if err != nil || len(events) < 2 || !events[len(events)-1].ManagementOverride ||
+		events[len(events)-1].ClaimReason != "legacy_receipt" {
+		t.Fatalf("frozen compatibility audit = %+v, %v", events, err)
+	}
+	retried := executeTodoToolContext(t, ctx, resumed.Toolset, "todo_update",
+		`{"task_id":"`+string(retryTask.ID)+`","expected_revision":1,"status":"blocked","idempotency_key":"frozen-retry-update"}`)
+	var retriedTask task.Task
+	if retried.IsErr || json.Unmarshal([]byte(retried.Content), &retriedTask) != nil || !reflect.DeepEqual(retriedTask, preUpgrade) {
+		t.Fatalf("frozen pre-claims retry = %+v decoded=%+v want=%+v", retried, retriedTask, preUpgrade)
+	}
+	afterRetryEvents, err := store.ListTaskEvents(context.Background(), retryTask.ID)
+	if err != nil || !reflect.DeepEqual(afterRetryEvents, preUpgradeEvents) {
+		t.Fatalf("frozen retry events = %+v, %v; want %+v", afterRetryEvents, err, preUpgradeEvents)
 	}
 }
 
@@ -185,11 +812,11 @@ func TestReceiptRejectsContentThatCouldCarryCredentials(t *testing.T) {
 }
 
 func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []PluginID{WebPluginID, FinancePluginID} {
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID} {
 		if err := manager.SetEnabled(id, true); err != nil {
 			t.Fatal(err)
 		}
@@ -225,15 +852,15 @@ func TestResumeCompositionRequiresEveryExactPinnedProviderAndSchema(t *testing.T
 }
 
 func TestResumeCompositionContextCancelsEnabledStateRefresh(t *testing.T) {
-	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance())
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	store := &cancelingEnabledStateStore{enabledStateMemoryStore: &enabledStateMemoryStore{
-		values: map[string]bool{string(WebPluginID): true, string(FinancePluginID): true},
+		values: map[string]bool{string(WebPluginID): true, string(FinancePluginID): true, string(YouTubePluginID): true, string(TodoPluginID): true},
 	}}
 	if err := manager.ConfigureEnabledState(context.Background(), store, map[PluginID]bool{
-		WebPluginID: true, FinancePluginID: true,
+		WebPluginID: true, FinancePluginID: true, YouTubePluginID: true, TodoPluginID: true,
 	}); err != nil {
 		t.Fatal(err)
 	}

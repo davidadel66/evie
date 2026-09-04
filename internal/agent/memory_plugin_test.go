@@ -48,11 +48,17 @@ func TestMemoryPluginCompositionReceiptSurvivesProcessReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	newManager := func() *plugins.Manager {
-		manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewMemory(&agentMemoryKernel{}))
+		manager, err := plugins.NewManager(
+			tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store),
+			plugins.NewMemory(&agentMemoryKernel{}),
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.MemoryPluginID} {
+		for _, id := range []plugins.PluginID{
+			plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID,
+			plugins.MemoryPluginID,
+		} {
 			if err := manager.Enable(ctx, id); err != nil {
 				t.Fatal(err)
 			}

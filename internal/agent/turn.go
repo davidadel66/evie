@@ -9,6 +9,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/google/uuid"
 )
@@ -166,10 +167,17 @@ func (s *Session) runOwnedTurn(
 		if err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
 		}
+		workingContext := ""
+		if provider, ok := s.history.(workingContextProvider); ok {
+			workingContext, err = provider.WorkingContext(coordinator.ctx)
+			if err != nil {
+				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
+			}
+		}
 		composeInput := ContextComposeInput{
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
-			Tools: s.toolset.Schemas(), Reasoning: s.reasoning,
+			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
 		if err != nil {
@@ -476,8 +484,14 @@ func (s *Session) runOwnedTurn(
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
 				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
 			})
+			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
+				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),
+				ParentSessionID: string(s.scope.ParentSessionID), LeaseHolderID: string(lease.HolderID),
+				WorkspaceID: string(s.scope.WorkspaceID), ProjectID: string(s.scope.ProjectID),
+				LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
+			})
 			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
-				invocationCtx, call, wrappedApprover, observeApproval, authorize,
+				toolCtx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {
 						s.timing.beforeToolResultHandoff()

@@ -51,6 +51,41 @@ func (s *Store) GetActiveSession(ctx context.Context, id memory.SessionID) (memo
 	return session, nil
 }
 
+// EnsureGlobalSession returns one durable active Global primary session for a
+// caller-owned stable identity. It never reopens or repurposes an existing
+// session, so a collision cannot silently change scope or lifecycle history.
+func (s *Store) EnsureGlobalSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
+	if id == "" {
+		return memory.Session{}, errors.New("global session ID is required")
+	}
+	now := s.now().UTC().Format(time.RFC3339Nano)
+	var session memory.Session
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		if _, err := conn.ExecContext(ctx, `
+			INSERT INTO sessions (id, status, created_at, updated_at)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(id) DO NOTHING
+		`, id, memory.SessionActive, now, now); err != nil {
+			return fmt.Errorf("ensure global session %q: %w", id, err)
+		}
+		var err error
+		session, err = scanSession(conn.QueryRowContext(ctx, `
+			SELECT id, workspace_id, workspace_revision_snapshot, project_id, project_root_snapshot,
+			       parent_session_id, COALESCE(title, ''), status, created_at, updated_at
+			FROM sessions WHERE id = ?
+		`, id))
+		if err != nil {
+			return fmt.Errorf("read ensured global session %q: %w", id, err)
+		}
+		if session.Status != memory.SessionActive || session.WorkspaceID != "" ||
+			session.ProjectID != "" || session.ParentSessionID != "" {
+			return fmt.Errorf("global session identity %q is already reserved by an incompatible session", id)
+		}
+		return nil
+	})
+	return session, err
+}
+
 // GetActiveSessionForChooser serializes the rendered cwd-owner expectation
 // with the active-session read. Registration after this commit is later state,
 // not a scope silently adopted by this selection.

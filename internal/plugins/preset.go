@@ -20,7 +20,15 @@ import (
 const (
 	EvieVersion                    = "1.0.0"
 	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
+	StandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+
+	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
+	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
+	preTodoStandardPresetVersion    = "sha256:8149efdcc636e89d8c404c181cfa595bfe8ab09b38bffbefb756f73e99e5d6c0"
+	preDurableTodoPresetVersion     = "sha256:6490dc45771d4fc2d865fa9c3380d660b8100ad2c77bc79007c8d4e7b2053694"
+	preLifecycleTodoPresetVersion   = "sha256:d3bb965df9ac07057a94b4816e42e072130335422baa0f0ce3d38cffa8702554"
+	preTreeTodoPresetVersion        = "sha256:3a40a38be361fc81f2e6e4bfa33621b452e3f749fd8b9661a6766810f3e0cf67"
+	preClaimsTodoPresetVersion      = "sha256:1e4786b65b81693e09bbebe2253f9531abb53f0092a7796fd7259518cd948c7e"
 )
 
 type PresetID string
@@ -84,8 +92,121 @@ func standardPresetContent() Preset {
 			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
 			{ID: WebFetchCapabilityID, Compatibility: compatibility},
 			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+			{ID: TodoListCapabilityID, Compatibility: compatibility},
+			{ID: TodoAddCapabilityID, Compatibility: compatibility},
+			{ID: TodoGetCapabilityID, Compatibility: compatibility},
+			{ID: TodoUpdateCapabilityID, Compatibility: compatibility},
+			{ID: TodoDecomposeCapabilityID, Compatibility: compatibility},
+			{ID: TodoClaimCapabilityID, Compatibility: compatibility},
+			{ID: TodoReleaseCapabilityID, Compatibility: compatibility},
 		},
 		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preTreeTodoStandardPreset() Preset {
+	preset := preClaimsTodoStandardPreset()
+	preset.Version = preTreeTodoPresetVersion
+	preset.RequiredCapabilities = preset.RequiredCapabilities[:len(preset.RequiredCapabilities)-1]
+	return preset
+}
+
+func preClaimsTodoStandardPreset() Preset {
+	preset := standardPresetContent()
+	preset.Version = preClaimsTodoPresetVersion
+	preset.RequiredCapabilities = preset.RequiredCapabilities[:len(preset.RequiredCapabilities)-2]
+	return preset
+}
+
+func preLifecycleTodoStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preLifecycleTodoPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+			{ID: TodoListCapabilityID, Compatibility: compatibility},
+			{ID: TodoAddCapabilityID, Compatibility: compatibility},
+			{ID: TodoGetCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preDurableTodoStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preDurableTodoPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+			{ID: TodoListCapabilityID, Compatibility: compatibility},
+			{ID: TodoAddCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preTodoStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preTodoStandardPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
+			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preYouTubeStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preYouTubeStandardPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
+		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+	}
+}
+
+func preMemoryStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	return Preset{
+		ID:      StandardPresetID,
+		Version: preMemoryStandardPresetVersion,
+		RequiredCapabilities: []CapabilityRequirement{
+			{ID: FinanceSyncCapabilityID, Compatibility: compatibility},
+			{ID: FinanceRulesCapabilityID, Compatibility: compatibility},
+			{ID: FinanceCategorizeCapabilityID, Compatibility: compatibility},
+			{ID: WebFetchCapabilityID, Compatibility: compatibility},
+			{ID: WebSearchCapabilityID, Compatibility: compatibility},
+		},
 	}
 }
 
@@ -451,10 +572,46 @@ func (m *Manager) ResumeCompositionContext(
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return ResolvedComposition{}, err
 	}
+	switch receipt.Preset.Version {
+	case preMemoryStandardPresetVersion:
+		return m.resumePresetWithBase(
+			preMemoryStandardPreset(), tools.LegacyKernelToolset(), receipt, YouTubePluginID, TodoPluginID,
+		)
+	case preYouTubeStandardPresetVersion:
+		return m.resumePresetWithBase(
+			preYouTubeStandardPreset(), tools.LegacyKernelToolset(), receipt, YouTubePluginID, TodoPluginID,
+		)
+	}
+	if receipt.Preset.Version == preTodoStandardPresetVersion {
+		return m.resumePresetWithBase(
+			preTodoStandardPreset(), tools.PreTodoExtractionKernelToolset(), receipt, TodoPluginID,
+		)
+	}
+	if receipt.Preset.Version == preDurableTodoPresetVersion {
+		return m.resumePreset(preDurableTodoStandardPreset(), receipt)
+	}
+	if receipt.Preset.Version == preLifecycleTodoPresetVersion {
+		return m.resumePreset(preLifecycleTodoStandardPreset(), receipt)
+	}
+	if receipt.Preset.Version == preTreeTodoPresetVersion {
+		return m.resumePreset(preTreeTodoStandardPreset(), receipt)
+	}
+	if receipt.Preset.Version == preClaimsTodoPresetVersion {
+		return m.resumePreset(preClaimsTodoStandardPreset(), receipt)
+	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }
 
 func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (ResolvedComposition, error) {
+	return m.resumePresetWithBase(preset, m.base, receipt)
+}
+
+func (m *Manager) resumePresetWithBase(
+	preset Preset,
+	base tools.Toolset,
+	receipt CompositionReceipt,
+	legacyProviderIDs ...PluginID,
+) (ResolvedComposition, error) {
 	if err := ValidateCompositionReceipt(receipt); err != nil {
 		return ResolvedComposition{}, err
 	}
@@ -470,6 +627,15 @@ func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (Resol
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	for _, id := range legacyProviderIDs {
+		entry, exists := m.plugins[id]
+		if !exists {
+			return ResolvedComposition{}, fmt.Errorf("legacy provider plugin %q is not compiled into Evie", id)
+		}
+		if entry.state != StateReady {
+			return ResolvedComposition{}, fmt.Errorf("legacy provider plugin %q is %s", id, entry.state)
+		}
+	}
 	providerReceipts := make(map[PluginID]ProviderReceipt, len(receipt.Providers))
 	for _, provider := range receipt.Providers {
 		providerReceipts[PluginID(provider.ID)] = provider
@@ -494,6 +660,11 @@ func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (Resol
 			)
 		}
 		capability, exists := activeCapability(entry, CapabilityID(pinnedCapability.ID))
+		if provider := providerReceipts[providerID]; provider.ImplementationVersion != entry.manifest.ImplementationVersion {
+			if resumable, found := resumableCapability(entry, provider.ImplementationVersion, CapabilityID(pinnedCapability.ID)); found {
+				capability, exists = resumable, true
+			}
+		}
 		if !exists {
 			return ResolvedComposition{}, fmt.Errorf(
 				"pinned Capability %q is not exposed by provider plugin %q version %q",
@@ -562,7 +733,7 @@ func (m *Manager) resumePreset(preset Preset, receipt CompositionReceipt) (Resol
 		resolutions = append(resolutions, resolution)
 	}
 
-	toolset := m.base.WithTools(definitions)
+	toolset := base.WithTools(definitions)
 	if err := validatePinnedToolSchemas(receipt.ToolSchemas, toolSchemaReceipts(toolset.Schemas())); err != nil {
 		return ResolvedComposition{}, err
 	}
@@ -660,6 +831,15 @@ func validatePinnedToolSchemas(pinned, loaded []ToolSchemaReceipt) error {
 
 func activeCapability(entry *compiledPlugin, id CapabilityID) (ToolCapability, bool) {
 	for _, capability := range entry.activeCapabilities {
+		if capability.ID == id {
+			return capability, true
+		}
+	}
+	return ToolCapability{}, false
+}
+
+func resumableCapability(entry *compiledPlugin, version string, id CapabilityID) (ToolCapability, bool) {
+	for _, capability := range entry.resumableCapabilities[version] {
 		if capability.ID == id {
 			return capability, true
 		}

@@ -96,8 +96,12 @@ func (s *Store) AcquireTurnLease(
 ) (memory.TurnLease, error) {
 	var lease memory.TurnLease
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, s.now(), duration)
+		now := s.now()
+		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, now, duration)
 		if err != nil {
+			return err
+		}
+		if _, err := releaseInactiveTaskClaimsForSession(ctx, conn, sessionID, now.UTC()); err != nil {
 			return err
 		}
 
@@ -198,8 +202,12 @@ func (s *Store) ReleaseTurnLease(
 	token memory.FencingToken,
 ) error {
 	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, s.now())
+		now := s.now()
+		nowText, err := validateTurnLeaseAccess(sessionID, holderID, token, now)
 		if err != nil {
+			return err
+		}
+		if _, err := releaseTaskClaimsForLease(ctx, conn, sessionID, holderID, token, now.UTC(), "execution_ended"); err != nil {
 			return err
 		}
 

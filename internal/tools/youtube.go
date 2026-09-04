@@ -70,6 +70,16 @@ var youtubeScrapeChannelTool = openrouter.Tool{
 	},
 }
 
+// YouTubeTools returns fresh definitions for the existing model-facing
+// YouTube tools. The YouTube first-party plugin attaches canonical Capability
+// identities while preserving these schemas and execution functions unchanged.
+func YouTubeTools() []Tool {
+	return []Tool{
+		{Schema: cloneSchema(youtubeTranscriptTool), Execute: youtubeTranscript},
+		{Schema: cloneSchema(youtubeScrapeChannelTool), Execute: youtubeScrapeChannel},
+	}
+}
+
 func youtubeTranscript(ctx context.Context, args string) (string, error) {
 	var params struct {
 		Video    string `json:"video"`

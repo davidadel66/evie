@@ -324,11 +324,15 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	store := eviedb.NewStore(db)
 	plugin := plugins.NewMemory(store)
-	manager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugin)
+	manager, err := plugins.NewManager(
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store), plugin,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.MemoryPluginID} {
+	for _, id := range []plugins.PluginID{
+		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID, plugins.MemoryPluginID,
+	} {
 		if err := manager.Enable(ctx, id); err != nil {
 			t.Fatal(err)
 		}
@@ -640,11 +644,15 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		t.Fatalf("Composition Receipt changed across restart: got=%+v want=%+v error=%v", reopenedReceipt, pinnedReceipt, err)
 	}
 	restartedPlugin := plugins.NewMemory(store)
-	restartedManager, err := plugins.NewManager(tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), restartedPlugin)
+	restartedManager, err := plugins.NewManager(
+		tools.NewToolset(nil), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(store), restartedPlugin,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []plugins.PluginID{plugins.WebPluginID, plugins.FinancePluginID, plugins.MemoryPluginID} {
+	for _, id := range []plugins.PluginID{
+		plugins.WebPluginID, plugins.FinancePluginID, plugins.YouTubePluginID, plugins.TodoPluginID, plugins.MemoryPluginID,
+	} {
 		if err := restartedManager.Enable(ctx, id); err != nil {
 			t.Fatal(err)
 		}

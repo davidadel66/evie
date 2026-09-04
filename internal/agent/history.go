@@ -18,6 +18,10 @@ type History interface {
 	Events(ctx context.Context) ([]memory.Event, error)
 }
 
+type workingContextProvider interface {
+	WorkingContext(context.Context) (string, error)
+}
+
 type completeToolResultGroup struct {
 	resultIndexes []int
 }

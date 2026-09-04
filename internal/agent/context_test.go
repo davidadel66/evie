@@ -42,12 +42,12 @@ func TestCanonicalRequestEstimatorAccountsForCompleteStreamingRequest(t *testing
 }
 
 func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 8000, 8000, 1)
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	events := []memory.Event{
-		{ID: "old-user", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: strings.Repeat("o", 700)},
+		{ID: "old-user", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: strings.Repeat("o", 2500)},
 		{ID: "old-assistant", Sequence: 2, ParentID: "old-user", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "old answer", Payload: json.RawMessage(`{}`)},
 		{ID: "active-user", Sequence: 3, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "current"},
 	}
@@ -70,7 +70,7 @@ func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T)
 }
 
 func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 8000, 8000, 1)
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +95,31 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 	}
 	if result.Snapshot.ActiveCompactionEventID != "compaction-1" || result.Snapshot.SummaryMessageBytes <= 0 {
 		t.Fatalf("snapshot=%+v", result.Snapshot)
+	}
+}
+
+func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
+		Profile:        profile,
+		Summary:        &ContextSummary{CompactionEventID: "compaction-1", Content: "prior summary"},
+		WorkingContext: "# Task Focus\n- id=task-1 title=\"ship\"",
+		Events:         []memory.Event{{ID: "active-user", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "continue"}},
+		ActiveRootID:   "active-user", TriggerEventID: "active-user", Iteration: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := result.Request.Messages
+	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != "prior summary" ||
+		messages[2].Role != "user" || messages[2].Content != "# Task Focus\n- id=task-1 title=\"ship\"" || messages[3].Content != "continue" {
+		t.Fatalf("messages = %+v", messages)
+	}
+	if result.Snapshot.SystemMessageBytes == 0 || result.Snapshot.HistoryMessageBytes == 0 || result.Snapshot.SummaryMessageBytes == 0 {
+		t.Fatalf("snapshot does not account for working context and summary: %+v", result.Snapshot)
 	}
 }
 

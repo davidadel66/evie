@@ -55,17 +55,26 @@ func main() {
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
+		log.Fatalf("failed to import legacy Todo list: %v", err)
+	}
+	if _, err := kernelStore.RecoverInactiveTaskClaims(context.Background()); err != nil {
+		log.Fatalf("failed to recover inactive Task claims: %v", err)
+	}
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
 		plugins.NewFinance(),
+		plugins.NewYouTube(),
+		plugins.NewTodo(kernelStore),
 		plugins.NewMemory(kernelStore),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
 	}
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
-		plugins.WebPluginID: true, plugins.FinancePluginID: true, plugins.MemoryPluginID: true,
+		plugins.WebPluginID: true, plugins.FinancePluginID: true,
+		plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}
