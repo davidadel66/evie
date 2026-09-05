@@ -63,6 +63,23 @@ func TestContextSessionHTTPDoesNotExposeControllerErrors(t *testing.T) {
 	}
 }
 
+func TestContextSessionHTTPEncodesEmptyCollectionsAsArrays(t *testing.T) {
+	handler := NewContextServer(nil, nil, nil, &fakeContextSessionController{}).Handler()
+
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, managementRequest("/api/context-sessions/list", `{}`))
+
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+	for _, collection := range []string{"workspaces", "projects", "sessions"} {
+		want := `"` + collection + `":[]`
+		if !strings.Contains(listed.Body.String(), want) {
+			t.Errorf("list body=%s, want %s", listed.Body.String(), want)
+		}
+	}
+}
+
 func TestWorkspaceHTTPRegistrationExplicitSelectionChatAndResume(t *testing.T) {
 	client := &fakeClient{steps: []fakeStep{{content: "inside Cairo"}}}
 	controller := &fakeContextSessionController{
