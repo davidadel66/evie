@@ -68,7 +68,7 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
 		}
 	}
 	identityPolicy := g.EntityPolicy
-	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 {
+	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 && identityPolicy != CompilerTemporalPolicyV3 {
 		return "", nil, errors.New("unsupported compiler identity policy")
 	}
 	for _, policy := range []string{g.PredicatePolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy} {

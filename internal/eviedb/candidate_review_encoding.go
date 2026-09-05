@@ -28,7 +28,7 @@ func canonicalOwnerReviewOperation(op memory.OwnerReviewOperation) any {
 	}{reviewIdentityEncodingDomain(op.Preview, "operation"), op}
 }
 func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
-	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
+	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
 		return errors.New("invalid review preview")
 	}
 	if p.Action == "accept" && (p.Effect == nil || p.Effect.Version != "owner-review-effect-"+p.Version[len("owner-review-preview-"):] || len(p.Effect.Claims) != len(p.Candidates)) {
@@ -38,6 +38,9 @@ func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
 		return errors.New("reject preview contains effects")
 	}
 	if err := validateReviewIdentityEffect(p); err != nil {
+		return err
+	}
+	if err := validateReviewTemporalEncoding(p); err != nil {
 		return err
 	}
 	hash, _, err := ownerReviewEffectHash(p.Effect)
@@ -68,6 +71,9 @@ func canonicalOwnerReviewEffect(effect *memory.ReviewEffect) any {
 	domain := "evie-owner-review-effect-v1"
 	if effect != nil && effect.Version == "owner-review-effect-v2" {
 		domain = "evie-owner-review-effect-v2"
+	}
+	if effect != nil && effect.Version == "owner-review-effect-v3" {
+		domain = "evie-owner-review-effect-v3"
 	}
 	return struct {
 		Domain string               `json:"domain"`

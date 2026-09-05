@@ -198,6 +198,9 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
 			return result, err
 		}
 	}
+	if err = validateReviewCorrectionCurrent(ctx, conn, effect); err != nil {
+		return result, err
+	}
 	now, err := nextSemanticTransactionTime(ctx, writer, clock)
 	if err != nil {
 		return result, err
@@ -251,6 +254,9 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
 				return result, err
 			}
 		}
+	}
+	if err = applyReviewCorrectionEffect(ctx, conn, effect, now); err != nil {
+		return result, err
 	}
 	for _, scope := range effect.Scopes {
 		if scope.Key != effect.Scope.Key && !(scope.Key == "global" && reviewWritesGlobal(effect)) {
@@ -326,6 +332,13 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 			}
 			current.Create = false
 			source.Create = false
+			if effect.Version == "owner-review-effect-v3" {
+				observed, parseErr := time.Parse(time.RFC3339Nano, current.ObservedAt)
+				if parseErr != nil {
+					return parseErr
+				}
+				current.ObservedAt = formatSemanticTime(observed)
+			}
 			if string(compilerJSON(current)) != string(compilerJSON(source)) {
 				return ErrReviewStale
 			}
@@ -423,7 +436,7 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
 	}
 	for i, item := range effect.Claims {
 		original := p.Candidates[i]
-		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
+		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Temporal == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
 			return errors.New("invalid recorded candidate identity")
 		}
 		proposal := original.Candidate.Proposal
@@ -447,7 +460,7 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
 			if validateSemanticUUID(string(source.ID)) != nil || validateSemanticUUID(string(source.OperationID)) != nil || validateSemanticUUID(string(source.EventID)) != nil || validateSemanticUUID(string(source.SessionID)) != nil {
 				return errors.New("invalid recorded source identity")
 			}
-			if source.EventID != originalSource.Locator.EventID || source.SessionID != originalSource.SessionID || source.ScopeKey != originalSource.ScopeKey || source.EventPart != originalSource.Locator.EventPart || source.LocatorKind != originalSource.Locator.LocatorKind || source.LocatorValue != originalSource.Locator.LocatorValue || source.EvidenceSHA256 != "sha256:"+originalSource.Locator.EvidenceSHA256 || source.Evidence != originalSource.Evidence || source.ObservedAt != originalSource.ObservedAt || source.Actor != originalSource.Actor || source.Authority != originalSource.Authority || source.SourceType != originalSource.SourceType {
+			if source.EventID != originalSource.Locator.EventID || source.SessionID != originalSource.SessionID || source.ScopeKey != originalSource.ScopeKey || source.EventPart != originalSource.Locator.EventPart || source.LocatorKind != originalSource.Locator.LocatorKind || source.LocatorValue != originalSource.Locator.LocatorValue || source.EvidenceSHA256 != "sha256:"+originalSource.Locator.EvidenceSHA256 || source.Evidence != originalSource.Evidence || !reviewObservedTimeMatches(p.Version, source.ObservedAt, originalSource.ObservedAt) || source.Actor != originalSource.Actor || source.Authority != originalSource.Authority || source.SourceType != originalSource.SourceType {
 				return errors.New("review source differs from original authority")
 			}
 		}

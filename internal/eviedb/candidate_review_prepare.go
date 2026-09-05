@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 )
@@ -40,6 +41,9 @@ func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 		p = memory.ReviewPreview{Version: "owner-review-preview-v1", ID: string(id), OwnerID: memory.LocalOwnerID, AuthenticationBinding: a.binding, AuthorizationRevision: a.revision, ScopeKey: a.scope, JobID: candidate.JobID, GenerationID: candidates[0].GenerationID, Action: action, Candidates: candidates}
 		if candidate.Candidate.Proposal.Identity != nil {
 			p.Version = "owner-review-preview-v2"
+		}
+		if candidate.Candidate.Proposal.Temporal != nil {
+			p.Version = "owner-review-preview-v3"
 		}
 		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
 			return err
@@ -97,11 +101,11 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		if len(c.Support) == 0 {
 			return nil, ErrReviewInvalidSource
 		}
-		time, err := normalizeValidTime(c.Proposal.ValidTime)
+		validTime, err := normalizeValidTime(c.Proposal.ValidTime)
 		if err != nil {
 			return nil, err
 		}
-		if !validTimesEqual(time, c.Proposal.ValidTime) {
+		if !validTimesEqual(validTime, c.Proposal.ValidTime) {
 			return nil, errors.New("noncanonical candidate time")
 		}
 		prop := c.Proposal.Proposition
@@ -141,7 +145,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		} else if string(item.Predicate.ObjectConstraint) != string(prop.Object.Literal.Kind) {
 			return nil, errors.New("Predicate object constraint changed")
 		}
-		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: time, CreatedOperationID: id}
+		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: validTime, CreatedOperationID: id}
 		objectKind, objectEntity, literalKind, literalValue := "literal", any(nil), any(nil), any(nil)
 		if prop.Object.EntityID != "" {
 			objectKind = "entity"
@@ -151,7 +155,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			literalValue = prop.Object.Literal.Value
 		}
 		var claimID memory.SemanticID
-		err = q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND object_kind=? AND object_entity_id IS ? AND literal_kind IS ? AND literal_value IS ? AND polarity=? AND valid_from IS ? AND valid_to IS ?`, effect.Scope.ID, prop.SubjectEntityID, prop.PredicateID, objectKind, objectEntity, literalKind, literalValue, prop.Polarity, semanticTimeArgument(time.From), semanticTimeArgument(time.To)).Scan(&claimID)
+		err = q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND object_kind=? AND object_entity_id IS ? AND literal_kind IS ? AND literal_value IS ? AND polarity=? AND valid_from IS ? AND valid_to IS ?`, effect.Scope.ID, prop.SubjectEntityID, prop.PredicateID, objectKind, objectEntity, literalKind, literalValue, prop.Polarity, semanticTimeArgument(validTime.From), semanticTimeArgument(validTime.To)).Scan(&claimID)
 		if errors.Is(err, sql.ErrNoRows) {
 			item.Claim.ID, err = newSemanticID()
 			item.Create = true
@@ -170,7 +174,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		meaning := string(compilerJSON(struct {
 			P memory.ClaimProposition
 			T memory.ValidTime
-		}{prop, time}))
+		}{prop, validTime}))
 		if claimKeys[meaning] {
 			return nil, errors.New("duplicate effects require a combined interpretation")
 		}
@@ -184,6 +188,13 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 				return nil, ErrReviewInvalidSource
 			}
 			src := memory.SemanticSource{EventID: source.Locator.EventID, SessionID: source.SessionID, ScopeKey: source.ScopeKey, EventPart: source.Locator.EventPart, LocatorKind: source.Locator.LocatorKind, LocatorValue: source.Locator.LocatorValue, EvidenceSHA256: "sha256:" + source.Locator.EvidenceSHA256, Actor: source.Actor, SourceType: memory.SourceTypeUserMessage, Authority: source.Authority, ObservedAt: source.ObservedAt, Evidence: source.Evidence, Eligibility: memory.EligibilityEligible, OperationID: id}
+			if c.Proposal.Temporal != nil {
+				observed, parseErr := time.Parse(time.RFC3339Nano, src.ObservedAt)
+				if parseErr != nil {
+					return nil, parseErr
+				}
+				src.ObservedAt = formatSemanticTime(observed)
+			}
 			err = q.QueryRowContext(ctx, `SELECT source_link_id,created_operation_id FROM semantic_source_links WHERE claim_id=? AND event_id=? AND event_part=? AND locator_kind=? AND locator_value=? AND evidence_sha256=?`, item.Claim.ID, src.EventID, src.EventPart, src.LocatorKind, src.LocatorValue, src.EvidenceSHA256).Scan(&src.ID, &src.OperationID)
 			if errors.Is(err, sql.ErrNoRows) {
 				src.ID, err = newSemanticID()
@@ -198,6 +209,9 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 				return nil, err
 			}
 			item.Sources = append(item.Sources, src)
+		}
+		if err := prepareReviewTemporalEffect(ctx, q, a, candidate, effect, item); err != nil {
+			return nil, err
 		}
 		conflicts, err := reviewClaimConflicts(ctx, q, effect.Scope.ID, item.Claim)
 		if err != nil {

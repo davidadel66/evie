@@ -10,6 +10,7 @@ type CandidateRef struct {
 }
 
 type OwnerCandidate struct {
+	Temporal     *ReviewTemporalRevision `json:"temporal,omitempty"`
 	Identity     *ReviewIdentityRevision `json:"identity,omitempty"`
 	Ref          CandidateRef            `json:"ref"`
 	JobID        string                  `json:"job_id"`
@@ -45,13 +46,14 @@ type ReviewClaimEffect struct {
 }
 
 type ReviewEffect struct {
-	Identity       *ReviewIdentityEffect `json:"identity,omitempty"`
-	Version        string                `json:"version"`
-	OperationID    SemanticID            `json:"operation_id"`
-	Scope          SemanticScope         `json:"scope"`
-	Scopes         []SemanticScope       `json:"scopes"`
-	PriorRevisions []ScopeRevision       `json:"prior_revisions"`
-	Claims         []ReviewClaimEffect   `json:"claims"`
+	Correction     *ReviewCorrectionEffect `json:"correction,omitempty"`
+	Identity       *ReviewIdentityEffect   `json:"identity,omitempty"`
+	Version        string                  `json:"version"`
+	OperationID    SemanticID              `json:"operation_id"`
+	Scope          SemanticScope           `json:"scope"`
+	Scopes         []SemanticScope         `json:"scopes"`
+	PriorRevisions []ScopeRevision         `json:"prior_revisions"`
+	Claims         []ReviewClaimEffect     `json:"claims"`
 }
 
 // ReviewPreview contains only one complete atomic group in the first review

@@ -70,6 +70,9 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 	if err := loadReviewIdentityRevision(ctx, q, &out); err != nil {
 		return out, err
 	}
+	if err := loadReviewTemporalRevision(ctx, q, &out); err != nil {
+		return out, err
+	}
 	canonicalizeReviewCandidate(&out)
 	return out, nil
 }

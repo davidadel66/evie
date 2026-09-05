@@ -145,6 +145,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 		if _, ok := timeShape["to"]; !ok {
 			return nil, errors.New("missing valid time to")
 		}
+		if err := validateCompilerTemporal(request, proposal); err != nil {
+			return nil, err
+		}
 		if err := validateCompilerProposition(request, proposal); err != nil {
 			return nil, err
 		}
@@ -198,6 +201,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 		}
 		if !latestNew {
 			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)
+		}
+		if err := validateTemporalObserved(candidate); err != nil {
+			return nil, errors.Join(ErrCompilerTerminalOutput, err)
 		}
 		if err := validateCompilerIdentitySupport(candidate); err != nil {
 			return nil, err

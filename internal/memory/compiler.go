@@ -98,6 +98,7 @@ type CompilerRequest struct {
 // ExtractorCandidate is untrusted model output. Scope, authority, projected
 // evidence and review state are deliberately absent: the Kernel binds them.
 type ExtractorCandidate struct {
+	Temporal              *CandidateTemporalProposal `json:"temporal,omitempty"`
 	Identity              *CandidateIdentityProposal `json:"identity,omitempty"`
 	Proposition           ClaimProposition           `json:"proposition"`
 	ValidTime             ValidTime                  `json:"valid_time"`

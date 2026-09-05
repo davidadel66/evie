@@ -26,6 +26,12 @@ type ownerIdentityReviewKernel interface {
 	ChooseOwnerCandidateIdentity(context.Context, eviedb.OwnerReviewContext, memory.ReviewIdentityDecision) (memory.OwnerCandidate, error)
 }
 
+type ownerTemporalReviewKernel interface {
+	OwnerCandidateTemporalOptions(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef) (memory.ReviewTemporalOptions, error)
+	ChooseOwnerCandidateTemporal(context.Context, eviedb.OwnerReviewContext, memory.ReviewTemporalDecision) (memory.OwnerCandidate, error)
+	InspectOwnerCandidateTemporalRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewTemporalRevision, error)
+}
+
 // Every invocation is a trusted local owner command selecting one exact scope.
 // A resolve accepts only immutable preview identity, never replacement effects.
 func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer, kernel ownerReviewKernel) (bool, error) {
@@ -33,7 +39,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		return false, nil
 	}
 	if len(args) < 2 {
-		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|prepare|resolve|operation --scope SCOPE")
+		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|temporal-options|temporal-choose|temporal-revision|prepare|resolve|operation --scope SCOPE")
 	}
 	command := args[1]
 	flags := flag.NewFlagSet("memory-review "+command, flag.ContinueOnError)
@@ -58,6 +64,9 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		return true, errors.New("review requires explicit --scope and no positional arguments")
 	}
 	allowed := map[string]map[string]bool{
+		"temporal-options":  {"scope": true, "id": true, "revision": true, "interpretation": true},
+		"temporal-choose":   {"scope": true, "id": true, "revision": true, "interpretation": true, "options": true, "choices": true},
+		"temporal-revision": {"scope": true, "id": true, "interpretation": true},
 		"inbox":             {"scope": true, "limit": true, "cursor": true},
 		"inspect":           {"scope": true, "id": true},
 		"operation":         {"scope": true, "id": true},
@@ -92,6 +101,29 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 	}
 	var result any
 	switch command {
+	case "temporal-options", "temporal-choose", "temporal-revision":
+		temporalKernel, ok := kernel.(ownerTemporalReviewKernel)
+		if !ok {
+			return true, errors.New("temporal review unavailable")
+		}
+		if *id == "" {
+			return true, errors.New("temporal review requires exact --id")
+		}
+		ref := memory.CandidateRef{ID: *id, ReviewRevision: *revision, InterpretationRevision: *interpretation}
+		if command == "temporal-options" {
+			result, err = temporalKernel.OwnerCandidateTemporalOptions(ctx, authority, ref)
+		} else if command == "temporal-revision" {
+			result, err = temporalKernel.InspectOwnerCandidateTemporalRevision(ctx, authority, *id, *interpretation)
+		} else {
+			var choice memory.ReviewTemporalChoice
+			if *options == "" {
+				return true, errors.New("temporal-choose requires reviewed --options digest")
+			}
+			if err := memory.DecodeCompilerJSON([]byte(*choices), &choice); err != nil {
+				return true, err
+			}
+			result, err = temporalKernel.ChooseOwnerCandidateTemporal(ctx, authority, memory.ReviewTemporalDecision{Candidate: ref, OptionsSHA256: *options, Choice: choice})
+		}
 	case "alternatives", "choose", "identity-revision":
 		identityKernel, ok := kernel.(ownerIdentityReviewKernel)
 		if !ok {

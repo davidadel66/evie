@@ -24,10 +24,10 @@ func compilerIdentityContext(ctx context.Context, conn *sql.Conn, request *memor
 	}
 	request.IdentityPolicy = ""
 	request.Aliases = nil
-	if generation.EntityPolicy != memory.CompilerIdentityPolicyV2 {
+	if generation.EntityPolicy != memory.CompilerIdentityPolicyV2 && generation.EntityPolicy != memory.CompilerTemporalPolicyV3 {
 		return nil
 	}
-	request.IdentityPolicy = memory.CompilerIdentityPolicyV2
+	request.IdentityPolicy = generation.EntityPolicy
 	inspected := 0
 	for _, entity := range request.Entities {
 		rows, err := conn.QueryContext(ctx, `SELECT alias_id,CASE WHEN length(CAST(value AS BLOB))<=1024 THEN value ELSE '' END,CASE WHEN length(CAST(normalized_value AS BLOB))<=1024 THEN normalized_value ELSE '' END,source_event_id,created_operation_id FROM semantic_aliases WHERE entity_id=? AND scope_id=(SELECT scope_id FROM semantic_scopes WHERE scope_key=?) AND lifecycle='active' ORDER BY alias_id LIMIT ?`, entity.ID, entity.ScopeKey, 33-inspected)
@@ -120,10 +120,10 @@ func validateCandidateIdentity(proposal memory.ExtractorCandidate) error {
 }
 
 func validateCompilerProposition(request memory.CompilerRequest, proposal memory.ExtractorCandidate) error {
-	if proposal.Identity != nil && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 {
+	if proposal.Identity != nil && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 && request.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
 		return fmt.Errorf("%w: identity policy does not admit proposals", ErrCompilerTerminalOutput)
 	}
-	if request.IdentityPolicy != "" && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 {
+	if request.IdentityPolicy != "" && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 && request.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
 		return errors.New("unsupported request identity policy")
 	}
 	if err := validateCandidateIdentity(proposal); err != nil {
