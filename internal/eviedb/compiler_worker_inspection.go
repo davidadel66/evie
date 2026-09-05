@@ -79,7 +79,7 @@ func (s *Store) InspectCompilerStatus(ctx context.Context, owner memory.ScopeCon
 
 func safeCompilerReason(reason string) string {
 	switch reason {
-	case "", "worker_interrupted", "worker_shutdown", "caller_cancelled", "owner_cancelled", "attempts_exhausted", "invalid_source", "invalid_source_or_effect", "invalid_configuration", "invalid_or_missing_output", "staging_failed", "invalid_stage", "oversized_input", "configuration_unavailable", "activation_disabled", "resource_capacity":
+	case "", "endpoint_unavailable", "worker_interrupted", "worker_shutdown", "caller_cancelled", "owner_cancelled", "attempts_exhausted", "invalid_source", "invalid_source_or_effect", "invalid_configuration", "invalid_or_missing_output", "staging_failed", "invalid_stage", "oversized_input", "configuration_unavailable", "activation_disabled", "resource_capacity":
 		return reason
 	default:
 		return "unavailable_detail"

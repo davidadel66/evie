@@ -14,6 +14,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -86,6 +87,8 @@ func (s *Session) Send(
 	approve tools.Approver,
 	extra ...tools.Tool,
 ) (retErr error) {
+	observation := beginForegroundObservation(ctx, s.history)
+	defer observation.finish()
 	if !s.mu.TryLock() {
 		return ErrBusy
 	}
@@ -155,7 +158,10 @@ func (s *Session) Send(
 		coordinator.selectCause(causeStorage, err, 0)
 		return fmt.Errorf("persist user message: %w", err)
 	}
-	progress := &turnProgress{rootTurnID: rootEvent.ID, requestParentID: rootEvent.ID}
+	if observation != nil {
+		observation.record.RootID = rootEvent.ID
+	}
+	progress := &turnProgress{rootTurnID: rootEvent.ID, requestParentID: rootEvent.ID, foreground: observation}
 	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress)
 	if turnErr != nil && coordinator.result().kind == causeNone {
 		coordinator.selectCause(causeStorage, turnErr, 0)
@@ -172,8 +178,16 @@ func (s *Session) Send(
 	stopHeartbeat()
 	if rootEvent.ID != "" && causeHasDurableTerminal(cause.kind) {
 		terminalCtx, cancel := s.timing.newCleanupContext(ctx, s.timing.cleanupTimeout)
+		terminalStarted := time.Now()
 		terminalErr := s.appendTerminal(terminalCtx, lease, rootEvent.ID, progress.requestParentID, cause)
 		cancel()
+		if terminalErr == nil {
+			outcome := "failed"
+			if cause.kind == causeCallerCancelled || cause.kind == causeCallerDeadline {
+				outcome = "interrupted"
+			}
+			observation.terminal(terminalStarted, outcome)
+		}
 		if terminalErr != nil {
 			turnErr = errors.Join(turnErr, fmt.Errorf("persist terminal event: %w", terminalErr))
 		}

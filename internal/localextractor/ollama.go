@@ -105,7 +105,7 @@ func (o *Ollama) call(ctx context.Context, method, path string, body any, target
 	request.Header.Set("Content-Type", "application/json")
 	response, err := o.client.Do(request)
 	if err != nil {
-		return err
+		return errors.Join(eviedb.ErrCompilerEndpointUnavailable, err)
 	}
 	defer response.Body.Close()
 	limit := memory.CompilerMaxBytes
@@ -120,7 +120,11 @@ func (o *Ollama) call(ctx context.Context, method, path string, body any, target
 		return errors.New("runtime response limit")
 	}
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("local runtime HTTP %d", response.StatusCode)
+		cause := fmt.Errorf("local runtime HTTP %d", response.StatusCode)
+		if response.StatusCode >= 500 || response.StatusCode == http.StatusTooManyRequests {
+			return errors.Join(eviedb.ErrCompilerEndpointUnavailable, cause)
+		}
+		return cause
 	}
 	// Runtime metadata may add fields. Strictness applies to duplicate keys and
 	// framing here; the Kernel separately closes the model-output shape.

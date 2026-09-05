@@ -12,6 +12,8 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
+var ErrCompilerEndpointUnavailable = errors.New("compiler endpoint unavailable")
+
 var ErrCompilerNotConfigured = errors.New("memory compiler is not configured")
 var ErrCompilerCapacityBlocked = errors.New("memory compiler capacity blocked")
 var ErrCompilerConfiguration = errors.New("unsafe or unverifiable compiler configuration")
@@ -64,7 +66,14 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
 	return s.runCompilerClaim(ctx, owner, selectionID, claim, extractor)
 }
 
-func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext, selectionID string, claim compilerClaim, extractor CompilerExtractor) (memory.Compilation, error) {
+func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext, selectionID string, claim compilerClaim, extractor CompilerExtractor) (result memory.Compilation, retErr error) {
+	observation := compilerAttemptObservation{claim: claim}
+	defer func() {
+		if !observation.databaseStart.IsZero() {
+			observation.database = measuredCompilerDuration(observation.databaseStart)
+		}
+		retErr = errors.Join(retErr, s.recordCompilerAttempt(observation, retErr))
+	}()
 	jobID, holder, fence := claim.JobID, claim.Holder, claim.Fence
 	request, generation := claim.Request, claim.Generation
 	var err error
@@ -139,7 +148,9 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 		extractErr = callCtx.Err()
 		extracted.ReleaseEvidence = "not_dispatched"
 	} else {
+		inferenceStarted := time.Now()
 		extracted, extractErr = extractor.Extract(callCtx, generation, dispatched)
+		observation.inference = measuredCompilerDuration(inferenceStarted)
 	}
 	close(callerWatchStop)
 	<-callerWatchDone
@@ -166,18 +177,24 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 	}
 	var candidates []memory.MemoryCandidate
 	if extractErr == nil {
+		validationStarted := time.Now()
 		candidates, extractErr = validateCompilerOutput(request, extracted.Raw)
+		observation.validation = measuredCompilerDuration(validationStarted)
 	}
 	if extractErr != nil {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		reason := "invalid_or_missing_output"
+		if errors.Is(extractErr, ErrCompilerEndpointUnavailable) {
+			reason = "endpoint_unavailable"
+		}
 		if errors.Is(extractErr, ErrCompilerConfiguration) {
 			reason = "invalid_configuration"
 		}
 		if errors.Is(extractErr, ErrCompilerTerminalOutput) {
 			reason = "invalid_source_or_effect"
 		}
+		observation.databaseStart = time.Now()
 		err = s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence), reason, errors.Is(extractErr, ErrCompilerConfiguration) || errors.Is(extractErr, ErrCompilerTerminalOutput))
 		if errors.Is(err, ErrCompilerFence) {
 			err = errors.Join(err, s.stopCompilerClaim(cleanupCtx, claim, compilerReleaseKnown(extracted.ReleaseEvidence)))
@@ -185,6 +202,7 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
 		return result, errors.Join(extractErr, err, readErr)
 	}
+	observation.databaseStart = time.Now()
 	if err = s.stageCompilerResult(publicationCtx, owner, jobID, string(holder), fence, request, candidates); err != nil {
 		if ctx.Err() != nil {
 			return cancelledResult(err)
@@ -202,11 +220,17 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 		}
 		return memory.Compilation{}, errors.Join(err, failedErr)
 	}
+	publicationStarted := time.Now()
 	if err = s.publishCompilerResult(publicationCtx, owner, jobID, string(holder), fence, request); err != nil {
 		if ctx.Err() != nil {
 			return cancelledResult(err)
 		}
 		return memory.Compilation{}, err
+	}
+	observation.database = measuredCompilerDuration(observation.databaseStart)
+	observation.databaseStart = time.Time{}
+	if measurementErr := s.recordCompilerPublication(jobID, fence, publicationStarted); measurementErr != nil {
+		return memory.Compilation{}, measurementErr
 	}
 	return s.InspectCompilation(ctx, owner, selectionID)
 }

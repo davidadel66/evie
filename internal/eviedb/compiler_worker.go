@@ -632,7 +632,11 @@ func (s *Store) RunCompilerStep(ctx context.Context, config CompilerSupervisorCo
 			}
 			return false, err
 		}
+		publicationStarted := time.Now()
 		err = s.publishCompilerResult(ctx, owner, jobID, claim.Holder, claim.Fence, claim.Request)
+		if err == nil {
+			err = s.recordCompilerPublication(jobID, claim.Fence, publicationStarted)
+		}
 		if ctx.Err() != nil {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

@@ -11,11 +11,14 @@ import (
 // InspectCompilerHistory pages content-free exact intervals for one receipt
 // range. Indexed coordinates and persisted manifests determine progress; a
 // scanning cursor or accepted/rejected candidate never establishes completion.
+// Exact session totals use bounded persisted indexing; ErrCompilerStatusIndexing
+// asks the caller to repeat this authorized request without returning partial counts.
 func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.ScopeContext, id string, rangeIndex int, afterSequence int64, limit int) (result memory.CompilerHistoryProgress, err error) {
 	result.Intervals = []memory.CompilerHistoryInterval{}
 	if limit < 1 || limit > 64 || rangeIndex < 0 || afterSequence < 0 {
 		return result, errors.New("history progress requires a range index, nonnegative cursor, and limit 1 through 64")
 	}
+	indexing := false
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		receipt, state, err := loadCompilerHistory(ctx, conn, owners, id)
 		if err != nil {
@@ -30,6 +33,10 @@ func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.Scop
 		r := receipt.Request.Ranges[rangeIndex]
 		// All rows below are bounded by the receipt's <=10,000 event selection.
 		// Event ID joins preserve holes/control members and interleaved ancestry.
+		// nextCompilerInterval assigns nonoverlapping immutable ownership for
+		// each generation/destination/session/root. One indexed predecessor
+		// therefore identifies an event's only possible owner; its endpoint
+		// check preserves gaps without scanning retained later segments.
 		rows, err := conn.QueryContext(ctx, `SELECT e.sequence,
   CASE WHEN c.outcome IS NOT NULL AND EXISTS(SELECT 1 FROM json_each(c.event_ids) WHERE value=e.id) THEN c.outcome
        WHEN h.state='excluded' AND h.selection_id='' THEN 'excluded'
@@ -42,7 +49,9 @@ func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.Scop
  FROM events e
  LEFT JOIN memory_compiler_history_events m ON m.request_id=? AND m.range_ordinal=? AND m.event_id=e.id
  LEFT JOIN memory_compiler_history_roots h ON h.request_id=m.request_id AND h.range_ordinal=m.range_ordinal AND h.root_id=m.root_id
- LEFT JOIN memory_compiler_selections s ON s.generation_id=? AND s.destination=? AND s.session_id=e.session_id AND s.root_id=m.root_id AND e.sequence BETWEEN s.first_sequence AND s.last_sequence
+ LEFT JOIN memory_compiler_selections s ON s.selection_id=(
+  SELECT candidate.selection_id FROM memory_compiler_selections candidate WHERE candidate.generation_id=? AND candidate.destination=? AND candidate.session_id=e.session_id AND candidate.root_id=m.root_id AND candidate.first_sequence<=e.sequence ORDER BY candidate.first_sequence DESC LIMIT 1
+ ) AND e.sequence<=s.last_sequence
  LEFT JOIN memory_compiler_jobs j ON j.job_id=s.job_id
  LEFT JOIN memory_compiler_coverage c ON c.job_id=j.job_id
  WHERE e.session_id=? AND e.sequence BETWEEN ? AND ? ORDER BY e.sequence`, state.Cancelled, id, rangeIndex, receipt.GenerationID, r.Destination, r.SessionID, r.FirstSequence, r.LastSequence)
@@ -94,18 +103,17 @@ func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.Scop
 			}
 			result.Intervals = append(result.Intervals, item)
 		}
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events e WHERE e.session_id=? AND (
- EXISTS(SELECT 1 FROM memory_compiler_history_ranges r JOIN memory_compiler_history_requests q USING(request_id) WHERE r.session_id=e.session_id AND r.destination=? AND q.generation_id=? AND e.sequence BETWEEN r.first_sequence AND r.last_sequence)
- OR EXISTS(SELECT 1 FROM memory_compiler_event_positions p JOIN memory_compiler_activations a ON a.generation_id=? AND a.destination=? AND (a.source_session='' OR a.source_session=e.session_id) AND a.source_scope=? WHERE p.event_id=e.id AND p.commit_position>a.after_position AND (a.through_position IS NULL OR p.commit_position<=a.through_position)))`, r.SessionID, r.Destination, receipt.GenerationID, receipt.GenerationID, r.Destination, r.SourceScope).Scan(&result.SelectedSessionEvents); err != nil {
+		total, selected, ready, err := compilerStatusEventCounts(ctx, conn, r.SourceScope, r.SessionID, receipt.GenerationID, r.Destination)
+		if err != nil {
 			return err
 		}
-		var total int64
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=?`, r.SessionID).Scan(&total); err != nil {
-			return err
-		}
-		result.OutsideSelectionEvents = total - result.SelectedSessionEvents
+		result.SelectedSessionEvents, result.OutsideSelectionEvents = selected, total-selected
+		indexing = !ready
 		return nil
 	})
+	if err == nil && indexing {
+		return memory.CompilerHistoryProgress{}, ErrCompilerStatusIndexing
+	}
 	return
 }
 

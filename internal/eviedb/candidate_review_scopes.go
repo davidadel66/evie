@@ -75,11 +75,21 @@ func (s *Store) ListLocalOwnerCandidateScopes(ctx context.Context, query memory.
 	if query.Limit < 1 || query.Limit > 100 || len(query.Cursor) > 2048 {
 		return out, errors.New("invalid review scope page")
 	}
+	var compilerIndexing bool
 	err := s.withImmediateTransaction(ctx, func(tx *sql.Conn) error {
+		var e error
+		compilerIndexing, e = reconcileCompilerScopeNavigation(ctx, tx)
+		return e
+	})
+	if err != nil {
+		return out, err
+	}
+	err = s.withImmediateTransaction(ctx, func(tx *sql.Conn) error {
 		var err error
 		if out.Indexing, err = reconcileCandidateNavigation(ctx, tx); err != nil {
 			return err
 		}
+		out.Indexing = out.Indexing || compilerIndexing
 		var key []byte
 		var revision int64
 		if err = tx.QueryRowContext(ctx, `SELECT authentication_key,revision FROM memory_review_authorization WHERE singleton=1`).Scan(&key, &revision); err != nil {

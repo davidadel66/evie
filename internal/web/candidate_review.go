@@ -35,6 +35,7 @@ func (s *Server) registerCandidateReviewRoutes(mux *http.ServeMux) {
 		return
 	}
 	s.registerAdvancedCandidateReviewRoutes(mux)
+	s.registerCompilerDiagnosticRoutes(mux)
 	for path, handler := range map[string]http.HandlerFunc{
 		"scopes": s.handleCandidateScopes, "list": s.handleCandidateList, "inspect": s.handleCandidateInspect,
 		"prepare": s.handleCandidatePrepare, "resolve": s.handleCandidateResolve, "operation": s.handleCandidateOperation,

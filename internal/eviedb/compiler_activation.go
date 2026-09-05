@@ -218,14 +218,20 @@ func scanCompilerActivation(row interface{ Scan(...any) error }, result *memory.
 }
 
 // Status returns content-free selection counts for this exact owner lineage.
+// ErrCompilerStatusIndexing advances persisted bounded indexing; repeat the
+// authorized request until exact totals are ready. Partial totals are not returned.
 func (s *Store) InspectCompilerActivations(ctx context.Context, owner memory.ScopeContext) (result memory.CompilerActivationStatus, err error) {
 	result.Activations = []memory.CompilerActivation{}
 	result.Roots = []memory.CompilerActivationRootStatus{}
+	indexing := false
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		if err := compilerAuthorize(ctx, conn, owner, memory.CompilationSelection{SessionID: owner.SessionID, Destination: scopeKeyForContext(owner)}); err != nil {
 			return err
 		}
-		rows, err := conn.QueryContext(ctx, `SELECT activation_id,source_scope,source_session,destination,generation_id,revision,after_position,through_position,work_paused FROM memory_compiler_activations WHERE source_scope=? AND (source_session='' OR source_session=?) ORDER BY revision DESC,activation_id LIMIT 129`, scopeKeyForContext(owner), owner.SessionID)
+		rows, err := conn.QueryContext(ctx, `SELECT activation_id,source_scope,source_session,destination,generation_id,revision,after_position,through_position,work_paused FROM (
+ SELECT * FROM (SELECT * FROM memory_compiler_activations WHERE source_scope=?1 AND source_session='' ORDER BY revision DESC,activation_id LIMIT 129)
+ UNION ALL SELECT * FROM (SELECT * FROM memory_compiler_activations WHERE source_scope=?1 AND source_session=?2 ORDER BY revision DESC,activation_id LIMIT 129)
+ ) ORDER BY revision DESC,activation_id LIMIT 129`, scopeKeyForContext(owner), owner.SessionID)
 		if err != nil {
 			return err
 		}
@@ -273,15 +279,21 @@ func (s *Store) InspectCompilerActivations(ctx context.Context, owner memory.Sco
 			result.RootsTruncated = true
 			result.Roots = result.Roots[:128]
 		}
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND EXISTS(SELECT 1 FROM memory_compiler_activations a WHERE a.source_scope=? AND (a.source_session='' OR a.source_session=e.session_id) AND p.commit_position>a.after_position AND (a.through_position IS NULL OR p.commit_position<=a.through_position))`, owner.SessionID, scopeKeyForContext(owner)).Scan(&result.SelectedEvents); err != nil {
+		total, selected, eventsReady, err := compilerStatusEventCounts(ctx, conn, scopeKeyForContext(owner), owner.SessionID, "", "")
+		if err != nil {
 			return err
 		}
-		var total int64
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=?`, owner.SessionID).Scan(&total); err != nil {
+		pending, failed, rootsReady, err := compilerStatusRootCounts(ctx, conn, owner.SessionID)
+		if err != nil {
 			return err
 		}
-		result.OutsideSelectionEvents = total - result.SelectedEvents
-		return conn.QueryRowContext(ctx, `SELECT COALESCE(SUM(state IN ('selected_unmaterialized','deferred_live')),0),COALESCE(SUM(state='failed'),0) FROM memory_compiler_activation_roots WHERE session_id=?`, owner.SessionID).Scan(&result.PendingRoots, &result.SourceErrors)
+		result.SelectedEvents, result.OutsideSelectionEvents = selected, total-selected
+		result.PendingRoots, result.SourceErrors = pending, failed
+		indexing = !eventsReady || !rootsReady
+		return nil
 	})
+	if err == nil && indexing {
+		return memory.CompilerActivationStatus{}, ErrCompilerStatusIndexing
+	}
 	return
 }
