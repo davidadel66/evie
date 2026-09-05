@@ -27,6 +27,17 @@ export function fakeAPI(overrides: Partial<CandidateReviewAPI> = {}): CandidateR
     prepare: async (_scope, _ref, action) => ({ ...preview, action, effect: action === "reject" ? null : preview.effect }),
     resolve: async () => result,
     operation: async () => ({ operation_id: "operation-1", preview, audit_id: "audit-1" }),
+    identityOptions: async () => { throw new Error("No identity fixture"); },
+    chooseIdentity: async () => candidate,
+    temporalOptions: async () => { throw new Error("No temporal fixture"); },
+    chooseTemporal: async () => candidate,
+    edit: async () => candidate,
+    editRevision: async () => { throw new Error("No edit fixture"); },
+    identityRevision: async () => { throw new Error("No identity revision fixture"); },
+    temporalRevision: async () => { throw new Error("No temporal revision fixture"); },
+    prepareBatch: async () => { throw new Error("No batch fixture"); },
+    inspectBatch: async () => { throw new Error("No batch fixture"); },
+    resolveBatch: async () => { throw new Error("No batch fixture"); },
     ...overrides,
   };
 }

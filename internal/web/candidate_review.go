@@ -34,6 +34,7 @@ func (s *Server) registerCandidateReviewRoutes(mux *http.ServeMux) {
 	if s.candidateReview == nil {
 		return
 	}
+	s.registerAdvancedCandidateReviewRoutes(mux)
 	for path, handler := range map[string]http.HandlerFunc{
 		"scopes": s.handleCandidateScopes, "list": s.handleCandidateList, "inspect": s.handleCandidateInspect,
 		"prepare": s.handleCandidatePrepare, "resolve": s.handleCandidateResolve, "operation": s.handleCandidateOperation,
@@ -43,11 +44,15 @@ func (s *Server) registerCandidateReviewRoutes(mux *http.ServeMux) {
 }
 
 func decodeCandidateRequest(w http.ResponseWriter, r *http.Request, request any) bool {
+	return decodeCandidateRequestLimit(w, r, request, 8192)
+}
+
+func decodeCandidateRequestLimit(w http.ResponseWriter, r *http.Request, request any, limit int64) bool {
 	// Evidence and accepted operation bodies must not enter browser caches.
 	w.Header().Set("Cache-Control", "no-store")
 	// The 4 KiB owner reason plus its exact preview envelope needs more than
 	// the legacy 4 KiB management-body budget. The complete request caps at 8 KiB.
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	defer r.Body.Close()
 	b, err := io.ReadAll(r.Body)
 	status := http.StatusBadRequest
@@ -56,7 +61,7 @@ func decodeCandidateRequest(w http.ResponseWriter, r *http.Request, request any)
 		status = http.StatusRequestEntityTooLarge
 	}
 	if err == nil && strings.HasPrefix(strings.TrimSpace(string(b)), "{") {
-		err = memory.ValidateCompilerJSON(b)
+		err = validateCandidateJSON(b)
 		if err == nil {
 			decoder := json.NewDecoder(bytes.NewReader(b))
 			decoder.DisallowUnknownFields()
@@ -192,7 +197,7 @@ func (s *Server) handleCandidateResolve(w http.ResponseWriter, r *http.Request) 
 		Scope    string                `json:"scope_key"`
 		Decision memory.ReviewDecision `json:"decision"`
 	}
-	if !decodeCandidateRequest(w, r, &request) {
+	if !decodeCandidateRequestLimit(w, r, &request, 32*1024) {
 		return
 	}
 	a, ok := s.candidateAuthority(w, r, request.Scope)
@@ -224,6 +229,10 @@ func candidateAction(action string) bool { return action == "accept" || action =
 func writeCandidateError(w http.ResponseWriter, err error) {
 	status, code, message := http.StatusServiceUnavailable, "review_retryable", "the review service could not confirm this request; retry the same decision if one was submitted"
 	switch {
+	case errors.Is(err, errCandidateHistoryInput):
+		status, code, message = http.StatusBadRequest, "invalid_history_request", "provide a candidate ID and a positive interpretation revision"
+	case errors.Is(err, errCandidateHistoryMissing):
+		status, code, message = http.StatusNotFound, "review_revision_not_found", "no history of this kind was found at that revision; edits, identity choices and correction choices share one sequence, so select the matching kind and revision"
 	case errors.Is(err, eviedb.ErrOwnerReviewUnauthorized):
 		status, code, message = http.StatusForbidden, "review_unauthorized", "this memory scope or candidate is not available"
 	case errors.Is(err, eviedb.ErrReviewStale), errors.Is(err, eviedb.ErrStaleScopeRevision):
@@ -234,12 +243,18 @@ func writeCandidateError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "idempotency_conflict", "this delivery key belongs to a different decision; inspect the recorded result before trying again"
 	case errors.Is(err, eviedb.ErrReviewInvalidSource):
 		status, code, message = http.StatusConflict, "source_ineligible", "supporting evidence is no longer eligible; acceptance is blocked, but you may inspect and reject the candidate"
+	case errors.Is(err, eviedb.ErrReviewInvalidRequest):
+		status, code, message = http.StatusBadRequest, "invalid_review_request", "the delivery or reason was refused before any change; use a valid delivery and a bounded reason without secrets"
+	case errors.Is(err, eviedb.ErrReviewTooLarge):
+		status, code, message = http.StatusRequestEntityTooLarge, "review_too_large", "the complete review exceeds a bound; select fewer complete groups or shorten the edit"
+	case errors.Is(err, eviedb.ErrReviewDependencies):
+		status, code, message = http.StatusConflict, "review_dependencies", "review the complete dependency groups and prepare a new exact batch"
 	case errors.Is(err, eviedb.ErrInvalidCursor):
 		status, code, message = http.StatusBadRequest, "invalid_cursor", "restart this paginated listing"
 	case errors.Is(err, eviedb.ErrSemanticScopeQuarantined):
 		status, code, message = http.StatusLocked, "review_scope_quarantined", "this memory scope needs local verification or repair before review"
 	case strings.HasPrefix(err.Error(), "needs_choice:"):
-		status, code, message = http.StatusConflict, "needs_choice", "this candidate needs an explicit identity choice through local review before acceptance"
+		status, code, message = http.StatusConflict, "needs_choice", "this candidate needs an explicit identity or correction choice before acceptance"
 	}
 	managementJSONError(w, status, code, message)
 }

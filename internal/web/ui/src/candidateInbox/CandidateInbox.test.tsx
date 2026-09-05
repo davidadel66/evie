@@ -22,7 +22,7 @@ describe("candidate review disclosure", () => {
   });
 
   it("never offers acceptance of an undisclosed identity effect", () => {
-    const advanced = { ...candidate, candidate: { ...candidate.candidate, proposal: { ...candidate.candidate.proposal, identity: {} } } };
+    const advanced = { ...candidate, candidate: { ...candidate.candidate, proposal: { ...candidate.candidate.proposal, identity: { subject: null, object: null, predicate: null, uncertainty: "", confidence: null } } } };
     const html = render({ ...state, detail: advanced, preview: { ...preview, version: "owner-review-preview-v2" } });
     expect(html).toContain("Additional identity review"); expect(html).toMatch(/disabled=""[^>]*>Accept this exact memory/);
   });
