@@ -35,6 +35,9 @@ type ownerTemporalReviewKernel interface {
 // Every invocation is a trusted local owner command selecting one exact scope.
 // A resolve accepts only immutable preview identity, never replacement effects.
 func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer, kernel ownerReviewKernel) (bool, error) {
+	if handled, err := runOwnerBatchReviewManagement(ctx, args, out, kernel); handled {
+		return true, err
+	}
 	if len(args) == 0 || args[0] != "memory-review" {
 		return false, nil
 	}

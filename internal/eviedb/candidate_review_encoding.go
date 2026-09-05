@@ -28,6 +28,20 @@ func canonicalOwnerReviewOperation(op memory.OwnerReviewOperation) any {
 	}{reviewIdentityEncodingDomain(op.Preview, "operation"), op}
 }
 func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
+	if p.Version == "owner-review-preview-v5" {
+		if err := validateReviewCompoundEncoding(p); err != nil {
+			return err
+		}
+		return validateReviewPreviewDigests(p)
+	}
+	if p.BatchID != "" || len(p.Dependencies) != 0 || p.Effect != nil && (len(p.Effect.Members) != 0 || len(p.Effect.Records) != 0 || len(p.Effect.Dependencies) != 0) {
+		return ErrReviewDependencies
+	}
+	for _, candidate := range p.Candidates {
+		if candidate.Edit != nil || candidate.Original != nil {
+			return errors.New("older review version cannot carry owner edits")
+		}
+	}
 	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3" && p.Version != "owner-review-preview-v4") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
 		return errors.New("invalid review preview")
 	}
@@ -46,6 +60,9 @@ func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
 	if err := validateReviewTemporalEncoding(p); err != nil {
 		return err
 	}
+	return validateReviewPreviewDigests(p)
+}
+func validateReviewPreviewDigests(p memory.ReviewPreview) error {
 	hash, _, err := ownerReviewEffectHash(p.Effect)
 	if err != nil {
 		return err
@@ -80,6 +97,9 @@ func canonicalOwnerReviewEffect(effect *memory.ReviewEffect) any {
 	}
 	if effect != nil && effect.Version == "owner-review-effect-v4" {
 		domain = "evie-owner-review-effect-v4"
+	}
+	if effect != nil && effect.Version == "owner-review-effect-v5" {
+		domain = "evie-owner-review-effect-v5"
 	}
 	return struct {
 		Domain string               `json:"domain"`

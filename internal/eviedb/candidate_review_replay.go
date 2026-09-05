@@ -16,8 +16,11 @@ func ownerReviewReplayHandler(operation semanticAcceptedReplayOperation) (semant
 	if err := validateOwnerReviewOperation(op); err != nil {
 		return semanticReplayPreparedHandler{}, err
 	}
-	effect := op.Preview.Effect
-	return semanticReplayPreparedHandler{SchemaVersion: 6, Kind: op.Kind, OperationID: op.OperationID, IdempotencyKey: op.IdempotencyKey, Actor: op.Actor, SessionID: op.SessionID, TargetScope: effect.Scope, Scopes: effect.Scopes, PriorRevisions: effect.PriorRevisions, SourceEventID: op.SourceEventID, PreparedProposal: op, CanonicalProposal: canonicalOwnerReviewOperation(op), CanonicalEffect: canonicalOwnerReviewEffect(effect), ValidateResult: func(record semanticAcceptedReplayOperation) error {
+	effect, err := reviewReplayEffect(op)
+	if err != nil {
+		return semanticReplayPreparedHandler{}, err
+	}
+	return semanticReplayPreparedHandler{SchemaVersion: 6, Kind: op.Kind, OperationID: op.OperationID, IdempotencyKey: op.IdempotencyKey, Actor: op.Actor, SessionID: op.SessionID, TargetScope: effect.Scope, Scopes: effect.Scopes, PriorRevisions: effect.PriorRevisions, SourceEventID: op.SourceEventID, PreparedProposal: op, CanonicalProposal: canonicalOwnerReviewOperation(op), CanonicalEffect: canonicalOwnerReviewEffect(op.Preview.Effect), ValidateResult: func(record semanticAcceptedReplayOperation) error {
 		return validateConcreteReplayResult(record, &memory.OwnerReviewOperationResult{}, func(r memory.OwnerReviewOperationResult) (memory.SemanticID, time.Time, []memory.ScopeRevision) {
 			return r.OperationID, r.TransactionTime, r.ResultingRevisions
 		}, func(r memory.OwnerReviewOperationResult) bool {

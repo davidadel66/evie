@@ -36,7 +36,7 @@ func (s *Store) ResolveOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 	var result memory.ReviewResult
 	var priorResolution memory.ReviewResult
 	if !reviewDeliveryValid(decision.DeliveryKey) || len(decision.Reason) > 4096 || !utf8.ValidString(decision.Reason) || compilerHasSecret(decision.Reason) {
-		return result, errors.New("invalid review delivery or reason")
+		return result, ErrReviewInvalidRequest
 	}
 	requestHash, _, err := semanticHash(decision)
 	if err != nil {
@@ -61,13 +61,26 @@ func (s *Store) ResolveOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		var batchDelivery int
+		if err = conn.QueryRowContext(ctx, `SELECT count(*) FROM memory_review_batch_deliveries WHERE owner_id=? AND delivery_key=?`, memory.LocalOwnerID, decision.DeliveryKey).Scan(&batchDelivery); err != nil {
+			return err
+		}
+		if batchDelivery != 0 {
+			return ErrIdempotencyConflict
+		}
 		var raw []byte
 		if err = conn.QueryRowContext(ctx, `SELECT envelope FROM memory_review_previews WHERE preview_id=? AND scope_key=?`, decision.PreviewID, a.scope).Scan(&raw); err != nil {
-			return ErrOwnerReviewUnauthorized
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrOwnerReviewUnauthorized
+			}
+			return err
 		}
 		var p memory.ReviewPreview
 		if json.Unmarshal(raw, &p) != nil {
 			return errors.New("invalid stored preview")
+		}
+		if p.BatchID != "" {
+			return ErrReviewDependencies
 		}
 		if err = validateOwnerReviewEncoding(p); err != nil {
 			return err
@@ -180,6 +193,9 @@ func (s *Store) ResolveOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 // replay supplies the previously accepted envelope and recorded commit time.
 // Neither route uses or changes source-session turn authority.
 func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, op memory.OwnerReviewOperation, clock time.Time) (memory.OwnerReviewOperationResult, error) {
+	if op.Preview.Version == "owner-review-preview-v5" {
+		return s.applyOwnerCompoundOperation(ctx, conn, op, clock)
+	}
 	var result memory.OwnerReviewOperationResult
 	if err := validateOwnerReviewOperation(op); err != nil {
 		return result, err
@@ -296,6 +312,9 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 			continue
 		}
 		entity, err := reviewEntity(ctx, q, keys, expected.ID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		if err != nil || entity != *expected {
 			return ErrReviewStale
 		}
@@ -310,16 +329,25 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 	} else {
 		var predicate memory.SemanticPredicate
 		err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, item.Predicate.ID).Scan(&predicate.ID, &predicate.Token, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		if err != nil || predicate != item.Predicate {
 			return ErrReviewStale
 		}
 	}
 	if !item.Create {
 		claim, err := loadSemanticClaim(ctx, q, item.Claim.ID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		if err != nil || string(compilerJSON(claim)) != string(compilerJSON(item.Claim)) {
 			return ErrReviewStale
 		}
 		state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, item.Claim.ID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 		if err != nil || state.State != memory.SemanticStateActive {
 			return ErrReviewStale
 		}
@@ -343,6 +371,9 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 				return ErrReviewStale
 			}
 			state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectSourceLink, source.ID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 			if err != nil || state.State != memory.SemanticStateEligible {
 				return ErrReviewStale
 			}
@@ -359,6 +390,9 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 }
 
 func validateOwnerReviewOperation(op memory.OwnerReviewOperation) error {
+	if op.Preview.Version == "owner-review-preview-v5" {
+		return validateOwnerCompoundOperation(op)
+	}
 	if op.SchemaVersion != 6 || op.Kind != "owner_candidate_review" || op.Actor != memory.SemanticActorOwner || !reviewDeliveryValid(op.IdempotencyKey) || op.Preview.Action != "accept" {
 		return errors.New("invalid owner review operation")
 	}
@@ -436,8 +470,11 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
 	}
 	for i, item := range effect.Claims {
 		original := p.Candidates[i]
-		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Temporal == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
+		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Temporal == nil && original.Edit == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
 			return errors.New("invalid recorded candidate identity")
+		}
+		if err := validateReviewEditEnvelope(original); err != nil {
+			return err
 		}
 		proposal := original.Candidate.Proposal
 		resolved, err := reviewResolvedProposition(p, i)

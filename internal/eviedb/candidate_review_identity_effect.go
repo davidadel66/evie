@@ -230,6 +230,11 @@ func reviewResolvedProposition(p memory.ReviewPreview, index int) (memory.ClaimP
 }
 
 func reviewWritesGlobal(effect *memory.ReviewEffect) bool {
+	for _, member := range effect.Members {
+		if reviewWritesGlobal(&member) {
+			return true
+		}
+	}
 	return effect.Identity != nil && effect.Claims[0].Predicate.Create
 }
 
@@ -290,6 +295,9 @@ func reviewIdentityEncodingDomain(p memory.ReviewPreview, kind string) string {
 	}
 	if p.Version == "owner-review-preview-v4" {
 		version = "v4"
+	}
+	if p.Version == "owner-review-preview-v5" {
+		version = "v5"
 	}
 	return "evie-owner-review-" + kind + "-" + version
 }

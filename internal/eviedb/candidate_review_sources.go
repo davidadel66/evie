@@ -69,6 +69,11 @@ func (s *Store) InspectOwnerReviewOperation(ctx context.Context, a OwnerReviewCo
 	if json.Unmarshal([]byte(raw), &op) != nil {
 		return memory.OwnerReviewOperation{}, errors.New("invalid accepted review envelope")
 	}
+	if op.Preview.Version == "owner-review-preview-v5" {
+		if err = validateOwnerReviewOperation(op); err != nil {
+			return memory.OwnerReviewOperation{}, err
+		}
+	}
 	if err = reviewOperationSourcesVisible(ctx, tx, op); err != nil {
 		return memory.OwnerReviewOperation{}, ErrReviewInvalidSource
 	}
@@ -76,11 +81,24 @@ func (s *Store) InspectOwnerReviewOperation(ctx context.Context, a OwnerReviewCo
 }
 
 func reviewOperationSourcesVisible(ctx context.Context, q reviewQuery, op memory.OwnerReviewOperation) error {
-	if !reviewSourcePolicyCurrent(ctx, q) {
+	quoted := false
+	for _, c := range op.Preview.Candidates {
+		for _, sources := range reviewCandidateDisclosureSources(c) {
+			quoted = quoted || len(sources) != 0
+		}
+	}
+	if !quoted {
+		return nil
+	}
+	var policy string
+	if err := q.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&policy); err != nil {
+		return err
+	}
+	if policy != memory.CompilerPolicyVersion {
 		return ErrReviewInvalidSource
 	}
-	ctx = withCompilerSourceCache(ctx)
 	for _, candidate := range op.Preview.Candidates {
+		candidateCtx := context.WithValue(ctx, compilerSourceCacheKey{}, &compilerSourceCache{events: map[memory.EventID]compilerEvent{}})
 		var requestRaw []byte
 		var request memory.CompilerRequest
 		if err := q.QueryRowContext(ctx, `SELECT request FROM memory_compiler_jobs WHERE job_id=?`, candidate.JobID).Scan(&requestRaw); err != nil {
@@ -96,9 +114,9 @@ func reviewOperationSourcesVisible(ctx context.Context, q reviewQuery, op memory
 		if err = compilerAuthorize(ctx, q, owner, request.Window.Selection); err != nil {
 			return err
 		}
-		for _, sources := range [][]memory.CompilerSource{candidate.Candidate.Support, candidate.Candidate.Context} {
+		for _, sources := range reviewCandidateDisclosureSources(candidate) {
 			for _, source := range sources {
-				if _, err = resolveCompilerSource(ctx, q, owner, request.Window.Selection, source); err != nil {
+				if _, err = resolveCompilerSource(candidateCtx, q, owner, request.Window.Selection, source); err != nil {
 					return err
 				}
 			}

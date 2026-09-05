@@ -17,6 +17,7 @@ var (
 	ErrReviewStale             = errors.New("stale_preview")
 	ErrReviewResolved          = errors.New("already_resolved")
 	ErrReviewInvalidSource     = errors.New("source_ineligible")
+	ErrReviewInvalidRequest    = errors.New("invalid_review_request")
 )
 
 // OwnerReviewContext is an opaque capability. Only the trusted local owner
@@ -50,6 +51,9 @@ func (s *Store) LocalOwnerReviewContext(ctx context.Context, scope string) (Owne
 	var a OwnerReviewContext
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		if _, err := reviewScopeKeys(ctx, conn, scope); err != nil {
+			if !compilerDataFailure(err) {
+				return err
+			}
 			return ErrOwnerReviewUnauthorized
 		}
 		var key []byte
@@ -74,6 +78,9 @@ func checkReviewAuthority(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		return ErrOwnerReviewUnauthorized
 	}
 	if _, err := reviewScopeKeys(ctx, q, a.scope); err != nil {
+		if !compilerDataFailure(err) {
+			return err
+		}
 		return ErrOwnerReviewUnauthorized
 	}
 	return nil
@@ -90,12 +97,18 @@ func reviewScopeKeys(ctx context.Context, q reviewQuery, key string) ([]string, 
 	case "workspace":
 		var state string
 		if err := q.QueryRowContext(ctx, `SELECT lifecycle_state FROM workspaces WHERE id=?`, id).Scan(&state); err != nil || state != "active" {
+			if err != nil && !compilerDataFailure(err) {
+				return nil, err
+			}
 			return nil, ErrOwnerReviewUnauthorized
 		}
 		keys = append(keys, key)
 	case "project":
 		var archived int
 		if err := q.QueryRowContext(ctx, `SELECT archived FROM projects WHERE id=?`, id).Scan(&archived); err != nil || archived != 0 {
+			if err != nil && !compilerDataFailure(err) {
+				return nil, err
+			}
 			return nil, ErrOwnerReviewUnauthorized
 		}
 		keys = append(keys, key)

@@ -10,6 +10,8 @@ type CandidateRef struct {
 }
 
 type OwnerCandidate struct {
+	Edit         *ReviewEditRevision     `json:"edit,omitempty"`
+	Original     *MemoryCandidate        `json:"original,omitempty"`
 	Temporal     *ReviewTemporalRevision `json:"temporal,omitempty"`
 	Identity     *ReviewIdentityRevision `json:"identity,omitempty"`
 	Ref          CandidateRef            `json:"ref"`
@@ -46,6 +48,9 @@ type ReviewClaimEffect struct {
 }
 
 type ReviewEffect struct {
+	Records        []ReviewEffectRecord    `json:"records,omitempty"`
+	Members        []ReviewEffect          `json:"members,omitempty"`
+	Dependencies   []ReviewDependency      `json:"dependencies,omitempty"`
 	Correction     *ReviewCorrectionEffect `json:"correction,omitempty"`
 	Identity       *ReviewIdentityEffect   `json:"identity,omitempty"`
 	Version        string                  `json:"version"`
@@ -56,23 +61,25 @@ type ReviewEffect struct {
 	Claims         []ReviewClaimEffect     `json:"claims"`
 }
 
-// ReviewPreview contains only one complete atomic group in the first review
-// slice. Later batch preparation can compose already explicit groups.
+// ReviewPreview binds one complete atomic group. A nonempty BatchID requires
+// resolution through that outer batch and its ordered dependency/vector binding.
 type ReviewPreview struct {
-	Version               string           `json:"version"`
-	ID                    string           `json:"preview_id"`
-	OwnerID               OwnerID          `json:"owner_id"`
-	AuthenticationBinding string           `json:"authentication_binding"`
-	AuthorizationRevision int64            `json:"authorization_revision"`
-	ScopeKey              string           `json:"scope_key"`
-	JobID                 string           `json:"job_id"`
-	GenerationID          string           `json:"generation_id"`
-	Action                string           `json:"action"`
-	Candidates            []OwnerCandidate `json:"candidates"`
-	SourcePolicy          string           `json:"source_policy"`
-	Effect                *ReviewEffect    `json:"effect"`
-	EffectSHA256          string           `json:"effect_sha256"`
-	SHA256                string           `json:"preview_sha256"`
+	BatchID               string             `json:"batch_preview_id,omitempty"`
+	Dependencies          []ReviewDependency `json:"dependencies,omitempty"`
+	Version               string             `json:"version"`
+	ID                    string             `json:"preview_id"`
+	OwnerID               OwnerID            `json:"owner_id"`
+	AuthenticationBinding string             `json:"authentication_binding"`
+	AuthorizationRevision int64              `json:"authorization_revision"`
+	ScopeKey              string             `json:"scope_key"`
+	JobID                 string             `json:"job_id"`
+	GenerationID          string             `json:"generation_id"`
+	Action                string             `json:"action"`
+	Candidates            []OwnerCandidate   `json:"candidates"`
+	SourcePolicy          string             `json:"source_policy"`
+	Effect                *ReviewEffect      `json:"effect"`
+	EffectSHA256          string             `json:"effect_sha256"`
+	SHA256                string             `json:"preview_sha256"`
 }
 
 type ReviewDecision struct {
@@ -93,15 +100,16 @@ type ReviewResult struct {
 }
 
 type OwnerReviewOperation struct {
-	SchemaVersion  int           `json:"schema_version"`
-	Kind           string        `json:"kind"`
-	OperationID    SemanticID    `json:"operation_id"`
-	IdempotencyKey string        `json:"idempotency_key"`
-	Actor          SemanticActor `json:"actor"`
-	SessionID      SessionID     `json:"session_id"`
-	SourceEventID  EventID       `json:"source_event_id"`
-	Preview        ReviewPreview `json:"preview"`
-	AuditID        string        `json:"audit_id"`
+	Batch          *ReviewBatchCommit `json:"batch,omitempty"`
+	SchemaVersion  int                `json:"schema_version"`
+	Kind           string             `json:"kind"`
+	OperationID    SemanticID         `json:"operation_id"`
+	IdempotencyKey string             `json:"idempotency_key"`
+	Actor          SemanticActor      `json:"actor"`
+	SessionID      SessionID          `json:"session_id"`
+	SourceEventID  EventID            `json:"source_event_id"`
+	Preview        ReviewPreview      `json:"preview"`
+	AuditID        string             `json:"audit_id"`
 }
 
 type OwnerReviewOperationResult struct {

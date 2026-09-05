@@ -48,11 +48,19 @@ func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 		if candidateHasClock(candidate.Candidate) {
 			p.Version = "owner-review-preview-v4"
 		}
+		if candidate.Edit != nil {
+			p.Version = "owner-review-preview-v5"
+		}
 		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
 			return err
 		}
 		if action == "accept" {
-			p.Effect, err = prepareReviewEffects(ctx, conn, a, candidates)
+			if candidate.Edit != nil {
+				p.Version = "owner-review-preview-v5"
+				p.Effect, err = prepareReviewCompound(ctx, conn, a, candidates, nil)
+			} else {
+				p.Effect, err = prepareReviewEffects(ctx, conn, a, candidates)
+			}
 			if err != nil {
 				return err
 			}
@@ -241,7 +249,10 @@ var errReviewInactiveEntity = errors.New("inactive Entity")
 func reviewEntity(ctx context.Context, q reviewQuery, keys []string, id memory.SemanticID) (memory.SemanticEntity, error) {
 	entity, err := loadSemanticEntityForInspection(ctx, q, id)
 	if err != nil {
-		return entity, errors.New("needs_choice: Entity")
+		if !compilerDataFailure(err) {
+			return entity, err
+		}
+		return entity, errors.Join(ErrReviewStale, errors.New("needs_choice: Entity"))
 	}
 	allowed := false
 	for _, key := range keys {
@@ -254,7 +265,10 @@ func reviewEntity(ctx context.Context, q reviewQuery, keys []string, id memory.S
 	}
 	var lifecycle string
 	if err = q.QueryRowContext(ctx, `SELECT lifecycle FROM semantic_entities WHERE entity_id=?`, id).Scan(&lifecycle); err != nil || lifecycle != "active" {
-		return entity, errReviewInactiveEntity
+		if err != nil && !compilerDataFailure(err) {
+			return entity, err
+		}
+		return entity, errors.Join(ErrReviewStale, errReviewInactiveEntity)
 	}
 	state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectEntity, id)
 	if err == nil && state.State != memory.SemanticStateActive {

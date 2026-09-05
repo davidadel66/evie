@@ -12,6 +12,27 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
+// Terminal metadata is authorized by exact destination before any source or
+// interpretation decoding. Losing edits/choices cannot hide a durable winner.
+func reviewCandidateState(ctx context.Context, q reviewQuery, a OwnerReviewContext, id, job string) (string, error) {
+	var state string
+	err := q.QueryRowContext(ctx, `SELECT c.review_state FROM memory_compiler_candidates c JOIN memory_compiler_jobs j ON j.job_id=c.job_id WHERE c.candidate_id=? AND j.destination=? AND (?='' OR c.job_id=?)`, id, a.scope, job, job).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrOwnerReviewUnauthorized
+	}
+	return state, err
+}
+func requireReviewUnresolved(ctx context.Context, q reviewQuery, a OwnerReviewContext, id string) error {
+	state, err := reviewCandidateState(ctx, q, a, id, "")
+	if err != nil {
+		return err
+	}
+	if state != "unresolved" {
+		return ErrReviewResolved
+	}
+	return nil
+}
+
 // loadReviewCandidate checks destination before decoding protected envelopes.
 func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContext, id string, requireSources bool) (memory.OwnerCandidate, error) {
 	out := memory.OwnerCandidate{}
@@ -20,7 +41,10 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 	var session memory.SessionID
 	err := q.QueryRowContext(ctx, `SELECT c.candidate_id,c.job_id,j.generation_id,j.destination,c.envelope,c.review_state,c.review_revision,COALESCE(c.equivalent_to,''),j.request,j.session_id FROM memory_compiler_candidates c JOIN memory_compiler_jobs j ON j.job_id=c.job_id WHERE c.candidate_id=? AND j.destination=?`, id, a.scope).Scan(&out.Ref.ID, &out.JobID, &out.GenerationID, &out.Destination, &raw, &state, &out.Ref.ReviewRevision, &equivalent, &requestRaw, &session)
 	if err != nil {
-		return out, ErrOwnerReviewUnauthorized
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, ErrOwnerReviewUnauthorized
+		}
+		return out, err
 	}
 	out.Ref.InterpretationRevision = 0
 	var request memory.CompilerRequest
@@ -32,7 +56,10 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 	out.Candidate.EquivalentTo = equivalent
 	owner, err := reviewSourceContext(ctx, q, session)
 	if err != nil {
-		return out, ErrOwnerReviewUnauthorized
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, ErrOwnerReviewUnauthorized
+		}
+		return out, err
 	}
 	sourceErr := compilerAuthorize(ctx, q, owner, request.Window.Selection)
 	if request.Window.Selection.Destination != a.scope || out.Candidate.ID != id {
@@ -55,18 +82,24 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 		for _, sources := range [][]memory.CompilerSource{out.Candidate.Support, out.Candidate.Context} {
 			for _, source := range sources {
 				if _, err = resolveCompilerSource(ctx, q, owner, request.Window.Selection, source); err != nil {
-					sourceErr = ErrReviewInvalidSource
+					sourceErr = err
 					break
 				}
 			}
 		}
 	}
 	if sourceErr != nil {
+		if !compilerDataFailure(sourceErr) {
+			return out, sourceErr
+		}
 		if requireSources {
 			return out, ErrReviewInvalidSource
 		}
 		out.Candidate = memory.MemoryCandidate{ID: id, ReviewState: state, ReviewRevision: out.Ref.ReviewRevision, EquivalentTo: equivalent}
 		out.Redacted = true
+	}
+	if err := loadReviewEditRevision(ctx, q, a, &out, request, requireSources); err != nil {
+		return out, err
 	}
 	if err := loadReviewIdentityRevision(ctx, q, &out); err != nil {
 		return out, err
@@ -176,6 +209,9 @@ func validateReviewCandidateSeal(ctx context.Context, q reviewQuery, item memory
 	var stage, manifest []byte
 	var ordinal int
 	err := q.QueryRowContext(ctx, `SELECT j.window_hash,g.envelope_hash,s.envelope,c.ordinal,gen.manifest FROM memory_compiler_jobs j JOIN memory_compiler_candidate_groups g ON g.job_id=j.job_id JOIN memory_compiler_stages s ON s.job_id=j.job_id JOIN memory_compiler_candidates c ON c.job_id=j.job_id JOIN memory_compiler_generations gen ON gen.generation_id=j.generation_id WHERE c.candidate_id=?`, item.Ref.ID).Scan(&windowHash, &groupHash, &stage, &ordinal, &manifest)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	if err != nil || windowHash != request.WindowSHA256 || memory.CompilerHash(stage) != groupHash {
 		return ErrReviewInvalidSource
 	}

@@ -35,6 +35,9 @@ func loadReviewIdentityRevision(ctx context.Context, q reviewQuery, item *memory
 	if json.Unmarshal(raw, &revision) != nil || revision.Revision < 1 || revision.ReviewRevision > item.Ref.ReviewRevision || revision.Options.Candidate.ID != item.Ref.ID {
 		return errors.New("invalid stored identity revision")
 	}
+	if revision.Revision <= item.Ref.InterpretationRevision {
+		return nil
+	}
 	item.Ref.InterpretationRevision = revision.Revision
 	if !item.Redacted {
 		item.Identity = &revision
@@ -50,6 +53,9 @@ func (s *Store) OwnerCandidateIdentityOptions(ctx context.Context, a OwnerReview
 	}
 	defer tx.Rollback()
 	if err = checkReviewAuthority(ctx, tx, a); err != nil {
+		return result, err
+	}
+	if err := requireReviewUnresolved(ctx, tx, a, ref.ID); err != nil {
 		return result, err
 	}
 	item, err := loadReviewCandidate(ctx, tx, a, ref.ID, true)
@@ -328,6 +334,9 @@ func (s *Store) ChooseOwnerCandidateIdentity(ctx context.Context, a OwnerReviewC
 	var result memory.OwnerCandidate
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		if err := checkReviewAuthority(ctx, conn, a); err != nil {
+			return err
+		}
+		if err := requireReviewUnresolved(ctx, conn, a, decision.Candidate.ID); err != nil {
 			return err
 		}
 		item, err := loadReviewCandidate(ctx, conn, a, decision.Candidate.ID, true)

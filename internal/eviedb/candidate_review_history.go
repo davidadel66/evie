@@ -19,14 +19,18 @@ type historicalReviewQuery interface {
 }
 
 func validateOwnerReviewHistoricalSources(ctx context.Context, q historicalReviewQuery, op memory.OwnerReviewOperation) error {
-	ctx = withCompilerSourceCache(ctx)
 	for _, candidate := range op.Preview.Candidates {
-		for _, category := range []struct {
-			sources []memory.CompilerSource
-			context bool
-		}{{candidate.Candidate.Support, false}, {candidate.Candidate.Context, true}} {
-			for _, source := range category.sources {
-				if err := validateReviewHistoricalSource(ctx, q, op.SessionID, op.Preview.ScopeKey, source, category.context); err != nil {
+		candidateCtx := context.WithValue(ctx, compilerSourceCacheKey{}, &compilerSourceCache{events: map[memory.EventID]compilerEvent{}})
+		sessionID := op.SessionID
+		if op.Preview.Version == "owner-review-preview-v5" {
+			if len(candidate.Candidate.Support) == 0 {
+				return ErrReviewInvalidSource
+			}
+			sessionID = candidate.Candidate.Support[0].SessionID
+		}
+		for _, sources := range reviewCandidateDisclosureSources(candidate) {
+			for _, source := range sources {
+				if err := validateReviewHistoricalSource(candidateCtx, q, sessionID, op.Preview.ScopeKey, source, source.Usage == "context"); err != nil {
 					return err
 				}
 			}
