@@ -642,6 +642,8 @@ func runREPLContextIOWithMemory(
 	out io.Writer,
 	semantic agent.SemanticMemory,
 ) {
+	responseOutput := &replResponseWriter{out: out}
+	out = responseOutput
 	// approve is the terminal half of the write gate: gated tools show
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
@@ -747,7 +749,9 @@ func runREPLContextIOWithMemory(
 			_, _ = fmt.Fprintln(out, "Usage: /compact")
 			continue
 		}
-		err := session.Send(ctx, input, ev, approve)
+		responseOutput.begin()
+		measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(ctx)
+		err := session.Send(measurementCtx, input, ev, approve)
 		switch {
 		case errors.Is(err, agent.ErrLeaseConflict):
 			_, _ = fmt.Fprintln(out, "Session busy; message not sent.")
@@ -755,6 +759,9 @@ func runREPLContextIOWithMemory(
 			_, _ = fmt.Fprintln(out, "Session unavailable; message not sent.")
 		case err != nil:
 			_, _ = fmt.Fprintf(out, "request failed: %v\n", err)
+		}
+		if measurementErr := finalizeMeasurement(responseOutput.complete()); measurementErr != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "compiler foreground measurement unavailable")
 		}
 	}
 }

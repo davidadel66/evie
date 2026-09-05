@@ -1,0 +1,129 @@
+{
+  "schema_version": "evie-extraction-spike-gold-v1",
+  "annotation_status": "proposed_not_human_reviewed",
+  "cases": [
+    {
+      "case_id": "N10-a",
+      "split": "pilot",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "Entire detector-positive owner field, undefined todo_get observation, and its echo are excluded; no task-state or preference candidate.",
+      "uncertainty": "Only a clearly synthetic sentinel is used. The spike detector proves this fixture exclusion, not general secret-detection quality.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N10-b",
+      "split": "pilot",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "walking for errands",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "7d2d3162-bf8c-58f4-a184-0df3a4ae1f22",
+              "start": 0,
+              "end": 29
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Unaffected new event remains usable. No excluded older content is provided as context.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N11-a",
+      "split": "pilot",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "Embedded text is source data; no residence, authorization, or promotion effect follows.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N11-b",
+      "split": "pilot",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "constraint",
+            "object_kind": "text",
+            "object": "local-only storage",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "d9a537e8-6dae-5241-8987-7c154179c534",
+              "start": 0,
+              "end": 62
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Destination is the registered project ID; global owner/Predicate visibility never imports the project source.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N12-a",
+      "split": "pilot",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "additional_support",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "attach_support"
+          },
+          "sources": [
+            {
+              "event_id": "0ba9f887-064d-52fd-9e5d-1744f9a4a0b9",
+              "start": 0,
+              "end": 13
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "An equal accepted preference receives additional support rather than a duplicate Claim. Aliases are accepted context, not new support.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N12-b",
+      "split": "pilot",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "A name from another session sharing this project cannot resolve She.",
+      "uncertainty": "This final root starts a distinct durable session; it is an explicitly separate conversation, never joined to preceding same-project roots.",
+      "annotation_status": "proposed_not_human_reviewed"
+    }
+  ]
+}

@@ -10,7 +10,9 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
@@ -55,6 +57,36 @@ func main() {
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	if handled, err := runCompilerDiagnostics(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory compiler diagnostics: %v", err)
+		}
+		return
+	}
+	if handled, err := runCompilerHistoryManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory compiler history: %v", err)
+		}
+		return
+	}
+	if handled, err := runCompilerActivationManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory compiler activation: %v", err)
+		}
+		return
+	}
+	if handled, err := runCompilerManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory compiler: %v", err)
+		}
+		return
+	}
+	if handled, err := runOwnerReviewManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory review: %v", err)
+		}
+		return
+	}
 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
 		log.Fatalf("failed to import legacy Todo list: %v", err)
 	}
@@ -93,8 +125,8 @@ func main() {
 	// cron-exec runs headless under launchd with no API key — it must
 	// never pay for (or die on) client construction, so the session is
 	// built inside the arms that talk to the model.
-	newSession := func(selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
-		defaultComposition, err := pluginManager.ResolvePresetContext(context.Background(), "")
+	newSession := func(ctx context.Context, selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
+		defaultComposition, err := pluginManager.ResolvePresetContext(ctx, "")
 		if err != nil {
 			log.Fatalf("failed to resolve default Agent Preset: %v", err)
 		}
@@ -106,7 +138,7 @@ func main() {
 		if model == "" {
 			model = agent.DefaultModel
 		}
-		profile, err := client.ResolveContextProfile(context.Background(), model)
+		profile, err := client.ResolveContextProfile(ctx, model)
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
@@ -124,7 +156,7 @@ func main() {
 
 		holderID := memory.LeaseHolderID(holderUUID.String())
 		resolvedComposition, err := bindSessionComposition(
-			context.Background(), store, pluginManager, selection.ID, defaultComposition,
+			ctx, store, pluginManager, selection.ID, defaultComposition,
 			selection.createdComposition,
 		)
 		if err != nil {
@@ -142,31 +174,54 @@ func main() {
 			resolvedComposition.Resolved.Toolset,
 		)
 	}
+	startCompilerForRuntime := func(ctx context.Context) func() {
+		stop, err := startConfiguredCompilerHost(ctx, os.Getenv("EVIE_COMPILER_CONFIG"), kernelStore)
+		if err != nil {
+			log.Printf("memory compiler unavailable: %v", err)
+			return func() {}
+		}
+		return func() {
+			if err := stop(); err != nil {
+				log.Printf("memory compiler shutdown: %v", err)
+			}
+		}
+	}
 
 	switch cmd {
 	case "":
+		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stopSignals()
+		stopInput := closeInputOnCancellation(runtimeCtx, os.Stdin)
+		defer stopInput()
 		launchDir, err := os.Getwd()
 		if err != nil {
 			log.Fatalf("failed to read launch directory: %v", err)
 		}
 		scanner := bufio.NewScanner(os.Stdin)
-		session := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
+		session := newSession(runtimeCtx, func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
 			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved}
 			selected, err := selectREPLSession(
-				context.Background(), boundStore,
+				runtimeCtx, boundStore,
 				launchDir, scanner, os.Stdout,
 			)
 			return boundStore.selection(selected), err
 		})
-		runREPLWithMemory(session, scanner, kernelStore)
+		stopCompiler := startCompilerForRuntime(runtimeCtx)
+		runREPLContextIOWithMemory(runtimeCtx, session, scanner, os.Stdout, kernelStore)
+		stopCompiler()
 	case "serve":
-		presetReport, err := pluginManager.ValidatePresetContext(context.Background(), "")
+		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stopSignals()
+		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
 		}
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
-			if err := web.ServeManaged(nil, pluginManager, kernelStore); err != nil {
+			stopCompiler := startCompilerForRuntime(runtimeCtx)
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore))
+			stopCompiler()
+			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
 			}
 			break
@@ -179,7 +234,7 @@ func main() {
 		if model == "" {
 			model = agent.DefaultModel
 		}
-		profile, err := client.ResolveContextProfile(context.Background(), model)
+		profile, err := client.ResolveContextProfile(runtimeCtx, model)
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
@@ -198,7 +253,10 @@ func main() {
 				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
 			), nil
 		})
-		if err := web.ServeContextManaged(pluginManager, kernelStore, controller, kernelStore); err != nil {
+		stopCompiler := startCompilerForRuntime(runtimeCtx)
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewContextMemoryServer(nil, pluginManager, kernelStore, controller, kernelStore), kernelStore))
+		stopCompiler()
+		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)
 		}
 	default:

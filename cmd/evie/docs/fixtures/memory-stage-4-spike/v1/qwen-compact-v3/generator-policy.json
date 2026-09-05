@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "derivation_version": "compact-category-v1",
+  "wire_configuration": "compact-v3",
+  "projection_version": "compact-v1",
+  "expansion_version": "compact-v1",
+  "input": "Only the canonical compact seal produced from selected source-only input; no gold, label, future event or inferred source selection.",
+  "support_aliases": "Seal order; every source with ownership new or overlap. Use exact aliases as enum values in each existing closed sources reference alternative.",
+  "context_aliases": "Seal order; only sources with ownership context. Use exact aliases as enum values in each existing closed context reference alternative.",
+  "empty_context": {
+    "type": "array",
+    "const": []
+  },
+  "empty_support": "Require candidates const[] when no supporting alias exists; never emit empty enums.",
+  "template": "The pinned unchanged compact-v2 closed-reference schema. Preserve every property except reference alias enums and required-empty arrays.",
+  "system_prompt": "Pinned prompt.txt prefix concatenated with complete derived schema encoded by Go encoding/json; same derived schema is passed in format.",
+  "request_identity": "Record actual system/schema SHA256 and derivation version alongside the unchanged seal and exact request. Report top-level prompt/schema hashes name pinned base files.",
+  "scoring": "Reconstruct exact per-window schema/system/request from the reviewed corpus and pinned base files; reject edited aliases/schema/prompt even when local request hashes are recomputed.",
+  "unchanged": "Strict subject/object identity, range/UTF-8/source/clock checks, scope, authority, response binding and raw denominators; no repairs or semantic credit from schema membership."
+}

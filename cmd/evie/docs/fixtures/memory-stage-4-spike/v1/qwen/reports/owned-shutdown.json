@@ -1,0 +1,18 @@
+{
+  "at": "2026-09-05T04:04:30.290806+00:00",
+  "owned_pids": [
+    78270
+  ],
+  "previously_observed_owned_runner_pid": 84407,
+  "all20_requests_finished": true,
+  "no_inference_outstanding": true,
+  "report_sha256": "sha256:15c64a287f0f46f33752137010897fc0c170ee6a133bda00e8e12a2c280be2ce",
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424194088   7304876    99% 3546267 73048760    5%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 9216.00M  used = 8501.88M  free = 714.12M  (encrypted)\n",
+  "memory_pressure": "The system has 19327352832 (1179648 pages with a page size of 16384).\n\nStats: \nPages free: 9602 \nPages purgeable: 10049 \nPages purged: 57357339 \n\nSwap I/O:\nSwapins: 1231979 \nSwapouts: 2272747 \n\nPage Q counts:\nPages active: 413180 \nPages inactive: 409509 \nPages speculative: 7457 \nPages throttled: 0 \nPages wired down: 164069 \n\nCompressor Stats:\nPages used by compressor: 135323 \nPages decompressed: 289900932 \nPages compressed: 332061611 \n\nFile I/O:\nPageins: 108231921 \nPageouts: 1756224 \n\nSystem-wide memory free percentage: 73%\n",
+  "pressure_level": "kern.memorystatus_vm_pressure_level: 1\n",
+  "all_current_owned_pids_exited": true,
+  "previous_runner_pid_absent": true,
+  "termination_seconds": 0.13849504198879004,
+  "cache_artifacts_preserved": true
+}

@@ -724,11 +724,14 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		t.Fatalf("verify/rebuild changed Episodic Memory: before=%d after=%d error=%v", len(eventsBeforeRestart), len(eventsAfterRebuild), err)
 	}
 	var laterStageObjects int
+	// Stage 4 owns candidate storage, while the explicit-memory path still
+	// exposes no extraction capabilities or other deferred memory machinery.
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM sqlite_schema
 		WHERE name NOT LIKE 'sqlite_%'
-		  AND (lower(name) LIKE '%candidate%' OR lower(name) LIKE '%fts%' OR
+		  AND ((lower(name) LIKE '%candidate%' AND
+		        name NOT GLOB 'memory_compiler_*' AND name NOT GLOB 'memory_review_*') OR lower(name) LIKE '%fts%' OR
 		       lower(name) LIKE '%vector%' OR lower(name) LIKE '%ranking%' OR
 		       lower(name) LIKE '%cache%' OR lower(name) LIKE '%hard_eras%')
 	`).Scan(&laterStageObjects); err != nil || laterStageObjects != 0 {

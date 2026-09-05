@@ -162,27 +162,7 @@ CREATE TABLE IF NOT EXISTS semantic_graph_links (
     UNIQUE (scope_id, relation, source_kind, source_id, target_kind, target_id)
 );
 
-CREATE TABLE IF NOT EXISTS semantic_claim_corrections (
-    operation_id          TEXT PRIMARY KEY NOT NULL REFERENCES semantic_operations(operation_id),
-    scope_id              TEXT NOT NULL REFERENCES semantic_scopes(scope_id),
-    old_claim_id          TEXT NOT NULL UNIQUE REFERENCES semantic_claims(claim_id),
-    replacement_claim_id  TEXT NOT NULL UNIQUE REFERENCES semantic_claims(claim_id),
-    mode                  TEXT NOT NULL CHECK (mode IN ('error', 'changed')),
-    effective_time        TEXT,
-    old_valid_from        TEXT,
-    old_valid_to          TEXT,
-    old_effective_from    TEXT,
-    old_effective_to      TEXT,
-    replacement_from      TEXT,
-    replacement_to        TEXT,
-    scope_revision        INTEGER NOT NULL CHECK (scope_revision > 0),
-    transaction_time      TEXT NOT NULL,
-    CHECK ((mode = 'error' AND effective_time IS NULL)
-        OR (mode = 'changed' AND effective_time IS NOT NULL)),
-    CHECK (old_valid_from IS NULL OR old_valid_to IS NULL OR old_valid_from < old_valid_to),
-    CHECK (old_effective_from IS NULL OR old_effective_to IS NULL OR old_effective_from < old_effective_to),
-    CHECK (replacement_from IS NULL OR replacement_to IS NULL OR replacement_from < replacement_to)
-);
+` + semanticClaimCorrectionsTable + semanticClaimCorrectionsAuxiliary + `
 
 CREATE TABLE IF NOT EXISTS semantic_promotions (
     operation_id         TEXT PRIMARY KEY NOT NULL REFERENCES semantic_operations(operation_id),
@@ -236,7 +216,6 @@ CREATE INDEX IF NOT EXISTS semantic_source_links_claim_idx ON semantic_source_li
 CREATE INDEX IF NOT EXISTS semantic_graph_links_source_idx ON semantic_graph_links(source_kind, source_id, relation, graph_link_id);
 CREATE INDEX IF NOT EXISTS semantic_graph_links_target_idx ON semantic_graph_links(target_kind, target_id, relation, graph_link_id);
 CREATE INDEX IF NOT EXISTS semantic_state_events_object_idx ON semantic_state_events(object_kind, object_id, scope_revision);
-CREATE INDEX IF NOT EXISTS semantic_claim_corrections_scope_idx ON semantic_claim_corrections(scope_id, transaction_time, scope_revision);
 
 CREATE TRIGGER IF NOT EXISTS semantic_operations_append_only_update BEFORE UPDATE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_operations_append_only_delete BEFORE DELETE ON semantic_operations BEGIN SELECT RAISE(ABORT, 'semantic operations are append-only'); END;
@@ -256,8 +235,6 @@ CREATE TRIGGER IF NOT EXISTS semantic_graph_links_append_only_update BEFORE UPDA
 CREATE TRIGGER IF NOT EXISTS semantic_graph_links_append_only_delete BEFORE DELETE ON semantic_graph_links BEGIN SELECT RAISE(ABORT, 'semantic graph links are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_cursor_auth_append_only_update BEFORE UPDATE ON semantic_cursor_auth BEGIN SELECT RAISE(ABORT, 'semantic cursor authentication is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_cursor_auth_append_only_delete BEFORE DELETE ON semantic_cursor_auth BEGIN SELECT RAISE(ABORT, 'semantic cursor authentication is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_update BEFORE UPDATE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS semantic_claim_corrections_append_only_delete BEFORE DELETE ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT, 'semantic claim corrections are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_promotions_append_only_update BEFORE UPDATE ON semantic_promotions BEGIN SELECT RAISE(ABORT, 'semantic promotions are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_promotions_append_only_delete BEFORE DELETE ON semantic_promotions BEGIN SELECT RAISE(ABORT, 'semantic promotions are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS semantic_promotion_entities_append_only_update BEFORE UPDATE ON semantic_promotion_entities BEGIN SELECT RAISE(ABORT, 'semantic promotion entities are append-only'); END;
@@ -270,7 +247,7 @@ BEGIN SELECT RAISE(ABORT, 'semantic scope identity is immutable'); END;
 `
 
 func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, semanticSchema); err != nil {
+	if err := ensureSemanticBaseSchema(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureSemanticCursorAuth(ctx, db); err != nil {
@@ -286,6 +263,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureSemanticOperationSchemaV5(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureSemanticOperationSchemaV6(ctx, db); err != nil {
 		return err
 	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
@@ -431,7 +411,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
 		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
@@ -486,7 +466,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -540,7 +520,7 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -594,7 +574,7 @@ func ensureSemanticOperationSchemaV5(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)

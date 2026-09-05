@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "report_sha256": "sha256:47cc38e1e79560fb6615fbcd8d34ec579d0ee127781b645a2729582daad49aa4",
+  "score_sha256": "sha256:1e26acdbd1fde7881a8f246d96cd985e8bdc10c2569123009bd9b09b64f1d88f",
+  "resources_sha256": "sha256:b3607e773b3449de830ba1085157fe84820edbf6d0c824b4f1c59ab9a8415576",
+  "owned_shutdown_sha256": "sha256:612ee406bf8d07a057cca36dd7a6382020702589a4f22e6d7138723dbe426a11",
+  "requests": {
+    "planned": 10,
+    "attempted": 10,
+    "remaining": 0,
+    "all_finished_response": true,
+    "statuses": {
+      "ok": 10
+    }
+  },
+  "raw_proposals": 14,
+  "retained_proposals": 9,
+  "all_aliases_known_and_in_correct_category": true,
+  "no_dangling_coordinates": true,
+  "resource_samples": 20,
+  "server_rss_kib_baseline": 27808,
+  "server_rss_kib_peak": 3156848,
+  "server_rss_kib_final": 3104176,
+  "client_rss_kib_peak": 22736,
+  "host_swap_unique": [
+    "vm.swapusage: total = 9216.00M  used = 7789.88M  free = 1426.12M  (encrypted)"
+  ],
+  "elapsed_measurement_seconds": 100.51989724999294,
+  "prompt_tokens_min": 1174,
+  "prompt_tokens_max": 1410,
+  "output_tokens_min": 129,
+  "output_tokens_max": 368,
+  "first_request_load_ns": 2410462166,
+  "limitations": "RSS excludes a reliable account of Metal/unified GPU allocations; host swap is system-wide and cannot be attributed to this run. Runner RSS is the standalone Go process, not a production Evie foreground workload."
+}

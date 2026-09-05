@@ -1,0 +1,71 @@
+{
+  "at": "2026-09-05T04:51:07.667505+00:00",
+  "checked_runtime_and_model_artifacts": [
+    {
+      "path": "/Users/davidboktor/.ollama/models/blobs/sha256-2f15b3218f0552c60647ce60ada83632d2c09755b16259b13e3e4458e9ae419d",
+      "sha256": "sha256:2f15b3218f0552c60647ce60ada83632d2c09755b16259b13e3e4458e9ae419d",
+      "bytes": 487
+    },
+    {
+      "path": "/Users/davidboktor/.ollama/models/blobs/sha256-2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730",
+      "sha256": "sha256:2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730",
+      "bytes": 4683073952
+    },
+    {
+      "path": "/Users/davidboktor/.ollama/models/blobs/sha256-66b9ea09bd5b7099cbb4fc820f31b575c0366fa439b08245566692c6784e281e",
+      "sha256": "sha256:66b9ea09bd5b7099cbb4fc820f31b575c0366fa439b08245566692c6784e281e",
+      "bytes": 68
+    },
+    {
+      "path": "/Users/davidboktor/.ollama/models/blobs/sha256-eb4402837c7829a690fa845de4d7f3fd842c2adee476d5341da8a46ea9255175",
+      "sha256": "sha256:eb4402837c7829a690fa845de4d7f3fd842c2adee476d5341da8a46ea9255175",
+      "bytes": 1482
+    },
+    {
+      "path": "/Users/davidboktor/.ollama/models/blobs/sha256-832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "sha256": "sha256:832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "bytes": 11343
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-base.dylib",
+      "sha256": "sha256:860db70cd8df10d2489488578cbea742b64edfeaaa1e8c49661ace9262a330a1",
+      "bytes": 584512
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-cpu-alderlake.so",
+      "sha256": "sha256:f7b4817c5e1820f054554bf67b176461ff7f6fadc23a3d65f8b09867056df4da",
+      "bytes": 616640
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-cpu-haswell.so",
+      "sha256": "sha256:9370d42b8eb2133010e86c002b104217f1fe2e8e1724b58baed136331b03d4f0",
+      "bytes": 616608
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-cpu-icelake.so",
+      "sha256": "sha256:7e6c54772b8955973d36de7f927155e2c76cfb06b8a76e7ee5de00edbd212e3b",
+      "bytes": 814912
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-cpu-sandybridge.so",
+      "sha256": "sha256:4c2f17f06454517e9382ff3484e4663ce84832483823cb756a8973d0a7d609a3",
+      "bytes": 583568
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/libggml-cpu-skylakex.so",
+      "sha256": "sha256:0856d3d6c952a12a2d4dc78bf4da9204ee977dd4dfc1fa27d14bfd946db1d3e1",
+      "bytes": 814912
+    },
+    {
+      "path": "/Applications/Ollama.app/Contents/Resources/ollama",
+      "sha256": "sha256:2794d30cf43308d6ce368d2827f09b2b6b2e804960e9f5768b3b603f1ad93a8f",
+      "bytes": 57335232
+    }
+  ],
+  "model_tag_manifest_sha256": "sha256:845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+  "port_11434_available": true,
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424420936   7078028    99% 3546763 70780280    5%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 9216.00M  used = 8277.88M  free = 938.12M  (encrypted)\n",
+  "pressure_level": "kern.memorystatus_vm_pressure_level: 1\n",
+  "inference_requests_dispatched": 0
+}

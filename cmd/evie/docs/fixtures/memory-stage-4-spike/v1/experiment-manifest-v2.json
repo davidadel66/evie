@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-05T03:29:04.000861+00:00",
+  "git_head_at_record": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "purpose": "Corrected common prompt two-format exploratory comparison; no production selection from this subset",
+  "model": "mistral:latest",
+  "model_manifest_sha256": "sha256:f974a74358d62a017b37c6f424fcdf2744ca02926c4f952513ddf474b2fa5091",
+  "configurations": [
+    {
+      "id": "schema",
+      "format": "closed JSON schema"
+    },
+    {
+      "id": "json",
+      "format": "JSON object"
+    }
+  ],
+  "shared": {
+    "temperature": 0,
+    "context_tokens": 8192,
+    "max_output_tokens": 768,
+    "timeout_seconds": 60,
+    "parallel_requests": 1,
+    "seeds": [
+      17
+    ],
+    "repetitions": 1,
+    "case_ids": [
+      "N01-a",
+      "N01-b",
+      "N02-a",
+      "N02-b",
+      "N03-b",
+      "N04-b",
+      "N05-b",
+      "N06-a",
+      "N08-b",
+      "N09-a"
+    ]
+  },
+  "file_sha256": {
+    "prompt-v2.txt": "sha256:f6f280093b15e1a1928db2737ec9bde8b2e0471ef66cbeab11de47b0ca57c832",
+    "output.schema.json": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+    "runtime-manifest.json": "sha256:56d8dbd0fc53d4ee9ae42f7170e78c0b48f808c7308b9969b1afae383cad882d",
+    "runtime-api-metadata.json": "sha256:0cb7b51fd0ed73a46c209049a1c9bd742573d6d2721df7e0d47e555c618b4b4e",
+    "development.json": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "development.gold.json": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "annotation-record.json": "sha256:a6ee1e4f56b31a14a1df0062349e56de06e5d6125f7943d6978033cf35f1b28a",
+    "token-budgets-v2.json": "sha256:85e48a2ba293014ff2d21525923b15082d885f99a4d2e44178629564d1e361af",
+    "tokenizer-proof.json": "sha256:68a54396c5509c3fe1184ab344a50fadc4c635e9048405c2c0c011b8e94975d8",
+    "input-budget-proof.md": "sha256:dae2d420b36b628cfb6f636201de68cbc847ced8084ac66f73712301079d4a8d"
+  },
+  "inference_runner_binary_sha256": "sha256:d5314e70ab77a6e2cf4f36ae29756b6781a599472ea6c11bdf01c49f548e6ebf",
+  "limitations": [
+    "Original two seeds produced byte-identical outputs; corrected pass has one request per case/arm and does not establish stochastic robustness.",
+    "Context changes from4096 to8192 along with explicit field contract; this is a corrected-configuration comparison, not isolated prompt causal attribution.",
+    "Only the same ten development windows are tested; other development families and pilot remain unexecuted. Final holdout is uncreated and unexposed.",
+    "Unknown output meanings remain subject to separate human adjudication. Typed/schema/source conformance is reported separately from raw semantic credit."
+  ],
+  "source_file_sha256": {
+    "scripts/memory-extractor-spike/budget.go": "sha256:bf1d9cdf06bec7fe25158c0d48dfb3c456f0edbcb41a165e88e1e67d9e45b4c4",
+    "scripts/memory-extractor-spike/checks.go": "sha256:9b490f43b9c78e11a20ebcde24c8710fbc69e839abf78cfdd214fc3ac4e5945b",
+    "scripts/memory-extractor-spike/main.go": "sha256:ce70559ba6d1c3a84424b7009caa0852cf145bd931206d49094b88167cb0327b",
+    "scripts/memory-extractor-spike/main_test.go": "sha256:139adebb6f39443910fb8da8be84293974fa6aec5080cd7c94403260b86a7e7c",
+    "scripts/memory-extractor-spike/revalidate.go": "sha256:4249b47f35e578ed8eeeac3001eeefd5912a997f36b7df2e2cc6fc66973f0f11",
+    "scripts/memory-extractor-spike/score.go": "sha256:c8c3559c374559406cd658b78479e2884c3619603798e5f12dc41634c08b334c"
+  },
+  "bound": {
+    "formula": "full_rendered_utf8_bytes+2+768+64<=8192",
+    "complete_template_overhead_utf8_bytes": 17,
+    "system_utf8_bytes": 5588
+  }
+}

@@ -1,0 +1,6 @@
+# These hash-bound machine logs retain their original trailing spaces as
+# experimental evidence. Preserve bytes; other whitespace checks still apply.
+v1/qwen-compact-v2/reports/ollama-server.log -text whitespace=-blank-at-eol
+v1/qwen-compact-v2/reports/verification.log -text whitespace=-blank-at-eol
+v1/qwen-compact-v3/reports/ollama-server.log -text whitespace=-blank-at-eol
+v1/qwen-compact-v3/reports/verification.log -text whitespace=-blank-at-eol

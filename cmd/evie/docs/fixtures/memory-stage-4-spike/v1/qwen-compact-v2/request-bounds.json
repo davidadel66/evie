@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "method": "actual full pinned template rendering checked by executable; independent BPE bound bytes+2 plus output768/reserve64",
+  "requests": [
+    {
+      "case_id": "N01-a",
+      "request_sha256": "sha256:1659359f050375c71299a1ced4011cf402ccd84bb4d26e739b5114b5b66cecea",
+      "alias_seal_sha256": "sha256:26b3b9fbca8ea4d2e18a562508a7b15a427b2f7b570f779a5de7ad193c8b37bf",
+      "input_utf8_bytes": 282,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6515,
+      "prompt_token_upper_bound": 6517,
+      "including_output_and_reserve": 7349
+    },
+    {
+      "case_id": "N01-b",
+      "request_sha256": "sha256:e118820591237e07c44589799e553226a5c47b25e85fe67dd82a940e7bf0ee62",
+      "alias_seal_sha256": "sha256:b99a9e84b2e52b9c2273d5b83bd46eb7737b16f1e61e183dc092635b68bf096f",
+      "input_utf8_bytes": 445,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6678,
+      "prompt_token_upper_bound": 6680,
+      "including_output_and_reserve": 7512
+    },
+    {
+      "case_id": "N02-a",
+      "request_sha256": "sha256:0767230ebd18021d013dbd47bfc3c20eaebff651139d14f3b73f0116a27172c7",
+      "alias_seal_sha256": "sha256:4f6888514e54e013dfaf42e58af4ba39a5197524e732e588a9803dcff28ef52c",
+      "input_utf8_bytes": 345,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6578,
+      "prompt_token_upper_bound": 6580,
+      "including_output_and_reserve": 7412
+    },
+    {
+      "case_id": "N02-b",
+      "request_sha256": "sha256:9b5498679e58dd0c12bd0402d7f5e44256c43ead6edadb0c4f10257300e59912",
+      "alias_seal_sha256": "sha256:f05bb3e6b2ccf1b4ac9b3743c3f295776ac603af20ae82db27eec05221f2e75d",
+      "input_utf8_bytes": 561,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6794,
+      "prompt_token_upper_bound": 6796,
+      "including_output_and_reserve": 7628
+    },
+    {
+      "case_id": "N03-b",
+      "request_sha256": "sha256:6910df20d6fad48f20f3eef8e808d03470e49694c3e32875aa7fedb2975953ef",
+      "alias_seal_sha256": "sha256:6477fc15001458f4bdbc803baf3249de564b45db113eee0332b811991da74aa3",
+      "input_utf8_bytes": 584,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6817,
+      "prompt_token_upper_bound": 6819,
+      "including_output_and_reserve": 7651
+    },
+    {
+      "case_id": "N04-b",
+      "request_sha256": "sha256:161f110b396eaa27156af1e469dfde6e71594c20b699ab92415a8cf09b2f81e0",
+      "alias_seal_sha256": "sha256:bb421ecd22c1ba76a87e174591c313408205355fe98ab2e0574206dbea4d7b61",
+      "input_utf8_bytes": 484,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6717,
+      "prompt_token_upper_bound": 6719,
+      "including_output_and_reserve": 7551
+    },
+    {
+      "case_id": "N05-b",
+      "request_sha256": "sha256:6a7b44fc84e130408e0be69b239d0a4ae5bad23f406c06ccb68acece5315ea84",
+      "alias_seal_sha256": "sha256:6fb05e3a5ef2b88c8f630052f306e8612a168168c49dca50a4fd710fe01a7f11",
+      "input_utf8_bytes": 591,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6824,
+      "prompt_token_upper_bound": 6826,
+      "including_output_and_reserve": 7658
+    },
+    {
+      "case_id": "N06-a",
+      "request_sha256": "sha256:af6c70a408ef49e83a8db6ce991d7ccff8d64446f098ec106b428970bb42d7c4",
+      "alias_seal_sha256": "sha256:e09266867fecbd2ba1e1b4fdcb6c977d3f96f8cde6532a930741b31428577803",
+      "input_utf8_bytes": 313,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6546,
+      "prompt_token_upper_bound": 6548,
+      "including_output_and_reserve": 7380
+    },
+    {
+      "case_id": "N08-b",
+      "request_sha256": "sha256:d9a24cd7427e8526aa1f63c6b9dff5cca0e21672b1d5aa6691694c0aabc4a365",
+      "alias_seal_sha256": "sha256:d440ad02f8dd397ea580c0393c0cb9398a80cde1f61276e9eb921096e47982f1",
+      "input_utf8_bytes": 696,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6929,
+      "prompt_token_upper_bound": 6931,
+      "including_output_and_reserve": 7763
+    },
+    {
+      "case_id": "N09-a",
+      "request_sha256": "sha256:95bba293878bea145f140e96b61c41162d736c372d44a91edde071330eaa5c8e",
+      "alias_seal_sha256": "sha256:ced1a2902b7f1e6b24227a600553da2732a75ad580a0dd90e5fc5bbb3a199780",
+      "input_utf8_bytes": 295,
+      "system_utf8_bytes": 6153,
+      "full_rendered_utf8_bytes": 6528,
+      "prompt_token_upper_bound": 6530,
+      "including_output_and_reserve": 7362
+    }
+  ],
+  "maximum_proven_budget": 7763
+}

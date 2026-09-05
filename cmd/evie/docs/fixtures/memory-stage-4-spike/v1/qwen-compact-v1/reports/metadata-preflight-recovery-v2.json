@@ -1,0 +1,7 @@
+{
+  "at": "2026-09-05T04:53:57.746704+00:00",
+  "previous_owned_pid": 8101,
+  "previous_pid_absent": true,
+  "inference_requests_dispatched": 0,
+  "cause": "Metadata summary comparison stopped on JSON hash mismatch before generation; actual API payload will be preserved for offline encoding comparison. No runtime/model/extractor changes."
+}

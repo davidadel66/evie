@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T03:38:54.960003+00:00",
+  "reason": "Mistral measurements complete; controlled restart to pin C++ engine before Qwen experiment",
+  "owned_pids": [
+    66679
+  ],
+  "last_requests": "all completed; no inference outstanding",
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused     ifree %iused  Mounted on\n/dev/disk3s5   482797652 420435412  12113328    98% 3556096 121133280    3%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 8192.00M  used = 7716.06M  free = 475.94M  (encrypted)\n",
+  "memory_pressure": "The system has 19327352832 (1179648 pages with a page size of 16384).\n\nStats: \nPages free: 62636 \nPages purgeable: 3418 \nPages purged: 57318550 \n\nSwap I/O:\nSwapins: 1198392 \nSwapouts: 2189683 \n\nPage Q counts:\nPages active: 320300 \nPages inactive: 316589 \nPages speculative: 3337 \nPages throttled: 0 \nPages wired down: 165769 \n\nCompressor Stats:\nPages used by compressor: 269988 \nPages decompressed: 288179443 \nPages compressed: 330304647 \n\nFile I/O:\nPageins: 106879935 \nPageouts: 1679865 \n\nSystem-wide memory free percentage: 61%\n",
+  "all_observed_owned_pids_exited": true,
+  "termination_seconds": 0.14705866703297943
+}

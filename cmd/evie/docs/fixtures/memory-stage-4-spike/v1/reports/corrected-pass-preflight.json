@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T03:27:41.085159+00:00",
+  "owned_server_pid": 66679,
+  "runtime_sha256": "sha256:2794d30cf43308d6ce368d2827f09b2b6b2e804960e9f5768b3b603f1ad93a8f",
+  "model_manifest_sha256": "sha256:f974a74358d62a017b37c6f424fcdf2744ca02926c4f952513ddf474b2fa5091",
+  "template_sha256": "sha256:491dfa501e59ed17239711477601bdc7f559de5407fbd4a2a79078b271045621",
+  "runtime_version": "0.6.3",
+  "model_messages_or_system_layer": false,
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused     ifree %iused  Mounted on\n/dev/disk3s5   482797652 420227668  12321072    98% 3556060 123210720    3%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 8192.00M  used = 7030.25M  free = 1161.75M  (encrypted)\n",
+  "host_memory_pressure": "The system has 19327352832 (1179648 pages with a page size of 16384).\n\nStats: \nPages free: 4217 \nPages purgeable: 11513 \nPages purged: 57027891 \n\nSwap I/O:\nSwapins: 1181792 \nSwapouts: 2127867 \n\nPage Q counts:\nPages active: 344550 \nPages inactive: 343114 \nPages speculative: 903 \nPages throttled: 0 \nPages wired down: 166710 \n\nCompressor Stats:\nPages used by compressor: 279579 \nPages decompressed: 286222653 \nPages compressed: 328130932 \n\nFile I/O:\nPageins: 106368724 \nPageouts: 1674301 \n\nSystem-wide memory free percentage: 60%\n",
+  "notes": "Read-only local metadata and cached-artifact verification, no inference. Metadata parser transiently read the model file into memory once for its header hash; subsequent model identity hash streamed. Host memory observations include other applications."
+}

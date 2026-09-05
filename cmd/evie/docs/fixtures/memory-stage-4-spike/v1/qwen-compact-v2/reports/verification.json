@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-05T07:34:41.804499+00:00",
+  "scope": "Frozen compact-v2 executable before live inference and later production ticket edits",
+  "focused": {
+    "command": "go test ./scripts/memory-extractor-spike -count=1",
+    "exit_code": 0,
+    "package_seconds": 9.965
+  },
+  "full_repository": {
+    "recorded_at": "2026-09-05T07:22:37.397470+00:00",
+    "command": "./scripts/verify-change.sh",
+    "exit_code": 0,
+    "log": ".scratch/memory-stage-4/verify-135-closed-schema.log",
+    "package_seconds": 9.223,
+    "go_source_sha256": {
+      "scripts/memory-extractor-spike/budget.go": "sha256:58e112744277fe0060e800899091693d4e5320e42206743e1f078a57535e891e",
+      "scripts/memory-extractor-spike/checks.go": "sha256:86b9cba65d823ec10d42d4f445bdfa5784e62d1fe40a556300ca41c1cccf446d",
+      "scripts/memory-extractor-spike/compact_config.go": "sha256:3c19ba20eeec5c53b1ec7682acac0da6df11f2fa0eb37d81a44f972637a596dc",
+      "scripts/memory-extractor-spike/compact_schema_test.go": "sha256:3efbf57cc0f1f8174738bcd27c94ab8ae20f2b19e483528f64ca9d65f54a8049",
+      "scripts/memory-extractor-spike/compact_wire.go": "sha256:8a4971edaebb3bf7efdab9ad09681d77de767b77a33934281d601996a9c3f6ce",
+      "scripts/memory-extractor-spike/compact_wire_test.go": "sha256:53b4961cd8430ea56b8f6e9b868def7775debcfded925d72c96fb78d52993f84",
+      "scripts/memory-extractor-spike/main.go": "sha256:699f3ba3c16c27c0ebadc78a0f1d5beb5d2b1e23eb6fe5fa239cd040ced8221b",
+      "scripts/memory-extractor-spike/main_test.go": "sha256:3db63d85016183743f307d1b038db67a9b3c12fa5c5c47906385f25159d20809",
+      "scripts/memory-extractor-spike/qwen_budget.go": "sha256:0cd37106ae4cbd56f068f02d36e0e089ed2299989d143c1ce0b2b243daa9ae93",
+      "scripts/memory-extractor-spike/revalidate.go": "sha256:4f1f108ef42884a21e979f0a5af53f0d6256382bede4b51a3ba1f5cca37a2039",
+      "scripts/memory-extractor-spike/score.go": "sha256:b703739579e6cff749533f756f05c12df78acc318be9a79b773c730fc5d7adc8"
+    },
+    "existing_warnings": [
+      "Icon.tsx:16 react(only-export-components)",
+      "Vite chunks larger than 500kB"
+    ],
+    "skipped_required_checks": [],
+    "note": "Completed before #136 owner resumed production edits. All frozen v2 source and file pins independently checked.",
+    "independent_reviews": {
+      "standards": {
+        "reviewer": "/root/review_132_spec",
+        "result": "pass",
+        "actionable_findings": 0
+      },
+      "spec": {
+        "reviewer": "/root/review_spike_135_spec",
+        "result": "pass",
+        "actionable_findings": 0
+      }
+    },
+    "dispatch_authorized_after_reviews": true
+  },
+  "verification_log_sha256": "sha256:63c3e9b728288a5a5247e1cf1bceaf84cd054ac93f8f83ba828191b6749cd6f2",
+  "offline_grammar": {
+    "command": "python3 .scratch/memory-stage-4/ollama-v0.6.3-schema-proof/run.py --schema cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/output.schema.json --cache .scratch/memory-stage-4/ollama-v0.6.3-schema-proof --offline",
+    "exit_code": 0,
+    "cases_passed": 62,
+    "inference_requests": 0
+  },
+  "python_compile": {
+    "command": "python3 -m py_compile cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/grammar-proof/run.py",
+    "exit_code": 0
+  },
+  "independent_reviews": {
+    "Standards": "Parent reported PASS, no actionable findings before dispatch",
+    "Spec": "Parent reported PASS, no actionable findings before dispatch"
+  },
+  "skipped_required_checks": [],
+  "limitations": "Full checks cover frozen spike sources; production work in other tickets continued afterward. Report/packet-only edits are verified with whitespace/links/data/hash preservation checks, not another live run."
+}

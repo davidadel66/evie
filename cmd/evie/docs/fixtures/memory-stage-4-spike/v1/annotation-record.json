@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "status": "human_approved",
+  "reviewer": "David",
+  "reviewed_at": "2026-09-05T02:45:30.356184+00:00",
+  "approval_provenance": "Root task relayed David's async response: Approve the proposed labels. Applies to the 24-case packet including optional neighbor relationship and conservative temporal qualifiers.",
+  "approved_file_sha256": {
+    "development.json": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "pilot.json": "sha256:d8381bee6ec7a96a256886d3e321099e6ee320a79ad8e5ba1f6321f8c6d7ec46",
+    "development.gold.json": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "pilot.gold.json": "sha256:6fc3344a218b1944636be9a542fdae4de4612c743ac0c345429f6c6116ecbdef",
+    "review-packet.md": "sha256:09dd8d9a631dea46ea1b27be6841a611a081df390d7959bf32dae760f42c2659"
+  },
+  "corrections": [],
+  "output_adjudication_policy": "Only the reviewed listed meanings and exact evidence are approved. Unmatched meanings require separate human adjudication. Source/schema validity is never proof of entailment."
+}

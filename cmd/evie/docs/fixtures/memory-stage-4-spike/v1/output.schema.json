@@ -1,0 +1,154 @@
+{
+  "type": "object",
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "predicate": {
+            "type": "string",
+            "enum": [
+              "preference",
+              "habit",
+              "relationship",
+              "residence",
+              "decision",
+              "constraint",
+              "employment",
+              "consideration",
+              "intention"
+            ]
+          },
+          "object_kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "entity",
+              "date"
+            ]
+          },
+          "object": {
+            "type": "string"
+          },
+          "polarity": {
+            "type": "string",
+            "enum": [
+              "affirmed",
+              "denied"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fact",
+              "world_change",
+              "error_correction",
+              "decision",
+              "consideration",
+              "intention",
+              "additional_support"
+            ]
+          },
+          "temporal": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unresolved"
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "assert",
+              "correct",
+              "attach_support"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "event_id",
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 8
+          },
+          "context": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "event_id",
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 8
+          }
+        },
+        "required": [
+          "subject",
+          "predicate",
+          "object_kind",
+          "object",
+          "polarity",
+          "kind",
+          "temporal",
+          "identity",
+          "effect",
+          "scope",
+          "sources",
+          "context"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "candidates"
+  ],
+  "additionalProperties": false
+}

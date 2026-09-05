@@ -399,6 +399,9 @@ type semanticReplayPreparedHandler struct {
 }
 
 func semanticReplayHandler(operation semanticAcceptedReplayOperation) (semanticReplayPreparedHandler, error) {
+	if operation.SchemaVersion == 6 && operation.Kind == "owner_candidate_review" {
+		return ownerReviewReplayHandler(operation)
+	}
 	base := func(schemaVersion int, kind string, operationID memory.SemanticID, idempotencyKey string, actor memory.SemanticActor,
 		sessionID memory.SessionID, targetScope memory.SemanticScope, scopes []memory.SemanticScope, priors []memory.ScopeRevision,
 		sourceEventID memory.EventID, prepared, canonicalProposal, canonicalEffect any,
@@ -516,7 +519,7 @@ func semanticReplayHandler(operation semanticAcceptedReplayOperation) (semanticR
 				candidate := proposal
 				candidate.ProposalSHA256 = operation.ProposalHash
 				candidate.PreparedSHA256, _, _ = semanticHash(candidate)
-				return store.ApplyPromotion(ctx, replayLease(candidate.SessionID), candidate)
+				return store.ApplyPromotion(withHistoricalPromotionReview(ctx), replayLease(candidate.SessionID), candidate)
 			}), nil
 	case operation.SchemaVersion == 5 && operation.Kind == "create_graph_link":
 		var proposal memory.CreateGraphLinkProposal
@@ -595,8 +598,10 @@ func validateSemanticReplayOperationPreflight(operation semanticAcceptedReplayOp
 	if string(preparedJSON) != operation.PreparedJSON {
 		return errors.New("accepted prepared proposal JSON is not canonical")
 	}
-	if err := validateSemanticIDsInJSON(operation.PreparedJSON); err != nil {
-		return err
+	if operation.SchemaVersion != 6 {
+		if err := validateSemanticIDsInJSON(operation.PreparedJSON); err != nil {
+			return err
+		}
 	}
 	return handler.ValidateResult(operation)
 }
@@ -736,8 +741,10 @@ func replaySemanticOperations(ctx context.Context, db *sql.DB, operations []sema
 		}
 		operation := remaining[selected]
 		remaining = append(remaining[:selected], remaining[selected+1:]...)
-		if err := ensureReplayLease(ctx, db, operation); err != nil {
-			return &SemanticReplayError{OperationID: operation.OperationID, SchemaVersion: operation.SchemaVersion, Cause: err}
+		if operation.SchemaVersion != 6 {
+			if err := ensureReplayLease(ctx, db, operation); err != nil {
+				return &SemanticReplayError{OperationID: operation.OperationID, SchemaVersion: operation.SchemaVersion, Cause: err}
+			}
 		}
 		store.now = func() time.Time { return operation.TransactionTime }
 		if err := store.replaySemanticOperation(ctx, operation); err != nil {
@@ -1441,7 +1448,8 @@ func checkSemanticProjectionStartup(ctx context.Context, db *sql.DB) error {
 			(operations.schema_version = 2 AND operations.operation_kind = 'correct_claim') OR
 			(operations.schema_version = 3 AND operations.operation_kind IN ('retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
 			(operations.schema_version = 4 AND operations.operation_kind = 'promote_claim') OR
-			(operations.schema_version = 5 AND operations.operation_kind IN ('create_graph_link', 'retire_memory', 'restore_memory', 'retract_source', 'restore_source'))
+			(operations.schema_version = 5 AND operations.operation_kind IN ('create_graph_link', 'retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
+			(operations.schema_version = 6 AND operations.operation_kind = 'owner_candidate_review')
 		)
 	`)
 	if err != nil {

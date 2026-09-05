@@ -1,0 +1,1258 @@
+{
+  "schema_version": "evie-extraction-spike-input-v1",
+  "synthetic_only": true,
+  "evidence_policy": "memory-stage-4-evidence-contract@92d10a4",
+  "histories": [
+    {
+      "id": "N01",
+      "title": "Standing preference and an incidental meal",
+      "split": "development",
+      "variant_lineage": "synthetic-family-01",
+      "events": [
+        {
+          "id": "0d8102f9-c956-5110-82d9-4853195285fd",
+          "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I prefer tea.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "6562ccc9-f9e2-5fb6-a621-32496a9aca4d",
+          "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+          "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I ate a pear at lunch.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "3aeaceaa-8abe-5b5a-ab06-9aa88c22b463",
+          "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N01-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 13,
+                "text": "I prefer tea.",
+                "sha256": "sha256:0b848d5bacc4fe482bebcc7651d89f6c1ecf683773e0e528077bad5f36a059e2",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N01-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+                "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 22,
+                "text": "I ate a pear at lunch.",
+                "sha256": "sha256:1eaa90441b1cbb74086377d882716796752383cfea7dca5cc067178d4a0a56d7",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "session_id": "4ce94707-d456-561c-9100-150a6a3d3c6a",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 13,
+                "text": "I prefer tea.",
+                "sha256": "sha256:0b848d5bacc4fe482bebcc7651d89f6c1ecf683773e0e528077bad5f36a059e2",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N02",
+      "title": "Quotation, reporting, and explicit endorsement",
+      "split": "development",
+      "variant_lineage": "synthetic-family-02",
+      "events": [
+        {
+          "id": "39878038-6df9-5dac-8e20-f25238f36882",
+          "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "For the story, write \"I live in Paris.\" Maya also told me she moved there.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "ea36dec8-4853-5d01-b3b6-5f5ff8db87a3",
+          "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "39878038-6df9-5dac-8e20-f25238f36882",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+          "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Maya, my next-door neighbor, now lives in Paris. I can confirm that myself.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "c731133d-b0df-5d27-b2fa-9ae975e11dd7",
+          "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N02-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 74,
+                "text": "For the story, write \"I live in Paris.\" Maya also told me she moved there.",
+                "sha256": "sha256:f0928ace258d2d73efb3084da334d9607959e28affd2f9cec59d6a62d891c338",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N02-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+                "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 75,
+                "text": "Maya, my next-door neighbor, now lives in Paris. I can confirm that myself.",
+                "sha256": "sha256:4e701d36372a437c4ee48f46ff53c0d3490267c5e4756679bd4eb4f717ac0ad8",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "session_id": "21c06de7-390c-5551-a302-0e469a63c811",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 74,
+                "text": "For the story, write \"I live in Paris.\" Maya also told me she moved there.",
+                "sha256": "sha256:f0928ace258d2d73efb3084da334d9607959e28affd2f9cec59d6a62d891c338",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N03",
+      "title": "Bounded assistant question and assent",
+      "split": "development",
+      "variant_lineage": "synthetic-family-03",
+      "events": [
+        {
+          "id": "fec582bc-51f0-52a4-a323-93950fd00118",
+          "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Let us discuss drinks.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+          "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "fec582bc-51f0-52a4-a323-93950fd00118",
+          "execution_id": "",
+          "content": "Do you prefer tea to coffee?",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+          "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Yes.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "29078d4f-1212-5bf2-9686-988175e727e0",
+          "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N03-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "fec582bc-51f0-52a4-a323-93950fd00118",
+                "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 22,
+                "text": "Let us discuss drinks.",
+                "sha256": "sha256:c52d1a2b546bb6a49005c279babcf0f4cbf3a8841b0bdfd244acb4f2a953afd9",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 28,
+                "text": "Do you prefer tea to coffee?",
+                "sha256": "sha256:7554d91ba8ce18ef922fbc9f4c587d8e0369e9ecd98a8046e6cea466d97d4ec3",
+                "authority": "none",
+                "ownership": "context"
+              }
+            ],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N03-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 4,
+                "text": "Yes.",
+                "sha256": "sha256:5f9a2b795615ba6a3d5455fd5624d773fbca5bcd16249c421fd37411dc9837da",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "fec582bc-51f0-52a4-a323-93950fd00118",
+                "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 22,
+                "text": "Let us discuss drinks.",
+                "sha256": "sha256:c52d1a2b546bb6a49005c279babcf0f4cbf3a8841b0bdfd244acb4f2a953afd9",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "session_id": "d6071b04-2f88-50af-ab3f-ab9d66c14715",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 28,
+                "text": "Do you prefer tea to coffee?",
+                "sha256": "sha256:7554d91ba8ce18ef922fbc9f4c587d8e0369e9ecd98a8046e6cea466d97d4ec3",
+                "authority": "none",
+                "ownership": "context"
+              }
+            ],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N04",
+      "title": "Same-name identity and ambiguous continuity",
+      "split": "development",
+      "variant_lineage": "synthetic-family-04",
+      "events": [
+        {
+          "id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+          "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Maya Chen is my cousin. Maya Patel is my colleague.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "924fbde9-34fb-5253-8569-6fd07d46242b",
+          "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+          "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "She has moved to Paris.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "7db926e2-88b5-5fa6-a165-d492b41e6be5",
+          "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N04-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+                "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 51,
+                "text": "Maya Chen is my cousin. Maya Patel is my colleague.",
+                "sha256": "sha256:3b9c154037632ff6c62694d266d50c1b2f73e9860a5d8943dd75b730daba70c3",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N04-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+                "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 23,
+                "text": "She has moved to Paris.",
+                "sha256": "sha256:cdc2c8ccccb3af63b222bb46880aedaf16baf69d2ae98ab6a016c06ae69eb57b",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+                "session_id": "6b4ac65d-d278-5b2a-9450-cdc310f5e7ed",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 51,
+                "text": "Maya Chen is my cousin. Maya Patel is my colleague.",
+                "sha256": "sha256:3b9c154037632ff6c62694d266d50c1b2f73e9860a5d8943dd75b730daba70c3",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N05",
+      "title": "Adopted project decision versus an enduring option",
+      "split": "development",
+      "variant_lineage": "synthetic-family-05",
+      "events": [
+        {
+          "id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+          "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "For this project we have chosen SQLite. Offline operation is a lasting requirement.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "93e86078-830c-51cd-bd1b-f17221f8e8f6",
+          "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+          "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "For future storage, PostgreSQL remains a long-term option I am considering. I have not adopted it.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "7ecddf27-f749-5346-80c7-fc0f13f3e666",
+          "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N05-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 83,
+                "text": "For this project we have chosen SQLite. Offline operation is a lasting requirement.",
+                "sha256": "sha256:b1c638915131496bd0157607e3f01edd6dddf8963fdac03cd31a033acfd97b7a",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N05-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+                "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 98,
+                "text": "For future storage, PostgreSQL remains a long-term option I am considering. I have not adopted it.",
+                "sha256": "sha256:2dc63a1b1fe684023f89662c475518ef26282b3802d1dcaacdb4b207507b7cf1",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "session_id": "b470e285-1e2b-5803-86b0-72e15f8053cb",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 83,
+                "text": "For this project we have chosen SQLite. Offline operation is a lasting requirement.",
+                "sha256": "sha256:b1c638915131496bd0157607e3f01edd6dddf8963fdac03cd31a033acfd97b7a",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N06",
+      "title": "World change, unknown date, and correction",
+      "split": "development",
+      "variant_lineage": "synthetic-family-06",
+      "events": [
+        {
+          "id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+          "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I no longer work at Acme. I left last month.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "ab0add2c-ab7e-59b7-aca8-d481fcc7f4eb",
+          "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "c21d505c-f80a-5910-83f7-685617e6d48e",
+          "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I was mistaken earlier: Maya Chen is my cousin, not my sister.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "5356510f-05c1-57e4-8cc0-9150ed00b616",
+          "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "c21d505c-f80a-5910-83f7-685617e6d48e",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N06-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+                "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 44,
+                "text": "I no longer work at Acme. I left last month.",
+                "sha256": "sha256:cc126513ae425f5819871d418eb7c0d9311b08187b949b6f2e70b64736acfe27",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N06-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "c21d505c-f80a-5910-83f7-685617e6d48e",
+                "session_id": "c41e0614-f391-5a70-be92-08b95cbc847c",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 62,
+                "text": "I was mistaken earlier: Maya Chen is my cousin, not my sister.",
+                "sha256": "sha256:372a036e61886a8ceea52900d995d04ff6836076d505cce8e6cc46367a43fd24",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N07",
+      "title": "Future decision and idle hypothetical",
+      "split": "development",
+      "variant_lineage": "synthetic-family-07",
+      "events": [
+        {
+          "id": "bf3cfc60-9f7a-5852-9bb5-05c3416fb25b",
+          "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I have decided to move to Paris next year.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "1ad1b270-52fa-539c-bacc-313cc758c9d3",
+          "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "bf3cfc60-9f7a-5852-9bb5-05c3416fb25b",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "5cc87d74-0d99-55e1-a5bb-dc37ceba31fb",
+          "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "If I moved to Rome instead, perhaps I would cycle to work.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "684654e7-c146-58f4-a23f-3f80f393d2d6",
+          "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "5cc87d74-0d99-55e1-a5bb-dc37ceba31fb",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N07-a",
+          "closure": "final_assistant",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "bf3cfc60-9f7a-5852-9bb5-05c3416fb25b",
+                "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 42,
+                "text": "I have decided to move to Paris next year.",
+                "sha256": "sha256:59ecae8e493e411d9665da66f91745d097665d0188281b6cf5c5e8568f740331",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N07-b",
+          "closure": "final_assistant",
+          "captured_sequence": 4,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "5cc87d74-0d99-55e1-a5bb-dc37ceba31fb",
+                "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 58,
+                "text": "If I moved to Rome instead, perhaps I would cycle to work.",
+                "sha256": "sha256:9c9645805103f2a9d2b947c286b202b244c3167c30473676cb10e060634dd288",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "bf3cfc60-9f7a-5852-9bb5-05c3416fb25b",
+                "session_id": "13750238-b78d-5180-b005-cfc0696be16c",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 42,
+                "text": "I have decided to move to Paris next year.",
+                "sha256": "sha256:59ecae8e493e411d9665da66f91745d097665d0188281b6cf5c5e8568f740331",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N08",
+      "title": "Named clock observation and multi-source date",
+      "split": "development",
+      "variant_lineage": "synthetic-family-08",
+      "events": [
+        {
+          "id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Check the local date for me.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "dccc4337-8cbe-58a7-943a-042a9a0e184e",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+          "execution_id": "",
+          "content": "",
+          "payload": {
+            "tool_calls": [
+              {
+                "id": "c1",
+                "name": "get_time",
+                "arguments": "{}"
+              }
+            ]
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "0b4b8696-872f-520e-8776-45a17f932929",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "tool_intent",
+          "role": "tool",
+          "parent_id": "dccc4337-8cbe-58a7-943a-042a9a0e184e",
+          "execution_id": "2ed2a8c0-7992-527e-bf49-40a3ce6c972e",
+          "content": "",
+          "payload": {
+            "call": {
+              "id": "c1",
+              "name": "get_time",
+              "arguments": "{}"
+            }
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "tool_succeeded",
+          "role": "tool",
+          "parent_id": "0b4b8696-872f-520e-8776-45a17f932929",
+          "execution_id": "2ed2a8c0-7992-527e-bf49-40a3ce6c972e",
+          "content": "2026-09-04 09:30:00",
+          "payload": {
+            "tool_call_id": "c1",
+            "is_error": false
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "54fee003-e5e2-5943-89d3-82c2eceaf7d2",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 5,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+          "execution_id": "",
+          "content": "The displayed local date is September 4, 2026.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 6,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "Use the date you just checked: as of that date I have stopped drinking coffee.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "0dee5004-82ea-5f3e-b319-e00983325199",
+          "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+          "sequence": 7,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+          "execution_id": "",
+          "content": "Understood.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N08-a",
+          "closure": "final_assistant",
+          "captured_sequence": 5,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+                "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 28,
+                "text": "Check the local date for me.",
+                "sha256": "sha256:ecd98d1de10bf574e828b3dd6fcad7d847a0d23d1852a3db2f5a67d81e22fb86",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+                "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 19,
+                "text": "2026-09-04 09:30:00",
+                "sha256": "sha256:9e1d9445a52d8465e4b69a3c137d2130e5cc06ca37c39229a1deff54609381e1",
+                "authority": "tool_observation",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N08-b",
+          "closure": "final_assistant",
+          "captured_sequence": 7,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+                "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 78,
+                "text": "Use the date you just checked: as of that date I have stopped drinking coffee.",
+                "sha256": "sha256:2a5a4fcfe445308a4a97b52746d173eea1eff78e58b3d5c552d739a7a75e6989",
+                "authority": "owner_statement",
+                "ownership": "new"
+              },
+              {
+                "event_id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+                "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 28,
+                "text": "Check the local date for me.",
+                "sha256": "sha256:ecd98d1de10bf574e828b3dd6fcad7d847a0d23d1852a3db2f5a67d81e22fb86",
+                "authority": "owner_statement",
+                "ownership": "overlap"
+              },
+              {
+                "event_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+                "session_id": "15ae0854-bed7-5796-a01f-8234f0a0c82f",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 19,
+                "text": "2026-09-04 09:30:00",
+                "sha256": "sha256:9e1d9445a52d8465e4b69a3c137d2130e5cc06ca37c39229a1deff54609381e1",
+                "authority": "tool_observation",
+                "ownership": "overlap"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "N09",
+      "title": "Failed turn, incomplete intent, and excluded output",
+      "split": "development",
+      "variant_lineage": "synthetic-family-09",
+      "events": [
+        {
+          "id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+          "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+          "sequence": 1,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I do not prefer café ☕.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "43c9e54c-739d-531e-88c5-6927eb622bc4",
+          "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+          "sequence": 2,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "turn_failed",
+          "role": "assistant",
+          "parent_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+          "execution_id": "",
+          "content": "The provider request failed.",
+          "payload": {
+            "turn_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+            "classification": "provider_error",
+            "stage": "provider"
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "360edcc2-fb9c-5c40-8884-f90ba6c41136",
+          "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+          "sequence": 3,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "user_message",
+          "role": "user",
+          "parent_id": "",
+          "execution_id": "",
+          "content": "I prefer cycling for my daily commute.",
+          "payload": {},
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "38d290ce-b6e4-5195-9a0e-2ef92ca3eb8e",
+          "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+          "sequence": 4,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "assistant_message",
+          "role": "assistant",
+          "parent_id": "360edcc2-fb9c-5c40-8884-f90ba6c41136",
+          "execution_id": "",
+          "content": "",
+          "payload": {
+            "tool_calls": [
+              {
+                "id": "c1",
+                "name": "get_time",
+                "arguments": "{}"
+              }
+            ]
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        },
+        {
+          "id": "e27da6cc-597d-516b-a77b-0ddfe15c1618",
+          "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+          "sequence": 5,
+          "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+          "type": "tool_intent",
+          "role": "tool",
+          "parent_id": "38d290ce-b6e4-5195-9a0e-2ef92ca3eb8e",
+          "execution_id": "bfdfc457-3d79-54ba-aa71-eeafc24e9ce2",
+          "content": "",
+          "payload": {
+            "call": {
+              "id": "c1",
+              "name": "get_time",
+              "arguments": "{}"
+            }
+          },
+          "recorded_at": "2026-09-04T13:30:00Z",
+          "format_version": 1
+        }
+      ],
+      "windows": [
+        {
+          "id": "N09-a",
+          "closure": "turn_failed",
+          "captured_sequence": 2,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+                "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 26,
+                "text": "I do not prefer café ☕.",
+                "sha256": "sha256:00479e7e524eb59e2c69c612d9c9baac37cd023a7da917279c74206d5822660e",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        },
+        {
+          "id": "N09-b",
+          "closure": "incomplete_no_live_lease",
+          "captured_sequence": 5,
+          "input": {
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "support": [
+              {
+                "event_id": "360edcc2-fb9c-5c40-8884-f90ba6c41136",
+                "session_id": "a45fa288-6b2f-5367-82f4-e91aa687e11b",
+                "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+                "event_part": "content",
+                "start": 0,
+                "end": 38,
+                "text": "I prefer cycling for my daily commute.",
+                "sha256": "sha256:e6741d8ed97c194e3f974dd78fde9a8b14b4d85be725fd3e4c5a9abe7cb4db26",
+                "authority": "owner_statement",
+                "ownership": "new"
+              }
+            ],
+            "context": [],
+            "accepted_context": []
+          }
+        }
+      ]
+    }
+  ]
+}

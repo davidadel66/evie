@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-05T03:54:41.676493+00:00",
+  "git_head_at_record": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "purpose": "Bounded first alternate model comparison after both corrected Mistral configurations failed exact approved-meaning extraction",
+  "model": "qwen2.5:7b-instruct-q4_K_M",
+  "model_manifest_sha256": "sha256:845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+  "configurations": [
+    {
+      "id": "qwen-schema",
+      "format": "unchanged closed JSON schema"
+    }
+  ],
+  "shared": {
+    "temperature": 0,
+    "context_tokens": 8192,
+    "max_output_tokens": 768,
+    "timeout_seconds": 60,
+    "parallel_requests": 1,
+    "seeds": [
+      17,
+      18
+    ],
+    "repetitions": 2,
+    "case_ids": [
+      "N01-a",
+      "N01-b",
+      "N02-a",
+      "N02-b",
+      "N03-b",
+      "N04-b",
+      "N05-b",
+      "N06-a",
+      "N08-b",
+      "N09-a"
+    ],
+    "stop_on_failure": true
+  },
+  "file_sha256": {
+    "prompt-v2.txt": "sha256:f6f280093b15e1a1928db2737ec9bde8b2e0471ef66cbeab11de47b0ca57c832",
+    "output.schema.json": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+    "development.json": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "development.gold.json": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "annotation-record.json": "sha256:a6ee1e4f56b31a14a1df0062349e56de06e5d6125f7943d6978033cf35f1b28a",
+    "qwen/runtime-manifest.json": "sha256:25f22801682b5301596397b3113b1a5be0b27341324187193ac731546b5bf14b",
+    "qwen/runtime-api-metadata.json": "sha256:100a0ae981b35bffc4f387a16404b17e6b2b8ff1d21a64201b880f14834cb720",
+    "qwen/token-budgets.json": "sha256:ed2fb771a3040b5e3f902c7ade39bd9892d8a725647e279e1d3125af662d04a9",
+    "qwen/tokenizer-proof.json": "sha256:9023a4b4dfaf703dae5e5eb1bee9545d0860bd6ea506950b47fd3567c71acf5d",
+    "qwen/input-budget-proof.md": "sha256:10aa2fd0b331685ca0a67950b2015ada6fec11cfcbfd4fb1cef77ad149514f7e"
+  },
+  "inference_runner_binary_sha256": "sha256:3e6360396ab34c68c78148aadd2b14bcea0146eb9e4b216ac9cadf4fc4e06df3",
+  "limitations": [
+    "At most20 requests:10 selected development windows\u00d72. Stop on any load/protocol/context/release failure; preserve attempted outcomes and unexecuted plan.",
+    "Temperature0 seeds17/18 measure reproducibility, not stochastic robustness.",
+    "Remaining8 development windows and6 pilot windows must precede any adequate-to-proceed selection. Final holdout remains uncreated/unexposed.",
+    "Raw/source/type conformance are distinct; unlisted output meanings require actual human adjudication."
+  ],
+  "source_file_sha256": {
+    "scripts/memory-extractor-spike/budget.go": "sha256:c8a4269ccd45459867cc644cd8276c85b96a74774c20207ad3aab132775fc717",
+    "scripts/memory-extractor-spike/checks.go": "sha256:9b490f43b9c78e11a20ebcde24c8710fbc69e839abf78cfdd214fc3ac4e5945b",
+    "scripts/memory-extractor-spike/main.go": "sha256:a196dfdf83012de833b7bc7e2337184649caf6a4e5ab8980c1427a63e374e2ae",
+    "scripts/memory-extractor-spike/main_test.go": "sha256:3db63d85016183743f307d1b038db67a9b3c12fa5c5c47906385f25159d20809",
+    "scripts/memory-extractor-spike/qwen_budget.go": "sha256:7e2a4099b185d27a6440cb21b369c149ad0959a5dfb5f14096f545f0e8c2f2f0",
+    "scripts/memory-extractor-spike/revalidate.go": "sha256:2efc8d26d943a7badd03ac47ff3afec147c8d0ecab8cc000eba57ea76913700e",
+    "scripts/memory-extractor-spike/score.go": "sha256:c8c3559c374559406cd658b78479e2884c3619603798e5f12dc41634c08b334c"
+  },
+  "bound": {
+    "formula": "full_rendered_utf8_bytes+2+768+64<=8192",
+    "complete_template_overhead_utf8_bytes": 80,
+    "system_utf8_bytes": 5588,
+    "max_source_input_utf8_bytes": 1690
+  },
+  "support_script_sha256": {
+    "scripts/memory-extractor-spike/freeze_budget.py": "sha256:05447ba2a149c9e68e438c9cdf685f77f0ffdcae23d8a5fed47d6e28f1541d41",
+    "scripts/memory-extractor-spike/inspect_qwen_gguf.py": "sha256:54faab1e6bd86f81f2de31034679cba885476c63d2bc6628ed1585466e15df6b",
+    "scripts/memory-extractor-spike/measure.py": "sha256:439ec701c738ab760484aa34ef1c27fbfe61101536eea221b94b34ac7562f062"
+  }
+}

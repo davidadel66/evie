@@ -1,0 +1,22 @@
+{
+  "at": "2026-09-05T04:04:30.290806+00:00",
+  "log_excerpt": [
+    "time=2026-09-04T23:54:41.991-04:00 level=INFO source=server.go:138 msg=offload library=metal layers.requested=-1 layers.model=29 layers.offload=29 layers.split=\"\" memory.available=\"[12.0 GiB]\" memory.gpu_overhead=\"0 B\" memory.required.full=\"5.6 GiB\" memory.required.partial=\"5.6 GiB\" memory.required.kv=\"448.0 MiB\" memory.required.allocations=\"[5.6 GiB]\" memory.weights.total=\"4.1 GiB\" memory.weights.repeating=\"3.7 GiB\" memory.weights.nonrepeating=\"426.4 MiB\" memory.graph.full=\"478.0 MiB\" memory.graph.partial=\"478.0 MiB\"",
+    "time=2026-09-04T23:54:42.110-04:00 level=INFO source=server.go:405 msg=\"starting llama server\" cmd=\"/Applications/Ollama.app/Contents/Resources/ollama runner --model /Users/davidboktor/.ollama/models/blobs/sha256-2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730 --ctx-size 8192 --batch-size 512 --n-gpu-layers 29 --threads 5 --parallel 1 --port 54424\"",
+    "time=2026-09-04T23:54:42.122-04:00 level=INFO source=runner.go:846 msg=\"starting go runner\"",
+    "ggml_backend_load_best: failed to load /Applications/Ollama.app/Contents/Resources/libggml-cpu-icelake.so",
+    "ggml_backend_load_best: failed to load /Applications/Ollama.app/Contents/Resources/libggml-cpu-haswell.so",
+    "ggml_backend_load_best: failed to load /Applications/Ollama.app/Contents/Resources/libggml-cpu-alderlake.so",
+    "ggml_backend_load_best: failed to load /Applications/Ollama.app/Contents/Resources/libggml-cpu-sandybridge.so",
+    "ggml_backend_load_best: failed to load /Applications/Ollama.app/Contents/Resources/libggml-cpu-skylakex.so",
+    "load_tensors: offloading 28 repeating layers to GPU",
+    "load_tensors: offloading output layer to GPU",
+    "load_tensors: offloaded 29/29 layers to GPU",
+    "load_tensors:   CPU_Mapped model buffer size =   292.36 MiB",
+    "load_tensors: Metal_Mapped model buffer size =  4168.10 MiB",
+    "llama_init_from_model: n_ctx         = 8192",
+    "llama_init_from_model: n_ctx_per_seq = 8192",
+    "llama_kv_cache_init: kv_size = 8192, offload = 1, type_k = 'f16', type_v = 'f16', n_layer = 28, can_shift = 1"
+  ],
+  "interpretation": "Startup probes reported unavailable x86 CPU .so backends; Metal loaded29/29 layers and all20 inference responses completed. No input-truncation log was observed. Host-wide memory values are not attributable to this experiment alone."
+}

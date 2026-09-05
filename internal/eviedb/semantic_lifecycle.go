@@ -909,7 +909,10 @@ func loadSourceForInspection(ctx context.Context, queryer semanticInspectionQuer
 		&source.EventPart, &source.LocatorKind, &source.LocatorValue, &source.EvidenceSHA256,
 		&source.Actor, &source.SourceType, &source.Authority, &source.ObservedAt,
 		&source.Eligibility, &source.Evidence)
-	return source, err
+	if err != nil {
+		return source, err
+	}
+	return renderSourceWithReviewOrigin(ctx, queryer, source), nil
 }
 
 func loadAllSourceInspections(ctx context.Context, queryer semanticInspectionQueryer, claimID memory.SemanticID, at time.Time) ([]memory.SemanticSourceInspection, error) {
@@ -973,6 +976,18 @@ func loadSemanticOperationInspection(ctx context.Context, queryer semanticInspec
 		&operation.ResultJSON, &transactionTime)
 	if err != nil {
 		return operation, err
+	}
+	if operation.SchemaVersion == 6 {
+		var reviewed memory.OwnerReviewOperation
+		if json.Unmarshal([]byte(operation.PreparedJSON), &reviewed) != nil || reviewOperationSourcesVisible(ctx, queryer, reviewed) != nil {
+			operation.ProposalJSON, operation.PreparedJSON, operation.ResultJSON = "", "", ""
+		}
+	}
+	if operation.SchemaVersion == 4 && operation.Kind == "promote_claim" {
+		var promoted memory.PromotionProposal
+		if json.Unmarshal([]byte(operation.PreparedJSON), &promoted) != nil || requirePromotionReviewDisclosure(ctx, queryer, promoted.Sources) != nil {
+			operation.ProposalJSON, operation.PreparedJSON, operation.ResultJSON = "", "", ""
+		}
 	}
 	operation.TransactionTime, err = parseSemanticTime(transactionTime)
 	if err != nil {

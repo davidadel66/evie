@@ -1,0 +1,24 @@
+{
+  "matrix_sha256": "5a7513e7129cf72a5a33d933ce47f9bd781aa842c0367c03d63a94bee6ff6a7b",
+  "trials": 99,
+  "unique_jobs": 1584,
+  "job_states": {
+    "completed_candidates": 1518,
+    "completed_empty": 33,
+    "failed": 33
+  },
+  "counts": {
+    "dispatches": 1584,
+    "foreground_persisted_events": 4752,
+    "jobs": 1584,
+    "attempts": 1584,
+    "completed_events": 4158,
+    "selected_events": 4224
+  },
+  "all_raw_resource_hashes_match": true,
+  "all_outcomes_match_declared_counts": true,
+  "all_temporary_databases_removed": true,
+  "source_unchanged": true,
+  "unexpected_job_outcomes": 0,
+  "note": "33 failed jobs are deliberate per-history fixtures. This is scripted infrastructure, not model/human pilot acceptance. Sparse Go count maps omit zeros; array cardinalities independently checked."
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -23,6 +24,7 @@ type renderedOutput struct {
 }
 
 type turnProgress struct {
+	foreground      *foregroundObservation
 	rendered        renderedOutput
 	rootTurnID      memory.EventID
 	requestParentID memory.EventID
@@ -342,6 +344,7 @@ func (s *Session) runOwnedTurn(
 		if !coordinator.beginCommitBoundary() {
 			return s.observeTurnContext(coordinator)
 		}
+		assistantCommitStarted := time.Now()
 		assistantEvent, err := s.history.Append(coordinator.ctx, lease, assistantInput)
 		if err != nil {
 			coordinator.abortCommitBoundary()
@@ -365,6 +368,7 @@ func (s *Session) runOwnedTurn(
 			// A committed final assistant is durable success. This deliberately
 			// wins over cancellation reserved while its append was in flight.
 			coordinator.finishSuccessBoundary()
+			progress.foreground.terminal(assistantCommitStarted, "success")
 		} else {
 			coordinator.finishCommitBoundary(memory.StageToolPrepare)
 		}

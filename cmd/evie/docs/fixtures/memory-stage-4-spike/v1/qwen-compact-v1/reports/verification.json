@@ -1,0 +1,60 @@
+{
+  "recorded_at": "2026-09-05T04:49:23.579205+00:00",
+  "scope": "compact-v1 focused deterministic verification; no model inference",
+  "checks": [
+    {
+      "command": "go test ./scripts/memory-extractor-spike -count=1",
+      "exit_code": 0,
+      "output": "ok  github.com/davidadel66/evie/scripts/memory-extractor-spike 7.608s"
+    },
+    {
+      "command": "go build -o /tmp/evie-extractor-compact-v1 ./scripts/memory-extractor-spike",
+      "exit_code": 0
+    },
+    {
+      "command": "/tmp/evie-extractor-compact-v1 [frozen compact flags] -preflight-only -output reports/preflight.json",
+      "exit_code": 0,
+      "planned_requests": 10,
+      "dispatched_requests": 0,
+      "maximum_proven_budget": 7171
+    },
+    {
+      "command": "./scripts/verify-change.sh",
+      "exit_code": 0,
+      "log": "verification.log",
+      "focused_package_seconds_in_full_check": 8.187
+    }
+  ],
+  "experiment_manifest_sha256": "sha256:a7ff9a886c9976568bb0e409f986ebe10ab018e09670b0fb9821d1476cc82fd1",
+  "root_verification": {
+    "recorded_at": "2026-09-05T04:48:51.536367+00:00",
+    "command": "./scripts/verify-change.sh",
+    "exit_code": 0,
+    "log": ".scratch/memory-stage-4/verify-135-compact.log",
+    "package_seconds": 8.187,
+    "go_source_sha256": {
+      "scripts/memory-extractor-spike/budget.go": "sha256:8f3e1a7f5ccb59de8e857973ead9aeb5bc1bb7c54a125108f17b0d950ab29bbb",
+      "scripts/memory-extractor-spike/checks.go": "sha256:86b9cba65d823ec10d42d4f445bdfa5784e62d1fe40a556300ca41c1cccf446d",
+      "scripts/memory-extractor-spike/compact_config.go": "sha256:89b14ab87aea1fc68488c634b1da1133df9eb1499ce7622d717e4bfa7842ae9c",
+      "scripts/memory-extractor-spike/compact_wire.go": "sha256:eb877904d2c3f6e4e78bf9bfaae6c363ee2349ec92556e7915df1d21ae91c448",
+      "scripts/memory-extractor-spike/compact_wire_test.go": "sha256:53b4961cd8430ea56b8f6e9b868def7775debcfded925d72c96fb78d52993f84",
+      "scripts/memory-extractor-spike/main.go": "sha256:c2a9261566cc20d8b36557b4422eb49cdb7dcb04e4f2dfa31c5d948ef4578a55",
+      "scripts/memory-extractor-spike/main_test.go": "sha256:3db63d85016183743f307d1b038db67a9b3c12fa5c5c47906385f25159d20809",
+      "scripts/memory-extractor-spike/qwen_budget.go": "sha256:30b61b0851bddbb78399a84be41691c4ce85d1ee287b2af23c24f8233e68d32a",
+      "scripts/memory-extractor-spike/revalidate.go": "sha256:4f1f108ef42884a21e979f0a5af53f0d6256382bede4b51a3ba1f5cca37a2039",
+      "scripts/memory-extractor-spike/score.go": "sha256:6146c27b70560bc7792287d3745623c61934b53d1f274576dd92634f2f1bef79"
+    },
+    "existing_warnings": [
+      "Icon.tsx:16 react(only-export-components)",
+      "Vite chunks larger than500kB"
+    ],
+    "skipped_required_checks": [],
+    "index_empty": true
+  },
+  "log_normalization": {
+    "method": "Removed ANSI CSI escape sequences and CR bytes; stripped trailing whitespace on each rendered line; preserved substantive diagnostic content.",
+    "original_log_sha256": "sha256:308c7325037a5668f86971682ddd29f152109baa951cb9cde4a611a525db0930",
+    "normalized_log_sha256": "sha256:7dcdc936176c1634414121d0d8f153538d01018411574112359f71142a195e75"
+  },
+  "skipped_required_checks": []
+}

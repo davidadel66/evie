@@ -1150,6 +1150,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	if err := connectSQLiteStartup(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("connect db: %w", err)
+	}
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
@@ -1161,6 +1165,30 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 	if err := ensureSemanticSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create Semantic Memory schema: %w", err)
+	}
+	if err := ensureCompilerSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create memory compiler schema: %w", err)
+	}
+	if err := ensureCompilerActivationSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create memory compiler activation schema: %w", err)
+	}
+	if err := ensureCompilerHistorySchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create memory compiler history schema: %w", err)
+	}
+	if err := ensureCandidateReviewSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create candidate review schema: %w", err)
+	}
+	if err := ensureCandidateReviewNavigationSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create candidate review navigation schema: %w", err)
+	}
+	if err := ensureCompilerDiagnosticsSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create memory compiler diagnostics schema: %w", err)
 	}
 	if err := checkSemanticProjectionStartup(ctx, db); err != nil {
 		db.Close()

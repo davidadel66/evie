@@ -82,6 +82,7 @@ type Server struct {
 	receipts         ReceiptInspector
 	contextSessions  ContextSessionController
 	semanticMemory   agent.SemanticGraphMemory
+	candidateReview  CandidateReviewKernel
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -162,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
 		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
 	}
+	s.registerCandidateReviewRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }
@@ -257,7 +259,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendErr := session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
+	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(turnLifecycleContext(r))
+	sendErr := session.Send(measurementCtx, req.Message, ev, s.approver(r.Context(), ev))
 
 	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")
@@ -266,7 +269,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if sendErr != nil {
 		ev.Error(sendErr.Error())
 	}
-	ev.TurnDone()
+	outputErr := ev.TurnDone()
+	if measurementErr := finalizeMeasurement(outputErr); measurementErr != nil {
+		log.Printf("compiler foreground measurement unavailable")
+	}
 }
 
 // jsonError writes the {"error": ...} body every non-stream failure

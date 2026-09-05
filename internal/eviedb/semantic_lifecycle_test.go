@@ -917,7 +917,7 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if !strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") {
 		t.Fatalf("upgraded operation schema = %s", definition)
 	}
 	store = NewStore(db)

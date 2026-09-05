@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-05T03:55:44.910184+00:00",
+  "owned_server_pid": 78270,
+  "owned_runner_pid": 84407,
+  "engine": "Ollama0.6.3 legacy llama.cpp-backed Go runner; launch explicitly OLLAMA_NEW_ENGINE=false and no --ollama-engine; native llama_init_from_model observed",
+  "log_evidence": [
+    "time=2026-09-04T23:54:42.110-04:00 level=INFO source=server.go:405 msg=\"starting llama server\" cmd=\"/Applications/Ollama.app/Contents/Resources/ollama runner --model /Users/davidboktor/.ollama/models/blobs/sha256-2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730 --ctx-size 8192 --batch-size 512 --n-gpu-layers 29 --threads 5 --parallel 1 --port 54424\"",
+    "time=2026-09-04T23:54:42.122-04:00 level=INFO source=runner.go:846 msg=\"starting go runner\"",
+    "llama_init_from_model: n_ctx         = 8192",
+    "llama_init_from_model: n_ctx_per_seq = 8192"
+  ],
+  "process": "  PID  PPID    RSS COMMAND\n84407 78270 4316608 /Applications/Ollama.app/Contents/Resources/ollama runner --model /Users/davidboktor/.ollama/models/blobs/sha256-2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730 --ctx-size 8192 --batch-size 512 --n-gpu-layers 29 --threads 5 --parallel 1 --port 54424\n"
+}

@@ -1,0 +1,594 @@
+{
+  "schema_version": 1,
+  "command": [
+    "/tmp/evie-extractor-compact-v2",
+    "-wire",
+    "compact-v2",
+    "-endpoint",
+    "http://127.0.0.1:11434",
+    "-model",
+    "qwen2.5:7b-instruct-q4_K_M",
+    "-prompt",
+    "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/prompt.txt",
+    "-schema",
+    "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/output.schema.json",
+    "-budgets",
+    "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/token-budgets.json",
+    "-context",
+    "8192",
+    "-max-tokens",
+    "768",
+    "-timeout",
+    "60s",
+    "-mode",
+    "schema",
+    "-repetitions",
+    "1",
+    "-stop-on-failure",
+    "-only",
+    "N01-a,N01-b,N02-a,N02-b,N03-b,N04-b,N05-b,N06-a,N08-b,N09-a",
+    "-output",
+    "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/reports/development.json"
+  ],
+  "owned_server_pid": 52517,
+  "sampling_seconds": 5,
+  "baseline": {
+    "at": "2026-09-05T07:26:04.612941+00:00",
+    "server_processes_rss_kib": [
+      [
+        52517,
+        24864
+      ]
+    ],
+    "runner_processes_rss_kib": [],
+    "server_rss_kib_sum": 24864,
+    "runner_rss_kib_sum": 0,
+    "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+  },
+  "samples": [
+    {
+      "at": "2026-09-05T07:26:04.637779+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          24864
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          1952
+        ]
+      ],
+      "server_rss_kib_sum": 24864,
+      "runner_rss_kib_sum": 1952,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:09.658775+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          27040
+        ],
+        [
+          58025,
+          4396192
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9136
+        ]
+      ],
+      "server_rss_kib_sum": 4423232,
+      "runner_rss_kib_sum": 9136,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:14.685449+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          29280
+        ],
+        [
+          58025,
+          4325328
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9136
+        ]
+      ],
+      "server_rss_kib_sum": 4354608,
+      "runner_rss_kib_sum": 9136,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:19.713332+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          34064
+        ],
+        [
+          58025,
+          4362016
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9136
+        ]
+      ],
+      "server_rss_kib_sum": 4396080,
+      "runner_rss_kib_sum": 9136,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:24.741363+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          44576
+        ],
+        [
+          58025,
+          4108960
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8848
+        ]
+      ],
+      "server_rss_kib_sum": 4153536,
+      "runner_rss_kib_sum": 8848,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:29.759379+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          44016
+        ],
+        [
+          58025,
+          4078832
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8848
+        ]
+      ],
+      "server_rss_kib_sum": 4122848,
+      "runner_rss_kib_sum": 8848,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:34.788157+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45328
+        ],
+        [
+          58025,
+          4106064
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9024
+        ]
+      ],
+      "server_rss_kib_sum": 4151392,
+      "runner_rss_kib_sum": 9024,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:39.811001+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45072
+        ],
+        [
+          58025,
+          4107984
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9024
+        ]
+      ],
+      "server_rss_kib_sum": 4153056,
+      "runner_rss_kib_sum": 9024,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:44.832408+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45104
+        ],
+        [
+          58025,
+          4116992
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9024
+        ]
+      ],
+      "server_rss_kib_sum": 4162096,
+      "runner_rss_kib_sum": 9024,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:49.859857+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          41040
+        ],
+        [
+          58025,
+          4075664
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9024
+        ]
+      ],
+      "server_rss_kib_sum": 4116704,
+      "runner_rss_kib_sum": 9024,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:54.882422+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          44624
+        ],
+        [
+          58025,
+          4089936
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8992
+        ]
+      ],
+      "server_rss_kib_sum": 4134560,
+      "runner_rss_kib_sum": 8992,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:26:59.906948+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          44624
+        ],
+        [
+          58025,
+          4100960
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8992
+        ]
+      ],
+      "server_rss_kib_sum": 4145584,
+      "runner_rss_kib_sum": 8992,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:04.933144+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45936
+        ],
+        [
+          58025,
+          4091584
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9216
+        ]
+      ],
+      "server_rss_kib_sum": 4137520,
+      "runner_rss_kib_sum": 9216,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:09.963161+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          46720
+        ],
+        [
+          58025,
+          4095984
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9232
+        ]
+      ],
+      "server_rss_kib_sum": 4142704,
+      "runner_rss_kib_sum": 9232,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:14.989364+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          46608
+        ],
+        [
+          58025,
+          4076928
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9232
+        ]
+      ],
+      "server_rss_kib_sum": 4123536,
+      "runner_rss_kib_sum": 9232,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:20.006967+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          42768
+        ],
+        [
+          58025,
+          4036880
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9056
+        ]
+      ],
+      "server_rss_kib_sum": 4079648,
+      "runner_rss_kib_sum": 9056,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:25.033011+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          42352
+        ],
+        [
+          58025,
+          4034256
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9040
+        ]
+      ],
+      "server_rss_kib_sum": 4076608,
+      "runner_rss_kib_sum": 9040,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:30.057671+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45776
+        ],
+        [
+          58025,
+          4082384
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9392
+        ]
+      ],
+      "server_rss_kib_sum": 4128160,
+      "runner_rss_kib_sum": 9392,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:35.082712+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45104
+        ],
+        [
+          58025,
+          4093664
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8784
+        ]
+      ],
+      "server_rss_kib_sum": 4138768,
+      "runner_rss_kib_sum": 8784,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:40.107592+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45200
+        ],
+        [
+          58025,
+          4093808
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          8784
+        ]
+      ],
+      "server_rss_kib_sum": 4139008,
+      "runner_rss_kib_sum": 8784,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:45.135428+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45504
+        ],
+        [
+          58025,
+          4091312
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9296
+        ]
+      ],
+      "server_rss_kib_sum": 4136816,
+      "runner_rss_kib_sum": 9296,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:50.161855+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45968
+        ],
+        [
+          58025,
+          4100448
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9632
+        ]
+      ],
+      "server_rss_kib_sum": 4146416,
+      "runner_rss_kib_sum": 9632,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:27:55.186111+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          45872
+        ],
+        [
+          58025,
+          4077024
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9616
+        ]
+      ],
+      "server_rss_kib_sum": 4122896,
+      "runner_rss_kib_sum": 9616,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    },
+    {
+      "at": "2026-09-05T07:28:00.208342+00:00",
+      "server_processes_rss_kib": [
+        [
+          52517,
+          46304
+        ],
+        [
+          58025,
+          4107120
+        ]
+      ],
+      "runner_processes_rss_kib": [
+        [
+          58022,
+          9840
+        ]
+      ],
+      "server_rss_kib_sum": 4153424,
+      "runner_rss_kib_sum": 9840,
+      "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+    }
+  ],
+  "final": {
+    "at": "2026-09-05T07:28:05.255582+00:00",
+    "server_processes_rss_kib": [
+      [
+        52517,
+        49968
+      ],
+      [
+        58025,
+        4109072
+      ]
+    ],
+    "runner_processes_rss_kib": [],
+    "server_rss_kib_sum": 4159040,
+    "runner_rss_kib_sum": 0,
+    "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)"
+  },
+  "elapsed_seconds": 120.6413974169991,
+  "exit_code": 0,
+  "limitations": "RSS excludes a reliable account of Metal/unified GPU allocations; host swap is system-wide and cannot be attributed to this run. Runner RSS is the standalone Go process, not a production Evie foreground workload."
+}

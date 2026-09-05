@@ -1,0 +1,239 @@
+{
+  "effect_sha256": "sha256:ef7e66e7e6bb00a6c2ef6838380eebd1376abec439ff6ce65cb814bddb04e298",
+  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v4\",\"effect\":{\"version\":\"owner-review-effect-v4\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00.000000000Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true},{\"source_link_id\":\"99000000-0000-4000-8000-000000000145\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"99000000-0000-4000-8000-000000000143\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"0:10\",\"evidence_sha256\":\"sha256:ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa\",\"actor\":\"tool\",\"source_type\":\"tool_succeeded\",\"authority\":\"tool_observation\",\"observed_at\":\"2026-09-05T12:00:00.000000000Z\",\"evidence\":\"2026-09-04\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]}}",
+  "preview_sha256": "sha256:213d9db68acc13874977e00fb6b9dbd2376d3a3768e847e8d11b5261d28d61a8",
+  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v4\",\"preview\":{\"version\":\"owner-review-preview-v4\",\"preview_id\":\"92000000-0000-4000-8000-000000000009\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"action\":\"accept\",\"candidates\":[{\"ref\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"destination\":\"global\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"},{\"event_id\":\"99000000-0000-4000-8000-000000000143\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"0:10\",\"evidence_sha256\":\"ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"},\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T12:00:00Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"café\"},{\"observation\":{\"contract\":\"local-clock-display-v1\",\"root_id\":\"92000000-0000-4000-8000-000000000001\",\"execution_id\":\"99000000-0000-4000-8000-000000000144\",\"call_id\":\"clock-call\",\"ancestry_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},\"source_type\":\"tool_succeeded\",\"locator\":{\"event_id\":\"99000000-0000-4000-8000-000000000143\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"0:10\",\"evidence_sha256\":\"ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa\"},\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"scope_key\":\"global\",\"sequence\":4,\"format_version\":1,\"observed_at\":\"2026-09-05T12:00:00Z\",\"actor\":\"tool\",\"authority\":\"tool_observation\",\"usage\":\"new_support\",\"evidence\":\"2026-09-04\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"version\":\"owner-review-effect-v4\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00.000000000Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true},{\"source_link_id\":\"99000000-0000-4000-8000-000000000145\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"99000000-0000-4000-8000-000000000143\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"0:10\",\"evidence_sha256\":\"sha256:ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa\",\"actor\":\"tool\",\"source_type\":\"tool_succeeded\",\"authority\":\"tool_observation\",\"observed_at\":\"2026-09-05T12:00:00.000000000Z\",\"evidence\":\"2026-09-04\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]},\"effect_sha256\":\"sha256:ef7e66e7e6bb00a6c2ef6838380eebd1376abec439ff6ce65cb814bddb04e298\",\"preview_sha256\":\"\"}}",
+  "preview": {
+    "version": "owner-review-preview-v4",
+    "preview_id": "92000000-0000-4000-8000-000000000009",
+    "owner_id": "local",
+    "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "authorization_revision": 1,
+    "scope_key": "global",
+    "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "action": "accept",
+    "candidates": [
+      {
+        "ref": {
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "interpretation_revision": 0,
+          "review_revision": 0
+        },
+        "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "destination": "global",
+        "candidate": {
+          "review_revision": 0,
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "proposal": {
+            "proposition": {
+              "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+              "predicate_id": "92000000-0000-4000-8000-000000000003",
+              "object": {
+                "literal": {
+                  "kind": "text",
+                  "value": "café"
+                }
+              },
+              "polarity": "affirmed"
+            },
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "temporal_qualification": "",
+            "support": [
+              {
+                "event_id": "92000000-0000-4000-8000-000000000001",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "9:14",
+                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+              },
+              {
+                "event_id": "99000000-0000-4000-8000-000000000143",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "0:10",
+                "evidence_sha256": "ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa"
+              }
+            ],
+            "context": []
+          },
+          "support": [
+            {
+              "source_type": "user_message",
+              "locator": {
+                "event_id": "92000000-0000-4000-8000-000000000001",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "9:14",
+                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+              },
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "scope_key": "global",
+              "sequence": 2,
+              "format_version": 1,
+              "observed_at": "2026-09-05T12:00:00Z",
+              "actor": "owner",
+              "authority": "owner_statement",
+              "usage": "new_support",
+              "evidence": "café"
+            },
+            {
+              "observation": {
+                "contract": "local-clock-display-v1",
+                "root_id": "92000000-0000-4000-8000-000000000001",
+                "execution_id": "99000000-0000-4000-8000-000000000144",
+                "call_id": "clock-call",
+                "ancestry_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "source_type": "tool_succeeded",
+              "locator": {
+                "event_id": "99000000-0000-4000-8000-000000000143",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "0:10",
+                "evidence_sha256": "ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa"
+              },
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "scope_key": "global",
+              "sequence": 4,
+              "format_version": 1,
+              "observed_at": "2026-09-05T12:00:00Z",
+              "actor": "tool",
+              "authority": "tool_observation",
+              "usage": "new_support",
+              "evidence": "2026-09-04"
+            }
+          ],
+          "context": [],
+          "review_state": "unresolved"
+        },
+        "redacted": false
+      }
+    ],
+    "source_policy": "owner-assertions-v1",
+    "effect": {
+      "version": "owner-review-effect-v4",
+      "operation_id": "92000000-0000-4000-8000-000000000006",
+      "scope": {
+        "scope_id": "92000000-0000-4000-8000-000000000002",
+        "scope_key": "global",
+        "revision": 1
+      },
+      "scopes": [
+        {
+          "scope_id": "92000000-0000-4000-8000-000000000002",
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "claims": [
+        {
+          "candidate": {
+            "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "interpretation_revision": 0,
+            "review_revision": 0
+          },
+          "claim": {
+            "claim_id": "92000000-0000-4000-8000-000000000008",
+            "scope_key": "global",
+            "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+            "predicate": {
+              "predicate_id": "92000000-0000-4000-8000-000000000003",
+              "token": "drink",
+              "version": 1,
+              "label": "drink",
+              "object_constraint": "text",
+              "cardinality": "many",
+              "create": false
+            },
+            "object": {
+              "literal": {
+                "kind": "text",
+                "value": "café"
+              }
+            },
+            "polarity": "affirmed",
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "created_operation_id": "92000000-0000-4000-8000-000000000006",
+            "transaction_time": "0001-01-01T00:00:00Z"
+          },
+          "create": true,
+          "subject": {
+            "entity_id": "92000000-0000-4000-8000-000000000004",
+            "scope_key": "global",
+            "canonical_name": "owner",
+            "entity_type": "person",
+            "anchor_kind": "owner",
+            "create": false
+          },
+          "predicate": {
+            "predicate_id": "92000000-0000-4000-8000-000000000003",
+            "token": "drink",
+            "version": 1,
+            "label": "drink",
+            "object_constraint": "text",
+            "cardinality": "many",
+            "create": false
+          },
+          "object_entity": null,
+          "sources": [
+            {
+              "source_link_id": "92000000-0000-4000-8000-000000000005",
+              "operation_id": "92000000-0000-4000-8000-000000000006",
+              "event_id": "92000000-0000-4000-8000-000000000001",
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "source_scope_key": "global",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "9:14",
+              "evidence_sha256": "sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e",
+              "actor": "owner",
+              "source_type": "user_message",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-05T12:00:00.000000000Z",
+              "evidence": "café",
+              "eligibility": "eligible",
+              "create": true
+            },
+            {
+              "source_link_id": "99000000-0000-4000-8000-000000000145",
+              "operation_id": "92000000-0000-4000-8000-000000000006",
+              "event_id": "99000000-0000-4000-8000-000000000143",
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "source_scope_key": "global",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "0:10",
+              "evidence_sha256": "sha256:ec00d6c3e1a390cb687d96168d38fbb1c79e6fcd9e3d1193448e5bc2dea06efa",
+              "actor": "tool",
+              "source_type": "tool_succeeded",
+              "authority": "tool_observation",
+              "observed_at": "2026-09-05T12:00:00.000000000Z",
+              "evidence": "2026-09-04",
+              "eligibility": "eligible",
+              "create": true
+            }
+          ],
+          "conflicts": [],
+          "context": [],
+          "temporal_qualification": ""
+        }
+      ]
+    },
+    "effect_sha256": "sha256:ef7e66e7e6bb00a6c2ef6838380eebd1376abec439ff6ce65cb814bddb04e298",
+    "preview_sha256": "sha256:213d9db68acc13874977e00fb6b9dbd2376d3a3768e847e8d11b5261d28d61a8"
+  }
+}

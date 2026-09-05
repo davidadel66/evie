@@ -1,0 +1,543 @@
+{
+  "schema_version": "evie-extraction-spike-gold-v1",
+  "annotation_status": "proposed_not_human_reviewed",
+  "cases": [
+    {
+      "case_id": "N01-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+              "start": 0,
+              "end": 13
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N01-b",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unwanted_but_true",
+      "forbidden": "",
+      "uncertainty": "The pear is true but unwanted. The old preference alone cannot own a new candidate.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N02-a",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "Neither owner residence nor Maya residence nor an attributed-report Claim is supported under D1.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N02-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "residence",
+            "object_kind": "text",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "neighbor",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Use a distinct unresolved Maya; no existing same-name identity is silently reused. Residence is required; the explicitly supported neighbor relationship is optional.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N03-a",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "The assistant question does not establish a preference.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N03-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea over coffee",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+              "start": 0,
+              "end": 4
+            }
+          ],
+          "context": [
+            {
+              "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+              "start": 0,
+              "end": 28
+            }
+          ]
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "The exact question is non-supporting context; Yes is the new owner support.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N04-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya Chen",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "cousin",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+              "start": 0,
+              "end": 51
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya Patel",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "colleague",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "2b5f248a-7225-5148-8a68-f5911fe3c31a",
+              "start": 0,
+              "end": 51
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Both Entities are new alternatives pending review; full names identify distinct proposals but do not approve a merge.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N04-b",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "The pronoun has two plausible antecedents. Neither Maya receives a residence/move assertion.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N05-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "decision",
+            "object_kind": "text",
+            "object": "SQLite",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+              "start": 0,
+              "end": 83
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "constraint",
+            "object_kind": "text",
+            "object": "offline operation",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+              "start": 0,
+              "end": 83
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N05-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "consideration",
+            "object_kind": "text",
+            "object": "PostgreSQL",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+              "start": 0,
+              "end": 98
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "An adopted PostgreSQL decision is unsupported. Abstention on the optional consideration passes.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N06-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "employment",
+            "object_kind": "text",
+            "object": "Acme",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "last month",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+              "start": 0,
+              "end": 44
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Keep relative time verbatim; no exact UTC boundary. Earlier employment may have been true.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N06-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya Chen",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "cousin",
+            "polarity": "affirmed",
+            "kind": "error_correction",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "correct"
+          },
+          "sources": [
+            {
+              "event_id": "c21d505c-f80a-5910-83f7-685617e6d48e",
+              "start": 0,
+              "end": 62
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya Chen",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "sister",
+            "polarity": "denied",
+            "kind": "error_correction",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "correct"
+          },
+          "sources": [
+            {
+              "event_id": "c21d505c-f80a-5910-83f7-685617e6d48e",
+              "start": 0,
+              "end": 62
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Interpret an earlier error without selecting an existing Maya or mutating any accepted Claim.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N07-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "decision",
+            "object_kind": "text",
+            "object": "move to Paris",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "next year",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "bf3cfc60-9f7a-5852-9bb5-05c3416fb25b",
+              "start": 0,
+              "end": 42
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "Completed residence or an invented exact move date is unsupported.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N07-b",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unsupported",
+      "forbidden": "Neither Rome residence nor a standing cycling preference follows; do not repeat the old Paris decision from overlap.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N08-a",
+      "split": "development",
+      "expected": [],
+      "no_memory_label": "unwanted_but_true",
+      "forbidden": "",
+      "uncertainty": "The clock is an eligible contracted observation but no standalone useful memory is wanted.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N08-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "habit",
+            "object_kind": "text",
+            "object": "drinking coffee",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "2026-09-04",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+              "start": 0,
+              "end": 78
+            },
+            {
+              "event_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+              "start": 0,
+              "end": 10
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Calendar date only, from get_time content 0:10; no timezone or exact ValidTime boundary. The coffee change is an explicit owner assertion.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N09-a",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "café ☕",
+            "polarity": "denied",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+              "start": 0,
+              "end": 26
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "",
+      "uncertainty": "Committed owner assertion survives failure. Unicode byte locations remain exact.",
+      "annotation_status": "proposed_not_human_reviewed"
+    },
+    {
+      "case_id": "N09-b",
+      "split": "development",
+      "expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "cycling for daily commute",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "360edcc2-fb9c-5c40-8884-f90ba6c41136",
+              "start": 0,
+              "end": 38
+            }
+          ],
+          "context": []
+        }
+      ],
+      "no_memory_label": "",
+      "forbidden": "No completed clock outcome, invented date, or synthetic terminal. Prior failed-turn preference is not new support.",
+      "uncertainty": "",
+      "annotation_status": "proposed_not_human_reviewed"
+    }
+  ]
+}
