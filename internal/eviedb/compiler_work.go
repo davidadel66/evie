@@ -111,7 +111,7 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 			case <-ticker.C:
 				checkCtx, checkCancel := context.WithTimeout(callCtx, 500*time.Millisecond)
 				var current int
-				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running'`, jobID, holder, fence).Scan(&current)
+				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, jobID, holder, fence).Scan(&current)
 				if err == nil && current != 1 {
 					err = ErrCompilerFence
 				}
@@ -179,6 +179,9 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 			reason = "invalid_source_or_effect"
 		}
 		err = s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence), reason, errors.Is(extractErr, ErrCompilerConfiguration) || errors.Is(extractErr, ErrCompilerTerminalOutput))
+		if errors.Is(err, ErrCompilerFence) {
+			err = errors.Join(err, s.stopCompilerClaim(cleanupCtx, claim, compilerReleaseKnown(extracted.ReleaseEvidence)))
+		}
 		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
 		return result, errors.Join(extractErr, err, readErr)
 	}
@@ -194,6 +197,9 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 			reason = "invalid_source"
 		}
 		failedErr := s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, true, reason, terminal)
+		if errors.Is(failedErr, ErrCompilerFence) {
+			failedErr = errors.Join(failedErr, s.stopCompilerClaim(cleanupCtx, claim, true))
+		}
 		return memory.Compilation{}, errors.Join(err, failedErr)
 	}
 	if err = s.publishCompilerResult(publicationCtx, owner, jobID, string(holder), fence, request); err != nil {
@@ -225,43 +231,40 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 		if err := compilerAuthorize(ctx, conn, owner, selection); err != nil {
 			return err
 		}
-		// Any previously owned covering prefix is reused, including failed work.
-		var existingState string
-		err := conn.QueryRowContext(ctx, `SELECT selection_id,COALESCE(job_id,''),state FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=? AND last_sequence>=? ORDER BY last_sequence LIMIT 1`, generationID, selection.Destination, selection.SessionID, selection.RootID, selection.Cutoff).Scan(&selectionID, &jobID, &existingState)
-		if err == nil && existingState != "deferred_live" && existingState != "selected_unmaterialized" {
-			return nil
-		}
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		var requestedFirst int64
+		if err := conn.QueryRowContext(ctx, `SELECT sequence FROM events WHERE id=? AND session_id=?`, selection.RootID, selection.SessionID).Scan(&requestedFirst); err != nil {
 			return err
 		}
-		newSelection := errors.Is(err, sql.ErrNoRows)
-		var first int64
+		if scheduling.FirstSequence > requestedFirst {
+			requestedFirst = scheduling.FirstSequence
+		}
+		interval, err := nextCompilerInterval(ctx, conn, generationID, selection, requestedFirst)
+		if err != nil {
+			return err
+		}
+		first := interval.First
+		selection.Cutoff = interval.Last
+		selectionID, jobID = interval.SelectionID, interval.JobID
+		newSelection := selectionID == ""
+		if !newSelection && interval.State != "deferred_live" && interval.State != "selected_unmaterialized" {
+			return nil
+		}
 		if newSelection {
-			if err := conn.QueryRowContext(ctx, `SELECT sequence FROM events WHERE id=? AND session_id=?`, selection.RootID, selection.SessionID).Scan(&first); err != nil {
-				return err
-			}
-			var last sql.NullInt64
-			if err := conn.QueryRowContext(ctx, `SELECT MAX(last_sequence) FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=?`, generationID, selection.Destination, selection.SessionID, selection.RootID).Scan(&last); err != nil {
-				return err
-			}
-			if last.Valid {
-				first = last.Int64 + 1
-			}
-			if scheduling.FirstSequence > first {
-				first = scheduling.FirstSequence
-			}
 			selectionID = memory.CompilerHash(compilerJSON(struct {
 				Generation string
 				Selection  memory.CompilationSelection
 			}{generationID, selection}))
-		} else {
-			if err := conn.QueryRowContext(ctx, `SELECT first_sequence,last_sequence FROM memory_compiler_selections WHERE selection_id=?`, selectionID).Scan(&first, &selection.Cutoff); err != nil {
-				return err
-			}
 		}
+
 		window, state, reason, err := captureCompilerWindow(ctx, conn, owner, selection, first)
 		if err != nil {
 			return err
+		}
+		// Live activation owns its revisit obligation separately. Do not create
+		// an immutable-looking partial cut before its exact root can be sealed.
+		if state == "deferred_live" && scheduling.AwaitClosure {
+			selectionID = ""
+			return nil
 		}
 		if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_generations VALUES(?,?)`, generationID, manifest); err != nil {
 			return err
@@ -328,7 +331,7 @@ func compilerChanged(result sql.Result, err error) error {
 }
 func compilerFence(ctx context.Context, conn *sql.Conn, job, holder string, fence int64, state string) error {
 	var n int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=?`, job, holder, fence, state).Scan(&n); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, job, holder, fence, state).Scan(&n); err != nil {
 		return err
 	}
 	if n != 1 {

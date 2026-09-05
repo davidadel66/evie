@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"text/template"
 	"time"
 
@@ -55,56 +54,8 @@ func (o *Ollama) Extract(ctx context.Context, g memory.CompilerGeneration, reque
 	if err := memory.CompilerInputBudget(g, request); err != nil {
 		return noDispatch, err
 	}
-	var version struct {
-		Version string `json:"version"`
-	}
-	if err := o.call(ctx, "GET", "/api/version", nil, &version); err != nil {
+	if err := o.VerifyCompilerConfiguration(ctx, g); err != nil {
 		return noDispatch, err
-	}
-	if version.Version != g.RuntimeVersion {
-		return noDispatch, fmt.Errorf("%w: pinned runtime version mismatch", eviedb.ErrCompilerConfiguration)
-	}
-	var tags struct {
-		Models []struct {
-			Name   string `json:"name"`
-			Digest string `json:"digest"`
-		} `json:"models"`
-	}
-	if err := o.call(ctx, "GET", "/api/tags", nil, &tags); err != nil {
-		return noDispatch, err
-	}
-	matched := 0
-	for _, model := range tags.Models {
-		if model.Name == g.ModelArtifact && strings.TrimPrefix(model.Digest, "sha256:") == g.ModelManifestSHA256 {
-			matched++
-		}
-	}
-	if matched != 1 {
-		return noDispatch, fmt.Errorf("%w: pinned model artifact mismatch", eviedb.ErrCompilerConfiguration)
-	}
-	var show struct {
-		Template string `json:"template"`
-		System   string `json:"system"`
-		Details  struct {
-			Quantization string `json:"quantization_level"`
-		} `json:"details"`
-		ModelInfo map[string]json.RawMessage `json:"model_info"`
-	}
-	if err := o.call(ctx, "POST", "/api/show", map[string]any{"model": g.ModelArtifact, "verbose": true}, &show); err != nil {
-		return noDispatch, err
-	}
-	tokenizer := map[string]json.RawMessage{}
-	for key, value := range show.ModelInfo {
-		if strings.HasPrefix(key, "tokenizer.") {
-			tokenizer[key] = value
-		}
-	}
-	tokenizerJSON, err := json.Marshal(tokenizer)
-	if err != nil {
-		return noDispatch, err
-	}
-	if show.Template != g.Template || show.System != "" || show.Details.Quantization != g.Quantization || len(tokenizer) == 0 || memory.CompilerHash(tokenizerJSON) != g.TokenizerSHA256 {
-		return noDispatch, fmt.Errorf("%w: pinned template, system, tokenizer or quantization mismatch", eviedb.ErrCompilerConfiguration)
 	}
 	prompt, err := render(g, request)
 	if err != nil {

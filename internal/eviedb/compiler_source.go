@@ -35,11 +35,24 @@ func compilerHasSecret(text string) bool {
 
 type compilerEvent struct {
 	id, parent                 memory.EventID
+	hasParent                  bool
 	seq                        int64
 	kind                       memory.EventType
 	role                       memory.EventRole
 	content, payload, observed string
 	size, version              int
+}
+
+// Index coordinates and aggregate counts do not inspect source fields. The
+// complete bounded event projection below is the counted source-read boundary.
+const compilerEventColumns = `id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version`
+
+func readCompilerEvent(row interface{ Scan(...any) error }) (e compilerEvent, err error) {
+	var parent sql.NullString
+	err = row.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version)
+	e.parent = memory.EventID(parent.String)
+	e.hasParent = parent.Valid
+	return
 }
 
 // Owner authority is independent of the source session's active/closed state.
@@ -82,17 +95,19 @@ func compilerAuthorize(ctx context.Context, q interface {
 	return requireSemanticScopeKeysAvailable(ctx, q, []string{"global", destination, sel.Destination})
 }
 
-func captureCompilerWindow(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, sel memory.CompilationSelection, first int64) (memory.CompilerWindow, string, string, error) {
+func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memory.ScopeContext, sel memory.CompilationSelection, first int64) (memory.CompilerWindow, string, string, error) {
 	w := memory.CompilerWindow{Selection: sel, FirstSequence: first, NewEventIDs: []memory.EventID{}, Sources: []memory.CompilerSource{}, Omissions: []memory.CompilerOmission{}}
-	var rootseq int64
-	var rootType, rootRole string
-	var rootParent sql.NullString
-	if err := conn.QueryRowContext(ctx, `SELECT sequence,event_type,role,parent_id FROM events WHERE id=? AND session_id=?`, sel.RootID, sel.SessionID).Scan(&rootseq, &rootType, &rootRole, &rootParent); err != nil {
+	// Root eligibility is source inspection too. Cache its complete bounded row
+	// and omit it from the range read below, so a 128-event window is read once.
+	root, err := readCompilerEvent(conn.QueryRowContext(ctx, `SELECT `+compilerEventColumns+` FROM events WHERE id=? AND session_id=?`, sel.RootID, sel.SessionID))
+	if err != nil {
 		return w, "failed", "invalid_root", err
 	}
-	if rootType != "user_message" || rootRole != "user" || rootParent.Valid || sel.Cutoff < rootseq || first < rootseq {
+	rootseq := root.seq
+	if root.kind != memory.EventUserMessage || root.role != memory.RoleUser || root.hasParent || sel.Cutoff < rootseq || first < rootseq {
 		return w, "failed", "invalid_root", nil
 	}
+
 	var last int64
 	if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0) FROM events WHERE session_id=?`, sel.SessionID).Scan(&last); err != nil {
 		return w, "", "", err
@@ -129,28 +144,30 @@ func captureCompilerWindow(ctx context.Context, conn *sql.Conn, owner memory.Sco
 	if count > 128 {
 		return w, "failed", "source_inspection_limit", nil
 	}
-	rows, err = conn.QueryContext(ctx, `SELECT id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version FROM events WHERE session_id=? AND sequence BETWEEN ? AND ? ORDER BY sequence`, sel.SessionID, start, sel.Cutoff)
+	rows, err = conn.QueryContext(ctx, `SELECT `+compilerEventColumns+` FROM events WHERE session_id=? AND sequence BETWEEN ? AND ? AND id<>? ORDER BY sequence`, sel.SessionID, start, sel.Cutoff, sel.RootID)
 	if err != nil {
 		return w, "", "", err
 	}
-	events := []compilerEvent{}
-	byID := map[memory.EventID]compilerEvent{}
+	events := []compilerEvent{root}
 	for rows.Next() {
-		var e compilerEvent
-		var parent sql.NullString
-		if err := rows.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version); err != nil {
+		e, err := readCompilerEvent(rows)
+		if err != nil {
 			rows.Close()
 			return w, "", "", err
 		}
-		e.parent = memory.EventID(parent.String)
 		events = append(events, e)
-		byID[e.id] = e
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
 		return w, "", "", err
 	}
+	sort.Slice(events, func(i, j int) bool { return events[i].seq < events[j].seq })
+	byID := make(map[memory.EventID]compilerEvent, len(events))
+	for _, e := range events {
+		byID[e.id] = e
+	}
+
 	rootOf := func(e compilerEvent) (memory.EventID, error) {
 		visited := map[memory.EventID]bool{}
 		for n := 0; n < 128; n++ {

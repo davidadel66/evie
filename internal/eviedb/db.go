@@ -1166,6 +1166,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("create memory compiler schema: %w", err)
 	}
+	if err := ensureCompilerActivationSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create memory compiler activation schema: %w", err)
+	}
 	if err := ensureCandidateReviewSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create candidate review schema: %w", err)

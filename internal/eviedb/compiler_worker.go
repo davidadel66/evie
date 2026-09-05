@@ -19,6 +19,7 @@ import (
 // Neither retries nor a different supervisor can rewrite its original lane.
 type compilerScheduling struct {
 	FirstSequence   int64
+	AwaitClosure    bool
 	Lane            string
 	Position        int64
 	HistoricalOrder int64
@@ -119,7 +120,7 @@ func claimCompilerJob(ctx context.Context, conn *sql.Conn, owner memory.ScopeCon
 		return c, err
 	}
 	var ready int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
 		return c, err
 	}
 	if ready != 1 {
@@ -193,7 +194,7 @@ func reserveCompilerResources(ctx context.Context, conn compilerStageTransaction
 
 func (s *Store) renewCompilerClaim(ctx context.Context, claim compilerClaim) error {
 	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged')`, claim.JobID, claim.Holder, claim.Fence)
+		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged') AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, claim.JobID, claim.Holder, claim.Fence)
 		return compilerChanged(result, err)
 	})
 }
@@ -357,7 +358,7 @@ func adoptCompilerStageInTransaction(ctx context.Context, conn compilerStageTran
 			return err
 		}
 		var eligible int
-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason=''`, jobID).Scan(&eligible); err != nil {
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs)`, jobID).Scan(&eligible); err != nil {
 			return err
 		}
 		if eligible != 1 {
@@ -442,6 +443,14 @@ func (s *Store) ResumeCompilation(ctx context.Context, owner memory.ScopeContext
 		case "completed_candidates", "completed_empty", "excluded", "failed":
 			return errors.New("terminal compilation cannot be resumed")
 		}
+		var paused int
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_activation_paused_jobs WHERE job_id=?`, inspection.JobID).Scan(&paused); err != nil {
+			return err
+		}
+		if paused != 0 {
+			return ErrCompilerFence
+		}
+
 		if inspection.State == "cancelled" {
 			var unfinished int
 			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE state IN ('queued','running','retry_wait','staged')`).Scan(&unfinished); err != nil {
@@ -564,7 +573,7 @@ func (s *Store) RunCompilerStep(ctx context.Context, config CompilerSupervisorCo
 		}
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
 		// The fairness predicate includes due/configured/unpaused work only.
-		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
+		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
 		var session memory.SessionID
 		var state string
 		if err := conn.QueryRowContext(ctx, query, args...).Scan(&jobID, &session, &state); err != nil {
