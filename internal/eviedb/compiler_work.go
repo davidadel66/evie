@@ -111,7 +111,7 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
 			case <-ticker.C:
 				checkCtx, checkCancel := context.WithTimeout(callCtx, 500*time.Millisecond)
 				var current int
-				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, jobID, holder, fence).Scan(&current)
+				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND NOT EXISTS (SELECT 1 FROM memory_compiler_invalid_claims p WHERE p.job_id=memory_compiler_jobs.job_id)`, jobID, holder, fence).Scan(&current)
 				if err == nil && current != 1 {
 					err = ErrCompilerFence
 				}
@@ -304,6 +304,11 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_job_schedule SET lane=?,position=?,historical_order=? WHERE job_id=?`, scheduling.Lane, scheduling.Position, scheduling.HistoricalOrder, jobID); err != nil {
 			return err
 		}
+		if scheduling.HistorySelected {
+			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_jobs(job_id) VALUES(?)`, jobID); err != nil {
+				return err
+			}
+		}
 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_selections SET job_id=?,state=?,reason=? WHERE selection_id=?`, jobID, state, reason, selectionID); err != nil {
 			return err
 		}
@@ -331,7 +336,7 @@ func compilerChanged(result sql.Result, err error) error {
 }
 func compilerFence(ctx context.Context, conn *sql.Conn, job, holder string, fence int64, state string) error {
 	var n int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, job, holder, fence, state).Scan(&n); err != nil {
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND NOT EXISTS (SELECT 1 FROM memory_compiler_invalid_claims p WHERE p.job_id=memory_compiler_jobs.job_id)`, job, holder, fence, state).Scan(&n); err != nil {
 		return err
 	}
 	if n != 1 {

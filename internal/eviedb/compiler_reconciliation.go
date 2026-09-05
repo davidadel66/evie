@@ -140,24 +140,17 @@ func discoverCompilerEvidenceInTransaction(ctx context.Context, conn compilerAct
 	}
 	// Follow parent/terminal turn identity, never "most recent root". Only
 	// metadata is loaded; the separate sealing transaction bounds raw input.
-	var root, rootKind, rootRole string
-	var rootseq, depth int64
-	var rootParent sql.NullString
-	err = conn.QueryRowContext(ctx, `WITH RECURSIVE ancestry(id,parent_id,sequence,event_type,role,payload_json,depth) AS (
- VALUES(?,?,?,?,?,?,1)
- UNION ALL SELECT e.id,e.parent_id,e.sequence,e.event_type,COALESCE(e.role,''),CASE WHEN length(CAST(e.payload_json AS BLOB))<=8192 THEN COALESCE(e.payload_json,'') ELSE '' END,a.depth+1 FROM ancestry a JOIN events e ON e.id=CASE WHEN a.event_type IN ('turn_failed','turn_interrupted') AND json_valid(a.payload_json) THEN json_extract(a.payload_json,'$.turn_id') ELSE a.parent_id END
- WHERE e.session_id=? AND e.sequence<a.sequence AND a.depth<128
-) SELECT id,sequence,event_type,role,parent_id,depth FROM ancestry ORDER BY depth DESC LIMIT 1`, event, parent, seq, kind, role, payload, session).Scan(&root, &rootseq, &rootKind, &rootRole, &rootParent, &depth)
+	ancestry, err := resolveCompilerAncestry(ctx, conn, session, compilerAncestryEvent{ID: event, Parent: parent, Sequence: seq, Kind: kind, Role: role, Payload: payload})
 	if err != nil {
 		return err
 	}
+	root := ancestry.ID
 	state, reason := "selected_unmaterialized", ""
-	if rootKind != "user_message" || rootRole != "user" || rootParent.Valid {
+	if ancestry.Kind != "user_message" || ancestry.Role != "user" || ancestry.Parent.Valid {
 		root = event
-		rootseq = seq
 		state = "failed"
 		reason = "invalid_source_ancestry"
-		if depth == 128 {
+		if ancestry.Depth == 128 {
 			reason = "source_inspection_limit"
 		}
 		if kind == string(memory.EventContextCompacted) || kind == string(memory.EventContextSnapshot) {
@@ -214,6 +207,7 @@ func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorCo
 			if err != nil && ctx.Err() == nil {
 				continue
 			} // obligations remain durable
+			_, _ = s.ReconcileCompilerHistory(ctx, config)
 		}
 	}
 }

@@ -306,6 +306,18 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 	sort.Slice(w.Sources, func(i, j int) bool { return w.Sources[i].Sequence < w.Sources[j].Sequence })
 	sort.Slice(w.Omissions, func(i, j int) bool { return w.Omissions[i].Sequence < w.Omissions[j].Sequence })
 	if w.Closure == "" {
+		// A later root closes this captured historical prefix even when that
+		// root is outside selection. This indexed count loads no outside text
+		// and does not extend the immutable evidence cutoff or covered IDs.
+		var later int
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM events WHERE session_id=? AND sequence>? AND event_type='user_message' AND role='user' AND parent_id IS NULL LIMIT 1)`, sel.SessionID, sel.Cutoff).Scan(&later); err != nil {
+			return w, "", "", err
+		}
+		if later != 0 {
+			w.Closure = "later_root"
+		}
+	}
+	if w.Closure == "" {
 		var live int
 		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM session_turn_leases WHERE session_id=? AND holder_id IS NOT NULL AND julianday(expires_at)>julianday('now')`, sel.SessionID).Scan(&live); err != nil {
 			return w, "", "", err

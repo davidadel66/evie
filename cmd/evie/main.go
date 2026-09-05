@@ -57,6 +57,12 @@ func main() {
 	}
 	defer db.Close()
 	kernelStore := eviedb.NewStore(db)
+	if handled, err := runCompilerHistoryManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory compiler history: %v", err)
+		}
+		return
+	}
 	if handled, err := runCompilerActivationManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
 		if err != nil {
 			log.Fatalf("memory compiler activation: %v", err)
