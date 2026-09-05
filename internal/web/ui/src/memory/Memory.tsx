@@ -10,10 +10,15 @@ import {
   type SemanticScope,
 } from "../api/memory";
 import { LatestMemoryRequest } from "./latestRequest";
+import { MemoryReviewTabs } from "../candidateInbox/MemoryReviewTabs";
 
 type ListKind = "entity" | "claim";
 
 export function Memory() {
+  return <MemoryReviewTabs><AcceptedMemory /></MemoryReviewTabs>;
+}
+
+function AcceptedMemory() {
   const [scopes, setScopes] = useState<SemanticScope[]>([]);
   const [scopeKey, setScopeKey] = useState("");
   const [kind, setKind] = useState<ListKind>("entity");

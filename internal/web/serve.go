@@ -82,6 +82,7 @@ type Server struct {
 	receipts         ReceiptInspector
 	contextSessions  ContextSessionController
 	semanticMemory   agent.SemanticGraphMemory
+	candidateReview  CandidateReviewKernel
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -162,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
 		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
 	}
+	s.registerCandidateReviewRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

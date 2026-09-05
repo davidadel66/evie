@@ -207,7 +207,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopCompiler := startCompilerForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.NewManagedServer(nil, pluginManager, kernelStore))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore))
 			stopCompiler()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -242,7 +242,7 @@ func main() {
 			), nil
 		})
 		stopCompiler := startCompilerForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.NewContextMemoryServer(nil, pluginManager, kernelStore, controller, kernelStore))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewContextMemoryServer(nil, pluginManager, kernelStore, controller, kernelStore), kernelStore))
 		stopCompiler()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)
