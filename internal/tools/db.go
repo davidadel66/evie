@@ -174,11 +174,27 @@ Databases: "transcripts" — read-only YouTube transcript library. Query transcr
 	},
 }
 
+// QueryDBToolWithEvieReader binds the existing query tool to a trusted Evie
+// reader. The opener changes only the database connection; all model-facing SQL
+// validation and dispatch behavior remain the same. The tool closes each reader.
+func QueryDBToolWithEvieReader(openEvie func(context.Context) (*sql.DB, error)) Tool {
+	if openEvie == nil {
+		openEvie = func(context.Context) (*sql.DB, error) { return nil, errors.New("Evie query reader unavailable") }
+	}
+	return Tool{Schema: cloneSchema(queryDBTool), Execute: func(ctx context.Context, args string) (string, error) {
+		return queryDBWithEvieReader(ctx, args, openEvie)
+	}}
+}
+
 // queryDB runs the model's SQL through the named database's read-only
 // connection and renders the result as a pipe-separated table. Fences
 // per database as in editDB; the SELECT-prefix check and engine-level
 // mode=ro are layered defenses.
 func queryDB(ctx context.Context, args string) (string, error) {
+	return queryDBWithEvieReader(ctx, args, eviedb.OpenDBReadOnlyContext)
+}
+
+func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(context.Context) (*sql.DB, error)) (string, error) {
 	var params struct {
 		DB    string `json:"db"`
 		Query string `json:"query"`
@@ -204,7 +220,7 @@ func queryDB(ctx context.Context, args string) (string, error) {
 		if err := validateEvieSelect(q); err != nil {
 			return "", err
 		}
-		db, err = eviedb.OpenDBReadOnlyContext(ctx)
+		db, err = openEvie(ctx)
 	case "transcripts":
 		if err := validateTranscriptSelect(q); err != nil {
 			return "", err

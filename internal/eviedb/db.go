@@ -1150,6 +1150,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+	if err := connectSQLiteStartup(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("connect db: %w", err)
+	}
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
