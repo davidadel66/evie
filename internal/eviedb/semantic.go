@@ -288,6 +288,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureSemanticOperationSchemaV5(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureSemanticOperationSchemaV6(ctx, db); err != nil {
+		return err
+	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
 	if err != nil {
 		return err
@@ -431,7 +434,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
 		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
@@ -486,7 +489,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -540,7 +543,7 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -594,7 +597,7 @@ func ensureSemanticOperationSchemaV5(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)

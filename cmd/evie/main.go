@@ -61,6 +61,12 @@ func main() {
 		}
 		return
 	}
+	if handled, err := runOwnerReviewManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+		if err != nil {
+			log.Fatalf("memory review: %v", err)
+		}
+		return
+	}
 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
 		log.Fatalf("failed to import legacy Todo list: %v", err)
 	}

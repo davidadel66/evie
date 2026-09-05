@@ -1110,7 +1110,15 @@ func loadEligibleSourcesAt(ctx context.Context, queryer semanticInspectionQuerye
 		}
 		sources = append(sources, source)
 	}
-	return sources, rows.Err()
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	for i := range sources {
+		sources[i] = renderSourceWithReviewOrigin(ctx, queryer, sources[i])
+	}
+	return sources, nil
 }
 
 func loadSemanticEntityForInspection(ctx context.Context, queryer semanticInspectionQueryer, id memory.SemanticID) (memory.SemanticEntity, error) {

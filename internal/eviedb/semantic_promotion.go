@@ -45,6 +45,9 @@ func (s *Store) PreparePromotion(
 		if proposal.SessionID != scope.SessionID || !promotionRequestsEqual(proposal.Request, request) {
 			return memory.PromotionProposal{}, ErrIdempotencyConflict
 		}
+		if err := requirePromotionReviewDisclosure(ctx, s.db, proposal.Sources); err != nil {
+			return memory.PromotionProposal{}, err
+		}
 		proposal.ProposalSHA256 = acceptedHash
 		proposal.PreparedSHA256, _, err = semanticHash(proposal)
 		return proposal, err
@@ -106,6 +109,10 @@ func (s *Store) PreparePromotion(
 		if _, allowed := allowedSourceScopes[sources[index].ScopeKey]; !allowed {
 			sources[index].Evidence = ""
 		}
+	}
+
+	if err := requirePromotionReviewDisclosure(ctx, s.db, sources); err != nil {
+		return memory.PromotionProposal{}, err
 	}
 
 	operationID, err := newSemanticID()
@@ -579,6 +586,9 @@ func validatePromotionSources(
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	if len(eligible) != len(sources) {
 		return errors.New("Promotion source eligibility changed")
 	}
@@ -590,6 +600,17 @@ func validatePromotionSources(
 		}
 		seen[key] = struct{}{}
 		current, ok := eligible[key]
+		if ok {
+			var protected bool
+			var err error
+			current, protected, err = projectSourceWithReviewOrigin(ctx, promotionReviewQuery{writer}, current)
+			if err != nil {
+				return err
+			}
+			if protected && proposed.Evidence == "" {
+				return ErrReviewInvalidSource
+			}
+		}
 		if !ok || current.ID == "" || current.EventID != proposed.EventID || current.SessionID != proposed.SessionID ||
 			current.ScopeKey != proposed.ScopeKey || current.EventPart != proposed.EventPart ||
 			current.LocatorKind != proposed.LocatorKind || current.LocatorValue != proposed.LocatorValue ||
@@ -648,6 +669,10 @@ func validatePromotionSources(
 		if errors.Is(err, sql.ErrNoRows) {
 			return errors.New("Promotion destination Source Link changed")
 		}
+		if err != nil {
+			return err
+		}
+		destination, _, err = projectSourceWithReviewOrigin(ctx, promotionReviewQuery{writer}, destination)
 		if err != nil {
 			return err
 		}
