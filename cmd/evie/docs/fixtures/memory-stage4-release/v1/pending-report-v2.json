@@ -1,0 +1,124 @@
+{
+  "input_bytes_sha256": "sha256:627c20e399df4d0ae7d400f4af2b332538511e429141e844e77c1a7bb771383f",
+  "final_run_evidence_supplied": false,
+  "tooling_only": true,
+  "report": {
+    "observed_failures": null,
+    "version": "memory-stage4-release-report-v1",
+    "submission_sha256": "sha256:cc0aebfb490c8100b3b661d0eac46f0ddd1a4a097f514ec94a7e0eebd49d1663",
+    "status": "pending",
+    "ready_for_ongoing_compilation": false,
+    "holdout_run_authorized": false,
+    "gates": [
+      {
+        "id": "frozen_plan",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "model_selection",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "gold_review",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "pilot_review",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "release_gates",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "holdout_custody",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "complete_paired_runs",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "accepted_state_conformance",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "learned_extraction",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      },
+      {
+        "id": "integrated_workloads",
+        "status": "pending",
+        "detail": "Required evidence has not been supplied.",
+        "samples": 0
+      }
+    ],
+    "panels": [
+      {
+        "panel": "semantic_conformance",
+        "status": "not_populated",
+        "case_count": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "panel": "learned_extraction",
+        "status": "not_populated",
+        "case_count": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "panel": "retrieval_provenance",
+        "status": "not_populated",
+        "case_count": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "panel": "answer_abstention",
+        "status": "not_populated",
+        "case_count": 0,
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "measurements": null,
+    "measurement_summaries": null,
+    "review_outcomes": null,
+    "quality": [],
+    "paired_quality_deltas": [],
+    "limits": [
+      "Offline assessment of submitted metadata and adjudicated counts; hashes verify identity, not human or custodian honesty.",
+      "No model call, holdout-source access, or production activation is performed or authorized by this command.",
+      "Retrieval and production-answer quality remain deferred to Stage 5."
+    ],
+    "follow_up": "Resolve pending prerequisites before a separately authorized custodian run. Never tune on an exposed final holdout; move exposed families to development/regression and curate fresh material."
+  }
+}
