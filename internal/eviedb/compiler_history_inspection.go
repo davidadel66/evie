@@ -119,7 +119,7 @@ func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.Scop
 
 func safeHistoryReason(reason string) string {
 	switch reason {
-	case "source_scope_unavailable", "history_cancelled", "job_capacity", "unfinished_live_turn", "invalid_source_ancestry", "source_inspection_limit", "prohibited_source", "no_admitted_support", "secret_field":
+	case "source_scope_unavailable", "history_cancelled", "job_capacity", "unfinished_live_turn", "invalid_source_ancestry", "source_inspection_limit", "prohibited_source", "no_admitted_support", "no_root_members", "secret_field":
 		return reason
 	default:
 		return safeCompilerReason(reason)

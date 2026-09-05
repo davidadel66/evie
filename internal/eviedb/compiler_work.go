@@ -290,6 +290,15 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 			selectionID = ""
 			return nil
 		}
+		// Automatic reconciliation can encounter foreign-root coordinates
+		// between two owned intervals of this root. A successful bounded capture
+		// proves this gap has no root members. Record only that coordinate
+		// exclusion so reconciliation can advance; there is no job or coverage.
+		// Direct compilation and every other source failure keep their outcome.
+		emptyRootGap := scheduling.AwaitClosure && state == "failed" && reason == "empty_selection" && len(window.NewEventIDs) == 0
+		if emptyRootGap {
+			state, reason = "excluded", "no_root_members"
+		}
 		if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_generations VALUES(?,?)`, generationID, manifest); err != nil {
 			return err
 		}
@@ -302,7 +311,7 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 				return err
 			}
 		}
-		if state == "deferred_live" {
+		if state == "deferred_live" || emptyRootGap {
 			return nil
 		}
 		var unfinished int

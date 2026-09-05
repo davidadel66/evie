@@ -56,10 +56,22 @@ func (s *Store) ReconcileCompilerEvidence(ctx context.Context, config CompilerSu
 			return err
 		}
 		owner := memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: memory.SessionID(session), WorkspaceID: memory.WorkspaceID(workspace.String), ProjectID: memory.ProjectID(project.String)}
-		// Include a selected later root solely as the closure boundary. Earlier
-		// roots own only their actual members; its content cannot become support.
+		// The next root proves closure but does not belong to this root's
+		// selected interval. Including that coordinate would create an empty
+		// suffix when an already sealed root is reconsidered. Source capture
+		// checks later-root closure separately, without reading its content.
 		var cutoff int64
 		err = conn.QueryRowContext(ctx, `SELECT e.sequence FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND p.commit_position>? AND p.commit_position<=? AND e.event_type='user_message' AND e.role='user' AND e.parent_id IS NULL AND e.sequence>(SELECT sequence FROM events WHERE id=?) ORDER BY e.sequence LIMIT 1`, session, after, high, root).Scan(&cutoff)
+		if err == nil {
+			// Sequence coordinates may be sparse. Use an actual selected event
+			// boundary, not the nonexistent ordinal immediately before the root.
+			err = conn.QueryRowContext(ctx, `SELECT e.sequence FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND p.commit_position>? AND p.commit_position<=? AND e.sequence>=? AND e.sequence<? ORDER BY e.sequence DESC LIMIT 1`, session, after, high, last, cutoff).Scan(&cutoff)
+			if errors.Is(err, sql.ErrNoRows) {
+				// A root may predate activation and acquire selected children
+				// only after a newer root. No earlier selected boundary exists.
+				cutoff, err = last, nil
+			}
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			err = conn.QueryRowContext(ctx, `SELECT e.sequence FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND p.commit_position>? AND p.commit_position<=? ORDER BY e.sequence DESC LIMIT 1`, session, after, high).Scan(&cutoff)
 		}
@@ -72,9 +84,15 @@ func (s *Store) ReconcileCompilerEvidence(ctx context.Context, config CompilerSu
 		desiredCutoff := cutoff
 		if pendingSelection != "" {
 			var pendingCutoff int64
-			err := conn.QueryRowContext(ctx, `SELECT last_sequence FROM memory_compiler_selections WHERE selection_id=? AND state='selected_unmaterialized' AND job_id IS NULL`, pendingSelection).Scan(&pendingCutoff)
+			var unmaterialized bool
+			err := conn.QueryRowContext(ctx, `SELECT last_sequence,state='selected_unmaterialized' AND job_id IS NULL FROM memory_compiler_selections WHERE selection_id=?`, pendingSelection).Scan(&pendingCutoff, &unmaterialized)
 			if err == nil {
-				cutoff = pendingCutoff
+				// Discovery of a member already inside the sealed interval must
+				// reuse it. Later coordinates may belong only to other roots;
+				// they cannot create a new obligation for this root.
+				if unmaterialized || last <= pendingCutoff {
+					cutoff = pendingCutoff
+				}
 			} else if !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
@@ -104,7 +122,7 @@ func (s *Store) ReconcileCompilerEvidence(ctx context.Context, config CompilerSu
 			}
 		}
 		rootState, rootReason := state, reason
-		if desiredCutoff > sealedLast && state != "selected_unmaterialized" && state != "deferred_live" {
+		if last > sealedLast && state != "selected_unmaterialized" && state != "deferred_live" {
 			rootState = "selected_unmaterialized"
 			rootReason = ""
 		}
