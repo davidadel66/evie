@@ -55,8 +55,11 @@ CREATE TRIGGER IF NOT EXISTS memory_review_deliveries_no_delete BEFORE DELETE ON
 
 func ensureCandidateReviewSchema(ctx context.Context, db *sql.DB) error {
 	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
-		_, err := conn.ExecContext(ctx, candidateReviewSchema+reviewIdentitySchema+reviewTemporalSchema+reviewEditSchema+reviewBatchSchema)
-		return err
+		_, err := conn.ExecContext(ctx, candidateReviewSchema+reviewIdentitySchema+reviewTemporalSchema+reviewEditSchema+reviewBatchSchema+compilerRecurrenceSchema)
+		if err != nil {
+			return err
+		}
+		return migrateCompilerRecurrence(ctx, conn)
 	})
 }
 

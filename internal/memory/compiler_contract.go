@@ -74,10 +74,13 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
 	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 && identityPolicy != CompilerTemporalPolicyV3 {
 		return "", nil, errors.New("unsupported compiler identity policy")
 	}
-	for _, policy := range []string{g.PredicatePolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy} {
+	for _, policy := range []string{g.PredicatePolicy, g.ValidationPolicy, g.EffectPolicy} {
 		if policy != identityPolicy {
 			return "", nil, errors.New("inconsistent compiler interpretation policy")
 		}
+	}
+	if g.EquivalencePolicy != identityPolicy && g.EquivalencePolicy != CompilerEquivalencePolicyV2 {
+		return "", nil, errors.New("unsupported compiler equivalence policy")
 	}
 	if !json.Valid(g.Schema) || bytes.Equal(bytes.TrimSpace(g.Schema), []byte("null")) || len(g.Schema) == 0 {
 		return "", nil, errors.New("missing extraction schema")

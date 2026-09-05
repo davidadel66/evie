@@ -495,16 +495,30 @@ func (s *Store) publishCompilerResult(ctx context.Context, owner memory.ScopeCon
 		if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_candidate_groups VALUES(?,?)`, job, hash); err != nil {
 			return err
 		}
+		var generationRaw []byte
+		if err := conn.QueryRowContext(ctx, `SELECT manifest FROM memory_compiler_generations WHERE generation_id=?`, request.GenerationID).Scan(&generationRaw); err != nil {
+			return err
+		}
+		var generation memory.CompilerGeneration
+		if json.Unmarshal(generationRaw, &generation) != nil {
+			return ErrReviewInvalidSource
+		}
 		for index, candidate := range candidates {
 			candidate.ID = memory.CompilerHash([]byte(fmt.Sprintf("%s:%s:%d", job, hash, index)))
-			equivalence := memory.CompilerHash(compilerEquivalenceEncoding(request.Window.Selection, candidate))
-			var equivalent string
-			err := conn.QueryRowContext(ctx, `SELECT candidate_id FROM memory_compiler_candidates WHERE equivalence_hash=? AND equivalent_to IS NULL ORDER BY candidate_id LIMIT 1`, equivalence).Scan(&equivalent)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			// Classification reads current interpretation/review revisions in this
+			// same immediate transaction; owner edits and decisions serialize here.
+			recurrence, err := classifyCompilerRecurrence(ctx, conn, generation, request, candidate)
+			if err != nil {
 				return err
 			}
-			candidate.EquivalentTo = equivalent
-			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_candidates(candidate_id,job_id,ordinal,envelope,equivalence_hash,equivalent_to) VALUES(?,?,?,?,?,NULLIF(?,''))`, candidate.ID, job, index, compilerJSON(candidate), equivalence, equivalent); err != nil {
+			if recurrence.Suppressed {
+				candidate.EquivalentTo = recurrence.Primary
+			}
+			equivalence := memory.CompilerHash(compilerEquivalenceEncoding(request.Window.Selection, candidate))
+			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_candidates(candidate_id,job_id,ordinal,envelope,equivalence_hash,equivalent_to) VALUES(?,?,?,?,?,NULLIF(?,''))`, candidate.ID, job, index, compilerJSON(candidate), equivalence, candidate.EquivalentTo); err != nil {
+				return err
+			}
+			if err := insertCompilerRecurrence(ctx, conn, candidate.ID, recurrence); err != nil {
 				return err
 			}
 		}

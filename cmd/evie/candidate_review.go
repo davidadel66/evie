@@ -42,7 +42,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		return false, nil
 	}
 	if len(args) < 2 {
-		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|temporal-options|temporal-choose|temporal-revision|prepare|resolve|operation --scope SCOPE")
+		return true, errors.New("usage: memory-review inbox|inspect|lineage|alternatives|choose|identity-revision|temporal-options|temporal-choose|temporal-revision|prepare|resolve|operation --scope SCOPE")
 	}
 	command := args[1]
 	flags := flag.NewFlagSet("memory-review "+command, flag.ContinueOnError)
@@ -72,6 +72,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		"temporal-revision": {"scope": true, "id": true, "interpretation": true},
 		"inbox":             {"scope": true, "limit": true, "cursor": true},
 		"inspect":           {"scope": true, "id": true},
+		"lineage":           {"scope": true, "id": true},
 		"operation":         {"scope": true, "id": true},
 		"identity-revision": {"scope": true, "id": true, "interpretation": true},
 		"alternatives":      {"scope": true, "id": true, "revision": true, "interpretation": true},
@@ -92,7 +93,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 	if invalid {
 		return true, errors.New("flag is not allowed for this review command")
 	}
-	if (command == "inspect" || command == "operation" || command == "alternatives" || command == "choose" || command == "identity-revision") && *id == "" || command == "prepare" && *id == "" || command == "resolve" && (*preview == "" || *digest == "" || *delivery == "") {
+	if (command == "inspect" || command == "lineage" || command == "operation" || command == "alternatives" || command == "choose" || command == "identity-revision") && *id == "" || command == "prepare" && *id == "" || command == "resolve" && (*preview == "" || *digest == "" || *delivery == "") {
 		return true, errors.New("review command is missing an exact identity")
 	}
 	if (command == "prepare" || command == "resolve") && *action != "accept" && *action != "reject" {
@@ -149,6 +150,14 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		}
 	case "inbox":
 		result, err = kernel.ListOwnerCandidates(ctx, authority, memory.OwnerCandidateQuery{Limit: *limit, Cursor: *cursor})
+	case "lineage":
+		lineageKernel, ok := kernel.(interface {
+			InspectOwnerCandidateLineage(context.Context, eviedb.OwnerReviewContext, string) (memory.CandidateLineage, error)
+		})
+		if !ok {
+			return true, errors.New("candidate lineage unavailable")
+		}
+		result, err = lineageKernel.InspectOwnerCandidateLineage(ctx, authority, *id)
 	case "inspect":
 		result, err = kernel.InspectOwnerCandidate(ctx, authority, *id)
 	case "operation":
