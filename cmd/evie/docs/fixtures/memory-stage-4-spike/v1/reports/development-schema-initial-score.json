@@ -1,0 +1,845 @@
+{
+  "annotation_record_sha256": "sha256:a6ee1e4f56b31a14a1df0062349e56de06e5d6125f7943d6978033cf35f1b28a",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "metric_policy": "Raw means JSON-decodable proposals, including proposals rejected by declared shape/source checks. Unparseable runs remain explicit failures and required-recall attempts. Confirmed exact reviewed meanings/sources are matched; all unlisted meanings require human adjudication. Unexecuted planned runs are reported separately, never filled in. Structural retention is not entailment. Precision intervals bound unadjudicated proposals, not statistical confidence intervals.",
+  "reports": [
+    {
+      "report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/reports/development-schema.json",
+      "report_sha256": "sha256:680ee4e97153f0ab2e2003894b84e46cd3993c507033a2c03e6c5954b0e8cadf",
+      "mode": "schema",
+      "planned_runs": 20,
+      "attempted_runs": 20,
+      "unexecuted_runs": 0,
+      "statuses": {
+        "ok": 18,
+        "truncated_output": 2
+      },
+      "unparseable_raw_runs": 2,
+      "raw": {
+        "proposals": 34,
+        "supported_useful": 0,
+        "required_matches": 0,
+        "required_denominator": 12,
+        "unsupported": 0,
+        "unwanted": 0,
+        "unadjudicated": 34,
+        "confirmed_required_omissions": 2,
+        "errors": {},
+        "precision_confirmed_lower_bound": 0,
+        "precision_possible_upper_bound": 1,
+        "recall_confirmed_lower_bound": 0
+      },
+      "retained": {
+        "proposals": 20,
+        "supported_useful": 0,
+        "required_matches": 0,
+        "required_denominator": 12,
+        "unsupported": 0,
+        "unwanted": 0,
+        "unadjudicated": 20,
+        "confirmed_required_omissions": 2,
+        "errors": {},
+        "precision_confirmed_lower_bound": 0,
+        "precision_possible_upper_bound": 1,
+        "recall_confirmed_lower_bound": 0
+      },
+      "latency_p50_ms": 18574.065,
+      "latency_p95_ms": 31098.395,
+      "latency_max_ms": 32778.398
+    }
+  ],
+  "status": "output_adjudication_pending",
+  "unadjudicated": [
+    {
+      "case_id": "N01-a",
+      "candidate_sha256": "sha256:b73577bc2f92a8cbfc1534be41149e283a6c42e5d4185c8da507d70da39b2e64",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "tea",
+        "polarity": "affirmed",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+            "start": 0,
+            "end": 13
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+              "start": 0,
+              "end": 13
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:65922c25bedbfef520e5669721717bd88c52ea8e5266ab6313693d2f54de4f9e",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "decision",
+        "object_kind": "entity",
+        "object": "not eating pear at lunch",
+        "polarity": "denied",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "correct",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+            "start": 0,
+            "end": 22
+          },
+          {
+            "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+            "start": 0,
+            "end": 13
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:b73577bc2f92a8cbfc1534be41149e283a6c42e5d4185c8da507d70da39b2e64",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "tea",
+        "polarity": "affirmed",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+            "start": 0,
+            "end": 13
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:135d60520c88b7af6c4bc88e46540f89eb0fe9cb33b46e8027f16cc6dd48816b",
+      "candidate": {
+        "subject": "Maya",
+        "predicate": "residence",
+        "object_kind": "entity",
+        "object": "Paris",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "correct",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "21c06de7-390c-5551-a302-0e469a63c811",
+            "start": 0,
+            "end": 74
+          },
+          {
+            "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+            "start": 61,
+            "end": 74
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "Neither owner residence nor Maya residence nor an attributed-report Claim is supported under D1.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:30dfbf73bbd09f91a88441412c42510ce8cb63f808e4bdeaefcd0cbd8f9dcb84",
+      "candidate": {
+        "subject": "Maya",
+        "predicate": "residence",
+        "object_kind": "entity",
+        "object": "Paris",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+            "start": 0,
+            "end": 74
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "Neither owner residence nor Maya residence nor an attributed-report Claim is supported under D1.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:02f9586577f718183b55053b7b9c2b6237c47f732084b3f080a9240facf2c283",
+      "candidate": {
+        "subject": "Maya",
+        "predicate": "residence",
+        "object_kind": "entity",
+        "object": "Paris",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "correct",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+            "start": 0,
+            "end": 74
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "residence",
+            "object_kind": "text",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "neighbor",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:56ad967798ed32378e0e969c5f2f0636813307f555c5bc11d82f10b5e8e895e9",
+      "candidate": {
+        "subject": "Maya",
+        "predicate": "residence",
+        "object_kind": "entity",
+        "object": "Paris",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+            "start": 0,
+            "end": 75
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "residence",
+            "object_kind": "text",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        },
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "new:Maya (neighbor)",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "neighbor",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+              "start": 0,
+              "end": 75
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:9af9f75034ccb87a65a41b8d95e9e0bc17a7361eab56d3203ad6326f9f047d13",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "coffee",
+        "polarity": "denied",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+            "start": 0,
+            "end": 4
+          }
+        ],
+        "context": [
+          {
+            "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+            "start": 0,
+            "end": 28
+          }
+        ]
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea over coffee",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+              "start": 0,
+              "end": 4
+            }
+          ],
+          "context": [
+            {
+              "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+              "start": 0,
+              "end": 28
+            }
+          ]
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:da82ac6d1f6cf86d2032a7c017895c765f33ebea770ddebaf7a07d6690311361",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "tea",
+        "polarity": "affirmed",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+            "start": 0,
+            "end": 4
+          }
+        ],
+        "context": [
+          {
+            "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+            "start": 0,
+            "end": 28
+          }
+        ]
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea over coffee",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+              "start": 0,
+              "end": 4
+            }
+          ],
+          "context": [
+            {
+              "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+              "start": 0,
+              "end": 28
+            }
+          ]
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:975251b230750db35ebaea66d7f8a23a0bce06d33be8815059fa6f8e880a4695",
+      "candidate": {
+        "subject": "Maya Chen",
+        "predicate": "relationship",
+        "object_kind": "entity",
+        "object": "cousin",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+            "start": 0,
+            "end": 23
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "The pronoun has two plausible antecedents. Neither Maya receives a residence/move assertion.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:c453b271f41bb0997c073ff07c9b1e6cad57967841956a22e625a0eaeb4448f7",
+      "candidate": {
+        "subject": "Maya Patel",
+        "predicate": "relationship",
+        "object_kind": "entity",
+        "object": "colleague",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+            "start": 24,
+            "end": 51
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [],
+      "forbidden": "The pronoun has two plausible antecedents. Neither Maya receives a residence/move assertion.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:9c9721e050e0afa87a2f1fbab2d37b2cfb2fc38d0dae7cc67eb3ce898b6bbf67",
+      "candidate": {
+        "subject": "offline operation",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "polarity": "affirmed",
+        "kind": "fact",
+        "temporal": "",
+        "identity": "resolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+            "start": 78,
+            "end": 83
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "consideration",
+            "object_kind": "text",
+            "object": "PostgreSQL",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+              "start": 0,
+              "end": 98
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "An adopted PostgreSQL decision is unsupported. Abstention on the optional consideration passes.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:e5f29e297ac2a4e5095c79f50ebee4ee0ae7a0fc5f9aae781a409f6695e594eb",
+      "candidate": {
+        "subject": "PostgreSQL",
+        "predicate": "consideration",
+        "object_kind": "entity",
+        "object": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "polarity": "affirmed",
+        "kind": "consideration",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "attach_support",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+            "start": 0,
+            "end": 98
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "consideration",
+            "object_kind": "text",
+            "object": "PostgreSQL",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+              "start": 0,
+              "end": 98
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "An adopted PostgreSQL decision is unsupported. Abstention on the optional consideration passes.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:ead62567528dc7ff1bf09f486a959fd3ed038e22c0d938291f2bfc81e20d3489",
+      "candidate": {
+        "subject": "SQLite",
+        "predicate": "decision",
+        "object_kind": "entity",
+        "object": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "polarity": "affirmed",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "resolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+            "start": 0,
+            "end": 83
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "optional_useful",
+          "meaning": {
+            "subject": "project",
+            "predicate": "consideration",
+            "object_kind": "text",
+            "object": "PostgreSQL",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+              "start": 0,
+              "end": 98
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "An adopted PostgreSQL decision is unsupported. Abstention on the optional consideration passes.",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:403d86ec0f06d35ccf0ed87b5a7f453d5cf9ecd7d7959162a4e99a3893157148",
+      "candidate": {
+        "subject": "Acme",
+        "predicate": "employment",
+        "object_kind": "date",
+        "object": "last month",
+        "polarity": "denied",
+        "kind": "fact",
+        "temporal": "past",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+            "start": 45,
+            "end": 52
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "employment",
+            "object_kind": "text",
+            "object": "Acme",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "last month",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+              "start": 0,
+              "end": 44
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:9b2e4f9da84d1a9a2520b9916685424b67100c85533eb562a6c97744f4c730e6",
+      "candidate": {
+        "subject": "Acme",
+        "predicate": "employment",
+        "object_kind": "entity",
+        "object": "Acme",
+        "polarity": "denied",
+        "kind": "fact",
+        "temporal": "past",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+            "start": 0,
+            "end": 44
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "employment",
+            "object_kind": "text",
+            "object": "Acme",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "last month",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+              "start": 0,
+              "end": 44
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    },
+    {
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:22041618e44f55673ab878c75ca49f9abe411f66a0d1c91b9af73b6590d0ec5f",
+      "candidate": {
+        "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "predicate": "preference",
+        "object_kind": "entity",
+        "object": "cafe ☕",
+        "polarity": "denied",
+        "kind": "decision",
+        "temporal": "",
+        "identity": "unresolved",
+        "effect": "assert",
+        "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+        "sources": [
+          {
+            "event_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+            "start": 0,
+            "end": 26
+          }
+        ],
+        "context": []
+      },
+      "reviewed_expected": [
+        {
+          "label": "required_useful",
+          "meaning": {
+            "subject": "owner",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "café ☕",
+            "polarity": "denied",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert"
+          },
+          "sources": [
+            {
+              "event_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+              "start": 0,
+              "end": 26
+            }
+          ],
+          "context": []
+        }
+      ],
+      "forbidden": "",
+      "occurrences": 2
+    }
+  ],
+  "version": "evie-extraction-spike-score-v1"
+}

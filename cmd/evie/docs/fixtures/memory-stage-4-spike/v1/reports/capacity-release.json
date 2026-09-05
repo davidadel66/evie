@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-09-05T03:08:16.253123+00:00",
+  "client_timeout_ms": 500,
+  "owned_server_pid": 55247,
+  "owned_pids_before_restart": [
+    55247
+  ],
+  "release_before_restart": "unknown; no request-specific server completion acknowledgment observed",
+  "second_inference_before_restart": false,
+  "client_report_sha256": "sha256:9be471786da4a8a7921244a7e71c9668793a12654edd87f93dbfb2458a780bcc",
+  "client_latency_ms": 502.494,
+  "remaining_owned_pids": [],
+  "owned_process_exit_seconds": 0.14740820799488574,
+  "release_after_termination": "verified owned server and runner exited",
+  "observed_pids_immediately_after_timeout": [
+    55247,
+    66162
+  ],
+  "runner_pid_66162_already_exited_before_server_restart": true,
+  "restarted_server_pid": 66679,
+  "restarted_server_version": "0.6.3",
+  "restart_verified_at": "2026-09-05T03:09:02.105006+00:00",
+  "release_after_restart": "verified original server and observed runner exited, new owned server listening on the same loopback origin"
+}

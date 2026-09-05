@@ -1,0 +1,431 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_sha256": "sha256:aedc9737dd0ee9c3cc081a9a009d8e11a2073da119bb609ca8486379f3d45b89",
+  "source_score_sha256": "sha256:fdd1db400c1dfd57b414fdd5e85a06f3d37078131332800a407ff5c24955daab",
+  "decisions": [
+    {
+      "id": "O01",
+      "case_id": "N01-a",
+      "candidate_sha256": "sha256:4d4b73c74c1a8d23df961364ede8e6eccc1968eebd1a26ba0684a1e13d76a053",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented.",
+      "gold_matches": []
+    },
+    {
+      "id": "O02",
+      "case_id": "N01-a",
+      "candidate_sha256": "sha256:6924283537eda8fe71fc115644ff7706d401945515300e011c419d7af4a2cdfb",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented.",
+      "gold_matches": []
+    },
+    {
+      "id": "O03",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:293bd8045f9e63d0d01bc826559fec19cfa4b88619bcf11e6a9b00cbcc7caf9d",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Either re-proposes an old preference without new supporting evidence, or invents a denial/correction of the reported pear meal.",
+      "gold_matches": []
+    },
+    {
+      "id": "O04",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:4632948b3f28a7a56121e6fcdd8e6ccf3753b8bcd69046510697b219a1ee206c",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "polarity",
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Either re-proposes an old preference without new supporting evidence, or invents a denial/correction of the reported pear meal.",
+      "gold_matches": []
+    },
+    {
+      "id": "O05",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:4d4b73c74c1a8d23df961364ede8e6eccc1968eebd1a26ba0684a1e13d76a053",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Either re-proposes an old preference without new supporting evidence, or invents a denial/correction of the reported pear meal.",
+      "gold_matches": []
+    },
+    {
+      "id": "O06",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:6c7ec35cca700cde01a0732c4a37fb0ac32f33f292d478570c82d1d1d6907175",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "polarity",
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Either re-proposes an old preference without new supporting evidence, or invents a denial/correction of the reported pear meal.",
+      "gold_matches": []
+    },
+    {
+      "id": "O07",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:28291d5897156b94647ec386b6fb34736b53be85faf4f06698e5a135b95ccfb1",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Treats the unendorsed report/story as residence or move evidence; D1 does not admit that assertion. A correction effect is also unproven.",
+      "gold_matches": []
+    },
+    {
+      "id": "O08",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:359287afa13733d5a777b574727161b64bdd8611536e6be78eb97001360607c1",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Treats the unendorsed report/story as residence or move evidence; D1 does not admit that assertion. A correction effect is also unproven.",
+      "gold_matches": []
+    },
+    {
+      "id": "O09",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:829d39a009154b84b8a454ddb7c41ab1a2c72ca9442ba2468a6438d65e2778e7",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Treats the unendorsed report/story as residence or move evidence; D1 does not admit that assertion. A correction effect is also unproven.",
+      "gold_matches": []
+    },
+    {
+      "id": "O10",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:a3f43751748eda3a2b84054bf63308ce645db85b67571792e557e572fe271225",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Treats the unendorsed report/story as residence or move evidence; D1 does not admit that assertion. A correction effect is also unproven.",
+      "gold_matches": []
+    },
+    {
+      "id": "O11",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:284068bb994b1c3fe2acffa122bae7b84965a498e652cb96ae87a8db79ff9788",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Cites the earlier unendorsed report as a correction/move rather than the new explicit residence endorsement. Neither that source nor that effect is sufficient.",
+      "gold_matches": []
+    },
+    {
+      "id": "O12",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:5333db534629f8429228236d301a19a9ccdbfe72c29fadbb9e143ce04a514f14",
+      "label": "required_useful",
+      "errors": [
+        "predicate",
+        "typed_meaning"
+      ],
+      "note": "Maya\u2019s supported Paris residence is useful and equivalent to required gold 0. Preserve unresolved identity. The experimental object/subject encoding needs repair; the JSON-format lives/location variant also violates the requested Predicate/type enums.",
+      "gold_matches": [
+        0
+      ]
+    },
+    {
+      "id": "O13",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:84921ce629598dd008b356f4584efa4c51a712a8636d2d8cec3f8c71a3af380d",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Cites the earlier unendorsed report as a correction/move rather than the new explicit residence endorsement. Neither that source nor that effect is sufficient.",
+      "gold_matches": []
+    },
+    {
+      "id": "O14",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:af9dd3a252da47266dd0df9165b147be5cde964fa879f0001c3abd88a3af997d",
+      "label": "required_useful",
+      "errors": [
+        "typed_meaning"
+      ],
+      "note": "Maya\u2019s supported Paris residence is useful and equivalent to required gold 0. Preserve unresolved identity. The experimental object/subject encoding needs repair; the JSON-format lives/location variant also violates the requested Predicate/type enums.",
+      "gold_matches": [
+        0
+      ]
+    },
+    {
+      "id": "O15",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:1b0d5dcfe94d6131bc7ab69a2cf9db932d9b110688623768b981acea0b7f1ada",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented. Assent also requires the exact non-supporting question; it does not independently establish absolute dislike of coffee.",
+      "gold_matches": []
+    },
+    {
+      "id": "O16",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:402aedd84a16f421bb223b9e7ee1d65b70fa514467940b03cd436f078b5061e8",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented. Assent also requires the exact non-supporting question; it does not independently establish absolute dislike of coffee.",
+      "gold_matches": []
+    },
+    {
+      "id": "O17",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:48c0a58d1c55f1c6988b00c4d6cec6e989c9af2d45e5e99a6546692a5a50d562",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented. Assent also requires the exact non-supporting question; it does not independently establish absolute dislike of coffee.",
+      "gold_matches": []
+    },
+    {
+      "id": "O18",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:96727311db20d5424b6b557efb559b1edf43a46f8f2f049953288b9cffeb46d3",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented. Assent also requires the exact non-supporting question; it does not independently establish absolute dislike of coffee.",
+      "gold_matches": []
+    },
+    {
+      "id": "O19",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:164e9daba9cf50d1b1af8f2abafc2cf6dbc0565be425ff7f5e9b697a27201545",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Cites the new ambiguous \u201cShe has moved\u201d event as support for an old cousin/colleague relationship; one range also exceeds that event. The new pronoun does not resolve a person.",
+      "gold_matches": []
+    },
+    {
+      "id": "O20",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:58278ca542438dd0ba8d3607467a5293fbf3417cb0cff497a1b177464fb47dd3",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Cites the new ambiguous \u201cShe has moved\u201d event as support for an old cousin/colleague relationship; one range also exceeds that event. The new pronoun does not resolve a person.",
+      "gold_matches": []
+    },
+    {
+      "id": "O21",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:0584cecc3963054f8aaddc8df860c270b5fc6f5d5157f572f669eabfde3c4c5d",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reverses or changes the relation, invents an additional-support effect without accepted context, or reuses only old/insufficient overlap. The raw effect is not the supported new optional consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "O22",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:15af807072e7348d20e8d22a6d21eda27a2637bae6673db7ed75f2e976908ebe",
+      "label": "optional_useful",
+      "errors": [
+        "predicate",
+        "typed_meaning"
+      ],
+      "note": "The source supports PostgreSQL as an unadopted consideration. Its raw meaning is optionally useful; the empty object/type/identity and free-form Predicate fail the requested output contract.",
+      "gold_matches": []
+    },
+    {
+      "id": "O23",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:420132adeda57c95b4bfd09a3b668cef1d7c676667a16586ce537a718d169680",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reverses or changes the relation, invents an additional-support effect without accepted context, or reuses only old/insufficient overlap. The raw effect is not the supported new optional consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "O24",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:7eb3dc96e35fd31504c4d62f6d24daa98802b38ef58ccab286c0ec0e67a2e459",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reverses or changes the relation, invents an additional-support effect without accepted context, or reuses only old/insufficient overlap. The raw effect is not the supported new optional consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "O25",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:b14b1ae289a0ee1b83afb181378df446d9ca588c2cd5dd6dbffa239246d20684",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reverses or changes the relation, invents an additional-support effect without accepted context, or reuses only old/insufficient overlap. The raw effect is not the supported new optional consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "O26",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:de3abc3a5dc0832805250f06db5a2c766670f13956b6885aad596e7229950448",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reverses or changes the relation, invents an additional-support effect without accepted context, or reuses only old/insufficient overlap. The raw effect is not the supported new optional consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "O27",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:0cfa7906e2d202bc03079b9b19a4a0fad81ac85e88db49fdc35bf281ad2efdef",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "temporal",
+        "typed_meaning"
+      ],
+      "note": "Makes Acme the subject, loses the owner\u2019s actual employment change, and replaces the explicit relative date with generic past or an incorrectly typed/denied date.",
+      "gold_matches": []
+    },
+    {
+      "id": "O28",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:14757daac9c572e56de740d2f8e71f1265d417e7964aad9c9b958ec45025b797",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "temporal",
+        "typed_meaning"
+      ],
+      "note": "Makes Acme the subject, loses the owner\u2019s actual employment change, and replaces the explicit relative date with generic past or an incorrectly typed/denied date.",
+      "gold_matches": []
+    },
+    {
+      "id": "O29",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:8fd590f731e73b90d53b40b9644a00788758bb606eccbd4478e682fecf05b242",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "temporal",
+        "typed_meaning"
+      ],
+      "note": "Makes Acme the subject, loses the owner\u2019s actual employment change, and replaces the explicit relative date with generic past or an incorrectly typed/denied date.",
+      "gold_matches": []
+    },
+    {
+      "id": "O30",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:b1f2ba27dea3f8e1481717a63c9954877cfb1ece0417f6c06b6ea0d2558b9e6d",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "temporal",
+        "typed_meaning"
+      ],
+      "note": "Makes Acme the subject, loses the owner\u2019s actual employment change, and replaces the explicit relative date with generic past or an incorrectly typed/denied date.",
+      "gold_matches": []
+    },
+    {
+      "id": "O31",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:21ab450bafbbe7519d643eccd91b2056064ec6fcc5612e1c33e8509b47ee23e3",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "predicate",
+        "temporal",
+        "typed_meaning"
+      ],
+      "note": "Turns an instruction to use the checked date into a project decision, loses the coffee change, and adds clock-time precision beyond the required calendar date.",
+      "gold_matches": []
+    },
+    {
+      "id": "O32",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:aedb1ffad11363e1a9e99d933985e1318f6612cd03852db5ea141840a7122bfc",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented.",
+      "gold_matches": []
+    },
+    {
+      "id": "O33",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:fa29bc47fdf9b3bf3789361496eb3dbad725feaa927583ec659be1dbd0ad4c61",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Assigns the owner\u2019s preference to the project and relabels it a decision/entity. The intended owner memory is not represented.",
+      "gold_matches": []
+    }
+  ],
+  "packet_file": "output-adjudication-packet.md",
+  "source_score_file": "reports/comparison-for-adjudication.json",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94"
+}

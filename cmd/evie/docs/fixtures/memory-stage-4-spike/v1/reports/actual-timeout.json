@@ -1,0 +1,41 @@
+{
+  "planned_cases": [
+    "N01-a"
+  ],
+  "repetitions": 2,
+  "version": "evie-extraction-spike-report-v1",
+  "started_at": "2026-09-05T03:07:15.826449Z",
+  "quality_status": "unadjudicated",
+  "corpus_sha256": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+  "prompt_sha256": "sha256:477dcc434de42bf38b88535036ea2dd9fcd820e4d890dfcb09f2b2ce9368d07a",
+  "schema_sha256": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+  "evidence_policy": "memory-stage-4-evidence-contract@92d10a4",
+  "model": "mistral:latest",
+  "mode": "schema",
+  "context_tokens": 4096,
+  "max_output_tokens": 768,
+  "temperature": 0,
+  "endpoint": "http://127.0.0.1:11434",
+  "go_version": "go1.26.3",
+  "runs": [
+    {
+      "server_release": "unknown",
+      "case_id": "N01-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "cancelled_or_timeout",
+      "error": "Post \"http://127.0.0.1:11434/api/generate\": context deadline exceeded",
+      "latency_ms": 502.494,
+      "request_bytes": 4633,
+      "request_sha256": "sha256:25101d07a87fda9e8d963f314af07d6f46e07935b3428a77da193c9a7d41fb50",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 0,
+      "output_tokens": 0,
+      "load_ns": 0,
+      "prompt_ns": 0,
+      "evaluation_ns": 0
+    }
+  ]
+}

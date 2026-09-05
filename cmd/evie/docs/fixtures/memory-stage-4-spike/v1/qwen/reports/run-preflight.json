@@ -1,0 +1,7 @@
+{
+  "at": "2026-09-05T03:54:41.676493+00:00",
+  "owned_server_pid": 78270,
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424698408   7850332    99% 3556269 78503320    4%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 8192.00M  used = 7516.06M  free = 675.94M  (encrypted)\n",
+  "memory_pressure": "The system has 19327352832 (1179648 pages with a page size of 16384).\n\nStats: \nPages free: 128051 \nPages purgeable: 1655 \nPages purged: 57342663 \n\nSwap I/O:\nSwapins: 1210791 \nSwapouts: 2189683 \n\nPage Q counts:\nPages active: 303423 \nPages inactive: 296310 \nPages speculative: 6504 \nPages throttled: 0 \nPages wired down: 169104 \n\nCompressor Stats:\nPages used by compressor: 235468 \nPages decompressed: 288731998 \nPages compressed: 330800240 \n\nFile I/O:\nPageins: 107722680 \nPageouts: 1754089 \n\nSystem-wide memory free percentage: 64%\n"
+}

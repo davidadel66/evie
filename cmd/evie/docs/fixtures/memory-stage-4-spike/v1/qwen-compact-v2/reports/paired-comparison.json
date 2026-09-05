@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "method": "Descriptive matched case/seed subset; zero inference. Exact automatic matches remain approved-gold matches without pending output judgments. Canonical full repeated totals are context only. p50/p95 use lower-order statistic index floor((n-1)*percent/100).",
+  "panels": [
+    {
+      "configuration": "canonical all seeds",
+      "original_report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen/reports/development.json",
+      "original_report_sha256": "sha256:15c64a287f0f46f33752137010897fc0c170ee6a133bda00e8e12a2c280be2ce",
+      "selected_original_run_indexes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "seeds": [
+        17,
+        18
+      ],
+      "attempted_runs": 20,
+      "planned_runs": 20,
+      "raw_proposals": 30,
+      "retained_proposals": 16,
+      "exact_required_matches_raw_and_retained": 4,
+      "required_opportunities": 12,
+      "latency_p50_ms": 14137.135,
+      "latency_p95_ms": 36224.237,
+      "latency_max_ms": 36411.225,
+      "case_ids": [
+        "N01-a",
+        "N01-a",
+        "N01-b",
+        "N01-b",
+        "N02-a",
+        "N02-a",
+        "N02-b",
+        "N02-b",
+        "N03-b",
+        "N03-b",
+        "N04-b",
+        "N04-b",
+        "N05-b",
+        "N05-b",
+        "N06-a",
+        "N06-a",
+        "N08-b",
+        "N08-b",
+        "N09-a",
+        "N09-a"
+      ]
+    },
+    {
+      "configuration": "canonical seed17",
+      "original_report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen/reports/development.json",
+      "original_report_sha256": "sha256:15c64a287f0f46f33752137010897fc0c170ee6a133bda00e8e12a2c280be2ce",
+      "selected_original_run_indexes": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18
+      ],
+      "seeds": [
+        17
+      ],
+      "attempted_runs": 10,
+      "planned_runs": 10,
+      "raw_proposals": 15,
+      "retained_proposals": 8,
+      "exact_required_matches_raw_and_retained": 2,
+      "required_opportunities": 6,
+      "latency_p50_ms": 16845.975,
+      "latency_p95_ms": 34730.779,
+      "latency_max_ms": 36411.225,
+      "case_ids": [
+        "N01-a",
+        "N01-b",
+        "N02-a",
+        "N02-b",
+        "N03-b",
+        "N04-b",
+        "N05-b",
+        "N06-a",
+        "N08-b",
+        "N09-a"
+      ]
+    },
+    {
+      "configuration": "compact-v1 seed17",
+      "original_report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v1/reports/development.json",
+      "original_report_sha256": "sha256:67e4290e9c42b20726e90f56d919ccd703ddc5330cfb6bf7cb9119ebe70968f8",
+      "selected_original_run_indexes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "seeds": [
+        17
+      ],
+      "attempted_runs": 10,
+      "planned_runs": 10,
+      "raw_proposals": 12,
+      "retained_proposals": 0,
+      "exact_required_matches_raw_and_retained": 0,
+      "required_opportunities": 6,
+      "latency_p50_ms": 6915.277,
+      "latency_p95_ms": 18399.855,
+      "latency_max_ms": 18680.934,
+      "case_ids": [
+        "N01-a",
+        "N01-b",
+        "N02-a",
+        "N02-b",
+        "N03-b",
+        "N04-b",
+        "N05-b",
+        "N06-a",
+        "N08-b",
+        "N09-a"
+      ]
+    },
+    {
+      "configuration": "compact-v2 seed17",
+      "original_report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/reports/development.json",
+      "original_report_sha256": "sha256:a4141f7ab8dd9e6e41a72e4b71be080fc275fe451e355d5530b65e1eea3674c3",
+      "selected_original_run_indexes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "seeds": [
+        17
+      ],
+      "attempted_runs": 10,
+      "planned_runs": 10,
+      "raw_proposals": 16,
+      "retained_proposals": 3,
+      "exact_required_matches_raw_and_retained": 1,
+      "required_opportunities": 6,
+      "latency_p50_ms": 8489.417,
+      "latency_p95_ms": 19346.418,
+      "latency_max_ms": 20529.76,
+      "case_ids": [
+        "N01-a",
+        "N01-b",
+        "N02-a",
+        "N02-b",
+        "N03-b",
+        "N04-b",
+        "N05-b",
+        "N06-a",
+        "N08-b",
+        "N09-a"
+      ]
+    }
+  ],
+  "quality_comparison_attempts_across_all_configurations": 100,
+  "limitations": [
+    "One compact pass does not establish within-configuration reproducibility.",
+    "No resampling/independence or model-family/production adequacy claim.",
+    "Raw meanings and usefulness beyond exact gold remain pending actual human review."
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_file": "output-adjudication-packet.md",
+  "packet_sha256": "sha256:1daf6dc29e09cd4081f5a53e250a0db23fa0549c0dfc12c973180757988c44e4",
+  "source_score_file": "reports/development-initial-score.json",
+  "source_score_sha256": "sha256:1011a9fd3022843d4209ffdceb65955e381b15c903ac23a46921afbba4a07f78",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decisions": [
+    {
+      "id": "V01",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:27521a82d6c99939e998331e9301a18e791c5b562cc49c04c1a1fea41a570d39",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "A single pear at lunch does not support an enduring pear habit. The owner/text tuple is also incorrectly marked unresolved.",
+      "gold_matches": []
+    },
+    {
+      "id": "V02",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:6cbd38bd697ad3b37c08f118ba8073e50093fa7e5cc8f4fb2ab5559f0a43e3b2",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Repeats the older tea preference from overlap alone, with no newly owned support. The explicit owner/text tuple is incorrectly unresolved. Unsupported here means an ineligible repeated truth, not a fabricated historical preference.",
+      "gold_matches": []
+    },
+    {
+      "id": "V03",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:6a7a46be0dd599a7d2bd63d5a1552a71da2bc70d9578543f7883e83714c3087f",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Treats fiction and an unendorsed Maya report as the owner living in Paris. The owner field is also wrongly duplicated into assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V04",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:d4740635d1d4ae63715abf46bc1f56b6498dada483393e502ff8ab11410f56e2",
+      "label": "unwanted_but_true",
+      "errors": [
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Proposed raw judgment treats the writing request as a transient intent, which is not useful enduring memory. It is not an adopted lasting decision; the owner field is wrongly duplicated into assistant context. This request-as-owner-intention interpretation is explicitly for human review and may instead be judged unsupported.",
+      "gold_matches": []
+    },
+    {
+      "id": "V05",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:efd335224141c0ca81aaf238c722e343a80027e0005454f31c3ff62365867b1d",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Mentioning Maya's report does not assert an enduring owner consideration of that information. It also places owner evidence in assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V06",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:9dd7ffbf53f944955cc7103719a534546a57cc27a6be6fd0ae520109ff28506f",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "The new endorsement concerns Maya the neighbor, not the owner. The exact output changes the subject to owner and duplicates owner evidence into assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V07",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:e2332ccab62606d71bff818644dca17bfc2d6162cb370e6d1a97ab6b32055506",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning"
+      ],
+      "note": "The retained tuple says preference=tea and kind=decision. The reviewed statement is a standing tea-over-coffee comparison, not an adopted decision. The assistant question context is now cited correctly, but structural retention does not restore the lost comparison or kind.",
+      "gold_matches": []
+    },
+    {
+      "id": "V08",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:2145c6e7ff690d314ac7fcaaff0cc4e8f0ede93dad04f56565bbe20d0843f11c",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "The overlap says Maya Chen is a cousin. The proposed owner relationship object omits cousin and has no newly owned support; owner overlap is also duplicated into assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V09",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:45b8818b11228b0b1d1771b29cb98639ef61b25474dd57c3ba380bcfd731c45c",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "temporal",
+        "source_attribution"
+      ],
+      "note": "The exact tuple gives owner residence=Maya Chen, although Maya Chen is not a place and She is unresolved between two Mayas. It invents present temporal wording and duplicates owner evidence into assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V10",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:bdea167bfcb9c634a8dfedec8087f9a7d2a3c2495a943fc5799e2f34f3eed73a",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "The overlap says Maya Patel is a colleague. The proposed owner relationship object omits colleague and has no newly owned support; owner overlap is also duplicated into assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V11",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:67b0c92e2f28ff2c1deb1b2c8f5918bd15648d43dca72cc35b37f811a66473f5",
+      "label": "optional_useful",
+      "errors": [
+        "predicate",
+        "source_attribution"
+      ],
+      "note": "The raw kind=consideration and future PostgreSQL wording preserve the explicitly unadopted long-term option. Proposed optional raw credit requires human judgment because predicate=decision conflicts with that representation. The owner field is wrongly placed in assistant context; approval would not create retention or required recall.",
+      "gold_matches": []
+    },
+    {
+      "id": "V12",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:94f4702658b5536302ecfe455dda5afc21f1e57c84d3558358c5347daeecd706",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Repeats an overlap-only adopted SQLite decision as a preference/fact. There is no new support for that separate proposition, and the owner overlap is wrongly placed in assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "V13",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:1403d9aedd2b74e89e75f98039a46ecb303c14eda4baa92e1fd7719c0865d1d1",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "polarity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Affirms employment at Acme after the explicit departure. Acme is emitted as an unoffered accepted entity alias, kind=fact loses world_change, and owner evidence is duplicated into assistant context. Keeping last month does not repair the opposed meaning.",
+      "gold_matches": []
+    },
+    {
+      "id": "V14",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:a008e2f4c44184f386f367d4b342a6b1f7be8afe2e930d393deb3fb7979be21b",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "The tuple is a generic constraint whose date object is the unzoned full clock display. It loses stopped drinking coffee and the denied habit meaning, and wrongly treats the tool observation as assistant context. This is not the explicit coffee-change wording emitted by compact-v1.",
+      "gold_matches": []
+    },
+    {
+      "id": "V15",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:e5c4b37092427407316f3e9dfbe923851a03f468bcc13acc4aa66a0ec31a3805",
+      "label": "required_useful",
+      "errors": [],
+      "note": "Proposed equivalence treats café as the same preference target as the approved café ☕ wording, with the emoji decorative. The denied polarity, whole exact Unicode source, owner and fact encoding are preserved. This retained proposal requires actual human equivalence judgment; it is not an automatic exact match.",
+      "gold_matches": [
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_file": "output-adjudication-packet.md",
+  "packet_sha256": "sha256:553ea21a932a50ba360d70c9d154bfc6ca7f451afaaf3d3fc744180711135a5c",
+  "source_score_file": "reports/development-initial-score.json",
+  "source_score_sha256": "sha256:672e1a81025eef3a966b101e5034056a424ce292cdf20227d6b7c37b4e79cfbe",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decisions": [
+    {
+      "id": "Q01",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:ce9f58fff49ab6235efc54910e57d601409ee30694c62bf1f67b4949effec577",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Invents project residence from a story/unendorsed report. The project is not a supported resident, and D1 admits neither the story nor report as that assertion.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q02",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:4e062b6633e51a8a41cac6ffcafba6b44489b26731f6925aae74cd77552d3437",
+      "label": "unsupported",
+      "errors": [
+        "identity"
+      ],
+      "note": "The exact subject is the literal placeholder new:Name, not Maya. Inferring the intended person would repair an ungrounded identity; that is not automatic raw meaning credit.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q03",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:fb28dd7b2351f4e9ac55acf1be0cbd43f2898820ae12fd0d484834ec5823ba36",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Again uses literal new:Name and puts Maya\u2019s name plus neighbor description inside the relationship object. This exact tuple does not establish the reviewed Maya-neighbor assertion.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q04",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:1be944024c79d91d382c7097ed24390cad925135a3aa8064ffeab0e0ea49cb56",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Assigns the personal preference to the project, drops tea-over-coffee qualification and calls it an unresolved consideration. It now carries the question context, which does not repair those meaning errors.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q05",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:8644f01e3785ca89f411a7d86e53e5ffe5e2a311d86883e0d8ec478f1099283f",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Turns an old discussion of drinks into a project consideration using only old support. No new assent owns this candidate.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q06",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:2a56ce8bc801262d4c22d61f7a7d1b16901b8c8a1fbe46baa9f07324ea112763",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Invents an Entity named Paris as the resident instead of resolving the ambiguous She, and places owner text in non-supporting assistant-context references.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q07",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:f36beb262809d70ea0ac081a697ddbb02c7f1d281124dff2ceaced7016065591",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Repeats the old cousin relation with no new support, marks a new Entity resolved and misuses owner text as assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q08",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:f886e6829fbc3cd945868da9a95ba57a18075071c37d02e6cb61656edbda8dd8",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Repeats the old colleague relation with no new support, marks a new Entity resolved and misuses owner text as assistant context.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q09",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:33802d76957c8c985b1a9456487e2e0da6e3de0f6998dcc41b41d8149ecbe247",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Repeats the old offline constraint using only overlap. The new PostgreSQL consideration supplies no new support for this candidate.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q10",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:4bb802cdb79baf5f35d1c0878db14470dc572d3c558435cefeed339aa0f99826",
+      "label": "optional_useful",
+      "errors": [
+        "typed_meaning"
+      ],
+      "note": "The project\u2019s unadopted PostgreSQL consideration is supported and optional. Proposed raw semantic credit treats the longer text as equivalent; the project scope UUID still needs the requested literal-project representation. No required-memory recall is claimed.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q11",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:584083dba78503c6f184925697fb8a883f79fe521c837197e223c8b26e09e63f",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Repeats the old SQLite decision using only overlap. The new PostgreSQL consideration supplies no new support for it.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q12",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:ff93711a44679e3cfb5d3ab22d224e6a34a8dd253fa91278a94e23904ff84566",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "polarity",
+        "typed_meaning"
+      ],
+      "note": "Affirms employment after an explicit departure, assigns it to the project and encodes Acme as an Entity reference without the required Entity identity. Keeping last month and world_change does not repair subject/polarity/type.",
+      "gold_matches": []
+    },
+    {
+      "id": "Q13",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:851f1668b03622b0e132a2d2f1bceac1249f0925344f6908e622828fbce21b2a",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "temporal",
+        "source_attribution"
+      ],
+      "note": "Asserts a preference for stopped drinking coffee instead of the denied coffee habit, omits the checked calendar date, and places the clock/old owner instruction in forbidden context references.",
+      "gold_matches": []
+    }
+  ]
+}

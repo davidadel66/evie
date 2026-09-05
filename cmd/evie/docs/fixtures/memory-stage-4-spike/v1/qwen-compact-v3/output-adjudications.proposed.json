@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_file": "output-adjudication-packet.md",
+  "packet_sha256": "sha256:5fe494aa631bc9475e329043d9cf2130b4638cfec889268ebb0e24d82be323d8",
+  "source_score_file": "reports/development-initial-score.json",
+  "source_score_sha256": "sha256:1e26acdbd1fde7881a8f246d96cd985e8bdc10c2569123009bd9b09b64f1d88f",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decisions": [
+    {
+      "id": "C01",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:19ead54a895cf265144b88e2b074ebd8d9abe1a941612587fa9861db1d5b7286",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Repeats the older tea preference from overlap alone. The newly owned pear meal supplies no support for this preference. Unsupported here means an ineligible repeated truth, not a fabricated historical preference.",
+      "gold_matches": []
+    },
+    {
+      "id": "C02",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:3233b60e719dc2a7b1dd11d393d938bdcbd4d995fff4456871dc42e364d82954",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Retained, but treats a fictional first-person line and an unendorsed Maya report as the owner living in Paris. Exact source copying does not supply the missing owner assertion.",
+      "gold_matches": []
+    },
+    {
+      "id": "C03",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:52b8207c79112efcd255561fb4e3841979a6b382d4fe78cd3557829697328799",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Retained, but the owner never asserts a decision or enduring consideration to move to Paris. The source concerns a story and Maya's unendorsed report; changing it into the owner's choice is unsupported.",
+      "gold_matches": []
+    },
+    {
+      "id": "C04",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:b8fa2a905a74d1a412924dd92a612138bde4dacf9bb61232e932004f682d830f",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Retained, but the new endorsement concerns Maya the neighbor, not the owner. The subject is explicitly owner; no new-Entity identity is proposed.",
+      "gold_matches": []
+    },
+    {
+      "id": "C05",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:e2332ccab62606d71bff818644dca17bfc2d6162cb370e6d1a97ab6b32055506",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning"
+      ],
+      "note": "Retained with correct assistant question context, but preference=tea and kind=decision lose the reviewed standing tea-over-coffee comparison/fact encoding. This raw object is byte-for-byte identical after canonical JSON encoding to pending compact-v2 V07; no second independent judgment or automatic approval is inferred.",
+      "gold_matches": []
+    },
+    {
+      "id": "C06",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:2594c3028394905519542cad347403a3c9b0b8285e723a6adafe1b384f9251af",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Retained, but She is ambiguous between Maya Chen and Maya Patel. The output instead assigns Paris residence to the owner, which the source does not assert.",
+      "gold_matches": []
+    },
+    {
+      "id": "C07",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:1b08c16b0e2793488cecb554e721af616d4dff9a309cc56d8ad59f01bcce225f",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "The offline requirement is an older true project constraint, supported only by overlap. The new PostgreSQL consideration does not own this separate constraint; no new candidate is eligible.",
+      "gold_matches": []
+    },
+    {
+      "id": "C08",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:21591dc80d8debdbcd2b0aa2eb18da5afcb0e19c703698378d47e9fc49479eda",
+      "label": "optional_useful",
+      "errors": [
+        "identity",
+        "predicate"
+      ],
+      "note": "Proposed optional raw credit recognizes the explicitly unadopted PostgreSQL consideration. The exact predicate=decision conflicts with kind=consideration, and project/text is incorrectly unresolved. Human judgment is needed for raw credit; approval would not repair identity, create retention or supply required recall.",
+      "gold_matches": []
+    },
+    {
+      "id": "C09",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:a574750e382c8ce772b58f91e2ec0ea0835a124456772de750f136332c6c179d",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "source_attribution"
+      ],
+      "note": "Repeats the old SQLite decision from overlap as a preference. No newly owned source supports this separate old decision; the newly owned PostgreSQL option does not change that ownership.",
+      "gold_matches": []
+    },
+    {
+      "id": "C10",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:e97c6ae7cde2e33c8c79b212c72be3b90886cf54af028d81d611d70b654a2b0f",
+      "label": "unsupported",
+      "errors": [
+        "polarity",
+        "typed_meaning"
+      ],
+      "note": "Retained, but emits affirmative employment/work at Acme as fact with last month, instead of the explicit departure/denied world-change meaning. If last month is read purely as past employment, that is a different historical proposition and still omits the required departure. This distinction is for actual human judgment; the proposed errors are not scored totals.",
+      "gold_matches": []
+    },
+    {
+      "id": "C11",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:2c800225b98e766319c747295e3848aaf34b0a367fd60d6c2ce3a5d74048eb0c",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "A clock-only overlap reference cannot establish an owner preference. local date is not a typed calendar date value, and attach_support has no offered equal accepted Claim. It has no newly owned owner support and does not represent the coffee change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C12",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:478f2c0e80289a52cee5e8bc4a187c1ff4f42f27128d6b57e917594595654794",
+      "label": "unsupported",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Retained, but represents a decision to stop coffee rather than the asserted completed habit change. Its exact calendar date is taken from the clock without citing that required clock support; only the owner's relative reference is cited. Whether this action/date wording merits partial raw useful credit despite those defects is explicitly left for human review; no required recall match is proposed.",
+      "gold_matches": []
+    },
+    {
+      "id": "C13",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:27bef93893e3a889b007b378c0d808d21f4bbf73137c3700402f9f657065028a",
+      "label": "required_useful",
+      "errors": [],
+      "note": "Proposed equivalence treats café as the approved café ☕ preference target with a decorative emoji. Denied polarity, whole exact Unicode source, owner and fact encoding are preserved. This is the same unresolved equivalence question as compact-v2 V15, not a new automatic match. Actual human approval is still required.",
+      "gold_matches": [
+        0
+      ]
+    }
+  ]
+}

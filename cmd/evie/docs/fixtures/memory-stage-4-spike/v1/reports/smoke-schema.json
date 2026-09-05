@@ -1,0 +1,62 @@
+{
+  "version": "evie-extraction-spike-report-v1",
+  "started_at": "2026-09-05T02:45:54.135054Z",
+  "quality_status": "unadjudicated",
+  "corpus_sha256": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+  "prompt_sha256": "sha256:477dcc434de42bf38b88535036ea2dd9fcd820e4d890dfcb09f2b2ce9368d07a",
+  "schema_sha256": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+  "evidence_policy": "memory-stage-4-evidence-contract@92d10a4",
+  "model": "mistral:latest",
+  "mode": "schema",
+  "context_tokens": 4096,
+  "max_output_tokens": 768,
+  "temperature": 0,
+  "endpoint": "http://127.0.0.1:11434",
+  "go_version": "go1.26.3",
+  "runs": [
+    {
+      "server_release": "finished_response",
+      "case_id": "N01-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 25649.96,
+      "request_bytes": 4633,
+      "request_sha256": "sha256:25101d07a87fda9e8d963f314af07d6f46e07935b3428a77da193c9a7d41fb50",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"entity\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:da5898e4b3062291418686fb5860126284afbe30a94a3e284838fa1e85c1c2e2",
+      "raw_count": 1,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "entity",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "start": 0,
+                "end": 13
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 796,
+      "output_tokens": 259,
+      "load_ns": 11341527958,
+      "prompt_ns": 4927270458,
+      "evaluation_ns": 9368686459
+    }
+  ]
+}

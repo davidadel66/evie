@@ -1,0 +1,20 @@
+{
+  "tokenizer.ggml.model": "llama",
+  "tokenizer.ggml.pre": "default",
+  "tokenizer.ggml.bos_token_id": 1,
+  "tokenizer.ggml.eos_token_id": 2,
+  "tokenizer.ggml.unknown_token_id": 0,
+  "tokenizer.ggml.add_bos_token": true,
+  "tokenizer.ggml.add_eos_token": false,
+  "tokenizer.chat_template": "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% else %}{{ raise_exception('Only user and assistant roles are supported!') }}{% endif %}{% endfor %}",
+  "metadata_end_bytes": 740404,
+  "normal_space_token_id": 29473,
+  "normal_space_token_type": 1,
+  "special_token_count": 771,
+  "special_min_utf8_bytes": 3,
+  "token_count": 32768,
+  "gguf_version": 3,
+  "metadata_sha256": "sha256:040873b17d898e62dbb4eb2f0545c2dd6589779c1685a9fd45a03465f6fdca58",
+  "model_sha256": "sha256:ff82381e2bea77d91c1b824c7afb83f6fb73e9f7de9dda631bcdbca564aa5435",
+  "model_bytes": 4113289152
+}

@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-05T04:49:23.566423+00:00",
+  "git_head_at_record": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "purpose": "Bounded independent compact ordered wire Qwen configuration; no model selection or human output adjudication implied",
+  "wire_version": "compact-v1",
+  "projection_version": "compact-v1",
+  "alias_seal_encoding": "encoding/json ordered typed struct, sha256 of compact JSON; exact request retained as string",
+  "expansion_version": "compact-v1",
+  "model": "qwen2.5:7b-instruct-q4_K_M",
+  "model_manifest_sha256": "sha256:845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+  "shared": {
+    "format": "schema",
+    "temperature": 0,
+    "context_tokens": 8192,
+    "max_output_tokens": 768,
+    "timeout_seconds": 60,
+    "parallel_requests": 1,
+    "seeds": [
+      17
+    ],
+    "repetitions": 1,
+    "case_ids": [
+      "N01-a",
+      "N01-b",
+      "N02-a",
+      "N02-b",
+      "N03-b",
+      "N04-b",
+      "N05-b",
+      "N06-a",
+      "N08-b",
+      "N09-a"
+    ],
+    "stop_on_failure": true
+  },
+  "inference_runner_binary": "/tmp/evie-extractor-compact-v1",
+  "inference_runner_binary_sha256": "sha256:53c71887d0829bbff7869d10ca8d49491c24c4d528b44be3c10419dbd283e958",
+  "file_sha256": {
+    "development.json": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "development.gold.json": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "annotation-record.json": "sha256:a6ee1e4f56b31a14a1df0062349e56de06e5d6125f7943d6978033cf35f1b28a",
+    "qwen-compact-v1/prompt.txt": "sha256:3158397c034891034c26bfa08c5cefe4970d89232882c8e054d8503a831ee672",
+    "qwen-compact-v1/output.schema.json": "sha256:0d6c989ca4f31c55b72b0cca700076a143bc130c57c94dd189a697c461a06048",
+    "qwen-compact-v1/token-budgets.json": "sha256:de4bbd8a01d763852afde9cee35a695006a1bde57bd49b71a851db034b541a3a",
+    "qwen-compact-v1/runtime-manifest.json": "sha256:25f22801682b5301596397b3113b1a5be0b27341324187193ac731546b5bf14b",
+    "qwen-compact-v1/runtime-api-metadata.json": "sha256:100a0ae981b35bffc4f387a16404b17e6b2b8ff1d21a64201b880f14834cb720",
+    "qwen-compact-v1/tokenizer-proof.json": "sha256:9023a4b4dfaf703dae5e5eb1bee9545d0860bd6ea506950b47fd3567c71acf5d",
+    "qwen-compact-v1/input-budget-proof.md": "sha256:35d80e38bff7e3bd3826e2ae7cb3ede3e8f96bbe4648aa4571c525853c98a7e3",
+    "qwen-compact-v1/reports/preflight.json": "sha256:bf12cef6c9ae93dfda6afc74f8c17e1de196a7a4d28a25705830ff29418b8020"
+  },
+  "source_file_sha256": {
+    "scripts/memory-extractor-spike/budget.go": "sha256:8f3e1a7f5ccb59de8e857973ead9aeb5bc1bb7c54a125108f17b0d950ab29bbb",
+    "scripts/memory-extractor-spike/checks.go": "sha256:86b9cba65d823ec10d42d4f445bdfa5784e62d1fe40a556300ca41c1cccf446d",
+    "scripts/memory-extractor-spike/compact_config.go": "sha256:89b14ab87aea1fc68488c634b1da1133df9eb1499ce7622d717e4bfa7842ae9c",
+    "scripts/memory-extractor-spike/compact_wire.go": "sha256:eb877904d2c3f6e4e78bf9bfaae6c363ee2349ec92556e7915df1d21ae91c448",
+    "scripts/memory-extractor-spike/compact_wire_test.go": "sha256:53b4961cd8430ea56b8f6e9b868def7775debcfded925d72c96fb78d52993f84",
+    "scripts/memory-extractor-spike/main.go": "sha256:c2a9261566cc20d8b36557b4422eb49cdb7dcb04e4f2dfa31c5d948ef4578a55",
+    "scripts/memory-extractor-spike/main_test.go": "sha256:3db63d85016183743f307d1b038db67a9b3c12fa5c5c47906385f25159d20809",
+    "scripts/memory-extractor-spike/qwen_budget.go": "sha256:30b61b0851bddbb78399a84be41691c4ce85d1ee287b2af23c24f8233e68d32a",
+    "scripts/memory-extractor-spike/revalidate.go": "sha256:4f1f108ef42884a21e979f0a5af53f0d6256382bede4b51a3ba1f5cca37a2039",
+    "scripts/memory-extractor-spike/score.go": "sha256:6146c27b70560bc7792287d3745623c61934b53d1f274576dd92634f2f1bef79"
+  },
+  "support_script_sha256": {
+    "scripts/memory-extractor-spike/freeze_budget.py": "sha256:05447ba2a149c9e68e438c9cdf685f77f0ffdcae23d8a5fed47d6e28f1541d41",
+    "scripts/memory-extractor-spike/inspect_qwen_gguf.py": "sha256:54faab1e6bd86f81f2de31034679cba885476c63d2bc6628ed1585466e15df6b",
+    "scripts/memory-extractor-spike/measure.py": "sha256:439ec701c738ab760484aa34ef1c27fbfe61101536eea221b94b34ac7562f062"
+  },
+  "request_bounds": [
+    {
+      "case_id": "N01-a",
+      "request_sha256": "sha256:069846a49a72ce88d4572505ad45c834b65f4889907f68b2c010dfda15a36700",
+      "alias_seal_sha256": "sha256:26b3b9fbca8ea4d2e18a562508a7b15a427b2f7b570f779a5de7ad193c8b37bf",
+      "input_utf8_bytes": 282,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 5923,
+      "prompt_token_upper_bound": 5925,
+      "including_output_and_reserve": 6757
+    },
+    {
+      "case_id": "N01-b",
+      "request_sha256": "sha256:e4bbd01929935d193cf589f915b20b439a9abd135771d258dab67dfcd77a539e",
+      "alias_seal_sha256": "sha256:b99a9e84b2e52b9c2273d5b83bd46eb7737b16f1e61e183dc092635b68bf096f",
+      "input_utf8_bytes": 445,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6086,
+      "prompt_token_upper_bound": 6088,
+      "including_output_and_reserve": 6920
+    },
+    {
+      "case_id": "N02-a",
+      "request_sha256": "sha256:e48011434e57ec3ef7e77fe62172a44859f8370f5f31ace0b48123a1f2bf00ae",
+      "alias_seal_sha256": "sha256:4f6888514e54e013dfaf42e58af4ba39a5197524e732e588a9803dcff28ef52c",
+      "input_utf8_bytes": 345,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 5986,
+      "prompt_token_upper_bound": 5988,
+      "including_output_and_reserve": 6820
+    },
+    {
+      "case_id": "N02-b",
+      "request_sha256": "sha256:ab1d5687acf19388fad560f06c6fefd3e868e020c4fd6c6b50c54bcce372cf15",
+      "alias_seal_sha256": "sha256:f05bb3e6b2ccf1b4ac9b3743c3f295776ac603af20ae82db27eec05221f2e75d",
+      "input_utf8_bytes": 561,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6202,
+      "prompt_token_upper_bound": 6204,
+      "including_output_and_reserve": 7036
+    },
+    {
+      "case_id": "N03-b",
+      "request_sha256": "sha256:7fb5f6c746498312ea1568cb8364e7d6e690ca787b7cf45b97766025dc798494",
+      "alias_seal_sha256": "sha256:6477fc15001458f4bdbc803baf3249de564b45db113eee0332b811991da74aa3",
+      "input_utf8_bytes": 584,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6225,
+      "prompt_token_upper_bound": 6227,
+      "including_output_and_reserve": 7059
+    },
+    {
+      "case_id": "N04-b",
+      "request_sha256": "sha256:d777ec6b70c80dfee2f8702e41078873fdbc3a887495295438d36531311420ae",
+      "alias_seal_sha256": "sha256:bb421ecd22c1ba76a87e174591c313408205355fe98ab2e0574206dbea4d7b61",
+      "input_utf8_bytes": 484,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6125,
+      "prompt_token_upper_bound": 6127,
+      "including_output_and_reserve": 6959
+    },
+    {
+      "case_id": "N05-b",
+      "request_sha256": "sha256:06d2ab1c2c84487aaddaf174293dd87f14f93eaad2d6d4a7793b7a35b2166f65",
+      "alias_seal_sha256": "sha256:6fb05e3a5ef2b88c8f630052f306e8612a168168c49dca50a4fd710fe01a7f11",
+      "input_utf8_bytes": 591,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6232,
+      "prompt_token_upper_bound": 6234,
+      "including_output_and_reserve": 7066
+    },
+    {
+      "case_id": "N06-a",
+      "request_sha256": "sha256:63c4362f1f2b78126f1008d9e533981cbfc5c363c2643265bb0723b55c3a121b",
+      "alias_seal_sha256": "sha256:e09266867fecbd2ba1e1b4fdcb6c977d3f96f8cde6532a930741b31428577803",
+      "input_utf8_bytes": 313,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 5954,
+      "prompt_token_upper_bound": 5956,
+      "including_output_and_reserve": 6788
+    },
+    {
+      "case_id": "N08-b",
+      "request_sha256": "sha256:60c9fddbe4151af8d3c8a51e643e1f87044f38303bcd43c31a847b0c59c5f15e",
+      "alias_seal_sha256": "sha256:d440ad02f8dd397ea580c0393c0cb9398a80cde1f61276e9eb921096e47982f1",
+      "input_utf8_bytes": 696,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 6337,
+      "prompt_token_upper_bound": 6339,
+      "including_output_and_reserve": 7171
+    },
+    {
+      "case_id": "N09-a",
+      "request_sha256": "sha256:b35d4af7621f25e0eee2c696d6fe0107ad59f81b51397398dbd20e631690df95",
+      "alias_seal_sha256": "sha256:ced1a2902b7f1e6b24227a600553da2732a75ad580a0dd90e5fc5bbb3a199780",
+      "input_utf8_bytes": 295,
+      "system_utf8_bytes": 5561,
+      "full_rendered_utf8_bytes": 5936,
+      "prompt_token_upper_bound": 5938,
+      "including_output_and_reserve": 6770
+    }
+  ],
+  "maximum_proven_budget": 7171,
+  "limitations": [
+    "One traversal of ten development cases compares complete wire configurations; it does not isolate alias length or establish model adequacy.",
+    "No final holdout created/exposed; eight development and six pilot windows remain unexecuted.",
+    "All prior raw outputs/reports/manifests and three proposed human output judgment packets remain unchanged.",
+    "First attempted request is the load/protocol smoke; stop and preserve failed attempt/unexecuted plan on failure or unknown release.",
+    "Semantic equivalence beyond unchanged approved canonical gold requires actual human judgments; no structural repair supplies semantic credit."
+  ]
+}

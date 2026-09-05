@@ -1,0 +1,25 @@
+{
+  "at": "2026-09-05T07:28:05.734395+00:00",
+  "owned_server_pid": 52517,
+  "observed_owned_group_pids": [
+    52517,
+    58025
+  ],
+  "last_owned_process_snapshot": [
+    "52517     1 52517  49968 /Applications/Ollama.app/Contents/Resources/ollama serve",
+    "58025 52517 52517 4109072 /Applications/Ollama.app/Contents/Resources/ollama runner --model /Users/davidboktor/.ollama/models/blobs/sha256-2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730 --ctx-size 8192 --batch-size 512 --n-gpu-layers 29 --threads 5 --parallel 1 --port 65082"
+  ],
+  "completed_requests": 10,
+  "all_request_specific_done": true,
+  "no_inference_outstanding": true,
+  "all_owned_group_pids_exited": true,
+  "remaining_processes": [],
+  "termination_seconds": 0.1472777919843793,
+  "measurement_exit_code": 0,
+  "first_load_engine_recorded": true,
+  "development_report_sha256": "sha256:a4141f7ab8dd9e6e41a72e4b71be080fc275fe451e355d5530b65e1eea3674c3",
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424607392   6892556    99% 3548145 68925560    5%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 9216.00M  used = 7869.88M  free = 1346.12M  (encrypted)\n",
+  "pressure_level": "kern.memorystatus_vm_pressure_level: 1\n",
+  "cache_artifacts_preserved": true
+}

@@ -1,0 +1,2 @@
+PASS nonempty-array accepted=1 expected=1
+PASS empty-array accepted=1 expected=1

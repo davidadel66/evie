@@ -1,0 +1,62 @@
+[
+  {
+    "name": "empty-context",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "unknown-source",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"unknown\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "unknown-context",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"unknown\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "source-in-context",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "source/s1/omitted",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "source/s1/whole",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"whole\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "source/s1/date",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"date\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "source/s1/range",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "dangling-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "whole-coords",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"whole\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "range-no-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "nonempty-context-no-assistant",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":\"whole\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  }
+]

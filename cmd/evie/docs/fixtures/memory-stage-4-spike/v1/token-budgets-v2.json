@@ -1,0 +1,11 @@
+{
+  "version": "pinned-mistral-spm-byte-bound-v1",
+  "reserve_tokens": 64,
+  "file_sha256": {
+    "runtime-manifest.json": "sha256:56d8dbd0fc53d4ee9ae42f7170e78c0b48f808c7308b9969b1afae383cad882d",
+    "runtime-api-metadata.json": "sha256:0cb7b51fd0ed73a46c209049a1c9bd742573d6d2721df7e0d47e555c618b4b4e",
+    "output.schema.json": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+    "tokenizer-proof.json": "sha256:68a54396c5509c3fe1184ab344a50fadc4c635e9048405c2c0c011b8e94975d8",
+    "prompt.txt": "sha256:f6f280093b15e1a1928db2737ec9bde8b2e0471ef66cbeab11de47b0ca57c832"
+  }
+}

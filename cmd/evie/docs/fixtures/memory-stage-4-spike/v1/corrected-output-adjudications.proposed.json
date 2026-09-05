@@ -1,0 +1,304 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_file": "corrected-output-adjudication-packet.md",
+  "packet_sha256": "sha256:fb6de27ba6c7c9034bd4acc2207c851d45c3e9172fc2c38d1f8b64e378bade50",
+  "source_score_file": "reports/corrected-comparison-initial-score.json",
+  "source_score_sha256": "sha256:4a7aa0734bab2aa1074231641b34b7dc8b5d555dc865fee400857dc00e19b92f",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decisions": [
+    {
+      "id": "C01",
+      "case_id": "N01-a",
+      "candidate_sha256": "sha256:12ab6f4ec03703b8d2eb3066443efc77af7b49f8a3ed302d4770081ba70be0b4",
+      "label": "unsupported",
+      "errors": [
+        "identity"
+      ],
+      "note": "Assigns the owner\u2019s tea preference to the project scope UUID. Correct text/fact fields do not repair the wrong subject.",
+      "gold_matches": []
+    },
+    {
+      "id": "C02",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:12ab6f4ec03703b8d2eb3066443efc77af7b49f8a3ed302d4770081ba70be0b4",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Repeats the old tea preference with old-only support and assigns it to the project. No new evidence owns this proposal.",
+      "gold_matches": []
+    },
+    {
+      "id": "C03",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:cb10e1690e7ef620bbca1746b9cb92e30f2417c5b686f829f0ad91a1a0d705ac",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "polarity",
+        "predicate",
+        "typed_meaning"
+      ],
+      "note": "Invents a denied relationship with a pear and a correction effect; the source only reports an incidental meal.",
+      "gold_matches": []
+    },
+    {
+      "id": "C04",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:a48fba38f80bf44c5a60b88a550b02fa184f883d581b24f65977fe49c2a059ab",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "identity"
+      ],
+      "note": "Treats unendorsed reported speech as Maya\u2019s residence and marks a bare name resolved. D1 does not admit this assertion.",
+      "gold_matches": []
+    },
+    {
+      "id": "C05",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:e2a61678147f9e4b98252989483f87e2c14f702bcb4eb38acdfb4dcb4d93e114",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "identity",
+        "polarity",
+        "typed_meaning"
+      ],
+      "note": "Invents Maya\u2019s project-owner relationship, uses an impossible range, empty polarity and unproven attach-support effect.",
+      "gold_matches": []
+    },
+    {
+      "id": "C06",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:1189c4bfa9847c18e1742f07cb34f5359216ff3029b6acdccaa7499635f12c1f",
+      "label": "optional_useful",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "The neighbor relationship is explicitly supported and optional. Raw semantic credit needs human confirmation; Maya must remain unresolved. The emitted bare name plus resolved identity violates that contract.",
+      "gold_matches": []
+    },
+    {
+      "id": "C07",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:8db32d2241c0db1ca845f4424c9661a1b962e312a5bc4d47837c8496ab9b8986",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "typed_meaning",
+        "identity"
+      ],
+      "note": "Calls Paris a date, marks Maya resolved and nominates 76:102 on a 75-byte source. The exact proposal cannot receive supported-source credit through repair.",
+      "gold_matches": []
+    },
+    {
+      "id": "C08",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:bad878bb101645d417d384d59461ad6781e1b59c41f3b1e52ee74ca93d579444",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Turns the earlier story-writing request into a project decision and cites only the old, unendorsed event.",
+      "gold_matches": []
+    },
+    {
+      "id": "C09",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:c8f230deca9caa5014f633f5b6f98b1bfb23e4f477c2a3dd2e99708ad9fbca5d",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Assigns the preference to the project, drops tea-over-coffee qualification, and omits the exact assistant question needed to interpret Yes.",
+      "gold_matches": []
+    },
+    {
+      "id": "C10",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:07e1f2a4f5c2f99f15354ba80538b74c155d2298f0451e29203476c002598c2a",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Attaches the old colleague relation to an impossible 24:51 span on the 23-byte ambiguous pronoun event; Maya Patel is not resolved by that new source.",
+      "gold_matches": []
+    },
+    {
+      "id": "C11",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:f9e9c28c4409adbe4816383b57439cd5ceab64c1120bf49888fa93ff36c23562",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Attaches the old cousin relation to an impossible 0:51 span on the 23-byte ambiguous pronoun event; Maya Chen is not resolved by that new source.",
+      "gold_matches": []
+    },
+    {
+      "id": "C12",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:facef654fec964e59ad51505b3f6f02936d8eb9e28969137fe8bfc8707d156e9",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning"
+      ],
+      "note": "Paris as the subject with an empty residence object does not identify the ambiguous person or express a supported move.",
+      "gold_matches": []
+    },
+    {
+      "id": "C13",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:241631dbcd76362d2c277c2c9864aa8ee4dead2b962fef5312fef1ce4405f171",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution",
+        "typed_meaning"
+      ],
+      "note": "Reuses only old overlap and classifies the offline constraint as a decision. The nominated 74:83 slice does not state the constraint.",
+      "gold_matches": []
+    },
+    {
+      "id": "C14",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:dd367e7a59b0d58d835d68efbd567f66c729c3df8d95698685d552f007514db8",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning",
+        "identity"
+      ],
+      "note": "The source states an unadopted PostgreSQL consideration, but this exact proposal requests attachment to accepted support without accepted context and marks the project unresolved.",
+      "gold_matches": []
+    },
+    {
+      "id": "C15",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:fff0f9546c05a4e341a50e5ab16308f96440e96f91b349dca7a7200abdf875f1",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Re-proposes the old SQLite decision with old-only evidence. It is not newly supported by the PostgreSQL consideration.",
+      "gold_matches": []
+    },
+    {
+      "id": "C16",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:0f36e8179504f9c13ea09570d97fa19a50a94432bffac89be92fe2cef7deee61",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution",
+        "polarity"
+      ],
+      "note": "Invents an empty residence/date consideration with empty polarity and impossible 45:52 coordinates, instead of the owner\u2019s employment change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C17",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:3c45144f5bf7d5b93d31b6dad08e394a4b92e696748be6db6f569995695e0b73",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Invents an empty denied residence/date proposition with impossible 45:60 coordinates, instead of the owner\u2019s employment change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C18",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:ad2023b85a2bb070ba1da25153198f6b2aa158369de2b98719a376965f146da8",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "temporal"
+      ],
+      "note": "Assigns the denied employment to the project, classifies the departure as a standing fact, and omits last month.",
+      "gold_matches": []
+    },
+    {
+      "id": "C19",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:180c0afa5a20a48924722c41db6611d0192902d5dbb0800a1e7ecb081361ea43",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Reuses an old date-check instruction as a project decision and requests unsupported attachment. It is not new memory evidence.",
+      "gold_matches": []
+    },
+    {
+      "id": "C20",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:7e82516e8d1d9f7a91fa5a1ce25a5d86722e73b3ef49dd6edf820f64a01b62d4",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution",
+        "temporal",
+        "predicate"
+      ],
+      "note": "Turns an old clock observation into project residence with a correction effect, adds full-time precision and omits required context field. It is not the owner\u2019s coffee change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C21",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:d2fe3b87e455bd94a912ee09110d3fa4d49ad993915d390000e3f4eb56c90a48",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "source_attribution",
+        "temporal",
+        "predicate"
+      ],
+      "note": "Turns an old clock observation into project residence with a correction effect and full-time precision. It is not the owner\u2019s coffee change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C22",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:dace63c09bbafcd9553773dc9af31076fabd7a59f814557add964b569ca0e9f3",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "typed_meaning",
+        "temporal"
+      ],
+      "note": "Turns the date-use instruction into a project decision, retains unresolved relative wording, and omits the owner\u2019s coffee habit change.",
+      "gold_matches": []
+    },
+    {
+      "id": "C23",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:29e7e041c5562e12b4ade4ba421dfbceab580c4cb864e6fc4b59d4403b207f1f",
+      "label": "unsupported",
+      "errors": [
+        "identity"
+      ],
+      "note": "Assigns the owner\u2019s denied caf\u00e9 preference to the project scope UUID.",
+      "gold_matches": []
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "observed_at": "2026-09-05T02:39:01.453247+00:00",
+  "model": "mistral:latest",
+  "manifest_sha256": "f974a74358d62a017b37c6f424fcdf2744ca02926c4f952513ddf474b2fa5091",
+  "artifacts": [
+    {
+      "mediaType": "application/vnd.docker.container.image.v1+json",
+      "digest": "sha256:42347cd80dc868877d2807869c0e9c90034392b2f1f001cae1563488021e2e19",
+      "size": 485,
+      "actual_sha256": "sha256:42347cd80dc868877d2807869c0e9c90034392b2f1f001cae1563488021e2e19",
+      "actual_bytes": 485,
+      "content": "{\"model_format\":\"gguf\",\"model_family\":\"llama\",\"model_families\":[\"llama\"],\"model_type\":\"7.2B\",\"file_type\":\"Q4_0\",\"architecture\":\"amd64\",\"os\":\"linux\",\"rootfs\":{\"type\":\"layers\",\"diff_ids\":[\"sha256:ff82381e2bea77d91c1b824c7afb83f6fb73e9f7de9dda631bcdbca564aa5435\",\"sha256:43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1\",\"sha256:c43332387573e98fdfad4a606171279955b53d891ba2500552c2984a6560ffb4\",\"sha256:ed11eda7790d05b49395598a42b155812b17e263214292f7b87d15e14003d337\"]}}\n"
+    },
+    {
+      "mediaType": "application/vnd.ollama.image.model",
+      "digest": "sha256:ff82381e2bea77d91c1b824c7afb83f6fb73e9f7de9dda631bcdbca564aa5435",
+      "size": 4113289152,
+      "actual_sha256": "sha256:ff82381e2bea77d91c1b824c7afb83f6fb73e9f7de9dda631bcdbca564aa5435",
+      "actual_bytes": 4113289152
+    },
+    {
+      "mediaType": "application/vnd.ollama.image.license",
+      "digest": "sha256:43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+      "size": 11356,
+      "actual_sha256": "sha256:43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+      "actual_bytes": 11356
+    },
+    {
+      "mediaType": "application/vnd.ollama.image.template",
+      "digest": "sha256:491dfa501e59ed17239711477601bdc7f559de5407fbd4a2a79078b271045621",
+      "size": 801,
+      "actual_sha256": "sha256:491dfa501e59ed17239711477601bdc7f559de5407fbd4a2a79078b271045621",
+      "actual_bytes": 801,
+      "content": "{{- if .Messages }}\n{{- range $index, $_ := .Messages }}\n{{- if eq .Role \"user\" }}\n{{- if and (eq (len (slice $.Messages $index)) 1) $.Tools }}[AVAILABLE_TOOLS] {{ $.Tools }}[/AVAILABLE_TOOLS]\n{{- end }}[INST] {{ if and $.System (eq (len (slice $.Messages $index)) 1) }}{{ $.System }}\n\n{{ end }}{{ .Content }}[/INST]\n{{- else if eq .Role \"assistant\" }}\n{{- if .Content }} {{ .Content }}\n{{- else if .ToolCalls }}[TOOL_CALLS] [\n{{- range .ToolCalls }}{\"name\": \"{{ .Function.Name }}\", \"arguments\": {{ .Function.Arguments }}}\n{{- end }}]\n{{- end }}</s>\n{{- else if eq .Role \"tool\" }}[TOOL_RESULTS] {\"content\": {{ .Content }}} [/TOOL_RESULTS]\n{{- end }}\n{{- end }}\n{{- else }}[INST] {{ if .System }}{{ .System }}\n\n{{ end }}{{ .Prompt }}[/INST]\n{{- end }} {{ .Response }}\n{{- if .Response }}</s>\n{{- end }}"
+    },
+    {
+      "mediaType": "application/vnd.ollama.image.params",
+      "digest": "sha256:ed11eda7790d05b49395598a42b155812b17e263214292f7b87d15e14003d337",
+      "size": 30,
+      "actual_sha256": "sha256:ed11eda7790d05b49395598a42b155812b17e263214292f7b87d15e14003d337",
+      "actual_bytes": 30,
+      "content": "{\"stop\":[\"[INST]\",\"[/INST]\"]}\n"
+    }
+  ],
+  "runtime_path": "/Applications/Ollama.app/Contents/Resources/ollama",
+  "runtime_sha256": "2794d30cf43308d6ce368d2827f09b2b6b2e804960e9f5768b3b603f1ad93a8f",
+  "environment": {
+    "platform": "macOS-15.7.8-arm64-arm-64bit-Mach-O",
+    "physical_memory_bytes": 19327352832
+  }
+}

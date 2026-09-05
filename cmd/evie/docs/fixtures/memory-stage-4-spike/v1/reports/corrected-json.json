@@ -1,0 +1,669 @@
+{
+  "executable_sha256": "sha256:d5314e70ab77a6e2cf4f36ae29756b6781a599472ea6c11bdf01c49f548e6ebf",
+  "budget_sha256": "sha256:85e48a2ba293014ff2d21525923b15082d885f99a4d2e44178629564d1e361af",
+  "validation_version": "standalone-source-checks-v2",
+  "validation_code_sha256": "sha256:028e08dfca7efc7edf05553c6515b460bca00ab98753448a2d5e4a30d1612ff8",
+  "planned_cases": [
+    "N01-a",
+    "N01-b",
+    "N02-a",
+    "N02-b",
+    "N03-b",
+    "N04-b",
+    "N05-b",
+    "N06-a",
+    "N08-b",
+    "N09-a"
+  ],
+  "repetitions": 1,
+  "version": "evie-extraction-spike-report-v1",
+  "started_at": "2026-09-05T03:33:58.556661Z",
+  "quality_status": "unadjudicated",
+  "corpus_sha256": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+  "prompt_sha256": "sha256:f6f280093b15e1a1928db2737ec9bde8b2e0471ef66cbeab11de47b0ca57c832",
+  "schema_sha256": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+  "evidence_policy": "memory-stage-4-evidence-contract@92d10a4",
+  "model": "mistral:latest",
+  "mode": "json",
+  "context_tokens": 8192,
+  "max_output_tokens": 768,
+  "temperature": 0,
+  "endpoint": "http://127.0.0.1:11434",
+  "go_version": "go1.26.3",
+  "runs": [
+    {
+      "server_release": "finished_response",
+      "case_id": "N01-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 13085.69,
+      "request_bytes": 6559,
+      "request_sha256": "sha256:c972e4e1a33a2f335a876502a7d103525c0366cc705ce99a6f62f39fc3370460",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"text\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:5e8208509df963d4201f54ee5269804cfa63361a6c49030beeae81cbe6fb49fb",
+      "raw_count": 1,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "start": 0,
+                "end": 13
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 1564,
+      "output_tokens": 257,
+      "load_ns": 7968958,
+      "prompt_ns": 1676062042,
+      "evaluation_ns": 11395170666
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N01-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 24828.622,
+      "request_bytes": 6963,
+      "request_sha256": "sha256:a1d610f59914137ef613b45ab5088feb8a520ae2b4ad0b2cd0656cba47f70c61",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"text\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"relationship\",\n      \"object_kind\": \"text\",\n      \"object\": \"pear\",\n      \"polarity\": \"denied\",\n      \"kind\": \"fact\",\n      \"temporal\": \"lunch\",\n      \"identity\": \"resolved\",\n      \"effect\": \"correct\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"155add8e-9dfd-5e37-a055-65759c3b688d\",\n          \"start\": 0,\n          \"end\": 22\n        }\n      ],\n      \"context\": []\n    }\n]}",
+      "raw_sha256": "sha256:3700138d313505b71adfe26b6b34ee56ce0a1bf7c0fab88cfa0ead7edc0d5547",
+      "raw_count": 2,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "start": 0,
+                "end": 13
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "candidate has no newly owned support"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "pear",
+            "polarity": "denied",
+            "kind": "fact",
+            "temporal": "lunch",
+            "identity": "resolved",
+            "effect": "correct",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+                "start": 0,
+                "end": 22
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 1791,
+      "output_tokens": 502,
+      "load_ns": 9369417,
+      "prompt_ns": 2069302875,
+      "evaluation_ns": 22739016375
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N02-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 20294.497,
+      "request_bytes": 6626,
+      "request_sha256": "sha256:3baf262b53c425e340b4c555b70eb45912cc5bbd267ee0345f05b5b16d5872bf",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"residence\",\n      \"object_kind\": \"text\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"start\": 0,\n          \"end\": 74\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"relationship\",\n      \"object_kind\": \"text\",\n      \"object\": \"project owner\",\n      \"polarity\": \"\",\n      \"kind\": \"consideration\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"attach_support\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"start\": 75,\n          \"end\": 104\n        }\n      ],\n      \"context\": []\n    }\n  ]\n}",
+      "raw_sha256": "sha256:9a00273f6f2e73035ade676e431d8aa3f8a70cf9e1d676d3a1d848706dad3683",
+      "raw_count": 2,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "residence",
+            "object_kind": "text",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "start": 0,
+                "end": 74
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        },
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "project owner",
+            "polarity": "",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "attach_support",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "start": 75,
+                "end": 104
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1581,
+      "output_tokens": 436,
+      "load_ns": 8725750,
+      "prompt_ns": 1083852583,
+      "evaluation_ns": 19197403375
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N02-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 28201.754,
+      "request_bytes": 7083,
+      "request_sha256": "sha256:7c1ed470432adcba0927add1ff09096309e965cf18271a4ea2f8afb17069e383",
+      "raw": "{\"candidates\":[\n  {\n    \"subject\":\"Maya\",\n    \"predicate\":\"relationship\",\n    \"object_kind\":\"text\",\n    \"object\":\"neighbor\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"fact\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[\n      {\"event_id\":\"eaa07e15-ca81-5ffe-b8e3-c7519f474b93\",\"start\":0,\"end\":75}\n    ],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"Maya\",\n    \"predicate\":\"residence\",\n    \"object_kind\":\"date\",\n    \"object\":\"Paris\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"fact\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[\n      {\"event_id\":\"eaa07e15-ca81-5ffe-b8e3-c7519f474b93\",\"start\":76,\"end\":102}\n    ],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"project\",\n    \"predicate\":\"decision\",\n    \"object_kind\":\"text\",\n    \"object\":\"write \\\"I live in Paris.\\\"\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"decision\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[\n      {\"event_id\":\"39878038-6df9-5dac-8e20-f25238f36882\",\"start\":0,\"end\":74}\n    ],\n    \"context\":[]\n  }\n]}",
+      "raw_sha256": "sha256:15ee083580af85f08856c90b230796c1bb8dd7b8ebbda64719d5dee896dccdc2",
+      "raw_count": 3,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "neighbor",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+                "start": 0,
+                "end": 75
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        },
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "residence",
+            "object_kind": "date",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+                "start": 76,
+                "end": 102
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "support: range outside projected source"
+        },
+        {
+          "candidate": {
+            "subject": "project",
+            "predicate": "decision",
+            "object_kind": "text",
+            "object": "write \"I live in Paris.\"",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "start": 0,
+                "end": 74
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "candidate has no newly owned support"
+        }
+      ],
+      "prompt_tokens": 1820,
+      "output_tokens": 576,
+      "load_ns": 5395958,
+      "prompt_ns": 2212319042,
+      "evaluation_ns": 25978475042
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N03-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 13913.324,
+      "request_bytes": 7351,
+      "request_sha256": "sha256:2d8dfe25c2cfa37b61797e6f53891b96d22cd0d0f03b5d5d73591862b6c69280",
+      "raw": "{\"candidates\":[\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"preference\",\n    \"object_kind\":\"text\",\n    \"object\":\"tea\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"fact\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"0935c3b6-ecbb-571d-88e9-54711ce43e30\",\"start\":0,\"end\":4}],\n    \"context\":[]\n  }\n]}",
+      "raw_sha256": "sha256:5e8f007d2e51dd8d9305dea07330e17a055794ff28b08654464943162c9ad9a8",
+      "raw_count": 1,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "start": 0,
+                "end": 4
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 1998,
+      "output_tokens": 225,
+      "load_ns": 4926375,
+      "prompt_ns": 2928509167,
+      "evaluation_ns": 10974352250
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N04-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 31152.92,
+      "request_bytes": 7002,
+      "request_sha256": "sha256:bad9272d2beb05441d3dc77fe0f3f8c99f44c8f592abfb9882b4b7b5127b2e20",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya Chen\",\n      \"predicate\": \"relationship\",\n      \"object_kind\": \"text\",\n      \"object\": \"cousin\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 0,\n          \"end\": 51\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Patel\",\n      \"predicate\": \"relationship\",\n      \"object_kind\": \"text\",\n      \"object\": \"colleague\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 24,\n          \"end\": 51\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Paris\",\n      \"predicate\": \"residence\",\n      \"object_kind\": \"text\",\n      \"object\": \"\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 0,\n          \"end\": 23\n        }\n      ],\n      \"context\": []\n    }\n  ]\n}",
+      "raw_sha256": "sha256:febfcd3ed975cb99a1010585eb4ceb5c016ebb05e702b3d5af0ba19fe761f04e",
+      "raw_count": 3,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "Maya Chen",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "cousin",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+                "start": 0,
+                "end": 51
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "support: range outside projected source"
+        },
+        {
+          "candidate": {
+            "subject": "Maya Patel",
+            "predicate": "relationship",
+            "object_kind": "text",
+            "object": "colleague",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+                "start": 24,
+                "end": 51
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "support: range outside projected source"
+        },
+        {
+          "candidate": {
+            "subject": "Paris",
+            "predicate": "residence",
+            "object_kind": "text",
+            "object": "",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "f89cfaed-b920-5115-a0ac-371e724aa98a",
+                "start": 0,
+                "end": 23
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "missing/oversized meaning"
+        }
+      ],
+      "prompt_tokens": 1793,
+      "output_tokens": 640,
+      "load_ns": 4890209,
+      "prompt_ns": 2090643166,
+      "evaluation_ns": 29050208250
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N05-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 32914.316,
+      "request_bytes": 7109,
+      "request_sha256": "sha256:97b2de7d0eab099f14e7f283ef5d1ba1a8047e39d5e935271fc738b98003cd12",
+      "raw": "{\"candidates\":[\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"decision\",\n    \"object_kind\":\"text\",\n    \"object\":\"SQLite\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"decision\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"49290f19-3f35-50aa-b775-cf97d4591adc\",\"start\":0,\"end\":83}],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"constraint\",\n    \"object_kind\":\"text\",\n    \"object\":\"offline operation\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"decision\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"49290f19-3f35-50aa-b775-cf97d4591adc\",\"start\":74,\"end\":83}],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"consideration\",\n    \"object_kind\":\"text\",\n    \"object\":\"PostgreSQL\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"consideration\",\n    \"temporal\":\"\",\n    \"identity\":\"unresolved\",\n    \"effect\":\"attach_support\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"0b9cd9f7-c1e4-595e-98f5-8044d8340602\",\"start\":0,\"end\":98}],\n    \"context\":[]\n  }\n]}",
+      "raw_sha256": "sha256:a9fd1746bbfc32ec6cd9c6001e5ef4da851b3510a4398a47bbad4d4337ea3812",
+      "raw_count": 3,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "decision",
+            "object_kind": "text",
+            "object": "SQLite",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 0,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "candidate has no newly owned support"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "constraint",
+            "object_kind": "text",
+            "object": "offline operation",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 74,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "candidate has no newly owned support"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "consideration",
+            "object_kind": "text",
+            "object": "PostgreSQL",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "attach_support",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+                "start": 0,
+                "end": 98
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 1817,
+      "output_tokens": 672,
+      "load_ns": 6078125,
+      "prompt_ns": 2223991959,
+      "evaluation_ns": 30679567958
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N06-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 23732.881,
+      "request_bytes": 6590,
+      "request_sha256": "sha256:c54e7aaa790b7ea8fac57b22dc1a9f049d290f1a840b1f57165d584c9b977136",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"employment\",\n      \"object_kind\": \"text\",\n      \"object\": \"Acme\",\n      \"polarity\": \"denied\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"start\": 0,\n          \"end\": 44\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"residence\",\n      \"object_kind\": \"date\",\n      \"object\": \"\",\n      \"polarity\": \"\",\n      \"kind\": \"consideration\",\n      \"temporal\": \"last month\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"attach_support\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"start\": 45,\n          \"end\": 52\n        }\n      ],\n      \"context\": []\n    }\n  ]\n}",
+      "raw_sha256": "sha256:4e5521be26b9aff5e1eb9e26051debdb44ace5de6590516742b23d889c65c409",
+      "raw_count": 2,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "employment",
+            "object_kind": "text",
+            "object": "Acme",
+            "polarity": "denied",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+                "start": 0,
+                "end": 44
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "residence",
+            "object_kind": "date",
+            "object": "",
+            "polarity": "",
+            "kind": "consideration",
+            "temporal": "last month",
+            "identity": "unresolved",
+            "effect": "attach_support",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "71442dec-2d3c-50d4-a649-498937e18b6a",
+                "start": 45,
+                "end": 52
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "missing/oversized meaning"
+        }
+      ],
+      "prompt_tokens": 1574,
+      "output_tokens": 505,
+      "load_ns": 4288583,
+      "prompt_ns": 1078873125,
+      "evaluation_ns": 22645762584
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N08-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "schema_error",
+      "error": "closed candidate fields required",
+      "latency_ms": 35369.715,
+      "request_bytes": 7436,
+      "request_sha256": "sha256:86938c22665612e497fb312d900bf1de0d5c4c7763a75a79dc52ee50c563b14a",
+      "raw": "{\"candidates\":[\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"decision\",\n    \"object_kind\":\"text\",\n    \"object\":\"Use the date you just checked\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"decision\",\n    \"temporal\":\"as of that date\",\n    \"identity\":\"resolved\",\n    \"effect\":\"assert\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"eb55a65e-dace-573b-8a85-522b88a4f74d\",\"start\":0,\"end\":78}],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"decision\",\n    \"object_kind\":\"text\",\n    \"object\":\"Check the local date for me\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"decision\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"attach_support\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"e8cddf05-9db4-550f-aeda-a016becc0cd7\",\"start\":0,\"end\":28}],\n    \"context\":[]\n  },\n  {\n    \"subject\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"predicate\":\"residence\",\n    \"object_kind\":\"date\",\n    \"object\":\"2026-09-04 09:30:00\",\n    \"polarity\":\"affirmed\",\n    \"kind\":\"fact\",\n    \"temporal\":\"\",\n    \"identity\":\"resolved\",\n    \"effect\":\"correct\",\n    \"scope\":\"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n    \"sources\":[{\"event_id\":\"edc787df-49e6-5c93-a135-6aa6b7619aa0\",\"start\":0,\"end\":19}]\n  }\n]}",
+      "raw_sha256": "sha256:36c4397f978f1ea0f3358f02a723c692c250795ebcfc1f86185e575f4531106f",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 2032,
+      "output_tokens": 681,
+      "load_ns": 5474584,
+      "prompt_ns": 3079980291,
+      "evaluation_ns": 32278832875
+    },
+    {
+      "server_release": "finished_response",
+      "case_id": "N09-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 12624.675,
+      "request_bytes": 6572,
+      "request_sha256": "sha256:14aa8bfea44c3bea37d8579f2b014b2b90d8e241484cac254f816a64c594bd84",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"text\",\n      \"object\": \"café ☕\",\n      \"polarity\": \"denied\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"resolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"6b4b9ad5-f436-5e1f-b92a-6eab9543c666\",\n          \"start\": 0,\n          \"end\": 26\n        }\n      ],\n      \"context\": []\n    }\n]}",
+      "raw_sha256": "sha256:13099b85ae056bd61208c4f015a62a9546b1a68bf4b2c814862b6fbf6b9d99b5",
+      "raw_count": 1,
+      "retained_count": 1,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "text",
+            "object": "café ☕",
+            "polarity": "denied",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "resolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "6b4b9ad5-f436-5e1f-b92a-6eab9543c666",
+                "start": 0,
+                "end": 26
+              }
+            ],
+            "context": []
+          },
+          "retained": true
+        }
+      ],
+      "prompt_tokens": 1571,
+      "output_tokens": 259,
+      "load_ns": 7717500,
+      "prompt_ns": 1086143208,
+      "evaluation_ns": 11526577000
+    }
+  ]
+}

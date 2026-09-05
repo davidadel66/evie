@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "status": "proposed_not_human_reviewed",
+  "reviewer": null,
+  "reviewed_at": null,
+  "packet_file": "output-adjudication-packet.md",
+  "packet_sha256": "sha256:53b6e3609f03731f1f9f8c369fba62aa534a03f9fdddf95ceaddabd602576354",
+  "source_score_file": "reports/development-initial-score.json",
+  "source_score_sha256": "sha256:503cad16e1baa77dad310216c1307b963bd2540f34bdd1a758f1271b70596efd",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decisions": [
+    {
+      "id": "W01",
+      "case_id": "N01-a",
+      "candidate_sha256": "sha256:d1c203b4e80d79be453924ba329902dab606af0e2001e9e4f4bff79e2b1844f9",
+      "label": "required_useful",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "The explicit owner/tea meaning is supported by s1. Proposed raw semantic credit only; its dangling start coordinate is not a valid citation and remains rejected. Human approval would not repair the reference or create retained credit.",
+      "gold_matches": [
+        0
+      ]
+    },
+    {
+      "id": "W02",
+      "case_id": "N01-b",
+      "candidate_sha256": "sha256:2d3b37e4c5a831da7b7d0dd3c5027cb399c11d11f67c7e42f06041e4d405c557",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Repeats tea from s1 overlap when the newly owned source is an incidental pear lunch. No new support owns this preference. It also marks the explicit owner/text tuple unresolved and emits an invalid reference. Here unsupported means an ineligible repeated truth under newly owned evidence rules, not a fabricated historical fact.",
+      "gold_matches": []
+    },
+    {
+      "id": "W03",
+      "case_id": "N02-a",
+      "candidate_sha256": "sha256:fb7cf0022334c3433d23a853b4e8b83901f422c110f275630ba433ceb118e4bc",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Treats the story/unendorsed report as the owner living in Paris. Neither passage asserts the owner residence. The source locator is also incomplete.",
+      "gold_matches": []
+    },
+    {
+      "id": "W04",
+      "case_id": "N02-b",
+      "candidate_sha256": "sha256:809a00fd8560562ec35e9b81ffc79f4af4197e3d1c743623a767cb3ed3982f2a",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "The exact subject is owner, while the new assertion concerns Maya the neighbor. Changing owner to Maya would repair a wrong identity, not merely transport. The reference is incomplete.",
+      "gold_matches": []
+    },
+    {
+      "id": "W05",
+      "case_id": "N03-b",
+      "candidate_sha256": "sha256:49ba4078625819bc9370aed2fa9747d5416508e7d054ae65d003243ebfd2c0fa",
+      "label": "unsupported",
+      "errors": [
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Drops the tea-over-coffee comparison, represents a decision instead of a standing fact, omits the required assistant question context, and supplies an incomplete citation for Yes.",
+      "gold_matches": []
+    },
+    {
+      "id": "W06",
+      "case_id": "N04-b",
+      "candidate_sha256": "sha256:809a00fd8560562ec35e9b81ffc79f4af4197e3d1c743623a767cb3ed3982f2a",
+      "label": "unsupported",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "Assigns residence to owner even though She is ambiguous between Maya Chen and Maya Patel. The adapter must not resolve it to the owner; its nominated citation is also incomplete.",
+      "gold_matches": []
+    },
+    {
+      "id": "W07",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:6961d8a8b3e156be3d18c46c7a3d3e47e4e3b31677a4339f7b69fad78d4c4ebc",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Repeats the old offline constraint from overlap s1. The new PostgreSQL consideration supplies no newly owned support for this separate claim; the reference is also incomplete. Here unsupported means an ineligible repeated truth under newly owned evidence rules, not a fabricated historical fact.",
+      "gold_matches": []
+    },
+    {
+      "id": "W08",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:8321b876a4f9bfe45153d37c440f114391c63d052a44024cd8dc3f91376389ce",
+      "label": "unsupported",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Repeats the old SQLite decision from overlap s1. The new PostgreSQL consideration supplies no newly owned support for this separate claim; the reference is also incomplete. Here unsupported means an ineligible repeated truth under newly owned evidence rules, not a fabricated historical fact.",
+      "gold_matches": []
+    },
+    {
+      "id": "W09",
+      "case_id": "N05-b",
+      "candidate_sha256": "sha256:99130053022f8a39cff5eaed983c7ba16f8213eddfd0579116bf6e086ca4f53d",
+      "label": "optional_useful",
+      "errors": [
+        "identity",
+        "source_attribution"
+      ],
+      "note": "The explicit project PostgreSQL consideration is supported and optional. Proposed raw semantic credit keeps it unadopted; the unresolved identity flag conflicts with the explicit project/text tuple, and the citation is incomplete. No required recall credit is proposed.",
+      "gold_matches": []
+    },
+    {
+      "id": "W10",
+      "case_id": "N06-a",
+      "candidate_sha256": "sha256:0e6525b5b1c1d2448149efbcbec5345d8f8ee203683092593413c160c74437f0",
+      "label": "unsupported",
+      "errors": [
+        "polarity",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "Affirms a generic employment object after an explicit departure from Acme. The employer is lost and kind=fact replaces the reviewed world_change. Keeping last month does not repair meaning or the incomplete citation.",
+      "gold_matches": []
+    },
+    {
+      "id": "W11",
+      "case_id": "N08-b",
+      "candidate_sha256": "sha256:eb537c5762213f11d845a43bdc87c839c8da1f30ac53e790178c463a8ba9a4a3",
+      "label": "required_useful",
+      "errors": [
+        "predicate",
+        "typed_meaning",
+        "source_attribution"
+      ],
+      "note": "The raw owner wording explicitly says stopped drinking coffee as of the checked 2026-09-04 date. Proposed raw semantic credit recognizes that stated change, subject to human judgment. The encoded constraint/fact tuple is not the reviewed habit/world_change representation; the clock is wrongly placed in assistant context and whole/date references carry forbidden start coordinates. Raw approval repairs none of these structural or typed errors and creates no retained credit.",
+      "gold_matches": [
+        0
+      ]
+    },
+    {
+      "id": "W12",
+      "case_id": "N09-a",
+      "candidate_sha256": "sha256:4ec578a61caeaeaff3209212ba9aad1d16df88153c2d566f37ec3eca735e81b8",
+      "label": "required_useful",
+      "errors": [
+        "source_attribution"
+      ],
+      "note": "Proposed raw equivalence treats café as the same preference target as the approved café ☕ wording, with the emoji decorative. This equivalence specifically needs human judgment. Its dangling start coordinate remains invalid and cannot be repaired by approval.",
+      "gold_matches": [
+        0
+      ]
+    }
+  ]
+}

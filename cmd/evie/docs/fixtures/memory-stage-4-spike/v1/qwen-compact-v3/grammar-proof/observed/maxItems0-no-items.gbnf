@@ -1,0 +1,12 @@
+null ::= "null" space
+boolean ::= ("true" | "false") space
+array ::= "[" space ( value ("," space value)* )? "]" space
+string ::= "\"" char* "\"" space
+number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
+decimal-part ::= [0-9]{1,16}
+char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
+root ::= "[" space ( value ("," space value)* )? "]" space
+integral-part ::= [0] | [1-9] [0-9]{0,15}
+value ::= object | array | string | number | boolean | null
+space ::= | " " | "\n" [ \t]{0,20}

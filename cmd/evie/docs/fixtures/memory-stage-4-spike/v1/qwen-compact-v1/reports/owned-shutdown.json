@@ -1,0 +1,21 @@
+{
+  "at": "2026-09-05T04:57:35.024134+00:00",
+  "owned_server_pid": 8268,
+  "observed_owned_group_pids": [
+    8268
+  ],
+  "completed_requests": 10,
+  "all_request_specific_done": true,
+  "no_inference_outstanding": true,
+  "all_owned_group_pids_exited": true,
+  "termination_seconds": 0.03298216697294265,
+  "earlier_metadata_only_pids": [
+    7626,
+    8101
+  ],
+  "development_report_sha256": "sha256:67e4290e9c42b20726e90f56d919ccd703ddc5330cfb6bf7cb9119ebe70968f8",
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424404880   7094084    99% 3546857 70940840    5%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 9216.00M  used = 8253.88M  free = 962.12M  (encrypted)\n",
+  "pressure_level": "kern.memorystatus_vm_pressure_level: 1\n",
+  "cache_artifacts_preserved": true
+}

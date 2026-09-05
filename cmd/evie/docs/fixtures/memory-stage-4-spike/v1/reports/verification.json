@@ -1,0 +1,114 @@
+{
+  "recorded_at": "2026-09-05T04:16:19.172498+00:00",
+  "git_head": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "branch": "codex/memory-stage-4",
+  "commands": [
+    {
+      "command": "go test ./scripts/memory-extractor-spike -count=1",
+      "exit_code": 0,
+      "result": "final focused run passed in 4.624 s"
+    },
+    {
+      "command": "python3 -m py_compile scripts/memory-extractor-spike/measure.py scripts/memory-extractor-spike/freeze_budget.py scripts/memory-extractor-spike/inspect_qwen_gguf.py",
+      "exit_code": 0
+    },
+    {
+      "command": "./scripts/verify-change.sh",
+      "exit_code": 0,
+      "includes": [
+        "UI lint",
+        "UI typecheck/build",
+        "go test ./...",
+        "go vet ./...",
+        "git diff --check",
+        "git diff --cached --check"
+      ]
+    }
+  ],
+  "existing_warnings": [
+    "internal/web/ui/src/ui/Icon.tsx:16 react(only-export-components)",
+    "Vite built chunks larger than 500 kB after minification"
+  ],
+  "skipped_required_repository_checks": [],
+  "full_log": "verification.log",
+  "normalized_log_sha256": "sha256:6e2204543b6f15042f40469aac9a5793f77276675398795cf9c51529f7bc93fb",
+  "original_local_log_sha256": "sha256:4a61f205696fd374bde7694f9293e91e71d6259d310188367a0a20ca81617424",
+  "normalization": "ANSI control sequences and carriage returns removed; line-ending whitespace stripped; all diagnostic text retained",
+  "go_source_sha256": {
+    "scripts/memory-extractor-spike/budget.go": "sha256:c8a4269ccd45459867cc644cd8276c85b96a74774c20207ad3aab132775fc717",
+    "scripts/memory-extractor-spike/checks.go": "sha256:9b490f43b9c78e11a20ebcde24c8710fbc69e839abf78cfdd214fc3ac4e5945b",
+    "scripts/memory-extractor-spike/main.go": "sha256:a196dfdf83012de833b7bc7e2337184649caf6a4e5ab8980c1427a63e374e2ae",
+    "scripts/memory-extractor-spike/main_test.go": "sha256:3db63d85016183743f307d1b038db67a9b3c12fa5c5c47906385f25159d20809",
+    "scripts/memory-extractor-spike/qwen_budget.go": "sha256:7e2a4099b185d27a6440cb21b369c149ad0959a5dfb5f14096f545f0e8c2f2f0",
+    "scripts/memory-extractor-spike/revalidate.go": "sha256:2efc8d26d943a7badd03ac47ff3afec147c8d0ecab8cc000eba57ea76913700e",
+    "scripts/memory-extractor-spike/score.go": "sha256:c8c3559c374559406cd658b78479e2884c3619603798e5f12dc41634c08b334c"
+  },
+  "python_source_sha256": {
+    "scripts/memory-extractor-spike/freeze_budget.py": "sha256:05447ba2a149c9e68e438c9cdf685f77f0ffdcae23d8a5fed47d6e28f1541d41",
+    "scripts/memory-extractor-spike/inspect_qwen_gguf.py": "sha256:54faab1e6bd86f81f2de31034679cba885476c63d2bc6628ed1585466e15df6b",
+    "scripts/memory-extractor-spike/measure.py": "sha256:439ec701c738ab760484aa34ef1c27fbfe61101536eea221b94b34ac7562f062"
+  },
+  "review": "Independent Standards and Spec reviews plus focused Qwen proof/adapter/stop-on-failure rechecks reported no actionable findings.",
+  "artifact_audit": {
+    "recorded_at": "2026-09-05T04:30:54.495773+00:00",
+    "owned_file_count": 76,
+    "local_markdown_targets_checked": 33,
+    "missing_local_markdown_targets": 0,
+    "approved_corpus_file_bindings_checked": 5,
+    "proposed_output_record_bindings_checked": 3,
+    "proposed_output_records": [
+      {
+        "file": "output-adjudications.proposed.json",
+        "sha256": "sha256:a36fe2fb5c4fde55b051257affc03b78ca9595245694fcbd45d8c04e1c913507",
+        "packet_file": "output-adjudication-packet.md",
+        "packet_sha256": "sha256:aedc9737dd0ee9c3cc081a9a009d8e11a2073da119bb609ca8486379f3d45b89",
+        "status": "proposed_not_human_reviewed"
+      },
+      {
+        "file": "corrected-output-adjudications.proposed.json",
+        "sha256": "sha256:3b7da4224a9256eaabbfa4ea11aad7b26b1ff1f7e47d34897c156f2eec79da74",
+        "packet_file": "corrected-output-adjudication-packet.md",
+        "packet_sha256": "sha256:fb6de27ba6c7c9034bd4acc2207c851d45c3e9172fc2c38d1f8b64e378bade50",
+        "status": "proposed_not_human_reviewed"
+      },
+      {
+        "file": "qwen/output-adjudications.proposed.json",
+        "sha256": "sha256:56cfeb03694ac690bf7aeb243591c2d854ef3aabfb01a20ed9d97ceac3a39365",
+        "packet_file": "output-adjudication-packet.md",
+        "packet_sha256": "sha256:553ea21a932a50ba360d70c9d154bfc6ca7f451afaaf3d3fc744180711135a5c",
+        "status": "proposed_not_human_reviewed"
+      }
+    ],
+    "experiment_input_and_current_qwen_code_bindings_checked": 37,
+    "formatting_revision": {
+      "file": "output-packet-formatting-revision.json",
+      "sha256": "sha256:c00057a38a3046fbc49589d0cda4ba40474039269d48dfd56ecdbeeb36990635",
+      "packet_count": 2,
+      "mechanical_byte_and_hash_assertions_pass": true
+    },
+    "preservation": {
+      "baseline": ".scratch/memory-stage-4/implementation-baseline.json",
+      "baseline_sha256": "sha256:3a7f78b2200a61b516525d0756bbb14116b75fe68b6ba47a2d6c320b352731f3",
+      "excluded_root_owned_prefix": ".scratch/memory-stage-4/",
+      "missing_file_encoding": "absent",
+      "preexisting_paths_checked": 220,
+      "differences": 0,
+      "index_empty": true
+    },
+    "new_file_whitespace": {
+      "command": "git diff --no-index --check /dev/null EACH_OWNED_FILE",
+      "files_checked": 76,
+      "failures": []
+    },
+    "git_diff_whitespace_exit_codes": [
+      0,
+      0
+    ],
+    "failures": []
+  },
+  "documentation_only_followup": {
+    "changes": "Removed exactly one final LF from each of two pending review packets, updated only their proposed-record packet hashes, preserved original bytes/hash lineage, and documented final corrected-Mistral resources plus allocation/sampling limitations. The report remains an 80-request snapshot.",
+    "required_checks": "All-owned-file whitespace, local links, approved corpus/proposed-record/manifest bindings, revision byte assertions, preservation and empty index passed.",
+    "full_code_retest": "Not repeated: executable source and dependencies are unchanged from the passing full verification."
+  }
+}

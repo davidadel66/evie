@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T04:54:37.730259+00:00",
+  "owned_server_pid": 8268,
+  "version": {
+    "version": "0.6.3"
+  },
+  "all_frozen_api_metadata_matched": true,
+  "array_hash_encoding": "Compact JSON retaining API object key order, matching frozen summary encoding; tensor hash does not sort dictionary keys.",
+  "actual_api_sha256": "sha256:7ed138912bcb1660891b3481a8759f6ab8b1afaee553953d40b78b6a742657fc",
+  "inference_requests_dispatched": 0,
+  "preflight_only_starts": 3,
+  "earlier_starts_exited_before_generation": true
+}

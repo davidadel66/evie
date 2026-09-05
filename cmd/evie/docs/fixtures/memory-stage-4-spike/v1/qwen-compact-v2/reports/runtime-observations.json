@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-05T07:13:42.917974+00:00",
+  "owned_server_pid": 52517,
+  "version": {
+    "version": "0.6.3"
+  },
+  "all_frozen_api_metadata_matched": true,
+  "array_hash_encoding": "json.dumps(value,separators=(',',':')) retaining API dictionary insertion order; no sorted keys",
+  "actual_api_sha256": "sha256:45d6384f6fd7788bc7ba629c075d0a0f360cb732096e990299b777ef0e8d6a00",
+  "inference_requests_dispatched": 0
+}

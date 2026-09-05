@@ -1,0 +1,997 @@
+{
+  "original_report": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/reports/development-json.json",
+  "original_report_sha256": "sha256:b1a65df7d54a4450ecf929dda8a30251a9ce58fe7e08ebb9cc8c27e2529af9af",
+  "validation_version": "standalone-source-checks-v2",
+  "validation_code_sha256": "sha256:dd31c9e07480d0c74bd4bad3df781f6a16c3c147247d1a88432e823206704f19",
+  "planned_cases": [
+    "N01-a",
+    "N01-b",
+    "N02-a",
+    "N02-b",
+    "N03-b",
+    "N04-b",
+    "N05-b",
+    "N06-a",
+    "N08-b",
+    "N09-a"
+  ],
+  "repetitions": 2,
+  "version": "evie-extraction-spike-report-v1",
+  "started_at": "2026-09-05T02:57:59.347485Z",
+  "quality_status": "unadjudicated",
+  "corpus_sha256": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+  "prompt_sha256": "sha256:477dcc434de42bf38b88535036ea2dd9fcd820e4d890dfcb09f2b2ce9368d07a",
+  "schema_sha256": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+  "evidence_policy": "memory-stage-4-evidence-contract@92d10a4",
+  "model": "mistral:latest",
+  "mode": "json",
+  "context_tokens": 4096,
+  "max_output_tokens": 768,
+  "temperature": 0,
+  "endpoint": "http://127.0.0.1:11434",
+  "go_version": "go1.26.3",
+  "runs": [
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N01-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 12400.432,
+      "request_bytes": 3132,
+      "request_sha256": "sha256:55edea711c35d17dd7d4761661284ade814714347bf13b13c6781726610fd7ee",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"session_id\": \"4ce94707-d456-561c-9100-150a6a3d3c6a\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:7d947358048e0276c2e9e28da266604847515be7e7d91bb9c41ae2459bae5aa3",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 796,
+      "output_tokens": 305,
+      "load_ns": 5690666,
+      "prompt_ns": 1132185708,
+      "evaluation_ns": 11256981042
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N01-a",
+      "repetition": 2,
+      "seed": 18,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 11360.852,
+      "request_bytes": 3132,
+      "request_sha256": "sha256:36bd94111e57b9cd3dfecced856036c91c4b71d3fb6707e2904494483ea628a0",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"session_id\": \"4ce94707-d456-561c-9100-150a6a3d3c6a\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:7d947358048e0276c2e9e28da266604847515be7e7d91bb9c41ae2459bae5aa3",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 796,
+      "output_tokens": 305,
+      "load_ns": 5700500,
+      "prompt_ns": 39407792,
+      "evaluation_ns": 11312931000
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N01-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 21230.539,
+      "request_bytes": 3536,
+      "request_sha256": "sha256:77d1a51d5425102c1b605931fc73414e7cff176b885a9f0be3d0020295cbaa9a",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"meal\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"pear\",\n      \"polarity\": \"denied\",\n      \"kind\": \"world_change\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"correct\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"155add8e-9dfd-5e37-a055-65759c3b688d\",\n          \"start\": 0,\n          \"end\": 22\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:5e681b54d0182ad12e1948617f76d4d28fc26ef9c89dc0f62448a9b5bcf56d7e",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "owner_statement",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "start": 0,
+                "end": 13
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "meal",
+            "object_kind": "EntityID",
+            "object": "pear",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "",
+            "identity": "owner_statement",
+            "effect": "correct",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+                "start": 0,
+                "end": 22
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1023,
+      "output_tokens": 510,
+      "load_ns": 5502041,
+      "prompt_ns": 1790823792,
+      "evaluation_ns": 19430757333
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N01-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "ok",
+      "latency_ms": 20202.661,
+      "request_bytes": 3536,
+      "request_sha256": "sha256:7bd50553213006e2f57e8e4301448961a85054bb5eee6d40f6eb5a4d18cc9c23",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0d8102f9-c956-5110-82d9-4853195285fd\",\n          \"start\": 0,\n          \"end\": 13\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"meal\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"pear\",\n      \"polarity\": \"denied\",\n      \"kind\": \"world_change\",\n      \"temporal\": \"\",\n      \"identity\": \"owner_statement\",\n      \"effect\": \"correct\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"155add8e-9dfd-5e37-a055-65759c3b688d\",\n          \"start\": 0,\n          \"end\": 22\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:5e681b54d0182ad12e1948617f76d4d28fc26ef9c89dc0f62448a9b5bcf56d7e",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "owner_statement",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0d8102f9-c956-5110-82d9-4853195285fd",
+                "start": 0,
+                "end": 13
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "meal",
+            "object_kind": "EntityID",
+            "object": "pear",
+            "polarity": "denied",
+            "kind": "world_change",
+            "temporal": "",
+            "identity": "owner_statement",
+            "effect": "correct",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "155add8e-9dfd-5e37-a055-65759c3b688d",
+                "start": 0,
+                "end": 22
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1023,
+      "output_tokens": 510,
+      "load_ns": 4691625,
+      "prompt_ns": 40220708,
+      "evaluation_ns": 20152994042
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N02-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 23006.376,
+      "request_bytes": 3199,
+      "request_sha256": "sha256:ba6550ecf4fdf881e645d7c11dd06d8684988846d6ea61b6f7e0b9baa06d9531",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"lives in\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"session_id\": \"21c06de7-390c-5551-a302-0e469a63c811\",\n          \"start\": 0,\n          \"end\": 74,\n          \"text\": \"For the story, write \\\"I live in Paris.\\\" Maya also told me she moved there.\"\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"moved to\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"session_id\": \"21c06de7-390c-5551-a302-0e469a63c811\",\n          \"start\": 62,\n          \"end\": 74,\n          \"text\": \"Maya also told me she moved there.\"\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:9c854acc75ca67cf87589cc339ce5080ec1f539d3fe19b17c59a0e4640e717d8",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 813,
+      "output_tokens": 568,
+      "load_ns": 5736958,
+      "prompt_ns": 948741709,
+      "evaluation_ns": 22048411666
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N02-a",
+      "repetition": 2,
+      "seed": 18,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 21284.874,
+      "request_bytes": 3199,
+      "request_sha256": "sha256:9928d913d73f9eaf05d22cb03c2bfdccd9da64e52f074ff14a8ec5a37b272b08",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"lives in\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"session_id\": \"21c06de7-390c-5551-a302-0e469a63c811\",\n          \"start\": 0,\n          \"end\": 74,\n          \"text\": \"For the story, write \\\"I live in Paris.\\\" Maya also told me she moved there.\"\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"moved to\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"session_id\": \"21c06de7-390c-5551-a302-0e469a63c811\",\n          \"start\": 62,\n          \"end\": 74,\n          \"text\": \"Maya also told me she moved there.\"\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:9c854acc75ca67cf87589cc339ce5080ec1f539d3fe19b17c59a0e4640e717d8",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 813,
+      "output_tokens": 568,
+      "load_ns": 5816250,
+      "prompt_ns": 39042875,
+      "evaluation_ns": 21236704792
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N02-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 18394.774,
+      "request_bytes": 3656,
+      "request_sha256": "sha256:4468c48692b617d6c15b77482d5be6b305af20586d5e484ee4b39b3ecd1e5a46",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"lives\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"eaa07e15-ca81-5ffe-b8e3-c7519f474b93\",\n          \"start\": 0,\n          \"end\": 75\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"moved\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"start\": 0,\n          \"end\": 74\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:3b87d2462b6f547d295f28b385c8f16c5e1a52dd090b7d1d908dbbbc8ad500eb",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "lives",
+            "object_kind": "location",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+                "start": 0,
+                "end": 75
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "moved",
+            "object_kind": "location",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "start": 0,
+                "end": 74
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1052,
+      "output_tokens": 432,
+      "load_ns": 4354042,
+      "prompt_ns": 1924774375,
+      "evaluation_ns": 16462891458
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N02-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "ok",
+      "latency_ms": 17167.356,
+      "request_bytes": 3656,
+      "request_sha256": "sha256:1952a125c2ad2435f00c23355ab05bd28255a0640867485351e728e63e1ecb43",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"lives\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"eaa07e15-ca81-5ffe-b8e3-c7519f474b93\",\n          \"start\": 0,\n          \"end\": 75\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya\",\n      \"predicate\": \"moved\",\n      \"object_kind\": \"location\",\n      \"object\": \"Paris\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"39878038-6df9-5dac-8e20-f25238f36882\",\n          \"start\": 0,\n          \"end\": 74\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:3b87d2462b6f547d295f28b385c8f16c5e1a52dd090b7d1d908dbbbc8ad500eb",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "lives",
+            "object_kind": "location",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eaa07e15-ca81-5ffe-b8e3-c7519f474b93",
+                "start": 0,
+                "end": 75
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "Maya",
+            "predicate": "moved",
+            "object_kind": "location",
+            "object": "Paris",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "39878038-6df9-5dac-8e20-f25238f36882",
+                "start": 0,
+                "end": 74
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1052,
+      "output_tokens": 432,
+      "load_ns": 5606292,
+      "prompt_ns": 39966333,
+      "evaluation_ns": 17118955000
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N03-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 28843.459,
+      "request_bytes": 3924,
+      "request_sha256": "sha256:9de5a27d096673455cb098af421639e4457b72b915c984b79fbfcb66c3033bc1",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0935c3b6-ecbb-571d-88e9-54711ce43e30\",\n          \"start\": 0,\n          \"end\": 4\n        }\n      ],\n      \"context\": [\n        {\n          \"event_id\": \"067d03f1-f474-52a7-ba4b-7f678dc5fead\",\n          \"start\": 0,\n          \"end\": 28\n        }\n      ]\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"coffee\",\n      \"polarity\": \"denied\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0935c3b6-ecbb-571d-88e9-54711ce43e30\",\n          \"start\": 0,\n          \"end\": 4\n        }\n      ],\n      \"context\": [\n        {\n          \"event_id\": \"067d03f1-f474-52a7-ba4b-7f678dc5fead\",\n          \"start\": 0,\n          \"end\": 28\n        }\n      ]\n    }\n  ]}",
+      "raw_sha256": "sha256:84ac292e6fce1f5aaa7c23851dd70d2cf090e5e12bb40d23543a8ad35df70621",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "start": 0,
+                "end": 4
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "start": 0,
+                "end": 28
+              }
+            ]
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "coffee",
+            "polarity": "denied",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "start": 0,
+                "end": 4
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "start": 0,
+                "end": 28
+              }
+            ]
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1230,
+      "output_tokens": 636,
+      "load_ns": 4906333,
+      "prompt_ns": 2532320459,
+      "evaluation_ns": 26302496375
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N03-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "ok",
+      "latency_ms": 25793.873,
+      "request_bytes": 3924,
+      "request_sha256": "sha256:f365f5ef0b60fb0cf769d44eb758d2173a72fa9c1cd4e714163e3a700139761d",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"tea\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0935c3b6-ecbb-571d-88e9-54711ce43e30\",\n          \"start\": 0,\n          \"end\": 4\n        }\n      ],\n      \"context\": [\n        {\n          \"event_id\": \"067d03f1-f474-52a7-ba4b-7f678dc5fead\",\n          \"start\": 0,\n          \"end\": 28\n        }\n      ]\n    },\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"EntityID\",\n      \"object\": \"coffee\",\n      \"polarity\": \"denied\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0935c3b6-ecbb-571d-88e9-54711ce43e30\",\n          \"start\": 0,\n          \"end\": 4\n        }\n      ],\n      \"context\": [\n        {\n          \"event_id\": \"067d03f1-f474-52a7-ba4b-7f678dc5fead\",\n          \"start\": 0,\n          \"end\": 28\n        }\n      ]\n    }\n  ]}",
+      "raw_sha256": "sha256:84ac292e6fce1f5aaa7c23851dd70d2cf090e5e12bb40d23543a8ad35df70621",
+      "raw_count": 2,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "tea",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "start": 0,
+                "end": 4
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "start": 0,
+                "end": 28
+              }
+            ]
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "preference",
+            "object_kind": "EntityID",
+            "object": "coffee",
+            "polarity": "denied",
+            "kind": "decision",
+            "temporal": "",
+            "identity": "unresolved",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0935c3b6-ecbb-571d-88e9-54711ce43e30",
+                "start": 0,
+                "end": 4
+              }
+            ],
+            "context": [
+              {
+                "event_id": "067d03f1-f474-52a7-ba4b-7f678dc5fead",
+                "start": 0,
+                "end": 28
+              }
+            ]
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1230,
+      "output_tokens": 636,
+      "load_ns": 5628000,
+      "prompt_ns": 41044625,
+      "evaluation_ns": 25732607250
+    },
+    {
+      "original_status": "truncated_output",
+      "server_release": "finished_response",
+      "case_id": "N04-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "truncated_output",
+      "latency_ms": 32105.939,
+      "request_bytes": 3575,
+      "request_sha256": "sha256:36033331f09df0dbc3cf5800c7c65cc79a49c1b63d4b4cfa616e81bd0b6a274b",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya Chen\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"person\",\n      \"object\": \"new:Chen_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 0,\n          \"end\": 23\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Patel\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"person\",\n      \"object\": \"new:Patel_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 24,\n          \"end\": 51\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Chen\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"relative\",\n      \"object\": \"new:Chen_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"2b5f248a-7225-5148-8a68-f5911fe3c31a\",\n          \"start\": 0,\n          \"end\": 12\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Patel\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"relative\",\n      \"object\": \"new:Patel_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4",
+      "raw_sha256": "sha256:88315ca26232bd51f7c01a8f55a0692c17a5b7459ab2a8eab8abb28d20ffa51e",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 1025,
+      "output_tokens": 768,
+      "load_ns": 9095083,
+      "prompt_ns": 1853821333,
+      "evaluation_ns": 30237956042
+    },
+    {
+      "original_status": "truncated_output",
+      "server_release": "finished_response",
+      "case_id": "N04-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "truncated_output",
+      "latency_ms": 31137.705,
+      "request_bytes": 3575,
+      "request_sha256": "sha256:c939f5de9592b487dff48f4e96488e890d47e74f0a0d4fc5056b68db1b588eb7",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Maya Chen\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"person\",\n      \"object\": \"new:Chen_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 0,\n          \"end\": 23\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Patel\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"person\",\n      \"object\": \"new:Patel_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"f89cfaed-b920-5115-a0ac-371e724aa98a\",\n          \"start\": 24,\n          \"end\": 51\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Chen\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"relative\",\n      \"object\": \"new:Chen_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"2b5f248a-7225-5148-8a68-f5911fe3c31a\",\n          \"start\": 0,\n          \"end\": 12\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Maya Patel\",\n      \"predicate\": \"is\",\n      \"object_kind\": \"relative\",\n      \"object\": \"new:Patel_Maya\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4",
+      "raw_sha256": "sha256:88315ca26232bd51f7c01a8f55a0692c17a5b7459ab2a8eab8abb28d20ffa51e",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 1025,
+      "output_tokens": 768,
+      "load_ns": 5789083,
+      "prompt_ns": 42278875,
+      "evaluation_ns": 31084719625
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N05-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 32024.706,
+      "request_bytes": 3682,
+      "request_sha256": "sha256:a7c7919357ec2adc5789e9bae084c4beb2df44d3840ee2aa90334f711d6e3971",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"SQLite\",\n      \"predicate\": \"is used for project\",\n      \"object_kind\": \"project\",\n      \"object\": \"553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"49290f19-3f35-50aa-b775-cf97d4591adc\",\n          \"start\": 0,\n          \"end\": 83\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"PostgreSQL\",\n      \"predicate\": \"is a long-term option being considered\",\n      \"object_kind\": \"\",\n      \"object\": \"\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"consideration\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0b9cd9f7-c1e4-595e-98f5-8044d8340602\",\n          \"start\": 0,\n          \"end\": 98\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Offline operation\",\n      \"predicate\": \"is a lasting requirement for project\",\n      \"object_kind\": \"project\",\n      \"object\": \"553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"49290f19-3f35-50aa-b775-cf97d4591adc\",\n          \"start\": 68,\n          \"end\": 83\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:6e79bfd8e8246c1137aa90f24643be3ff265a86861190d3aa97d18824fa09ccf",
+      "raw_count": 3,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "SQLite",
+            "predicate": "is used for project",
+            "object_kind": "project",
+            "object": "553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 0,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "PostgreSQL",
+            "predicate": "is a long-term option being considered",
+            "object_kind": "",
+            "object": "",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+                "start": 0,
+                "end": 98
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "missing/oversized meaning"
+        },
+        {
+          "candidate": {
+            "subject": "Offline operation",
+            "predicate": "is a lasting requirement for project",
+            "object_kind": "project",
+            "object": "553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 68,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1049,
+      "output_tokens": 712,
+      "load_ns": 5524250,
+      "prompt_ns": 2083884542,
+      "evaluation_ns": 29932204291
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N05-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "ok",
+      "latency_ms": 30029.695,
+      "request_bytes": 3682,
+      "request_sha256": "sha256:64f67ac0f6de43ab948e9ddd00c912f0d76552d389023274f4fa7d8771ea24ed",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"SQLite\",\n      \"predicate\": \"is used for project\",\n      \"object_kind\": \"project\",\n      \"object\": \"553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"49290f19-3f35-50aa-b775-cf97d4591adc\",\n          \"start\": 0,\n          \"end\": 83\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"PostgreSQL\",\n      \"predicate\": \"is a long-term option being considered\",\n      \"object_kind\": \"\",\n      \"object\": \"\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"consideration\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"0b9cd9f7-c1e4-595e-98f5-8044d8340602\",\n          \"start\": 0,\n          \"end\": 98\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Offline operation\",\n      \"predicate\": \"is a lasting requirement for project\",\n      \"object_kind\": \"project\",\n      \"object\": \"553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"\",\n      \"identity\": \"\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"49290f19-3f35-50aa-b775-cf97d4591adc\",\n          \"start\": 68,\n          \"end\": 83\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:6e79bfd8e8246c1137aa90f24643be3ff265a86861190d3aa97d18824fa09ccf",
+      "raw_count": 3,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "SQLite",
+            "predicate": "is used for project",
+            "object_kind": "project",
+            "object": "553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 0,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        },
+        {
+          "candidate": {
+            "subject": "PostgreSQL",
+            "predicate": "is a long-term option being considered",
+            "object_kind": "",
+            "object": "",
+            "polarity": "affirmed",
+            "kind": "consideration",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "0b9cd9f7-c1e4-595e-98f5-8044d8340602",
+                "start": 0,
+                "end": 98
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "missing/oversized meaning"
+        },
+        {
+          "candidate": {
+            "subject": "Offline operation",
+            "predicate": "is a lasting requirement for project",
+            "object_kind": "project",
+            "object": "553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "polarity": "affirmed",
+            "kind": "fact",
+            "temporal": "",
+            "identity": "",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "49290f19-3f35-50aa-b775-cf97d4591adc",
+                "start": 68,
+                "end": 83
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1049,
+      "output_tokens": 712,
+      "load_ns": 10320500,
+      "prompt_ns": 44081334,
+      "evaluation_ns": 29972038416
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N06-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 22539.01,
+      "request_bytes": 3163,
+      "request_sha256": "sha256:6547310a34b9cbdc2a65fa2c6a05b9231b760f5d4b40d2efdcb490f5ad16e9f8",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Acme\",\n      \"predicate\": \"employment_status\",\n      \"object_kind\": \"state\",\n      \"object\": \"former\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"past\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"session_id\": \"c41e0614-f391-5a70-be92-08b95cbc847c\",\n          \"start\": 0,\n          \"end\": 44\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Acme\",\n      \"predicate\": \"employment_departure\",\n      \"object_kind\": \"time\",\n      \"object\": \"last month\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"past\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"session_id\": \"c41e0614-f391-5a70-be92-08b95cbc847c\",\n          \"start\": 45,\n          \"end\": 52\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:487b470acd24acb56ba035bbd30c7f63c80fac3bbbd7dd6e8c181c67255dca36",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 806,
+      "output_tokens": 531,
+      "load_ns": 4537000,
+      "prompt_ns": 1019173166,
+      "evaluation_ns": 21511590917
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N06-a",
+      "repetition": 2,
+      "seed": 18,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 21642.35,
+      "request_bytes": 3163,
+      "request_sha256": "sha256:582091362288df875289e35478afe5b55f5f04162a96d1098f288f48aa50670d",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"Acme\",\n      \"predicate\": \"employment_status\",\n      \"object_kind\": \"state\",\n      \"object\": \"former\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"past\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"session_id\": \"c41e0614-f391-5a70-be92-08b95cbc847c\",\n          \"start\": 0,\n          \"end\": 44\n        }\n      ],\n      \"context\": []\n    },\n    {\n      \"subject\": \"Acme\",\n      \"predicate\": \"employment_departure\",\n      \"object_kind\": \"time\",\n      \"object\": \"last month\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"fact\",\n      \"temporal\": \"past\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"71442dec-2d3c-50d4-a649-498937e18b6a\",\n          \"session_id\": \"c41e0614-f391-5a70-be92-08b95cbc847c\",\n          \"start\": 45,\n          \"end\": 52\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:487b470acd24acb56ba035bbd30c7f63c80fac3bbbd7dd6e8c181c67255dca36",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 806,
+      "output_tokens": 531,
+      "load_ns": 5687250,
+      "prompt_ns": 43799208,
+      "evaluation_ns": 21588836667
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N08-b",
+      "repetition": 1,
+      "seed": 17,
+      "status": "ok",
+      "latency_ms": 20241.451,
+      "request_bytes": 4009,
+      "request_sha256": "sha256:5aa6883395e37cb73ba693ae46584fec2c340d98cbbbe72ef60bcb1fa230dac9",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"has_decision\",\n      \"object_kind\": \"fact\",\n      \"object\": \"Use the date you just checked\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"as of 2026-09-04 09:30:00\",\n      \"identity\": \"new\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"eb55a65e-dace-573b-8a85-522b88a4f74d\",\n          \"start\": 0,\n          \"end\": 78\n        },\n        {\n          \"event_id\": \"e8cddf05-9db4-550f-aeda-a016becc0cd7\",\n          \"start\": 0,\n          \"end\": 28\n        },\n        {\n          \"event_id\": \"edc787df-49e6-5c93-a135-6aa6b7619aa0\",\n          \"start\": 0,\n          \"end\": 19\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:42b06fb31a0108cb38641b0d02455e7564e932ef7da3ede2dad238996e0dc8f1",
+      "raw_count": 1,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "has_decision",
+            "object_kind": "fact",
+            "object": "Use the date you just checked",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "as of 2026-09-04 09:30:00",
+            "identity": "new",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+                "start": 0,
+                "end": 78
+              },
+              {
+                "event_id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+                "start": 0,
+                "end": 28
+              },
+              {
+                "event_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+                "start": 0,
+                "end": 19
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1264,
+      "output_tokens": 408,
+      "load_ns": 4122834,
+      "prompt_ns": 2886142666,
+      "evaluation_ns": 17347810125
+    },
+    {
+      "original_status": "ok",
+      "server_release": "finished_response",
+      "case_id": "N08-b",
+      "repetition": 2,
+      "seed": 18,
+      "status": "ok",
+      "latency_ms": 17440.903,
+      "request_bytes": 4009,
+      "request_sha256": "sha256:426c25ae0748556cc4b725bd7a1f8d07c4b619020909baa547675944838a9ddb",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"has_decision\",\n      \"object_kind\": \"fact\",\n      \"object\": \"Use the date you just checked\",\n      \"polarity\": \"affirmed\",\n      \"kind\": \"decision\",\n      \"temporal\": \"as of 2026-09-04 09:30:00\",\n      \"identity\": \"new\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"eb55a65e-dace-573b-8a85-522b88a4f74d\",\n          \"start\": 0,\n          \"end\": 78\n        },\n        {\n          \"event_id\": \"e8cddf05-9db4-550f-aeda-a016becc0cd7\",\n          \"start\": 0,\n          \"end\": 28\n        },\n        {\n          \"event_id\": \"edc787df-49e6-5c93-a135-6aa6b7619aa0\",\n          \"start\": 0,\n          \"end\": 19\n        }\n      ],\n      \"context\": []\n    }\n   ]}",
+      "raw_sha256": "sha256:42b06fb31a0108cb38641b0d02455e7564e932ef7da3ede2dad238996e0dc8f1",
+      "raw_count": 1,
+      "retained_count": 0,
+      "proposals": [
+        {
+          "candidate": {
+            "subject": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "predicate": "has_decision",
+            "object_kind": "fact",
+            "object": "Use the date you just checked",
+            "polarity": "affirmed",
+            "kind": "decision",
+            "temporal": "as of 2026-09-04 09:30:00",
+            "identity": "new",
+            "effect": "assert",
+            "scope": "project:553ecf4c-6a4f-50d4-94e1-8c37985464a7",
+            "sources": [
+              {
+                "event_id": "eb55a65e-dace-573b-8a85-522b88a4f74d",
+                "start": 0,
+                "end": 78
+              },
+              {
+                "event_id": "e8cddf05-9db4-550f-aeda-a016becc0cd7",
+                "start": 0,
+                "end": 28
+              },
+              {
+                "event_id": "edc787df-49e6-5c93-a135-6aa6b7619aa0",
+                "start": 0,
+                "end": 19
+              }
+            ],
+            "context": []
+          },
+          "retained": false,
+          "rejection": "schema enum mismatch"
+        }
+      ],
+      "prompt_tokens": 1264,
+      "output_tokens": 408,
+      "load_ns": 4715209,
+      "prompt_ns": 44871833,
+      "evaluation_ns": 17385262834
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N09-a",
+      "repetition": 1,
+      "seed": 17,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 13459.838,
+      "request_bytes": 3145,
+      "request_sha256": "sha256:c1ed9497e2442ba68526fa30402d6513596462b0333921a5e528f4c5513b26d3",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"place\",\n      \"object\": \"café ☕\",\n      \"polarity\": \"denied\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"6b4b9ad5-f436-5e1f-b92a-6eab9543c666\",\n          \"session_id\": \"a45fa288-6b2f-5367-82f4-e91aa687e11b\",\n          \"start\": 0,\n          \"end\": 26\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:9804b5e7ee9f799c626843c415d7c5dc937f4e6e23532d320f8d1330abe31a1f",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 803,
+      "output_tokens": 306,
+      "load_ns": 8817958,
+      "prompt_ns": 1029826458,
+      "evaluation_ns": 12417970958
+    },
+    {
+      "original_status": "schema_error",
+      "server_release": "finished_response",
+      "case_id": "N09-a",
+      "repetition": 2,
+      "seed": 18,
+      "status": "schema_error",
+      "error": "closed reference fields required",
+      "latency_ms": 12460.683,
+      "request_bytes": 3145,
+      "request_sha256": "sha256:1d5879b7b868a18e0a0d5878fcb58fb5f2a3e86bf599946c0f9ddf7cdaa2cea9",
+      "raw": "{\"candidates\": [\n    {\n      \"subject\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"predicate\": \"preference\",\n      \"object_kind\": \"place\",\n      \"object\": \"café ☕\",\n      \"polarity\": \"denied\",\n      \"kind\": \"decision\",\n      \"temporal\": \"\",\n      \"identity\": \"unresolved\",\n      \"effect\": \"assert\",\n      \"scope\": \"project:553ecf4c-6a4f-50d4-94e1-8c37985464a7\",\n      \"sources\": [\n        {\n          \"event_id\": \"6b4b9ad5-f436-5e1f-b92a-6eab9543c666\",\n          \"session_id\": \"a45fa288-6b2f-5367-82f4-e91aa687e11b\",\n          \"start\": 0,\n          \"end\": 26\n        }\n      ],\n      \"context\": []\n    }\n  ]}",
+      "raw_sha256": "sha256:9804b5e7ee9f799c626843c415d7c5dc937f4e6e23532d320f8d1330abe31a1f",
+      "raw_count": 0,
+      "retained_count": 0,
+      "proposals": [],
+      "prompt_tokens": 803,
+      "output_tokens": 306,
+      "load_ns": 5109833,
+      "prompt_ns": 40897500,
+      "evaluation_ns": 12411770166
+    }
+  ]
+}

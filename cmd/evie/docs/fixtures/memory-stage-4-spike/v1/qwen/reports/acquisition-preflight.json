@@ -1,0 +1,9 @@
+{
+  "at": "2026-09-05T03:48:25.198560+00:00",
+  "owned_server_pid": 78270,
+  "disk": "Filesystem   1024-blocks      Used Available Capacity iused    ifree %iused  Mounted on\n/dev/disk3s5   482797652 424679224   7869516    99% 3556166 78695160    4%   /System/Volumes/Data\n",
+  "host_swap": "vm.swapusage: total = 8192.00M  used = 7580.06M  free = 611.94M  (encrypted)\n",
+  "memory_pressure": "The system has 19327352832 (1179648 pages with a page size of 16384).\n\nStats: \nPages free: 7002 \nPages purgeable: 2202 \nPages purged: 57335789 \n\nSwap I/O:\nSwapins: 1206615 \nSwapouts: 2189683 \n\nPage Q counts:\nPages active: 353382 \nPages inactive: 344071 \nPages speculative: 7837 \nPages throttled: 0 \nPages wired down: 168151 \n\nCompressor Stats:\nPages used by compressor: 258617 \nPages decompressed: 288482457 \nPages compressed: 330593519 \n\nFile I/O:\nPageins: 107507560 \nPageouts: 1753371 \n\nSystem-wide memory free percentage: 62%\n",
+  "model_loaded": false,
+  "acquisition": "exact authorized4.7GB artifact pull succeeded; actual model and all layers verified"
+}

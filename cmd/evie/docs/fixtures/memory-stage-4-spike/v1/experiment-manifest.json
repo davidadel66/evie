@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-09-05T02:55:09.647511+00:00",
+  "git_head_at_record": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "purpose": "Exploratory two-format comparison, not final holdout or production enablement",
+  "model": "mistral:latest",
+  "model_manifest_sha256": "sha256:f974a74358d62a017b37c6f424fcdf2744ca02926c4f952513ddf474b2fa5091",
+  "configurations": [
+    {
+      "id": "schema",
+      "format": "closed JSON schema"
+    },
+    {
+      "id": "json",
+      "format": "JSON object"
+    }
+  ],
+  "shared": {
+    "temperature": 0,
+    "context_tokens": 4096,
+    "max_output_tokens": 768,
+    "timeout_seconds": 60,
+    "parallel_requests": 1,
+    "seeds": [
+      17,
+      18
+    ],
+    "repetitions": 2,
+    "case_ids": [
+      "N01-a",
+      "N01-b",
+      "N02-a",
+      "N02-b",
+      "N03-b",
+      "N04-b",
+      "N05-b",
+      "N06-a",
+      "N08-b",
+      "N09-a"
+    ]
+  },
+  "file_sha256": {
+    "prompt.txt": "sha256:477dcc434de42bf38b88535036ea2dd9fcd820e4d890dfcb09f2b2ce9368d07a",
+    "output.schema.json": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65",
+    "runtime-manifest.json": "sha256:56d8dbd0fc53d4ee9ae42f7170e78c0b48f808c7308b9969b1afae383cad882d",
+    "runtime-api-metadata.json": "sha256:0cb7b51fd0ed73a46c209049a1c9bd742573d6d2721df7e0d47e555c618b4b4e",
+    "development.json": "sha256:1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "development.gold.json": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "annotation-record.json": "sha256:a6ee1e4f56b31a14a1df0062349e56de06e5d6125f7943d6978033cf35f1b28a"
+  },
+  "inference_runner_binary_sha256": "sha256:82bae6a01befe146821e40a161c22923f8005cb779bddf80a3be7940366c66de",
+  "limitations": [
+    "Temperature zero with different seeds measures reproducibility, not promised diversity.",
+    "Only ten of eighteen development windows enter this exploratory comparison. Six pilot windows and final holdout remain unexecuted.",
+    "If either configuration appears usable, cover remaining development/pilot families before selection. Neither source checks nor approval of input gold validates an unlisted output meaning."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "version": "pinned-qwen2-bpe-byte-bound-v1",
+  "reserve_tokens": 64,
+  "file_sha256": {
+    "runtime-manifest.json": "sha256:25f22801682b5301596397b3113b1a5be0b27341324187193ac731546b5bf14b",
+    "runtime-api-metadata.json": "sha256:100a0ae981b35bffc4f387a16404b17e6b2b8ff1d21a64201b880f14834cb720",
+    "tokenizer-proof.json": "sha256:9023a4b4dfaf703dae5e5eb1bee9545d0860bd6ea506950b47fd3567c71acf5d",
+    "prompt.txt": "sha256:f6f280093b15e1a1928db2737ec9bde8b2e0471ef66cbeab11de47b0ca57c832",
+    "output.schema.json": "sha256:734c0413b0861475d0a37daccd06921c36f9cbb909c8ac2ca219281952af0d65"
+  }
+}
