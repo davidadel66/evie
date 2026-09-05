@@ -17,6 +17,9 @@ import (
 // discover an omitted event, change source category, or fall back from a bad
 // range/hash to the full event.
 func projectCompilerSource(offered memory.CompilerSource, locator memory.EvidenceLocator) (memory.CompilerSource, error) {
+	if err := validateClockProjection(offered, locator); err != nil {
+		return memory.CompilerSource{}, err
+	}
 	if locator.EventID != offered.Locator.EventID || locator.EventPart != memory.EvidenceContent {
 		return memory.CompilerSource{}, errors.New("source was not offered")
 	}
@@ -68,23 +71,27 @@ func (s *Store) ResolveCompilerSource(ctx context.Context, owner memory.ScopeCon
 }
 func resolveCompilerSource(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, owner memory.ScopeContext, selection memory.CompilationSelection, source memory.CompilerSource) (memory.CompilerSource, error) {
-	var session memory.SessionID
-	var seq int64
-	var kind, role, text, observed string
-	var version int
-	var workspace, project sql.NullString
-	var size int
-	err := q.QueryRowContext(ctx, `SELECT session_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN content ELSE '' END,length(CAST(content AS BLOB)),recorded_at,format_version,workspace_id,project_id FROM events WHERE id=?`, source.Locator.EventID).Scan(&session, &seq, &kind, &role, &text, &size, &observed, &version, &workspace, &project)
+	ctx = withCompilerSourceCache(ctx)
+	e, err := loadCompilerSourceEvent(ctx, q, source.Locator.EventID)
 	if err != nil {
 		return memory.CompilerSource{}, err
 	}
-	if session != selection.SessionID || session != source.SessionID || seq != source.Sequence || seq > selection.Cutoff || source.ScopeKey != scopeKeyForContext(owner) || workspace.String != string(owner.WorkspaceID) || project.String != string(owner.ProjectID) || version != 1 || version != source.FormatVersion || string(source.SourceType) != kind || observed != source.ObservedAt || size > 32768 || !utf8.ValidString(text) || compilerHasSecret(text) {
+	session, seq, kind, role, text, observed, version, size := e.session, e.seq, string(e.kind), string(e.role), e.content, e.observed, e.version, e.size
+	if session != selection.SessionID || session != source.SessionID || seq != source.Sequence || seq > selection.Cutoff || source.ScopeKey != scopeKeyForContext(owner) || e.workspace != string(owner.WorkspaceID) || e.project != string(owner.ProjectID) || version != 1 || version != source.FormatVersion || string(source.SourceType) != kind || observed != source.ObservedAt || size > 32768 || !utf8.ValidString(text) || compilerHasSecret(text) {
 		return memory.CompilerSource{}, errors.New("source no longer eligible or metadata mismatch")
 	}
 	if source.Usage == "context" {
 		if kind != "assistant_message" || role != "assistant" || source.Actor != "assistant" || source.Authority != "none" {
 			return memory.CompilerSource{}, errors.New("context authority mismatch")
+		}
+	} else if source.Observation != nil {
+		if kind != "tool_succeeded" || role != "tool" || source.Actor != memory.SemanticActorTool || source.Authority != memory.AuthorityToolObservation || (source.Usage != "new_support" && source.Usage != "overlap") {
+			return memory.CompilerSource{}, errors.New("observation authority mismatch")
+		}
+		if err := resolveClockObservation(ctx, q, source); err != nil {
+			return memory.CompilerSource{}, err
 		}
 	} else if (source.Usage != "new_support" && source.Usage != "overlap") || kind != "user_message" || role != "user" || source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
 		return memory.CompilerSource{}, errors.New("support authority mismatch")
@@ -105,6 +112,9 @@ func resolveCompilerSource(ctx context.Context, q interface {
 var ErrCompilerTerminalOutput = errors.New("invalid compiler source or forbidden effect")
 
 func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memory.MemoryCandidate, error) {
+	if request.EvidencePolicy != "" && request.EvidencePolicy != memory.CompilerClockEvidencePolicy {
+		return nil, errors.New("unsupported request evidence policy")
+	}
 	var response memory.CompilerResponse
 	if err := memory.DecodeCompilerJSON(raw, &response); err != nil {
 		return nil, err
@@ -198,6 +208,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 					}
 				}
 			}
+		}
+		if err := validateClockSupport(candidate, request.EvidencePolicy == memory.CompilerClockEvidencePolicy); err != nil {
+			return nil, errors.Join(ErrCompilerTerminalOutput, err)
 		}
 		if !latestNew {
 			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)

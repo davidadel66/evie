@@ -50,6 +50,7 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 			sourceErr = ErrReviewInvalidSource
 		}
 	}
+	ctx = withCompilerSourceCache(ctx)
 	if sourceErr == nil {
 		for _, sources := range [][]memory.CompilerSource{out.Candidate.Support, out.Candidate.Context} {
 			for _, source := range sources {
@@ -184,6 +185,9 @@ func validateReviewCandidateSeal(ctx context.Context, q reviewQuery, item memory
 	}
 	generationID, canonical, err := memory.CompilerGenerationIdentity(generation)
 	if err != nil || generationID != item.GenerationID || string(canonical) != string(manifest) {
+		return ErrReviewInvalidSource
+	}
+	if request.EvidencePolicy != "" && request.EvidencePolicy != generation.EvidencePolicy || request.EvidencePolicy == "" && generation.EvidencePolicy != memory.CompilerPolicyVersion {
 		return ErrReviewInvalidSource
 	}
 	if request.IdentityPolicy != "" && generation.EntityPolicy != request.IdentityPolicy || request.IdentityPolicy == "" && generation.EntityPolicy != memory.CompilerPolicyVersion {

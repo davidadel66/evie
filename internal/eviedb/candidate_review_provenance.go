@@ -167,7 +167,7 @@ func projectSourceWithReviewOrigin(ctx context.Context, q historicalReviewQuery,
 	}
 	if isHistoricalPromotionReview(ctx) {
 		locator := memory.EvidenceLocator{EventID: source.EventID, EventPart: source.EventPart, LocatorKind: source.LocatorKind, LocatorValue: source.LocatorValue, EvidenceSHA256: strings.TrimPrefix(source.EvidenceSHA256, "sha256:")}
-		projected, err := projectHistoricalCompilerSource(memory.CompilerSource{Locator: memory.EvidenceLocator{EventID: source.EventID}, Evidence: source.Evidence}, locator)
+		projected, err := projectHistoricalCompilerSource(acceptedCompilerSource(source), locator)
 		if err != nil {
 			return source, origin != "", err
 		}

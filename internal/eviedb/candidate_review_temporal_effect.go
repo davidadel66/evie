@@ -56,13 +56,16 @@ func prepareReviewTemporalEffect(ctx context.Context, q reviewQuery, a OwnerRevi
 func validateReviewTemporalEncoding(p memory.ReviewPreview) error {
 	candidate := p.Candidates[0]
 	proposal := candidate.Candidate.Proposal
-	if p.Version != "owner-review-preview-v3" {
+	if p.Version != "owner-review-preview-v3" && p.Version != "owner-review-preview-v4" {
 		if proposal.Temporal != nil || candidate.Temporal != nil || p.Effect != nil && p.Effect.Correction != nil {
 			return errors.New("older review version cannot carry temporal effects")
 		}
 		return nil
 	}
 	if proposal.Temporal == nil {
+		if p.Version == "owner-review-preview-v4" && candidate.Temporal == nil && (p.Effect == nil || p.Effect.Correction == nil) {
+			return nil
+		}
 		return errors.New("v3 preview requires typed temporal interpretation")
 	}
 	if p.Action == "reject" {
@@ -177,7 +180,7 @@ func applyReviewCorrectionEffect(ctx context.Context, conn *sql.Conn, effect *me
 // their original timestamp spelling. V3 seals canonical Source Link time while
 // retaining the original event spelling in the candidate evidence manifest.
 func reviewObservedTimeMatches(version, accepted, original string) bool {
-	if version != "owner-review-preview-v3" {
+	if version != "owner-review-preview-v3" && version != "owner-review-preview-v4" {
 		return accepted == original
 	}
 	at, err := time.Parse(time.RFC3339Nano, original)

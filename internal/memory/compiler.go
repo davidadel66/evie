@@ -51,17 +51,18 @@ type CompilationSelection struct {
 }
 
 type CompilerSource struct {
-	SourceType    SemanticSourceType `json:"source_type"`
-	Locator       EvidenceLocator    `json:"locator"`
-	SessionID     SessionID          `json:"session_id"`
-	ScopeKey      string             `json:"scope_key"`
-	Sequence      int64              `json:"sequence"`
-	FormatVersion int                `json:"format_version"`
-	ObservedAt    string             `json:"observed_at"`
-	Actor         SemanticActor      `json:"actor"`
-	Authority     SourceAuthority    `json:"authority"`
-	Usage         string             `json:"usage"`
-	Evidence      string             `json:"evidence"`
+	Observation   *CompilerObservation `json:"observation,omitempty"`
+	SourceType    SemanticSourceType   `json:"source_type"`
+	Locator       EvidenceLocator      `json:"locator"`
+	SessionID     SessionID            `json:"session_id"`
+	ScopeKey      string               `json:"scope_key"`
+	Sequence      int64                `json:"sequence"`
+	FormatVersion int                  `json:"format_version"`
+	ObservedAt    string               `json:"observed_at"`
+	Actor         SemanticActor        `json:"actor"`
+	Authority     SourceAuthority      `json:"authority"`
+	Usage         string               `json:"usage"`
+	Evidence      string               `json:"evidence"`
 }
 
 type CompilerOmission struct {
@@ -81,6 +82,7 @@ type CompilerWindow struct {
 }
 
 type CompilerRequest struct {
+	EvidencePolicy string          `json:"evidence_policy,omitempty"`
 	IdentityPolicy string          `json:"identity_policy,omitempty"`
 	Aliases        []SemanticAlias `json:"aliases,omitempty"`
 	// AttemptID identifies one dispatch; it is excluded from the sealed request.

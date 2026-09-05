@@ -332,7 +332,7 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 			}
 			current.Create = false
 			source.Create = false
-			if effect.Version == "owner-review-effect-v3" {
+			if effect.Version == "owner-review-effect-v3" || effect.Version == "owner-review-effect-v4" {
 				observed, parseErr := time.Parse(time.RFC3339Nano, current.ObservedAt)
 				if parseErr != nil {
 					return parseErr
@@ -398,7 +398,7 @@ func validateOwnerReviewOperation(op memory.OwnerReviewOperation) error {
 			return errors.New("literal constraint mismatch")
 		}
 		for _, source := range item.Sources {
-			if source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement || source.SourceType != memory.SourceTypeUserMessage || source.EventPart != memory.EvidenceContent || source.Eligibility != memory.EligibilityEligible || source.Create && source.OperationID != op.OperationID {
+			if ((source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement || source.SourceType != memory.SourceTypeUserMessage) && (op.Preview.Version != "owner-review-preview-v4" || !reviewClockSource(source))) || source.EventPart != memory.EvidenceContent || source.Eligibility != memory.EligibilityEligible || source.Create && source.OperationID != op.OperationID {
 				return ErrReviewInvalidSource
 			}
 			if source.EvidenceSHA256 != "sha256:"+memory.CompilerHash([]byte(source.Evidence)) {

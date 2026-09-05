@@ -62,7 +62,10 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
 	if CompilerHash([]byte(g.Template)) != g.TemplateSHA256 {
 		return "", nil, errors.New("template digest mismatch")
 	}
-	for _, policy := range []string{g.EvidencePolicy, g.SecretPolicy, g.ClosurePolicy, g.WindowPolicy} {
+	if g.EvidencePolicy != CompilerPolicyVersion && g.EvidencePolicy != CompilerClockEvidencePolicy {
+		return "", nil, errors.New("unsupported compiler evidence policy")
+	}
+	for _, policy := range []string{g.SecretPolicy, g.ClosurePolicy, g.WindowPolicy} {
 		if policy != CompilerPolicyVersion {
 			return "", nil, errors.New("unsupported compiler policy")
 		}

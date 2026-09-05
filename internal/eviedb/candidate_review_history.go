@@ -19,6 +19,7 @@ type historicalReviewQuery interface {
 }
 
 func validateOwnerReviewHistoricalSources(ctx context.Context, q historicalReviewQuery, op memory.OwnerReviewOperation) error {
+	ctx = withCompilerSourceCache(ctx)
 	for _, candidate := range op.Preview.Candidates {
 		for _, category := range []struct {
 			sources []memory.CompilerSource
@@ -35,32 +36,26 @@ func validateOwnerReviewHistoricalSources(ctx context.Context, q historicalRevie
 }
 
 func validateReviewHistoricalSource(ctx context.Context, q historicalReviewQuery, sessionID memory.SessionID, destination string, source memory.CompilerSource, interpretationContext bool) error {
-	rows, err := q.QueryContext(ctx, `
-		SELECT e.session_id,e.sequence,e.event_type,COALESCE(e.role,''),
-		       CASE WHEN length(CAST(e.content AS BLOB))<=32768 THEN e.content ELSE '' END,
-		       length(CAST(e.content AS BLOB)),e.recorded_at,e.format_version,
-		       e.workspace_id,e.project_id,s.workspace_id,s.project_id
-		FROM events e JOIN sessions s ON s.id=e.session_id WHERE e.id=?
-	`, source.Locator.EventID)
+	ctx = withCompilerSourceCache(ctx)
+	e, err := loadCompilerSourceEvent(ctx, q, source.Locator.EventID)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		return errors.New("historical review source event is missing")
-	}
-	var eventSession memory.SessionID
-	var sequence int64
-	var kind, role, content, observed string
-	var size, version int
-	var eventWorkspace, eventProject, sessionWorkspace, sessionProject sql.NullString
-	if err := rows.Scan(&eventSession, &sequence, &kind, &role, &content, &size, &observed, &version, &eventWorkspace, &eventProject, &sessionWorkspace, &sessionProject); err != nil {
+	eventSession, sequence, kind, role, content, observed, size, version := e.session, e.seq, string(e.kind), string(e.role), e.content, e.observed, e.size, e.version
+	eventWorkspace := sql.NullString{String: e.workspace, Valid: e.workspace != ""}
+	eventProject := sql.NullString{String: e.project, Valid: e.project != ""}
+	var sessionWorkspace, sessionProject sql.NullString
+	rows, err := q.QueryContext(ctx, `SELECT workspace_id,project_id FROM sessions WHERE id=?`, eventSession)
+	if err != nil {
 		return err
 	}
-	if err := rows.Close(); err != nil {
+	if !rows.Next() {
+		rows.Close()
+		return errors.New("historical source session is missing")
+	}
+	err = rows.Scan(&sessionWorkspace, &sessionProject)
+	rows.Close()
+	if err != nil {
 		return err
 	}
 	scopeKind, registryID, err := splitScopeKey(source.ScopeKey)
@@ -87,6 +82,13 @@ func validateReviewHistoricalSource(ctx context.Context, q historicalReviewQuery
 		if source.Usage != "context" || kind != "assistant_message" || role != "assistant" || source.Actor != "assistant" || source.Authority != "none" {
 			return errors.New("historical review context authority mismatch")
 		}
+	} else if source.Observation != nil {
+		if kind != "tool_succeeded" || role != "tool" || source.Actor != memory.SemanticActorTool || source.Authority != memory.AuthorityToolObservation || (source.Usage != "new_support" && source.Usage != "overlap") {
+			return errors.New("historical observation authority mismatch")
+		}
+		if err := resolveClockObservation(ctx, q, source); err != nil {
+			return err
+		}
 	} else if (source.Usage != "new_support" && source.Usage != "overlap") || kind != "user_message" || role != "user" || source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
 		return errors.New("historical review support authority mismatch")
 	}
@@ -106,6 +108,9 @@ func validateReviewHistoricalSource(ctx context.Context, q historicalReviewQuery
 // without the live compiler's secret detector. Accepted replay must reproduce
 // the old projection even when current disclosure rules have become stricter.
 func projectHistoricalCompilerSource(offered memory.CompilerSource, locator memory.EvidenceLocator) (memory.CompilerSource, error) {
+	if err := validateClockProjection(offered, locator); err != nil {
+		return memory.CompilerSource{}, err
+	}
 	if locator.EventID != offered.Locator.EventID || locator.EventPart != memory.EvidenceContent || !utf8.ValidString(offered.Evidence) {
 		return memory.CompilerSource{}, errors.New("invalid historical source content")
 	}

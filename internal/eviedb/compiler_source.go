@@ -35,6 +35,9 @@ func compilerHasSecret(text string) bool {
 
 type compilerEvent struct {
 	id, parent                 memory.EventID
+	execution                  memory.ExecutionID
+	session                    memory.SessionID
+	workspace, project         string
 	hasParent                  bool
 	seq                        int64
 	kind                       memory.EventType
@@ -45,11 +48,11 @@ type compilerEvent struct {
 
 // Index coordinates and aggregate counts do not inspect source fields. The
 // complete bounded event projection below is the counted source-read boundary.
-const compilerEventColumns = `id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version`
+const compilerEventColumns = `id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version,COALESCE(execution_id,''),session_id,COALESCE(workspace_id,''),COALESCE(project_id,'')`
 
 func readCompilerEvent(row interface{ Scan(...any) error }) (e compilerEvent, err error) {
 	var parent sql.NullString
-	err = row.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version)
+	err = row.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version, &e.execution, &e.session, &e.workspace, &e.project)
 	e.parent = memory.EventID(parent.String)
 	e.hasParent = parent.Valid
 	return
@@ -95,7 +98,8 @@ func compilerAuthorize(ctx context.Context, q interface {
 	return requireSemanticScopeKeysAvailable(ctx, q, []string{"global", destination, sel.Destination})
 }
 
-func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memory.ScopeContext, sel memory.CompilationSelection, first int64) (memory.CompilerWindow, string, string, error) {
+func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memory.ScopeContext, sel memory.CompilationSelection, first int64, evidencePolicy ...string) (memory.CompilerWindow, string, string, error) {
+	clockPolicy := len(evidencePolicy) == 1 && evidencePolicy[0] == memory.CompilerClockEvidencePolicy
 	w := memory.CompilerWindow{Selection: sel, FirstSequence: first, NewEventIDs: []memory.EventID{}, Sources: []memory.CompilerSource{}, Omissions: []memory.CompilerOmission{}}
 	// Root eligibility is source inspection too. Cache its complete bounded row
 	// and omit it from the range read below, so a 128-event window is read once.
@@ -203,6 +207,9 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 	newBytes, newCount := 0, 0
 	overlap, contexts := []memory.CompilerSource{}, []memory.CompilerSource{}
 	for _, e := range events {
+		if clockPolicy && (e.session != sel.SessionID || e.workspace != string(owner.WorkspaceID) || e.project != string(owner.ProjectID)) {
+			return w, "failed", "invalid_source_lineage", nil
+		}
 		root, err := rootOf(e)
 		if err != nil {
 			return w, "failed", "invalid_source_ancestry", nil
@@ -226,6 +233,7 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 		if e.seq > rootseq && e.kind == memory.EventUserMessage && e.parent == "" && root != sel.RootID {
 			w.Closure = "later_root"
 		}
+		var observation *memory.CompilerObservation
 		reason := "prohibited_source"
 		usage := ""
 		if e.kind == memory.EventUserMessage && e.role == memory.RoleUser {
@@ -236,6 +244,40 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 			}
 		} else if e.kind == memory.EventAssistantMessage && e.role == memory.RoleAssistant {
 			usage = "context"
+		}
+		if clockPolicy && e.kind == memory.EventToolSucceeded && compilerHasSecret(e.content) {
+			reason = "secret_field"
+		}
+		if clockPolicy && e.kind == memory.EventToolSucceeded && !compilerHasSecret(e.content) {
+			lookup := func(id memory.EventID) (compilerEvent, error) {
+				found, ok := byID[id]
+				if !ok {
+					return compilerEvent{}, errors.New("missing clock ancestry")
+				}
+				return found, nil
+			}
+			parent, ok := byID[e.parent]
+			if ok && parent.kind == memory.EventApproval {
+				parent, ok = byID[parent.parent]
+			}
+			var intent memory.ToolIntentPayload
+			if !ok || parent.kind != memory.EventToolIntent || json.Unmarshal([]byte(parent.payload), &intent) != nil || intent.Call.Name == "" {
+				return w, "failed", "invalid_tool_observation", nil
+			}
+			if intent.Call.Name == "get_time" {
+				observation, err = validateClockAncestry(ctx, conn, sel.SessionID, e, lookup)
+				if err != nil {
+					if !errors.Is(err, errClockInvalidSource) {
+						return w, "", "", err
+					}
+					return w, "failed", "invalid_tool_observation", nil
+				}
+				if isNew {
+					usage = "new_support"
+				} else if e.seq < first {
+					usage = "overlap"
+				}
+			}
 		}
 		if root != sel.RootID && e.seq >= rootseq {
 			usage = ""
@@ -266,7 +308,7 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 			}
 			continue
 		}
-		source := memory.CompilerSource{SourceType: memory.SemanticSourceType(e.kind), Locator: memory.EvidenceLocator{EventID: e.id, EventPart: "content", LocatorKind: memory.LocatorWhole, EvidenceSHA256: memory.CompilerHash([]byte(e.content))}, SessionID: sel.SessionID, ScopeKey: scopeKeyForContext(owner), Sequence: e.seq, FormatVersion: e.version, ObservedAt: e.observed, Usage: usage, Evidence: e.content}
+		source := memory.CompilerSource{Observation: observation, SourceType: memory.SemanticSourceType(e.kind), Locator: memory.EvidenceLocator{EventID: e.id, EventPart: "content", LocatorKind: memory.LocatorWhole, EvidenceSHA256: memory.CompilerHash([]byte(e.content))}, SessionID: sel.SessionID, ScopeKey: scopeKeyForContext(owner), Sequence: e.seq, FormatVersion: e.version, ObservedAt: e.observed, Usage: usage, Evidence: e.content}
 		if usage == "context" {
 			source.Actor = "assistant"
 			source.Authority = "none"
@@ -274,6 +316,10 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
 		} else {
 			source.Actor = memory.SemanticActorOwner
 			source.Authority = memory.AuthorityOwnerStatement
+			if observation != nil {
+				source.Actor = memory.SemanticActorTool
+				source.Authority = memory.AuthorityToolObservation
+			}
 			if usage == "new_support" {
 				newBytes += len(e.content)
 				newCount++

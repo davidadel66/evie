@@ -256,7 +256,7 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 			}{generationID, selection}))
 		}
 
-		window, state, reason, err := captureCompilerWindow(ctx, conn, owner, selection, first)
+		window, state, reason, err := captureCompilerWindow(ctx, conn, owner, selection, first, generation.EvidencePolicy)
 		if err != nil {
 			return err
 		}
@@ -290,6 +290,9 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 			return err
 		}
 		request := memory.CompilerRequest{GenerationID: generationID, WindowSHA256: memory.CompilerHash(compilerJSON(window)), Window: window, Entities: []memory.SemanticEntity{}, Predicates: []memory.SemanticPredicate{}, ScopeRevisions: []memory.ScopeRevision{}}
+		if generation.EvidencePolicy == memory.CompilerClockEvidencePolicy {
+			request.EvidencePolicy = generation.EvidencePolicy
+		}
 		jobID = memory.CompilerHash(compilerJSON(struct{ Generation, Window string }{generationID, request.WindowSHA256}))
 		request.ID = memory.CompilerHash(compilerJSON(request))
 		if state == "queued" {
@@ -433,6 +436,7 @@ func (s *Store) stageCompilerResult(ctx context.Context, owner memory.ScopeConte
 		if err := compilerAuthorize(ctx, conn, owner, request.Window.Selection); err != nil {
 			return err
 		}
+		ctx = withCompilerSourceCache(ctx)
 		for _, source := range request.Window.Sources {
 			if _, err := resolveCompilerSource(ctx, conn, owner, request.Window.Selection, source); err != nil {
 				return err
@@ -478,6 +482,7 @@ func (s *Store) publishCompilerResult(ctx context.Context, owner memory.ScopeCon
 		}
 		// Adoption validated sources in its earlier transaction. Publication
 		// independently rechecks current eligibility before committing coverage.
+		ctx = withCompilerSourceCache(ctx)
 		for _, source := range request.Window.Sources {
 			if _, err := resolveCompilerSource(ctx, conn, owner, request.Window.Selection, source); err != nil {
 				return err

@@ -112,12 +112,12 @@ func validateReviewIdentityEffect(p memory.ReviewPreview) error {
 		}
 		return nil
 	}
-	if p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3" {
+	if p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3" && p.Version != "owner-review-preview-v4" {
 		return errors.New("unsupported identity preview")
 	}
 	candidate := p.Candidates[0]
 	if candidate.Candidate.Proposal.Identity == nil {
-		if p.Version == "owner-review-preview-v3" && candidate.Identity == nil && (effect == nil || effect.Identity == nil) {
+		if (p.Version == "owner-review-preview-v3" || p.Version == "owner-review-preview-v4") && candidate.Identity == nil && (effect == nil || effect.Identity == nil) {
 			return nil
 		}
 		return errors.New("v2 preview requires identity proposal")
@@ -287,6 +287,9 @@ func reviewIdentityEncodingDomain(p memory.ReviewPreview, kind string) string {
 	}
 	if p.Version == "owner-review-preview-v3" {
 		version = "v3"
+	}
+	if p.Version == "owner-review-preview-v4" {
+		version = "v4"
 	}
 	return "evie-owner-review-" + kind + "-" + version
 }

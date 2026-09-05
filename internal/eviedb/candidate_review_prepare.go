@@ -45,6 +45,9 @@ func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 		if candidate.Candidate.Proposal.Temporal != nil {
 			p.Version = "owner-review-preview-v3"
 		}
+		if candidateHasClock(candidate.Candidate) {
+			p.Version = "owner-review-preview-v4"
+		}
 		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
 			return err
 		}
@@ -184,11 +187,11 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			return string(compilerJSON(sources[i].Locator)) < string(compilerJSON(sources[j].Locator))
 		})
 		for _, source := range sources {
-			if source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
+			if (source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement) && (source.Observation == nil || source.Actor != memory.SemanticActorTool || source.Authority != memory.AuthorityToolObservation) {
 				return nil, ErrReviewInvalidSource
 			}
-			src := memory.SemanticSource{EventID: source.Locator.EventID, SessionID: source.SessionID, ScopeKey: source.ScopeKey, EventPart: source.Locator.EventPart, LocatorKind: source.Locator.LocatorKind, LocatorValue: source.Locator.LocatorValue, EvidenceSHA256: "sha256:" + source.Locator.EvidenceSHA256, Actor: source.Actor, SourceType: memory.SourceTypeUserMessage, Authority: source.Authority, ObservedAt: source.ObservedAt, Evidence: source.Evidence, Eligibility: memory.EligibilityEligible, OperationID: id}
-			if c.Proposal.Temporal != nil {
+			src := memory.SemanticSource{EventID: source.Locator.EventID, SessionID: source.SessionID, ScopeKey: source.ScopeKey, EventPart: source.Locator.EventPart, LocatorKind: source.Locator.LocatorKind, LocatorValue: source.Locator.LocatorValue, EvidenceSHA256: "sha256:" + source.Locator.EvidenceSHA256, Actor: source.Actor, SourceType: source.SourceType, Authority: source.Authority, ObservedAt: source.ObservedAt, Evidence: source.Evidence, Eligibility: memory.EligibilityEligible, OperationID: id}
+			if c.Proposal.Temporal != nil || candidateHasClock(c) {
 				observed, parseErr := time.Parse(time.RFC3339Nano, src.ObservedAt)
 				if parseErr != nil {
 					return nil, parseErr
@@ -218,6 +221,9 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			return nil, err
 		}
 		item.Conflicts = conflicts
+		if candidateHasClock(c) {
+			effect.Version = "owner-review-effect-v4"
+		}
 		effect.Claims = append(effect.Claims, item)
 	}
 	effects := 0

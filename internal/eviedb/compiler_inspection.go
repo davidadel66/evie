@@ -73,6 +73,7 @@ func loadCompilerInspection(ctx context.Context, q compilerQueryer, owner memory
 	}
 	request.ID = requestID
 	// All source fields are checked once, at most the bounded window event count.
+	ctx = withCompilerSourceCache(ctx)
 	for _, source := range result.Window.Sources {
 		if _, err := resolveCompilerSource(ctx, q, owner, result.Window.Selection, source); err != nil {
 			return result, err

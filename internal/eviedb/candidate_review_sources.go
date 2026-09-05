@@ -26,7 +26,7 @@ func projectAcceptedSource(source memory.SemanticSource, reviewOrigin, policyCur
 		source.Evidence = ""
 		return source
 	}
-	projected, err := projectCompilerSource(memory.CompilerSource{Locator: memory.EvidenceLocator{EventID: source.EventID}, Evidence: source.Evidence}, locator)
+	projected, err := projectCompilerSource(acceptedCompilerSource(source), locator)
 	if err != nil {
 		source.Evidence = ""
 		return source
@@ -79,6 +79,7 @@ func reviewOperationSourcesVisible(ctx context.Context, q reviewQuery, op memory
 	if !reviewSourcePolicyCurrent(ctx, q) {
 		return ErrReviewInvalidSource
 	}
+	ctx = withCompilerSourceCache(ctx)
 	for _, candidate := range op.Preview.Candidates {
 		var requestRaw []byte
 		var request memory.CompilerRequest
