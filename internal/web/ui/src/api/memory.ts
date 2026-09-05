@@ -46,6 +46,8 @@ export type SemanticObjectSummary = {
   scope_key: string;
   status: string;
   entity?: SemanticEntity;
+  subject?: SemanticEntity;
+  object_entity?: SemanticEntity;
   claim?: SemanticClaim;
 };
 export type SemanticObjectPage = {

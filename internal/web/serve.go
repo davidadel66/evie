@@ -39,8 +39,9 @@ func ServeContextManaged(
 	receipts ReceiptInspector,
 	contextSessions ContextSessionController,
 	semanticMemory agent.SemanticGraphMemory,
+	databaseInspector DatabaseInspector,
 ) error {
-	return serveServer(NewContextMemoryServer(nil, manager, receipts, contextSessions, semanticMemory))
+	return serveServer(NewContextDataServer(nil, manager, receipts, contextSessions, semanticMemory, databaseInspector))
 }
 
 func serveServer(server *Server) error {
@@ -73,16 +74,17 @@ func listenAddr() (string, error) {
 // waiting for a browser answer. Context-managed servers may replace the
 // selected conversation only between turns.
 type Server struct {
-	sessionMu        sync.RWMutex
-	session          *agent.Session
-	activeSession    memory.Session
-	activeTurns      int
-	selectingSession bool
-	manager          *plugins.Manager
-	receipts         ReceiptInspector
-	contextSessions  ContextSessionController
-	semanticMemory   agent.SemanticGraphMemory
-	candidateReview  CandidateReviewKernel
+	sessionMu         sync.RWMutex
+	session           *agent.Session
+	activeSession     memory.Session
+	activeTurns       int
+	selectingSession  bool
+	manager           *plugins.Manager
+	receipts          ReceiptInspector
+	contextSessions   ContextSessionController
+	semanticMemory    agent.SemanticGraphMemory
+	databaseInspector DatabaseInspector
+	candidateReview   CandidateReviewKernel
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -137,6 +139,22 @@ func NewContextMemoryServer(
 	return server
 }
 
+// NewContextDataServer adds the physical database-inspection seam to the
+// Context and Semantic Memory server. Keeping it separate preserves focused
+// fakes for callers that only need one of those owner surfaces.
+func NewContextDataServer(
+	session *agent.Session,
+	manager *plugins.Manager,
+	receipts ReceiptInspector,
+	contextSessions ContextSessionController,
+	semanticMemory agent.SemanticGraphMemory,
+	databaseInspector DatabaseInspector,
+) *Server {
+	server := NewContextMemoryServer(session, manager, receipts, contextSessions, semanticMemory)
+	server.databaseInspector = databaseInspector
+	return server
+}
+
 // Handler is the route table. Every /api route sits behind the
 // cross-origin guard — bash is ungated, so a drive-by form POST from a
 // malicious page must die here, not in the handler.
@@ -162,6 +180,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/memory/scopes", s.managementRoute(s.handleMemoryScopes))
 		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
 		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
+	}
+	if s.databaseInspector != nil {
+		mux.Handle("/api/data/database/schema", s.managementRoute(s.handleDatabaseSchema))
+		mux.Handle("/api/data/database/rows", s.managementRoute(s.handleDatabaseRows))
 	}
 	s.registerCandidateReviewRoutes(mux)
 	mux.Handle("/", s.staticHandler())

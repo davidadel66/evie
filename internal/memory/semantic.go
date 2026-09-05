@@ -372,15 +372,17 @@ type CreateGraphLinkResult struct {
 }
 
 type SemanticObjectSummary struct {
-	ObjectKind SemanticObjectKind   `json:"object_kind"`
-	ObjectID   SemanticID           `json:"object_id"`
-	ScopeKey   string               `json:"scope_key"`
-	Status     SemanticObjectStatus `json:"status"`
-	Entity     *SemanticEntity      `json:"entity,omitempty"`
-	Alias      *SemanticAlias       `json:"alias,omitempty"`
-	Claim      *SemanticClaim       `json:"claim,omitempty"`
-	Source     *SemanticSource      `json:"source,omitempty"`
-	GraphLink  *SemanticGraphLink   `json:"graph_link,omitempty"`
+	ObjectKind   SemanticObjectKind   `json:"object_kind"`
+	ObjectID     SemanticID           `json:"object_id"`
+	ScopeKey     string               `json:"scope_key"`
+	Status       SemanticObjectStatus `json:"status"`
+	Entity       *SemanticEntity      `json:"entity,omitempty"`
+	Subject      *SemanticEntity      `json:"subject,omitempty"`
+	ObjectEntity *SemanticEntity      `json:"object_entity,omitempty"`
+	Alias        *SemanticAlias       `json:"alias,omitempty"`
+	Claim        *SemanticClaim       `json:"claim,omitempty"`
+	Source       *SemanticSource      `json:"source,omitempty"`
+	GraphLink    *SemanticGraphLink   `json:"graph_link,omitempty"`
 }
 
 type SemanticObjectListQuery struct {

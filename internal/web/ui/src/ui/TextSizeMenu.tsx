@@ -10,9 +10,10 @@ const options: { value: ChatTextSize; label: string; pixels: number }[] = [
 type Props = {
   value: ChatTextSize;
   onChange: (value: ChatTextSize) => void;
+  placement?: "top" | "bottom";
 };
 
-export function TextSizeMenu({ value, onChange }: Props) {
+export function TextSizeMenu({ value, onChange, placement = "bottom" }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -58,7 +59,7 @@ export function TextSizeMenu({ value, onChange }: Props) {
           id="chat-text-size-options"
           role="group"
           aria-label="Chat text size"
-          className="border-hair-strong bg-card absolute top-[34px] right-0 z-30 w-[174px] rounded-[8px] border p-[5px] shadow-[0_12px_32px_rgba(0,0,0,.35)]"
+          className={`border-hair-strong bg-card absolute right-0 z-50 w-[174px] rounded-[8px] border p-[5px] shadow-[0_12px_32px_rgba(0,0,0,.35)] ${placement === "top" ? "bottom-[34px]" : "top-[34px]"}`}
         >
           <div className="text-fainter px-2 pt-1 pb-[5px] font-mono text-[10px] uppercase tracking-[.08em]">
             Chat text

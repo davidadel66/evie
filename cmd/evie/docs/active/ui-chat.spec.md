@@ -1,18 +1,68 @@
 # ui-chat — the React frontend (feature 3 of the serve umbrella)
 
-Status: draft (pending David's approval)
+Status: active (workbench shell amendment approved by David on 2026-09-04)
 
-The browser half of `evie serve`: the shell, the chat column, tool cards, the
-approval card with a diff, the composer. Plus the two Go pieces deferred from
+The browser half of `evie serve`: the workbench shell, the chat column, tool
+cards, the approval card with a diff, the composer. Plus the two Go pieces deferred from
 serve-core — `go:embed all:ui/dist` and static serving — so `evie serve` finally
 opens a real page. After this lands, everything serve-core emits is visible and
 operable in a browser; the whiteboard and critic (feature 4) plug into the same
 store.
 
-Implements the imported design `Moussa App.dc.html` (claude-design project
+Uses the visual foundation of the imported design `Moussa App.dc.html` (claude-design project
 "Moussa Eve desktop UI"), extracted to `/tmp/evie-design.html`. The design
 predates the rename: every "Moussa"/"Eve" string becomes **Evie**, the logo
-mark stays a single letter (`E`), and the `· eve` subtitle drops.
+mark stays a single letter (`E`), and the `· eve` subtitle drops. The original
+top-tab shell and artifact rail are superseded by the workbench amendment
+below.
+
+## Workbench shell amendment (2026-09-04)
+
+David approved a Codex-like three-pane workbench adapted to Evie's domain:
+
+- The left sidebar owns `New chat`, `Data`, and `Workspaces`, then lists durable
+  Workspaces with their recent sessions nested underneath. It always shows the
+  active immutable Context Scope at the bottom.
+- The center owns a closable tab strip. Chat is a persistent tab; Data, the
+  Workspace directory, and individual Workspace homes open beside it. A
+  Workspace home is not a chat and may list or start multiple scoped sessions.
+- The right Inspector replaces the artifact-only rail. It opens contextual
+  memory records now, including provenance, lifecycle, conflicts, and operation
+  history. Files, diffs, previews, tables, and future artifacts use the same
+  surface as their contracts land. The top-right controls collapse the
+  Inspector or focus it without replacing open work.
+- `Data` is an extensible data-source hub. Its first sources are the physical
+  SQLite database and exact-scope Semantic Memory. Tests, experiment runs, and
+  other sources remain absent until they have real contracts.
+- Filesystem projects remain distinct from Workspaces. Both can create a chat
+  with one explicit immutable Context Scope; neither is inferred from message
+  text or combined with another scope.
+- On narrow screens the left sidebar and Inspector become overlays. Keyboard
+  focus remains visible, and labels and empty states describe real behavior.
+
+## Data hub amendment (2026-09-04)
+
+David approved the first complete Data workspace after the shell amendment:
+
+- `Database` renders live, read-only SQLite schema metadata as a deterministic
+  relationship map. A searchable table rail and narrow-screen selector focus
+  one table and its connected component. Selecting a table raises a lower
+  drawer with Structure and Indexes; Rows are available only for an explicit
+  server allowlist. There is no arbitrary SQL surface.
+- Schema metadata excludes raw DDL, trigger bodies, default expressions, and
+  values. Episodic `events` and semantic projection tables are topology-visible
+  but remain behind their typed views; authentication state is not browsable.
+- `Memory` is the owner-facing graph projection of current, supported Semantic
+  Memory Claims and Entities. It reads one exact scope and pinned revision at a
+  time, supports Valid Time and Transaction Time inspection, and keeps a
+  Records view as an accessible fallback. It never merges sibling scopes or
+  chooses a conflict winner.
+- Selecting a Claim or Entity opens the shared Inspector. Claim evidence names
+  its source episode ID, but raw Episodic Memory remains canonical in the
+  database instead of being copied into the semantic graph.
+- The source switcher is deliberately small: only `Database` and `Memory` ship.
+  Later sources such as Tests and experiment/run tracking can join the same hub
+  once their typed read contracts exist, without changing the shell model.
 
 ## What the design specifies
 
@@ -31,12 +81,12 @@ handwriting). Tokens, verbatim from the design:
 | green (ok / added) | `#5fae7d`, text `#a8d4b5` |
 | radii | 3–12px (bubbles `10px 10px 3px 10px`, cards 7–9px) |
 
-Layout: 46px top bar (`EVIE` wordmark, Chat/Whiteboard/Reports tabs, text-size
-control right) →
-optional connection banner → tab body. Chat body = message column (`flex:1`,
-`max-width:min(720px,100%)` per assistant message, user bubbles `62%`
-right-aligned) + composer, beside a 620px artifacts panel that collapses to a
-34px vertical rail.
+Layout: 276px left navigation → flexible tabbed work area → optional Inspector
+(`min(460px,42vw)` in split view, flexible in focus view). The work area has a
+46px tab strip and optional connection banner. Chat keeps the existing message
+column (`flex:1`, `max-width:min(720px,100%)` per assistant message, user
+bubbles `62%` right-aligned) and composer. A 38px scope bar keeps the immutable
+session boundary visible.
 
 **Polish amendment (2026-08-09):** the top bar carries no connection/activity
 status; approval cards and the error banner own the states that require
@@ -56,10 +106,12 @@ blocks carrying a filename header + `copy`), approval card (pending → approved
 
 ## Scope: what ships, what doesn't
 
-**Ships:** shell + tabs, connection banner, chat column (user,
+**Ships:** workbench shell + tabs, Workspace directory and homes, contextual
+Inspector, Database schema/approved-record inspection, exact-scope Semantic
+Memory graph/records, connection banner, chat column (user,
 assistant markdown, tool cards incl. error state, streaming caret), approval
-card with diff and Y/N hotkeys, composer, artifacts panel as rail + empty
-state, static serving + embed + build workflow.
+card with diff and Y/N hotkeys, composer, static serving + embed + build
+workflow.
 
 **Deferred, with reasons** — the design shows these but the backend has nothing
 to feed them; building empty chrome now means building it twice:
@@ -67,13 +119,11 @@ to feed them; building empty chrome now means building it twice:
 - **Thinking block.** ~~Nothing in the stream carries reasoning~~ — shipped
   2026-08-08 by the reasoning spec (`docs/done/reasoning.spec.md`): `reasoning`
   / `reasoning_done` events, a `reasoning` item kind, and `Reasoning.tsx`.
-- **Artifact cards** (mermaid / chart / markdown, focus view, prev/next).
-  Nothing emits artifacts until the whiteboard feature. The panel ships as the
-  collapsed rail plus the "Nothing pinned yet" empty state, so the layout is
-  real and feature 4 fills it in.
-- **Whiteboard tab, Reports tab, 3D viewer overlay, model attachment chip.**
-  Tabs render and are clickable; their bodies are a centered one-line notice
-  naming the feature that will fill them. Nothing else.
+- **Artifact cards** (mermaid / chart / markdown, prev/next). Nothing emits
+  artifacts until the whiteboard feature; they will open in the shared
+  Inspector rather than adding a second right-hand surface.
+- **Whiteboard, Reports, 3D viewer overlay, model attachment chip.** Their old
+  placeholder tabs are removed until the corresponding behavior exists.
 
 ## Stack decisions (two amendments to serve.decisions.md, record them)
 
@@ -111,7 +161,8 @@ internal/web/
     src/
       main.tsx
       theme.css          @theme tokens, fonts, keyframes, scrollbar
-      App.tsx            shell: top bar, tabs, banner, tab bodies
+      App.tsx            workbench orchestration, open tabs, banner, tab bodies
+      api/database.ts     read-only schema + approved-record client
       api/stream.ts      POST /api/chat + SSE line parser → callbacks
       api/approve.ts     POST /api/approve
       store/events.ts    SSE event types (mirrors the Go vocabulary)
@@ -120,7 +171,13 @@ internal/web/
       store/useSession.ts  hook: reducer + delta buffer + 50ms flush + status
       chat/Chat.tsx  Message.tsx  ToolCard.tsx  ApprovalCard.tsx
       chat/Diff.tsx  Composer.tsx  Markdown.tsx
-      artifacts/Panel.tsx  (rail + empty state)
+      shell/Sidebar.tsx    navigation, scoped session hierarchy, text size
+      data/DataHub.tsx     extensible source switcher
+      data/Database.tsx    schema map + bounded table drawer
+      data/schemaLayout.ts deterministic relationship layout
+      memory/Memory.tsx    exact-scope graph + record fallback
+      workspaces/Workspaces.tsx  directory and per-Workspace home
+      artifacts/Panel.tsx  contextual Inspector and memory detail
 ```
 
 ## The store model

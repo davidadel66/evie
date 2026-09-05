@@ -1,231 +1,430 @@
-// The shell: top bar, tabs, and whichever tab body is active. Chat is the only
-// live tab; Whiteboard and Reports render a notice naming the feature that
-// will fill them, so the navigation is honest rather than broken.
-
-import { useEffect, useState } from "react";
-import { Panel } from "./artifacts/Panel";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  ContextScope,
+  ContextSessionSelection,
+  Project,
+  Workspace,
+} from "./api/contextSessions";
+import { Panel, type InspectorTarget } from "./artifacts/Panel";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
-import { useSession } from "./store/useSession";
-import { Management } from "./management/Management";
-import { Memory } from "./memory/Memory";
-import { ContextChooser } from "./context/ContextChooser";
+import { DataHub, type DataSource } from "./data/DataHub";
+import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
+import { selectionForScope } from "./shell/scopeSelection";
 import { useContextSessions } from "./store/useContextSessions";
+import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
-import { TextSizeMenu } from "./ui/TextSizeMenu";
+import { Cross, Expand, Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
 import {
   defaultChatTextSize,
   resolveChatTextSize,
   type ChatTextSize,
 } from "./ui/textSize";
+import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
 
-export type Tab = "chat" | "memory" | "board" | "reports" | "system";
+export type WorkbenchView =
+  | { id: "chat"; kind: "chat" }
+  | { id: "data"; kind: "data" }
+  | { id: "workspaces"; kind: "workspaces" }
+  | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string };
+
 const textSizeStorageKey = "evie.chatTextSize";
+const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 
 export default function App() {
   const { items, status, queue, problem, send, answer, dismissProblem, reset } = useSession();
   const contextSessions = useContextSessions();
-  const [tab, setTab] = useState<Tab>("chat");
+  const [views, setViews] = useState<WorkbenchView[]>(initialViews);
+  const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
   const [draft, setDraft] = useState("");
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
-  // The artifacts rail starts collapsed — an empty 620px panel is wasted
-  // space. The whiteboard feature owns the other half of this: when artifact
-  // events exist, pinning one should setPanelOpen(true) from the stream.
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorFocused, setInspectorFocused] = useState(false);
+  const [inspectorOverride, setInspectorOverride] = useState<InspectorTarget>();
+  const [dataSource, setDataSource] = useState<DataSource>("memory");
 
-  // Y/N resolve the pending approval, as the design specifies — but only from
-  // the Chat tab and never while typing, or "yes" in the composer would
-  // approve a file edit on its first keystroke.
-  const pending = items.find(
-    (it) => it.kind === "tool" && it.approval?.state === "pending",
+  const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
+  const activeWorkspace = activeView.kind === "workspace"
+    ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
+    : undefined;
+  const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
+  const inspectorTarget = inspectorOverride ?? defaultInspectorTarget(
+    activeView,
+    activeWorkspace,
+    contextSessions.snapshot?.activeScope,
+    latestFileDiff?.kind === "tool" && latestFileDiff.approval?.preview
+      ? {
+          kind: "file-diff",
+          path: latestFileDiff.approval.preview.path,
+          oldText: latestFileDiff.approval.preview.oldText,
+          newText: latestFileDiff.approval.preview.newText,
+          isNew: latestFileDiff.approval.preview.isNew,
+          state: latestFileDiff.approval.state,
+        }
+      : undefined,
   );
-  const pendingId =
-    pending?.kind === "tool" ? pending.approval?.reqId : undefined;
+
+  const pending = items.find((item) => item.kind === "tool" && item.approval?.state === "pending");
+  const pendingId = pending?.kind === "tool" ? pending.approval?.reqId : undefined;
 
   useEffect(() => {
-    if (!pendingId || tab !== "chat") return;
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el?.tagName === "TEXTAREA" || el?.tagName === "INPUT") return;
-      const k = e.key.toLowerCase();
-      if (k === "y") answer(pendingId, true);
-      else if (k === "n") answer(pendingId, false);
+    if (!pendingId || activeView.kind !== "chat") return;
+    const onKey = (event: KeyboardEvent) => {
+      const element = event.target as HTMLElement | null;
+      if (element?.tagName === "TEXTAREA" || element?.tagName === "INPUT") return;
+      const key = event.key.toLowerCase();
+      if (key === "y") answer(pendingId, true);
+      else if (key === "n") answer(pendingId, false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pendingId, tab, answer]);
+  }, [pendingId, activeView.kind, answer]);
 
   useEffect(() => {
     try {
       localStorage.setItem(textSizeStorageKey, textSize);
     } catch {
-      // Storage can be unavailable in locked-down browser contexts; the
-      // in-memory setting still works for this page load.
+      // The in-memory setting still works in locked-down browser contexts.
     }
   }, [textSize]);
 
+  const openView = (view: WorkbenchView) => {
+    setViews((current) => current.some((open) => open.id === view.id) ? current : [...current, view]);
+    setActiveViewId(view.id);
+    setInspectorOverride(undefined);
+    setMobileNavOpen(false);
+  };
+
+  const openWorkspace = (workspace: Workspace) => {
+    openView({ id: `workspace:${workspace.id}`, kind: "workspace", workspaceId: workspace.id, label: workspace.displayName });
+  };
+
+  const activateView = (view: WorkbenchView) => {
+    setActiveViewId(view.id);
+    setInspectorOverride(undefined);
+  };
+
+  const closeView = (view: WorkbenchView) => {
+    if (view.kind === "chat") return;
+    const index = views.findIndex((open) => open.id === view.id);
+    const next = views.filter((open) => open.id !== view.id);
+    setViews(next);
+    if (view.id === activeViewId) setActiveViewId(next[Math.max(0, index - 1)]?.id ?? "chat");
+    setInspectorOverride(undefined);
+  };
+
+  const selectSession = async (selection: ContextSessionSelection) => {
+    try {
+      await contextSessions.select(selection);
+      reset();
+      setDraft("");
+      setActiveViewId("chat");
+      setInspectorOverride(undefined);
+      setMobileNavOpen(false);
+    } catch {
+      // useContextSessions owns the actionable error message.
+    }
+  };
+
+  const startWorkspaceChat = (workspace: Workspace) => selectSession({
+    workspaceId: workspace.id,
+    workspaceRevision: workspace.currentRevisionId,
+  });
+
+  const startProjectChat = (project: Project) => selectSession({ projectId: project.id });
+
+  const startNewChat = () => {
+    const scope = contextSessions.snapshot?.activeScope;
+    if (!scope) {
+      openView({ id: "workspaces", kind: "workspaces" });
+      return;
+    }
+    const selection = selectionForScope(scope);
+    if (selection) void selectSession(selection);
+    else openView({ id: "workspaces", kind: "workspaces" });
+  };
+
+  const registerWorkspace = async (name: string) => {
+    try {
+      await contextSessions.register(name);
+      reset();
+      setDraft("");
+      setActiveViewId("chat");
+      setInspectorOverride(undefined);
+    } catch {
+      // useContextSessions owns the actionable error message.
+    }
+  };
+
+  const workspaceSessions = useMemo(
+    () => activeWorkspace
+      ? contextSessions.snapshot?.sessions.filter((session) => session.workspaceId === activeWorkspace.id) ?? []
+      : [],
+    [activeWorkspace, contextSessions.snapshot?.sessions],
+  );
+
   return (
-    <div
-      data-chat-size={textSize}
-      className="bg-app text-ink flex h-screen flex-col overflow-hidden text-[13px]"
-    >
-      <TopBar
-        tab={tab}
-        onTab={setTab}
+    <div data-chat-size={textSize} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
+      {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={() => setMobileNavOpen(false)} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
+      <Sidebar
+        snapshot={contextSessions.snapshot}
+        destination={sidebarDestination(activeView)}
+        busy={contextSessions.busy || status === "streaming"}
+        mobileOpen={mobileNavOpen}
         textSize={textSize}
         onTextSize={setTextSize}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        onNewChat={startNewChat}
+        onData={() => openView({ id: "data", kind: "data" })}
+        onWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })}
+        onWorkspace={openWorkspace}
+        onSession={(session) => void selectSession({ sessionId: session.id })}
       />
 
-      {problem && <Banner message={problem} onDismiss={dismissProblem} />}
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <WorkbenchBar
+          views={views}
+          activeViewId={activeView.id}
+          chatLabel={contextSessions.snapshot?.activeSession?.title.trim() || "Chat"}
+          inspectorOpen={inspectorOpen}
+          inspectorFocused={inspectorFocused}
+          onOpenNavigation={() => setMobileNavOpen(true)}
+          onActivate={activateView}
+          onClose={closeView}
+          onToggleInspector={() => {
+            setInspectorOpen((open) => !open);
+            if (inspectorOpen) setInspectorFocused(false);
+          }}
+          onToggleInspectorFocus={() => {
+            setInspectorOpen(true);
+            setInspectorFocused((focused) => !focused);
+          }}
+        />
 
-      {tab === "chat" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <ContextChooser
-            snapshot={contextSessions.snapshot}
-            busy={contextSessions.busy || status === "streaming"}
-            problem={contextSessions.problem}
-            onRegister={(name) => {
-              void contextSessions
-                .register(name)
-                .then(() => {
-                  reset();
-                  setDraft("");
-                })
-                .catch(() => undefined);
-            }}
-            onSelect={(selection) => {
-              void contextSessions
-                .select(selection)
-                .then(() => {
-                  reset();
-                  setDraft("");
-                })
-                .catch(() => undefined);
-            }}
-          />
-          {contextSessions.snapshot?.activeScope && (
-            <div className="flex min-h-0 flex-1">
-              <div className="border-hair flex min-w-0 flex-1 flex-col border-r">
-                <Chat
-                  items={items}
-                  queued={queue}
-                  streaming={status === "streaming"}
-                  onAnswer={answer}
-                />
-                <Composer
-                  value={draft}
-                  onChange={setDraft}
-                  streaming={status === "streaming"}
-                  disabled={contextSessions.busy}
-                  onSend={() => {
-                    send(draft);
-                    setDraft("");
+        {problem && <Banner message={problem} onDismiss={dismissProblem} />}
+
+        <div className="relative flex min-h-0 flex-1">
+          {!inspectorFocused && (
+            <div className="flex min-w-0 flex-1 flex-col">
+              {activeView.kind === "chat" && (
+                contextSessions.snapshot?.activeScope ? (
+                  <>
+                    <ScopeBar scope={contextSessions.snapshot.activeScope} onOpenWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })} />
+                    <Chat items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} />
+                    <Composer
+                      value={draft}
+                      onChange={setDraft}
+                      streaming={status === "streaming"}
+                      disabled={contextSessions.busy}
+                      onSend={() => {
+                        send(draft);
+                        setDraft("");
+                      }}
+                    />
+                  </>
+                ) : (
+                  <ChooseScope
+                    snapshot={contextSessions.snapshot}
+                    busy={contextSessions.busy}
+                    onWorkspace={(workspace) => void startWorkspaceChat(workspace)}
+                    onProject={(project) => void startProjectChat(project)}
+                    onUnscoped={() => void selectSession({ unscoped: true })}
+                    onManage={() => openView({ id: "workspaces", kind: "workspaces" })}
+                  />
+                )
+              )}
+              {activeView.kind === "data" && (
+                <DataHub
+                  source={dataSource}
+                  onSource={(source) => {
+                    setDataSource(source);
+                    setInspectorOverride(undefined);
+                  }}
+                  onOpenMemoryDetail={(detail) => {
+                    setInspectorOverride({ kind: "memory", detail });
+                    setInspectorOpen(true);
                   }}
                 />
-              </div>
-              <Panel open={panelOpen} onToggle={() => setPanelOpen(!panelOpen)} />
+              )}
+              {activeView.kind === "workspaces" && (
+                <Workspaces
+                  snapshot={contextSessions.snapshot}
+                  busy={contextSessions.busy || status === "streaming"}
+                  problem={contextSessions.problem}
+                  onRegister={(name) => void registerWorkspace(name)}
+                  onOpenWorkspace={openWorkspace}
+                  onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
+                  onNewProjectChat={(project) => void startProjectChat(project)}
+                  onResume={(session) => void selectSession({ sessionId: session.id })}
+                  onNewUnscopedChat={() => void selectSession({ unscoped: true })}
+                />
+              )}
+              {activeView.kind === "workspace" && activeWorkspace && (
+                <WorkspaceHome
+                  workspace={activeWorkspace}
+                  sessions={workspaceSessions}
+                  busy={contextSessions.busy || status === "streaming"}
+                  onNewChat={() => void startWorkspaceChat(activeWorkspace)}
+                  onResume={(session) => void selectSession({ sessionId: session.id })}
+                />
+              )}
+              {activeView.kind === "workspace" && !activeWorkspace && (
+                <div className="text-muted-text flex flex-1 items-center justify-center">This workspace is no longer available.</div>
+              )}
             </div>
           )}
+
+          {inspectorOpen && (
+            <Panel
+              target={inspectorTarget}
+              focused={inspectorFocused}
+              onClose={() => {
+                setInspectorOpen(false);
+                setInspectorFocused(false);
+              }}
+            />
+          )}
         </div>
-      )}
-
-      {tab === "memory" && <Memory />}
-      {tab === "board" && (
-        <Soon
-          title="Whiteboard"
-          detail="Evie draws here — free-stroke SVG, diagrams and markup, streamed as she writes. Landing with the whiteboard feature."
-        />
-      )}
-      {tab === "reports" && (
-        <Soon
-          title="Reports"
-          detail="Saved dashboards and queries Evie builds and edits. Not yet built."
-        />
-      )}
-      {tab === "system" && <Management />}
-    </div>
-  );
-}
-
-export function TopBar({
-  tab,
-  onTab,
-  textSize,
-  onTextSize,
-}: {
-  tab: Tab;
-  onTab: (t: Tab) => void;
-  textSize: ChatTextSize;
-  onTextSize: (value: ChatTextSize) => void;
-}) {
-  return (
-    <div className="border-hair bg-topbar flex h-[46px] flex-none items-center gap-[22px] border-b px-5">
-      <span className="text-ink font-sans text-[17px] font-bold tracking-[0.18em]">
-        EVIE
-      </span>
-      <div className="flex h-full items-stretch gap-[2px]">
-        <TabButton label="Chat" active={tab === "chat"} onClick={() => onTab("chat")} />
-        <TabButton label="Memory" active={tab === "memory"} onClick={() => onTab("memory")} />
-        <TabButton label="Whiteboard" active={tab === "board"} onClick={() => onTab("board")} />
-        <TabButton label="Reports" active={tab === "reports"} onClick={() => onTab("reports")} />
-        <TabButton label="System" active={tab === "system"} onClick={() => onTab("system")} />
       </div>
-      <div className="flex-1" />
-      <TextSizeMenu value={textSize} onChange={onTextSize} />
     </div>
   );
 }
 
-function TabButton({
-  label,
-  active,
-  onClick,
+export function WorkbenchBar({
+  views,
+  activeViewId,
+  chatLabel,
+  inspectorOpen,
+  inspectorFocused,
+  onOpenNavigation,
+  onActivate,
+  onClose,
+  onToggleInspector,
+  onToggleInspectorFocus,
 }: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
+  views: WorkbenchView[];
+  activeViewId: WorkbenchView["id"];
+  chatLabel: string;
+  inspectorOpen: boolean;
+  inspectorFocused: boolean;
+  onOpenNavigation: () => void;
+  onActivate: (view: WorkbenchView) => void;
+  onClose: (view: WorkbenchView) => void;
+  onToggleInspector: () => void;
+  onToggleInspectorFocus: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className="flex cursor-pointer items-center border-0 bg-transparent px-[14px] font-sans text-[12.5px] font-medium"
-    >
-      {/* The design underlines the active tab with an offset box-shadow rather
-          than a border, so the line sits at the bar's bottom edge. */}
-      <span
-        className={active ? "text-ink" : "text-faint"}
-        style={
-          active
-            ? { boxShadow: "0 15px 0 -13px var(--color-teal)", padding: "15px 0" }
-            : { padding: "15px 0" }
-        }
-      >
-        {label}
-      </span>
+    <header className="border-hair bg-topbar flex h-[46px] flex-none items-stretch border-b">
+      <button type="button" aria-label="Open navigation" onClick={onOpenNavigation} className="text-faint hover:text-body px-4 md:hidden"><SidebarIcon size={16} /></button>
+      <div role="tablist" aria-label="Open work" className="flex min-w-0 flex-1 overflow-x-auto">
+        {views.map((view) => {
+          const active = view.id === activeViewId;
+          return (
+            <div key={view.id} className={`${active ? "bg-app text-body" : "text-faint hover:text-muted-text"} border-hair group flex max-w-[220px] min-w-[120px] items-center border-r`}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onActivate(view)}
+                className="min-w-0 flex-1 truncate px-3 text-left text-[11.5px]"
+              >
+                {view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}
+              </button>
+              {view.kind !== "chat" && (
+                <button type="button" aria-label={`Close ${view.kind === "workspace" ? view.label : view.kind} tab`} onClick={() => onClose(view)} className="hover:text-body mr-2 rounded p-1 opacity-0 focus:opacity-100 group-hover:opacity-100"><Cross size={11} /></button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-none items-center gap-1 px-2">
+        <button type="button" title="Toggle inspector" aria-label="Toggle inspector" aria-pressed={inspectorOpen} onClick={onToggleInspector} className={`${inspectorOpen ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><PanelRight size={15} /></button>
+        <button type="button" title="Focus inspector" aria-label="Focus inspector" aria-pressed={inspectorFocused} onClick={onToggleInspectorFocus} className={`${inspectorFocused ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><Expand size={14} /></button>
+      </div>
+    </header>
+  );
+}
+
+function ScopeBar({ scope, onOpenWorkspaces }: { scope: ContextScope; onOpenWorkspaces: () => void }) {
+  return (
+    <div className="border-hair flex h-[38px] flex-none items-center gap-2 border-b px-5">
+      <span className="text-teal"><Folder size={13} /></span>
+      <span className="text-body text-[11.5px] font-medium">{scope.displayName}</span>
+      <span className="text-fainter text-[10.5px]">{scope.kind === "workspace" ? "Workspace" : scope.kind === "project" ? "Project" : "Unscoped"}</span>
+      {scope.workspaceRevision && <span className="text-ghost hidden font-mono text-[9.5px] sm:inline">revision {shortId(scope.workspaceRevision)}</span>}
+      <div className="flex-1" />
+      <button type="button" onClick={onOpenWorkspaces} className="text-faint hover:text-body text-[10.5px]">Change context</button>
+    </div>
+  );
+}
+
+function ChooseScope({
+  snapshot,
+  busy,
+  onWorkspace,
+  onProject,
+  onUnscoped,
+  onManage,
+}: {
+  snapshot: ReturnType<typeof useContextSessions>["snapshot"];
+  busy: boolean;
+  onWorkspace: (workspace: Workspace) => void;
+  onProject: (project: Project) => void;
+  onUnscoped: () => void;
+  onManage: () => void;
+}) {
+  return (
+    <main className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-7">
+      <div className="w-full max-w-[560px]">
+        <div className="text-teal mb-3 flex items-center gap-2 text-xs"><MessageSquare size={14} /> New conversation</div>
+        <h1 className="text-ink text-[22px] font-semibold tracking-[-0.02em]">Choose where this conversation belongs</h1>
+        <p className="text-muted-text mt-2 max-w-[520px] text-[13px] leading-6">The selected context fixes which memory and resources are available for the life of the session.</p>
+        <div className="border-hair mt-7 border-t">
+          {snapshot?.workspaces.filter((workspace) => workspace.state === "active").map((workspace) => (
+            <ScopeChoice key={workspace.id} label={workspace.displayName} detail="Workspace" disabled={busy} onClick={() => onWorkspace(workspace)} />
+          ))}
+          {snapshot?.projects.filter((project) => !project.archived).map((project) => (
+            <ScopeChoice key={project.id} label={project.displayName} detail="Filesystem project" disabled={busy} onClick={() => onProject(project)} />
+          ))}
+          <ScopeChoice label="Unscoped" detail="Global and session memory only" disabled={busy} onClick={onUnscoped} />
+        </div>
+        <button type="button" onClick={onManage} className="text-teal hover:text-teal-hover mt-5 text-xs">Manage workspaces</button>
+      </div>
+    </main>
+  );
+}
+
+function ScopeChoice({ label, detail, disabled, onClick }: { label: string; detail: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className="border-hair hover:bg-hover flex w-full items-center gap-3 border-b px-2 py-4 text-left disabled:opacity-40">
+      <span className="border-hair-strong text-faint flex h-8 w-8 items-center justify-center rounded-[7px] border"><Folder size={14} /></span>
+      <span className="min-w-0 flex-1"><span className="text-body block truncate text-[13px] font-medium">{label}</span><span className="text-fainter mt-1 block text-[10.5px]">{detail}</span></span>
     </button>
   );
 }
 
+function sidebarDestination(view: WorkbenchView): SidebarDestination {
+  if (view.kind === "workspace") return view.id;
+  return view.kind;
+}
+
+function defaultInspectorTarget(view: WorkbenchView, workspace?: Workspace, scope?: ContextScope, fileDiff?: InspectorTarget): InspectorTarget {
+  if (view.kind === "workspace" && workspace) return { kind: "workspace", workspace };
+  if (view.kind === "chat" && fileDiff) return fileDiff;
+  if (view.kind === "chat" && scope) return { kind: "scope", scope };
+  if (view.kind === "data") return { kind: "data" };
+  return { kind: "empty" };
+}
+
+function shortId(value: string) {
+  return value.length > 12 ? value.slice(0, 12) : value;
+}
+
 function loadChatTextSize(): ChatTextSize {
   try {
-    const stored = localStorage.getItem(textSizeStorageKey);
-    return resolveChatTextSize(stored);
+    return resolveChatTextSize(localStorage.getItem(textSizeStorageKey));
   } catch {
     return defaultChatTextSize;
   }
-}
-
-function Soon({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-8">
-      <span className="text-body-dim font-sans text-[13px] font-semibold">
-        {title}
-      </span>
-      <span className="text-fainter max-w-[420px] text-center font-sans text-xs leading-[1.6]">
-        {detail}
-      </span>
-    </div>
-  );
 }

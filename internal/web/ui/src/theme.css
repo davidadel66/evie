@@ -22,6 +22,10 @@
   /* surfaces */
   --color-app: #0e1113;
   --color-topbar: #0b0e0f;
+  --color-sidebar: #151b1d;
+  --color-inspector: #101715;
+  --color-selected: #222a2c;
+  --color-hover: #1a2123;
   --color-card: #121618;
   --color-bubble: #1b2225;
   --color-code: #0b0e10;
@@ -82,7 +86,6 @@
   --color-background: var(--color-code);
   --color-foreground: var(--color-body);
   --color-border: var(--color-hair-strong);
-  --color-sidebar: var(--color-card);
   --color-sidebar-foreground: var(--color-body);
   --color-muted: #171d1f;
   --color-muted-foreground: var(--color-muted-text);

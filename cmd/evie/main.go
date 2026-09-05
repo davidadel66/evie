@@ -254,7 +254,7 @@ func main() {
 			), nil
 		})
 		stopCompiler := startCompilerForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewContextMemoryServer(nil, pluginManager, kernelStore, controller, kernelStore), kernelStore))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore))
 		stopCompiler()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

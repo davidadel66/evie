@@ -51,6 +51,15 @@ func TestSemanticMemoryHTTPUsesExactReadScopePaginationDetailAndRestart(t *testi
 	if first.Code != http.StatusOK || firstPage.Metadata.SelectedScope != "global" || len(firstPage.Metadata.AllowedScopes) != 1 || len(firstPage.Objects) != 1 || firstPage.NextCursor == "" {
 		t.Fatalf("first page status=%d result=%+v body=%s", first.Code, firstPage, first.Body.String())
 	}
+	graph := httptest.NewRecorder()
+	handler.ServeHTTP(graph, managementRequest("/api/memory/objects", `{"scopeKey":"global","kinds":["claim"],"pageSize":20}`))
+	var graphPage memory.SemanticObjectPage
+	if err := json.Unmarshal(graph.Body.Bytes(), &graphPage); err != nil {
+		t.Fatal(err)
+	}
+	if graph.Code != http.StatusOK || len(graphPage.Objects) != 1 || graphPage.Objects[0].Subject == nil || graphPage.Objects[0].Subject.CanonicalName == "" {
+		t.Fatalf("graph summaries must resolve claim endpoints: status=%d result=%+v", graph.Code, graphPage)
+	}
 
 	detail := httptest.NewRecorder()
 	handler.ServeHTTP(detail, managementRequest("/api/memory/inspect", `{"scopeKey":"global","kind":"claim","id":"`+string(claimID)+`"}`))

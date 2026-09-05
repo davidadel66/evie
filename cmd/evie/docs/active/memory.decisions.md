@@ -1,5 +1,15 @@
 # memory - decisions
 
+- **2026-09-04 - the owner Memory UI is an exact-scope semantic graph projection.**
+  The Data hub may visualize current supported Entities and Claims from one
+  explicit Semantic Memory scope and pinned Scope Revision. It retains a record
+  fallback and exposes Valid Time, Transaction Time, lifecycle, and evidence
+  through the existing typed inspection contract. The graph is presentation,
+  not new memory truth: it cannot merge scopes, accept candidates, choose
+  conflict winners, or mutate semantic state. Episodic Memory remains canonical
+  event evidence; a Claim references its source episode ID without copying raw
+  event content into the graph.
+
 - **2026-08-30 - automatic compaction is one pre-request pressure attempt per provider iteration.**
   Every initial and post-tool conversational iteration first applies the
   mandatory old-tool-result projection and measures the complete canonical

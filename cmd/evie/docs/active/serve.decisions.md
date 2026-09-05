@@ -1,5 +1,30 @@
 # serve — decisions
 
+- **2026-09-04 — Data is an extensible typed hub, not a generic database console.**
+  The first sources are Database and Semantic Memory. Database exposes live
+  schema topology plus records for a server-owned allowlist; it excludes raw
+  DDL and arbitrary SQL, and routes protected event and semantic state through
+  typed views. Memory visualizes current supported Claims and Entities in one
+  exact scope and pinned revision, with records as an accessible fallback.
+  Episodic events remain canonical database evidence and semantic Claims refer
+  to their source episode IDs rather than duplicating event content. Tests,
+  experiments, and run tracking may become later Data sources only after their
+  own typed contracts exist.
+
+- **2026-09-04 — the browser shell is a scope-aware three-pane workbench.**
+  David approved left navigation for New chat, Data, and Workspaces; center tabs
+  for chat and durable Workspace pages; and one collapsible/focusable right
+  Inspector for memory records, files, diffs, previews, tables, and artifacts.
+  Workspaces remain first-class Context Scopes rather than chats or filesystem
+  projects. The shell always exposes the active immutable scope, and selecting
+  or creating a session continues through the existing explicit server API.
+  Database tables and other Inspector types do not render fake data before a
+  backend contract exists; the Data hub decision above now supplies the first
+  database contract. This supersedes the top-level Chat/Memory/
+  Whiteboard/Reports/System tabs and the artifact-only rail from the imported
+  visual design while retaining its typography, palette, chat, approval, and
+  streaming behavior.
+
 - **2026-08-24 — committed assistant acceptance precedes terminal presentation.**
   `assistant_done` is the exactly-once presentation of a successfully committed
   assistant event, including tool-calling assistants whose append races with

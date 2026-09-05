@@ -615,7 +615,12 @@ func (s *Store) collectExactObjects(ctx context.Context, queryer semanticInspect
 		return nil, err
 	}
 	for _, claim := range claims.Claims {
-		row := memory.SemanticObjectSummary{ObjectKind: memory.SemanticObjectClaim, ObjectID: claim.ID, ScopeKey: claim.Scope.Key, Status: memory.SemanticStatusActive, Claim: &claim.SemanticClaim}
+		subject := claim.Subject
+		row := memory.SemanticObjectSummary{ObjectKind: memory.SemanticObjectClaim, ObjectID: claim.ID, ScopeKey: claim.Scope.Key, Status: memory.SemanticStatusActive, Claim: &claim.SemanticClaim, Subject: &subject}
+		if claim.ObjectEntity != nil {
+			objectEntity := *claim.ObjectEntity
+			row.ObjectEntity = &objectEntity
+		}
 		visible[semanticNodeKey{Kind: row.ObjectKind, ID: row.ObjectID}] = row
 		if _, ok := kinds[row.ObjectKind]; ok {
 			objects = append(objects, row)
