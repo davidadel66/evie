@@ -18,6 +18,9 @@ type compilerManagementKernel interface {
 	GetSession(context.Context, memory.SessionID) (memory.Session, error)
 	CompileCandidateUnit(context.Context, memory.ScopeContext, memory.CompilationSelection, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.Compilation, error)
 	InspectCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
+	InspectCompilerStatus(context.Context, memory.ScopeContext, string, int) (memory.CompilerStatus, error)
+	CancelCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
+	ResumeCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
 }
 
 // The short owner command runs before conversational provider construction.
@@ -28,16 +31,20 @@ func runCompilerManagement(ctx context.Context, args []string, out io.Writer, ke
 	}
 	command := args[0]
 	args = args[1:]
+	action := "compile"
 	if command == "memory-candidates" {
-		if len(args) == 0 || args[0] != "inspect" {
-			return true, errors.New("usage: memory-candidates inspect --session ID --id SELECTION_OR_JOB")
+		if len(args) == 0 || (args[0] != "inspect" && args[0] != "status" && args[0] != "cancel" && args[0] != "resume") {
+			return true, errors.New("usage: memory-candidates inspect|cancel|resume --session ID --id SELECTION_OR_JOB; status --session ID [--after JOB_ID] [--limit 32]")
 		}
+		action = args[0]
 		args = args[1:]
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	sessionID := flags.String("session", "", "source session ID")
 	id := flags.String("id", "", "selection or job ID")
+	after := flags.String("after", "", "status job cursor")
+	limit := flags.Int("limit", 32, "bounded status page size")
 	root := flags.String("root", "", "root event ID")
 	cutoff := flags.Int64("cutoff", 0, "inclusive captured sequence")
 	configPath := flags.String("config", "", "pinned local compiler configuration")
@@ -53,13 +60,33 @@ func runCompilerManagement(ctx context.Context, args []string, out io.Writer, ke
 		return true, err
 	}
 	owner := session.ScopeContext()
-	var result memory.Compilation
+	var result any
 	if command == "memory-candidates" {
-		if *id == "" || *root != "" || *cutoff != 0 || *configPath != "" || *sessionScope {
-			return true, errors.New("inspection accepts only --session and --id")
+		if *root != "" || *cutoff != 0 || *configPath != "" || *sessionScope {
+			return true, errors.New("candidate management does not accept compile flags")
 		}
-		result, err = kernel.InspectCompilation(ctx, owner, *id)
+		if action == "status" {
+			if *id != "" {
+				return true, errors.New("status accepts --after rather than --id")
+			}
+			result, err = kernel.InspectCompilerStatus(ctx, owner, *after, *limit)
+		} else {
+			if *id == "" || *after != "" || *limit != 32 {
+				return true, errors.New("inspection/cancel/resume requires --id and no pagination")
+			}
+			switch action {
+			case "inspect":
+				result, err = kernel.InspectCompilation(ctx, owner, *id)
+			case "cancel":
+				result, err = kernel.CancelCompilation(ctx, owner, *id)
+			case "resume":
+				result, err = kernel.ResumeCompilation(ctx, owner, *id)
+			}
+		}
 	} else {
+		if *after != "" || *limit != 32 {
+			return true, errors.New("compile does not accept status pagination")
+		}
 		if *configPath == "" {
 			return true, eviedb.ErrCompilerNotConfigured
 		}

@@ -111,4 +111,44 @@ func TestCompilerCLIUsesSQLiteAndLocalTransportWithoutConversationalClient(t *te
 	if !handled || err != nil || !strings.Contains(out.String(), "owner_statement") || !strings.Contains(out.String(), "I prefer tea.") || calls.Load() != 1 {
 		t.Fatalf("inspection %v %v %s", handled, err, out.String())
 	}
+
+	out.Reset()
+	handled, err = runCompilerManagement(ctx, []string{"memory-candidates", "status", "--session", string(session.ID)}, &out, store)
+	if !handled || err != nil || !strings.Contains(out.String(), "completed_empty") || strings.Contains(out.String(), "I prefer tea.") || strings.Contains(out.String(), "Extract.") {
+		t.Fatalf("unsafe worker status %v %v %s", handled, err, out.String())
+	}
+	next, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer coffee."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	end, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: next.ID, Content: "Recorded."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queuedExtractor, err := localextractor.New(localextractor.Config{Endpoint: server.URL, Generation: g})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued, err := store.QueueCandidateUnit(ctx, session.ScopeContext(), memory.CompilationSelection{SessionID: session.ID, RootID: next.ID, Cutoff: end.Sequence, Destination: "global"}, g, queuedExtractor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"cancel", "resume"} {
+		out.Reset()
+		handled, err = runCompilerManagement(ctx, []string{"memory-candidates", action, "--session", string(session.ID), "--id", queued.JobID}, &out, store)
+		if !handled || err != nil {
+			t.Fatalf("%s %v %v", action, handled, err)
+		}
+		var got memory.Compilation
+		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		want := "cancelled"
+		if action == "resume" {
+			want = "queued"
+		}
+		if got.State != want || got.Attempts != 0 || calls.Load() != 1 {
+			t.Fatalf("%s mutated attempts %+v", action, got)
+		}
+	}
 }

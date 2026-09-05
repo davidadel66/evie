@@ -102,12 +102,17 @@ func resolveCompilerSource(ctx context.Context, q interface {
 	return projected, nil
 }
 
+var ErrCompilerTerminalOutput = errors.New("invalid compiler source or forbidden effect")
+
 func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memory.MemoryCandidate, error) {
 	var response memory.CompilerResponse
 	if err := memory.DecodeCompilerJSON(raw, &response); err != nil {
 		return nil, err
 	}
-	if response.RequestID != request.ID || response.Candidates == nil || len(response.Candidates) > 16 {
+	if response.RequestID != "" && response.RequestID != request.ID {
+		return nil, fmt.Errorf("%w: request binding mismatch", ErrCompilerTerminalOutput)
+	}
+	if response.RequestID == "" || response.Candidates == nil || len(response.Candidates) > 16 {
 		return nil, errors.New("invalid response binding or candidate array")
 	}
 	// Required zero-valued members must be present rather than inferred by Go's
@@ -149,11 +154,11 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 			return nil, errors.New("missing valid time to")
 		}
 		if !entities[proposal.Proposition.SubjectEntityID] {
-			return nil, errors.New("unknown subject identity")
+			return nil, fmt.Errorf("%w: unknown subject identity", ErrCompilerTerminalOutput)
 		}
 		predicate, ok := predicates[proposal.Proposition.PredicateID]
 		if !ok {
-			return nil, errors.New("unreviewed Predicate")
+			return nil, fmt.Errorf("%w: unreviewed Predicate", ErrCompilerTerminalOutput)
 		}
 		object := proposal.Proposition.Object
 		if (object.EntityID == "") == (object.Literal == nil) {
@@ -161,17 +166,17 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 		}
 		if object.EntityID != "" {
 			if !entities[object.EntityID] || predicate.ObjectConstraint != memory.ConstraintEntity {
-				return nil, errors.New("invalid object identity or Predicate constraint")
+				return nil, fmt.Errorf("%w: invalid object identity or Predicate constraint", ErrCompilerTerminalOutput)
 			}
 		} else {
 			if err := validateLiteral(*object.Literal); err != nil {
 				return nil, err
 			}
 			if string(predicate.ObjectConstraint) != string(object.Literal.Kind) {
-				return nil, errors.New("Predicate literal constraint mismatch")
+				return nil, fmt.Errorf("%w: Predicate literal constraint mismatch", ErrCompilerTerminalOutput)
 			}
 			if len(object.Literal.Value) > 8192 || compilerHasSecret(object.Literal.Value) {
-				return nil, errors.New("invalid candidate text")
+				return nil, fmt.Errorf("%w: invalid candidate text", ErrCompilerTerminalOutput)
 			}
 		}
 		if proposal.Proposition.Polarity != memory.PolarityAffirmed && proposal.Proposition.Polarity != memory.PolarityDenied {
@@ -197,10 +202,10 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 			for _, ref := range entry.refs {
 				source, ok := offered[ref.EventID]
 				if !ok {
-					return nil, errors.New("unoffered source")
+					return nil, fmt.Errorf("%w: unoffered source", ErrCompilerTerminalOutput)
 				}
 				if (source.Usage == "context") != entry.context {
-					return nil, errors.New("support/context category mismatch")
+					return nil, fmt.Errorf("%w: support/context category mismatch", ErrCompilerTerminalOutput)
 				}
 				identity := string(compilerJSON(ref))
 				if seen[identity] {
@@ -209,7 +214,7 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 				seen[identity] = true
 				projected, err := projectCompilerSource(source, ref)
 				if err != nil {
-					return nil, err
+					return nil, errors.Join(ErrCompilerTerminalOutput, err)
 				}
 				if entry.context {
 					candidate.Context = append(candidate.Context, projected)
@@ -223,7 +228,7 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 			}
 		}
 		if !latestNew {
-			return nil, errors.New("latest required support is not newly owned")
+			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)
 		}
 		candidates = append(candidates, candidate)
 	}

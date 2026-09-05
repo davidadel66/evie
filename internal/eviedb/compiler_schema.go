@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS memory_compiler_coverage (
 
 func ensureCompilerSchema(ctx context.Context, db *sql.DB) error {
 	return withImmediateTransactionResolver(ctx, db, executeImmediateTransactionStatement, transactionResolutionContext, func(conn *sql.Conn) error {
-		_, err := conn.ExecContext(ctx, compilerSchema)
+		if _, err := conn.ExecContext(ctx, compilerSchema); err != nil {
+			return err
+		}
+		_, err := conn.ExecContext(ctx, compilerWorkerSchema)
 		return err
 	})
 }

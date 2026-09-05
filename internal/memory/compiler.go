@@ -81,6 +81,8 @@ type CompilerWindow struct {
 }
 
 type CompilerRequest struct {
+	// AttemptID identifies one dispatch; it is excluded from the sealed request.
+	AttemptID              string              `json:"-"`
 	AcceptedContextOmitted bool                `json:"accepted_context_omitted"`
 	ID                     string              `json:"request_id"`
 	GenerationID           string              `json:"generation_id"`

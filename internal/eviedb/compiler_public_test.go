@@ -260,7 +260,11 @@ func TestCompilerRejectsUntrustedSourceIdentityAndShape(t *testing.T) {
 				return compilerOutput(r, []memory.ExtractorCandidate{candidate}), nil
 			}}
 			result, err := f.store.CompileCandidateUnit(context.Background(), f.session.ScopeContext(), sel, compilerGeneration(), extractor)
-			if err == nil || result.State != "retry_wait" || len(result.Candidates) != 0 {
+			wantState := "failed"
+			if test.name == "polarity" {
+				wantState = "retry_wait"
+			}
+			if err == nil || result.State != wantState || len(result.Candidates) != 0 {
 				t.Fatalf("accepted invalid: %+v %v", result, err)
 			}
 		})
