@@ -19,23 +19,26 @@ func ownerReviewPreviewHash(preview memory.ReviewPreview) (string, []byte, error
 	return semanticHash(struct {
 		Domain  string               `json:"domain"`
 		Preview memory.ReviewPreview `json:"preview"`
-	}{"evie-owner-review-preview-v1", preview})
+	}{reviewIdentityEncodingDomain(preview, "preview"), preview})
 }
 func canonicalOwnerReviewOperation(op memory.OwnerReviewOperation) any {
 	return struct {
 		Domain    string                      `json:"domain"`
 		Operation memory.OwnerReviewOperation `json:"operation"`
-	}{"evie-owner-review-operation-v1", op}
+	}{reviewIdentityEncodingDomain(op.Preview, "operation"), op}
 }
 func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
-	if p.Version != "owner-review-preview-v1" || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
+	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
 		return errors.New("invalid review preview")
 	}
-	if p.Action == "accept" && (p.Effect == nil || p.Effect.Version != "owner-review-effect-v1" || len(p.Effect.Claims) != len(p.Candidates)) {
+	if p.Action == "accept" && (p.Effect == nil || p.Effect.Version != "owner-review-effect-"+p.Version[len("owner-review-preview-"):] || len(p.Effect.Claims) != len(p.Candidates)) {
 		return errors.New("incomplete review effects")
 	}
 	if p.Action == "reject" && p.Effect != nil {
 		return errors.New("reject preview contains effects")
+	}
+	if err := validateReviewIdentityEffect(p); err != nil {
+		return err
 	}
 	hash, _, err := ownerReviewEffectHash(p.Effect)
 	if err != nil {
@@ -62,8 +65,12 @@ func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
 }
 
 func canonicalOwnerReviewEffect(effect *memory.ReviewEffect) any {
+	domain := "evie-owner-review-effect-v1"
+	if effect != nil && effect.Version == "owner-review-effect-v2" {
+		domain = "evie-owner-review-effect-v2"
+	}
 	return struct {
 		Domain string               `json:"domain"`
 		Effect *memory.ReviewEffect `json:"effect"`
-	}{"evie-owner-review-effect-v1", effect}
+	}{domain, effect}
 }

@@ -422,6 +422,9 @@ func compilerAcceptedContext(ctx context.Context, conn *sql.Conn, owner memory.S
 			break
 		}
 	}
+	if err := compilerIdentityContext(ctx, conn, request); err != nil {
+		return err
+	}
 	data, _ := json.Marshal(struct {
 		Entities   []memory.SemanticEntity
 		Predicates []memory.SemanticPredicate

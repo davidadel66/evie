@@ -62,9 +62,18 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
 	if CompilerHash([]byte(g.Template)) != g.TemplateSHA256 {
 		return "", nil, errors.New("template digest mismatch")
 	}
-	for _, policy := range []string{g.EvidencePolicy, g.SecretPolicy, g.ClosurePolicy, g.WindowPolicy, g.PredicatePolicy, g.EntityPolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy} {
+	for _, policy := range []string{g.EvidencePolicy, g.SecretPolicy, g.ClosurePolicy, g.WindowPolicy} {
 		if policy != CompilerPolicyVersion {
 			return "", nil, errors.New("unsupported compiler policy")
+		}
+	}
+	identityPolicy := g.EntityPolicy
+	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 {
+		return "", nil, errors.New("unsupported compiler identity policy")
+	}
+	for _, policy := range []string{g.PredicatePolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy} {
+		if policy != identityPolicy {
+			return "", nil, errors.New("inconsistent compiler interpretation policy")
 		}
 	}
 	if !json.Valid(g.Schema) || bytes.Equal(bytes.TrimSpace(g.Schema), []byte("null")) || len(g.Schema) == 0 {

@@ -38,6 +38,9 @@ func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 			return err
 		}
 		p = memory.ReviewPreview{Version: "owner-review-preview-v1", ID: string(id), OwnerID: memory.LocalOwnerID, AuthenticationBinding: a.binding, AuthorizationRevision: a.revision, ScopeKey: a.scope, JobID: candidate.JobID, GenerationID: candidates[0].GenerationID, Action: action, Candidates: candidates}
+		if candidate.Candidate.Proposal.Identity != nil {
+			p.Version = "owner-review-preview-v2"
+		}
 		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
 			return err
 		}
@@ -94,9 +97,6 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		if len(c.Support) == 0 {
 			return nil, ErrReviewInvalidSource
 		}
-		if err := validateClaimObject(c.Proposal.Proposition.Object); err != nil {
-			return nil, err
-		}
 		time, err := normalizeValidTime(c.Proposal.ValidTime)
 		if err != nil {
 			return nil, err
@@ -109,19 +109,32 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			return nil, errors.New("invalid candidate polarity")
 		}
 		item := memory.ReviewClaimEffect{Candidate: candidate.Ref, Context: c.Context, TemporalQualification: c.Proposal.TemporalQualification, Sources: []memory.SemanticSource{}, Conflicts: []memory.ClaimConflictWarning{}}
-		item.Subject, err = reviewEntity(ctx, q, keys, prop.SubjectEntityID)
+		prop, err = prepareReviewIdentityEffects(ctx, q, a, candidate, effect, &item)
 		if err != nil {
 			return nil, err
 		}
-		if err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, prop.PredicateID).Scan(&item.Predicate.ID, &item.Predicate.Token, &item.Predicate.Version, &item.Predicate.Label, &item.Predicate.ObjectConstraint, &item.Predicate.Cardinality); err != nil {
-			return nil, errors.New("needs_choice: Predicate")
+		if err = validateClaimObject(prop.Object); err != nil {
+			return nil, err
 		}
-		if prop.Object.EntityID != "" {
-			entity, err := reviewEntity(ctx, q, keys, prop.Object.EntityID)
+		if item.Subject.ID == "" {
+			item.Subject, err = reviewEntity(ctx, q, keys, prop.SubjectEntityID)
 			if err != nil {
 				return nil, err
 			}
-			item.ObjectEntity = &entity
+		}
+		if item.Predicate.ID == "" {
+			if err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, prop.PredicateID).Scan(&item.Predicate.ID, &item.Predicate.Token, &item.Predicate.Version, &item.Predicate.Label, &item.Predicate.ObjectConstraint, &item.Predicate.Cardinality); err != nil {
+				return nil, errors.New("needs_choice: Predicate")
+			}
+		}
+		if prop.Object.EntityID != "" {
+			if item.ObjectEntity == nil {
+				entity, err := reviewEntity(ctx, q, keys, prop.Object.EntityID)
+				if err != nil {
+					return nil, err
+				}
+				item.ObjectEntity = &entity
+			}
 			if item.Predicate.ObjectConstraint != memory.ConstraintEntity {
 				return nil, errors.New("Predicate object constraint changed")
 			}
@@ -203,6 +216,8 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 	return effect, nil
 }
 
+var errReviewInactiveEntity = errors.New("inactive Entity")
+
 func reviewEntity(ctx context.Context, q reviewQuery, keys []string, id memory.SemanticID) (memory.SemanticEntity, error) {
 	entity, err := loadSemanticEntityForInspection(ctx, q, id)
 	if err != nil {
@@ -219,11 +234,11 @@ func reviewEntity(ctx context.Context, q reviewQuery, keys []string, id memory.S
 	}
 	var lifecycle string
 	if err = q.QueryRowContext(ctx, `SELECT lifecycle FROM semantic_entities WHERE entity_id=?`, id).Scan(&lifecycle); err != nil || lifecycle != "active" {
-		return entity, errors.New("inactive Entity")
+		return entity, errReviewInactiveEntity
 	}
 	state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectEntity, id)
 	if err == nil && state.State != memory.SemanticStateActive {
-		return entity, errors.New("inactive Entity")
+		return entity, errReviewInactiveEntity
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return entity, err

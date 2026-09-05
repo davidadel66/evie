@@ -10,12 +10,13 @@ type CandidateRef struct {
 }
 
 type OwnerCandidate struct {
-	Ref          CandidateRef    `json:"ref"`
-	JobID        string          `json:"job_id"`
-	GenerationID string          `json:"generation_id"`
-	Destination  string          `json:"destination"`
-	Candidate    MemoryCandidate `json:"candidate"`
-	Redacted     bool            `json:"redacted"`
+	Identity     *ReviewIdentityRevision `json:"identity,omitempty"`
+	Ref          CandidateRef            `json:"ref"`
+	JobID        string                  `json:"job_id"`
+	GenerationID string                  `json:"generation_id"`
+	Destination  string                  `json:"destination"`
+	Candidate    MemoryCandidate         `json:"candidate"`
+	Redacted     bool                    `json:"redacted"`
 }
 
 type OwnerCandidatePage struct {
@@ -44,12 +45,13 @@ type ReviewClaimEffect struct {
 }
 
 type ReviewEffect struct {
-	Version        string              `json:"version"`
-	OperationID    SemanticID          `json:"operation_id"`
-	Scope          SemanticScope       `json:"scope"`
-	Scopes         []SemanticScope     `json:"scopes"`
-	PriorRevisions []ScopeRevision     `json:"prior_revisions"`
-	Claims         []ReviewClaimEffect `json:"claims"`
+	Identity       *ReviewIdentityEffect `json:"identity,omitempty"`
+	Version        string                `json:"version"`
+	OperationID    SemanticID            `json:"operation_id"`
+	Scope          SemanticScope         `json:"scope"`
+	Scopes         []SemanticScope       `json:"scopes"`
+	PriorRevisions []ScopeRevision       `json:"prior_revisions"`
+	Claims         []ReviewClaimEffect   `json:"claims"`
 }
 
 // ReviewPreview contains only one complete atomic group in the first review

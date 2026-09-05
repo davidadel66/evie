@@ -67,6 +67,9 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
 		out.Candidate = memory.MemoryCandidate{ID: id, ReviewState: state, ReviewRevision: out.Ref.ReviewRevision, EquivalentTo: equivalent}
 		out.Redacted = true
 	}
+	if err := loadReviewIdentityRevision(ctx, q, &out); err != nil {
+		return out, err
+	}
 	canonicalizeReviewCandidate(&out)
 	return out, nil
 }
@@ -178,6 +181,9 @@ func validateReviewCandidateSeal(ctx context.Context, q reviewQuery, item memory
 	}
 	generationID, canonical, err := memory.CompilerGenerationIdentity(generation)
 	if err != nil || generationID != item.GenerationID || string(canonical) != string(manifest) {
+		return ErrReviewInvalidSource
+	}
+	if request.IdentityPolicy != "" && generation.EntityPolicy != request.IdentityPolicy || request.IdentityPolicy == "" && generation.EntityPolicy != memory.CompilerPolicyVersion {
 		return ErrReviewInvalidSource
 	}
 	if item.Ref.ID != memory.CompilerHash([]byte(fmt.Sprintf("%s:%s:%d", item.JobID, groupHash, ordinal))) {

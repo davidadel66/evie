@@ -81,6 +81,8 @@ type CompilerWindow struct {
 }
 
 type CompilerRequest struct {
+	IdentityPolicy string          `json:"identity_policy,omitempty"`
+	Aliases        []SemanticAlias `json:"aliases,omitempty"`
 	// AttemptID identifies one dispatch; it is excluded from the sealed request.
 	AttemptID              string              `json:"-"`
 	AcceptedContextOmitted bool                `json:"accepted_context_omitted"`
@@ -96,11 +98,12 @@ type CompilerRequest struct {
 // ExtractorCandidate is untrusted model output. Scope, authority, projected
 // evidence and review state are deliberately absent: the Kernel binds them.
 type ExtractorCandidate struct {
-	Proposition           ClaimProposition  `json:"proposition"`
-	ValidTime             ValidTime         `json:"valid_time"`
-	TemporalQualification string            `json:"temporal_qualification"`
-	Support               []EvidenceLocator `json:"support"`
-	Context               []EvidenceLocator `json:"context"`
+	Identity              *CandidateIdentityProposal `json:"identity,omitempty"`
+	Proposition           ClaimProposition           `json:"proposition"`
+	ValidTime             ValidTime                  `json:"valid_time"`
+	TemporalQualification string                     `json:"temporal_qualification"`
+	Support               []EvidenceLocator          `json:"support"`
+	Context               []EvidenceLocator          `json:"context"`
 }
 
 type CompilerResponse struct {

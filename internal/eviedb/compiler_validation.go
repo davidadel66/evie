@@ -127,14 +127,6 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 	for _, source := range request.Window.Sources {
 		offered[source.Locator.EventID] = source
 	}
-	entities := map[memory.SemanticID]bool{}
-	for _, entity := range request.Entities {
-		entities[entity.ID] = true
-	}
-	predicates := map[memory.SemanticID]memory.SemanticPredicate{}
-	for _, predicate := range request.Predicates {
-		predicates[predicate.ID] = predicate
-	}
 	candidates := make([]memory.MemoryCandidate, 0, len(response.Candidates))
 	for index, proposal := range response.Candidates {
 		for _, key := range []string{"proposition", "valid_time", "temporal_qualification", "support", "context"} {
@@ -153,31 +145,8 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 		if _, ok := timeShape["to"]; !ok {
 			return nil, errors.New("missing valid time to")
 		}
-		if !entities[proposal.Proposition.SubjectEntityID] {
-			return nil, fmt.Errorf("%w: unknown subject identity", ErrCompilerTerminalOutput)
-		}
-		predicate, ok := predicates[proposal.Proposition.PredicateID]
-		if !ok {
-			return nil, fmt.Errorf("%w: unreviewed Predicate", ErrCompilerTerminalOutput)
-		}
-		object := proposal.Proposition.Object
-		if (object.EntityID == "") == (object.Literal == nil) {
-			return nil, errors.New("object must have exactly one typed value")
-		}
-		if object.EntityID != "" {
-			if !entities[object.EntityID] || predicate.ObjectConstraint != memory.ConstraintEntity {
-				return nil, fmt.Errorf("%w: invalid object identity or Predicate constraint", ErrCompilerTerminalOutput)
-			}
-		} else {
-			if err := validateLiteral(*object.Literal); err != nil {
-				return nil, err
-			}
-			if string(predicate.ObjectConstraint) != string(object.Literal.Kind) {
-				return nil, fmt.Errorf("%w: Predicate literal constraint mismatch", ErrCompilerTerminalOutput)
-			}
-			if len(object.Literal.Value) > 8192 || compilerHasSecret(object.Literal.Value) {
-				return nil, fmt.Errorf("%w: invalid candidate text", ErrCompilerTerminalOutput)
-			}
+		if err := validateCompilerProposition(request, proposal); err != nil {
+			return nil, err
 		}
 		if proposal.Proposition.Polarity != memory.PolarityAffirmed && proposal.Proposition.Polarity != memory.PolarityDenied {
 			return nil, errors.New("invalid polarity")
@@ -229,6 +198,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 		}
 		if !latestNew {
 			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)
+		}
+		if err := validateCompilerIdentitySupport(candidate); err != nil {
+			return nil, err
 		}
 		candidates = append(candidates, candidate)
 	}

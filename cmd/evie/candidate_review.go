@@ -20,6 +20,12 @@ type ownerReviewKernel interface {
 	InspectOwnerReviewOperation(context.Context, eviedb.OwnerReviewContext, memory.SemanticID) (memory.OwnerReviewOperation, error)
 }
 
+type ownerIdentityReviewKernel interface {
+	InspectOwnerCandidateIdentityRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewIdentityRevision, error)
+	OwnerCandidateIdentityOptions(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef) (memory.ReviewIdentityOptions, error)
+	ChooseOwnerCandidateIdentity(context.Context, eviedb.OwnerReviewContext, memory.ReviewIdentityDecision) (memory.OwnerCandidate, error)
+}
+
 // Every invocation is a trusted local owner command selecting one exact scope.
 // A resolve accepts only immutable preview identity, never replacement effects.
 func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer, kernel ownerReviewKernel) (bool, error) {
@@ -27,7 +33,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		return false, nil
 	}
 	if len(args) < 2 {
-		return true, errors.New("usage: memory-review inbox|inspect|prepare|resolve|operation --scope SCOPE")
+		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|prepare|resolve|operation --scope SCOPE")
 	}
 	command := args[1]
 	flags := flag.NewFlagSet("memory-review "+command, flag.ContinueOnError)
@@ -42,6 +48,8 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 	delivery := flags.String("delivery", "", "unique idem:v1 UUID delivery key")
 	reason := flags.String("reason", "", "optional owner reason")
 	limit := flags.Int("limit", 0, "inbox page size, default50 maximum100")
+	choices := flags.String("choices", "", "exact identity choices JSON from reviewed alternatives")
+	options := flags.String("options", "", "reviewed alternatives SHA256")
 	cursor := flags.String("cursor", "", "revision-bound inbox cursor")
 	if err := flags.Parse(args[2:]); err != nil {
 		return true, err
@@ -50,11 +58,14 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 		return true, errors.New("review requires explicit --scope and no positional arguments")
 	}
 	allowed := map[string]map[string]bool{
-		"inbox":     {"scope": true, "limit": true, "cursor": true},
-		"inspect":   {"scope": true, "id": true},
-		"operation": {"scope": true, "id": true},
-		"prepare":   {"scope": true, "id": true, "revision": true, "interpretation": true, "action": true},
-		"resolve":   {"scope": true, "preview": true, "digest": true, "delivery": true, "action": true, "reason": true},
+		"inbox":             {"scope": true, "limit": true, "cursor": true},
+		"inspect":           {"scope": true, "id": true},
+		"operation":         {"scope": true, "id": true},
+		"identity-revision": {"scope": true, "id": true, "interpretation": true},
+		"alternatives":      {"scope": true, "id": true, "revision": true, "interpretation": true},
+		"choose":            {"scope": true, "id": true, "revision": true, "interpretation": true, "options": true, "choices": true},
+		"prepare":           {"scope": true, "id": true, "revision": true, "interpretation": true, "action": true},
+		"resolve":           {"scope": true, "preview": true, "digest": true, "delivery": true, "action": true, "reason": true},
 	}
 	accepts, ok := allowed[command]
 	if !ok {
@@ -69,7 +80,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 	if invalid {
 		return true, errors.New("flag is not allowed for this review command")
 	}
-	if (command == "inspect" || command == "operation") && *id == "" || command == "prepare" && *id == "" || command == "resolve" && (*preview == "" || *digest == "" || *delivery == "") {
+	if (command == "inspect" || command == "operation" || command == "alternatives" || command == "choose" || command == "identity-revision") && *id == "" || command == "prepare" && *id == "" || command == "resolve" && (*preview == "" || *digest == "" || *delivery == "") {
 		return true, errors.New("review command is missing an exact identity")
 	}
 	if (command == "prepare" || command == "resolve") && *action != "accept" && *action != "reject" {
@@ -81,6 +92,26 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
 	}
 	var result any
 	switch command {
+	case "alternatives", "choose", "identity-revision":
+		identityKernel, ok := kernel.(ownerIdentityReviewKernel)
+		if !ok {
+			return true, errors.New("identity review unavailable")
+		}
+		ref := memory.CandidateRef{ID: *id, ReviewRevision: *revision, InterpretationRevision: *interpretation}
+		if command == "identity-revision" {
+			result, err = identityKernel.InspectOwnerCandidateIdentityRevision(ctx, authority, *id, *interpretation)
+		} else if command == "alternatives" {
+			result, err = identityKernel.OwnerCandidateIdentityOptions(ctx, authority, ref)
+		} else {
+			var selected memory.ReviewIdentityChoices
+			if *options == "" {
+				return true, errors.New("choose requires reviewed --options digest")
+			}
+			if err := memory.DecodeCompilerJSON([]byte(*choices), &selected); err != nil {
+				return true, err
+			}
+			result, err = identityKernel.ChooseOwnerCandidateIdentity(ctx, authority, memory.ReviewIdentityDecision{Candidate: ref, OptionsSHA256: *options, Choices: selected})
+		}
 	case "inbox":
 		result, err = kernel.ListOwnerCandidates(ctx, authority, memory.OwnerCandidateQuery{Limit: *limit, Cursor: *cursor})
 	case "inspect":

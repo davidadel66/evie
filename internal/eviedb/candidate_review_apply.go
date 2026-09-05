@@ -205,7 +205,7 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
 	result = memory.OwnerReviewOperationResult{OperationID: op.OperationID, ClaimIDs: []memory.SemanticID{}, SourceLinkIDs: []memory.SemanticID{}, TransactionTime: now, ResultingRevisions: []memory.ScopeRevision{}}
 	for _, scope := range effect.Scopes {
 		revision := scope.Revision
-		if scope.Key == effect.Scope.Key {
+		if scope.Key == effect.Scope.Key || scope.Key == "global" && reviewWritesGlobal(effect) {
 			revision++
 		}
 		result.ResultingRevisions = append(result.ResultingRevisions, memory.ScopeRevision{ScopeKey: scope.Key, Revision: revision})
@@ -225,6 +225,9 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
 		return result, err
 	}
 	if err = recordAcceptedSemanticOperation(ctx, writer, acceptedSemanticOperation{SchemaVersion: 6, OperationID: op.OperationID, Kind: op.Kind, IdempotencyKey: op.IdempotencyKey, Actor: op.Actor, SessionID: op.SessionID, TargetScopeID: effect.Scope.ID, SourceEventID: op.SourceEventID, ProposalHash: proposalHash, EffectHash: effectHash, ProposalJSON: proposalJSON, PreparedJSON: compilerJSON(op), ResultJSON: compilerJSON(result), TransactionTime: now, ResultRevisions: result.ResultingRevisions, ScopesByKey: byKey}); err != nil {
+		return result, err
+	}
+	if err = applyReviewIdentityEffects(ctx, conn, effect, byKey, now); err != nil {
 		return result, err
 	}
 	for _, item := range effect.Claims {
@@ -249,13 +252,18 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
 			}
 		}
 	}
-	updated, err := conn.ExecContext(ctx, `UPDATE semantic_scopes SET revision=revision+1 WHERE scope_id=? AND revision=?`, effect.Scope.ID, effect.Scope.Revision)
-	if err != nil {
-		return result, err
-	}
-	count, err := updated.RowsAffected()
-	if err != nil || count != 1 {
-		return result, ErrReviewStale
+	for _, scope := range effect.Scopes {
+		if scope.Key != effect.Scope.Key && !(scope.Key == "global" && reviewWritesGlobal(effect)) {
+			continue
+		}
+		updated, err := conn.ExecContext(ctx, `UPDATE semantic_scopes SET revision=revision+1 WHERE scope_id=? AND revision=?`, scope.ID, scope.Revision)
+		if err != nil {
+			return result, err
+		}
+		count, err := updated.RowsAffected()
+		if err != nil || count != 1 {
+			return result, ErrReviewStale
+		}
 	}
 	return result, nil
 }
@@ -270,20 +278,35 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 	for _, scope := range effect.Scopes {
 		keys = append(keys, scope.Key)
 	}
-	entity, err := reviewEntity(ctx, q, keys, item.Subject.ID)
-	if err != nil || entity != item.Subject {
-		return ErrReviewStale
-	}
-	if item.ObjectEntity != nil {
-		entity, err = reviewEntity(ctx, q, keys, item.ObjectEntity.ID)
-		if err != nil || entity != *item.ObjectEntity {
+	var err error
+	for _, expected := range []*memory.SemanticEntity{&item.Subject, item.ObjectEntity} {
+		if expected == nil {
+			continue
+		}
+		if expected.Create {
+			if err = validateNewReviewEntity(ctx, q, effect, *expected); err != nil {
+				return err
+			}
+			continue
+		}
+		entity, err := reviewEntity(ctx, q, keys, expected.ID)
+		if err != nil || entity != *expected {
 			return ErrReviewStale
 		}
 	}
-	var predicate memory.SemanticPredicate
-	err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, item.Predicate.ID).Scan(&predicate.ID, &predicate.Token, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
-	if err != nil || predicate != item.Predicate {
-		return ErrReviewStale
+	if item.Predicate.Create {
+		if effect.Identity == nil {
+			return errors.New("unreviewed Predicate creation")
+		}
+		if err = validateReviewNewPredicate(ctx, q, item.Predicate); err != nil {
+			return err
+		}
+	} else {
+		var predicate memory.SemanticPredicate
+		err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, item.Predicate.ID).Scan(&predicate.ID, &predicate.Token, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
+		if err != nil || predicate != item.Predicate {
+			return ErrReviewStale
+		}
 	}
 	if !item.Create {
 		claim, err := loadSemanticClaim(ctx, q, item.Claim.ID)
@@ -400,11 +423,15 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
 	}
 	for i, item := range effect.Claims {
 		original := p.Candidates[i]
-		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
+		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
 			return errors.New("invalid recorded candidate identity")
 		}
 		proposal := original.Candidate.Proposal
-		if proposal.Proposition.SubjectEntityID != item.Claim.SubjectEntityID || proposal.Proposition.PredicateID != item.Predicate.ID || proposal.Proposition.Polarity != item.Claim.Polarity || string(compilerJSON(proposal.Proposition.Object)) != string(compilerJSON(item.Claim.Object)) || !validTimesEqual(proposal.ValidTime, item.Claim.ValidTime) || proposal.TemporalQualification != item.TemporalQualification || string(compilerJSON(original.Candidate.Context)) != string(compilerJSON(item.Context)) {
+		resolved, err := reviewResolvedProposition(p, i)
+		if err != nil {
+			return err
+		}
+		if resolved.SubjectEntityID != item.Claim.SubjectEntityID || resolved.PredicateID != item.Predicate.ID || resolved.Polarity != item.Claim.Polarity || string(compilerJSON(resolved.Object)) != string(compilerJSON(item.Claim.Object)) || !validTimesEqual(proposal.ValidTime, item.Claim.ValidTime) || proposal.TemporalQualification != item.TemporalQualification || string(compilerJSON(original.Candidate.Context)) != string(compilerJSON(item.Context)) {
 			return errors.New("review effect differs from reviewed meaning")
 		}
 		for _, id := range []memory.SemanticID{item.Claim.ID, item.Subject.ID, item.Predicate.ID, item.Claim.CreatedOperationID} {
