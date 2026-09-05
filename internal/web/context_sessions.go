@@ -65,6 +65,15 @@ func (s *Server) handleContextSessionList(w http.ResponseWriter, r *http.Request
 		managementJSONError(w, http.StatusInternalServerError, "context_sessions_unavailable", "Context Scope choices are unavailable")
 		return
 	}
+	if snapshot.Workspaces == nil {
+		snapshot.Workspaces = []memory.Workspace{}
+	}
+	if snapshot.Projects == nil {
+		snapshot.Projects = []memory.Project{}
+	}
+	if snapshot.Sessions == nil {
+		snapshot.Sessions = []memory.SessionListing{}
+	}
 	s.sessionMu.RLock()
 	active := s.activeSession
 	s.sessionMu.RUnlock()
