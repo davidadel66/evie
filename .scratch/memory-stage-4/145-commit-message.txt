@@ -1,0 +1,13 @@
+feat(memory): review simple candidates in the web inbox (#145)
+
+Expose explicit bounded scope navigation and guarded HTTP review after source
+conversations close. Show exact claims, support, context and durable accepted
+provenance separately from normal memory; bind accept/reject to the displayed
+revision and preview.
+
+Preserve uncertain decision delivery across reload and retain the owner's
+reason during stale refresh. Reconcile legacy inbox scopes in bounded chunks.
+
+Validation: isolated ./scripts/verify-change.sh, all isolated frontend tests,
+focused race recovery test, independent Standards/Spec review, and scripted
+real-browser acceptance/rejection with closed-session scope and reload.

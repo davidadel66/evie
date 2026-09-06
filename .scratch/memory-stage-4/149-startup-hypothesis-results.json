@@ -1,0 +1,2164 @@
+{
+  "rows": [
+    {
+      "trial": 0,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 4,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 4,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 4,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 34,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "precreated-empty",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "precreated-empty",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "omit-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "omit-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "delete",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "preinitialized-wal",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "variant": "preinitialized-wal",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,494 @@
+{
+  "version": "memory-stage-4-browser-v1",
+  "status": "passed",
+  "synthetic": true,
+  "owner_pilot": false,
+  "cases": [
+    {
+      "name": "global",
+      "scope": "global",
+      "candidate_id": "3a63ca075d4d73672d32b2fbfa56125d599594b0d48acb964dd24f6d157531fc",
+      "preview_sha256": "sha256:74f2b6255895cc50156e44b91e7663864654a34cb392d9b8ef31be9b7171e324",
+      "effect_sha256": "sha256:18d8a0418cc2cb438107bf1ab669cb935b2300982e98b85e2a2d57ce4f5d349d",
+      "operation_id": "3595a760-ca03-497e-9b75-33ed2d40ef8f",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "workspace-1",
+      "scope": "workspace:97d97018-5f39-4790-9b09-a572238e975c",
+      "candidate_id": "798b35c1d590a17e4ef04567b49fae62d8665beac386a6b00d2db072e5750ca9",
+      "preview_sha256": "sha256:d9d4f26d010a799f369b8ef2f38fe90ad81e280ff7f0ffaba4f39f88ab2ff34c",
+      "effect_sha256": "sha256:f20a8b1bbf6a3642ce4dc5dfed65b03c16d6120b80bd093827df544221270ea5",
+      "operation_id": "c33753f8-39e9-4c48-84e4-995693548be8",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "workspace-2",
+      "scope": "workspace:8d42e7aa-6ec6-4b84-80e6-fd929e32eb9c",
+      "candidate_id": "6325f7f99a184bb69b7b1b58c75fb5ae3dc1a1e93c8cb12f331cc9381747c6e3",
+      "preview_sha256": "sha256:ee3d6052eb7f7f3a5486d37b1a1e18e8d112360199b6f76914c1b0dc80507b51",
+      "effect_sha256": "sha256:e76b782a6a63d4642e636930ef6107175cfb49f807b48f7b6ccacae51d9db3e1",
+      "operation_id": "64532e1c-cc4c-4113-9acc-3c1201b7e508",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "project-1",
+      "scope": "project:3fad6f45-48f6-4cf9-906f-47be4f865ec0",
+      "candidate_id": "2f66990325b0359fab619cd660ac912f10231531d8b04058761d105ee99afbdb",
+      "preview_sha256": "sha256:b1b6614da61dbfbe031afbadc0963fa68e442157675a811b1544fc927d275ed5",
+      "effect_sha256": "sha256:89812b974ebb3c974d1119c50fc0e8ff7970227edb2385fa0a86f283aad7688c",
+      "operation_id": "897d83a1-a60a-4e6c-a28d-a60b56801fa9",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "project-2",
+      "scope": "project:c316c97b-2843-4da5-8eef-d6d3eb30cd27",
+      "candidate_id": "976c5c2ff359ef550d4072e9b3d902c69f79cab924b75a72e82bcaf2e5146aa7",
+      "preview_sha256": "sha256:8fc0b32f937db4a8beb85b18fabb06aa4cb496fed6e3342c4dabbd86a8fdaea5",
+      "effect_sha256": "sha256:e0f3c061b68808e61bdcda6907f89ff37741e6fadfcebdc0700572f0fe356648",
+      "operation_id": "64035508-6670-4a24-b52a-68fbb9ebf89d",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "session-1",
+      "scope": "session:5f1215cf-5eb9-4899-8f7c-ff216b6e25ca",
+      "candidate_id": "dabc5650a9a9a0fc1ac5b1d2e845fc52a74802928ecc815c4433ec5fc7e9a8f2",
+      "preview_sha256": "sha256:e0778c2a06f37d0697541e39e09cbc4007179a34549bad3cebfabfcaf181c835",
+      "effect_sha256": "sha256:c253565c7b5cc5a7f85474531f2a512b0a1118679c1ed06e4742b541effac6ea",
+      "operation_id": "035f2e84-848f-4bb9-9eb9-63c31050d154",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    },
+    {
+      "name": "session-2",
+      "scope": "session:36a1a434-562f-478e-b34a-0f45f33cf744",
+      "candidate_id": "8cb57786a0b830ddabf8bc205c059d7f5d2288286cd4db0c9dfcbef34b3b9244",
+      "preview_sha256": "sha256:6e8241c6e6602f70ee9f00ca476bbbb9137d1c4f4738fd89994dfa1a948f162c",
+      "effect_sha256": "sha256:1225cb6d84329f6e3417220ae44c13338c6e10aa503b37a66b6e49b43872fa85",
+      "operation_id": "62659723-1252-4754-afa0-09be04faa386",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": true,
+        "accepted_graph": true
+      }
+    }
+  ],
+  "responses": [
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "inspect",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "provenance": {
+    "web_interactions": "Real Chrome, React and guarded HTTP: exact closed-source review, evidence, preview, acceptance, recorded operation and reload for all seven scopes. The accepted global graph and provenance are also browsed.",
+    "store_checks": "After browser completion, actual browser operation IDs and hashes bind owner operation inspection in all seven scopes. Active observers read global, Workspace and project Claims and Source Links through the public Kernel. Exact closed-session destinations use temporary projection assertions against accepted operations. Canonical replay verifies accepted state without model calls. All sources stay closed and private acceptance never enters global reads. These are not graphical reads in every scope."
+  },
+  "source_sha256": "9fc571ba419f545d07abd2d96c477bed6e90c1669ee3ee167918617f33034d34",
+  "driver_sha256": "fe13384d59d461dfecc2e5c14f0fc94eec9488341ff8c6c1009f784bfd54a389",
+  "browser_version": "142.0.7444.176",
+  "unaccepted_global_isolation": true,
+  "server_exit": {
+    "code": 0,
+    "signal": null
+  },
+  "kernel_proof": {
+    "canonical_replay": true,
+    "cases": [
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:18d8a0418cc2cb438107bf1ab669cb935b2300982e98b85e2a2d57ce4f5d349d",
+        "name": "global",
+        "operation_id": "3595a760-ca03-497e-9b75-33ed2d40ef8f",
+        "preview_sha256": "sha256:74f2b6255895cc50156e44b91e7663864654a34cb392d9b8ef31be9b7171e324",
+        "scope": "global"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:f20a8b1bbf6a3642ce4dc5dfed65b03c16d6120b80bd093827df544221270ea5",
+        "name": "workspace-1",
+        "operation_id": "c33753f8-39e9-4c48-84e4-995693548be8",
+        "preview_sha256": "sha256:d9d4f26d010a799f369b8ef2f38fe90ad81e280ff7f0ffaba4f39f88ab2ff34c",
+        "scope": "workspace:97d97018-5f39-4790-9b09-a572238e975c"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:e76b782a6a63d4642e636930ef6107175cfb49f807b48f7b6ccacae51d9db3e1",
+        "name": "workspace-2",
+        "operation_id": "64532e1c-cc4c-4113-9acc-3c1201b7e508",
+        "preview_sha256": "sha256:ee3d6052eb7f7f3a5486d37b1a1e18e8d112360199b6f76914c1b0dc80507b51",
+        "scope": "workspace:8d42e7aa-6ec6-4b84-80e6-fd929e32eb9c"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:89812b974ebb3c974d1119c50fc0e8ff7970227edb2385fa0a86f283aad7688c",
+        "name": "project-1",
+        "operation_id": "897d83a1-a60a-4e6c-a28d-a60b56801fa9",
+        "preview_sha256": "sha256:b1b6614da61dbfbe031afbadc0963fa68e442157675a811b1544fc927d275ed5",
+        "scope": "project:3fad6f45-48f6-4cf9-906f-47be4f865ec0"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:e0f3c061b68808e61bdcda6907f89ff37741e6fadfcebdc0700572f0fe356648",
+        "name": "project-2",
+        "operation_id": "64035508-6670-4a24-b52a-68fbb9ebf89d",
+        "preview_sha256": "sha256:8fc0b32f937db4a8beb85b18fabb06aa4cb496fed6e3342c4dabbd86a8fdaea5",
+        "scope": "project:c316c97b-2843-4da5-8eef-d6d3eb30cd27"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:c253565c7b5cc5a7f85474531f2a512b0a1118679c1ed06e4742b541effac6ea",
+        "name": "session-1",
+        "operation_id": "035f2e84-848f-4bb9-9eb9-63c31050d154",
+        "preview_sha256": "sha256:e0778c2a06f37d0697541e39e09cbc4007179a34549bad3cebfabfcaf181c835",
+        "scope": "session:5f1215cf-5eb9-4899-8f7c-ff216b6e25ca"
+      },
+      {
+        "accepted_graph": true,
+        "effect_sha256": "sha256:1225cb6d84329f6e3417220ae44c13338c6e10aa503b37a66b6e49b43872fa85",
+        "name": "session-2",
+        "operation_id": "62659723-1252-4754-afa0-09be04faa386",
+        "preview_sha256": "sha256:6e8241c6e6602f70ee9f00ca476bbbb9137d1c4f4738fd89994dfa1a948f162c",
+        "scope": "session:36a1a434-562f-478e-b34a-0f45f33cf744"
+      }
+    ],
+    "closed_sources": 7,
+    "global_claims": 2,
+    "replay_model_calls": 0,
+    "status": "passed",
+    "version": "memory-stage-4-browser-kernel-v1"
+  },
+  "fixture_directory_removed": true,
+  "completed_at": "2026-09-05T14:08:49.673Z"
+}

@@ -1,0 +1,40 @@
+direction: down
+
+classes: {
+  global: {
+    style: { fill: "#e8f1f8"; stroke: "#356b91"; font-color: "#17324d"; border-radius: 8 }
+  }
+  context: {
+    style: { fill: "#edf5ef"; stroke: "#4e8467"; font-color: "#204c38"; border-radius: 8 }
+  }
+  session: {
+    style: { fill: "#f7f0df"; stroke: "#a4843c"; font-color: "#624d1d"; border-radius: 8 }
+  }
+}
+
+read_rules: {
+  label: "EXACT STORAGE-ENFORCED READ SETS"
+  grid-columns: 3
+
+  global_session: "GLOBAL SESSION\n\nReads: session:<id> + global\nDefault write: global" { class: global }
+  workspace_session: "WORKSPACE SESSION\n\nReads: session:<id> + workspace:<id> + global\nDefault write: its Workspace" { class: context }
+  project_session: "PROJECT SESSION\n\nReads: session:<id> + project:<id> + global\nDefault write: its project" { class: context }
+}
+
+isolation: "ALWAYS EXCLUDED\nOther sessions - sibling Workspaces - sibling projects - mixed Workspace/project scope\nModel text cannot select, combine, or widen scope." {
+  class: session
+}
+
+promotion: {
+  label: "EXPLICIT PROMOTION - CONTROLLED PUBLICATION"
+  direction: right
+  narrower: "NARROWER ACCEPTED OBJECTS\nRemain unchanged and independently governed" { class: context }
+  proposal: "PROMOTION PROPOSAL\nValidates source + destination revisions\nand eligible provenance" { class: session }
+  broader: "BROADER ACCEPTED OBJECTS\nCreate or reuse broader entities, claim, and sources\nwith stable identity mappings" { class: global }
+  narrower -> proposal: "Owner selects one exact claim"
+  proposal -> broader: "One approved atomic operation"
+  broader -> narrower: "ID-level provenance; source text remains access-controlled" { style.stroke-dash: 4 }
+}
+
+read_rules -> isolation: "scope boundary"
+isolation -> promotion: "only explicit approval may widen reuse"

@@ -1,0 +1,3 @@
+Prove deterministic Stage 4 memory conformance (#149)
+
+Exercise actual foreground, recovery, scoped review, process fencing and canonical replay with source-bound browser and command receipts. Fix typed SQLite connection-startup contention and isolate the query tool for exact storage-boundary checks.

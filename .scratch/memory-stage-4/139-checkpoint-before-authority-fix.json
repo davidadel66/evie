@@ -1,0 +1,30 @@
+{
+  "base": "8c14c7748eff2f594efa29f7a7d1348660dd2554",
+  "tree": "96503100256f09cba28d5c6d122714db041cb402",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/139-checkpoint.index",
+  "files": {
+    "cmd/evie/compiler_history.go": "4fe739c694df00792f77e0bfbc4401fd5398309bc8147a1facd08f6254b73263",
+    "cmd/evie/compiler_history_test.go": "8a77f7ae3a04cbe2db3464632f9a5c45661d50e05a784aa66c4948ee4528d006",
+    "cmd/evie/docs/research/memory-stage-4-bounded-history.md": "0299db9f46418901f89ee613204485e05915d464f512b519aba7157e614a693a",
+    "internal/eviedb/compiler_ancestry.go": "db73a3cebd8e8c5e6d053b8f998cb2dc32f6d74e97368f17b5a5673e6965a80e",
+    "internal/eviedb/compiler_history.go": "7192daa80250f98914e19040001b9896e109195f50c1ec22f37623945d3256ad",
+    "internal/eviedb/compiler_history_bound_test.go": "ef4c0c9991eb57940708517fd00f73750586aa9f03937823f594a89edad0c3b9",
+    "internal/eviedb/compiler_history_inspection.go": "e39ec4f8eaa59e5fea0c7f379320ff170930b549957f65b94ecf2fa7ab935911",
+    "internal/eviedb/compiler_history_public_test.go": "07f23f8c52c9f724c37e1cfa4d28f275a12f3c59bf2f902b6ee10c4bc4ed1a5d",
+    "internal/eviedb/compiler_history_reconciliation.go": "4dc149ebe4c69cb98b54f67b67d4bcf9d299a83f20325aa674064c60bba1a619",
+    "internal/eviedb/compiler_history_resume.go": "0267309eaa98a3cf74c3c753c5dc0bbac5133c2f65df716002c679ae42fa0796",
+    "internal/eviedb/compiler_history_schema.go": "b02140f0fda53f2f379c5d879d4094750426fd5d53570ba4c59840f8f3910b18",
+    "internal/eviedb/compiler_history_test.go": "9f78e3376404d3d9332b6574a8a0b463312bb95f8a6fd2444efb6ba9ddfa97ec",
+    "internal/eviedb/compiler_reconciliation.go": "cc2b0012a84c66d7430aae35c186c3aa44bbddae9ca28342204e426fbc363a45",
+    "internal/eviedb/compiler_source.go": "bceb7b4ede6c6d35573314d0240a638fef9d84a99a2266b0e0c4d73e72c9d2a7",
+    "internal/eviedb/compiler_work.go": "805f7e053531520d970b65020627e2d1233a3239151b75bdc6546bf587de82c2",
+    "internal/eviedb/compiler_worker.go": "15ca8e7447ec2c6f31ebc1a5df2b6238fac18c6a8a25301b64f822284b72ee03",
+    "internal/memory/compiler_history.go": "f0edb9402fb50d3e2bed682d080a7003aa5ec119d39609aec710a228d4c575ff",
+    "cmd/evie/main.go": "55088e4ef42d9a15e250b3d07e01a9a997c16173c143eb929c86c46629857bf9",
+    "internal/eviedb/db.go": "69980a8f13fd3af1343e609ba0146dc5b57b182e85834df8cc2ba92a2541ae22"
+  },
+  "note": "139 frozen owner and root hook files on final142 tree; excludes143 and preexisting user changes.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-checkpoint-jxb6sqe6",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-139-isolated.log",
+  "verification_exit_code": 0
+}

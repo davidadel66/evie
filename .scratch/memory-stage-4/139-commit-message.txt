@@ -1,0 +1,16 @@
+feat(memory): select bounded historical backfill and inspect coverage (#139)
+
+Persist explicit historical selections with exact event boundaries and bounded
+per-request work. Reuse overlapping same-generation ownership, retain pending
+intervals through queue pressure, and distinguish completed ranges, empty
+results, gaps and history outside selection.
+
+Add cancellable, restartable reconciliation and CLI management. Fence cancelled
+attempts without releasing uncertain capacity or cancelling independently owned
+jobs. Use indexed pending requests and exact active selection references so
+retained completed or cancelled requests do not expand each worker gate scan.
+
+Validation: isolated ./scripts/verify-change.sh, focused SQLite/CLI normal and
+race suites, and independent Standards/Spec reviews. Cases cover overlap,
+multiple scopes/sessions, rollback, gap/frontier, queue pressure, closure,
+reopen, cancellation, priority, source bounds and retained-history query plans.

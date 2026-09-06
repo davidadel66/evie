@@ -1,0 +1,15 @@
+# #148 compiler health browser demonstration
+
+Use the orchestrator's isolated verified ticket tree and a disposable Store. This is an agent conformance demonstration, not David's active-review pilot. No installed model/default or owner decision is required. The actual public SQLite setup is executable in `TestCompilerDiagnosticsHTTPFailedGapLaterSuccessAndCursorScope`; the closed-source setup is `newWebReviewFixture`.
+
+1. Open Memory. Accepted memory must remain the default, with separate Review candidates and Compiler health tabs. Open Compiler health.
+2. Choose one exact memory scope. Session choices show IDs only, including the closed source session; no conversation title or source prose is returned by diagnostics. Choose a session explicitly.
+3. In Jobs and coverage, inspect the failed earlier job alongside the completed later job. Their selected/new completed counts and sequence bounds are separate. Inspect safe reason, due time and recovery for the generation whose local endpoint is unavailable. A known failure before dispatch leaves shared capacity available; uncertain release must remain blocked when the Kernel reports it.
+4. Switch to Selected units and Live selection obligations. Pending/deferred/unmaterialized work must remain visible independently of job completion. Switch to Activations and Historical selection; selection frontiers/scanned cursors must not be called completed coverage.
+5. In Event selection, choose a retained generation explicitly from the metadata-derived choices or enter its exact ID, then Refresh diagnostics. Inspect selected_live, selected_history and outside_selection. Switching generations clears the old page and requires a new request.
+6. In Review backlog, inspect candidate ID, review and interpretation revisions, edit flag, decision timestamps, original job/generation and suppression origin. An unresolved unsuppressed item may show elapsed inbox age. No active review time or accuracy is inferred. No accept, edit or reject action appears in this view.
+7. Inspect Foreground timings. Terminal event commit and response finalization must render as different metrics and timestamps; missing observations remain Unavailable / incomplete. Job attempt timings separately show queue wait, inference, validation/resolution, database completion and publication commit. Candidate freshness is unavailable without the measured terminal boundary.
+8. Use Next diagnostic page, then Refresh diagnostics; refresh returns to the first page, without accumulating prior pages. Empty pages may still have a Next button. Switch scopes or views while a request is delayed; old results must not reappear. No polling occurs.
+9. If a current scope/source denial is returned, previous diagnostic rows, discovered generation choices and session list are cleared. Refresh scopes/sessions after repair.
+
+The controller and static-render tests cover the async and display contracts deterministically. Browser demonstration remains pending with root if the OS/browser cannot be accessed; do not label static rendering as a browser run or an owner pilot.

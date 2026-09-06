@@ -1,0 +1,30 @@
+{
+  "ticket": 148,
+  "contribution": "legacy status",
+  "checks": [
+    {
+      "command": "go test ./internal/eviedb -run '^TestCompiler(StatusProjection|Activation|History|Intervals)' -count=1",
+      "result": "pass 6.163s",
+      "log": "148-legacy-stable-key-focused.log"
+    },
+    {
+      "command": "go test ./internal/eviedb -run '^TestCompilerStatusProjection' -count=1",
+      "result": "pass 1.016s",
+      "log": "148-legacy-final-projection-normal.log"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestCompiler(StatusProjection|Activation|History|Intervals)' -count=1",
+      "result": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t115.592s",
+      "log": "148-legacy-stable-key-race.log"
+    },
+    {
+      "command": "gofmt and git diff --check on contribution files",
+      "result": "pass"
+    },
+    {
+      "command": "exact live/frozen SHA-256 validation",
+      "result": "pass 4 files"
+    }
+  ],
+  "aggregate_gate": "root must run required full verify-change and independent reviews on combined #148 snapshot"
+}

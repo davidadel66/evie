@@ -1,0 +1,255 @@
+{
+  "ticket": 144,
+  "status": "frozen_focused_checks_passed",
+  "baseline_commit": "d61b2e7f29a751113e2eb0d713ad59f73caca740",
+  "originals": ".scratch/memory-stage-4/144-originals",
+  "frozen_files": ".scratch/memory-stage-4/144-frozen-files",
+  "files": [
+    {
+      "path": "cmd/evie/candidate_batch.go",
+      "before_sha256": null,
+      "after_sha256": "d7e7472a6de66a16817829cd3dc8579865e64f6925bd7b1ed44d6cddf9efa9ec",
+      "bytes": 4070
+    },
+    {
+      "path": "cmd/evie/candidate_batch_test.go",
+      "before_sha256": null,
+      "after_sha256": "e7e032090f315f8f2d11b54ed097988cb194f015869dd7869eeac6cfe21d5a0e",
+      "bytes": 21647
+    },
+    {
+      "path": "cmd/evie/candidate_review.go",
+      "before_sha256": "809a022600ac64623bef5ef2b0f39c9059fb48eac73c236186a4594ad1278f42",
+      "after_sha256": "6667cda401df3745101677ac75123a9409694278958de0875101f698a7f39e45",
+      "bytes": 8862
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "before_sha256": "e8c2978675fe2007c440faa247c664601d4de05d3292654b53f9dda8508908b8",
+      "after_sha256": "fe9bea6a087dc34b50d04b297f47ede945a6beeb616dd0b0a7a7e2f4268356e0",
+      "bytes": 23270
+    },
+    {
+      "path": "internal/eviedb/candidate_review_authority.go",
+      "before_sha256": "c745aa4b8404b049a1076e259b122902c2c681763d3285fdff4f31a72049fea0",
+      "after_sha256": "f7afed415aa4399d3430f57fb48c4020c60ede6af41c5bace9a4bd546ec68fa9",
+      "bytes": 4931
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch.go",
+      "before_sha256": null,
+      "after_sha256": "0a5f25dc86000166c7fd1a1f64e30ff089dd8d89fc4b40ef3e8adc5c3ae64ce5",
+      "bytes": 22517
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch_boundary_test.go",
+      "before_sha256": null,
+      "after_sha256": "c5ae5e8270c6a82a4821a203065d618ba0e27e39a4fa011e7ea029c1e98ebc33",
+      "bytes": 13752
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch_corruption_test.go",
+      "before_sha256": null,
+      "after_sha256": "7931810d24b9c1f18d0446b394e8ac887721353889966ca13b7c609deb63b47d",
+      "bytes": 5095
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch_read_error_test.go",
+      "before_sha256": null,
+      "after_sha256": "e55f986d67b075a7bd6cb948cd6c7a90e227b1a88195d81143ec042bb58cb01c",
+      "bytes": 10492
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch_record_bound_test.go",
+      "before_sha256": null,
+      "after_sha256": "a60de4d46100fdeda0aee50c94e9110976f70621995c7e3134eb90e1199d7334",
+      "bytes": 8318
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch_test.go",
+      "before_sha256": null,
+      "after_sha256": "1fd5a42994ab7af29047ffc475ce644569dd0d3b861c6316dfbeaffa33d1b8f5",
+      "bytes": 22001
+    },
+    {
+      "path": "internal/eviedb/candidate_review_compound.go",
+      "before_sha256": null,
+      "after_sha256": "b445cc673dfb776b48aba02dec2cb2b15e3d81f7ab35b95698f1127944926700",
+      "bytes": 28865
+    },
+    {
+      "path": "internal/eviedb/candidate_review_correction_schema.go",
+      "before_sha256": null,
+      "after_sha256": "fa8b1792e966252d13af8fce06fe77f4f6ac804b679ef06cfd6e71ea35961b05",
+      "bytes": 7366
+    },
+    {
+      "path": "internal/eviedb/candidate_review_correction_schema_test.go",
+      "before_sha256": null,
+      "after_sha256": "6a2d2998a3e9d5067f35a803abda797dabca79de2419642674f0f8d9a7584fe3",
+      "bytes": 22180
+    },
+    {
+      "path": "internal/eviedb/candidate_review_edit.go",
+      "before_sha256": null,
+      "after_sha256": "55cacb7bdb3f330b57640402a1bc1b716d5601d506beee30ca349e1ec9370b18",
+      "bytes": 9881
+    },
+    {
+      "path": "internal/eviedb/candidate_review_edit_lineage_test.go",
+      "before_sha256": null,
+      "after_sha256": "32c6c1b027e4290fbe7257dcf0c1d63d2b277d8a82a333e4cb24c5a084476f43",
+      "bytes": 11339
+    },
+    {
+      "path": "internal/eviedb/candidate_review_edit_race_test.go",
+      "before_sha256": null,
+      "after_sha256": "170890121402a67a1a01c5b28e6b55528bf4173f96875c2e023dd5a8fcbbdf20",
+      "bytes": 7651
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "before_sha256": "f33cd87ca57ed93822e4685fcd67f4edf3b4bb7bce1c76e6955e9dea57eb7df5",
+      "after_sha256": "158ab47670d0cf5422b5bd4a92ed2f96fa1a72f27624e6c86dd45fc9351405cd",
+      "bytes": 3827
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history.go",
+      "before_sha256": "998237dc3d36076041ba98b72dd2b323fd5033aa113130509f7caf57399ffb70",
+      "after_sha256": "7ffa169ed8bd21e720d36f58456e327b5968f9d54018efffb80c0885f74be714",
+      "bytes": 6483
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity.go",
+      "before_sha256": "d49f82b9463f8866bd012dd75365e8a63333ecc3c4b627c25d920fab35d8c276",
+      "after_sha256": "7247ae8a26c05316e42765f9504ab7381bf36e751789c87c6ccf3fd809fc6ba6",
+      "bytes": 15479
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "before_sha256": "b75dac66492ed99fc047fcb770c8e955ba9f3ef658550232d513a29940e5adea",
+      "after_sha256": "de3d5e1fe59653c250a23d297a44b68b8b317654a367762f7fb10bb323bfc1cf",
+      "bytes": 12904
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "before_sha256": "e84711086d889c78eee75a84f46a875d39066c35349552aed364f62b800288dd",
+      "after_sha256": "fb121ba7fb7ca082f40b96d2e88cf81fa79147e353e548caec057edf6d806d30",
+      "bytes": 10346
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "before_sha256": "b4b1ba62d7351feca484dd538697beabda6fc96bace43bc6743b61ed78567d98",
+      "after_sha256": "0e6c69bd0da8a57a7bd2db881e7e13d2d34d6f3c459dc4f5951435f2da24bb6e",
+      "bytes": 13187
+    },
+    {
+      "path": "internal/eviedb/candidate_review_replay.go",
+      "before_sha256": "2b54bada10cb3e8dc9dc66bc83d8d38e6c77c6d8a4f2a11a59d3680ed03c2cb1",
+      "after_sha256": "9db3aaae8d80e35aca2f7b6880375c4e628c4b57cbffc852efddb920a853a0a3",
+      "bytes": 2279
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "before_sha256": "4cc3669d294a9b1ec3b6e16f7b19fea790471725e02c2dbf9fb6df9937dd867a",
+      "after_sha256": "4bf3d710f08298ddb531a3b5a94d11d0967cde3c9d81c318038e546bb8189588",
+      "bytes": 5647
+    },
+    {
+      "path": "internal/eviedb/candidate_review_sources.go",
+      "before_sha256": "60658be061ac80711a871c5e823e19849ccd0052e1e3210e1793e060659d3ed4",
+      "after_sha256": "c6f8f65ecd985cc738ffe144c08335f7742da028db14b8c5a7417b6201037ebb",
+      "bytes": 5184
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal.go",
+      "before_sha256": "efaaf6760874d997a9c48b53276d095d07150f10ec650fa79230bf6740b930a7",
+      "after_sha256": "60c593438c038787e85636bd640d02b3f3ff35799fa8013fe64b2beab2f054e3",
+      "bytes": 11147
+    },
+    {
+      "path": "internal/eviedb/semantic.go",
+      "before_sha256": "001b567d0a45218fa7ffabd0c8783131a94872c77f2eaaccceb61af3e45e99b4",
+      "after_sha256": "30799abdd3ddc59ba085863c9e1496cc26b2f8d11925809033387f451f48f27f",
+      "bytes": 84996
+    },
+    {
+      "path": "internal/eviedb/testdata/candidate_review_encoding_v5.json",
+      "before_sha256": null,
+      "after_sha256": "3e20cba0b97d4bec0f72464cc9df87e5655a6c763e105388b582de964afa121c",
+      "bytes": 66569
+    },
+    {
+      "path": "internal/memory/candidate_batch.go",
+      "before_sha256": null,
+      "after_sha256": "51f59eaedd58cd2d6e69f09e44a4a1b16585c8e965791d2dbdafd793f63f1e0b",
+      "bytes": 4927
+    },
+    {
+      "path": "internal/memory/candidate_review.go",
+      "before_sha256": "3664e3d60d2fd06726cccdc8685bd0835f86f22afacdb04a40a06bdbc3de1d07",
+      "after_sha256": "2a3eeb0fd33bec827ed232001fee5b41c9168c770e7aef56e584a9716678b049",
+      "bytes": 5483
+    }
+  ],
+  "contributions_included": [
+    "144-migration-frozen-manifest.json",
+    "144-record-bound-frozen-manifest.json",
+    "144-cli-frozen-manifest.json"
+  ],
+  "root_only_manifest": "144-root-frozen-manifest.json",
+  "checks": {
+    "normal": {
+      "command": "go test -p 1 ./internal/eviedb ./cmd/evie ./internal/memory",
+      "status": "passed",
+      "log": ".scratch/memory-stage-4/144-final-all-normal.log",
+      "exit_code": 0,
+      "results": [
+        "internal/eviedb PASS37.183s",
+        "cmd/evie PASS7.288s",
+        "internal/memory PASScached"
+      ]
+    },
+    "race": {
+      "command": "go test -race -p 1 ./internal/eviedb ./cmd/evie ./internal/memory -run 'OwnerReview|ReviewEncoding|ReviewCorrectionSchema' -count=1",
+      "status": "passed",
+      "log": ".scratch/memory-stage-4/144-final-all-race.log",
+      "exit_code": 0,
+      "results": [
+        "internal/eviedb PASS188.145s",
+        "cmd/evie PASS21.365s",
+        "internal/memory PASS1.180s (no matching focused race tests; full normal suite passed)"
+      ]
+    },
+    "full_verification": {
+      "command": "./scripts/verify-change.sh",
+      "status": "root runs exact isolated integrated frozen tree"
+    },
+    "previous_full_race": {
+      "command": "go test -race -p 1 ./internal/eviedb ./cmd/evie ./internal/memory -run 'OwnerReview|ReviewEncoding|ReviewCorrectionSchema' -count=1",
+      "log": ".scratch/memory-stage-4/144-focused-race.log",
+      "results": [
+        "eviedb PASS191.288s",
+        "CLI build failed on transient146 helper creation; later focusedCLI race passed4.841s"
+      ],
+      "note": "Before final terminal/input classification hooks; retained diagnostic history"
+    },
+    "new_boundaries": {
+      "command": "go test ./internal/eviedb ./cmd/evie -run 'TestOwnerReview(TerminalEdit|InvalidRequest|BatchInspection|BatchCompeting|BatchCLI)' -count=1",
+      "exit_code": 0,
+      "results": [
+        "eviedb PASS0.612s",
+        "CLI PASS0.697s"
+      ],
+      "log": ".scratch/memory-stage-4/144-final-boundary-normal.log"
+    },
+    "format_and_whitespace": {
+      "gofmt": "gofmt -l all owned/contributed Go paths; no output",
+      "whitespace": "git diff --check -- exact owned/contributed paths",
+      "exit_code": 0
+    }
+  },
+  "no_staging_or_commits": true,
+  "final_hash_audit": "all31 live/frozen/baseline hashes and byte counts verified",
+  "handoff": ".scratch/memory-stage-4/144-frozen-handoff.md"
+}

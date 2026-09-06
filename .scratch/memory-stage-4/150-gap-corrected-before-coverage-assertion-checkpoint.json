@@ -1,0 +1,23 @@
+{
+  "ticket": 150,
+  "base": "ebb84af94f37b5bb5278d54208dc1d9f2dba73c7",
+  "tree": "7a0d837400f79d3ccb5a46a431946d266b96acf2",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-gap-corrected-checkpoint.index",
+  "files": {
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json": "6581b6a482c80e3418f45619510ed60b1487332e89fd6545c0184643d6fee33c",
+    "internal/eviedb/compiler_history_inspection.go": "c9ddbe0db056463974441974379d53de3d3ac6427fae01d240896c664302b098",
+    "internal/eviedb/compiler_reconciliation.go": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6",
+    "internal/eviedb/compiler_work.go": "5c55caba7745969fb80a2acf0e2d7e6608e36ca43238e1f0cc621f9be6fcc4b1",
+    "scripts/memory-stage4-pilot/README.md": "451df792b6817bed1597e6cf4b8a7cb1397004fc7b7c65acd40273863e9f602f",
+    "scripts/memory-stage4-pilot/fixture.go": "0dd7284b830379baea2e3549db9907dae01415ec4a3a4b0972e761270d0e89c4",
+    "scripts/memory-stage4-pilot/main.go": "ac503426e053a7d72962190474482d81cedf8f3ac0f8ce57b99a149e7f44b87a",
+    "scripts/memory-stage4-pilot/main_test.go": "cd6dad5e0c14db7085b389c7e8978252e5f9fcb3582d9ba528ea93ad54b7faa6",
+    "scripts/memory-stage4-pilot/measure.py": "596b002f680c39c690e00e37f55bf9213dc0c5df1b9621215fa97fc26d86de8a",
+    "scripts/memory-stage4-pilot/measure_test.py": "a339a1692c6a7b0a6274076a978e77161979eaad948bedf31067f373e1fd53e8",
+    "scripts/memory-stage4-pilot/review.go": "844f0a9415c7ca179c2dfff4dbe2ee05352bd01393559b814fba6d011f783eb2",
+    "scripts/memory-stage4-pilot/run.go": "25edd25e55f56b7c289150db2b79ed89389ed783b83ad15dd9f20b56dc16798b",
+    "scripts/memory-stage4-pilot/selection_regression_test.go": "ad035884256fc2b8e755caa1f93a8cd2c8f1b01d74bb1f7586b1c382449386d2"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-gap-corrected-checkpoint-pox5yoog",
+  "note": "Isolated ticket contribution; preexisting user work excluded."
+}

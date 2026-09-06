@@ -1,0 +1,26 @@
+{
+  "ticket": 151,
+  "base": "413601a7c6088b59fb5dcd7ced53f46193590ffe",
+  "tree": "e543b9e9f28b024711ba8aed5da768fdb8613d46",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/151-checkpoint.index",
+  "files": {
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/README.md": "a56c920cad68de1c4598f8d56e870d1a6d86d0c7351f9c38f1fee6800ead6dd3",
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report-v2.json": "8a91b00cf9473c4c94c7c23eabba169237e319a47bca09df02a8c8beb3e73801",
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report.json": "6c530ef619bb5485be8e57872ca0a9a82ee712b150d409e6c3f41c292279cfa0",
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-submission.json": "627c20e399df4d0ae7d400f4af2b332538511e429141e844e77c1a7bb771383f",
+    "internal/memoryeval/stage4_release.go": "5c8e7dfbb8c693ac5228a070f791f1aa1d789a1f1cf440b1eb94b52e46a20599",
+    "internal/memoryeval/stage4_release_evidence.go": "df45eb41829a2ca53d651c5847bb21675087b02700372113135f17dd0320621a",
+    "internal/memoryeval/stage4_release_gates.go": "65282a4cd86647f3edfc994a9dd18c7581b2471d5cdb8adb4a2c7ce7c9ec6845",
+    "internal/memoryeval/stage4_release_observations.go": "62312d56f2e2a22066807220f46565bb68a9da8392eeabcee36208a81170f2bc",
+    "internal/memoryeval/stage4_release_quality.go": "ce3d8c4fffcf165184b3bbbc41fe0211cf7b45e3682c6f725cdd4f922f04ba11",
+    "internal/memoryeval/stage4_release_test.go": "a3ebb5bcb123b2acb0521c8b85add544c21846d8db34a4651770d34766fe5708",
+    "scripts/memory-stage4-release/README.md": "8663f0aec2abe2b676f793a3aaa964bec7f7029ec4c560bf1c803b4c417ad476",
+    "scripts/memory-stage4-release/artifacts.go": "cb25b92b8280dfbe701de29e0d5996bb39f0fff7377a52dcd9c2793f7576c355",
+    "scripts/memory-stage4-release/main.go": "b22695d62f493c8d770f1704191a9443321ffe3705383160b5946f61995ea8e0",
+    "scripts/memory-stage4-release/main_test.go": "c4c28baadcdadc798049efd8ce504fe444231e9de96e6c45f472303b7d2aa7ed"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-151-checkpoint-0g42s976",
+  "note": "Isolated ticket contribution; preexisting user work excluded.",
+  "verification_exit_code": 0,
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-151-final.log"
+}

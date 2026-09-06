@@ -1,0 +1,874 @@
+{
+  "tree": "fae9bdd86e9e0f0f2f42bac18d0cbc063684412c",
+  "public_entry": "OpenDBAtContext",
+  "trials": 12,
+  "processes_per_wave": 4,
+  "runs": 96,
+  "failures": 3,
+  "rows": [
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 1,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 1,
+      "duration_ms": 1,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 40,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 56,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 31,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 58,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 63,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 22,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 57,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 26,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 67,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 61,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 27,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 79,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 69,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 27,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 93,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 68,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 25,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 64,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 40,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 29,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 29,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 40,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 24,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 59,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 67,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 25,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 31,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    }
+  ]
+}

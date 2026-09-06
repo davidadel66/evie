@@ -1,0 +1,20 @@
+[
+  {
+    "path": "internal/eviedb/compiler_recurrence.go",
+    "exit_code": 1,
+    "whitespace_clean": true,
+    "output": ""
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_public_test.go",
+    "exit_code": 1,
+    "whitespace_clean": true,
+    "output": ""
+  },
+  {
+    "path": "cmd/evie/docs/research/memory-stage-4-generation-lineage.md",
+    "exit_code": 1,
+    "whitespace_clean": true,
+    "output": ""
+  }
+]

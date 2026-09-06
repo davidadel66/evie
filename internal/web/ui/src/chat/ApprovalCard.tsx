@@ -3,6 +3,7 @@
 // record and stays in the transcript: what was approved is history worth
 // keeping (docs/decisions.md, "reads wide, writes gated").
 
+import { useMemoryPresentation, applicabilityLabel } from "../memory/presentation";
 import { Check, Cross } from "../ui/Icon";
 import type { Item } from "../store/reducer";
 import { readApprovalArgs } from "./approvalArgs";
@@ -24,7 +25,8 @@ export function ApprovalCard({ tool, onAnswer }: Props) {
 }
 
 function Pending({ tool, onAnswer }: Props) {
-  const view = readApprovalArgs(tool.name, tool.args);
+  const { ownerName } = useMemoryPresentation();
+  const view = readApprovalArgs(tool.name, tool.args, ownerName);
   const preview = tool.approval!.preview;
   const reqId = tool.approval!.reqId;
   const subject = preview?.path || view.subject;
@@ -46,6 +48,7 @@ function Pending({ tool, onAnswer }: Props) {
         </span>
       </div>
 
+      {view.shape === "memory" && <MemoryApproval view={view} />}
       {preview ? (
         <Diff oldText={preview.oldText} newText={preview.newText} isNew={preview.isNew} />
       ) : view.shape === "diff" ? (
@@ -89,7 +92,8 @@ function Pending({ tool, onAnswer }: Props) {
 function Resolved({ tool }: { tool: Tool }) {
   const state = tool.approval!.state;
   const approved = state === "approved";
-  const view = readApprovalArgs(tool.name, tool.args);
+  const { ownerName } = useMemoryPresentation();
+  const view = readApprovalArgs(tool.name, tool.args, ownerName);
   const preview = tool.approval!.preview;
 
   if (preview) {
@@ -174,4 +178,10 @@ function Key({ label, dark }: { label: string; dark?: boolean }) {
       {label}
     </kbd>
   );
+}
+
+function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArgs>, {shape: "memory"}>}) {
+  const {names} = useMemoryPresentation();
+  const applies = applicabilityLabel(view.scopeKey,names);
+  return <div className="space-y-4 px-4 py-4 text-sm"><p className="text-ink font-medium">{view.subject}</p><p className="text-teal">Applies to: {applies}</p>{view.evidence && <blockquote className="border-hair text-body border-l-2 pl-3 whitespace-pre-wrap">{view.evidence}</blockquote>}<details className="text-muted-text text-xs"><summary className="cursor-pointer">Exact change</summary><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all">{view.json}</pre></details></div>;
 }

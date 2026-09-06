@@ -1,0 +1,10 @@
+{
+  "internal/memory/compiler.go": "7741fbab6ead774245373aaac12b487197bdd08a4cd1f20312dd797b3769590b",
+  "internal/eviedb/compiler_schema.go": "ff5139abfe96dbb78d1cac9ac656fb404af48b7693a5b23dfe73150ea20c06cc",
+  "internal/eviedb/compiler_work.go": "3c9b2e167d95ecb497eba30be451c97d87a606eeab147597115e30f6ce864d80",
+  "internal/eviedb/compiler_inspection.go": "502ae7552d7c6d962767e76572b99155856f07d878ab013eea009b99d015e85d",
+  "cmd/evie/compiler_management.go": "95247d7b3a971305c44194575c9192b557d67d21149aeba9a3ca0065ca70d1c3",
+  "cmd/evie/compiler_management_test.go": "3f864c8c331d38916b72b469bb8b3db2b9cb92f4bac44ac66f3aeb6c6feb7e9b",
+  "internal/eviedb/compiler_validation.go": "d93987efa4a3894782458e3a00838ebce3c0ceb686d939505a3a953e4ce3fdeb",
+  "internal/eviedb/compiler_public_test.go": "125a9a64a6ae6078d501fd29ef6657da3ebff7198893fcec9bd1f468782d6652"
+}

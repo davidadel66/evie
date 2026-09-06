@@ -1,0 +1,25 @@
+{
+  "tree": "4b29071dc69018a9fedb2464315453baab0c9025",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-auto-gap-checkpoint-skk5hi0c",
+  "status": "pass",
+  "scope": "narrow corrected engineering Spec recheck; study results pending",
+  "verified_file_hashes": {
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json": true,
+    "internal/eviedb/compiler_history_inspection.go": true,
+    "internal/eviedb/compiler_reconciliation.go": true,
+    "internal/eviedb/compiler_work.go": true,
+    "scripts/memory-stage4-pilot/README.md": true,
+    "scripts/memory-stage4-pilot/fixture.go": true,
+    "scripts/memory-stage4-pilot/main.go": true,
+    "scripts/memory-stage4-pilot/main_test.go": true,
+    "scripts/memory-stage4-pilot/measure.py": true,
+    "scripts/memory-stage4-pilot/measure_test.py": true,
+    "scripts/memory-stage4-pilot/review.go": true,
+    "scripts/memory-stage4-pilot/run.go": true,
+    "scripts/memory-stage4-pilot/selection_regression_test.go": true
+  },
+  "focused_command": "go test ./scripts/memory-stage4-pilot -run '^TestPilot(LaterRoot|PreFrontierRoot|SealedRoot|ReviewedHistoricalSuffix|ExplicitEmpty)' -count=1",
+  "focused_exit_code": 0,
+  "focused_package_seconds": 0.672,
+  "log_sha256": "dfead74cf5db56a889c512337defc1aae78dbc0be9672e511c0efd349f8ee390"
+}

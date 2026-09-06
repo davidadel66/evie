@@ -1,0 +1,50 @@
+[
+  {
+    "name": "web-focused",
+    "command": "go test ./internal/web -run CandidateReview|CandidateAdvancedHTTP -count=1",
+    "cwd": "/Users/davidboktor/code/evie",
+    "exit_code": 0,
+    "elapsed_seconds": 2.63,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-web-focused.log"
+  },
+  {
+    "name": "web-race",
+    "command": "go test -race ./internal/web -run CandidateReview|CandidateAdvancedHTTP -count=1",
+    "cwd": "/Users/davidboktor/code/evie",
+    "exit_code": 0,
+    "elapsed_seconds": 42.248,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-web-race.log"
+  },
+  {
+    "name": "ui-typecheck",
+    "command": "npx tsc -b",
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 2.448,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-ui-typecheck.log"
+  },
+  {
+    "name": "ui-tests",
+    "command": "npx vitest run",
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 1.443,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-ui-tests.log"
+  },
+  {
+    "name": "ui-lint",
+    "command": "npm run lint",
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 0.178,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-ui-lint.log"
+  },
+  {
+    "name": "ui-build",
+    "command": "npm run build",
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 2.351,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-final-ui-build.log"
+  }
+]

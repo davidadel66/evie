@@ -1,0 +1,410 @@
+--- before/internal/web/candidate_review.go
++++ after/internal/web/candidate_review.go
+@@ -229,6 +229,10 @@
+ func writeCandidateError(w http.ResponseWriter, err error) {
+ 	status, code, message := http.StatusServiceUnavailable, "review_retryable", "the review service could not confirm this request; retry the same decision if one was submitted"
+ 	switch {
++	case errors.Is(err, errCandidateHistoryInput):
++		status, code, message = http.StatusBadRequest, "invalid_history_request", "provide a candidate ID and a positive interpretation revision"
++	case errors.Is(err, errCandidateHistoryMissing):
++		status, code, message = http.StatusNotFound, "review_revision_not_found", "no history of this kind was found at that revision; edits, identity choices and correction choices share one sequence, so select the matching kind and revision"
+ 	case errors.Is(err, eviedb.ErrOwnerReviewUnauthorized):
+ 		status, code, message = http.StatusForbidden, "review_unauthorized", "this memory scope or candidate is not available"
+ 	case errors.Is(err, eviedb.ErrReviewStale), errors.Is(err, eviedb.ErrStaleScopeRevision):
+--- before/internal/web/candidate_review_advanced.go
++++ after/internal/web/candidate_review_advanced.go
+@@ -2,6 +2,8 @@
+ 
+ import (
+ 	"context"
++	"database/sql"
++	"errors"
+ 	"net/http"
+ 
+ 	"github.com/davidadel66/evie/internal/eviedb"
+@@ -29,6 +31,9 @@
+ 	Revision int64  `json:"revision"`
+ }
+ 
++var errCandidateHistoryInput = errors.New("invalid candidate history input")
++var errCandidateHistoryMissing = errors.New("candidate history revision not found")
++
+ // A complete edited proposal can approach 256 KiB. Reserve another 8 KiB for
+ // its request envelope/reason; the Kernel applies its canonical disclosure bound.
+ // Batch input has at most 64 references and 20 groups; 64 KiB admits its full
+@@ -39,21 +44,15 @@
+ 		return
+ 	}
+ 	for path, handler := range map[string]http.HandlerFunc{
+-		"identity/options": advancedReviewRoute(s, 8192, k.OwnerCandidateIdentityOptions),
+-		"identity/choose":  advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateIdentity),
+-		"temporal/options": advancedReviewRoute(s, 8192, k.OwnerCandidateTemporalOptions),
+-		"temporal/choose":  advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateTemporal),
+-		"edit":             advancedReviewRoute(s, 264*1024, k.EditOwnerCandidate),
+-		"edit/revision": advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, r candidateRevisionRequest) (memory.ReviewEditRevision, error) {
+-			return k.InspectOwnerCandidateEditRevision(ctx, a, r.ID, r.Revision)
+-		}),
+-		"identity/revision": advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, r candidateRevisionRequest) (memory.ReviewIdentityRevision, error) {
+-			return k.InspectOwnerCandidateIdentityRevision(ctx, a, r.ID, r.Revision)
+-		}),
+-		"temporal/revision": advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, r candidateRevisionRequest) (memory.ReviewTemporalRevision, error) {
+-			return k.InspectOwnerCandidateTemporalRevision(ctx, a, r.ID, r.Revision)
+-		}),
+-		"batch/prepare": advancedReviewRoute(s, 64*1024, k.PrepareOwnerCandidateBatch),
++		"identity/options":  advancedReviewRoute(s, 8192, k.OwnerCandidateIdentityOptions),
++		"identity/choose":   advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateIdentity),
++		"temporal/options":  advancedReviewRoute(s, 8192, k.OwnerCandidateTemporalOptions),
++		"temporal/choose":   advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateTemporal),
++		"edit":              advancedReviewRoute(s, 264*1024, k.EditOwnerCandidate),
++		"edit/revision":     candidateHistoryRoute(s, k.InspectOwnerCandidateEditRevision),
++		"identity/revision": candidateHistoryRoute(s, k.InspectOwnerCandidateIdentityRevision),
++		"temporal/revision": candidateHistoryRoute(s, k.InspectOwnerCandidateTemporalRevision),
++		"batch/prepare":     advancedReviewRoute(s, 64*1024, k.PrepareOwnerCandidateBatch),
+ 		"batch/inspect": advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, r candidateRevisionRequest) (memory.ReviewBatchPreview, error) {
+ 			return k.InspectOwnerCandidateBatch(ctx, a, r.ID)
+ 		}),
+@@ -61,6 +60,23 @@
+ 	} {
+ 		mux.Handle("/api/memory/candidates/"+path, s.managementRoute(handler))
+ 	}
++}
++
++func candidateHistoryRoute[Response any](s *Server, call func(context.Context, eviedb.OwnerReviewContext, string, int64) (Response, error)) http.HandlerFunc {
++	return advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, request candidateRevisionRequest) (Response, error) {
++		var out Response
++		if request.ID == "" || request.Revision < 1 {
++			return out, errCandidateHistoryInput
++		}
++		out, err := call(ctx, a, request.ID, request.Revision)
++		// These read-only routes share revision numbers but query separate kinds.
++		// A proven absent row is ordinary navigation; infrastructure, source and
++		// authorization errors retain their existing classifications.
++		if errors.Is(err, sql.ErrNoRows) {
++			err = errCandidateHistoryMissing
++		}
++		return out, err
++	})
+ }
+ 
+ func advancedReviewRoute[Request, Response any](s *Server, limit int64, call func(context.Context, eviedb.OwnerReviewContext, Request) (Response, error)) http.HandlerFunc {
+--- before/internal/web/candidate_review_input_error_test.go
++++ after/internal/web/candidate_review_input_error_test.go
+@@ -1,10 +1,16 @@
+ package web_test
+ 
+ import (
++	"context"
++	"database/sql"
++	"errors"
++	"fmt"
+ 	"strings"
+ 	"testing"
+ 
++	"github.com/davidadel66/evie/internal/eviedb"
+ 	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/web"
+ )
+ 
+ func TestCandidateAdvancedHTTPInputRefusalIsDefinitiveWithoutPersistence(t *testing.T) {
+@@ -55,3 +61,69 @@
+ 		}
+ 	}
+ }
++
++func TestCandidateAdvancedHTTPHistoryKindAndMissingRevision(t *testing.T) {
++	f := newWebReviewFixture(t)
++	edit := reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, "edit", memory.ReviewEditDecision{Candidate: f.candidate.Ref, Proposal: f.candidate.Candidate.Proposal, Reason: "Review history fixture"}), 200)
++	for _, route := range []string{"edit/revision", "identity/revision", "temporal/revision"} {
++		t.Run(route, func(t *testing.T) {
++			input := map[string]any{"id": edit.Ref.ID, "revision": edit.Ref.InterpretationRevision}
++			if route == "edit/revision" {
++				recorded := reviewResponse[memory.ReviewEditRevision](t, advancedPost(t, f, route, input), 200)
++				if recorded.Revision != edit.Ref.InterpretationRevision || recorded.CandidateID != edit.Ref.ID {
++					t.Fatal("history returned a different binding")
++				}
++			} else {
++				advancedError(t, advancedPost(t, f, route, input), 404, "review_revision_not_found")
++			}
++			input["revision"] = edit.Ref.InterpretationRevision + 1
++			advancedError(t, advancedPost(t, f, route, input), 404, "review_revision_not_found")
++			input["revision"] = 0
++			advancedError(t, advancedPost(t, f, route, input), 400, "invalid_history_request")
++			input["revision"] = 1
++			input["id"] = ""
++			advancedError(t, advancedPost(t, f, route, input), 400, "invalid_history_request")
++			// Even a missing revision cannot reveal a candidate outside its scope.
++			input["id"] = edit.Ref.ID
++			advancedError(t, reviewPost(t, f.handler, route, map[string]any{"scope_key": "session:unavailable", "input": input}), 403, "review_unauthorized")
++		})
++	}
++}
++
++type historyReadFailureKernel struct {
++	*eviedb.Store
++	err error
++}
++
++func (k historyReadFailureKernel) InspectOwnerCandidateEditRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewEditRevision, error) {
++	return memory.ReviewEditRevision{}, k.err
++}
++func (k historyReadFailureKernel) InspectOwnerCandidateIdentityRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewIdentityRevision, error) {
++	return memory.ReviewIdentityRevision{}, k.err
++}
++func (k historyReadFailureKernel) InspectOwnerCandidateTemporalRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewTemporalRevision, error) {
++	return memory.ReviewTemporalRevision{}, k.err
++}
++
++func TestCandidateAdvancedHTTPHistoryReadErrorsRetainTheirMeaning(t *testing.T) {
++	f := newWebReviewFixture(t)
++	for _, test := range []struct {
++		name   string
++		err    error
++		status int
++		code   string
++	}{
++		{"proven missing row", fmt.Errorf("history lookup: %w", sql.ErrNoRows), 404, "review_revision_not_found"},
++		{"untyped similar text", errors.New(sql.ErrNoRows.Error()), 503, "review_retryable"},
++		{"database read", errors.New("synthetic database failure"), 503, "review_retryable"},
++		{"cancellation", context.Canceled, 503, "review_retryable"},
++		{"current source", eviedb.ErrReviewInvalidSource, 409, "source_ineligible"},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			f.handler = web.WithCandidateReview(web.NewServer(nil), historyReadFailureKernel{Store: f.store, err: test.err}).Handler()
++			for _, route := range []string{"edit/revision", "identity/revision", "temporal/revision"} {
++				advancedError(t, advancedPost(t, f, route, map[string]any{"id": f.candidate.Ref.ID, "revision": 1}), test.status, test.code)
++			}
++		})
++	}
++}
+--- before/internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx
++++ after/internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx
+@@ -1,18 +1,18 @@
+ import { useState } from "react";
+ import type { CandidateProposal, IdentityChoices, IdentityOptions, OwnerCandidate, TemporalOptions } from "../api/candidateReview";
+-import type { CandidateInboxController, InboxState } from "./controller";
+-import { CanonicalDisclosure, CandidateSources, EditLineage, ProposalMeaning } from "./ReviewDisclosure";
++import type { CandidateInboxController, InboxState, InterpretationHistory } from "./controller";
++import { IdentityLineage, CorrectionLineage, CandidateSources, EditLineage, ProposalMeaning } from "./ReviewDisclosure";
+ 
+ const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
+ const input = "border-hair-input bg-app w-full rounded border px-3 py-2 text-xs";
+ 
+ export function AdvancedReviewForms({ state, controller }: { state: InboxState; controller?: CandidateInboxController }) {
+- const item = state.detail; const [editing, setEditing] = useState(false); const [revision, setRevision] = useState(1);
++ const item = state.detail; const [editing, setEditing] = useState(false);
+  if (!item || item.redacted) return null;
+  return <section aria-label="Interpretation review" className="mt-4 space-y-3">
+   {item.original && <details><summary>Original extraction retained</summary><ProposalMeaning proposal={item.original.proposal}/><CandidateSources title="Original supporting evidence" sources={item.original.support ?? []}/><CandidateSources title="Original context" sources={item.original.context ?? []}/></details>}
+-  {item.identity && <CanonicalDisclosure value={item.identity} title="Recorded identity choices and original alternatives"/>}
+-  {item.temporal && <CanonicalDisclosure value={item.temporal} title="Recorded correction choice"/>}
++  {item.identity && <IdentityLineage identity={item.identity}/>}
++  {item.temporal && <CorrectionLineage correction={item.temporal}/>}
+   {item.candidate.review_state === "unresolved" && <>
+    {item.candidate.proposal.identity && <><p className="text-amber-ink">Additional identity review: explicitly choose an existing identity or create a distinct definition.</p><button className={button} disabled={state.busy || !controller} onClick={() => void controller?.loadIdentityOptions()}>Inspect identity alternatives</button></>}
+    {state.identityOptions && <IdentityForm key={state.identityOptions.options_sha256} item={item} options={state.identityOptions} disabled={state.busy || !controller} onChoose={(choices) => void controller?.chooseIdentity({ candidate: state.identityOptions!.candidate, options_sha256: state.identityOptions!.options_sha256, choices })}/>}
+@@ -21,8 +21,15 @@
+    <button className={`${button} block`} disabled={state.busy || !controller} onClick={() => setEditing(!editing)}>{editing ? "Close edit draft" : "Edit interpretation"}</button>
+    {editing && <EditForm item={item} disabled={state.busy || !controller} onEdit={(proposal, reason, candidate) => void controller?.edit({ candidate, proposal, reason })}/>}
+   </>}
+-  {item.ref.interpretation_revision > 0 && <details><summary>Inspect earlier edit revision</summary><label className="mt-2 block text-xs">Interpretation revision<input aria-label="Edit revision number" className={input} type="number" min={1} max={item.ref.interpretation_revision} value={revision} onChange={(event) => setRevision(Number(event.target.value))}/></label><button className={`${button} mt-2`} disabled={state.busy || !controller} onClick={() => void controller?.loadEditRevision(revision)}>Load immutable edit revision</button>{state.editHistory && <EditLineage edit={state.editHistory}/>}</details>}
++  {item.ref.interpretation_revision > 0 && <HistoryForm maximum={item.ref.interpretation_revision} state={state} controller={controller}/>}
+  </section>;
++}
++
++function HistoryForm({ maximum, state, controller }: { maximum: number; state: InboxState; controller?: CandidateInboxController }) {
++ const [kind, setKind] = useState<InterpretationHistory["kind"]>("edit"); const [revision, setRevision] = useState(1);
++ const history = state.history?.kind === kind && state.history.value.revision === revision ? state.history : undefined;
++ const valid = Number.isSafeInteger(revision) && revision >= 1 && revision <= maximum;
++ return <details><summary>Inspect interpretation history</summary><p className="mt-2 text-xs">Edits, identity choices and correction choices share one revision sequence. Select the recorded kind and revision; a number may belong to a different kind.</p><form className="mt-2 space-y-2" onSubmit={(event) => { event.preventDefault(); if (valid) void controller?.loadHistoryRevision(kind, revision); }}><fieldset disabled={state.busy || !controller} className="space-y-2"><label className="block text-xs">History kind<select aria-label="Interpretation history kind" className={input} value={kind} onChange={(event) => { const value = event.target.value; if (value === "edit" || value === "identity" || value === "correction") setKind(value); }}><option value="edit">Owner edit</option><option value="identity">Identity choice</option><option value="correction">Correction choice</option></select></label><label className="block text-xs">Interpretation revision<input aria-label="Interpretation history revision" className={input} type="number" min={1} max={maximum} step={1} value={revision} onChange={(event) => setRevision(Number(event.target.value))}/></label><button className={button} disabled={!valid} type="submit">Load immutable history revision</button></fieldset></form>{history?.kind === "edit" && <EditLineage edit={history.value}/>} {history?.kind === "identity" && <IdentityLineage identity={history.value}/>} {history?.kind === "correction" && <CorrectionLineage correction={history.value}/>}</details>;
+ }
+ 
+ function IdentityForm({ item, options, disabled, onChoose }: { item: OwnerCandidate; options: IdentityOptions; disabled: boolean; onChoose: (choices: IdentityChoices) => void }) {
+--- before/internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx
++++ after/internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx
+@@ -1,4 +1,4 @@
+-import type { CandidateSource, ReviewClaimEffect, ReviewSource, ReviewPreview, ReviewEffect, CandidateProposal, EditRevision } from "../api/candidateReview";
++import type { CandidateSource, ReviewClaimEffect, ReviewSource, ReviewPreview, ReviewEffect, CandidateProposal, EditRevision, IdentityRevision, TemporalRevision, InterpretationRevision } from "../api/candidateReview";
+ import { supportedPreview } from "./previewSupport";
+ export function CandidateSources({ title, sources }: { title: string; sources: CandidateSource[] }) {
+   if (!sources.length) return null;
+@@ -31,6 +31,18 @@
+ export function EditLineage({ edit }: { edit: EditRevision }) {
+  return <section aria-label="Owner edit lineage" className="border-hair mt-4 border-t pt-3"><h4>Owner interpretation {edit.revision}, from revision {edit.parent_revision}</h4><p className="text-muted-text text-xs">Audit {edit.audit_id}. This edit and its reason are owner interpretation, not new factual evidence.</p><p>Reason: {edit.reason || "None supplied"}</p><div className="grid gap-4 md:grid-cols-2"><section><h5>Before edit</h5><ProposalMeaning proposal={edit.before.proposal}/><CandidateSources title="Prior supporting evidence" sources={edit.before.support}/><CandidateSources title="Prior context" sources={edit.before.context}/></section><section><h5>After edit</h5><ProposalMeaning proposal={edit.after.proposal}/><CandidateSources title="Edited supporting evidence" sources={edit.after.support}/><CandidateSources title="Edited context" sources={edit.after.context}/></section></div><CanonicalDisclosure value={edit} title="Complete edit revision, including prior identity and correction choices"/></section>;
+ }
++function RevisionAudit({ revision }: { revision: InterpretationRevision }) {
++ return <p className="text-muted-text text-xs">Interpretation {revision.revision}, from revision {revision.parent_revision}; review revision {revision.review_revision}; audit {revision.audit_id}. This is an immutable owner interpretation, not new factual evidence or approval of memory.</p>;
++}
++export function IdentityLineage({ identity }: { identity: IdentityRevision }) {
++ return <section aria-label="Recorded identity history" className="border-hair mt-4 space-y-2 border-t pt-3"><h4>Recorded identity choice</h4><RevisionAudit revision={identity}/><p className="text-xs">Scope: {identity.options.scope_key} · candidate {identity.options.candidate.candidate_id}</p>{(["subject", "object"] as const).map((field) => {
++  const choice = identity.choices[field]; const alternatives = identity.options[field];
++  return <section key={field}><h5>{field === "subject" ? "Subject" : "Object"} choice</h5><p className="text-xs">{!choice ? "No unresolved identity choice for this field" : choice.create ? "Create a distinct Entity" : `Reuse Entity ${choice.entity_id}`}</p>{alternatives.length > 0 && <details><summary>Recorded {field} alternatives</summary>{alternatives.map((alternative) => <div key={alternative.entity.entity_id} className="mt-2 text-xs"><p>{alternative.entity.canonical_name} · {alternative.entity.entity_type} · {alternative.entity.scope_key} · {alternative.entity.entity_id}{choice && !choice.create && choice.entity_id === alternative.entity.entity_id ? " · Chosen" : ""}</p><p>Aliases: {alternative.aliases.map((alias) => `${alias.value} (${alias.alias_id})`).join(", ") || "None"}</p>{alternative.context.map((claim) => <p key={claim.claim_id}>Known context at this revision: {claim.predicate.label} · {claim.polarity} · {claim.object.literal?.value ?? claim.object.entity_id} · claim {claim.claim_id} · valid {claim.valid_time.from ?? "Unknown"} / {claim.valid_time.to ?? "Unknown"}</p>)}</div>)}</details>}</section>;
++ })}<section><h5>Predicate choice</h5><p className="text-xs">{!identity.choices.predicate ? "No unresolved Predicate choice" : identity.choices.predicate.create ? "Create the sourced global Predicate definition" : `Reuse Predicate ${identity.choices.predicate.predicate_id}`}</p>{identity.options.predicates.length > 0 && <details><summary>Recorded Predicate alternatives</summary>{identity.options.predicates.map((predicate) => <p className="text-xs" key={predicate.predicate_id}>{predicate.label} · {predicate.token} v{predicate.version} · {predicate.object_constraint} · {predicate.cardinality} · {predicate.predicate_id}</p>)}</details>}</section><CanonicalDisclosure value={identity} title="Complete immutable identity revision and reviewed alternatives"/></section>;
++}
++export function CorrectionLineage({ correction }: { correction: TemporalRevision }) {
++ return <section aria-label="Recorded correction history" className="border-hair mt-4 space-y-2 border-t pt-3"><h4>Recorded correction choice</h4><RevisionAudit revision={correction}/><p className="text-xs">Scope: {correction.options.scope_key} · candidate {correction.options.candidate.candidate_id}</p><p>Chosen earlier claim: {correction.choice.old_claim_id}</p><p>Recorded meaning: {correction.choice.mode === "error" ? "Error: earlier statement was wrong" : correction.choice.mode === "changed" ? "Changed: the real-world state changed" : correction.choice.mode}</p><p>Recorded source-proposed effective time: {correction.options.effective_time ?? "Unknown"}</p><p className="text-xs">Offered meanings: {correction.options.modes.join(", ")}</p><details><summary>Recorded earlier claim alternatives</summary>{correction.options.alternatives.map((alternative) => <div className="mt-2 text-xs" key={alternative.claim.claim_id}><p>{alternative.claim.claim_id}{alternative.claim.claim_id === correction.choice.old_claim_id ? " · Chosen" : ""}: {alternative.claim.predicate.label} · {alternative.claim.polarity} · {alternative.claim.object.literal?.value ?? alternative.claim.object.entity_id}</p><p>Lifecycle at this revision: {alternative.state.state} · valid {alternative.claim.valid_time.from ?? "Unknown"} / {alternative.claim.valid_time.to ?? "Unknown"}</p></div>)}</details><CanonicalDisclosure value={correction} title="Complete immutable correction revision and reviewed alternatives"/></section>;
++}
+ export function CanonicalDisclosure({ value, title = "Complete canonical disclosure" }: { value: unknown; title?: string }) { return <details className="text-muted-text mt-3 text-xs"><summary>{title}</summary><pre className="whitespace-pre-wrap break-all p-2">{JSON.stringify(value, null, 2)}</pre></details>; }
+ export function ReviewEffects({ preview }: { preview: ReviewPreview }) {
+  if (!supportedPreview(preview, !!preview.batch_preview_id)) return <p className="text-amber-ink mt-3">Additional review is required to display all effects of this operation.</p>;
+--- before/internal/web/ui/src/candidateInbox/advancedController.test.ts
++++ after/internal/web/ui/src/candidateInbox/advancedController.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it, vi } from "vitest";
+-import { CandidateReviewError, type BatchPreview, type IdentityOptions, type OwnerCandidate } from "../api/candidateReview";
++import { CandidateReviewError, type BatchPreview, type EditRevision, type IdentityOptions, type IdentityRevision, type OwnerCandidate, type TemporalRevision } from "../api/candidateReview";
+ import { CandidateInboxController } from "./controller";
+ import { pendingDecisionJournal } from "./pendingDecision";
+ import { supportedPreview } from "./previewSupport";
+@@ -45,6 +45,55 @@
+  it("supports complete v2/v3/v4 meanings and refuses unknown versions and standalone batch member approval", async () => {
+   for (const value of [identityPreview, correctionPreview, { ...preview, version: "owner-review-preview-v4", effect: { ...preview.effect!, version: "owner-review-effect-v4" } }]) expect(supportedPreview(value)).toBe(true);
+   expect(supportedPreview({ ...preview, version: "owner-review-preview-v99" })).toBe(false); expect(supportedPreview(batchPreview.groups[0].preview)).toBe(false);
++ });
++});
++
++describe("mixed immutable interpretation history", () => {
++ const meaning = { proposal: candidate.candidate.proposal, support: candidate.candidate.support!, context: candidate.candidate.context!, identity: null, temporal: null };
++ const edit: EditRevision = { candidate_id: candidate.ref.candidate_id, revision: 2, parent_revision: 1, review_revision: 2, audit_id: "edit-audit", before: meaning, after: meaning, reason: "Corrected extraction" };
++ const identity: IdentityRevision = chosenCandidate.identity!;
++ const correction: TemporalRevision = { ...correctionPreview.effect!.correction!.revision, revision: 3, parent_revision: 2, review_revision: 3, options: { ...temporalOptions, candidate: { ...candidate.ref, interpretation_revision: 2, review_revision: 2 } } };
++ const current = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++ const historyAPI = { inspect: async () => current, editRevision: async () => edit, identityRevision: async () => identity, temporalRevision: async () => correction };
++ it("loads the requested kind in a shared identity/edit/correction sequence without changing current interpretation", async () => {
++  const editRevision = vi.fn(historyAPI.editRevision), identityRevision = vi.fn(historyAPI.identityRevision), temporalRevision = vi.fn(historyAPI.temporalRevision);
++  const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision, identityRevision, temporalRevision })); await ready(controller);
++  for (const [kind, value] of [["identity", identity], ["edit", edit], ["correction", correction]] as const) {
++   await controller.loadHistoryRevision(kind, value.revision); expect(controller.snapshot().history).toEqual({ kind, value }); expect(controller.snapshot().detail).toEqual(current);
++  }
++  expect(identityRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 1);
++  expect(editRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 2);
++  expect(temporalRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 3);
++ });
++ it("bounds requested revision before dispatch and refuses redacted history reads", async () => {
++  const editRevision = vi.fn(historyAPI.editRevision); const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision })); await ready(controller);
++  for (const revision of [0, -1, 1.5, 4, NaN, Infinity]) { await controller.loadHistoryRevision("edit", revision); expect(controller.snapshot().history).toBeUndefined(); }
++  expect(editRevision).not.toHaveBeenCalled();
++  const redacted = new CandidateInboxController(fakeAPI({ ...historyAPI, inspect: async () => ({ ...current, redacted: true }), editRevision })); await ready(redacted); await redacted.loadHistoryRevision("edit", 2); expect(editRevision).not.toHaveBeenCalled();
++ });
++ it("rejects returned history for a different candidate, scope, revision, or parent binding", async () => {
++  for (const value of [{ ...identity, revision: 2 }, { ...identity, parent_revision: 8 }, { ...identity, review_revision: 7 }, { ...identity, options: { ...identity.options, scope_key: "session:other" } }, { ...identity, options: { ...identity.options, candidate: { ...candidate.ref, candidate_id: "other" } } }]) {
++   const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, identityRevision: async () => value })); await ready(controller); await controller.loadHistoryRevision("identity", 1); expect(controller.snapshot().history).toBeUndefined(); expect(controller.snapshot().problem).toContain("does not match");
++  }
++  const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision: async () => ({ ...edit, candidate_id: "other" }) })); await ready(controller); await controller.loadHistoryRevision("edit", 2); expect(controller.snapshot().history).toBeUndefined();
++ });
++ it("fences delayed history by scope, candidate selection and candidate refresh", async () => {
++  for (const navigation of ["scope", "candidate", "refresh"]) {
++   const response = deferred<TemporalRevision>(); const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, temporalRevision: async () => response.promise })); await ready(controller);
++   const reading = controller.loadHistoryRevision("correction", 3);
++   if (navigation === "scope") await controller.selectScope("session:other");
++   else await controller.inspect(navigation === "candidate" ? "other" : candidate.ref.candidate_id);
++   response.resolve(correction); await reading; expect(controller.snapshot().history).toBeUndefined();
++  }
++ });
++ it("clears historical disclosure on source or freshness failures and does not relabel unknown failures as missing history", async () => {
++  for (const code of ["source_ineligible", "stale_preview", "review_unauthorized", "review_scope_quarantined", "review_revision_not_found", "review_retryable"]) {
++   const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, temporalRevision: async () => { throw new CandidateReviewError(code, code === "review_retryable" ? "Service could not confirm the read" : "Revision unavailable"); } })); await ready(controller);
++   await controller.loadHistoryRevision("identity", 1); expect(controller.snapshot().history).toBeDefined(); await controller.loadHistoryRevision("correction", 3); expect(controller.snapshot().history).toBeUndefined();
++   if (["source_ineligible", "stale_preview", "review_unauthorized", "review_scope_quarantined"].includes(code)) expect(controller.snapshot().detail).toBeUndefined();
++   else expect(controller.snapshot().detail).toEqual(current);
++   if (code === "review_retryable") { expect(controller.snapshot().problem).toBe("Service could not confirm the read"); expect(controller.snapshot().problem).not.toContain("not found"); }
++  }
+  });
+ });
+ 
+--- before/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
++++ after/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
+@@ -1,10 +1,10 @@
+ import { renderToStaticMarkup } from "react-dom/server";
+ import { describe, expect, it } from "vitest";
+-import { ReviewEffects, EditLineage } from "./ReviewDisclosure";
++import { ReviewEffects, EditLineage, IdentityLineage, CorrectionLineage } from "./ReviewDisclosure";
+ import { AdvancedReviewForms } from "./AdvancedReviewForms";
+ import { BatchReview } from "./BatchReview";
+ import { CandidateInboxController, type InboxState } from "./controller";
+-import { batchPreview, batchResult, correctionPreview, identityCandidate, identityOptions, identityPreview, temporalOptions } from "./advanced.test-support";
++import { batchPreview, batchResult, chosenCandidate, correctionPreview, identityCandidate, identityOptions, identityPreview, temporalOptions } from "./advanced.test-support";
+ import { candidate, fakeAPI, preview } from "./fixtures.test-support";
+ import type { EditRevision } from "../api/candidateReview";
+ const state: InboxState = { scope: "global", busy: false, scopesBusy: false, problem: "", notice: "", reason: "" };
+@@ -12,6 +12,25 @@
+ function controller() { return new CandidateInboxController(fakeAPI()); }
+ 
+ describe("complete advanced owner disclosure", () => {
++ it("offers explicit edit, identity and correction history kinds within the shared revision bounds", () => {
++  const detail = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++  const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail }} controller={controller()}/>);
++  contains(html, ["Inspect interpretation history", "share one revision sequence", 'value="edit"', 'value="identity"', 'value="correction"', "Owner edit", "Identity choice", "Correction choice", 'max="3"', 'step="1"', "Load immutable history revision"]);
++  expect(html).not.toContain("Inspect earlier edit revision");
++ });
++ it("renders readable immutable identity choices, earlier alternatives, parent and audit", () => {
++  const identity = { ...chosenCandidate.identity!, choices: { ...chosenCandidate.identity!.choices, subject: { create: false, entity_id: "maya-2" } } };
++  contains(renderToStaticMarkup(<IdentityLineage identity={identity}/>), ["Recorded identity choice", "Interpretation 1, from revision 0", "review revision 1", "identity-audit", "Reuse Entity maya-2", "Create the sourced global Predicate definition", "maya-1", "maya-2", "Maya 1", "Maya 2", "Designer", "Physician", "Chosen", "not new factual evidence or approval", "Complete immutable identity revision"]);
++ });
++ it("renders a historical correction without implying a current lifecycle transition or invented time", () => {
++  contains(renderToStaticMarkup(<CorrectionLineage correction={correctionPreview.effect!.correction!.revision}/>), ["Recorded correction choice", "temporal-audit", "Chosen earlier claim: old-tea", "earlier statement was wrong", "effective time: Unknown", "Lifecycle at this revision: active", "Offered meanings: error, changed", "Complete immutable correction revision"]);
++ });
++ it("never displays a historical result under a different selected kind or revision", () => {
++  const identity = { ...chosenCandidate.identity!, audit_id: "historical-protected-audit" };
++  const detail = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++  const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail, history: { kind: "identity", value: identity } }} controller={controller()}/>);
++  expect(html).not.toContain("historical-protected-audit");
++ });
+  it("renders distinct same-name alternatives, Alias/context and explicit new global Predicate choice without preselection", () => {
+   const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail: identityCandidate, identityOptions }} controller={controller()}/>);
+   contains(html,["maya-1","maya-2","Maya 1","Maya 2","Designer","Physician","Create distinct Entity","new global Predicate","Enjoys","enjoys","cardinality many","Record these identity choices"]); expect(html).not.toContain('checked=""');
+--- before/internal/web/ui/src/candidateInbox/controller.ts
++++ after/internal/web/ui/src/candidateInbox/controller.ts
+@@ -1,9 +1,10 @@
+-import { CandidateReviewError, type CandidateReviewAPI, type CandidateScopes, type CandidatePage, type OwnerCandidate, type ReviewDecision, type ReviewPreview, type ReviewResult, type ReviewOperation, type IdentityOptions, type IdentityDecision, type TemporalOptions, type TemporalDecision, type EditDecision, type EditRevision, type BatchRequest, type BatchPreview, type BatchDecision, type BatchResult } from "../api/candidateReview";
++import { CandidateReviewError, type CandidateReviewAPI, type CandidateScopes, type CandidatePage, type OwnerCandidate, type ReviewDecision, type ReviewPreview, type ReviewResult, type ReviewOperation, type IdentityOptions, type IdentityDecision, type TemporalOptions, type TemporalDecision, type EditDecision, type EditRevision, type IdentityRevision, type TemporalRevision, type BatchRequest, type BatchPreview, type BatchDecision, type BatchResult } from "../api/candidateReview";
+ import { supportedPreview, supportedBatch } from "./previewSupport";
+ import { pendingDecisionJournal, type PendingDecisionJournal, type PendingReview } from "./pendingDecision";
+ 
++export type InterpretationHistory = { kind: "edit"; value: EditRevision } | { kind: "identity"; value: IdentityRevision } | { kind: "correction"; value: TemporalRevision };
+ export type InboxState = {
+-  disclosureEpoch?: number; identityOptions?: IdentityOptions; temporalOptions?: TemporalOptions; editHistory?: EditRevision;
++  disclosureEpoch?: number; identityOptions?: IdentityOptions; temporalOptions?: TemporalOptions; history?: InterpretationHistory;
+   batchPreview?: BatchPreview; batchResult?: BatchResult; batchOperations?: ReviewOperation[]; batchPriorOperations?: { group_id: string; operation: ReviewOperation }[]; batchPending?: BatchDecision;
+   scopes?: CandidateScopes; scope: string; page?: CandidatePage; detail?: OwnerCandidate; preview?: ReviewPreview;
+   result?: ReviewResult; operation?: ReviewOperation; reason: string; busy: boolean; scopesBusy: boolean;
+@@ -27,7 +28,7 @@
+   }
+   snapshot = () => this.state;
+   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+-  private clearAdvanced = { identityOptions: undefined, temporalOptions: undefined, editHistory: undefined, batchOperations: undefined, batchPriorOperations: undefined, batchResult: undefined, batchPreview: undefined, batchPending: undefined };
++  private clearAdvanced = { identityOptions: undefined, temporalOptions: undefined, history: undefined, batchOperations: undefined, batchPriorOperations: undefined, batchResult: undefined, batchPreview: undefined, batchPending: undefined };
+   private set(patch: Partial<InboxState>) { this.state = { ...this.state, ...patch }; this.listeners.forEach((listener) => listener()); }
+   // A definitive freshness/source failure invalidates displayed disclosure too,
+   // including older batch selections. Owner reasons and delivery metadata survive.
+@@ -161,10 +162,27 @@
+       this.set({ detail: item, busy: false, notice: "Interpretation recorded. Review a new exact preview before accepting memory." });
+     } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: `${message(error)} Refresh to inspect the recorded interpretation before another edit or choice.` }); }
+   }
+-  async loadEditRevision(revision: number) {
+-    const { scope, detail, busy } = this.state; if (!detail || busy) return;
+-    const epoch = ++this.epoch; this.set({ busy: true, problem: "", editHistory: undefined });
+-    try { const editHistory = await this.api.editRevision(scope, detail.ref.candidate_id, revision); if (epoch === this.epoch) this.set({ editHistory, busy: false }); }
++  async loadHistoryRevision(kind: InterpretationHistory["kind"], revision: number) {
++    const { scope, detail, busy } = this.state; if (!detail || detail.redacted || busy) return;
++    if (!Number.isSafeInteger(revision) || revision < 1 || revision > detail.ref.interpretation_revision) {
++      this.set({ history: undefined, problem: `Choose an interpretation revision from 1 to ${detail.ref.interpretation_revision}.` }); return;
++    }
++    const epoch = ++this.epoch; this.set({ busy: true, problem: "", history: undefined });
++    try {
++      const id = detail.ref.candidate_id;
++      let history: InterpretationHistory;
++      if (kind === "edit") history = { kind, value: await this.api.editRevision(scope, id, revision) };
++      else if (kind === "identity") history = { kind, value: await this.api.identityRevision(scope, id, revision) };
++      else history = { kind, value: await this.api.temporalRevision(scope, id, revision) };
++      if (epoch !== this.epoch) return;
++      const value = history.value;
++      const bound = value.revision === revision && value.parent_revision === revision - 1 && value.review_revision > 0 && value.review_revision <= detail.ref.review_revision;
++      const candidateBound = history.kind === "edit" ? history.value.candidate_id === id :
++        history.value.options.scope_key === scope && history.value.options.candidate.candidate_id === id &&
++        history.value.options.candidate.interpretation_revision === value.parent_revision && history.value.options.candidate.review_revision === value.review_revision - 1;
++      if (!bound || !candidateBound) throw new Error("The returned history does not match the requested candidate, kind or revision. Refresh and inspect again.");
++      this.set({ history, busy: false });
++    }
+     catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
+   }
+   async prepareBatch(request: BatchRequest) {

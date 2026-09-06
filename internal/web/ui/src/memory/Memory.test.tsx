@@ -36,21 +36,21 @@ const detail: SemanticObjectInspection = {
 };
 
 describe("MemoryView", () => {
-  it("renders a graph-first exact-scope Semantic Memory browser", () => {
+  it("keeps an accessible graph with scoped navigation and secondary history controls", () => {
     const html = renderToStaticMarkup(<MemoryView
       scopes={[
         { scope_id: "scope-global", scope_key: "global", revision: 4 },
         { scope_id: "scope-sibling", scope_key: "workspace:sibling", revision: 2, quarantined: true, quarantine_reason: "canonical replay mismatch" },
       ]}
       scopeKey="global" view="graph" recordKind="claim" atTime validAt="2026-09-01T12:00" asKnownAt="2026-09-02T12:00"
-      entityPage={entityPage} claimPage={claimPage} detail={detail}
+      entityPage={entityPage} claimPage={claimPage}
       onScope={() => undefined} onView={() => undefined} onRecordKind={() => undefined} onAtTime={() => undefined}
       onValidAt={() => undefined} onAsKnownAt={() => undefined} onRefresh={() => undefined}
       onNext={() => undefined} onInspect={() => undefined}
     />);
     for (const text of [
-      "Knowledge Graph", "Semantic Memory", "Memory Scope", "Graph", "Records", "View at time", "Valid at",
-      "Known by Evie at", "David", "America/Detroit", "time zone", "Exact scope", "revision 4",
+      "Semantic Memory", "Memory scope", "Graph", "List", "History", "Valid at",
+      "Known by Evie at", "David", "America/Detroit", "time zone", "Revision 4",
     ]) expect(html).toContain(text);
     expect(html).toContain('aria-label="Claim: David time zone America/Detroit"');
     expect(html).not.toContain("Episodes");
@@ -58,7 +58,7 @@ describe("MemoryView", () => {
     expect(html).not.toContain("textarea");
   });
 
-  it("retains the accessible record fallback and exact provenance detail", () => {
+  it("opens a detail page with exact provenance and collapsed technical history", () => {
     const html = renderToStaticMarkup(<MemoryView
       scopes={[{ scope_id: "scope-global", scope_key: "global", revision: 4 }]}
       scopeKey="global" view="records" recordKind="claim" atTime={false} validAt="" asKnownAt=""
@@ -67,7 +67,25 @@ describe("MemoryView", () => {
       onValidAt={() => undefined} onAsKnownAt={() => undefined} onRefresh={() => undefined}
       onNext={() => undefined} onInspect={() => undefined}
     />);
-    for (const text of ["Claims", "Next page", "Record detail", "Evidence", "Source episode", "event-1", "Lifecycle", "Conflicts", "Operation history"]) expect(html).toContain(text);
-    expect(html).toContain('aria-pressed="true"');
+    for (const text of ["Memory detail", "Back to memories", "Source", "event-1", "Details &amp; history", "Conflicting memories", "Operations"]) expect(html).toContain(text);
+    expect(html).not.toContain('aria-label="Memory display"');
   });
+});
+
+function renderDetail(value: SemanticObjectInspection, selection = claimPage.objects[0]) {
+  return renderToStaticMarkup(<MemoryView scopes={[]} scopeKey="global" view="records" recordKind="claim" atTime={false} validAt="" asKnownAt="" claimPage={claimPage} detail={value} selection={selection} onScope={() => {}} onView={() => {}} onRecordKind={() => {}} onAtTime={() => {}} onValidAt={() => {}} onAsKnownAt={() => {}} onRefresh={() => {}} onNext={() => {}} onInspect={() => {}} />);
+}
+
+it("shows readable names for denied entity-valued memory details", () => {
+  const object = { ...owner, entity_id: "place-1", canonical_name: "Detroit", anchor_kind: undefined };
+  const relationship = { ...claim, polarity: "denied", object: { entity_id: object.entity_id } };
+  const html = renderDetail({ ...detail, claim: relationship }, { ...claimPage.objects[0], claim: relationship, object_entity: object });
+  expect(html).toContain('>Not: Detroit</h1>');
+  expect(html).not.toContain('>place-1</h1>');
+});
+
+it("keeps predicates and scopes visible on related memories", () => {
+  const html = renderDetail({ ...detail, object_kind: "entity", object_id: owner.entity_id, entity: owner, claim: undefined });
+  expect(html).toContain("time zone · Global");
+  expect(html).toContain("America/Detroit");
 });

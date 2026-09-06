@@ -1,0 +1,13 @@
+--- FAIL: TestCandidateAdvancedHTTPHistoryKindAndMissingRevision (0.06s)
+    --- FAIL: TestCandidateAdvancedHTTPHistoryKindAndMissingRevision/edit/revision (0.00s)
+        candidate_review_input_error_test.go:80: status 503 want 404: {"code":"review_retryable","error":"the review service could not confirm this request; retry the same decision if one was submitted"}
+    --- FAIL: TestCandidateAdvancedHTTPHistoryKindAndMissingRevision/identity/revision (0.00s)
+        candidate_review_input_error_test.go:77: status 503 want 404: {"code":"review_retryable","error":"the review service could not confirm this request; retry the same decision if one was submitted"}
+    --- FAIL: TestCandidateAdvancedHTTPHistoryKindAndMissingRevision/temporal/revision (0.00s)
+        candidate_review_input_error_test.go:77: status 503 want 404: {"code":"review_retryable","error":"the review service could not confirm this request; retry the same decision if one was submitted"}
+--- FAIL: TestCandidateAdvancedHTTPHistoryReadErrorsRetainTheirMeaning (0.04s)
+    --- FAIL: TestCandidateAdvancedHTTPHistoryReadErrorsRetainTheirMeaning/proven_missing_row (0.00s)
+        candidate_review_input_error_test.go:125: status 503 want 404: {"code":"review_retryable","error":"the review service could not confirm this request; retry the same decision if one was submitted"}
+FAIL
+FAIL	github.com/davidadel66/evie/internal/web	0.407s
+FAIL

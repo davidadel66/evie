@@ -322,7 +322,7 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner 
 			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_selections SET state='selected_unmaterialized',reason='job_capacity' WHERE selection_id=?`, selectionID)
 			return err
 		}
-		request := memory.CompilerRequest{GenerationID: generationID, WindowSHA256: memory.CompilerHash(compilerJSON(window)), Window: window, Entities: []memory.SemanticEntity{}, Predicates: []memory.SemanticPredicate{}, ScopeRevisions: []memory.ScopeRevision{}}
+		request := memory.CompilerRequest{ScopePolicy: generation.ScopePolicy, GenerationID: generationID, WindowSHA256: memory.CompilerHash(compilerJSON(window)), Window: window, Entities: []memory.SemanticEntity{}, Predicates: []memory.SemanticPredicate{}, ScopeRevisions: []memory.ScopeRevision{}}
 		if generation.EvidencePolicy == memory.CompilerClockEvidencePolicy {
 			request.EvidencePolicy = generation.EvidencePolicy
 		}

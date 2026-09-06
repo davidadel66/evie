@@ -1,0 +1,73 @@
+{
+  "ticket": 148,
+  "base_tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "files": [
+    {
+      "path": "internal/web/candidate_review.go",
+      "before_sha256": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5",
+      "after_sha256": "0345761257586252e8cfcf0c5cee7169f7e72fcc3e7c5f89a8d57b085e3de162",
+      "bytes": 11070
+    },
+    {
+      "path": "internal/web/compiler_diagnostics.go",
+      "before_sha256": "absent",
+      "after_sha256": "adbe7a3bfc0735a32d4674f4a86f9a78b880ad16007dafe782e0381d269910e8",
+      "bytes": 3320
+    },
+    {
+      "path": "internal/web/compiler_diagnostics_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "98713d5f7d16e0402a10a1e4369e239011d9402ee595a9d648e114950e486d4d",
+      "bytes": 16759
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx",
+      "before_sha256": "a50a3a7c523959e240420aafaf9530048bee5fc00438ead72d8374f49754546e",
+      "after_sha256": "2d06c3c7b31abe91dab533a44a5d77732a070644703b83d644c7e2d4e32f56b9",
+      "bytes": 1205
+    },
+    {
+      "path": "internal/web/ui/src/api/compilerDiagnostics.ts",
+      "before_sha256": "absent",
+      "after_sha256": "0d4f5926957b4999e361e6f77fedef7f1d7e679bc00529f8bfc0bf8dae49edc9",
+      "bytes": 4084
+    },
+    {
+      "path": "internal/web/ui/src/api/compilerDiagnostics.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "b4b863006945ce60c659bcbcf56cf606dc920d5f05367eeaf852ded489b21e1e",
+      "bytes": 1955
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "9ec98769a8794f1c20e9704b909346b46b1bc69edf7757d4de8ee49d30d055af",
+      "bytes": 6052
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/CompilerHealth.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "908a63b4fb04d78764da907771ed35e7232af43793cf27f8d2f67d292f20ee60",
+      "bytes": 17883
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/controller.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "138c91ed95bf05028890d3e18d7cfbc993e2578bf8e1492ea5267dd506dad273",
+      "bytes": 6522
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/controller.ts",
+      "before_sha256": "absent",
+      "after_sha256": "43f62a6956a357fdc47ec7dcfe8f825265cb604d83781299332fea2852bb3c76",
+      "bytes": 4408
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/fixtures.test-support.ts",
+      "before_sha256": "absent",
+      "after_sha256": "6fe4f81eedac8cd9215f6e7abf0fa9a5befef9e89411ca9d3ea5b130daa658e2",
+      "bytes": 2399
+    }
+  ],
+  "total_bytes": 75657
+}

@@ -39,6 +39,7 @@ export type ContextScope = {
 };
 
 export type ContextSessionSnapshot = {
+  ownerDisplayName?: string;
   workspaces: Workspace[];
   projects: Project[];
   sessions: StoredSession[];

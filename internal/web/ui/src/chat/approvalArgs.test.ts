@@ -48,3 +48,10 @@ describe("readApprovalArgs", () => {
     expect(view).toEqual({ shape: "json", subject: "", json: "{not json" });
   });
 });
+
+it("keeps the subject, relationship, value and polarity visible in memory approvals", () => {
+  for (const predicate of ["prefers", "avoids"]) {
+    const view = readApprovalArgs("memory_remember_literal", JSON.stringify({ scope: { scope_key: "global" }, subject: { canonical_name: "David" }, predicate: { label: predicate }, literal: { value: "coffee" }, polarity: "denied", source: { evidence: "My statement" } }));
+    expect(view).toMatchObject({ shape: "memory", subject: `Not: David · ${predicate} · coffee`, scopeKey: "global", evidence: "My statement" });
+  }
+});

@@ -91,8 +91,11 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		return nil, err
 	}
 	effect := &memory.ReviewEffect{Version: "owner-review-effect-v1", OperationID: id, Scopes: []memory.SemanticScope{}, PriorRevisions: []memory.ScopeRevision{}, Claims: []memory.ReviewClaimEffect{}}
-	keys, err := reviewScopeKeys(ctx, q, a.scope)
+	targetKey, keys, err := candidateEffectScopes(ctx, q, candidates)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireSemanticScopeKeysAvailable(ctx, q, keys); err != nil {
 		return nil, err
 	}
 	for _, key := range keys {
@@ -102,9 +105,15 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		}
 		effect.Scopes = append(effect.Scopes, scope.SemanticScope)
 		effect.PriorRevisions = append(effect.PriorRevisions, memory.ScopeRevision{ScopeKey: key, Revision: scope.Revision})
-		if key == a.scope {
+		if key == targetKey {
 			effect.Scope = scope.SemanticScope
 		}
+	}
+	targetContext := a
+	targetContext.scope = targetKey
+	referenceKeys, err := reviewScopeKeys(ctx, q, targetKey)
+	if err != nil {
+		return nil, err
 	}
 	claimKeys := map[string]bool{}
 	for _, candidate := range candidates {
@@ -124,7 +133,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			return nil, errors.New("invalid candidate polarity")
 		}
 		item := memory.ReviewClaimEffect{Candidate: candidate.Ref, Context: c.Context, TemporalQualification: c.Proposal.TemporalQualification, Sources: []memory.SemanticSource{}, Conflicts: []memory.ClaimConflictWarning{}}
-		prop, err = prepareReviewIdentityEffects(ctx, q, a, candidate, effect, &item)
+		prop, err = prepareReviewIdentityEffects(ctx, q, targetContext, candidate, effect, &item)
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +141,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			return nil, err
 		}
 		if item.Subject.ID == "" {
-			item.Subject, err = reviewEntity(ctx, q, keys, prop.SubjectEntityID)
+			item.Subject, err = reviewEntity(ctx, q, referenceKeys, prop.SubjectEntityID)
 			if err != nil {
 				return nil, err
 			}
@@ -144,7 +153,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		}
 		if prop.Object.EntityID != "" {
 			if item.ObjectEntity == nil {
-				entity, err := reviewEntity(ctx, q, keys, prop.Object.EntityID)
+				entity, err := reviewEntity(ctx, q, referenceKeys, prop.Object.EntityID)
 				if err != nil {
 					return nil, err
 				}
@@ -156,7 +165,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 		} else if string(item.Predicate.ObjectConstraint) != string(prop.Object.Literal.Kind) {
 			return nil, errors.New("Predicate object constraint changed")
 		}
-		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: validTime, CreatedOperationID: id}
+		item.Claim = memory.SemanticClaim{ScopeKey: targetKey, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: validTime, CreatedOperationID: id}
 		objectKind, objectEntity, literalKind, literalValue := "literal", any(nil), any(nil), any(nil)
 		if prop.Object.EntityID != "" {
 			objectKind = "entity"
@@ -221,7 +230,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
 			}
 			item.Sources = append(item.Sources, src)
 		}
-		if err := prepareReviewTemporalEffect(ctx, q, a, candidate, effect, item); err != nil {
+		if err := prepareReviewTemporalEffect(ctx, q, targetContext, candidate, effect, item); err != nil {
 			return nil, err
 		}
 		conflicts, err := reviewClaimConflicts(ctx, q, effect.Scope.ID, item.Claim)

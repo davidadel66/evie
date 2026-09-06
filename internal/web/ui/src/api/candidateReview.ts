@@ -5,6 +5,7 @@ export type EvidenceLocator = { event_id: string; event_part: string; locator_ki
 export type Observation = { contract: string; root_id: string; execution_id: string; call_id: string; ancestry_sha256: string };
 export type CandidateSource = { observation?: Observation; actor?: string; source_type?: string; format_version?: number; sequence?: number; locator: EvidenceLocator; session_id: string; scope_key: string; observed_at: string; authority: string; evidence: string; usage: string };
 export type CandidateProposal = {
+  destination?: "everywhere" | "workspace" | "session";
   proposition: { subject_entity_id: string; predicate_id: string; object: SemanticClaim["object"]; polarity: string };
   valid_time: SemanticClaim["valid_time"];
   temporal_qualification: string;

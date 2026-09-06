@@ -1,0 +1,23 @@
+{
+  "status": "human_approved_single_proposal",
+  "reviewer": "David",
+  "recorded_at": "2026-09-05T17:35:45.983927+00:00",
+  "user_statement": "i see okay. yeah no emojis for memory entries.",
+  "scope": "C13: decorative emoji omission preserves the approved meaning. Other proposal judgments remain pending. Original source evidence remains exact.",
+  "preference": "No emojis in memory entries.",
+  "packet_sha256": "sha256:5fe494aa631bc9475e329043d9cf2130b4638cfec889268ebb0e24d82be323d8",
+  "gold_sha256": "sha256:78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+  "decision": {
+    "id": "C13",
+    "case_id": "N09-a",
+    "candidate_sha256": "sha256:27bef93893e3a889b007b378c0d808d21f4bbf73137c3700402f9f657065028a",
+    "label": "required_useful",
+    "errors": [],
+    "note": "Proposed equivalence treats café as the approved café ☕ preference target with a decorative emoji. Denied polarity, whole exact Unicode source, owner and fact encoding are preserved. This is the same unresolved equivalence question as compact-v2 V15, not a new automatic match. Actual human approval is still required.",
+    "gold_matches": [
+      0
+    ]
+  },
+  "applied_to_score": false,
+  "production_emoji_removal_implemented": false
+}

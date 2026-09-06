@@ -1,0 +1,428 @@
+{
+  "version": "memory-stage-4-browser-v1",
+  "status": "failed",
+  "synthetic": true,
+  "owner_pilot": false,
+  "cases": [
+    {
+      "name": "global",
+      "scope": "global",
+      "candidate_id": "4f7f6ce2ff5bd8c665fce4690b47af694f89b6522ea337612ea9af8c53b0ccbf",
+      "preview_sha256": "sha256:c8be251da5f374d59fee8cfec64829c48a5a832efa9988335fdd47a6a29e0c07",
+      "effect_sha256": "sha256:ddc11aa9f6372e98277fb921850db3962cf59f3b70492bbd512364120ac3d7ce",
+      "operation_id": "a774b6b3-16ae-44fa-8e84-c5f471347336",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "workspace-1",
+      "scope": "workspace:3ffcc924-63d6-4b9f-9feb-3ff68623405a",
+      "candidate_id": "fb4d622a77350ef0d1883dd6c3ffe15894b3d7e4f31ea435e20e986b0693567d",
+      "preview_sha256": "sha256:5551e7750a3c91224254eacff23ddfab77b8b56d9db16ee0443446764ff67d8c",
+      "effect_sha256": "sha256:298b7dd2cef4097df5c0c7a86d56c5016d4dfae8fbd06b2b58d0b6fe909fd13c",
+      "operation_id": "386dbb42-28da-4f6c-87e0-70fb35c39e63",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "workspace-2",
+      "scope": "workspace:7139b985-7e79-4ebc-bcac-486f42870d96",
+      "candidate_id": "92314f2166d7cb4355833399cca5386e8dd4cf29e3725e9b914ea7586291b34d",
+      "preview_sha256": "sha256:8f59ec160361c798039dc24488c5d8a6da7707fb44091c38c7bdb8e5625c4dda",
+      "effect_sha256": "sha256:1fe9563083f17d5aa4b1bd7634fc823f188fb29d1cb15b3073321cefa9bef317",
+      "operation_id": "c391092a-8997-4798-bebf-d1b3488ab2e7",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "project-1",
+      "scope": "project:dc9664e1-81ef-4a69-a652-5f0b2dd3dc2e",
+      "candidate_id": "018ae7a89fffa52b50aedd1b4b8f8650e2b78c112a9c1ee2a79bba9200cbdd94",
+      "preview_sha256": "sha256:14370a45d2100326fe41a4473742599234027e0b5e63d64a5ce42b32fcc39572",
+      "effect_sha256": "sha256:c5561d0c16027d7b13f244e952a3880d16098aafc9cf484b0ff4f41e3f7b06d2",
+      "operation_id": "2b932356-df46-4a75-a88d-c117ba647f00",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "project-2",
+      "scope": "project:317e9465-d080-49d1-ad68-32adcf83cdf7",
+      "candidate_id": "0744fd3b2460c91eb0833d40802b8730ad92ac2e156a513564344a465050f928",
+      "preview_sha256": "sha256:028f6708b3bb4feafd728877238b446f35f89361d80ba7ef64d11ae99f89dbea",
+      "effect_sha256": "sha256:5c1c5abb329d46b6e60c420cc20b8bf5b8a98c78e4d6c6d7bd7159fca4b01c93",
+      "operation_id": "998f1de9-bbc6-4cd9-8cb9-f1819b9b36b7",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "session-1",
+      "scope": "session:34012d81-a5a2-4771-8f15-79571a6626e3",
+      "candidate_id": "089e2981fbe46154482a4cfdc65e296d8f0725281d60a6791fefd8267b2fe166",
+      "preview_sha256": "sha256:6547a68c719f2bb3ec9a123b66bb297d1d924d975389555ec14ad8e72b3c1554",
+      "effect_sha256": "sha256:961de2b7fd2e6dfca9c91f93fbcfae6cc17ecf8ca863897c6b2381995dc53822",
+      "operation_id": "35a1d38d-690d-430b-848f-6b311da2d53b",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    },
+    {
+      "name": "session-2",
+      "scope": "session:0820c97a-70cd-4efa-921e-222b01c581f0",
+      "candidate_id": "f3ac90412d93b9ea466e39c3ffa87ceedf7f9dd75bd52364049737f85b539519",
+      "preview_sha256": "sha256:762a0f0df70411369bf80eb3ac4a9e7ff0cffc638198ea2e24a2546c4c93166a",
+      "effect_sha256": "sha256:865ac51a08c7590e8322d11c66feeb5a98212f589a89aece072d99a31156fbb1",
+      "operation_id": "e251f222-7c6e-48a6-a816-5e8af572f758",
+      "checks": {
+        "scope": true,
+        "evidence": true,
+        "preview": true,
+        "resolution": true,
+        "reload": true,
+        "no_implicit_promotion": false,
+        "accepted_graph": false
+      }
+    }
+  ],
+  "responses": [
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/inspect",
+      "status": 200
+    },
+    {
+      "path": "candidates/prepare",
+      "status": 200
+    },
+    {
+      "path": "candidates/resolve",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "candidates/operation",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "path": "candidates/list",
+      "status": 200
+    },
+    {
+      "path": "scopes",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "objects",
+      "status": 200
+    },
+    {
+      "path": "inspect",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "provenance": {
+    "web_interactions": "Real Chrome, React and guarded HTTP: exact closed-source review, evidence, preview, acceptance, recorded operation and reload for all seven scopes. The accepted global graph and provenance are also browsed.",
+    "store_checks": "After browser completion, the helper inspects accepted Claims and Source Links in all seven exact scopes, verifies no implicit global Promotion, keeps source sessions closed, and verifies canonical replay without model calls. These are Kernel reads, not graphical browsing in every scope."
+  },
+  "source_sha256": "07fc21ce178c09fbe16748a178ccfe46a9e7172ee7532f20cb825a3cba2a36d9",
+  "driver_sha256": "fd66e9b9d9b1a5b94f7abb4f4933723d2eefbbcb33a6f9b74093f021ecc73330",
+  "browser_version": "142.0.7444.176",
+  "unaccepted_global_isolation": true,
+  "server_exit": {
+    "code": 1,
+    "signal": null
+  },
+  "error": "AssertionError [ERR_ASSERTION]: STAGE4_BROWSER_READY={\"cases\":[{\"name\":\"global\",\"scope\":\"global\",\"session\":{\"id\":\"9ca3e51a-2ce5-4ea4-becd-a3e1c545b256\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.804895Z\",\"updatedAt\":\"2026-09-05T12:55:36.804895Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"4f7f6ce2ff5bd8c665fce4690b47af694f89b6522ea337612ea9af8c53b0ccbf\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"2310cb8e7bff48209515835668209c9f3c3d31b5bb0f0aedc92d3817c4ae42c6\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"global\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"4f7f6ce2ff5bd8c665fce4690b47af694f89b6522ea337612ea9af8c53b0ccbf\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"5379085d-be8c-47af-946b-d233449e5900\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"5379085d-be8c-47af-946b-d233449e5900\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"9ca3e51a-2ce5-4ea4-becd-a3e1c545b256\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.844905Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"workspace-1\",\"scope\":\"workspace:3ffcc924-63d6-4b9f-9feb-3ff68623405a\",\"session\":{\"id\":\"512557fe-2f9c-46bd-a735-160a05852246\",\"workspaceId\":\"3ffcc924-63d6-4b9f-9feb-3ff68623405a\",\"workspaceRevisionSnapshot\":\"8bbe76e4-6bad-44d7-96c8-592ccc861f46\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.842921Z\",\"updatedAt\":\"2026-09-05T12:55:36.842921Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"fb4d622a77350ef0d1883dd6c3ffe15894b3d7e4f31ea435e20e986b0693567d\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"8a29f72fc860050917ed11d2e50fa1635acfa4555f3a2cf5967e0aa0ce84c5a2\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"workspace:3ffcc924-63d6-4b9f-9feb-3ff68623405a\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"fb4d622a77350ef0d1883dd6c3ffe15894b3d7e4f31ea435e20e986b0693567d\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"42282f28-a5c4-40c9-8bc0-316285bfaad9\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"42282f28-a5c4-40c9-8bc0-316285bfaad9\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"512557fe-2f9c-46bd-a735-160a05852246\",\"scope_key\":\"workspace:3ffcc924-63d6-4b9f-9feb-3ff68623405a\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.851865Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"workspace-2\",\"scope\":\"workspace:7139b985-7e79-4ebc-bcac-486f42870d96\",\"session\":{\"id\":\"e7921fc6-30b5-4717-a433-cb279f351b01\",\"workspaceId\":\"7139b985-7e79-4ebc-bcac-486f42870d96\",\"workspaceRevisionSnapshot\":\"ce1de7da-3e2a-4ef9-b1d0-32fdc628411a\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.843288Z\",\"updatedAt\":\"2026-09-05T12:55:36.843288Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"92314f2166d7cb4355833399cca5386e8dd4cf29e3725e9b914ea7586291b34d\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"b4600f56b2ce883211a8b87712c18fcce92a35d769f5490907cafc0592fb2c74\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"workspace:7139b985-7e79-4ebc-bcac-486f42870d96\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"92314f2166d7cb4355833399cca5386e8dd4cf29e3725e9b914ea7586291b34d\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"1db5ae62-9298-493d-b1f4-dc2de94c6841\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"1db5ae62-9298-493d-b1f4-dc2de94c6841\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"e7921fc6-30b5-4717-a433-cb279f351b01\",\"scope_key\":\"workspace:7139b985-7e79-4ebc-bcac-486f42870d96\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.8581Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"project-1\",\"scope\":\"project:dc9664e1-81ef-4a69-a652-5f0b2dd3dc2e\",\"session\":{\"id\":\"b68b88cc-160d-4824-94c6-e1600a19bd61\",\"projectId\":\"dc9664e1-81ef-4a69-a652-5f0b2dd3dc2e\",\"projectRootSnapshot\":\"/private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/TestStage4BrowserFixture3602773230/003\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.84373Z\",\"updatedAt\":\"2026-09-05T12:55:36.84373Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"018ae7a89fffa52b50aedd1b4b8f8650e2b78c112a9c1ee2a79bba9200cbdd94\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"0e6d08cda2a9cda0de24e30cf2cde2b7b3e1df11782d85f4cbaca6357ce3bb64\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"project:dc9664e1-81ef-4a69-a652-5f0b2dd3dc2e\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"018ae7a89fffa52b50aedd1b4b8f8650e2b78c112a9c1ee2a79bba9200cbdd94\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"10d552e9-98c9-4477-871b-f1b5cd26f4ff\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"10d552e9-98c9-4477-871b-f1b5cd26f4ff\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"b68b88cc-160d-4824-94c6-e1600a19bd61\",\"scope_key\":\"project:dc9664e1-81ef-4a69-a652-5f0b2dd3dc2e\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.866056Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"project-2\",\"scope\":\"project:317e9465-d080-49d1-ad68-32adcf83cdf7\",\"session\":{\"id\":\"61d5bc1e-0431-4792-9fc4-28e12c104bf9\",\"projectId\":\"317e9465-d080-49d1-ad68-32adcf83cdf7\",\"projectRootSnapshot\":\"/private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/TestStage4BrowserFixture3602773230/004\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.844026Z\",\"updatedAt\":\"2026-09-05T12:55:36.844026Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"0744fd3b2460c91eb0833d40802b8730ad92ac2e156a513564344a465050f928\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"28ac1f6b3f4d80cb48e75cbf2959cdea1e7a56cffa82befcece795908896f9df\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"project:317e9465-d080-49d1-ad68-32adcf83cdf7\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"0744fd3b2460c91eb0833d40802b8730ad92ac2e156a513564344a465050f928\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"67b56469-ad64-4cc7-82ee-80491b486dfa\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"67b56469-ad64-4cc7-82ee-80491b486dfa\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"61d5bc1e-0431-4792-9fc4-28e12c104bf9\",\"scope_key\":\"project:317e9465-d080-49d1-ad68-32adcf83cdf7\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.871519Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"session-1\",\"scope\":\"session:34012d81-a5a2-4771-8f15-79571a6626e3\",\"session\":{\"id\":\"34012d81-a5a2-4771-8f15-79571a6626e3\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.844154Z\",\"updatedAt\":\"2026-09-05T12:55:36.844154Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"089e2981fbe46154482a4cfdc65e296d8f0725281d60a6791fefd8267b2fe166\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"28b1246ef40b542d55b9828af97f7fa6d0c9d94ee6b5066089f17da00ca77413\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"session:34012d81-a5a2-4771-8f15-79571a6626e3\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"089e2981fbe46154482a4cfdc65e296d8f0725281d60a6791fefd8267b2fe166\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"70ff09f9-6098-48b7-a9ac-dac5df18e923\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"70ff09f9-6098-48b7-a9ac-dac5df18e923\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"34012d81-a5a2-4771-8f15-79571a6626e3\",\"scope_key\":\"global\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.876707Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}},{\"name\":\"session-2\",\"scope\":\"session:0820c97a-70cd-4efa-921e-222b01c581f0\",\"session\":{\"id\":\"0820c97a-70cd-4efa-921e-222b01c581f0\",\"title\":\"\",\"status\":\"active\",\"createdAt\":\"2026-09-05T12:55:36.84428Z\",\"updatedAt\":\"2026-09-05T12:55:36.84428Z\"},\"candidate\":{\"ref\":{\"candidate_id\":\"f3ac90412d93b9ea466e39c3ffa87ceedf7f9dd75bd52364049737f85b539519\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"85c28a42e631cc3b005bff9abbc51f7469b1f67f6a527eefdd3035942411db3f\",\"generation_id\":\"6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918\",\"destination\":\"session:0820c97a-70cd-4efa-921e-222b01c581f0\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"f3ac90412d93b9ea466e39c3ffa87ceedf7f9dd75bd52364049737f85b539519\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"9a3d45cc-d524-4651-9103-65401621886e\",\"predicate_id\":\"4dea8317-c738-4f25-8981-beacb597fca0\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"c1b2858c-043c-4ed4-951a-7eb572a18694\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"c1b2858c-043c-4ed4-951a-7eb572a18694\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067\"},\"session_id\":\"0820c97a-70cd-4efa-921e-222b01c581f0\",\"scope_key\":\"global\",\"sequence\":1,\"format_version\":1,\"observed_at\":\"2026-09-05T12:55:36.881946Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I prefer café in this exact context.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}}],\"database\":\"/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/TestStage4BrowserFixture3602773230/001/stage4.db\",\"url\":\"http://127.0.0.1:54025\",\"version\":\"memory-stage-4-browser-fixture-v1\"}\n--- FAIL: TestStage4BrowserFixture (2.88s)\n    memory_stage4_browser_test.go:111: browser did not accept global: {Candidate:{Edit:<nil> Original:<nil> Temporal:<nil> Identity:<nil> Ref:{ID:4f7f6ce2ff5bd8c665fce4690b47af694f89b6522ea337612ea9af8c53b0ccbf InterpretationRevision:0 ReviewRevision:1} JobID:2310cb8e7bff48209515835668209c9f3c3d31b5bb0f0aedc92d3817c4ae42c6 GenerationID:6f52c055a684c11d4c31314f6ea381e522b4178c9cee1ac8ee186497cb2bb918 Destination:global Candidate:{ReviewRevision:1 ID:4f7f6ce2ff5bd8c665fce4690b47af694f89b6522ea337612ea9af8c53b0ccbf Proposal:{Temporal:<nil> Identity:<nil> Proposition:{SubjectEntityID:9a3d45cc-d524-4651-9103-65401621886e PredicateID:4dea8317-c738-4f25-8981-beacb597fca0 Object:{EntityID: Literal:0x7a98448e260} Polarity:affirmed} ValidTime:{From:<nil> To:<nil>} TemporalQualification: Support:[{EventID:5379085d-be8c-47af-946b-d233449e5900 EventPart:content LocatorKind:whole LocatorValue: EvidenceSHA256:6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067}] Context:[]} Support:[{Observation:<nil> SourceType:user_message Locator:{EventID:5379085d-be8c-47af-946b-d233449e5900 EventPart:content LocatorKind:whole LocatorValue: EvidenceSHA256:6d57fde9787253b30a5cbcd27e3f95a9107304ffbb9f9de84df54947edfa1067} SessionID:9ca3e51a-2ce5-4ea4-becd-a3e1c545b256 ScopeKey:global Sequence:2 FormatVersion:1 ObservedAt:2026-09-05T12:55:36.844905Z Actor:owner Authority:owner_statement Usage:new_support Evidence:I prefer café in this exact context.}] Context:[] ReviewState:accepted EquivalentTo:} Redacted:false} Generation:{ModelManifestSHA256:f4ff3f52ee1006d4c0461f266186abcf2954537a4c52bba8d3e74e87fc3a07fc ModelManifest:[123 34 108 97 121 101 114 115 34 58 91 123 34 109 101 100 105 97 84 121 112 101 34 58 34 97 112 112 108 105 99 97 116 105 111 110 47 118 110 100 46 111 108 108 97 109 97 46 105 109 97 103 101 46 109 111 100 101 108 34 44 34 100 105 103 101 115 116 34 58 34 115 104 97 50 53 54 58 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 49 34 125 93 125] Version:compiler-generation-v1 ModelArtifact:scripted:test ModelSHA256:1111111111111111111111111111111111111111111111111111111111111111 Quantization:fixture RuntimeVersion:fixture ProtocolVersion:ollama-generate-v1 TokenizerSHA256:2222222222222222222222222222222222222222222222222222222222222222 Template:{{.System}}\n        {{.Prompt}} TemplateSHA256:8a640bdc0e5ac8aafc2fbbfa5741e5e60fbb43dbf150049529e0a8f6fef013aa Prompt:Extract owner assertions. Schema:[123 34 116 121 112 101 34 58 34 111 98 106 101 99 116 34 125] Decoding:{ContextTokens:131072 OutputTokens:768 Seed:17 Temperature:0} TokenBoundProofSHA256:3333333333333333333333333333333333333333333333333333333333333333 TokensPerByte:1 TemplateTokenOverhead:8 EvidencePolicy:owner-assertions-v1 SecretPolicy:owner-assertions-v1 ClosurePolicy:owner-assertions-v1 WindowPolicy:owner-assertions-v1 PredicatePolicy:owner-assertions-v1 EntityPolicy:owner-assertions-v1 ValidationPolicy:owner-assertions-v1 EquivalencePolicy:owner-assertions-v1 EffectPolicy:owner-assertions-v1} Selection:{SessionID:9ca3e51a-2ce5-4ea4-becd-a3e1c545b256 RootID:5379085d-be8c-47af-946b-d233449e5900 Cutoff:4 Destination:global} ComparisonVersion:compiler-recurrence-v2 Relationship:primary Suppressed:false Checked:<nil> CheckedState: Origin:<nil> Decision:<nil> Resolution:<nil> OriginRedacted:false} <nil>\nFAIL\n\n+ actual - expected\n\n  {\n+   code: 1,\n-   code: 0,\n    signal: null\n  }\n\n    at /private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-dqw_1b3n/scripts/memory-stage-4-browser.cjs:128:10\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "completed_at": "2026-09-05T12:55:39.648Z"
+}

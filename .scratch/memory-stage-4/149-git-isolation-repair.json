@@ -1,0 +1,6 @@
+{
+  "cause": "Initial unfixed test git init inherited GIT_DIR and GIT_WORK_TREE, installing that absolute worktree in caller config.",
+  "removed_root_owned_core_worktree": "/private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-ciorhth3",
+  "restored_toplevel": "/Users/davidboktor/code/evie",
+  "other_config_fields_changed_by_repair": false
+}

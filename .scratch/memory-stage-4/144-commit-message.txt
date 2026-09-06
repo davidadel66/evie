@@ -1,0 +1,18 @@
+feat(memory): edit interpretations and approve dependent batches (#144)
+
+Preserve immutable owner edit lineage and exact original evidence. Preview
+complete dependency groups and commit each group atomically inside one bounded
+batch, retaining ordered partial outcomes and exact delivery recovery.
+
+Allow multiple distinct Claim corrections in one canonical operation through
+a transactional schema migration that preserves existing rows, constraints,
+and replay. Bind member previews to their batch and preserve infrastructure
+errors and safe malformed-envelope failure behavior.
+
+Clarify the worked edit example: an unknown change instant remains unresolved;
+a correction needs an instant supported by the original frozen window.
+
+Validation: isolated ./scripts/verify-change.sh, focused SQLite and CLI normal
+and race checks, migration/replay preservation, exact/max-plus-one bounds,
+shared dependencies, multi-correction replay, fault/race/recovery regressions,
+encoding goldens, and independent Standards/Spec reviews.

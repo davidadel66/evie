@@ -1,0 +1,171 @@
+{
+  "purpose": "Offline feasibility only; no v2 mutation, v3 production implementation, inference, download or label application",
+  "derived_from_schema_sha256": "sha256:ad6ce8c0ea12f11345a3d421d710f718d9535ba24616858d78c2f207d4288c6e",
+  "proof_binary_sha256": "sha256:c817ee30231cde037672fb7921a4bbb16599a2739e7633811bacf4df7fa5080a",
+  "cases": [
+    {
+      "case_id": "N01-a",
+      "source_aliases": [
+        "s1"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1851,
+      "system_bytes": 5647,
+      "input_bytes": 282,
+      "full_rendered_bytes": 6009,
+      "including_output768_and_reserve64": 6843,
+      "grammar_bytes": 4813,
+      "offline_grammar_cases": 12,
+      "all_passed": true
+    },
+    {
+      "case_id": "N01-b",
+      "source_aliases": [
+        "s1",
+        "s2"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1866,
+      "system_bytes": 5662,
+      "input_bytes": 445,
+      "full_rendered_bytes": 6187,
+      "including_output768_and_reserve64": 7021,
+      "grammar_bytes": 4846,
+      "offline_grammar_cases": 19,
+      "all_passed": true
+    },
+    {
+      "case_id": "N02-a",
+      "source_aliases": [
+        "s1"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1851,
+      "system_bytes": 5647,
+      "input_bytes": 345,
+      "full_rendered_bytes": 6072,
+      "including_output768_and_reserve64": 6906,
+      "grammar_bytes": 4813,
+      "offline_grammar_cases": 12,
+      "all_passed": true
+    },
+    {
+      "case_id": "N02-b",
+      "source_aliases": [
+        "s1",
+        "s2"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1866,
+      "system_bytes": 5662,
+      "input_bytes": 561,
+      "full_rendered_bytes": 6303,
+      "including_output768_and_reserve64": 7137,
+      "grammar_bytes": 4846,
+      "offline_grammar_cases": 19,
+      "all_passed": true
+    },
+    {
+      "case_id": "N03-b",
+      "source_aliases": [
+        "s1",
+        "s3"
+      ],
+      "context_aliases": [
+        "s2"
+      ],
+      "schema_bytes": 2456,
+      "system_bytes": 6252,
+      "input_bytes": 584,
+      "full_rendered_bytes": 6916,
+      "including_output768_and_reserve64": 7750,
+      "grammar_bytes": 6750,
+      "offline_grammar_cases": 23,
+      "all_passed": true
+    },
+    {
+      "case_id": "N04-b",
+      "source_aliases": [
+        "s1",
+        "s2"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1866,
+      "system_bytes": 5662,
+      "input_bytes": 484,
+      "full_rendered_bytes": 6226,
+      "including_output768_and_reserve64": 7060,
+      "grammar_bytes": 4846,
+      "offline_grammar_cases": 19,
+      "all_passed": true
+    },
+    {
+      "case_id": "N05-b",
+      "source_aliases": [
+        "s1",
+        "s2"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1866,
+      "system_bytes": 5662,
+      "input_bytes": 591,
+      "full_rendered_bytes": 6333,
+      "including_output768_and_reserve64": 7167,
+      "grammar_bytes": 4846,
+      "offline_grammar_cases": 19,
+      "all_passed": true
+    },
+    {
+      "case_id": "N06-a",
+      "source_aliases": [
+        "s1"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1851,
+      "system_bytes": 5647,
+      "input_bytes": 313,
+      "full_rendered_bytes": 6040,
+      "including_output768_and_reserve64": 6874,
+      "grammar_bytes": 4813,
+      "offline_grammar_cases": 12,
+      "all_passed": true
+    },
+    {
+      "case_id": "N08-b",
+      "source_aliases": [
+        "s1",
+        "s2",
+        "s3"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1881,
+      "system_bytes": 5677,
+      "input_bytes": 696,
+      "full_rendered_bytes": 6453,
+      "including_output768_and_reserve64": 7287,
+      "grammar_bytes": 4879,
+      "offline_grammar_cases": 26,
+      "all_passed": true
+    },
+    {
+      "case_id": "N09-a",
+      "source_aliases": [
+        "s1"
+      ],
+      "context_aliases": [],
+      "schema_bytes": 1851,
+      "system_bytes": 5647,
+      "input_bytes": 295,
+      "full_rendered_bytes": 6022,
+      "including_output768_and_reserve64": 6856,
+      "grammar_bytes": 4813,
+      "offline_grammar_cases": 12,
+      "all_passed": true
+    }
+  ],
+  "maximum_context_bound": 7750,
+  "minimum_context_headroom": 442,
+  "offline_grammar_cases_passed": 177,
+  "max_grammar_bytes": 6750,
+  "empty_context_constraint": "type:array,const:[]; verified actual pinned converter/parser. maxItems0 with no items is ignored by pinned runtime."
+}

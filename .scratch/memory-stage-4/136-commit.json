@@ -1,0 +1,10 @@
+{
+  "ticket": 136,
+  "parent": "cadbe756eacfdbc983af403f03061fa037503158",
+  "commit": "24c1f90ebbbbd06527bb02652a59c683cdcb7dea",
+  "tree": "1d0ca15319dc3590f04f26c678d59affbae72c5f",
+  "isolated_tree": "b444a6e81510591b131b83ca40d8d74ee810ed92",
+  "files": 18,
+  "issue_closed": false,
+  "note": "Verified engineering committed; selected model and live quality gates remain open. Index advanced with -i -m to preserve user working-tree bytes."
+}

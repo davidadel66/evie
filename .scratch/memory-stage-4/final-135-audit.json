@@ -1,0 +1,57 @@
+{
+  "recorded_at": "2026-09-05T04:30:54.495773+00:00",
+  "owned_file_count": 76,
+  "local_markdown_targets_checked": 33,
+  "missing_local_markdown_targets": 0,
+  "approved_corpus_file_bindings_checked": 5,
+  "proposed_output_record_bindings_checked": 3,
+  "proposed_output_records": [
+    {
+      "file": "output-adjudications.proposed.json",
+      "sha256": "sha256:a36fe2fb5c4fde55b051257affc03b78ca9595245694fcbd45d8c04e1c913507",
+      "packet_file": "output-adjudication-packet.md",
+      "packet_sha256": "sha256:aedc9737dd0ee9c3cc081a9a009d8e11a2073da119bb609ca8486379f3d45b89",
+      "status": "proposed_not_human_reviewed"
+    },
+    {
+      "file": "corrected-output-adjudications.proposed.json",
+      "sha256": "sha256:3b7da4224a9256eaabbfa4ea11aad7b26b1ff1f7e47d34897c156f2eec79da74",
+      "packet_file": "corrected-output-adjudication-packet.md",
+      "packet_sha256": "sha256:fb6de27ba6c7c9034bd4acc2207c851d45c3e9172fc2c38d1f8b64e378bade50",
+      "status": "proposed_not_human_reviewed"
+    },
+    {
+      "file": "qwen/output-adjudications.proposed.json",
+      "sha256": "sha256:56cfeb03694ac690bf7aeb243591c2d854ef3aabfb01a20ed9d97ceac3a39365",
+      "packet_file": "output-adjudication-packet.md",
+      "packet_sha256": "sha256:553ea21a932a50ba360d70c9d154bfc6ca7f451afaaf3d3fc744180711135a5c",
+      "status": "proposed_not_human_reviewed"
+    }
+  ],
+  "experiment_input_and_current_qwen_code_bindings_checked": 37,
+  "formatting_revision": {
+    "file": "output-packet-formatting-revision.json",
+    "sha256": "sha256:c00057a38a3046fbc49589d0cda4ba40474039269d48dfd56ecdbeeb36990635",
+    "packet_count": 2,
+    "mechanical_byte_and_hash_assertions_pass": true
+  },
+  "preservation": {
+    "baseline": ".scratch/memory-stage-4/implementation-baseline.json",
+    "baseline_sha256": "sha256:3a7f78b2200a61b516525d0756bbb14116b75fe68b6ba47a2d6c320b352731f3",
+    "excluded_root_owned_prefix": ".scratch/memory-stage-4/",
+    "missing_file_encoding": "absent",
+    "preexisting_paths_checked": 220,
+    "differences": 0,
+    "index_empty": true
+  },
+  "new_file_whitespace": {
+    "command": "git diff --no-index --check /dev/null EACH_OWNED_FILE",
+    "files_checked": 76,
+    "failures": []
+  },
+  "git_diff_whitespace_exit_codes": [
+    0,
+    0
+  ],
+  "failures": []
+}

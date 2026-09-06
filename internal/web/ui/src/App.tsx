@@ -5,6 +5,7 @@ import type {
   Project,
   Workspace,
 } from "./api/contextSessions";
+import { MemoryPresentationProvider } from "./memory/presentation";
 import { Panel, type InspectorTarget } from "./artifacts/Panel";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
@@ -32,8 +33,8 @@ const textSizeStorageKey = "evie.chatTextSize";
 const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 
 export default function App() {
-  const { items, status, queue, problem, send, answer, dismissProblem, reset } = useSession();
   const contextSessions = useContextSessions();
+  const { items, status, queue, problem, send, answer, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id);
   const [views, setViews] = useState<WorkbenchView[]>(initialViews);
   const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
   const [draft, setDraft] = useState("");
@@ -117,7 +118,6 @@ export default function App() {
   const selectSession = async (selection: ContextSessionSelection) => {
     try {
       await contextSessions.select(selection);
-      reset();
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
@@ -148,7 +148,6 @@ export default function App() {
   const registerWorkspace = async (name: string) => {
     try {
       await contextSessions.register(name);
-      reset();
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
@@ -165,7 +164,7 @@ export default function App() {
   );
 
   return (
-    <div data-chat-size={textSize} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
+    <MemoryPresentationProvider snapshot={contextSessions.snapshot}><div data-chat-size={textSize} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
       {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={() => setMobileNavOpen(false)} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
       <Sidebar
         snapshot={contextSessions.snapshot}
@@ -202,6 +201,7 @@ export default function App() {
           }}
         />
 
+        {contextSessions.problem && activeView.kind !== "workspaces" && <div role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-5 py-3 text-sm">{contextSessions.problem}</div>}
         {problem && <Banner message={problem} onDismiss={dismissProblem} />}
 
         <div className="relative flex min-h-0 flex-1">
@@ -211,12 +211,12 @@ export default function App() {
                 contextSessions.snapshot?.activeScope ? (
                   <>
                     <ScopeBar scope={contextSessions.snapshot.activeScope} onOpenWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })} />
-                    <Chat items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} />
+                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
                     <Composer
                       value={draft}
                       onChange={setDraft}
                       streaming={status === "streaming"}
-                      disabled={contextSessions.busy}
+                      disabled={contextSessions.busy || historyLoading || !!historyProblem}
                       onSend={() => {
                         send(draft);
                         setDraft("");
@@ -241,10 +241,7 @@ export default function App() {
                     setDataSource(source);
                     setInspectorOverride(undefined);
                   }}
-                  onOpenMemoryDetail={(detail) => {
-                    setInspectorOverride({ kind: "memory", detail });
-                    setInspectorOpen(true);
-                  }}
+                  snapshot={contextSessions.snapshot}
                 />
               )}
               {activeView.kind === "workspaces" && (
@@ -287,7 +284,7 @@ export default function App() {
           )}
         </div>
       </div>
-    </div>
+    </div></MemoryPresentationProvider>
   );
 }
 

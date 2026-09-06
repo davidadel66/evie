@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-auto-gap-checkpoint-skk5hi0c/internal/web/ui
+
+
+ Test Files  23 passed (23)
+      Tests  155 passed (155)
+   Start at  10:39:43
+   Duration  614ms (transform 942ms, setup 0ms, import 1.85s, tests 334ms, environment 1ms)
+

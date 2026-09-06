@@ -129,7 +129,7 @@ func validateReviewIdentityEffect(p memory.ReviewPreview) error {
 		return errors.New("missing identity interpretation")
 	}
 	revision := effect.Identity.Revision
-	if string(compilerJSON(candidate.Identity)) != string(compilerJSON(revision)) || revision.Revision != candidate.Ref.InterpretationRevision || revision.ReviewRevision != candidate.Ref.ReviewRevision || revision.OwnerID != memory.LocalOwnerID || revision.ParentRevision != revision.Revision-1 || revision.Options.Candidate.ID != candidate.Ref.ID || revision.Options.Candidate.InterpretationRevision != revision.ParentRevision || revision.Options.Candidate.ReviewRevision != revision.ReviewRevision-1 || revision.Options.ScopeKey != p.ScopeKey || revision.Options.SHA256 != reviewIdentityOptionsHash(revision.Options) || revision.AuthorizationRevision < 1 || validateSemanticUUID(revision.AuditID) != nil {
+	if string(compilerJSON(candidate.Identity)) != string(compilerJSON(revision)) || revision.Revision != candidate.Ref.InterpretationRevision || revision.ReviewRevision != candidate.Ref.ReviewRevision || revision.OwnerID != memory.LocalOwnerID || revision.ParentRevision != revision.Revision-1 || revision.Options.Candidate.ID != candidate.Ref.ID || revision.Options.Candidate.InterpretationRevision != revision.ParentRevision || revision.Options.Candidate.ReviewRevision != revision.ReviewRevision-1 || revision.Options.ScopeKey != p.Effect.Scope.Key || revision.Options.SHA256 != reviewIdentityOptionsHash(revision.Options) || revision.AuthorizationRevision < 1 || validateSemanticUUID(revision.AuditID) != nil {
 		return errors.New("invalid owner identity revision")
 	}
 	if string(compilerJSON(revision.Options.ScopeRevisions)) != string(compilerJSON(effect.PriorRevisions)) {

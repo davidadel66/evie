@@ -1,0 +1,5 @@
+=== RUN   TestStage4HistoryGapEmptyAndGenerationConformance
+    memory_stage4_history_conformance_test.go:167: STAGE4_EVIDENCE {"details":{"automatic_history_sweep":false,"canonical_replay":true,"contiguous_frontier":4,"edit_sha256":"39579450e333bbb1477f4fcfe08cd1dced65ec80e8c6c6406ae9607d6c438adf","empty_job_id":"9e0af254f212bf1724f1b41f8bd1991980ccffc4796ce45c6dd00b7dbe714685","fresh_support_requires_review":true,"gap_job_id":"51550d71e5d68b913431129e38d6067064ff0a89a905b8938e065adb17c0dee3","outside_events":7,"outside_root":"04f8bf41-4d66-4563-8059-9a5c1c75cb05","preserved_rejection":true,"receipt_generation":"1a59ccdcc35e48534550851fb34df85a7c9752dcfff792d41ef1038dd2dcbf84","repeat_generation":"0eecd72b2f83341f692954ffd0090c65a8dad9d3174b8ab6c46f802509f40608","selected_events":6,"upgrade_generation":"5d3fc8b1a8e4b52384d35ac7046e6d7ee7713a8084937f84f9a14722b4dff2df"},"scenario":"history_gap_empty_generation_lineage","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4HistoryGapEmptyAndGenerationConformance (0.14s)
+PASS
+ok  	github.com/davidadel66/evie/cmd/evie	0.466s

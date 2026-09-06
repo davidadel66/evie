@@ -1,0 +1,40 @@
+direction: down
+grid-columns: 1
+
+classes: {
+  evidence: { style: { fill: "#e8f1f8"; stroke: "#356b91"; font-color: "#17324d"; border-radius: 8 } }
+  prepare: { style: { fill: "#edf5ef"; stroke: "#4e8467"; font-color: "#204c38"; border-radius: 8 } }
+  approval: { style: { fill: "#f7f0df"; stroke: "#a4843c"; font-color: "#624d1d"; border-radius: 8 } }
+  reject: { style: { fill: "#f9e7e7"; stroke: "#a95252"; font-color: "#632929"; border-radius: 8 } }
+}
+
+intent: {
+  label: "1. INTENT BECOMES A COMPLETE PROPOSAL"
+  grid-columns: 4
+  request: "EXPLICIT OWNER REQUEST\nCLI, web, or focused Memory Plugin" { class: approval }
+  source: "EPISODIC SOURCE EVENT\nPersist exact owner request before semantic work" { class: evidence }
+  prepare: "KERNEL PREPARE\nBind harness-owned scope and source evidence\nCapture required Scope Revision vector" { class: prepare }
+  normalize: "COMPOUND EFFECT\nResolve identities, predicate, equality, dependencies,\nconflict warnings, generated IDs, and proposal hash" { class: prepare }
+  request -> source -> prepare -> normalize
+}
+
+decision: {
+  label: "2. REVIEW THE COMPLETE PROPOSAL; APPROVAL BECOMES EPISODIC EVIDENCE"
+  grid-columns: 3
+  preview: "ACTION PREVIEW\nExact scope, proposition, evidence, time,\nand every dependent effect" { class: approval }
+  owner: "OWNER DECISION\nApprove | decline | expire" { shape: diamond; class: approval }
+  record: "EPISODIC APPROVAL EVENT\nProposal and prepared hashes" { class: evidence }
+  preview -> owner -> record
+}
+
+commit: {
+  label: "3. THE APPROVED PROPOSAL IS REVALIDATED AND COMMITTED ATOMICALLY"
+  grid-columns: 4
+  apply: "KERNEL APPLY\nUse the exact approved proposal" { class: prepare }
+  guards: "TRANSACTION GUARDS\nTurn lease | evidence | idempotency\nsource and destination Scope Revisions" { class: approval }
+  atomic: "ONE SQLITE TRANSACTION\nAppend operation + graph rows + state events\n+ operation scopes + resulting revisions" { class: evidence }
+  result: "STABLE RESULT\nOperation ID and semantic object IDs\nshared by every authorized surface" { class: prepare }
+  apply -> guards -> atomic -> result
+}
+
+unchanged: "NO-CHANGE OUTCOMES\nDeclined or expired at approval | stale or invalid at transaction guards\nNo semantic rows and no Scope Revision change" { class: reject }

@@ -1,0 +1,5 @@
+# github.com/davidadel66/evie/cmd/evie
+internal/web/static.go:17:12: pattern all:ui/dist: no matching files found
+FAIL	github.com/davidadel66/evie/cmd/evie [setup failed]
+ok  	github.com/davidadel66/evie/internal/eviedb	7.261s
+FAIL

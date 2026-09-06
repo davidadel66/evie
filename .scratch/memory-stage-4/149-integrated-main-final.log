@@ -1,0 +1,5 @@
+--- FAIL: TestStage4ForegroundRestartClosedReviewReplay (0.19s)
+    memory_stage4_conformance_test.go:438: canonical accepted read changed after rebuild <nil>
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.506s
+FAIL

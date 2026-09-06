@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-corrected-checkpoint-9pij5m74/internal/web/ui
+
+
+ Test Files  23 passed (23)
+      Tests  155 passed (155)
+   Start at  10:14:04
+   Duration  660ms (transform 1.08s, setup 0ms, import 2.19s, tests 351ms, environment 2ms)
+

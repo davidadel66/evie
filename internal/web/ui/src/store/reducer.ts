@@ -31,7 +31,7 @@ export type Item =
       key: string;
       tone: "warning";
       text: string;
-      reason: DiscardReason;
+      reason?: DiscardReason;
     }
   | {
       kind: "reasoning";

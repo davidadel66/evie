@@ -1,3 +1,4 @@
+import { entityLabel } from "./presentation";
 import type { SemanticEntity, SemanticObjectSummary } from "../api/memory";
 
 export type KnowledgeNode = {
@@ -42,14 +43,14 @@ const canvasHeight = 620;
 const nodeWidth = 160;
 const nodeHeight = 64;
 
-export function buildKnowledgeGraph(entityObjects: SemanticObjectSummary[], claimObjects: SemanticObjectSummary[]): KnowledgeGraph {
+export function buildKnowledgeGraph(entityObjects: SemanticObjectSummary[], claimObjects: SemanticObjectSummary[], ownerName?: string): KnowledgeGraph {
   const nodes = new Map<string, KnowledgeNode>();
   const addEntity = (entity: SemanticEntity, summary?: SemanticObjectSummary) => {
     const existing = nodes.get(entity.entity_id);
     nodes.set(entity.entity_id, {
       id: entity.entity_id,
       kind: "entity",
-      label: entity.canonical_name,
+      label: entityLabel(entity, ownerName),
       detail: entity.entity_type,
       entity,
       summary: summary ?? existing?.summary ?? entitySummary(entity),
@@ -87,6 +88,7 @@ export function buildKnowledgeGraph(entityObjects: SemanticObjectSummary[], clai
         kind: "literal",
         label: literal?.value ?? "Unknown value",
         detail: literal?.kind ?? "literal",
+        summary: object,
       });
     }
     edges.push({

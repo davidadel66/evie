@@ -1,0 +1,2912 @@
+diff --git a/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md b/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md
+new file mode 100644
+index 0000000..841a403
+--- /dev/null
++++ b/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md
+@@ -0,0 +1,144 @@
++# Stage 4 deterministic conformance, version 1
++
++This is the engineering acceptance artifact for story #149 and the Stage 4
++specification. It uses temporary real SQLite databases, scripted conversational
++and extraction responses, actual REPL turns, public compiler/review methods,
++CLI adapters, loopback HTTP, independent OS processes, and separately recorded
++browser interaction. No downloaded model, live inference service, owner
++adjudication, human pilot, resource result, or final holdout is involved.
++
++Run from the repository root after installing the existing UI dependencies:
++
++```sh
++npm --prefix internal/web/ui ci
++EVIE_PLAYWRIGHT_MODULE=/absolute/path/to/external/node_modules/playwright-core \
++  node scripts/memory-stage-4-browser.cjs /absolute/path/new-browser-run
++python3 scripts/memory-stage-4-conformance.py \
++  --browser-receipt /absolute/path/new-browser-run/browser.json \
++  --output-dir /absolute/path/new-conformance-run
++```
++
++The browser driver uses an externally supplied Playwright module and installed
++Google Chrome; `EVIE_CHROME_PATH` can select another Chrome executable. It builds
++the existing UI and starts the opt-in temporary test server itself. It installs
++no production dependency and touches no user database. The script records its
++actual browser interactions and source fingerprint in `browser.json`.
++
++The output directory must be new and outside source directories. The runner
++retains command output, a copy of the browser receipt, and `report.json` with
++source file hashes, HEAD, environment versions, exact command arrays, exit
++codes, log hashes, test outcomes, scenario evidence, warnings, and skipped
++checks. SQLite's actual runtime version is in the public startup receipt; the
++Go driver module version is also recorded. Generated UUIDs, observation times,
++and hashes derived from them vary between runs. The assertions, schema, and
++required scenario set are deterministic.
++
++`--focused-only` runs the integrated normal/race suites and the report boundary
++checks during development. It explicitly skips repository verification and UI
++tests, leaves the result incomplete, and exits 2. A missing browser receipt also
++leaves the result incomplete. The full command runs `./scripts/verify-change.sh`
++and the complete UI Vitest suite, in addition to the normal/race integrated
++checks. It retains the focused checks from every implementation story through
++the repository's full Go suite. A failed required command, missing scenario,
++skipped required focused test, stale browser receipt, or source change during
++verification fails the result and exits 1. Only a complete passing run exits 0.
++A failure in a scope, authority, source, persistence, or replay boundary blocks
++conformance and the pilot/release path; learned-quality metrics cannot offset it.
++
++The source fingerprint includes tracked and untracked code, configuration,
++tests, relevant documentation, executable bits, and recorded source deletions.
++It excludes build output, dependency directories, and run output in `.scratch/`
++or outside the repository. Generate the browser receipt after freezing the
++source, then run the conformance command against that same source. Any later
++source change requires rerunning the affected checks and issuing a new bound
++receipt. The fingerprint is an integrity binding, not a signature or an
++attestation that an operator actually performed a browser action.
++
++| Integrated scenario | Observable contract |
++| --- | --- |
++| Foreground, restart, closed review, replay | A real REPL turn commits and finalizes while extraction is stalled. Retry recovers the sealed selected window after reopening SQLite. The original source stays closed through exact inspection, approval, accepted reads, quarantine, and canonical rebuild. Replay makes zero model/extractor/tool calls. |
++| Scope adapter matrix | Global, two Workspaces, two projects, and two exact session destinations yield the same candidate, source, preview, and result through Kernel, CLI, and HTTP. Every wrong destination is denied; private memory never enters global reads by implicit Promotion. |
++| Generic storage containment | The registered `query_db` tool reads allowed control rows from the temporary read-only database, then rejects ordinary direct/nested, quoted, and qualified protected-table queries with exact policy errors and zero database opens. Unaccepted candidates remain absent from accepted reads. The privileged local shell is outside this model-tool boundary. |
++| History and generations | A failed earlier unit keeps the contiguous frontier behind a later empty success; explicit history counts selected and outside events separately. Edited/rejected interpretation lineage survives a new generation, while new support still needs owner review. Activation does not sweep old history. |
++| Atomic batch and source policy | Two dependent claims share explicitly chosen definitions in one atomic group. Failure writing the outer result rolls back all new effects. Exact retry preserves independent permanent rejection. A later source-policy revision redacts current disclosure without rewriting historical authority or accepted truth. |
++| Independent startup | Forty-eight ordinary public starts cover concurrent fresh and retained databases without test-only WAL priming. File mode and each physical connection's WAL, foreign key, and busy timeout settings are checked. |
++| Worker processes | Real process death, lease expiry, cancellation, uncertain capacity, mismatched release, trusted exact release, replacement, and delayed old transport completion preserve fencing, attempts, and single publication. |
++| Review processes | Process exit just before/after durable acceptance plus two competing identical delivery retries produce one canonical operation; a different delivery exposes the prior resolution. |
++
++`contract.json` binds eleven evidence records to ten named public integration
++or boundary tests. Each record is accepted only if its emitting test, parent
++scenario, and package pass. The report gate has its own deterministic tests for
++missing/duplicate/wrong-package evidence, split Go output, failed child tests,
++skips, stale browser data, and tracked/untracked/deleted source changes.
++
++Browser evidence uses this envelope:
++
++```json
++{
++  "version": "memory-stage-4-browser-v1",
++  "source_sha256": "value from --fingerprint",
++  "status": "passed",
++  "provenance": {
++    "web_interactions": "Describe actual candidate inspection, exact preview/approval, recorded operation provenance, and reload.",
++    "store_checks": "Describe accepted Store reads and projection/replay checks after browser completion."
++  },
++  "cases": [
++    {
++      "name": "global",
++      "checks": {
++        "scope": true,
++        "evidence": true,
++        "preview": true,
++        "resolution": true,
++        "reload": true,
++        "no_implicit_promotion": true,
++        "accepted_graph": true
++      }
++    }
++  ]
++}
++```
++
++This abbreviated example is incomplete and fails validation. The real receipt
++must contain all seven names from `contract.json`, with results backed by the
++actual interaction and exact Store checks. Inspect and approve each prepared
++candidate in its destination, compare the displayed source/preview hashes and
++recorded result to the public fixture values, reload, and verify the same
++accepted outcome. Include forbidden cross-scope access and private-to-global
++Promotion checks. Global accepted-record browsing uses a separate active global observer. Public
++accepted Store reads for global, Workspace, and project destinations use separate
++active observers in the exact context. Closed-source session destinations use
++owner operation inspection, exact temporary-database projection checks, and
++canonical replay; do not reopen the
++original source merely to make a UI route work, or label Store checks as graphical
++browser interactions. No human preference or quality judgment is inferred from
++scripted acceptance clicks.
++
++Controlled fixture changes are explicit: source sessions are closed in SQLite
++because the production session API exposes no close method; durable retry and
++lease clocks are advanced to make crash recovery deterministic; narrowly scoped
++triggers induce transaction failures or projection divergence; and a source
++policy revision tests current redaction. Work selection, scheduling, extraction,
++review, idempotency, accepted reads, verification, and owner rebuild still run
++through the implemented public boundaries.
++
++The SQLite startup change owned by #149 initializes the first physical SQLite
++connection before schema work and retries typed primary/extended `SQLITE_BUSY`
++errors. It does not retry DDL, migration, accepted operations, `SQLITE_LOCKED`,
++I/O errors, or message text that merely contains “busy.” Existing incompatible
++schema data must remain intact when initialization fails. Retry admission has
++a five-second context budget; modernc SQLite v1.53.0 initializes DSN PRAGMAs in
++`Driver.Open` with a background context, so an already entered physical open
++still observes the existing five-second SQLite busy timeout. This is not a
++claim that cancellation can interrupt that driver call or that all database
++contention is eliminated. The tests preserve the distinction between physical
++connection startup and subsequent schema/migration transactions.
++
++The other narrow production change provides a trusted Evie-reader constructor
++for the query tool. The default tool still supplies its existing default reader;
++the conformance test supplies a reader for its temporary database. Both paths use
++the same query implementation and unchanged SQL policy. This permits real allowed
++reads and exact containment checks without changing `HOME` or reading a user
++store. A targeted test-only Go overlay that permits unquoted memory identifiers
++passes the old quoted-only test and fails the enhanced test; the mutation is never
++applied to production source or a user database.
+diff --git a/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json b/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json
+new file mode 100644
+index 0000000..ed0e1fb
+--- /dev/null
++++ b/cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json
+@@ -0,0 +1,39 @@
++{
++  "version": "memory-stage-4-conformance-v1",
++  "kind": "scripted-engineering-conformance",
++  "packages": {
++    "github.com/davidadel66/evie/cmd/evie": [
++      "TestStage4ForegroundRestartClosedReviewReplay",
++      "TestStage4ScopeAdapterConformance",
++      "TestStage4GenericStorageConformance",
++      "TestStage4HistoryGapEmptyAndGenerationConformance",
++      "TestStage4AtomicBatchPolicyConformance"
++    ],
++    "github.com/davidadel66/evie/internal/eviedb": [
++      "TestStage4StartupRetryBoundaries",
++      "TestStage4StartupIndependentProcesses",
++      "TestStage4StartupIncompatibleSchemaFailsWithoutRewrite",
++      "TestStage4ProcessConformanceWorkerRecovery",
++      "TestStage4ProcessConformanceReviewCommitRecovery"
++    ]
++  },
++  "scenarios": {
++    "foreground_restart_closed_review_replay": "TestStage4ForegroundRestartClosedReviewReplay",
++    "scope_adapter_matrix": "TestStage4ScopeAdapterConformance",
++    "generic_storage_containment": "TestStage4GenericStorageConformance",
++    "history_gap_empty_generation_lineage": "TestStage4HistoryGapEmptyAndGenerationConformance",
++    "atomic_batch_source_policy": "TestStage4AtomicBatchPolicyConformance",
++    "public_sqlite_startup": "TestStage4StartupIndependentProcesses",
++    "process_crash": "TestStage4ProcessConformanceWorkerRecovery",
++    "expired_late_delivery": "TestStage4ProcessConformanceWorkerRecovery",
++    "cancelled_late_delivery": "TestStage4ProcessConformanceWorkerRecovery",
++    "before_commit": "TestStage4ProcessConformanceReviewCommitRecovery",
++    "after_commit": "TestStage4ProcessConformanceReviewCommitRecovery"
++  },
++  "browser": {
++    "version": "memory-stage-4-browser-v1",
++    "cases": ["global", "workspace-1", "workspace-2", "project-1", "project-2", "session-1", "session-2"],
++    "checks": ["scope", "evidence", "preview", "resolution", "reload", "no_implicit_promotion", "accepted_graph"]
++  },
++  "excluded_claims": ["learned extraction quality", "resource fitness", "human pilot", "final holdout", "ongoing compiler activation"]
++}
+diff --git a/cmd/evie/memory_stage4_browser_test.go b/cmd/evie/memory_stage4_browser_test.go
+new file mode 100644
+index 0000000..8490b93
+--- /dev/null
++++ b/cmd/evie/memory_stage4_browser_test.go
+@@ -0,0 +1,206 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"os/signal"
++	"strings"
++	"syscall"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/tools"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++// This opt-in helper serves only disposable scripted data to the external
++// browser driver. Ordinary go test runs do not launch a long-lived HTTP server.
++// SIGUSR1 requests final assertions; SIGINT/SIGTERM only clean up an aborted run.
++func TestStage4BrowserFixture(t *testing.T) {
++	if os.Getenv("EVIE_STAGE4_BROWSER_FIXTURE") != "1" {
++		return
++	}
++	f := newStage4ConformanceFixture(t)
++	type scopeCase struct {
++		Name      string                `json:"name"`
++		Scope     string                `json:"scope"`
++		Session   memory.Session        `json:"session"`
++		Candidate memory.OwnerCandidate `json:"candidate"`
++	}
++	cases := []scopeCase{{Name: "global", Scope: "global", Session: f.session}}
++	manager := sessionCompositionManager(t)
++	resolved, err := manager.ResolvePreset("")
++	if err != nil {
++		t.Fatal(err)
++	}
++	for i := 1; i <= 2; i++ {
++		workspace, err := f.store.RegisterWorkspace(f.ctx, fmt.Sprintf("Browser workspace %d", i))
++		if err != nil {
++			t.Fatal(err)
++		}
++		session, err := f.store.CreateWorkspaceSessionWithComposition(f.ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{Name: fmt.Sprintf("workspace-%d", i), Scope: "workspace:" + string(workspace.ID), Session: session})
++	}
++	for i := 1; i <= 2; i++ {
++		project, err := f.store.RegisterProject(f.ctx, fmt.Sprintf("Browser project %d", i), t.TempDir())
++		if err != nil {
++			t.Fatal(err)
++		}
++		session, err := f.store.CreateProjectSession(f.ctx, project.ID)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{Name: fmt.Sprintf("project-%d", i), Scope: "project:" + string(project.ID), Session: session})
++	}
++	for i := 1; i <= 2; i++ {
++		session, err := f.store.CreateGlobalSession(f.ctx)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{Name: fmt.Sprintf("session-%d", i), Scope: "session:" + string(session.ID), Session: session})
++	}
++	for i := range cases {
++		f.session = cases[i].Session
++		selection := f.foreground("I prefer café in this exact context.")
++		selection.Destination = cases[i].Scope
++		compiled := f.compile(selection, f.generation, f.extractor("café"))
++		f.closeSource()
++		cases[i].Candidate = f.inspectCandidate(compiled, cases[i].Scope)
++		cases[i].Session, err = f.store.GetSession(f.ctx, cases[i].Session.ID)
++		if err != nil {
++			t.Fatal(err)
++		}
++	}
++	observer, err := f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	runtime := agent.NewWithToolset(stage4ConversationClient{&f.modelCalls}, evieTestContextProfile("stage4-browser"), f.store.BindHistory(observer.ID, "browser-observer"), observer.ScopeContext(), f.store.BindTurnOwner(observer.ID, "browser-observer"), tools.NewToolset(nil))
++	controller := &stage4BrowserController{session: observer, runtime: runtime}
++	handler := web.WithCandidateReview(web.NewContextMemoryServer(nil, nil, nil, controller, f.store), f.store).Handler()
++	selected := httptest.NewRecorder()
++	request := httptest.NewRequest(http.MethodPost, "http://localhost/api/context-sessions/select", strings.NewReader(fmt.Sprintf(`{"sessionId":%q}`, observer.ID)))
++	request.Header.Set("Content-Type", "application/json")
++	handler.ServeHTTP(selected, request)
++	if selected.Code != http.StatusOK {
++		t.Fatalf("select real global observer: %d %s", selected.Code, selected.Body.String())
++	}
++	server := httptest.NewServer(handler)
++	defer server.Close()
++	raw, err := json.Marshal(map[string]any{"version": "memory-stage-4-browser-fixture-v1", "url": server.URL, "database": f.path, "cases": cases})
++	if err != nil {
++		t.Fatal(err)
++	}
++	signals := make(chan os.Signal, 1)
++	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGUSR1)
++	defer signal.Stop(signals)
++	fmt.Println("STAGE4_BROWSER_READY=" + string(raw))
++	if <-signals != syscall.SIGUSR1 {
++		return
++	}
++	server.Close()
++	// Bind final checks to the actual operation IDs and hashes returned by the
++	// browser. Candidate lineage only describes recurrence origins, so it is
++	// not the source of a primary candidate's own accepted operation.
++	var receipts []struct {
++		Name          string            `json:"name"`
++		CandidateID   string            `json:"candidate_id"`
++		OperationID   memory.SemanticID `json:"operation_id"`
++		PreviewSHA256 string            `json:"preview_sha256"`
++		EffectSHA256  string            `json:"effect_sha256"`
++	}
++	input, err := io.ReadAll(io.LimitReader(os.Stdin, 65537))
++	if err != nil || len(input) > 65536 || json.Unmarshal(input, &receipts) != nil || len(receipts) != len(cases) {
++		t.Fatalf("invalid browser operation receipts: %v", err)
++	}
++	modelCalls := f.modelCalls.Load()
++	proofs := []map[string]any{}
++	for i, entry := range cases {
++		receipt := receipts[i]
++		if receipt.Name != entry.Name || receipt.CandidateID != entry.Candidate.Ref.ID {
++			t.Fatalf("browser receipt identity mismatch for %s", entry.Name)
++		}
++		item, err := f.store.InspectOwnerCandidate(f.ctx, f.authority(entry.Scope), entry.Candidate.Ref.ID)
++		if err != nil || item.Candidate.ReviewState != "accepted" {
++			t.Fatalf("browser did not accept %s: %+v %v", entry.Name, item, err)
++		}
++		operation, err := f.store.InspectOwnerReviewOperation(f.ctx, f.authority(entry.Scope), receipt.OperationID)
++		if err != nil || operation.Preview.ScopeKey != entry.Scope || operation.Preview.SHA256 != receipt.PreviewSHA256 || operation.Preview.EffectSHA256 != receipt.EffectSHA256 || len(operation.Preview.Candidates) != 1 || operation.Preview.Candidates[0].Ref.ID != receipt.CandidateID || operation.Preview.Effect == nil || len(operation.Preview.Effect.Claims) != 1 {
++			t.Fatalf("accepted operation %s: %v", entry.Name, err)
++		}
++		reader := observer
++		switch {
++		case entry.Session.WorkspaceID != "":
++			reader, err = f.store.CreateWorkspaceSessionWithComposition(f.ctx, entry.Session.WorkspaceID, entry.Session.WorkspaceRevisionSnapshot, resolved.Receipt)
++		case entry.Session.ProjectID != "":
++			reader, err = f.store.CreateProjectSession(f.ctx, entry.Session.ProjectID)
++		}
++		if err != nil {
++			t.Fatal(err)
++		}
++		effect := operation.Preview.Effect.Claims[0]
++		if strings.HasPrefix(entry.Scope, "session:") {
++			// Exact closed-session destinations have no active read context.
++			// Check the disposable projection against the owner-visible operation;
++			// canonical replay below independently verifies accepted state.
++			var count int
++			err = f.db.QueryRow(`SELECT COUNT(*) FROM semantic_claims c JOIN semantic_scopes s ON s.scope_id=c.scope_id WHERE c.claim_id=? AND s.scope_key=? AND c.created_operation_id=? AND c.literal_value='café' AND c.lifecycle='active'`, effect.Claim.ID, entry.Scope, operation.OperationID).Scan(&count)
++			if err != nil || count != 1 || len(effect.Sources) == 0 {
++				t.Fatalf("accepted closed-session projection %s: %d %v", entry.Name, count, err)
++			}
++			for _, source := range effect.Sources {
++				err = f.db.QueryRow(`SELECT COUNT(*) FROM semantic_source_links l JOIN semantic_scopes s ON s.scope_id=l.scope_id WHERE l.source_link_id=? AND l.claim_id=? AND s.scope_key=? AND l.created_operation_id=? AND l.source_session_id=? AND l.event_id=? AND l.evidence_sha256=? AND l.authority='owner_statement' AND l.eligibility='eligible'`, source.ID, effect.Claim.ID, entry.Scope, operation.OperationID, entry.Session.ID, source.EventID, source.EvidenceSHA256).Scan(&count)
++				if err != nil || count != 1 {
++					t.Fatalf("accepted closed-session provenance %s: %d %v", entry.Name, count, err)
++				}
++			}
++		} else {
++			claim, err := f.store.InspectSemanticObjectAt(f.ctx, reader.ScopeContext(), memory.SemanticObjectClaim, effect.Claim.ID, memory.ClaimQuery{ScopeKey: entry.Scope})
++			if err != nil || claim.Scope.Key != entry.Scope || len(claim.Sources) == 0 {
++				t.Fatalf("accepted graph/provenance %s: %+v %v", entry.Name, claim, err)
++			}
++		}
++		proofs = append(proofs, map[string]any{"name": entry.Name, "scope": entry.Scope, "operation_id": operation.OperationID, "preview_sha256": operation.Preview.SHA256, "effect_sha256": operation.Preview.EffectSHA256, "accepted_graph": true})
++	}
++	global, err := f.store.InspectLiteralClaims(f.ctx, observer.ScopeContext())
++	if err != nil || len(global.Claims) != 2 {
++		t.Fatalf("private browser acceptances widened global graph: %+v %v", global, err)
++	}
++	var closed int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE status='closed'`).Scan(&closed); err != nil || closed != len(cases) {
++		t.Fatalf("source sessions reopened: %d %v", closed, err)
++	}
++	verified, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || !verified.Valid || f.modelCalls.Load() != modelCalls {
++		t.Fatalf("browser acceptance replay: %+v %v", verified, err)
++	}
++	raw, _ = json.Marshal(map[string]any{"version": "memory-stage-4-browser-kernel-v1", "status": "passed", "cases": proofs, "closed_sources": closed, "global_claims": len(global.Claims), "canonical_replay": true, "replay_model_calls": 0})
++	fmt.Println("STAGE4_BROWSER_VERIFIED=" + string(raw))
++}
++
++type stage4BrowserController struct {
++	session memory.Session
++	runtime *agent.Session
++}
++
++func (c *stage4BrowserController) Snapshot(context.Context) (web.ContextSessionSnapshot, error) {
++	return web.ContextSessionSnapshot{Workspaces: []memory.Workspace{}, Projects: []memory.Project{}, Sessions: []memory.SessionListing{{Session: c.session}}}, nil
++}
++func (*stage4BrowserController) RegisterWorkspace(context.Context, string) (memory.Workspace, error) {
++	return memory.Workspace{}, fmt.Errorf("browser observer does not register scopes")
++}
++func (c *stage4BrowserController) SelectSession(_ context.Context, selection web.ContextSessionSelection) (web.OpenedContextSession, error) {
++	if selection.SessionID != c.session.ID {
++		return web.OpenedContextSession{}, fmt.Errorf("browser observer session mismatch")
++	}
++	return web.OpenedContextSession{Session: c.session, Agent: c.runtime}, nil
++}
+diff --git a/cmd/evie/memory_stage4_conformance_test.go b/cmd/evie/memory_stage4_conformance_test.go
+new file mode 100644
+index 0000000..89eb4b2
+--- /dev/null
++++ b/cmd/evie/memory_stage4_conformance_test.go
+@@ -0,0 +1,456 @@
++package main
++
++import (
++	"bufio"
++	"bytes"
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"path/filepath"
++	"reflect"
++	"strings"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++	"github.com/davidadel66/evie/internal/tools"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++const stage4ConformanceVersion = "memory-stage-4-conformance-v1"
++
++type stage4ConformanceFixture struct {
++	t            *testing.T
++	ctx          context.Context
++	db           *sql.DB
++	path         string
++	store        *eviedb.Store
++	session      memory.Session
++	seed         memory.RememberLiteralProposal
++	generation   memory.CompilerGeneration
++	generationID string
++	modelCalls   atomic.Int64
++}
++
++func newStage4ConformanceFixture(t *testing.T) *stage4ConformanceFixture {
++	t.Helper()
++	f := &stage4ConformanceFixture{t: t, ctx: context.Background(), path: filepath.Join(t.TempDir(), "stage4.db"), generation: reviewCLIGeneration()}
++	var err error
++	f.db, err = eviedb.OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { f.db.Close() })
++	f.store = eviedb.NewStore(f.db)
++	f.session, err = f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.generationID, _, err = memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.seedLiteral("tea", 1)
++	return f
++}
++func (f *stage4ConformanceFixture) seedLiteral(value string, key int) {
++	f.t.Helper()
++	lease, err := f.store.AcquireTurnLease(f.ctx, f.session.ID, "stage4-seed", time.Minute)
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	event, err := f.store.AppendEventWithLease(f.ctx, f.session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "/remember drink " + value})
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	f.seed, err = f.store.PrepareRememberLiteral(f.ctx, f.session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: stage4Key(key), SourceEventID: event.ID, Predicate: "drink", PredicateLabel: "drink", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: value}})
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	if _, err = f.store.ApplyRememberLiteral(f.ctx, lease, f.seed); err != nil {
++		f.t.Fatal(err)
++	}
++	if err = f.store.ReleaseTurnLease(f.ctx, f.session.ID, lease.HolderID, lease.FencingToken); err != nil {
++		f.t.Fatal(err)
++	}
++}
++func stage4Key(n int) string { return fmt.Sprintf("idem:v1:14900000-0000-4000-8000-%012d", n) }
++func stage4Scope(session memory.Session) string {
++	if session.WorkspaceID != "" {
++		return "workspace:" + string(session.WorkspaceID)
++	}
++	if session.ProjectID != "" {
++		return "project:" + string(session.ProjectID)
++	}
++	return "global"
++}
++func (f *stage4ConformanceFixture) reopen() {
++	f.t.Helper()
++	if err := f.db.Close(); err != nil {
++		f.t.Fatal(err)
++	}
++	var err error
++	f.db, err = eviedb.OpenDBAt(f.path)
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	f.store = eviedb.NewStore(f.db)
++}
++func (f *stage4ConformanceFixture) closeSource() {
++	f.t.Helper()
++	if _, err := f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, f.session.ID); err != nil {
++		f.t.Fatal(err)
++	}
++}
++func (f *stage4ConformanceFixture) authority(scope string) eviedb.OwnerReviewContext {
++	f.t.Helper()
++	a, err := f.store.LocalOwnerReviewContext(f.ctx, scope)
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	return a
++}
++
++type stage4ConversationClient struct{ calls *atomic.Int64 }
++
++func (c stage4ConversationClient) ChatStream(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
++	c.calls.Add(1)
++	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", Content: "Recorded in this conversation."}}}}, nil
++}
++func (f *stage4ConformanceFixture) foreground(content string) memory.CompilationSelection {
++	f.t.Helper()
++	runtime := agent.NewWithToolset(stage4ConversationClient{&f.modelCalls}, evieTestContextProfile("stage4-scripted"), f.store.BindHistory(f.session.ID, "stage4-foreground"), f.session.ScopeContext(), f.store.BindTurnOwner(f.session.ID, "stage4-foreground"), tools.NewToolset(nil))
++	done := make(chan struct{})
++	var out bytes.Buffer
++	go func() {
++		defer close(done)
++		runREPLContextIO(f.ctx, runtime, bufio.NewScanner(strings.NewReader(content+"\n")), &out)
++	}()
++	select {
++	case <-done:
++	case <-time.After(3 * time.Second):
++		f.t.Fatal("foreground waited for unrelated extraction")
++	}
++	if !strings.Contains(out.String(), "Recorded in this conversation.") {
++		f.t.Fatalf("REPL did not finalize: %s", out.String())
++	}
++	events, err := f.store.LoadEvents(f.ctx, f.session.ID)
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	var root memory.Event
++	for _, event := range events {
++		if event.Type == memory.EventUserMessage {
++			root = event
++		}
++	}
++	if root.Content != content || events[len(events)-1].Type != memory.EventAssistantMessage {
++		f.t.Fatal("foreground terminal event did not commit")
++	}
++	return memory.CompilationSelection{SessionID: f.session.ID, RootID: root.ID, Cutoff: events[len(events)-1].Sequence, Destination: stage4Scope(f.session)}
++}
++
++type stage4ScriptedExtractor struct {
++	subject, predicate memory.SemanticID
++	value              string
++	calls              atomic.Int64
++	run                func(context.Context, memory.CompilerRequest) (eviedb.CompilerExtraction, error)
++}
++
++func (*stage4ScriptedExtractor) ServerIdentity() string { return "scripted:stage4-conformance" }
++func (*stage4ScriptedExtractor) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return nil
++}
++func (e *stage4ScriptedExtractor) Extract(ctx context.Context, _ memory.CompilerGeneration, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++	e.calls.Add(1)
++	if e.run != nil {
++		return e.run(ctx, r)
++	}
++	return stage4CandidateOutput(r, e.subject, e.predicate, e.value), nil
++}
++func stage4CandidateOutput(r memory.CompilerRequest, subject, predicate memory.SemanticID, value string) eviedb.CompilerExtraction {
++	candidates := []memory.ExtractorCandidate{}
++	if value != "" {
++		var source memory.EvidenceLocator
++		for _, s := range r.Window.Sources {
++			if s.Usage == "new_support" && s.Authority == memory.AuthorityOwnerStatement {
++				source = s.Locator
++				break
++			}
++		}
++		candidates = append(candidates, memory.ExtractorCandidate{Proposition: memory.ClaimProposition{SubjectEntityID: subject, PredicateID: predicate, Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: value}}, Polarity: memory.PolarityAffirmed}, Support: []memory.EvidenceLocator{source}, Context: []memory.EvidenceLocator{}})
++	}
++	raw, _ := json.Marshal(memory.CompilerResponse{RequestID: r.ID, Candidates: candidates})
++	return eviedb.CompilerExtraction{Raw: raw, ReleaseEvidence: "completed"}
++}
++func (f *stage4ConformanceFixture) extractor(value string) *stage4ScriptedExtractor {
++	return &stage4ScriptedExtractor{subject: f.seed.Subject.ID, predicate: f.seed.Predicate.ID, value: value}
++}
++func (f *stage4ConformanceFixture) config(e eviedb.CompilerExtractor) eviedb.CompilerSupervisorConfig {
++	return eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{f.generationID: e}}
++}
++func (f *stage4ConformanceFixture) compile(selection memory.CompilationSelection, g memory.CompilerGeneration, e eviedb.CompilerExtractor) memory.Compilation {
++	f.t.Helper()
++	c, err := f.store.CompileCandidateUnit(f.ctx, f.session.ScopeContext(), selection, g, e)
++	if err != nil {
++		f.t.Fatalf("compile %s/%s: %v", c.State, c.Reason, err)
++	}
++	return c
++}
++func (f *stage4ConformanceFixture) inspectCandidate(c memory.Compilation, scope string) memory.OwnerCandidate {
++	f.t.Helper()
++	if len(c.Candidates) != 1 {
++		f.t.Fatalf("candidate count %d state %s", len(c.Candidates), c.State)
++	}
++	item, err := f.store.InspectOwnerCandidate(f.ctx, f.authority(scope), c.Candidates[0].ID)
++	if err != nil {
++		f.t.Fatal(err)
++	}
++	return item
++}
++func stage4CLI(t *testing.T, store *eviedb.Store, target any, args ...string) {
++	t.Helper()
++	var out bytes.Buffer
++	handled, err := runOwnerReviewManagement(context.Background(), append([]string{"memory-review"}, args...), &out, store)
++	if !handled || err != nil {
++		t.Fatalf("CLI %v: %v", args, err)
++	}
++	if err = json.Unmarshal(out.Bytes(), target); err != nil {
++		t.Fatal(err)
++	}
++}
++func stage4HTTP(t *testing.T, server *httptest.Server, route string, input any, status int, target any) []byte {
++	t.Helper()
++	raw, err := json.Marshal(input)
++	if err != nil {
++		t.Fatal(err)
++	}
++	request, err := http.NewRequest(http.MethodPost, server.URL+"/api/memory/candidates/"+route, bytes.NewReader(raw))
++	if err != nil {
++		t.Fatal(err)
++	}
++	request.Header.Set("Content-Type", "application/json")
++	request.Header.Set("Origin", server.URL)
++	response, err := server.Client().Do(request)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer response.Body.Close()
++	body, err := io.ReadAll(response.Body)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if response.StatusCode != status {
++		t.Fatalf("HTTP %s got %d want %d: %s", route, response.StatusCode, status, body)
++	}
++	if response.Header.Get("Cache-Control") != "no-store" {
++		t.Fatal("review response could be cached")
++	}
++	if target != nil {
++		if err = json.Unmarshal(body, target); err != nil {
++			t.Fatal(err)
++		}
++	}
++	return body
++}
++func stage4Evidence(t *testing.T, scenario string, details map[string]any) {
++	t.Helper()
++	raw, err := json.Marshal(map[string]any{"version": stage4ConformanceVersion, "scenario": scenario, "details": details})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Log("STAGE4_EVIDENCE " + string(raw))
++}
++
++func TestStage4ForegroundRestartClosedReviewReplay(t *testing.T) {
++	f := newStage4ConformanceFixture(t)
++	extractor := f.extractor("café")
++	started := make(chan struct{})
++	extractor.run = func(ctx context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		close(started)
++		<-ctx.Done()
++		return eviedb.CompilerExtraction{ReleaseEvidence: "completed"}, ctx.Err()
++	}
++	activation, err := f.store.ActivateCompiler(f.ctx, f.session.ScopeContext(), memory.CompilerActivationRequest{RequestID: "stage4-live", Selector: memory.CompilerLiveSelector{SourceScope: "global", Destination: "global", SessionID: f.session.ID}}, f.generation, extractor)
++	if err != nil {
++		t.Fatal(err)
++	}
++	selected := f.foreground("I prefer café as my standing drink.")
++	var queued memory.Compilation
++	for range 12 {
++		if _, err = f.store.ReconcileCompilerEvidence(f.ctx, f.config(extractor)); err != nil {
++			t.Fatal(err)
++		}
++		status, err := f.store.InspectCompilerActivations(f.ctx, f.session.ScopeContext())
++		if err != nil {
++			t.Fatal(err)
++		}
++		if len(status.Roots) > 0 && status.Roots[0].SelectionID != "" {
++			queued, err = f.store.InspectCompilation(f.ctx, f.session.ScopeContext(), status.Roots[0].SelectionID)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if queued.State == "queued" {
++				break
++			}
++		}
++	}
++	if queued.JobID == "" || queued.Window.Selection.RootID != selected.RootID {
++		t.Fatalf("activation did not select foreground root %+v", queued)
++	}
++	workCtx, cancel := context.WithCancel(f.ctx)
++	defer cancel()
++	workerDone := make(chan error, 1)
++	go func() { _, err := f.store.RunCompilerStep(workCtx, f.config(extractor)); workerDone <- err }()
++	select {
++	case <-started:
++	case <-time.After(3 * time.Second):
++		t.Fatal("selected worker never entered extractor")
++	}
++	later := f.foreground("The foreground conversation remains available while extraction waits.")
++	if extractor.calls.Load() != 1 || f.modelCalls.Load() != 2 {
++		t.Fatal("background stall altered foreground dispatch")
++	}
++	foreground, err := f.store.InspectOwnerCompilerDiagnostics(f.ctx, f.authority("global"), memory.CompilerDiagnosticsQuery{SessionID: f.session.ID, View: "foreground"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(foreground.Foreground) != 2 {
++		t.Fatalf("missing actual host boundaries %+v", foreground)
++	}
++	for _, measurement := range foreground.Foreground {
++		if measurement.TerminalCommittedAtUnixMS == nil || measurement.ResponseFinalizedAtUnixMS == nil || measurement.TerminalCommitNanos == nil || measurement.ResponseFinalizationNanos == nil || *measurement.ResponseFinalizationNanos < *measurement.TerminalCommitNanos {
++			t.Fatalf("missing/distorted foreground observation %+v", measurement)
++		}
++	}
++	cancel()
++	select {
++	case err = <-workerDone:
++		if !errors.Is(err, context.Canceled) {
++			t.Fatalf("shutdown %v", err)
++		}
++	case <-time.After(3 * time.Second):
++		t.Fatal("worker shutdown did not release local client")
++	}
++	before, err := f.store.InspectCompilation(f.ctx, f.session.ScopeContext(), queued.JobID)
++	if err != nil || before.State != "retry_wait" || before.Attempts != 1 {
++		t.Fatalf("durable shutdown %+v %v", before, err)
++	}
++	frozenWindow := before.Window
++	f.reopen()
++	// Control only the already documented retry clock; the sealed work, attempt,
++	// capacity disposition and selection remain durable across the public reopen.
++	if _, err = f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=0 WHERE job_id=?`, queued.JobID); err != nil {
++		t.Fatal(err)
++	}
++	recoveredExtractor := f.extractor("café")
++	if worked, err := f.store.RunCompilerStep(f.ctx, f.config(recoveredExtractor)); !worked || err != nil {
++		t.Fatalf("recovery %v %v", worked, err)
++	}
++	compiled, err := f.store.InspectCompilation(f.ctx, f.session.ScopeContext(), queued.JobID)
++	if err != nil || compiled.State != "completed_candidates" || compiled.Attempts != 2 || !reflect.DeepEqual(compiled.Window, frozenWindow) {
++		t.Fatalf("recovery changed sealed work %+v %v", compiled, err)
++	}
++	acceptedBefore, err := f.store.InspectLiteralClaims(f.ctx, f.session.ScopeContext())
++	if err != nil || len(acceptedBefore.Claims) != 1 || acceptedBefore.Claims[0].Literal.Value != "tea" {
++		t.Fatalf("candidate escaped isolation %+v %v", acceptedBefore, err)
++	}
++	f.closeSource()
++	item := f.inspectCandidate(compiled, "global")
++	var cliItem, httpItem memory.OwnerCandidate
++	stage4CLI(t, f.store, &cliItem, "inspect", "--scope", "global", "--id", item.Ref.ID)
++	server := httptest.NewServer(web.WithCandidateReview(web.NewServer(nil), f.store).Handler())
++	defer server.Close()
++	stage4HTTP(t, server, "inspect", map[string]any{"scope_key": "global", "id": item.Ref.ID}, 200, &httpItem)
++	if !reflect.DeepEqual(item, cliItem) || !reflect.DeepEqual(item, httpItem) {
++		t.Fatal("Kernel/CLI/HTTP candidate evidence mismatch")
++	}
++	var preview memory.ReviewPreview
++	stage4HTTP(t, server, "prepare", map[string]any{"scope_key": "global", "candidate": item.Ref, "action": "accept"}, 200, &preview)
++	if preview.ScopeKey != "global" || preview.Effect == nil || len(preview.Effect.Claims) != 1 || len(preview.Effect.Claims[0].Sources) != 1 {
++		t.Fatalf("wrong full effect %+v", preview)
++	}
++	source := preview.Effect.Claims[0].Sources[0]
++	if source.EventID != selected.RootID || source.Evidence != "I prefer café as my standing drink." || source.Authority != memory.AuthorityOwnerStatement || source.Actor != "owner" || source.SessionID != f.session.ID {
++		t.Fatalf("original source authority %+v", source)
++	}
++	decision := memory.ReviewDecision{DeliveryKey: stage4Key(2), PreviewID: preview.ID, PreviewSHA256: preview.SHA256, Action: "accept", Reason: "Scripted conformance approval; not an owner pilot observation."}
++	var resolution memory.ReviewResult
++	stage4CLI(t, f.store, &resolution, "resolve", "--scope", "global", "--preview", decision.PreviewID, "--digest", decision.PreviewSHA256, "--delivery", decision.DeliveryKey, "--action", "accept", "--reason", decision.Reason)
++	if resolution.Operation == nil || len(resolution.Operation.ClaimIDs) != 1 {
++		t.Fatalf("missing atomic result %+v", resolution)
++	}
++	var repeated memory.ReviewResult
++	stage4HTTP(t, server, "resolve", map[string]any{"scope_key": "global", "decision": decision}, 200, &repeated)
++	if !reflect.DeepEqual(resolution, repeated) {
++		t.Fatal("HTTP duplicate delivery differs from CLI exact result")
++	}
++	operation, err := f.store.InspectOwnerReviewOperation(f.ctx, f.authority("global"), resolution.Operation.OperationID)
++	if err != nil || !reflect.DeepEqual(operation.Preview, preview) {
++		t.Fatalf("canonical accepted preview changed %v", err)
++	}
++	observer, err := f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	readTime := resolution.Operation.TransactionTime
++	readQuery := memory.ClaimQuery{ValidAt: &readTime, AsKnownAt: &readTime}
++	claim, err := f.store.InspectSemanticObjectAt(f.ctx, observer.ScopeContext(), memory.SemanticObjectClaim, resolution.Operation.ClaimIDs[0], readQuery)
++	if err != nil {
++		t.Fatal(err)
++	}
++	beforeReplayCalls := f.modelCalls.Load() + extractor.calls.Load() + recoveredExtractor.calls.Load()
++	verified, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || !verified.Valid {
++		t.Fatalf("canonical replay %v %+v", err, verified)
++	}
++	// Inject projection-only corruption to exercise quarantine and public owner
++	// rebuild against the actual just-accepted operation stream, not a fixture op.
++	if _, err = f.db.Exec(`DROP TRIGGER semantic_claims_append_only_update`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE semantic_claims SET literal_value='corrupted projection' WHERE claim_id=?`, resolution.Operation.ClaimIDs[0]); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`CREATE TRIGGER semantic_claims_append_only_update BEFORE UPDATE ON semantic_claims BEGIN SELECT RAISE(ABORT,'semantic claims are append-only'); END`); err != nil {
++		t.Fatal(err)
++	}
++	divergent, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || divergent.Valid {
++		t.Fatalf("projection divergence hidden %+v %v", divergent, err)
++	}
++	if _, err = f.store.InspectLiteralClaims(f.ctx, observer.ScopeContext()); !errors.Is(err, eviedb.ErrSemanticScopeQuarantined) {
++		t.Fatalf("quarantine bypass %v", err)
++	}
++	rebuilt, err := f.store.OwnerRebuildSemanticProjection(f.ctx, "stage4-conformance-rebuild")
++	if err != nil || !rebuilt.Valid {
++		t.Fatalf("owner rebuild %+v %v", rebuilt, err)
++	}
++	restored, err := f.store.InspectSemanticObjectAt(f.ctx, observer.ScopeContext(), memory.SemanticObjectClaim, resolution.Operation.ClaimIDs[0], readQuery)
++	if err != nil || !reflect.DeepEqual(restored, claim) {
++		t.Fatalf("canonical accepted read changed after rebuild %v", err)
++	}
++	if beforeReplayCalls != f.modelCalls.Load()+extractor.calls.Load()+recoveredExtractor.calls.Load() {
++		t.Fatal("replay dispatched model/extractor")
++	}
++	var toolEvents, operations int
++	if err = f.db.QueryRow(`SELECT COUNT(*) FROM events WHERE event_type IN ('tool_intent','tool_succeeded')`).Scan(&toolEvents); err != nil || toolEvents != 0 {
++		t.Fatal("replay external effect", toolEvents, err)
++	}
++	if err = f.db.QueryRow(`SELECT COUNT(*) FROM semantic_operations`).Scan(&operations); err != nil || operations != 2 {
++		t.Fatalf("duplicate accepted operation %d %v", operations, err)
++	}
++	if source.EventID == later.RootID || activation.AfterPosition >= selected.Cutoff {
++		t.Fatal("outside source replaced frozen support")
++	}
++	stage4Evidence(t, "foreground_restart_closed_review_replay", map[string]any{"foreground_turns": 2, "stalled_inferences": 1, "recovered_attempts": compiled.Attempts, "source_session_closed": true, "candidate_id": item.Ref.ID, "preview_sha256": preview.SHA256, "effect_sha256": preview.EffectSHA256, "source_sha256": source.EvidenceSHA256, "accepted_operation": resolution.Operation.OperationID, "adapter_results_equal": true, "canonical_replay": true, "quarantine_rebuild": true, "replay_model_calls": 0, "replay_external_effects": 0})
++}
+diff --git a/cmd/evie/memory_stage4_history_conformance_test.go b/cmd/evie/memory_stage4_history_conformance_test.go
+new file mode 100644
+index 0000000..68667e1
+--- /dev/null
++++ b/cmd/evie/memory_stage4_history_conformance_test.go
+@@ -0,0 +1,168 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"net/http/httptest"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++func TestStage4HistoryGapEmptyAndGenerationConformance(t *testing.T) {
++	f := newStage4ConformanceFixture(t)
++	f.generation.EquivalencePolicy = memory.CompilerEquivalencePolicyV2
++	var err error
++	f.generationID, _, err = memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	outside := f.foreground("This earlier conversation remains outside selected compilation.")
++	gapSelection := f.foreground("I prefer tea but this scripted compilation will fail.")
++	gap, err := f.store.QueueCandidateUnit(f.ctx, f.session.ScopeContext(), gapSelection, f.generation, f.extractor("tea"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	failed := f.extractor("")
++	failed.run = func(_ context.Context, _ memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		return eviedb.CompilerExtraction{ReleaseEvidence: "completed"}, eviedb.ErrCompilerTerminalOutput
++	}
++	if worked, err := f.store.RunCompilerStep(f.ctx, f.config(failed)); !worked || err == nil {
++		t.Fatalf("expected terminal scripted gap %v %v", worked, err)
++	}
++	emptySelection := f.foreground("No durable memory is requested from this small talk.")
++	empty := f.compile(emptySelection, f.generation, f.extractor(""))
++	if empty.State != "completed_empty" || len(empty.Candidates) != 0 {
++		t.Fatalf("empty completion %+v", empty)
++	}
++	decisionSelection := f.foreground("I drink coffee and espresso.")
++	original := f.compile(decisionSelection, f.generation, f.extractor("coffee"))
++	first := f.inspectCandidate(original, "global")
++	a := f.authority("global")
++	stale, err := f.store.PrepareOwnerCandidateReview(f.ctx, a, first.Ref, "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	editedProposal := first.Candidate.Proposal
++	editedProposal.Proposition.Object.Literal = &memory.TypedLiteral{Kind: memory.LiteralText, Value: "espresso"}
++	edited, err := f.store.EditOwnerCandidate(f.ctx, a, memory.ReviewEditDecision{Candidate: first.Ref, Proposal: editedProposal, Reason: "Select the other explicitly named drink for this scripted interpretation."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(f.ctx, a, memory.ReviewDecision{DeliveryKey: stage4Key(200), PreviewID: stale.ID, PreviewSHA256: stale.SHA256, Action: "accept"}); !errors.Is(err, eviedb.ErrReviewStale) {
++		t.Fatalf("old interpretation approval reused: %v", err)
++	}
++	server := httptest.NewServer(web.WithCandidateReview(web.NewServer(nil), f.store).Handler())
++	defer server.Close()
++	var reject memory.ReviewPreview
++	stage4HTTP(t, server, "prepare", map[string]any{"scope_key": "global", "candidate": edited.Ref, "action": "reject"}, 200, &reject)
++	var rejected memory.ReviewResult
++	stage4CLI(t, f.store, &rejected, "resolve", "--scope", "global", "--preview", reject.ID, "--digest", reject.SHA256, "--delivery", stage4Key(201), "--action", "reject")
++	if rejected.Operation != nil {
++		t.Fatal("rejection changed accepted memory")
++	}
++	// Explicit history covers the failed earlier unit and later completed-empty
++	// unit only. Neither out-of-order success nor a scan cursor fills that gap.
++	events, err := f.store.LoadEvents(f.ctx, f.session.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var firstSequence int64
++	var lastID memory.EventID
++	for _, event := range events {
++		if event.ID == gapSelection.RootID {
++			firstSequence = event.Sequence
++		}
++		if event.Sequence == emptySelection.Cutoff {
++			lastID = event.ID
++		}
++	}
++	request := memory.CompilerHistoryRequest{RequestID: "stage4-explicit-history", Ranges: []memory.CompilerHistoryRange{{SourceScope: "global", Destination: "global", SessionID: f.session.ID, FirstSequence: firstSequence, LastSequence: emptySelection.Cutoff, FirstEventID: gapSelection.RootID, LastEventID: lastID}}}
++	receipt, err := f.store.SelectCompilerHistory(f.ctx, []memory.ScopeContext{f.session.ScopeContext()}, request, f.generation, f.extractor(""))
++	if err != nil {
++		t.Fatal(err)
++	}
++	for range 12 {
++		if _, err = f.store.ReconcileCompilerHistory(f.ctx, f.config(f.extractor(""))); err != nil {
++			t.Fatal(err)
++		}
++	}
++	progress, err := f.store.InspectCompilerHistory(f.ctx, []memory.ScopeContext{f.session.ScopeContext()}, request.RequestID, 0, 0, 64)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if progress.ContiguousFrontier != firstSequence-1 || len(progress.Intervals) != 2 || progress.Intervals[0].State != "failed" || progress.Intervals[1].State != "completed_empty" || progress.SelectedSessionEvents != int64(emptySelection.Cutoff-firstSequence+1) || progress.OutsideSelectionEvents != int64(len(events))-(emptySelection.Cutoff-firstSequence+1) {
++		t.Fatalf("gap/completed/outside conflation %+v", progress)
++	}
++	f.closeSource()
++	oldSession := f.session
++	f.reopen()
++	a = f.authority("global")
++	next := f.generation
++	next.Decoding.Seed++
++	repeated := f.compile(decisionSelection, next, f.extractor("coffee"))
++	if len(repeated.Candidates) != 1 || repeated.Candidates[0].EquivalentTo != first.Ref.ID || repeated.Candidates[0].ReviewState != "unresolved" {
++		t.Fatalf("recurrence copied/lost owner authority %+v", repeated)
++	}
++	lineage, err := f.store.InspectOwnerCandidateLineage(f.ctx, a, repeated.Candidates[0].ID)
++	if err != nil || !lineage.Suppressed || lineage.Origin == nil || lineage.Origin.Ref != rejected.Candidates[0] || lineage.Origin.Edit == nil || lineage.Resolution == nil || lineage.Resolution.AuditID != rejected.AuditID || lineage.Decision == nil || lineage.Decision.Action != "reject" {
++		t.Fatalf("generation erased edit/rejection lineage %+v %v", lineage, err)
++	}
++	var cliLineage memory.CandidateLineage
++	stage4CLI(t, f.store, &cliLineage, "lineage", "--scope", "global", "--id", repeated.Candidates[0].ID)
++	kernelJSON, _ := json.Marshal(lineage)
++	cliJSON, _ := json.Marshal(cliLineage)
++	if string(kernelJSON) != string(cliJSON) {
++		t.Fatal("CLI lineage differs from preserved Kernel history")
++	}
++	freshSession, err := f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.session = freshSession
++	newSupport := f.foreground("I drink coffee and espresso.")
++	fresh := f.compile(newSupport, next, f.extractor("coffee"))
++	freshItem := f.inspectCandidate(fresh, "global")
++	if freshItem.Candidate.EquivalentTo != "" || freshItem.Candidate.ReviewState != "unresolved" {
++		t.Fatal("new evidence inherited old rejection")
++	}
++	freshLineage, err := f.store.InspectOwnerCandidateLineage(f.ctx, f.authority("global"), freshItem.Ref.ID)
++	if err != nil || freshLineage.Suppressed {
++		t.Fatalf("fresh support suppressed %+v %v", freshLineage, err)
++	}
++	selector := memory.CompilerLiveSelector{SourceScope: "global", Destination: "global", SessionID: f.session.ID}
++	activation, err := f.store.ActivateCompiler(f.ctx, f.session.ScopeContext(), memory.CompilerActivationRequest{RequestID: "stage4-next-generation", Selector: selector}, next, f.extractor("coffee"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	newest := next
++	newest.Prompt += " Preserve the same bounded output contract."
++	upgraded, err := f.store.ActivateCompiler(f.ctx, f.session.ScopeContext(), memory.CompilerActivationRequest{RequestID: "stage4-upgrade-generation", Selector: selector, ExpectedRevision: activation.Revision}, newest, f.extractor("coffee"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if upgraded.GenerationID == activation.GenerationID || upgraded.AfterPosition != activation.AfterPosition {
++		t.Fatal("generation frontier changed without appended evidence")
++	}
++	var swept int
++	if err = f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_jobs WHERE generation_id=?`, upgraded.GenerationID).Scan(&swept); err != nil || swept != 0 {
++		t.Fatal("generation activation swept historical events", swept, err)
++	}
++	oldProgress, err := f.store.InspectCompilerHistory(f.ctx, []memory.ScopeContext{oldSession.ScopeContext()}, request.RequestID, 0, 0, 64)
++	if err != nil || oldProgress.Receipt.GenerationID != receipt.GenerationID || oldProgress.ContiguousFrontier != progress.ContiguousFrontier {
++		t.Fatalf("generation rewrote prior coverage %+v %v", oldProgress, err)
++	}
++	claims, err := f.store.InspectLiteralClaims(f.ctx, f.session.ScopeContext())
++	if err != nil || len(claims.Claims) != 1 {
++		t.Fatalf("unaccepted/rejected state escaped into accepted reads %+v %v", claims, err)
++	}
++	verified, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || !verified.Valid {
++		t.Fatalf("history canonical replay %v %+v", err, verified)
++	}
++	raw, _ := json.Marshal(lineage.Origin.Edit)
++	stage4Evidence(t, "history_gap_empty_generation_lineage", map[string]any{"gap_job_id": gap.JobID, "empty_job_id": empty.JobID, "selected_events": progress.SelectedSessionEvents, "outside_events": progress.OutsideSelectionEvents, "outside_root": outside.RootID, "contiguous_frontier": progress.ContiguousFrontier, "receipt_generation": receipt.GenerationID, "repeat_generation": repeated.GenerationID, "upgrade_generation": upgraded.GenerationID, "edit_sha256": memory.CompilerHash(raw), "preserved_rejection": true, "fresh_support_requires_review": true, "automatic_history_sweep": false, "canonical_replay": true})
++}
+diff --git a/cmd/evie/memory_stage4_review_conformance_test.go b/cmd/evie/memory_stage4_review_conformance_test.go
+new file mode 100644
+index 0000000..7553692
+--- /dev/null
++++ b/cmd/evie/memory_stage4_review_conformance_test.go
+@@ -0,0 +1,191 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"net/http/httptest"
++	"reflect"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++func TestStage4AtomicBatchPolicyConformance(t *testing.T) {
++	f := newStage4ConformanceFixture(t)
++	// Two claims explicitly share newly chosen definitions, forming one real
++	// dependency component. A third candidate remains an independent group.
++	generation := f.generation
++	generation.EntityPolicy = memory.CompilerIdentityPolicyV2
++	generation.PredicatePolicy = generation.EntityPolicy
++	generation.ValidationPolicy = generation.EntityPolicy
++	generation.EquivalencePolicy = generation.EntityPolicy
++	generation.EffectPolicy = generation.EntityPolicy
++	extractor := f.extractor("")
++	extractor.run = func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		candidates := []memory.ExtractorCandidate{}
++		for _, value := range []string{"coffee", "espresso"} {
++			output := stage4CandidateOutput(r, f.seed.Subject.ID, f.seed.Predicate.ID, value)
++			var parsed memory.CompilerResponse
++			if err := json.Unmarshal(output.Raw, &parsed); err != nil {
++				return eviedb.CompilerExtraction{}, err
++			}
++			c := parsed.Candidates[0]
++			c.Proposition.SubjectEntityID = ""
++			c.Proposition.PredicateID = ""
++			c.Identity = &memory.CandidateIdentityProposal{Subject: &memory.EntityMention{Name: "Maya", EntityType: "person", Support: c.Support[0]}, Predicate: &memory.PredicateDefinition{Token: "likes", Label: "likes", ObjectConstraint: memory.PredicateObjectConstraint(memory.LiteralText), Cardinality: memory.CardinalityMany}}
++			candidates = append(candidates, c)
++		}
++		raw, err := json.Marshal(memory.CompilerResponse{RequestID: r.ID, Candidates: candidates})
++		return eviedb.CompilerExtraction{Raw: raw, ReleaseEvidence: "completed"}, err
++	}
++	selected := f.foreground("Maya likes coffee and espresso.")
++	compiled := f.compile(selected, generation, extractor)
++	if len(compiled.Candidates) != 2 {
++		t.Fatal("missing dependent candidates")
++	}
++	refs := []memory.CandidateRef{}
++	for _, candidate := range compiled.Candidates {
++		ref := memory.CandidateRef{ID: candidate.ID, ReviewRevision: candidate.ReviewRevision}
++		a := f.authority("global")
++		options, err := f.store.OwnerCandidateIdentityOptions(f.ctx, a, ref)
++		if err != nil {
++			t.Fatal(err)
++		}
++		chosen, err := f.store.ChooseOwnerCandidateIdentity(f.ctx, a, memory.ReviewIdentityDecision{Candidate: ref, OptionsSHA256: options.SHA256, Choices: memory.ReviewIdentityChoices{Subject: &memory.ReviewEntityChoice{Create: true}, Predicate: &memory.ReviewPredicateChoice{Create: true}}})
++		if err != nil {
++			t.Fatal(err)
++		}
++		refs = append(refs, chosen.Ref)
++	}
++	independent := f.foreground("I drink cocoa.")
++	item := f.inspectCandidate(f.compile(independent, f.generation, f.extractor("cocoa")), "global")
++	refs = append(refs, item.Ref)
++	f.closeSource()
++	sourceSession := f.session.ID
++	a := f.authority("global")
++	server := httptest.NewServer(web.WithCandidateReview(web.NewServer(nil), f.store).Handler())
++	defer server.Close()
++	request := memory.ReviewBatchRequest{Groups: []memory.ReviewBatchGroupRequest{
++		{ID: "atomic", Action: "accept", Candidates: refs[:2], Dependencies: []memory.ReviewDependency{{CandidateID: refs[1].ID, Field: "subject", FromCandidateID: refs[0].ID, FromField: "subject"}, {CandidateID: refs[1].ID, Field: "predicate", FromCandidateID: refs[0].ID, FromField: "predicate"}}},
++		{ID: "independent", Action: "accept", Candidates: refs[2:], Dependencies: []memory.ReviewDependency{}},
++	}}
++	var preview memory.ReviewBatchPreview
++	stage4HTTP(t, server, "batch/prepare", map[string]any{"scope_key": "global", "input": request}, 200, &preview)
++	if len(preview.Groups) != 2 || len(preview.Groups[0].Preview.Effect.Claims) != 2 {
++		t.Fatalf("incomplete atomic preview %+v", preview)
++	}
++	var cliPreview memory.ReviewBatchPreview
++	stage4CLI(t, f.store, &cliPreview, "batch-inspect", "--scope", "global", "--id", preview.ID)
++	if !reflect.DeepEqual(preview, cliPreview) {
++		t.Fatal("batch adapter preview differs")
++	}
++	// A competing explicit rejection is group-local drift, not semantic-vector
++	// drift. It must survive a later unrelated outer transaction rollback.
++	reject, err := f.store.PrepareOwnerCandidateReview(f.ctx, a, refs[2], "reject")
++	if err != nil {
++		t.Fatal(err)
++	}
++	rejected, err := f.store.ResolveOwnerCandidateReview(f.ctx, a, memory.ReviewDecision{DeliveryKey: stage4Key(300), PreviewID: reject.ID, PreviewSHA256: reject.SHA256, Action: "reject"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	decision := memory.ReviewBatchDecision{DeliveryKey: stage4Key(301), PreviewID: preview.ID, PreviewSHA256: preview.SHA256, Actions: []memory.ReviewBatchAction{{GroupID: "atomic", Action: "accept"}, {GroupID: "independent", Action: "accept"}}}
++	// Fail the outer durable-result write after successful groups. This is a
++	// controlled SQLite fault, exercising the actual HTTP -> Kernel transaction.
++	if _, err = f.db.Exec(`CREATE TRIGGER stage4_fail_batch_delivery BEFORE INSERT ON memory_review_batch_deliveries BEGIN SELECT RAISE(ABORT,'scripted outer persistence failure'); END`); err != nil {
++		t.Fatal(err)
++	}
++	var failure map[string]any
++	stage4HTTP(t, server, "batch/resolve", map[string]any{"scope_key": "global", "input": decision}, 503, &failure)
++	if failure["code"] != "review_retryable" {
++		t.Fatalf("incorrect retry boundary %+v", failure)
++	}
++	var operations, deliveries, resolutions int
++	if err = f.db.QueryRow(`SELECT (SELECT count(*) FROM semantic_operations),(SELECT count(*) FROM memory_review_batch_deliveries),(SELECT count(*) FROM memory_review_resolutions)`).Scan(&operations, &deliveries, &resolutions); err != nil {
++		t.Fatal(err)
++	}
++	if operations != 1 || deliveries != 0 || resolutions != 1 {
++		t.Fatalf("outer rollback leaked %d/%d/%d", operations, deliveries, resolutions)
++	}
++	for _, ref := range refs[:2] {
++		item, err := f.store.InspectOwnerCandidate(f.ctx, a, ref.ID)
++		if err != nil || item.Ref != ref || item.Candidate.ReviewState != "unresolved" {
++			t.Fatalf("rolled-back candidate changed %+v %v", item, err)
++		}
++	}
++	if _, err = f.db.Exec(`DROP TRIGGER stage4_fail_batch_delivery`); err != nil {
++		t.Fatal(err)
++	}
++	raw, err := json.Marshal(decision)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var result memory.ReviewBatchResult
++	stage4CLI(t, f.store, &result, "batch-resolve", "--scope", "global", "--decision", string(raw))
++	if len(result.Groups) != 2 || result.Groups[0].Outcome != "accepted" || result.Groups[0].Result == nil || result.Groups[0].Result.Operation == nil || len(result.Groups[0].Result.Operation.ClaimIDs) != 2 || result.Groups[1].Outcome != "failed" || result.Groups[1].FailureCode != "already_resolved" || len(result.Groups[1].PriorResolutions) != 1 || result.Groups[1].PriorResolutions[0].AuditID != rejected.AuditID {
++		t.Fatalf("atomic partial result %+v", result)
++	}
++	var duplicate memory.ReviewBatchResult
++	stage4HTTP(t, server, "batch/resolve", map[string]any{"scope_key": "global", "input": decision}, 200, &duplicate)
++	if !reflect.DeepEqual(result, duplicate) {
++		t.Fatal("HTTP retried a permanent group failure")
++	}
++	f.reopen()
++	a = f.authority("global")
++	repeated, err := f.store.ResolveOwnerCandidateBatch(f.ctx, a, decision)
++	if err != nil || !reflect.DeepEqual(result, repeated) {
++		t.Fatalf("reopened batch changed %+v %v", repeated, err)
++	}
++	observer, err := f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	claims, err := f.store.InspectLiteralClaims(f.ctx, observer.ScopeContext())
++	if err != nil || len(claims.Claims) != 3 {
++		t.Fatalf("batch accepted read %+v %v", claims, err)
++	}
++	operation := result.Groups[0].Result.Operation
++	var stored string
++	if err = f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, operation.OperationID).Scan(&stored); err != nil {
++		t.Fatal(err)
++	}
++	// A current source-policy revision hides disclosure, without rewriting the
++	// historical acceptance authority or erasing already accepted truth.
++	if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='stage4-changed-detector-v2'`); err != nil {
++		t.Fatal(err)
++	}
++	hidden, err := f.store.InspectOwnerReviewOperation(f.ctx, a, operation.OperationID)
++	if !errors.Is(err, eviedb.ErrReviewInvalidSource) || hidden.OperationID != "" {
++		t.Fatalf("historical source disclosure bypass %+v %v", hidden, err)
++	}
++	source, err := f.store.InspectSemanticObject(f.ctx, observer.ScopeContext(), memory.SemanticObjectSourceLink, operation.SourceLinkIDs[0])
++	if err != nil || source.Source == nil || source.Source.Evidence != "" || len(source.Operations) != 1 || source.Operations[0].PreparedJSON != "" || source.Operations[0].ProposalJSON != "" {
++		t.Fatalf("redaction bypass %+v %v", source, err)
++	}
++	claims, err = f.store.InspectLiteralClaims(f.ctx, observer.ScopeContext())
++	if err != nil || len(claims.Claims) != 3 {
++		t.Fatalf("source policy erased truth %+v %v", claims, err)
++	}
++	replay, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || !replay.Valid {
++		t.Fatalf("policy-dependent replay %+v %v", replay, err)
++	}
++	var after, status string
++	if err = f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, operation.OperationID).Scan(&after); err != nil {
++		t.Fatal(err)
++	}
++	if err = f.db.QueryRow(`SELECT status FROM sessions WHERE id=?`, sourceSession).Scan(&status); err != nil {
++		t.Fatal(err)
++	}
++	if after != stored || status != "closed" {
++		t.Fatal("accepted history or original source session changed")
++	}
++	repeated, err = f.store.ResolveOwnerCandidateBatch(f.ctx, a, decision)
++	if err != nil || !reflect.DeepEqual(result, repeated) {
++		t.Fatalf("source policy changed duplicate receipt %+v %v", repeated, err)
++	}
++	stage4Evidence(t, "atomic_batch_source_policy", map[string]any{"preview_sha256": preview.SHA256, "atomic_effect_sha256": preview.Groups[0].Preview.EffectSHA256, "outer_rollback": true, "atomic_claims": 2, "permanent_partial_result": true, "duplicate_adapter_results_equal": true, "original_source_closed": true, "source_policy_redacts": true, "accepted_truth_preserved": true, "historical_acceptance_sha256": memory.CompilerHash([]byte(stored)), "canonical_replay": true})
++}
+diff --git a/cmd/evie/memory_stage4_scope_conformance_test.go b/cmd/evie/memory_stage4_scope_conformance_test.go
+new file mode 100644
+index 0000000..ceddebf
+--- /dev/null
++++ b/cmd/evie/memory_stage4_scope_conformance_test.go
+@@ -0,0 +1,245 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http/httptest"
++	"net/url"
++	"reflect"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++	"github.com/davidadel66/evie/internal/tools"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++func TestStage4ScopeAdapterConformance(t *testing.T) {
++	f := newStage4ConformanceFixture(t)
++	type scopeCase struct {
++		name, scope string
++		session     memory.Session
++		candidate   memory.OwnerCandidate
++	}
++	cases := []scopeCase{{name: "global", scope: "global", session: f.session}}
++	manager := sessionCompositionManager(t)
++	resolved, err := manager.ResolvePreset("")
++	if err != nil {
++		t.Fatal(err)
++	}
++	for i := 0; i < 2; i++ {
++		workspace, err := f.store.RegisterWorkspace(f.ctx, fmt.Sprintf("Conformance workspace %d", i))
++		if err != nil {
++			t.Fatal(err)
++		}
++		session, err := f.store.CreateWorkspaceSessionWithComposition(f.ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{name: fmt.Sprintf("workspace_%d", i), scope: "workspace:" + string(workspace.ID), session: session})
++	}
++	for i := 0; i < 2; i++ {
++		project, err := f.store.RegisterProject(f.ctx, fmt.Sprintf("Conformance project %d", i), t.TempDir())
++		if err != nil {
++			t.Fatal(err)
++		}
++		session, err := f.store.CreateProjectSession(f.ctx, project.ID)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{name: fmt.Sprintf("project_%d", i), scope: "project:" + string(project.ID), session: session})
++	}
++	for i := 0; i < 2; i++ {
++		session, err := f.store.CreateGlobalSession(f.ctx)
++		if err != nil {
++			t.Fatal(err)
++		}
++		cases = append(cases, scopeCase{name: fmt.Sprintf("session_%d", i), scope: "session:" + string(session.ID), session: session})
++	}
++	for i := range cases {
++		f.session = cases[i].session
++		selection := f.foreground("I prefer café in this exact context.")
++		selection.Destination = cases[i].scope
++		compiled := f.compile(selection, f.generation, f.extractor("café"))
++		f.closeSource()
++		cases[i].candidate = f.inspectCandidate(compiled, cases[i].scope)
++	}
++	server := httptest.NewServer(web.WithCandidateReview(web.NewServer(nil), f.store).Handler())
++	defer server.Close()
++	denials := 0
++	receipts := []map[string]any{}
++	for i, entry := range cases {
++		a := f.authority(entry.scope)
++		page, err := f.store.ListOwnerCandidates(f.ctx, a, memory.OwnerCandidateQuery{})
++		if err != nil || len(page.Candidates) != 1 || page.Candidates[0].Ref.ID != entry.candidate.Ref.ID {
++			t.Fatalf("exact Kernel inbox %s %+v %v", entry.name, page, err)
++		}
++		var cliPage, httpPage memory.OwnerCandidatePage
++		stage4CLI(t, f.store, &cliPage, "inbox", "--scope", entry.scope)
++		stage4HTTP(t, server, "list", map[string]any{"scope_key": entry.scope, "limit": 32, "cursor": ""}, 200, &httpPage)
++		if !reflect.DeepEqual(page.Candidates, cliPage.Candidates) || !reflect.DeepEqual(page.Candidates, httpPage.Candidates) {
++			t.Fatalf("scope %s adapter evidence mismatch", entry.name)
++		}
++		for j, foreign := range cases {
++			if i == j {
++				continue
++			}
++			hidden, err := f.store.InspectOwnerCandidate(f.ctx, a, foreign.candidate.Ref.ID)
++			if !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) || len(hidden.Candidate.Support) != 0 {
++				t.Fatalf("Kernel foreign source %s->%s %+v %v", entry.name, foreign.name, hidden, err)
++			}
++			var out bytes.Buffer
++			if handled, err := runOwnerReviewManagement(f.ctx, []string{"memory-review", "inspect", "--scope", entry.scope, "--id", foreign.candidate.Ref.ID}, &out, f.store); !handled || !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) || out.Len() != 0 {
++				t.Fatalf("CLI foreign source %s->%s %v %s", entry.name, foreign.name, err, out.String())
++			}
++			body := stage4HTTP(t, server, "inspect", map[string]any{"scope_key": entry.scope, "id": foreign.candidate.Ref.ID}, 403, nil)
++			if bytes.Contains(body, []byte("café")) || bytes.Contains(body, []byte(foreign.candidate.Ref.ID)) {
++				t.Fatal("HTTP denial disclosed source or candidate identity")
++			}
++			denials++
++		}
++		if entry.scope != "global" {
++			if _, err = f.store.PrepareOwnerCandidateReview(f.ctx, f.authority("global"), entry.candidate.Ref, "accept"); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++				t.Fatalf("implicit Promotion preparation %v", err)
++			}
++			stage4HTTP(t, server, "prepare", map[string]any{"scope_key": "global", "candidate": entry.candidate.Ref, "action": "accept"}, 403, nil)
++		}
++		var preview memory.ReviewPreview
++		stage4CLI(t, f.store, &preview, "prepare", "--scope", entry.scope, "--id", entry.candidate.Ref.ID, "--revision", fmt.Sprint(entry.candidate.Ref.ReviewRevision), "--interpretation", fmt.Sprint(entry.candidate.Ref.InterpretationRevision), "--action", "accept")
++		if preview.ScopeKey != entry.scope || preview.Effect == nil || preview.Effect.Scope.Key != entry.scope || preview.Effect.Claims[0].Claim.ScopeKey != entry.scope {
++			t.Fatal("scope widened in effect")
++		}
++		decision := memory.ReviewDecision{DeliveryKey: stage4Key(100 + i), PreviewID: preview.ID, PreviewSHA256: preview.SHA256, Action: "accept"}
++		var result memory.ReviewResult
++		stage4HTTP(t, server, "resolve", map[string]any{"scope_key": entry.scope, "decision": decision}, 200, &result)
++		kernel, err := f.store.ResolveOwnerCandidateReview(f.ctx, a, decision)
++		if err != nil || !reflect.DeepEqual(kernel, result) {
++			t.Fatalf("scope %s exact result %v", entry.name, err)
++		}
++		operation, err := f.store.InspectOwnerReviewOperation(f.ctx, a, result.Operation.OperationID)
++		if err != nil || !reflect.DeepEqual(operation.Preview, preview) {
++			t.Fatalf("scope %s preview/provenance %v", entry.name, err)
++		}
++		receipts = append(receipts, map[string]any{"scope_family": entry.name, "scope": entry.scope, "candidate_id": entry.candidate.Ref.ID, "preview_sha256": preview.SHA256, "effect_sha256": preview.EffectSHA256, "operation_id": result.Operation.OperationID})
++	}
++	observer, err := f.store.CreateGlobalSession(f.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	claims, err := f.store.InspectLiteralClaims(f.ctx, observer.ScopeContext())
++	if err != nil || len(claims.Claims) != 2 {
++		t.Fatalf("private acceptance implicitly promoted %+v %v", claims, err)
++	}
++	for _, claim := range claims.Claims {
++		if claim.Scope.Key != "global" {
++			t.Fatal("private claim in global accepted read")
++		}
++	}
++	verified, err := f.store.VerifySemanticProjection(f.ctx)
++	if err != nil || !verified.Valid {
++		t.Fatalf("scope canonical replay %+v %v", verified, err)
++	}
++	var closed int
++	if err = f.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE status='closed'`).Scan(&closed); err != nil || closed != len(cases) {
++		t.Fatal("source review changed session lifecycle", closed, err)
++	}
++	stage4Evidence(t, "scope_adapter_matrix", map[string]any{"scope_cases": receipts, "cross_scope_denials_per_surface": denials, "closed_sources": closed, "implicit_promotion_denied": true, "canonical_replay": true})
++}
++
++func TestStage4GenericStorageConformance(t *testing.T) {
++	f := newStage4ConformanceFixture(t)
++	selection := f.foreground("I prefer café.")
++	compiled := f.compile(selection, f.generation, f.extractor("café"))
++	if len(compiled.Candidates) != 1 {
++		t.Fatal("missing protected candidate")
++	}
++	// Configure the actual query tool with a read-only opener bound to this temporary
++	// SQLite database. No HOME changes and no access to the user's default DB.
++	if _, err := f.db.Exec(`INSERT INTO jobs (name,schedule,command,created_at) VALUES ('stage4-public-control','* * * * *','true','2026-09-05T00:00:00Z')`); err != nil {
++		t.Fatal(err)
++	}
++	opens := 0
++	tool := tools.QueryDBToolWithEvieReader(func(ctx context.Context) (*sql.DB, error) {
++		opens++
++		path := (&url.URL{Scheme: "file", Path: f.path, RawQuery: "mode=ro"}).String()
++		db, err := sql.Open("sqlite", path)
++		if err != nil {
++			return nil, err
++		}
++		if err = db.PingContext(ctx); err != nil {
++			db.Close()
++			return nil, err
++		}
++		return db, nil
++	})
++	set := tools.NewToolset([]tools.Tool{tool})
++	queryTool := func(query string) (openrouter.Message, bool, error) {
++		args, err := json.Marshal(map[string]string{"db": "evie", "query": query})
++		if err != nil {
++			t.Fatal(err)
++		}
++		return set.ExecuteWithApprovalAuthorizedCompletion(f.ctx, openrouter.ToolCall{ID: "conformance-query", Type: "function", Function: openrouter.FunctionCall{Name: "query_db", Arguments: string(args)}}, nil, nil, nil, nil)
++	}
++	for _, query := range []string{`SELECT name FROM jobs`, `SELECT (SELECT name FROM jobs LIMIT 1) AS name FROM jobs`} {
++		message, isErr, err := queryTool(query)
++		if err != nil || isErr || message.Content != "name\nstage4-public-control\n(1 rows)\n" {
++			t.Fatalf("allowed temporary-database control failed: %t %v %q", isErr, err, message.Content)
++		}
++	}
++	if opens != 2 {
++		t.Fatalf("allowed control did not open the temporary database twice: %d", opens)
++	}
++	// Enumerate actual protected tables/views, then distinguish identifier denial
++	// from syntax-form rejection. A missing table, unavailable DB or dispatch error
++	// must never count as containment.
++	rows, err := f.db.Query(`SELECT name FROM sqlite_schema WHERE type IN ('table','view') AND (name LIKE 'memory_compiler_%' OR name LIKE 'memory_review_%' OR name LIKE 'semantic_%') ORDER BY name`)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var tables []string
++	for rows.Next() {
++		var name string
++		if err = rows.Scan(&name); err != nil {
++			t.Fatal(err)
++		}
++		tables = append(tables, name)
++	}
++	err = rows.Err()
++	rows.Close()
++	if err != nil {
++		t.Fatal(err)
++	}
++	denied := 0
++	for _, name := range tables {
++		queries := []struct{ query, want string }{
++			{fmt.Sprintf(`SELECT * FROM %s`, name), fmt.Sprintf("evie table %q is not available through query_db", name)},
++			{fmt.Sprintf(`SELECT (SELECT COUNT(*) FROM %s) FROM jobs`, name), fmt.Sprintf("evie table %q is not available through query_db", name)},
++			{fmt.Sprintf(`SELECT * FROM "%s"`, name), "evie queries may not use quoted table names"},
++			{fmt.Sprintf(`SELECT (SELECT COUNT(*) FROM main."%s") FROM jobs`, name), `evie table "main" is not available through query_db`},
++		}
++		for _, query := range queries {
++			message, isErr, err := queryTool(query.query)
++			if err != nil || !isErr || message.Content != "tool call came back with error "+query.want || message.Role != "tool" || message.ToolCallID != "conformance-query" {
++				t.Fatalf("generic storage fence %s: got error=%t transport=%v output=%q want=%q", query.query, isErr, err, message.Content, query.want)
++			}
++			if opens != 2 {
++				t.Fatalf("protected query reached the SQLite opener: %s", query.query)
++			}
++			denied++
++		}
++	}
++	claims, err := f.store.InspectLiteralClaims(f.ctx, f.session.ScopeContext())
++	if err != nil || len(claims.Claims) != 1 {
++		t.Fatalf("unaccepted candidate escaped into accepted reads: %+v %v", claims, err)
++	}
++
++	if len(tables) < 40 {
++		t.Fatalf("protected schema inventory incomplete: %d", len(tables))
++	}
++	stage4Evidence(t, "generic_storage_containment", map[string]any{"protected_tables_and_views": len(tables), "denied_model_queries": denied, "allowed_fixture_queries": 2, "blocked_query_db_opens": 0, "exact_policy_rejections": true, "unquoted_direct_and_nested_queries": true, "unaccepted_candidate_isolated": true, "privileged_shell_claim": "unchanged documented limitation"})
++}
+diff --git a/internal/eviedb/db.go b/internal/eviedb/db.go
+index 03c50c9..f480386 100644
+--- a/internal/eviedb/db.go
++++ b/internal/eviedb/db.go
+@@ -1150,6 +1150,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
+ 	if err != nil {
+ 		return nil, fmt.Errorf("open db: %w", err)
+ 	}
++	if err := connectSQLiteStartup(ctx, db); err != nil {
++		db.Close()
++		return nil, fmt.Errorf("connect db: %w", err)
++	}
+ 	if _, err := db.ExecContext(ctx, schema); err != nil {
+ 		db.Close()
+ 		return nil, fmt.Errorf("create schema: %w", err)
+diff --git a/internal/eviedb/sqlite_startup.go b/internal/eviedb/sqlite_startup.go
+new file mode 100644
+index 0000000..74cef89
+--- /dev/null
++++ b/internal/eviedb/sqlite_startup.go
+@@ -0,0 +1,50 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"time"
++)
++
++// connectSQLiteStartup retries only physical connection initialization, before
++// the first application statement. Concurrent fresh processes can receive BUSY
++// while enabling WAL despite busy_timeout. Schema migrations and uncertain
++// application writes are never replayed by this loop.
++func connectSQLiteStartup(ctx context.Context, db *sql.DB) error {
++	return connectSQLiteStartupWithin(ctx, db.PingContext, 5*time.Second, 10*time.Millisecond)
++}
++
++// The deadline bounds retry admission and is passed to PingContext. The pinned
++// SQLite driver initializes connection PRAGMAs without a context; a connection
++// already inside that driver call remains subject to its existing 5s SQLite
++// busy timeout. Do not describe this loop as interrupting Driver.Open itself.
++func connectSQLiteStartupWithin(ctx context.Context, ping func(context.Context) error, budget, delay time.Duration) error {
++	retryCtx, cancel := context.WithTimeout(ctx, budget)
++	defer cancel()
++	var lastBusy error
++	for {
++		if err := retryCtx.Err(); err != nil {
++			return errors.Join(err, lastBusy)
++		}
++		err := ping(retryCtx)
++		if stopped := retryCtx.Err(); stopped != nil {
++			return errors.Join(stopped, err, lastBusy)
++		}
++		if err == nil {
++			return nil
++		}
++		var coded interface{ Code() int }
++		if !errors.As(err, &coded) || coded.Code()&255 != 5 {
++			return err
++		}
++		lastBusy = err
++		timer := time.NewTimer(delay)
++		select {
++		case <-retryCtx.Done():
++			timer.Stop()
++			return errors.Join(retryCtx.Err(), lastBusy)
++		case <-timer.C:
++		}
++	}
++}
+diff --git a/internal/eviedb/sqlite_startup_test.go b/internal/eviedb/sqlite_startup_test.go
+new file mode 100644
+index 0000000..e5e7988
+--- /dev/null
++++ b/internal/eviedb/sqlite_startup_test.go
+@@ -0,0 +1,233 @@
++package eviedb
++
++import (
++	"bytes"
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++)
++
++type startupSQLiteError int
++
++func (e startupSQLiteError) Error() string { return fmt.Sprintf("fixture SQLite error %d", e) }
++func (e startupSQLiteError) Code() int     { return int(e) }
++
++func TestStage4StartupRetryBoundaries(t *testing.T) {
++	t.Run("only typed BUSY retries", func(t *testing.T) {
++		calls := 0
++		err := connectSQLiteStartupWithin(context.Background(), func(ctx context.Context) error {
++			calls++
++			if _, ok := ctx.Deadline(); !ok {
++				t.Fatal("missing connection deadline")
++			}
++			switch calls {
++			case 1:
++				return fmt.Errorf("primary: %w", startupSQLiteError(5))
++			case 2:
++				return fmt.Errorf("extended: %w", startupSQLiteError(517))
++			default:
++				return nil
++			}
++		}, time.Second, time.Millisecond)
++		if err != nil || calls != 3 {
++			t.Fatalf("retry result %d %v", calls, err)
++		}
++		for _, cause := range []error{startupSQLiteError(6), startupSQLiteError(10), errors.New("database is locked (5) (SQLITE_BUSY)")} {
++			calls = 0
++			err = connectSQLiteStartupWithin(context.Background(), func(context.Context) error { calls++; return cause }, time.Second, time.Millisecond)
++			if err != cause || calls != 1 {
++				t.Fatalf("non-BUSY retry %d %v", calls, err)
++			}
++		}
++	})
++	t.Run("cancelled before connection", func(t *testing.T) {
++		ctx, cancel := context.WithCancel(context.Background())
++		cancel()
++		calls := 0
++		err := connectSQLiteStartupWithin(ctx, func(context.Context) error { calls++; return nil }, time.Second, time.Millisecond)
++		if !errors.Is(err, context.Canceled) || calls != 0 {
++			t.Fatalf("cancelled attempt %d %v", calls, err)
++		}
++	})
++	t.Run("cancelled between attempts retains code", func(t *testing.T) {
++		ctx, cancel := context.WithCancel(context.Background())
++		defer cancel()
++		calls := 0
++		err := connectSQLiteStartupWithin(ctx, func(context.Context) error { calls++; cancel(); return startupSQLiteError(5) }, time.Second, time.Second)
++		if !errors.Is(err, context.Canceled) || !errors.Is(err, startupSQLiteError(5)) || calls != 1 {
++			t.Fatalf("cancel retry %d %v", calls, err)
++		}
++	})
++	t.Run("retry deadline preserves last BUSY", func(t *testing.T) {
++		calls := 0
++		start := time.Now()
++		err := connectSQLiteStartupWithin(context.Background(), func(context.Context) error { calls++; return startupSQLiteError(517) }, 10*time.Millisecond, time.Second)
++		if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, startupSQLiteError(517)) || calls != 1 || time.Since(start) > time.Second {
++			t.Fatalf("unbounded retry %d %v", calls, err)
++		}
++	})
++	t.Run("late successful connection cannot erase cancellation", func(t *testing.T) {
++		ctx, cancel := context.WithCancel(context.Background())
++		defer cancel()
++		err := connectSQLiteStartupWithin(ctx, func(context.Context) error { cancel(); return nil }, time.Second, time.Millisecond)
++		if !errors.Is(err, context.Canceled) {
++			t.Fatal(err)
++		}
++	})
++}
++
++type stage4StartupReceipt struct {
++	OK            bool   `json:"ok"`
++	Journal       string `json:"journal"`
++	ForeignKeys   int    `json:"foreign_keys"`
++	BusyTimeout   int    `json:"busy_timeout"`
++	SQLiteVersion string `json:"sqlite_version"`
++	Error         string `json:"error,omitempty"`
++}
++
++// Each child enters the ordinary public path with a fresh lazy pool. The stdin
++// barrier synchronizes independent processes without preopening a connection or
++// pre-enabling WAL. Both a new database and its retained reopen are exercised.
++func TestStage4StartupIndependentProcesses(t *testing.T) {
++	if path := os.Getenv("EVIE_STAGE4_STARTUP_CHILD"); path != "" {
++		var one [1]byte
++		if _, err := io.ReadFull(os.Stdin, one[:]); err != nil {
++			t.Fatal(err)
++		}
++		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
++		defer cancel()
++		out := stage4StartupReceipt{}
++		db, err := OpenDBAtContext(ctx, path)
++		if err == nil {
++			err = db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&out.Journal)
++			if err == nil {
++				err = db.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&out.ForeignKeys)
++			}
++			if err == nil {
++				err = db.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&out.BusyTimeout)
++			}
++			if err == nil {
++				err = db.QueryRowContext(ctx, `SELECT sqlite_version()`).Scan(&out.SQLiteVersion)
++			}
++			closeErr := db.Close()
++			if err == nil {
++				err = closeErr
++			}
++		}
++		out.OK = err == nil
++		if err != nil {
++			out.Error = err.Error()
++		}
++		if err = json.NewEncoder(os.Stdout).Encode(out); err != nil {
++			os.Exit(2)
++		}
++		if !out.OK {
++			os.Exit(1)
++		}
++		os.Exit(0)
++	}
++	executable, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	sqliteVersion := ""
++	for wave := 0; wave < 8; wave++ {
++		path := filepath.Join(t.TempDir(), "conformance.db")
++		for _, state := range []string{"fresh", "existing"} {
++			t.Run(fmt.Sprintf("%s_%d", state, wave), func(t *testing.T) {
++				type child struct {
++					command *exec.Cmd
++					input   io.WriteCloser
++					output  bytes.Buffer
++				}
++				children := make([]*child, 3)
++				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
++				defer cancel()
++				for i := range children {
++					c := &child{}
++					c.command = exec.CommandContext(ctx, executable, "-test.run=^TestStage4StartupIndependentProcesses$")
++					c.command.Env = append(os.Environ(), "EVIE_STAGE4_STARTUP_CHILD="+path, "GORACE=atexit_sleep_ms=0")
++					c.command.Stdout = &c.output
++					c.command.Stderr = &c.output
++					c.input, err = c.command.StdinPipe()
++					if err != nil {
++						t.Fatal(err)
++					}
++					if err = c.command.Start(); err != nil {
++						t.Fatal(err)
++					}
++					children[i] = c
++				}
++				var wg sync.WaitGroup
++				for _, c := range children {
++					wg.Add(1)
++					go func(c *child) { defer wg.Done(); _, _ = c.input.Write([]byte{1}); _ = c.input.Close() }(c)
++				}
++				wg.Wait()
++				for _, c := range children {
++					if err = c.command.Wait(); err != nil {
++						t.Fatalf("public startup %v: %s", err, c.output.String())
++					}
++					var result stage4StartupReceipt
++					if err = json.Unmarshal(c.output.Bytes(), &result); err != nil {
++						t.Fatalf("child receipt %v: %s", err, c.output.String())
++					}
++					if !result.OK || result.Journal != "wal" || result.ForeignKeys != 1 || result.BusyTimeout != 5000 || result.SQLiteVersion == "" {
++						t.Fatalf("connection configuration %+v", result)
++					}
++					sqliteVersion = result.SQLiteVersion
++				}
++				info, err := os.Stat(path)
++				if err != nil || info.Mode().Perm() != 0600 {
++					t.Fatalf("file protection %v %v", info, err)
++				}
++			})
++		}
++	}
++	receipt, err := json.Marshal(map[string]any{"version": "memory-stage-4-conformance-v1", "scenario": "public_sqlite_startup", "details": map[string]any{"independent_starts": 48, "fresh_and_existing": true, "unprimed_connections": true, "sqlite_version": sqliteVersion, "journal_mode": "wal", "foreign_keys": 1, "busy_timeout_ms": 5000, "file_mode": "0600"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Log("STAGE4_EVIDENCE " + string(receipt))
++}
++
++func TestStage4StartupIncompatibleSchemaFailsWithoutRewrite(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "incompatible.db")
++	db, err := sql.Open("sqlite", path+dsnPragmas)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = db.Exec(`CREATE TABLE memory_compiler_position_counter(unsupported TEXT);INSERT INTO memory_compiler_position_counter VALUES('preserve')`); err != nil {
++		t.Fatal(err)
++	}
++	if err = db.Close(); err != nil {
++		t.Fatal(err)
++	}
++	opened, err := OpenDBAt(path)
++	if opened != nil {
++		opened.Close()
++		t.Fatal("incompatible durable schema opened")
++	}
++	if err == nil || !strings.Contains(err.Error(), "create memory compiler schema") {
++		t.Fatalf("application failure lost: %v", err)
++	}
++	db, err = sql.Open("sqlite", path+dsnPragmas)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	var marker string
++	if err = db.QueryRow(`SELECT unsupported FROM memory_compiler_position_counter`).Scan(&marker); err != nil || marker != "preserve" {
++		t.Fatal(marker, err)
++	}
++}
+diff --git a/internal/eviedb/stage4_process_conformance_test.go b/internal/eviedb/stage4_process_conformance_test.go
+new file mode 100644
+index 0000000..224eb47
+--- /dev/null
++++ b/internal/eviedb/stage4_process_conformance_test.go
+@@ -0,0 +1,515 @@
++package eviedb
++
++import (
++	"bytes"
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"reflect"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// These tests cross actual process lifetimes through public Store entry points.
++// The only persistence mutations outside those entry points move durable lease
++// and retry deadlines relative to SQLite's clock. They do not manufacture work,
++// capacity acknowledgements, review effects, or completion receipts.
++func TestStage4ProcessConformanceWorkerRecovery(t *testing.T) {
++	for _, failure := range []string{"process_crash", "expired_late_delivery", "cancelled_late_delivery"} {
++		t.Run(failure, func(t *testing.T) {
++			ctx := context.Background()
++			f, options, job := stage4ProcessWorkerFixture(t)
++			options.Wait = true
++			options.Crash = failure == "process_crash"
++			old := stage4StartProcess(t, options)
++			old.waitFile(t, "ready.json")
++			reservation := stage4ProcessReservation(t, f.db)
++			if options.Crash {
++				old.wait(t, 86)
++			}
++			// Cancellation and lease recovery must both fence the original client
++			// without treating that local action as proof of remote completion.
++			if failure == "cancelled_late_delivery" {
++				if _, err := f.store.CancelCompilation(ctx, f.owner, job.JobID); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.store.ResumeCompilation(ctx, f.owner, job.JobID); err != nil {
++					t.Fatal(err)
++				}
++			} else if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')-1 WHERE job_id=?`, job.JobID); err != nil {
++				t.Fatal(err)
++			}
++			probe := options
++			probe.Wait, probe.Crash = false, false
++			blocked := stage4StartProcess(t, probe).result(t)
++			if blocked.Worked || blocked.Calls != 0 || blocked.Error != "capacity_blocked" {
++				t.Fatalf("unknown completion admitted replacement: %+v", blocked)
++			}
++			inspection, err := f.store.InspectCompilation(ctx, f.owner, job.JobID)
++			if err != nil || inspection.Attempts != 1 || inspection.CapacityState != "release_pending" || len(inspection.Candidates) != 0 {
++				t.Fatalf("recovery: state=%s attempts=%d capacity=%s candidates=%d error=%v", inspection.State, inspection.Attempts, inspection.CapacityState, len(inspection.Candidates), err)
++			}
++			if got := stage4ProcessReservation(t, f.db); got != reservation {
++				t.Fatalf("recovery changed dispatch identity: %+v", got)
++			}
++			if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now') WHERE job_id=? AND state='retry_wait'`, job.JobID); err != nil {
++				t.Fatal(err)
++			}
++			// A completed scripted server request is separate from delivery of its
++			// response. The old transport remains gated while this verifier checks
++			// its exact durable dispatch against its completion record.
++			probe.CompletionFile = filepath.Join(old.dir, "ready.json")
++			wrong := reservation
++			wrong.Fence++
++			probe.Acknowledgement = &wrong
++			bad := stage4StartProcess(t, probe).result(t)
++			if bad.Worked || bad.Calls != 0 || bad.Error != "capacity_blocked" {
++				t.Fatalf("mismatched trusted acknowledgement released capacity: %+v", bad)
++			}
++			probe.Acknowledgement, probe.Wait = &reservation, true
++			replacement := stage4StartProcess(t, probe)
++			replacement.waitFile(t, "ready.json")
++			current := stage4ProcessReservation(t, f.db)
++			if current.RequestID == reservation.RequestID || current.Holder == reservation.Holder || current.Fence <= reservation.Fence {
++				t.Fatalf("replacement reused expired dispatch: old=%+v current=%+v", reservation, current)
++			}
++			if !options.Crash {
++				old.release(t)
++				late := old.result(t)
++				if !late.Worked || late.Calls != 1 || late.Error != "fenced" {
++					t.Fatalf("stale successful response escaped fence: %+v", late)
++				}
++				if got := stage4ProcessReservation(t, f.db); got != current {
++					t.Fatalf("stale response released replacement capacity: %+v", got)
++				}
++			}
++			inspection, err = f.store.InspectCompilation(ctx, f.owner, job.JobID)
++			if err != nil || inspection.State != "running" || inspection.Attempts != 2 || len(inspection.Candidates) != 0 {
++				t.Fatalf("replacement: state=%s attempts=%d candidates=%d error=%v", inspection.State, inspection.Attempts, len(inspection.Candidates), err)
++			}
++			replacement.release(t)
++			completed := replacement.result(t)
++			if !completed.Worked || completed.Calls != 1 || completed.Error != "" {
++				t.Fatalf("replacement did not publish: %+v", completed)
++			}
++			// A fresh process observes the durable completion without dispatching;
++			// reselecting the same finite source interval preserves its receipt.
++			probe.Wait, probe.Acknowledgement = false, nil
++			duplicate := stage4StartProcess(t, probe).result(t)
++			if duplicate.Worked || duplicate.Calls != 0 || duplicate.Error != "" {
++				t.Fatalf("duplicate worker repeated completed extraction: %+v", duplicate)
++			}
++			repeated, err := f.store.QueueCandidateUnit(ctx, f.owner, job.Window.Selection, f.generation, &stage4ProcessExtractor{})
++			if err != nil || repeated.JobID != job.JobID || repeated.Attempts != 2 || repeated.State != "completed_candidates" || len(repeated.Candidates) != 1 {
++				t.Fatalf("reselection: job=%s state=%s attempts=%d candidates=%d error=%v", repeated.JobID, repeated.State, repeated.Attempts, len(repeated.Candidates), err)
++			}
++			candidate := repeated.Candidates[0]
++			if candidate.ReviewState != "unresolved" || candidate.Proposal.Proposition.SubjectEntityID != options.Subject || candidate.Proposal.Proposition.PredicateID != options.Predicate || len(candidate.Support) != 1 || candidate.Support[0].Locator.EventID != job.Window.Selection.RootID || candidate.Support[0].Authority != "owner_statement" {
++				t.Fatal("replacement changed the exact unreviewed proposition or source authority")
++			}
++			var capacity, receipts, groups, coverage, stages, accepted int
++			if err := f.db.QueryRow(`SELECT (SELECT count(*) FROM memory_compiler_capacity),(SELECT count(*) FROM memory_compiler_release_receipts),(SELECT count(*) FROM memory_compiler_candidate_groups),(SELECT count(*) FROM memory_compiler_coverage),(SELECT count(*) FROM memory_compiler_stages WHERE consumed=1),(SELECT count(*) FROM semantic_operations WHERE schema_version=6)`).Scan(&capacity, &receipts, &groups, &coverage, &stages, &accepted); err != nil {
++				t.Fatal(err)
++			}
++			if capacity != 0 || receipts != 1 || groups != 1 || coverage != 1 || stages != 1 || accepted != 0 {
++				t.Fatalf("durable exactly-once publication: capacity=%d receipts=%d groups=%d coverage=%d stages=%d accepted=%d", capacity, receipts, groups, coverage, stages, accepted)
++			}
++			var receipt CompilerCapacityReservation
++			var kind string
++			if err := f.db.QueryRow(`SELECT request_id,job_id,fence,holder,server_identity,kind FROM memory_compiler_release_receipts`).Scan(&receipt.RequestID, &receipt.JobID, &receipt.Fence, &receipt.Holder, &receipt.ServerIdentity, &kind); err != nil {
++				t.Fatal(err)
++			}
++			if receipt != reservation || kind != "request_completed" {
++				t.Fatal("release receipt no longer identifies the exact completed original request")
++			}
++			var publishedFence int64
++			if err := f.db.QueryRow(`SELECT fence FROM memory_compiler_stages WHERE job_id=?`, job.JobID).Scan(&publishedFence); err != nil || publishedFence != current.Fence {
++				t.Fatalf("published output did not belong to the replacement fence: %d %v", publishedFence, err)
++			}
++			stage4ProcessAssertReview(t, f.db, 0)
++			assertions := map[string]bool{"real_processes": true, "durable_attempts": true, "unknown_capacity_blocked": true, "mismatched_ack_blocked": true, "exact_release_verified": true, "single_candidate_publication": true, "exact_source_authority": true, "duplicate_dispatch_absent": true, "unaccepted_graph_unchanged": true}
++			if !options.Crash {
++				assertions["stale_delivery_fenced"] = true
++				assertions["replacement_capacity_preserved"] = true
++			}
++			stage4ProcessEvidence(t, failure, assertions)
++		})
++	}
++}
++
++func TestStage4ProcessConformanceReviewCommitRecovery(t *testing.T) {
++	for _, phase := range []string{"before_commit", "after_commit"} {
++		t.Run(phase, func(t *testing.T) {
++			ctx := context.Background()
++			f, authority, refs := batchBoundaryFixture(t, 1)
++			if err := f.store.ReleaseTurnLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++				t.Fatal(err)
++			}
++			preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, refs[0], "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			decision := memory.ReviewDecision{DeliveryKey: "idem:v1:90000000-0000-4000-8000-000000009149", PreviewID: preview.ID, PreviewSHA256: preview.SHA256, Action: "accept"}
++			options := stage4ProcessOptions{Mode: "review", DB: f.path, Decision: decision, Phase: phase}
++			stage4StartProcess(t, options).wait(t, 86)
++			want := 0
++			if phase == "after_commit" {
++				want = 1
++			}
++			stage4ProcessAssertReview(t, f.db, want)
++			// Both contenders open the ordinary public database path themselves,
++			// obtain current owner authority, then start on one shared gate. No
++			// process inherits a SQLite connection or an in-memory receipt.
++			options.Phase, options.Wait = "", true
++			options.Gate = filepath.Join(t.TempDir(), "review-go")
++			first, second := stage4StartProcess(t, options), stage4StartProcess(t, options)
++			first.waitFile(t, "ready.json")
++			second.waitFile(t, "ready.json")
++			stage4ProcessWrite(t, options.Gate, true)
++			one, two := first.result(t), second.result(t)
++			if one.Error != "" || two.Error != "" || one.Review.Operation == nil || !reflect.DeepEqual(one.Review, two.Review) {
++				t.Fatalf("competing delivery receipts diverged: %+v %+v", one, two)
++			}
++			if one.Review.Operation.OperationID != preview.Effect.OperationID || len(one.Review.Operation.ClaimIDs) != 1 || len(one.Review.Operation.SourceLinkIDs) != 1 || one.Review.Action != "accept" {
++				t.Fatalf("recovered a different accepted effect: %+v", one.Review)
++			}
++			stage4ProcessAssertReview(t, f.db, 1)
++			options.Wait = false
++			options.Decision.DeliveryKey = "idem:v1:90000000-0000-4000-8000-000000019149"
++			resolved := stage4StartProcess(t, options).result(t)
++			if resolved.Error != "already_resolved" || !reflect.DeepEqual(resolved.Review, one.Review) {
++				t.Fatalf("new delivery hid prior durable decision: %+v", resolved)
++			}
++			stage4ProcessAssertReview(t, f.db, 1)
++			item, err := f.store.InspectOwnerCandidate(ctx, authority, refs[0].ID)
++			if err != nil || item.Candidate.ReviewState != "accepted" || item.Ref.ReviewRevision != refs[0].ReviewRevision+1 {
++				t.Fatalf("candidate resolution: state=%s revision=%d error=%v", item.Candidate.ReviewState, item.Ref.ReviewRevision, err)
++			}
++			verified, err := f.store.VerifySemanticProjection(ctx)
++			if err != nil || !verified.Valid {
++				t.Fatalf("accepted process recovery cannot replay: %+v %v", verified, err)
++			}
++			stage4ProcessEvidence(t, phase, map[string]bool{"real_process_exit_at_review_commit": true, "atomic_effects": true, "competing_duplicate_receipts_equal": true, "single_canonical_operation": true, "prior_resolution_visible": true, "canonical_replay_valid": true})
++		})
++	}
++}
++
++func stage4ProcessWorkerFixture(t *testing.T) (*workerFixture, stage4ProcessOptions, memory.Compilation) {
++	t.Helper()
++	ctx := context.Background()
++	f := newWorkerFixture(t)
++	source, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I drink water."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	seed, err := f.store.PrepareRememberLiteral(ctx, f.owner, memory.RememberLiteralRequest{IdempotencyKey: "idem:v1:90000000-0000-4000-8000-000000001149", SourceEventID: source.ID, Predicate: "drinks", PredicateLabel: "drinks", PredicateCardinality: memory.CardinalityMany, Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "water"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ApplyRememberLiteral(ctx, f.lease, seed); err != nil {
++		t.Fatal(err)
++	}
++	job := f.queue(t, "I drink tea.")
++	if err = f.store.ReleaseTurnLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	return f, stage4ProcessOptions{Mode: "worker", DB: f.path, Subject: seed.Subject.ID, Predicate: seed.Predicate.ID}, job
++}
++
++func stage4ProcessReservation(t *testing.T, db *sql.DB) CompilerCapacityReservation {
++	t.Helper()
++	var r CompilerCapacityReservation
++	if err := db.QueryRow(`SELECT request_id,job_id,fence,holder,server_identity FROM memory_compiler_capacity`).Scan(&r.RequestID, &r.JobID, &r.Fence, &r.Holder, &r.ServerIdentity); err != nil {
++		t.Fatal(err)
++	}
++	return r
++}
++
++func stage4ProcessAssertReview(t *testing.T, db *sql.DB, accepted int) {
++	t.Helper()
++	var operations, claims, sources, audits, receipts, resolutions, revision int
++	if err := db.QueryRow(`SELECT (SELECT count(*) FROM semantic_operations WHERE schema_version=6),(SELECT count(*) FROM semantic_claims),(SELECT count(*) FROM semantic_source_links),(SELECT count(*) FROM memory_review_audits),(SELECT count(*) FROM memory_review_deliveries),(SELECT count(*) FROM memory_review_resolutions),(SELECT revision FROM semantic_scopes WHERE scope_key='global')`).Scan(&operations, &claims, &sources, &audits, &receipts, &resolutions, &revision); err != nil {
++		t.Fatal(err)
++	}
++	if operations != accepted || claims != 1+accepted || sources != 1+accepted || audits != accepted || receipts != accepted || resolutions != accepted || revision != 1+accepted {
++		t.Fatalf("partial or duplicate review commit: operations=%d claims=%d sources=%d audits=%d receipts=%d resolutions=%d revision=%d; accepted=%d", operations, claims, sources, audits, receipts, resolutions, revision, accepted)
++	}
++}
++
++type stage4ProcessOptions struct {
++	Mode, DB, Dir, Gate, Phase, CompletionFile string
++	Wait, Crash                                bool
++	Subject, Predicate                         memory.SemanticID
++	Acknowledgement                            *CompilerCapacityReservation
++	Decision                                   memory.ReviewDecision
++}
++
++type stage4ProcessResult struct {
++	Worked bool                `json:"worked"`
++	Calls  int                 `json:"calls"`
++	Error  string              `json:"error"`
++	Review memory.ReviewResult `json:"review"`
++}
++
++type stage4ProcessCompletion struct {
++	RequestID, ServerIdentity string
++}
++
++type stage4ProcessExtractor struct {
++	options stage4ProcessOptions
++	calls   int
++}
++
++func (*stage4ProcessExtractor) ServerIdentity() string { return "scripted:stage4-process" }
++
++func (e *stage4ProcessExtractor) Extract(_ context.Context, _ memory.CompilerGeneration, request memory.CompilerRequest) (CompilerExtraction, error) {
++	e.calls++
++	var support memory.EvidenceLocator
++	for _, source := range request.Window.Sources {
++		if source.Usage == "new_support" {
++			support = source.Locator
++			break
++		}
++	}
++	raw, err := json.Marshal(memory.CompilerResponse{RequestID: request.ID, Candidates: []memory.ExtractorCandidate{{Proposition: memory.ClaimProposition{SubjectEntityID: e.options.Subject, PredicateID: e.options.Predicate, Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: "tea"}}, Polarity: memory.PolarityAffirmed}, Support: []memory.EvidenceLocator{support}, Context: []memory.EvidenceLocator{}}}})
++	if err != nil {
++		return CompilerExtraction{}, err
++	}
++	if err := stage4WriteJSON(filepath.Join(e.options.Dir, "ready.json"), stage4ProcessCompletion{RequestID: request.AttemptID, ServerIdentity: e.ServerIdentity()}); err != nil {
++		return CompilerExtraction{}, err
++	}
++	if e.options.Crash {
++		os.Exit(86) // Real process death: no client cleanup or SQLite defers run.
++	}
++	if e.options.Wait {
++		// This transport deliberately ignores client cancellation: the scripted
++		// server has completed but the response can arrive after replacement.
++		if err := stage4WaitFile(filepath.Join(e.options.Dir, "go")); err != nil {
++			return CompilerExtraction{}, err
++		}
++	}
++	return CompilerExtraction{Raw: raw, ReleaseEvidence: "completed"}, nil
++}
++
++type stage4ProcessVerifier struct{ options stage4ProcessOptions }
++
++func (v stage4ProcessVerifier) VerifyCompilerRelease(_ context.Context, reservation CompilerCapacityReservation) (CompilerReleaseAcknowledgement, error) {
++	var completed stage4ProcessCompletion
++	raw, err := os.ReadFile(v.options.CompletionFile)
++	if err != nil {
++		return CompilerReleaseAcknowledgement{}, err
++	}
++	if err = json.Unmarshal(raw, &completed); err != nil {
++		return CompilerReleaseAcknowledgement{}, err
++	}
++	if completed.RequestID != reservation.RequestID || completed.ServerIdentity != reservation.ServerIdentity {
++		return CompilerReleaseAcknowledgement{}, ErrCompilerCapacityBlocked
++	}
++	return CompilerReleaseAcknowledgement{Reservation: *v.options.Acknowledgement, Kind: "request_completed"}, nil
++}
++
++func TestStage4ProcessConformanceChild(t *testing.T) {
++	optionsFile := os.Getenv("EVIE_STAGE4_PROCESS_OPTIONS")
++	if optionsFile == "" {
++		return
++	}
++	var options stage4ProcessOptions
++	stage4ProcessRead(t, optionsFile, &options)
++	ctx := context.Background()
++	db, err := OpenDBAt(options.DB)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	store := NewStore(db)
++	var result stage4ProcessResult
++	switch options.Mode {
++	case "worker":
++		extractor := &stage4ProcessExtractor{options: options}
++		generationID, _, err := memory.CompilerGenerationIdentity(compilerCommitGeneration())
++		if err != nil {
++			t.Fatal(err)
++		}
++		config := CompilerSupervisorConfig{Extractors: map[string]CompilerExtractor{generationID: extractor}}
++		if options.Acknowledgement != nil {
++			config.ReleaseVerifier = stage4ProcessVerifier{options: options}
++		}
++		result.Worked, err = store.RunCompilerStep(ctx, config)
++		result.Calls, result.Error = extractor.calls, stage4ProcessError(t, err)
++	case "review":
++		authority, err := store.LocalOwnerReviewContext(ctx, "global")
++		if err != nil {
++			t.Fatal(err)
++		}
++		if options.Wait {
++			stage4ProcessWrite(t, filepath.Join(options.Dir, "ready.json"), true)
++			if err := stage4WaitFile(options.Gate); err != nil {
++				t.Fatal(err)
++			}
++		}
++		if options.Phase != "" {
++			// Install the existing transaction-resolution seam only after owner
++			// authentication, so this exit belongs to acceptance itself.
++			store.resolveImmediateTransaction = func(ctx context.Context, conn *sql.Conn, statement string) (sql.Result, error) {
++				if statement == "COMMIT" {
++					var n int
++					if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM memory_review_deliveries WHERE delivery_key=?`, options.Decision.DeliveryKey).Scan(&n); err != nil {
++						return nil, err
++					}
++					if n != 1 {
++						return nil, errors.New("review crash seam did not reach its delivery")
++					}
++					if options.Phase == "after_commit" {
++						if _, err := executeImmediateTransactionStatement(ctx, conn, statement); err != nil {
++							return nil, err
++						}
++					}
++					os.Exit(86)
++				}
++				return executeImmediateTransactionStatement(ctx, conn, statement)
++			}
++		}
++		result.Review, err = store.ResolveOwnerCandidateReview(ctx, authority, options.Decision)
++		result.Error = stage4ProcessError(t, err)
++	default:
++		t.Fatal("unknown process mode")
++	}
++	stage4ProcessWrite(t, filepath.Join(options.Dir, "result.json"), result)
++}
++
++func stage4ProcessError(t *testing.T, err error) string {
++	t.Helper()
++	switch {
++	case err == nil:
++		return ""
++	case errors.Is(err, ErrCompilerCapacityBlocked):
++		return "capacity_blocked"
++	case errors.Is(err, ErrCompilerFence):
++		return "fenced"
++	case errors.Is(err, ErrReviewResolved):
++		return "already_resolved"
++	default:
++		t.Fatalf("unexpected public operation failure: %v", err)
++		return "unexpected"
++	}
++}
++
++type stage4Process struct {
++	dir    string
++	cmd    *exec.Cmd
++	done   chan struct{}
++	err    error
++	output bytes.Buffer
++}
++
++func stage4StartProcess(t *testing.T, options stage4ProcessOptions) *stage4Process {
++	t.Helper()
++	p := &stage4Process{dir: t.TempDir(), done: make(chan struct{})}
++	options.Dir = p.dir
++	optionsFile := filepath.Join(p.dir, "options.json")
++	stage4ProcessWrite(t, optionsFile, options)
++	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
++	p.cmd = exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStage4ProcessConformanceChild$", "-test.timeout=35s")
++	p.cmd.Env = append(os.Environ(), "EVIE_STAGE4_PROCESS_OPTIONS="+optionsFile)
++	p.cmd.Stdout, p.cmd.Stderr = &p.output, &p.output
++	if err := p.cmd.Start(); err != nil {
++		cancel()
++		t.Fatal(err)
++	}
++	go func() { p.err = p.cmd.Wait(); close(p.done) }()
++	t.Cleanup(func() { cancel(); <-p.done })
++	return p
++}
++
++func (p *stage4Process) wait(t *testing.T, code int) {
++	t.Helper()
++	<-p.done
++	if p.cmd.ProcessState == nil || p.cmd.ProcessState.ExitCode() != code {
++		t.Fatalf("child exit: %v; want %d\n%s", p.err, code, p.output.String())
++	}
++}
++
++func (p *stage4Process) waitFile(t *testing.T, name string) {
++	t.Helper()
++	if err := stage4WaitFile(filepath.Join(p.dir, name)); err != nil {
++		_ = p.cmd.Process.Kill()
++		<-p.done
++		t.Fatalf("child handshake: %v\n%s", err, p.output.String())
++	}
++}
++
++func (p *stage4Process) release(t *testing.T) {
++	t.Helper()
++	stage4ProcessWrite(t, filepath.Join(p.dir, "go"), true)
++}
++
++func (p *stage4Process) result(t *testing.T) stage4ProcessResult {
++	t.Helper()
++	p.wait(t, 0)
++	var result stage4ProcessResult
++	stage4ProcessRead(t, filepath.Join(p.dir, "result.json"), &result)
++	return result
++}
++
++func stage4WaitFile(path string) error {
++	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
++	defer cancel()
++	ticker := time.NewTicker(5 * time.Millisecond)
++	defer ticker.Stop()
++	for {
++		if _, err := os.Stat(path); err == nil {
++			return nil
++		} else if !errors.Is(err, os.ErrNotExist) {
++			return err
++		}
++		select {
++		case <-ctx.Done():
++			return ctx.Err()
++		case <-ticker.C:
++		}
++	}
++}
++
++func stage4ProcessRead(t *testing.T, path string, target any) {
++	t.Helper()
++	raw, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := json.Unmarshal(raw, target); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func stage4ProcessWrite(t *testing.T, path string, value any) {
++	t.Helper()
++	if err := stage4WriteJSON(path, value); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func stage4WriteJSON(path string, value any) error {
++	raw, err := json.Marshal(value)
++	if err != nil {
++		return err
++	}
++	if err := os.WriteFile(path+".tmp", raw, 0600); err != nil {
++		return err
++	}
++	return os.Rename(path+".tmp", path)
++}
++
++func stage4ProcessEvidence(t *testing.T, scenario string, assertions map[string]bool) {
++	t.Helper()
++	raw, err := json.Marshal(map[string]any{"version": "memory-stage-4-conformance-v1", "scenario": scenario, "assertions": assertions})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Log("STAGE4_EVIDENCE " + string(raw))
++}
+diff --git a/internal/tools/db.go b/internal/tools/db.go
+index 63eb8da..656542f 100644
+--- a/internal/tools/db.go
++++ b/internal/tools/db.go
+@@ -174,11 +174,27 @@ Databases: "transcripts" — read-only YouTube transcript library. Query transcr
+ 	},
+ }
+ 
++// QueryDBToolWithEvieReader binds the existing query tool to a trusted Evie
++// reader. The opener changes only the database connection; all model-facing SQL
++// validation and dispatch behavior remain the same. The tool closes each reader.
++func QueryDBToolWithEvieReader(openEvie func(context.Context) (*sql.DB, error)) Tool {
++	if openEvie == nil {
++		openEvie = func(context.Context) (*sql.DB, error) { return nil, errors.New("Evie query reader unavailable") }
++	}
++	return Tool{Schema: cloneSchema(queryDBTool), Execute: func(ctx context.Context, args string) (string, error) {
++		return queryDBWithEvieReader(ctx, args, openEvie)
++	}}
++}
++
+ // queryDB runs the model's SQL through the named database's read-only
+ // connection and renders the result as a pipe-separated table. Fences
+ // per database as in editDB; the SELECT-prefix check and engine-level
+ // mode=ro are layered defenses.
+ func queryDB(ctx context.Context, args string) (string, error) {
++	return queryDBWithEvieReader(ctx, args, eviedb.OpenDBReadOnlyContext)
++}
++
++func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(context.Context) (*sql.DB, error)) (string, error) {
+ 	var params struct {
+ 		DB    string `json:"db"`
+ 		Query string `json:"query"`
+@@ -204,7 +220,7 @@ func queryDB(ctx context.Context, args string) (string, error) {
+ 		if err := validateEvieSelect(q); err != nil {
+ 			return "", err
+ 		}
+-		db, err = eviedb.OpenDBReadOnlyContext(ctx)
++		db, err = openEvie(ctx)
+ 	case "transcripts":
+ 		if err := validateTranscriptSelect(q); err != nil {
+ 			return "", err
+diff --git a/scripts/memory-stage-4-browser.cjs b/scripts/memory-stage-4-browser.cjs
+new file mode 100644
+index 0000000..f2c1e9b
+--- /dev/null
++++ b/scripts/memory-stage-4-browser.cjs
+@@ -0,0 +1,165 @@
++#!/usr/bin/env node
++// Scripted real-browser conformance. Install playwright-core outside the repo
++// and point EVIE_PLAYWRIGHT_MODULE at it; no production dependency is required.
++const fs = require('node:fs');
++const path = require('node:path');
++const crypto = require('node:crypto');
++const assert = require('node:assert/strict');
++const {spawn, execFileSync} = require('node:child_process');
++const {chromium} = require(process.env.EVIE_PLAYWRIGHT_MODULE || 'playwright-core');
++
++const root = path.resolve(__dirname, '..');
++const output = path.resolve(process.argv[2] || path.join(root, '.scratch/memory-stage-4-browser'));
++fs.mkdirSync(output, {recursive: true});
++const report = {
++  version: 'memory-stage-4-browser-v1', status: 'failed', synthetic: true, owner_pilot: false,
++  cases: [], responses: [], page_errors: [],
++  provenance: {
++    web_interactions: 'Real Chrome, React and guarded HTTP: exact closed-source review, evidence, preview, acceptance, recorded operation and reload for all seven scopes. The accepted global graph and provenance are also browsed.',
++    store_checks: 'After browser completion, actual browser operation IDs and hashes bind owner operation inspection in all seven scopes. Active observers read global, Workspace and project Claims and Source Links through the public Kernel. Exact closed-session destinations use temporary projection assertions against accepted operations. Canonical replay verifies accepted state without model calls. All sources stay closed and private acceptance never enters global reads. These are not graphical reads in every scope.',
++  },
++};
++let server, serverDone, browser, page, fixture, verified, binary, stdout = '';
++const fingerprint = () => execFileSync('python3', [path.join(root, 'scripts/memory-stage-4-conformance.py'), '--fingerprint'], {cwd: root, encoding: 'utf8'}).trim();
++
++(async () => {
++  report.source_sha256 = fingerprint();
++  report.driver_sha256 = crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex');
++  binary = path.join(output, 'browser-fixture.test');
++  const buildLog = fs.openSync(path.join(output, 'build.log'), 'w');
++  try {
++    execFileSync('npm', ['--prefix', 'internal/web/ui', 'run', 'build'], {cwd: root, stdio: ['ignore', buildLog, buildLog]});
++    execFileSync('go', ['test', '-c', '-o', binary, './cmd/evie'], {cwd: root, stdio: ['ignore', buildLog, buildLog]});
++  } finally { fs.closeSync(buildLog); }
++  server = spawn(binary, ['-test.run=^TestStage4BrowserFixture$', '-test.timeout=3m'], {
++    cwd: root, env: {...process.env, EVIE_STAGE4_BROWSER_FIXTURE: '1'}, stdio: ['pipe', 'pipe', 'pipe'],
++  });
++  serverDone = new Promise(resolve => server.once('exit', (code, signal) => resolve({code, signal})));
++  await new Promise((resolve, reject) => {
++    const timer = setTimeout(() => reject(new Error('Browser fixture did not become ready')), 30000);
++    server.stdout.on('data', chunk => {
++      stdout += chunk;
++      const ready = stdout.match(/STAGE4_BROWSER_READY=(.+)/);
++      if (ready && !fixture) { fixture = JSON.parse(ready[1]); clearTimeout(timer); resolve(); }
++      const proof = stdout.match(/STAGE4_BROWSER_VERIFIED=(.+)/);
++      if (proof) verified = JSON.parse(proof[1]);
++    });
++    server.stderr.on('data', chunk => { report.server_stderr = (report.server_stderr || '') + chunk; });
++    server.once('exit', code => { clearTimeout(timer); reject(new Error('Fixture exited before readiness: ' + code)); });
++  });
++  browser = await chromium.launch({executablePath: process.env.EVIE_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true});
++  report.browser_version = browser.version();
++  page = await (await browser.newContext({viewport: {width: 1440, height: 1100}})).newPage();
++  page.setDefaultTimeout(10000);
++  page.on('pageerror', error => report.page_errors.push(error.message));
++  page.on('response', response => {
++    if (response.url().includes('/api/memory/')) report.responses.push({path: response.url().split('/api/memory/')[1], status: response.status()});
++  });
++  const button = name => page.getByRole('button', {name, exact: typeof name === 'string'});
++  const request = async (action, route) => {
++    const pending = page.waitForResponse(response => response.url().endsWith('/api/memory/' + route) && response.request().method() === 'POST');
++    const [response] = await Promise.all([pending, action()]);
++    const data = await response.json();
++    assert.equal(response.status(), 200, JSON.stringify(data));
++    await page.waitForFunction(() => !Array.from(document.querySelectorAll('[role=status]')).some(node => /Loading the current review/.test(node.textContent)));
++    return data;
++  };
++  const press = (name, route) => request(() => button(name).click(), 'candidates/' + route);
++  await page.goto(fixture.url);
++  await button('Memory').click();
++  await request(() => page.getByLabel(/^Memory scope/).selectOption('global'), 'objects');
++  const before = await request(() => button('Claims').click(), 'objects');
++  assert.equal(before.objects.length, 1);
++  assert.equal(before.objects[0].claim.object.literal.value, 'tea');
++  report.unaccepted_global_isolation = true;
++  await button('Review candidates').click();
++  for (const entry of fixture.cases) {
++    const listing = await request(() => page.getByLabel(/^Review scope/).selectOption(entry.scope), 'candidates/list');
++    assert.equal(listing.scope_key, entry.scope);
++    assert.equal(listing.candidates.length, 1);
++    assert.equal(listing.candidates[0].ref.candidate_id, entry.candidate.ref.candidate_id);
++    const item = await press(/^café\s+unresolved/, 'inspect');
++    assert.deepEqual(item, entry.candidate);
++    const preview = await press('Preview acceptance', 'prepare');
++    assert.equal(preview.scope_key, entry.scope);
++    assert.equal(preview.effect.scope.scope_key, entry.scope);
++    assert.equal(preview.effect.claims[0].claim.scope_key, entry.scope);
++    assert.deepEqual(preview.candidates[0].candidate.support, entry.candidate.candidate.support);
++    assert((await page.getByRole('article', {name: 'Exact review preview'}).innerText()).includes('Review the exact memory change'));
++    await page.getByLabel('Optional reason', {exact: true}).fill('Scripted browser conformance; not a David pilot observation.');
++    const operationPending = page.waitForResponse(response => response.url().endsWith('/api/memory/candidates/operation') && response.request().method() === 'POST');
++    const [operationResponse, resolution] = await Promise.all([operationPending, press('Accept this exact memory', 'resolve')]);
++    assert.equal(operationResponse.status(), 200);
++    const operation = await operationResponse.json();
++    assert.equal(resolution.preview_id, preview.preview_id);
++    assert.equal(operation.operation_id, resolution.operation.operation_id);
++    assert.equal(operation.preview.preview_sha256, preview.preview_sha256);
++    assert.equal(operation.preview.effect_sha256, preview.effect_sha256);
++    await page.getByRole('heading', {name: 'Recorded decision: accepted', exact: true}).waitFor();
++    assert((await page.getByRole('article', {name: 'Recorded review decision'}).innerText()).includes('Accepted provenance'));
++    report.cases.push({name: entry.name, scope: entry.scope, candidate_id: item.ref.candidate_id,
++      preview_sha256: preview.preview_sha256, effect_sha256: preview.effect_sha256, operation_id: operation.operation_id,
++      checks: {scope: true, evidence: true, preview: true, resolution: true, reload: false, no_implicit_promotion: false, accepted_graph: false}});
++    await page.reload();
++    await button('Memory').click();
++    await button('Review candidates').click();
++    const after = await request(() => page.getByLabel(/^Review scope/).selectOption(entry.scope), 'candidates/list');
++    assert.equal(after.candidates.length, 0);
++    assert((await page.locator('body').innerText()).includes('No unresolved candidates in this page.'));
++    report.cases.at(-1).checks.reload = true;
++  }
++  await button('Accepted memory').click();
++  await request(() => page.getByLabel(/^Memory scope/).selectOption('global'), 'objects');
++  const global = await request(() => button('Claims').click(), 'objects');
++  assert.equal(global.objects.length, 2);
++  const accepted = global.objects.find(object => object.claim.object.literal.value === 'café');
++  assert(accepted);
++  const detail = await request(() => button(new RegExp(accepted.object_id)).click(), 'inspect');
++  assert.equal(detail.object_id, accepted.object_id);
++  assert(detail.sources.some(source => source.source.authority === 'owner_statement' && source.source.evidence_sha256));
++  assert(detail.operations.some(operation => operation.operation_id === report.cases[0].operation_id));
++  const shown = await page.getByRole('region', {name: 'Memory record detail'}).innerText();
++  assert(shown.includes('Provenance') && shown.includes('I prefer café in this exact context.'));
++  await page.getByRole('region', {name: 'Memory record detail'}).scrollIntoViewIfNeeded();
++  await page.screenshot({path: path.join(output, 'accepted-provenance.png')});
++  assert.deepEqual(report.page_errors, []);
++  await browser.close(); browser = null;
++  await new Promise((resolve, reject) => {
++    server.stdin.once('error', reject);
++    server.stdin.end(JSON.stringify(report.cases.map(({name, candidate_id, operation_id, preview_sha256, effect_sha256}) => ({name, candidate_id, operation_id, preview_sha256, effect_sha256}))), resolve);
++  });
++  server.kill('SIGUSR1'); report.server_exit = await serverDone;
++  assert.deepEqual(report.server_exit, {code: 0, signal: null}, 'Fixture verification failed; see fixture.log');
++  assert.equal(verified?.status, 'passed', 'Missing fixture verification; see fixture.log');
++  assert.equal(verified.global_claims, 2);
++  assert.equal(verified.closed_sources, 7);
++  assert.equal(verified.canonical_replay, true);
++  assert.equal(verified.replay_model_calls, 0);
++  assert.equal(verified.cases.length, report.cases.length);
++  for (const entry of report.cases) {
++    const proof = verified.cases.find(value => value.name === entry.name);
++    assert(proof && proof.accepted_graph && proof.scope === entry.scope && proof.operation_id === entry.operation_id && proof.preview_sha256 === entry.preview_sha256 && proof.effect_sha256 === entry.effect_sha256);
++    entry.checks.accepted_graph = true;
++    entry.checks.no_implicit_promotion = true;
++  }
++  report.kernel_proof = verified;
++  assert.equal(fingerprint(), report.source_sha256, 'Source changed during browser verification');
++  report.fixture_directory_removed = !fs.existsSync(path.dirname(fixture.database));
++  assert.equal(report.fixture_directory_removed, true);
++  report.status = 'passed';
++})().catch(async error => {
++  report.error = error.stack;
++  if (page && !page.isClosed()) {
++    fs.writeFileSync(path.join(output, 'failure-dom.txt'), await page.locator('body').innerText().catch(() => ''));
++    await page.screenshot({path: path.join(output, 'failure.png')}).catch(() => {});
++  }
++  process.exitCode = 1;
++}).finally(async () => {
++  if (browser) await browser.close();
++  if (server && server.exitCode === null && server.signalCode === null) { server.kill('SIGINT'); report.server_exit = await serverDone; }
++  if (binary && fs.existsSync(binary)) fs.unlinkSync(binary);
++  report.completed_at = new Date().toISOString();
++  fs.writeFileSync(path.join(output, 'fixture.log'), stdout);
++  fs.writeFileSync(path.join(output, 'browser.json'), JSON.stringify(report, null, 2) + '\n');
++  console.log(JSON.stringify({status: report.status, cases: report.cases.map(entry => entry.name), error: report.error, output}));
++});
+diff --git a/scripts/memory-stage-4-conformance.py b/scripts/memory-stage-4-conformance.py
+new file mode 100755
+index 0000000..c539c26
+--- /dev/null
++++ b/scripts/memory-stage-4-conformance.py
+@@ -0,0 +1,250 @@
++#!/usr/bin/env python3
++"""Run the scripted Stage 4 contract and retain fail-closed, source-bound evidence."""
++
++import argparse
++import datetime as dt
++import hashlib
++import json
++import os
++from pathlib import Path
++import platform
++import re
++import subprocess
++import sys
++import time
++
++ROOT = Path(__file__).resolve().parent.parent
++CONTRACT_PATH = ROOT / "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json"
++MARKER = "STAGE4_EVIDENCE "
++
++
++def sha256(raw):
++    return hashlib.sha256(raw).hexdigest()
++
++
++def encoded(value):
++    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
++
++
++def source_fingerprint(root=ROOT):
++    """Hash tracked and untracked source, including deletions, but no run artifacts.
++
++    The same routine runs before browser setup and before/after verification.
++    Results belong outside source directories (normally .scratch/ or /tmp/).
++    """
++    paths = subprocess.check_output(
++        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root
++    ).decode().split("\0")
++    records = []
++    for name in sorted(set(paths)):
++        parts = Path(name).parts
++        if not parts or (parts[0] not in {"cmd", "internal", "scripts", "docs", ".github"}
++                         and name not in {"go.mod", "go.sum", "AGENTS.md", "package.json", "package-lock.json"}):
++            continue
++        if any(part in {"node_modules", "dist", "__pycache__"} for part in parts):
++            continue
++        path = root / name
++        if path.is_symlink():
++            records.append({"path": name, "symlink": os.readlink(path)})
++        elif path.is_file():
++            records.append({"path": name, "sha256": sha256(path.read_bytes()), "executable": bool(path.stat().st_mode & 0o111)})
++        elif not path.exists():
++            records.append({"path": name, "deleted": True})
++    if not records:
++        raise ValueError("no source files in fingerprint")
++    return {"sha256": sha256(encoded(records)), "files": records}
++
++
++def inspect_go_events(raw, contract):
++    """A receipt is evidence only when its emitting test and package passed."""
++    outcomes, package_outcomes, receipts, fragments, failures, skips = {}, {}, [], {}, [], []
++    for line in raw.splitlines():
++        try:
++            event = json.loads(line)
++        except (ValueError, TypeError):
++            failures.append("invalid go test JSON output")
++            continue
++        package, test, action = event.get("Package", ""), event.get("Test", ""), event.get("Action")
++        key = (package, test)
++        if action in {"pass", "fail", "skip"}:
++            if test:
++                outcomes[key] = action
++            else:
++                package_outcomes[package] = action
++            if action == "fail":
++                failures.append(f"{package}:{test or '(package)'} failed")
++            if action == "skip":
++                skips.append(f"{package}:{test or '(package)'}")
++        if action == "output":
++            fragments[key] = fragments.get(key, "") + event.get("Output", "")
++            while "\n" in fragments[key]:
++                output, fragments[key] = fragments[key].split("\n", 1)
++                if MARKER in output:
++                    try:
++                        receipt = json.loads(output.split(MARKER, 1)[1])
++                        if not isinstance(receipt, dict):
++                            raise ValueError("not an object")
++                        receipts.append({"package": package, "test": test, "receipt": receipt})
++                    except (ValueError, TypeError):
++                        failures.append(f"{package}:{test} emitted invalid evidence")
++    for package, tests in contract["packages"].items():
++        if package_outcomes.get(package) != "pass":
++            failures.append(f"required package did not pass: {package}")
++        for test in tests:
++            if outcomes.get((package, test)) != "pass":
++                failures.append(f"required test did not pass: {package}:{test}")
++    found = {}
++    for item in receipts:
++        receipt, test, package = item["receipt"], item["test"], item["package"]
++        scenario = receipt.get("scenario")
++        parent = test.split("/", 1)[0]
++        expected = contract["scenarios"].get(scenario) if isinstance(scenario, str) else None
++        if receipt.get("version") != contract["version"] or expected != parent:
++            failures.append(f"unbound evidence: {scenario}")
++        elif parent not in contract["packages"].get(package, []):
++            failures.append(f"wrong evidence package: {scenario}")
++        elif outcomes.get((package, test)) != "pass" or outcomes.get((package, parent)) != "pass":
++            failures.append(f"evidence test did not pass: {scenario}")
++        elif scenario in found:
++            failures.append(f"duplicate evidence: {scenario}")
++        else:
++            found[scenario] = item
++    for scenario in contract["scenarios"]:
++        if scenario not in found:
++            failures.append(f"missing scenario evidence: {scenario}")
++    if skips:
++        failures.append("required focused run skipped tests")
++    return {"failures": failures, "skips": skips, "scenarios": found,
++            "tests": [{"package": p, "test": t, "outcome": a} for (p, t), a in sorted(outcomes.items())]}
++
++
++def validate_browser(receipt, contract, source_sha256):
++    failures = []
++    if receipt.get("version") != contract["browser"]["version"]:
++        failures.append("browser receipt version mismatch")
++    if receipt.get("status") != "passed":
++        failures.append("browser interaction did not pass")
++    if receipt.get("source_sha256") != source_sha256:
++        failures.append("browser receipt source fingerprint mismatch")
++    cases = receipt.get("cases", [])
++    if not isinstance(cases, list):
++        return failures + ["browser cases must be a list"]
++    names = [case.get("name") for case in cases if isinstance(case, dict)]
++    if len(names) != len(cases) or any(not isinstance(name, str) for name in names) or sorted(names) != sorted(contract["browser"]["cases"]):
++        failures.append("browser case set is incomplete or duplicated")
++    for case in cases:
++        if not isinstance(case, dict):
++            failures.append("invalid browser case")
++            continue
++        checks = case.get("checks", {})
++        for check in contract["browser"]["checks"]:
++            if not isinstance(checks, dict) or checks.get(check) is not True:
++                failures.append(f"browser {case.get('name')} did not prove {check}")
++    # This explicitly distinguishes real UI interaction from public Store checks.
++    if not isinstance(receipt.get("provenance"), dict) or not receipt["provenance"].get("web_interactions") or not receipt["provenance"].get("store_checks"):
++        failures.append("browser receipt lacks UI/Store provenance boundaries")
++    return failures
++
++
++def run_command(name, argv, cwd, output, timeout=1200):
++    path = output / (name + ".log")
++    started = dt.datetime.now(dt.timezone.utc).isoformat()
++    begin = time.monotonic()
++    print(f"Running {name}: {' '.join(argv)}", flush=True)
++    with path.open("wb") as log:
++        try:
++            # Process groups allow a timed-out Go command to stop its child tests.
++            process = subprocess.Popen(argv, cwd=cwd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
++            try:
++                code = process.wait(timeout=timeout)
++            except subprocess.TimeoutExpired:
++                import signal
++                os.killpg(process.pid, signal.SIGKILL)
++                process.wait()
++                log.write(b"\nCONFORMANCE COMMAND TIMED OUT\n")
++                code = 124
++        except OSError as error:
++            log.write(str(error).encode())
++            code = 127
++    raw = path.read_bytes()
++    warnings = [line for line in raw.decode(errors="replace").splitlines() if re.search(r"\bwarning\b", line, re.I)]
++    print(f"{name}: exit {code} ({time.monotonic() - begin:.1f}s)", flush=True)
++    return {"name": name, "argv": argv, "cwd": str(cwd.relative_to(ROOT)) or ".", "exit_code": code,
++            "started_utc": started, "duration_seconds": round(time.monotonic() - begin, 3),
++            "log": path.name, "log_sha256": sha256(raw), "warnings": warnings}, raw
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--fingerprint", action="store_true", help="print only the current source SHA256 for browser evidence")
++    parser.add_argument("--output-dir", type=Path, help="new directory outside source roots for immutable logs/report")
++    parser.add_argument("--browser-receipt", type=Path, help="completed browser receipt from this exact source")
++    parser.add_argument("--focused-only", action="store_true", help="development run; explicitly incomplete, never conformance")
++    args = parser.parse_args(argv)
++    source = source_fingerprint()
++    if args.fingerprint:
++        print(source["sha256"])
++        return 0
++    output = (args.output_dir or ROOT / ".scratch" / "memory-stage-4" / ("conformance-" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))).resolve()
++    try:
++        relative = output.relative_to(ROOT)
++    except ValueError:
++        relative = None
++    if relative and relative.parts and relative.parts[0] in {"cmd", "internal", "scripts", "docs", ".github"}:
++        parser.error("results must be outside source directories")
++    output.mkdir(parents=True, exist_ok=False)
++    contract = json.loads(CONTRACT_PATH.read_text())
++    report = {"version": contract["version"], "kind": contract["kind"], "status": "incomplete",
++              "source": source, "git_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip(),
++              "environment": {"os": platform.platform(), "python": platform.python_version()},
++              "commands": [], "failures": [], "warnings": [], "skipped_checks": [], "excluded_claims": contract["excluded_claims"]}
++    for name, command in [("go", ["go", "version"]), ("node", ["node", "--version"]), ("npm", ["npm", "--version"]), ("sqlite_driver", ["go", "list", "-m", "-json", "modernc.org/sqlite"])]:
++        record, raw = run_command("environment-" + name, command, ROOT, output, 60)
++        report["commands"].append(record)
++        report["environment"][name] = raw.decode(errors="replace").strip()
++    record, _ = run_command("report-boundaries", [sys.executable, "scripts/memory_stage4_conformance_test.py"], ROOT, output, 60)
++    report["commands"].append(record)
++    tests = [test for package in contract["packages"].values() for test in package]
++    pattern = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
++    for name, race in [("integrated", []), ("integrated-race", ["-race"])]:
++        command = ["go", "test", *race, "-json", "./cmd/evie", "./internal/eviedb", "-run", pattern, "-count=1"]
++        record, raw = run_command(name, command, ROOT, output)
++        report["commands"].append(record)
++        analysis = inspect_go_events(raw.decode(errors="replace"), contract)
++        report[name] = analysis
++        report["failures"].extend(name + ": " + error for error in analysis["failures"])
++    if args.focused_only:
++        report["skipped_checks"].extend([{"check": "repository verification", "reason": "explicit --focused-only development run"}, {"check": "UI tests", "reason": "explicit --focused-only development run"}])
++    else:
++        for name, command, cwd in [("repository-verification", ["./scripts/verify-change.sh"], ROOT), ("ui-tests", ["npx", "--no-install", "vitest", "run"], ROOT / "internal/web/ui")]:
++            record, _ = run_command(name, command, cwd, output)
++            report["commands"].append(record)
++    if args.browser_receipt:
++        try:
++            raw = args.browser_receipt.read_bytes()
++            browser = json.loads(raw)
++            if not isinstance(browser, dict):
++                raise ValueError("browser receipt must be an object")
++            report["failures"].extend(validate_browser(browser, contract, source["sha256"]))
++            (output / "browser-receipt.json").write_bytes(raw)
++            report["browser"] = {"receipt": "browser-receipt.json", "sha256": sha256(raw), "result": browser}
++        except (OSError, ValueError) as error:
++            report["failures"].append("unreadable browser receipt: " + str(error))
++    else:
++        report["skipped_checks"].append({"check": "actual browser interactions", "reason": "no matching --browser-receipt supplied; conformance remains incomplete"})
++    report["source_after_sha256"] = source_fingerprint()["sha256"]
++    if report["source_after_sha256"] != source["sha256"]:
++        report["failures"].append("source changed during verification")
++    for command in report["commands"]:
++        if command["exit_code"] != 0:
++            report["failures"].append(command["name"] + " exited " + str(command["exit_code"]))
++        report["warnings"].extend({"command": command["name"], "message": warning} for warning in command["warnings"])
++    report["status"] = "failed" if report["failures"] else "incomplete" if report["skipped_checks"] else "passed"
++    report["completed_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
++    (output / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
++    print(f"{report['status']}: {output / 'report.json'}", flush=True)
++    return 1 if report["failures"] else 2 if report["skipped_checks"] else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/scripts/memory_stage4_conformance_test.py b/scripts/memory_stage4_conformance_test.py
+new file mode 100644
+index 0000000..4f10321
+--- /dev/null
++++ b/scripts/memory_stage4_conformance_test.py
+@@ -0,0 +1,116 @@
++#!/usr/bin/env python3
++"""Regression tests for accidentally approving incomplete or stale conformance."""
++
++import copy
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import tempfile
++import unittest
++from unittest.mock import patch
++
++SPEC = importlib.util.spec_from_file_location("conformance", Path(__file__).with_name("memory-stage-4-conformance.py"))
++RUNNER = importlib.util.module_from_spec(SPEC)
++SPEC.loader.exec_module(RUNNER)
++
++
++class EvidenceBoundaries(unittest.TestCase):
++    def setUp(self):
++        self.contract = {"version": "v1", "packages": {"real/package": ["TestReal"]}, "scenarios": {"real": "TestReal"}}
++        self.receipt = {"version": "v1", "scenario": "real", "details": {"boundary": True}}
++
++    def events(self, receipt=None, child_outcome="pass", package="real/package"):
++        body = "prefix STAGE4_EVIDENCE " + json.dumps(receipt or self.receipt) + "\n"
++        # test2json may split an evidence line across multiple Output events.
++        return [{"Action": "output", "Package": package, "Test": "TestReal/child", "Output": body[:25]},
++                {"Action": "output", "Package": package, "Test": "TestReal/child", "Output": body[25:]},
++                {"Action": child_outcome, "Package": package, "Test": "TestReal/child"},
++                {"Action": "pass", "Package": package, "Test": "TestReal"},
++                {"Action": "pass", "Package": package}]
++
++    def inspect(self, events):
++        return RUNNER.inspect_go_events("\n".join(json.dumps(event) for event in events), self.contract)
++
++    def test_split_receipt_requires_passing_test_and_package(self):
++        result = self.inspect(self.events())
++        self.assertEqual(result["failures"], [])
++        self.assertEqual(result["scenarios"]["real"]["receipt"], self.receipt)
++        for outcome in ("fail", "skip"):
++            with self.subTest(outcome=outcome):
++                self.assertTrue(self.inspect(self.events(child_outcome=outcome))["failures"])
++        self.assertTrue(self.inspect(self.events()[:-1])["failures"])
++
++    def test_receipt_cannot_replace_tests_or_cross_packages(self):
++        self.assertTrue(self.inspect(self.events()[:2])["failures"])
++        self.assertTrue(self.inspect(self.events(package="other/package"))["failures"])
++        self.assertTrue(self.inspect(self.events()[2:])["failures"])
++        self.assertTrue(self.inspect(self.events() + self.events()[:2])["failures"])
++        for receipt in ({"version": "other", "scenario": "real"}, {"version": "v1", "scenario": []}):
++            with self.subTest(receipt=receipt):
++                self.assertTrue(self.inspect(self.events(receipt=receipt))["failures"])
++
++    def test_failed_test_cannot_be_erased_by_later_pass(self):
++        events = [{"Action": "fail", "Package": "real/package", "Test": "TestReal"}] + self.events()
++        self.assertTrue(self.inspect(events)["failures"])
++
++    def test_invalid_go_output_fails_closed(self):
++        self.assertTrue(RUNNER.inspect_go_events("not test JSON", self.contract)["failures"])
++
++
++class BrowserBoundaries(unittest.TestCase):
++    def setUp(self):
++        self.contract = {"browser": {"version": "browser-v1", "cases": ["global", "private"], "checks": ["scope", "resolution"]}}
++        self.receipt = {"version": "browser-v1", "status": "passed", "source_sha256": "source-a",
++                        "cases": [{"name": name, "checks": {"scope": True, "resolution": True}} for name in ("global", "private")],
++                        "provenance": {"web_interactions": "actual preview and approval", "store_checks": "exact replay"}}
++
++    def test_rejects_stale_incomplete_and_false_evidence(self):
++        self.assertEqual(RUNNER.validate_browser(self.receipt, self.contract, "source-a"), [])
++        self.assertTrue(RUNNER.validate_browser(self.receipt, self.contract, "source-b"))
++        for field, value in (("cases", self.receipt["cases"][:1]), ("cases", [None]), ("cases", [{"name": None}]), ("cases", [self.receipt["cases"][0]] * 2), ("status", "incomplete"), ("provenance", {})):
++            receipt = copy.deepcopy(self.receipt)
++            receipt[field] = value
++            with self.subTest(field=field, value=value):
++                self.assertTrue(RUNNER.validate_browser(receipt, self.contract, "source-a"))
++        receipt = copy.deepcopy(self.receipt)
++        receipt["cases"][1]["checks"]["scope"] = False
++        self.assertTrue(RUNNER.validate_browser(receipt, self.contract, "source-a"))
++
++
++class SourceBinding(unittest.TestCase):
++    def test_untracked_changes_deletions_and_generated_results(self):
++        with tempfile.TemporaryDirectory() as directory:
++            # An alternate index/worktree may be verifying the caller. Bind all
++            # repository paths here so this fixture cannot operate on that repo.
++            with patch.dict(os.environ, {"GIT_DIR": str(Path(directory) / ".git"),
++                                         "GIT_COMMON_DIR": str(Path(directory) / ".git"),
++                                         "GIT_WORK_TREE": directory,
++                                         "GIT_INDEX_FILE": str(Path(directory) / ".git" / "index")}):
++                self.check_source_binding(Path(directory))
++
++    def check_source_binding(self, root):
++        subprocess.run(["git", "init", "-q", str(root)], check=True)
++        (root / "internal").mkdir()
++        source = root / "internal" / "behavior.go"
++        source.write_text("original")
++        subprocess.run(["git", "add", "internal/behavior.go"], cwd=root, check=True)
++        original = RUNNER.source_fingerprint(root)["sha256"]
++        (root / ".scratch").mkdir()
++        (root / ".scratch" / "result.json").write_text("generated")
++        self.assertEqual(RUNNER.source_fingerprint(root)["sha256"], original)
++        untracked = root / "internal" / "new_test.go"
++        untracked.write_text("new coverage")
++        self.assertNotEqual(RUNNER.source_fingerprint(root)["sha256"], original)
++        untracked.unlink()
++        source.write_text("edited")
++        self.assertNotEqual(RUNNER.source_fingerprint(root)["sha256"], original)
++        source.unlink()
++        deleted = RUNNER.source_fingerprint(root)
++        self.assertNotEqual(deleted["sha256"], original)
++        self.assertEqual(deleted["files"], [{"path": "internal/behavior.go", "deleted": True}])
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -1,5 +1,11 @@
 # serve — decisions
 
+- **2026-09-06 — Usage joins Data and the sidebar uses `evie.`.**
+  David approved [usage.spec.md](usage.spec.md): a typed owner usage read view
+  with explicit source coverage, and the lowercase wordmark with teal period
+  from the reviewed preview. This supersedes the uppercase name/E badge.
+
+
 - **2026-09-04 — Data is an extensible typed hub, not a generic database console.**
   The first sources are Database and Semantic Memory. Database exposes live
   schema topology plus records for a server-owned allowlist; it excludes raw

@@ -1,0 +1,84 @@
+{
+  "tree": "2f33759f8a50026d36aa22a9ba8dd09056c5f531",
+  "synthetic": true,
+  "owner_pilot": false,
+  "browser": "isolated headless Chrome",
+  "steps": [
+    {
+      "name": "Closed-session failed gap, later success, actual unavailable endpoint, measured publication and explicitly missing freshness",
+      "pass": true
+    },
+    {
+      "name": "Selected units, unfinished live obligation, explicit activation frontier and historical selection remain distinct",
+      "pass": true
+    },
+    {
+      "name": "Generation-specific event membership, bounded next-page replacement and refresh from first page",
+      "pass": true
+    }
+  ],
+  "responses": [
+    {
+      "route": "scopes",
+      "status": 405
+    },
+    {
+      "route": "candidates/scopes",
+      "status": 200
+    },
+    {
+      "route": "compiler/sessions",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    },
+    {
+      "route": "compiler/diagnostics",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "browser_version": "142.0.7444.176",
+  "pass": false,
+  "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(candidates.candidates.some(c=>c.review_state==='unresolved'))\n\n    at /Users/davidboktor/code/evie/.scratch/memory-stage-4/browser-driver/check-148.cjs:43:44\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:473:9)",
+  "server_exit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixture_directory_removed": true,
+  "driver_sha256": "e74bfeb099ed53f7463a308d9b6d404ddbac86f4407ca12f82b144f08a913a74"
+}

@@ -1,0 +1,23 @@
+{
+  "base": "9d697bf57c7835d7522da391c44163e15f416189",
+  "tree": "c1020ec36a2564841c50fa8c1c41450fb762f802",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-checkpoint.index",
+  "files": {
+    "cmd/evie/memory_stage4_conformance_test.go": "d15d08c24c0d5c661086ac83b3ca5f0a589da76f24e9cb61b117a3f9bb200dcb",
+    "cmd/evie/memory_stage4_scope_conformance_test.go": "36db493f773d8359c76f08e9901e7c103f4cef32b4b78bb88d50f81e709c30cc",
+    "cmd/evie/memory_stage4_history_conformance_test.go": "26eb6d48641915d3eff671b5479af2c4f150d486557364f1b4fb0a4849b97ed7",
+    "cmd/evie/memory_stage4_review_conformance_test.go": "6ed458421e4259d656237e16bd62d7f45c1a0f815193371ff79d2f3ae66e124d",
+    "internal/eviedb/sqlite_startup.go": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+    "internal/eviedb/sqlite_startup_test.go": "620a0da46e352356be2abb50e6b64851ad6c10de568e6d8f09a78faf96c884cc",
+    "internal/eviedb/stage4_process_conformance_test.go": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+    "scripts/memory-stage-4-conformance.py": "3f0fd1b3e29cd826421dcf4f16dd3970e7476b9a8ff2d0b187ecaf36aadf5659",
+    "scripts/memory_stage4_conformance_test.py": "cc70e9cbc77d27d38c1eed9d23fce257646fe9437ae7c9ccf1eeb89b59f151af",
+    "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json": "df05cba523bfc807549dec3d9800115ca78fae3e9ce882669b27668a043c071f",
+    "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md": "4e87388e25e8a3170c4fa76872579277fce846877b746430b527384f2c2ce08d",
+    "internal/eviedb/db.go": "3d0bed9a9f0575ef8da4b7d54acf141ac603196cc993ddd0b9b972f1b8140ead",
+    "cmd/evie/memory_stage4_browser_test.go": "841015e672c7b3d92f623392c1c34845adfe54663ca3ca2c7f2117a04fcf2ed1",
+    "scripts/memory-stage-4-browser.cjs": "fd66e9b9d9b1a5b94f7abb4f4933723d2eefbbcb33a6f9b74093f021ecc73330"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-dqw_1b3n",
+  "note": "149 conformance and physical connection startup retry on frozen148; excludes150/151 and preexisting user work."
+}

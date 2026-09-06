@@ -1,0 +1,6 @@
+=== RUN   TestStage4HistoryGapEmptyAndGenerationConformance
+    memory_stage4_history_conformance_test.go:118: CLI lineage differs from preserved Kernel history
+--- FAIL: TestStage4HistoryGapEmptyAndGenerationConformance (0.09s)
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.409s
+FAIL

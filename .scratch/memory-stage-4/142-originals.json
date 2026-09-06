@@ -1,0 +1,50 @@
+[
+  {
+    "path": "internal/memory/compiler.go",
+    "before_sha256": "b885e6e6b4158ec1642c05b324af699ceb65e702870c9f26ececa9d397a51b72"
+  },
+  {
+    "path": "internal/memory/compiler_contract.go",
+    "before_sha256": "b424f70570dc9c84045964af8cbd96bb5a88d4210f2f35de6b72d6c8f1856c15"
+  },
+  {
+    "path": "internal/memory/candidate_review.go",
+    "before_sha256": "c889804ef551314df62c211666b22bf9d9a0558686831b1debbffaf9d7fd3983"
+  },
+  {
+    "path": "internal/eviedb/compiler_identity.go",
+    "before_sha256": "0a2901deaea12daf1ed995aef8f11c81b2e00c8b4bf54deb68728367ca4d95b8"
+  },
+  {
+    "path": "internal/eviedb/compiler_validation.go",
+    "before_sha256": "0f77ba7ff8c1c666c016ce4275ca148878894e9a765e8747c617145ec7fd8494"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_inspection.go",
+    "before_sha256": "e1da85f6c096a1bd27f6adc04775b6924569ab88ca88da8b99172be9fc5b797a"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_prepare.go",
+    "before_sha256": "7cf1c41c4c9887f7c5c3dd0781df38e218418dda0c829f132b40eb28578327d3"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_apply.go",
+    "before_sha256": "20b887321d07c05597b0477ae4a65babe7deab58ae58e60af084eac0d2a968f7"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_encoding.go",
+    "before_sha256": "6aeb2895ee2e93aa2b6bdca0bb3fd84105222d8781444bc6db94d4ef258cd86e"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_identity_effect.go",
+    "before_sha256": "42d45128254c49f5ea7dc444cedc4d0b8a38301ececc5a5176c6b71106a46c70"
+  },
+  {
+    "path": "internal/eviedb/candidate_review_schema.go",
+    "before_sha256": "62466747ec54f696cad915b20fe44572a048724ab9321b355bfec3f55d6f1c14"
+  },
+  {
+    "path": "cmd/evie/candidate_review.go",
+    "before_sha256": "05544a8505589d383e4f027bca4019659513e3f3b6213382327cf80a35bf3452"
+  }
+]

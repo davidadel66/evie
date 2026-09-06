@@ -1,0 +1,6 @@
+=== RUN   TestStage4GenericStorageConformance
+    memory_stage4_scope_conformance_test.go:228: generic storage fence SELECT * FROM memory_compiler_activation_claims: got error=false transport=<nil> output="job_id | fence | work_epoch\n(0 rows)\n" want="evie table \"memory_compiler_activation_claims\" is not available through query_db"
+--- FAIL: TestStage4GenericStorageConformance (0.07s)
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.386s
+FAIL

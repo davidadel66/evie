@@ -1,0 +1,81 @@
+{
+  "version": "memory-stage4-boundary-review-v1",
+  "recorded_at": "2026-09-05T14:09:36.406094+00:00",
+  "reviewer": "/root/implement_150_pilot/review_pilot_boundary_fix",
+  "status": "pass",
+  "scope": "Bounded reconciliation cutoff and immutable selection reuse fix discovered by the Stage 4 infrastructure matrix; no model-quality or human-pilot conclusion.",
+  "files": [
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "sha256": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6",
+      "bytes": 12325
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/selection_regression_test.go",
+      "sha256": "7b6664cb181867c268f28305606bf2361e6639669f02d1242468cbd4d64f4b46",
+      "bytes": 11893
+    }
+  ],
+  "requirements": [
+    "cmd/evie/docs/active/memory-stage-4-evidence-contract.decisions.md",
+    "cmd/evie/docs/active/memory-stage-4-work-contract.decisions.md",
+    ".scratch/memory-stage-4/published-bodies/07-new-evidence-activation.md",
+    ".scratch/memory-stage-4/published-bodies/19-integrated-pilot-and-gates.md"
+  ],
+  "resolved_findings": [
+    {
+      "finding": "Arithmetic next-root minus one manufactured an empty interval across valid sparse sequence coordinates.",
+      "resolution": "The lookup uses an actual selected predecessor coordinate."
+    },
+    {
+      "finding": "A root predating activation can have only late selected members after the next root, leaving no selected predecessor; falling back to the highest selected sequence could include a still newer unrelated root.",
+      "resolution": "Absent selected predecessor uses the known last discovered root member, separately from absent-next-root handling."
+    },
+    {
+      "finding": "A selected predecessor may belong to an earlier root whose late members arrived after an already sealed current root.",
+      "red_evidence": "TestPilotSealedRootDoesNotOwnLateMembersOfEarlierRoot failed before the membership reuse guard in 0.280s, creating failed zero-attempt interval5..6 with no new current-root members.",
+      "resolution": "Discovery already covered by the referenced immutable selection reuses that interval; only a discovered root member beyond sealedLast keeps the root pending."
+    },
+    {
+      "finding": "An absent predecessor search could walk pre-activation retained events before rejecting them by commit position.",
+      "classification": "Static query-bound recommendation",
+      "resolution": "The new predecessor query starts at the last discovered selected root member; this is equivalent under the existing maximum guard."
+    }
+  ],
+  "review_conclusions": [
+    "Predecessor lookup retains exact session and activation append-position lower/upper bounds.",
+    "Actual later root closure is still evaluated independently by source capture without importing later root text.",
+    "The existing max(last) guard retains legitimate late root members.",
+    "nextCompilerInterval still starts from the activation first coordinate and finds earliest unowned ranges around immutable historical ownership.",
+    "Pending unmaterialized selection reuse and queue-capacity revisit behavior are retained.",
+    "The last-versus-sealedLast comparison preserves known actual remainder obligations without creating obligations from foreign coordinates.",
+    "No new authority, schema, dependency, scheduling lane, or automatic historical selection is introduced."
+  ],
+  "unresolved_findings": [],
+  "verification": [
+    {
+      "command": "go test ./scripts/memory-stage4-pilot -run '^TestPilot(LaterRoot|PreFrontierRoot|SealedRoot)' -count=3",
+      "result": "PASS",
+      "package_seconds": 0.888,
+      "cases": "Contiguous and sparse reconsideration; live-prefix closure and late same-root member; pre-frontier root with late selected children; late members of an earlier root."
+    },
+    {
+      "command": "go test ./internal/eviedb -run 'TestCompilerActivation(AllClosureClasses|PostFrontierSuffixAndRestart|ResumedEarlierSegmentRetainsItsOwnInterval|RevisitsRemainderAroundExistingHistoricalIntervals|CaptureInspectsMaximumWindowOnce|DiscoveryInspectsMaximumAncestryOnce|Queue|.*Capacity)|TestCompilerHistory(Overlap|.*Pending)' -count=1",
+      "result": "PASS",
+      "note": "Independent focused interval, activation-frontier, closure, queue, source-bound and history regression checks."
+    },
+    {
+      "command": "git diff --check -- internal/eviedb/compiler_reconciliation.go scripts/memory-stage4-pilot/selection_regression_test.go",
+      "result": "PASS"
+    },
+    {
+      "command": "./scripts/verify-change.sh",
+      "result": "NOT_RUN_BY_REVIEWER",
+      "reason": "Assigned bounded independent review; implementation owner/root retains full frozen-tree verification responsibility."
+    }
+  ],
+  "reviewer_edits": [
+    "Added TestPilotPreFrontierRootLateMembersDoNotOwnNewerRoot and TestPilotSealedRootDoesNotOwnLateMembersOfEarlierRoot to the assigned regression test file. Production changes were made by the implementation owner."
+  ],
+  "commit_or_external_action": false
+}

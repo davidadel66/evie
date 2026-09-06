@@ -67,6 +67,9 @@ func prepareReviewCompound(ctx context.Context, q reviewQuery, a OwnerReviewCont
 		if effect == nil {
 			effect = &memory.ReviewEffect{Version: "owner-review-effect-v5", OperationID: member.OperationID, Scope: member.Scope, Scopes: member.Scopes, PriorRevisions: member.PriorRevisions, Claims: []memory.ReviewClaimEffect{}, Members: []memory.ReviewEffect{}, Dependencies: dependencies}
 		}
+		if member.Scope != effect.Scope || string(compilerJSON(member.PriorRevisions)) != string(compilerJSON(effect.PriorRevisions)) {
+			return nil, errors.New("review memories with different applicability separately")
+		}
 		old := member.OperationID
 		member.OperationID = effect.OperationID
 		for i := range member.Claims {

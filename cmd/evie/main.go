@@ -20,6 +20,7 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/tools"
+	"github.com/davidadel66/evie/internal/usage"
 	"github.com/davidadel66/evie/internal/web"
 	"github.com/google/uuid"
 
@@ -212,6 +213,11 @@ func main() {
 	case "serve":
 		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stopSignals()
+		codexHomes, err := usage.CodexHomes()
+		if err != nil {
+			log.Fatalf("usage configuration: %v", err)
+		}
+		usageReader := usage.NewService(runtimeCtx, kernelStore, usage.CodexBinary(), codexHomes)
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -219,7 +225,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopCompiler := startCompilerForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), usageReader))
 			stopCompiler()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -254,7 +260,7 @@ func main() {
 			), nil
 		})
 		stopCompiler := startCompilerForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader))
 		stopCompiler()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

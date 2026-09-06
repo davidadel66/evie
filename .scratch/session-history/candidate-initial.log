@@ -1,0 +1,14 @@
+--- FAIL: TestOwnerReviewReplayIgnoresCurrentAuthorityAndRegistryAvailability (0.09s)
+    candidate_review_history_test.go:231: current authorization or policy changed historical replay: {Valid:false Scopes:[]} semantic memory: replay failed at operation 62a8feac-2a20-4b56-9881-883777873f22 (schema version 6): owner review unauthorized
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	45.726s
+ok  	github.com/davidadel66/evie/internal/plugins	1.905s
+--- FAIL: TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn (0.00s)
+    context_test.go:59: agent: request exceeds configured model context: 6084 serialized bytes exceeds 5903 usable bytes
+--- FAIL: TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory (0.00s)
+    context_test.go:89: agent: request exceeds configured model context: 6139 serialized bytes exceeds 5903 usable bytes
+--- FAIL: TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory (0.00s)
+    context_test.go:114: agent: request exceeds configured model context: 6198 serialized bytes exceeds 5903 usable bytes
+FAIL
+FAIL	github.com/davidadel66/evie/internal/agent	1.099s
+FAIL

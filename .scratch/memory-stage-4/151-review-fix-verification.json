@@ -1,0 +1,50 @@
+{
+  "version": "memory-stage4-release-tooling-verification-v1",
+  "checks": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release",
+        "-count=1"
+      ],
+      "started_at": "2026-09-05T13:45:01.120192+00:00",
+      "exit_code": 0,
+      "output": "ok  \tgithub.com/davidadel66/evie/internal/memoryeval\t0.591s\nok  \tgithub.com/davidadel66/evie/scripts/memory-stage4-release\t0.180s\n"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release",
+        "-count=1"
+      ],
+      "started_at": "2026-09-05T13:45:01.837797+00:00",
+      "exit_code": 0,
+      "output": "ok  \tgithub.com/davidadel66/evie/internal/memoryeval\t3.171s\nok  \tgithub.com/davidadel66/evie/scripts/memory-stage4-release\t1.322s\n"
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release"
+      ],
+      "started_at": "2026-09-05T13:45:05.736324+00:00",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "full_repository_verification": "pending root isolated checkpoint after review fixes",
+  "independent_reviews": {
+    "standards": "PASS on final14file freeze;151-standards-review.md",
+    "spec": "PASS on final14file freeze;151-spec-review-final.md",
+    "manifest_sha256": "6c2d2687a28377c2da5ed9aa143b208878de14d7233dea391657fab2ced17fcc"
+  },
+  "final_holdout": "not_created_not_exposed_not_run",
+  "measurement_window": "started only after #150 owner confirmed all99 trials/source/digest/cleanup checks completed",
+  "code_tooling_only": true
+}

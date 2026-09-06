@@ -1,0 +1,145 @@
+{
+  "version": "memory-stage-4-owner-contribution-v1",
+  "ticket": 149,
+  "status": "refined_frozen_focused_normal_and_race_pass_root_aggregate_checks_pending",
+  "created_at": "2026-09-05T13:10:29.368583+00:00",
+  "head_at_freeze": "acf37b7a2975091ad415ff79f17a7106f5bcb105",
+  "files": [
+    {
+      "path": "cmd/evie/memory_stage4_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "d15d08c24c0d5c661086ac83b3ca5f0a589da76f24e9cb61b117a3f9bb200dcb",
+      "bytes": 19603,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_scope_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "dedaf902d92acf352f89b2aaf5ecf79778d0b7025874b6435b2ef2c91d0596c9",
+      "bytes": 11394,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_history_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "26eb6d48641915d3eff671b5479af2c4f150d486557364f1b4fb0a4849b97ed7",
+      "bytes": 9196,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_review_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "6ed458421e4259d656237e16bd62d7f45c1a0f815193371ff79d2f3ae66e124d",
+      "bytes": 10310,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+      "bytes": 1591,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "620a0da46e352356be2abb50e6b64851ad6c10de568e6d8f09a78faf96c884cc",
+      "bytes": 8033,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/stage4_process_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+      "bytes": 22687,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage-4-conformance.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "3f0fd1b3e29cd826421dcf4f16dd3970e7476b9a8ff2d0b187ecaf36aadf5659",
+      "bytes": 13488,
+      "executable": true
+    },
+    {
+      "path": "scripts/memory_stage4_conformance_test.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "cc70e9cbc77d27d38c1eed9d23fce257646fe9437ae7c9ccf1eeb89b59f151af",
+      "bytes": 5833,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "df05cba523bfc807549dec3d9800115ca78fae3e9ce882669b27668a043c071f",
+      "bytes": 2023,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "454e43bf6241a625911e5fddae084920948763769f3752230debbeb0387f06d5",
+      "bytes": 9904,
+      "executable": false
+    },
+    {
+      "path": "internal/tools/db.go",
+      "before_sha256": "a25a87d4799f4a4fa228900c569aad966d233288d7e9d2d4397f3853bcc08914",
+      "before_state": "tracked_unchanged_at_assignment",
+      "after_sha256": "4ae0054fbe042d2aeb7a6514c36bde6ea3f95c863a431971331c715ef90a9a87",
+      "bytes": 17959,
+      "executable": false
+    }
+  ],
+  "frozen_files": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-owner-refined-frozen-files",
+  "supersedes": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-owner-frozen-manifest.json",
+  "focused_report": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-conformance-storage-refined-v1/report.json",
+  "focused_report_sha256": "6acbc96b3590db34c262ad0c9d3ce5e79ac830aae19481b16b2aa5637eeda76d",
+  "scenario_count_each_run": 11,
+  "checks": [
+    {
+      "command": "python3 scripts/memory-stage-4-conformance.py --focused-only --output-dir .scratch/memory-stage-4/149-conformance-storage-refined-v1",
+      "result": "EXPECTED incomplete exit2; normal5.1s/race53.7s PASS,11 receipts each,zero failures/warnings/source drift; full/UI/browser explicitly pending"
+    },
+    {
+      "command": "go test ./cmd/evie ./internal/tools -run ^(TestStage4GenericStorageConformance|TestQueryDBEvieAllowsOnlyPublicTables|TestQueryDBDispatchesTranscriptFTSAndFramesUntrustedData)$ -count=1 -v",
+      "result": "PASS cmd0.557s tools0.268s",
+      "log": "149-storage-refined-green.log"
+    },
+    {
+      "command": "go test -race ./internal/tools -run ^TestQueryDB -count=1",
+      "result": "PASS13.569s",
+      "log": "149-storage-tools-race.log"
+    },
+    {
+      "command": "gofmt -l <8 Go files>; individual git diff --no-index --check /dev/null <12 files>",
+      "result": "PASS empty output"
+    }
+  ],
+  "mutation_evidence": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-storage-mutation-evidence.json",
+  "added_path": "internal/tools/db.go",
+  "other_refined_paths": [
+    "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md",
+    "cmd/evie/memory_stage4_scope_conformance_test.go"
+  ],
+  "pending": [
+    "Root-owned db.go hook and browser helper/driver aggregation",
+    "Required isolated ./scripts/verify-change.sh and complete UI Vitest",
+    "Actual browser receipt matching source fingerprint",
+    "Independent Standards and Spec reviews",
+    "Root one-ticket commit"
+  ],
+  "production_hooks": "Root already inserted connectSQLiteStartup(ctx,db) after sql.Open and before any application/schema statements. No db.go bytes included here.",
+  "source_sha256": "63df2cb314f8a706851309c8d32f185238cde68a1c5decd831fee4e9ef4cf705"
+}

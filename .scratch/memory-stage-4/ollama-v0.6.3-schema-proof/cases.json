@@ -1,0 +1,312 @@
+[
+  {
+    "name": "sources/ref-only",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/whole",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"whole\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/date",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"date\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/range-minimum",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/range-positive",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":35,\"ref\":\"s1\",\"selector\":\"range\",\"start\":12}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/unknown-property",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ignored\":true,\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/whole-with-range",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"whole\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/date-with-range",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"date\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-no-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-no-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-negative-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":-1}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-zero-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":0,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-negative-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":-1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-float-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0.5}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-float-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1.5,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-string-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":\"0\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-string-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":\"1\",\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-null-start",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":null}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/range-boolean-end",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":true,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/selector-unknown",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"other\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/selector-null",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":null}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/no-selector-with-bounds",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"start\":0}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/missing-ref",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"selector\":\"whole\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/empty-object",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/ref-not-string",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":1}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/ref-null",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":null}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/null-reference",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[null],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/unbounded-semantic-order",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":9}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/unbounded-unknown-ref",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"unknown\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/ref-only",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/whole",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":\"whole\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/date",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":\"date\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/range-minimum",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/range-positive",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":35,\"ref\":\"s1\",\"selector\":\"range\",\"start\":12}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/unknown-property",
+    "json": "{\"candidates\":[{\"context\":[{\"ignored\":true,\"ref\":\"s1\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/whole-with-range",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"whole\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/date-with-range",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"date\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-no-start",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-no-end",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-negative-start",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":-1}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-zero-end",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":0,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-negative-end",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":-1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-float-start",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0.5}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-float-end",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1.5,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-string-start",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":\"0\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-string-end",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":\"1\",\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-null-start",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":null}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/range-boolean-end",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":true,\"ref\":\"s1\",\"selector\":\"range\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/selector-unknown",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":\"other\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/selector-null",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\",\"selector\":null}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/no-selector-with-bounds",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"start\":0}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/missing-ref",
+    "json": "{\"candidates\":[{\"context\":[{\"selector\":\"whole\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/empty-object",
+    "json": "{\"candidates\":[{\"context\":[{}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/ref-not-string",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":1}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/ref-null",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":null}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/null-reference",
+    "json": "{\"candidates\":[{\"context\":[null],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/unbounded-semantic-order",
+    "json": "{\"candidates\":[{\"context\":[{\"end\":1,\"ref\":\"s1\",\"selector\":\"range\",\"start\":9}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "context/unbounded-unknown-ref",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"unknown\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": true
+  },
+  {
+    "name": "sources/too-many-items",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "context/too-many-items",
+    "json": "{\"candidates\":[{\"context\":[{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"},{\"ref\":\"s1\"}],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\"}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "sources/empty",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  },
+  {
+    "name": "generator-limitation/schema-valid-range-property-order",
+    "json": "{\"candidates\":[{\"context\":[],\"effect\":\"assert\",\"identity\":\"resolved\",\"kind\":\"fact\",\"object\":\"tea\",\"object_kind\":\"text\",\"polarity\":\"affirmed\",\"predicate\":\"preference\",\"sources\":[{\"ref\":\"s1\",\"selector\":\"range\",\"start\":0,\"end\":1}],\"subject_entity_ref\":\"\",\"subject_name\":\"David\",\"subject_type\":\"owner\",\"temporal\":\"\"}],\"window_id\":\"w1\"}",
+    "accepted": false
+  }
+]

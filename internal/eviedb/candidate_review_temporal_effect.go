@@ -89,7 +89,7 @@ func validateReviewTemporalEncoding(p memory.ReviewPreview) error {
 		return errors.New("missing reviewed correction")
 	}
 	revision := effect.Revision
-	if string(compilerJSON(candidate.Temporal)) != string(compilerJSON(revision)) || revision.Revision != candidate.Ref.InterpretationRevision || revision.ParentRevision != revision.Revision-1 || revision.ReviewRevision != candidate.Ref.ReviewRevision || revision.Options.Candidate.ID != candidate.Ref.ID || revision.Options.Candidate.InterpretationRevision != revision.ParentRevision || revision.Options.Candidate.ReviewRevision != revision.ReviewRevision-1 || revision.Options.ScopeKey != p.ScopeKey || revision.Options.SHA256 != temporalOptionsHash(revision.Options) || revision.OwnerID != memory.LocalOwnerID || revision.AuthorizationRevision < 1 || validateSemanticUUID(revision.AuditID) != nil || len(revision.AuthenticationBinding) != 64 {
+	if string(compilerJSON(candidate.Temporal)) != string(compilerJSON(revision)) || revision.Revision != candidate.Ref.InterpretationRevision || revision.ParentRevision != revision.Revision-1 || revision.ReviewRevision != candidate.Ref.ReviewRevision || revision.Options.Candidate.ID != candidate.Ref.ID || revision.Options.Candidate.InterpretationRevision != revision.ParentRevision || revision.Options.Candidate.ReviewRevision != revision.ReviewRevision-1 || revision.Options.ScopeKey != p.Effect.Scope.Key || revision.Options.SHA256 != temporalOptionsHash(revision.Options) || revision.OwnerID != memory.LocalOwnerID || revision.AuthorizationRevision < 1 || validateSemanticUUID(revision.AuditID) != nil || len(revision.AuthenticationBinding) != 64 {
 		return errors.New("invalid temporal choice revision")
 	}
 	if string(compilerJSON(revision.Options.ScopeRevisions)) != string(compilerJSON(p.Effect.PriorRevisions)) || string(compilerJSON(revision.Options.Modes)) != string(compilerJSON(proposal.Temporal.Correction.Modes)) || string(compilerJSON(revision.Options.EffectiveTime)) != string(compilerJSON(proposal.Temporal.Correction.EffectiveTime)) {
@@ -104,7 +104,7 @@ func validateReviewTemporalEncoding(p memory.ReviewPreview) error {
 	}
 	for n, alternative := range revision.Options.Alternatives {
 		prior := alternative.Claim
-		if n > 0 && revision.Options.Alternatives[n-1].Claim.ID >= prior.ID || prior.ScopeKey != p.ScopeKey || prior.SubjectEntityID != item.Claim.SubjectEntityID || prior.Predicate != item.Predicate || alternative.State.State != memory.SemanticStateActive || alternative.State.ScopeRevision < 1 || alternative.State.ScopeRevision > p.Effect.Scope.Revision {
+		if n > 0 && revision.Options.Alternatives[n-1].Claim.ID >= prior.ID || prior.ScopeKey != p.Effect.Scope.Key || prior.SubjectEntityID != item.Claim.SubjectEntityID || prior.Predicate != item.Predicate || alternative.State.State != memory.SemanticStateActive || alternative.State.ScopeRevision < 1 || alternative.State.ScopeRevision > p.Effect.Scope.Revision {
 			return errors.New("invalid scoped correction alternative")
 		}
 		for _, id := range []memory.SemanticID{prior.ID, prior.CreatedOperationID, alternative.State.OperationID} {
@@ -131,7 +131,7 @@ func validateReviewTemporalEncoding(p memory.ReviewPreview) error {
 	if expected.Mode == memory.CorrectionChanged {
 		expected.EffectiveTime = proposal.Temporal.Correction.EffectiveTime
 	}
-	if string(compilerJSON(effect)) != string(compilerJSON(expected)) || old.Claim.ScopeKey != p.ScopeKey || old.Claim.ID == item.Claim.ID || old.State.State != memory.SemanticStateActive || old.Claim.Predicate != item.Predicate {
+	if string(compilerJSON(effect)) != string(compilerJSON(expected)) || old.Claim.ScopeKey != p.Effect.Scope.Key || old.Claim.ID == item.Claim.ID || old.State.State != memory.SemanticStateActive || old.Claim.Predicate != item.Predicate {
 		return errors.New("correction differs from exact reviewed lifecycle effect")
 	}
 	return nil

@@ -5,6 +5,7 @@ import "encoding/json"
 // CompilerGeneration is the immutable, complete extraction contract. Endpoint
 // addresses and process identities belong to requests, not generation identity.
 type CompilerGeneration struct {
+	ScopePolicy         string           `json:"scope_policy,omitempty"`
 	ModelManifestSHA256 string           `json:"model_manifest_sha256"`
 	ModelManifest       []byte           `json:"model_manifest"`
 	Version             string           `json:"version"`
@@ -82,6 +83,7 @@ type CompilerWindow struct {
 }
 
 type CompilerRequest struct {
+	ScopePolicy    string          `json:"scope_policy,omitempty"`
 	EvidencePolicy string          `json:"evidence_policy,omitempty"`
 	IdentityPolicy string          `json:"identity_policy,omitempty"`
 	Aliases        []SemanticAlias `json:"aliases,omitempty"`
@@ -100,6 +102,7 @@ type CompilerRequest struct {
 // ExtractorCandidate is untrusted model output. Scope, authority, projected
 // evidence and review state are deliberately absent: the Kernel binds them.
 type ExtractorCandidate struct {
+	Destination           MemoryDestination          `json:"destination,omitempty"`
 	Temporal              *CandidateTemporalProposal `json:"temporal,omitempty"`
 	Identity              *CandidateIdentityProposal `json:"identity,omitempty"`
 	Proposition           ClaimProposition           `json:"proposition"`

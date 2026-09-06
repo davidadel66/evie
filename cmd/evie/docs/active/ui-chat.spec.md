@@ -64,6 +64,12 @@ David approved the first complete Data workspace after the shell amendment:
   Later sources such as Tests and experiment/run tracking can join the same hub
   once their typed read contracts exist, without changing the shell model.
 
+## Usage and wordmark amendment (2026-09-06)
+
+David approved [usage.spec.md](usage.spec.md). Usage now joins the Data source
+switcher. The sidebar brand is `evie.` in tight lowercase lettering with a teal
+period, superseding the original E badge and uppercase wordmark.
+
 ## What the design specifies
 
 Dark desktop app, 13px base, IBM Plex Sans / IBM Plex Mono / Caveat (whiteboard

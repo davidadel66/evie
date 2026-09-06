@@ -1,0 +1,9 @@
+--- FAIL: TestOwnerReviewTemporalExactDuplicateAddsNoGraphRows (0.78s)
+    candidate_review_temporal_test.go:410: stale_preview
+--- FAIL: TestOwnerReviewTemporalTypedLiteralsRemainCanonical (7.17s)
+    --- FAIL: TestOwnerReviewTemporalTypedLiteralsRemainCanonical/datetime (0.72s)
+        candidate_review_temporal_test.go:444: literal "2025-01-01T00:00:00Z" is not canonical for kind "datetime"
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	23.415s
+ok  	github.com/davidadel66/evie/cmd/evie	13.835s
+FAIL

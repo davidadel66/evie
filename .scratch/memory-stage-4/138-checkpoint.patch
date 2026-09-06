@@ -1,0 +1,3287 @@
+diff --git a/cmd/evie/compiler_activation.go b/cmd/evie/compiler_activation.go
+new file mode 100644
+index 0000000..0e6bed9
+--- /dev/null
++++ b/cmd/evie/compiler_activation.go
+@@ -0,0 +1,120 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"flag"
++	"io"
++	"os"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/localextractor"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerActivationKernel interface {
++	GetSession(context.Context, memory.SessionID) (memory.Session, error)
++	ActivateCompiler(context.Context, memory.ScopeContext, memory.CompilerActivationRequest, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerActivation, error)
++	DisableCompilerActivation(context.Context, memory.ScopeContext, memory.CompilerActivationRequest) (memory.CompilerActivation, error)
++	ResumeCompilerActivation(context.Context, memory.ScopeContext, memory.CompilerActivationRequest, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerActivation, error)
++	InspectCompilerActivations(context.Context, memory.ScopeContext) (memory.CompilerActivationStatus, error)
++}
++
++func readCompilerHostConfiguration(path string) (localextractor.Config, *localextractor.Ollama, error) {
++	var config localextractor.Config
++	if path == "" {
++		return config, nil, eviedb.ErrCompilerNotConfigured
++	}
++	file, err := os.Open(path)
++	if err != nil {
++		return config, nil, err
++	}
++	data, readErr := io.ReadAll(io.LimitReader(file, memory.CompilerMaxBytes+1))
++	closeErr := file.Close()
++	if readErr != nil || closeErr != nil {
++		return config, nil, errors.Join(readErr, closeErr)
++	}
++	if err := memory.DecodeCompilerJSON(data, &config); err != nil {
++		return config, nil, err
++	}
++	extractor, err := localextractor.New(config)
++	return config, extractor, err
++}
++
++// Short activation commands never construct a conversational provider or drain
++// extraction. The owner supplies a complete pinned local configuration.
++func runCompilerActivationManagement(ctx context.Context, args []string, out io.Writer, kernel compilerActivationKernel) (bool, error) {
++	if len(args) == 0 || args[0] != "memory-compiler" {
++		return false, nil
++	}
++	if len(args) < 2 {
++		return true, errors.New("usage: memory-compiler activate|status|disable|resume --session ID")
++	}
++	action := args[1]
++	if action != "activate" && action != "status" && action != "disable" && action != "resume" {
++		return true, errors.New("unknown compiler activation action")
++	}
++	flags := flag.NewFlagSet("memory-compiler", flag.ContinueOnError)
++	flags.SetOutput(io.Discard)
++	sessionID := flags.String("session", "", "owner source session")
++	requestID := flags.String("request", "", "idempotent operation ID")
++	revision := flags.Int64("revision", 0, "expected selector revision")
++	id := flags.String("id", "", "exact prior activation ID")
++	configPath := flags.String("config", "", "pinned local configuration")
++	lineage := flags.Bool("lineage", false, "select all sessions in the exact source lineage")
++	sessionScope := flags.Bool("session-scope", false, "select the session destination")
++	if err := flags.Parse(args[2:]); err != nil {
++		return true, err
++	}
++	if flags.NArg() != 0 || *sessionID == "" {
++		return true, errors.New("compiler activation requires --session and no positional arguments")
++	}
++	session, err := kernel.GetSession(ctx, memory.SessionID(*sessionID))
++	if err != nil {
++		return true, err
++	}
++	owner := session.ScopeContext()
++	source := "global"
++	if owner.WorkspaceID != "" {
++		source = "workspace:" + string(owner.WorkspaceID)
++	} else if owner.ProjectID != "" {
++		source = "project:" + string(owner.ProjectID)
++	}
++	selector := memory.CompilerLiveSelector{SourceScope: source, Destination: source, SessionID: owner.SessionID}
++	if *lineage {
++		selector.SessionID = ""
++	}
++	if *sessionScope {
++		selector.Destination = "session:" + string(owner.SessionID)
++	}
++	req := memory.CompilerActivationRequest{RequestID: *requestID, ActivationID: *id, ExpectedRevision: *revision, Selector: selector}
++	var result any
++	if action == "status" {
++		if *requestID != "" || *revision != 0 || *id != "" || *configPath != "" || *lineage || *sessionScope {
++			return true, errors.New("status accepts only --session")
++		}
++		result, err = kernel.InspectCompilerActivations(ctx, owner)
++	} else if action == "disable" {
++		if *configPath != "" {
++			return true, errors.New("disable does not accept configuration")
++		}
++		result, err = kernel.DisableCompilerActivation(ctx, owner, req)
++	} else {
++		config, extractor, readErr := readCompilerHostConfiguration(*configPath)
++		if readErr != nil {
++			return true, readErr
++		}
++		if action == "activate" {
++			result, err = kernel.ActivateCompiler(ctx, owner, req, config.Generation, extractor)
++		} else {
++			result, err = kernel.ResumeCompilerActivation(ctx, owner, req, config.Generation, extractor)
++		}
++	}
++	if err != nil {
++		return true, err
++	}
++	encoder := json.NewEncoder(out)
++	encoder.SetIndent("", "  ")
++	return true, encoder.Encode(result)
++}
+diff --git a/cmd/evie/compiler_activation_cli_test.go b/cmd/evie/compiler_activation_cli_test.go
+new file mode 100644
+index 0000000..4c4f632
+--- /dev/null
++++ b/cmd/evie/compiler_activation_cli_test.go
+@@ -0,0 +1,198 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"strconv"
++	"strings"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/localextractor"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerRuntimeFixture struct {
++	db         *sql.DB
++	store      *eviedb.Store
++	session    memory.Session
++	generation memory.CompilerGeneration
++	configPath string
++	server     *httptest.Server
++	inferences atomic.Int32
++}
++
++func newCompilerRuntimeFixture(t *testing.T, generate http.HandlerFunc) *compilerRuntimeFixture {
++	t.Helper()
++	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = db.Close() })
++	f := &compilerRuntimeFixture{db: db, store: eviedb.NewStore(db)}
++	f.session, err = f.store.CreateGlobalSession(context.Background())
++	if err != nil {
++		t.Fatal(err)
++	}
++	tokenizer := map[string]any{"tokenizer.ggml.model": "fixture"}
++	tokenizerJSON, err := json.Marshal(tokenizer)
++	if err != nil {
++		t.Fatal(err)
++	}
++	g := memory.CompilerGeneration{
++		Version: "compiler-generation-v1", ModelArtifact: "fixture:model", ModelSHA256: strings.Repeat("1", 64),
++		Quantization: "fixture", RuntimeVersion: "fixture", ProtocolVersion: "ollama-generate-v1",
++		TokenizerSHA256: memory.CompilerHash(tokenizerJSON), Template: "{{.System}}\n{{.Prompt}}",
++		Prompt: "Extract fixture candidates.", Schema: json.RawMessage(`{"type":"object"}`),
++		TokenBoundProofSHA256: strings.Repeat("3", 64), TokensPerByte: 1, TemplateTokenOverhead: 8,
++		Decoding:       memory.CompilerDecoding{ContextTokens: 131072, OutputTokens: 768, Seed: 17},
++		EvidencePolicy: memory.CompilerPolicyVersion, SecretPolicy: memory.CompilerPolicyVersion,
++		ClosurePolicy: memory.CompilerPolicyVersion, WindowPolicy: memory.CompilerPolicyVersion,
++		PredicatePolicy: memory.CompilerPolicyVersion, EntityPolicy: memory.CompilerPolicyVersion,
++		ValidationPolicy: memory.CompilerPolicyVersion, EquivalencePolicy: memory.CompilerPolicyVersion,
++		EffectPolicy: memory.CompilerPolicyVersion,
++	}
++	g.ModelManifest = json.RawMessage(`{"layers":[{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:` + g.ModelSHA256 + `"}]}`)
++	g.ModelManifestSHA256 = memory.CompilerHash(g.ModelManifest)
++	g.TemplateSHA256 = memory.CompilerHash([]byte(g.Template))
++	f.generation = g
++	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		switch r.URL.Path {
++		case "/api/version":
++			_ = json.NewEncoder(w).Encode(map[string]any{"version": g.RuntimeVersion})
++		case "/api/tags":
++			_ = json.NewEncoder(w).Encode(map[string]any{"models": []any{map[string]any{"name": g.ModelArtifact, "digest": g.ModelManifestSHA256}}})
++		case "/api/show":
++			_ = json.NewEncoder(w).Encode(map[string]any{"template": g.Template, "details": map[string]any{"quantization_level": g.Quantization}, "model_info": tokenizer})
++		case "/api/generate":
++			f.inferences.Add(1)
++			if generate != nil {
++				generate(w, r)
++			} else {
++				http.Error(w, "inference was not authorized by this fixture", http.StatusServiceUnavailable)
++			}
++		default:
++			http.NotFound(w, r)
++		}
++	}))
++	t.Cleanup(f.server.Close)
++	f.configPath = filepath.Join(t.TempDir(), "compiler.json")
++	config, err := json.Marshal(localextractor.Config{Endpoint: f.server.URL, Generation: g})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(f.configPath, config, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	return f
++}
++
++func (f *compilerRuntimeFixture) command(t *testing.T, action string, args ...string) []byte {
++	t.Helper()
++	command := append([]string{"memory-compiler", action, "--session", string(f.session.ID)}, args...)
++	var out bytes.Buffer
++	handled, err := runCompilerActivationManagement(context.Background(), command, &out, f.store)
++	if !handled || err != nil {
++		t.Fatalf("%s handled=%v error=%v", action, handled, err)
++	}
++	for _, protected := range []string{"private source", f.generation.Prompt, f.generation.ModelArtifact, f.server.URL} {
++		if strings.Contains(out.String(), protected) {
++			t.Fatalf("%s output includes protected source or configuration", action)
++		}
++	}
++	return out.Bytes()
++}
++
++func (f *compilerRuntimeFixture) activate(t *testing.T) memory.CompilerActivation {
++	t.Helper()
++	var result memory.CompilerActivation
++	if err := json.Unmarshal(f.command(t, "activate", "--request", "activate", "--config", f.configPath), &result); err != nil {
++		t.Fatal(err)
++	}
++	return result
++}
++
++func (f *compilerRuntimeFixture) appendOwnerEvent(t *testing.T, content string) memory.Event {
++	t.Helper()
++	ctx := context.Background()
++	lease, err := f.store.AcquireTurnLease(ctx, f.session.ID, "cli-fixture", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	event, appendErr := f.store.AppendEventWithLease(ctx, f.session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{
++		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: content,
++	})
++	if err := errors.Join(appendErr, f.store.ReleaseTurnLease(ctx, f.session.ID, lease.HolderID, lease.FencingToken)); err != nil {
++		t.Fatal(err)
++	}
++	return event
++}
++
++func TestCompilerActivationCLIFrontierDisableResumeWithoutInference(t *testing.T) {
++	f := newCompilerRuntimeFixture(t, nil)
++	f.appendOwnerEvent(t, "private source before activation")
++	active := f.activate(t)
++	if active.AfterPosition != 1 || active.Revision != 1 || active.Selector.SessionID != f.session.ID || active.Selector.Destination != "global" {
++		t.Fatalf("activation did not pin exact new selection: %+v", active)
++	}
++	f.appendOwnerEvent(t, "private source inside selection")
++	if replay := f.activate(t); replay.ID != active.ID || replay.AfterPosition != active.AfterPosition {
++		t.Fatalf("request replay moved frontier: %+v", replay)
++	}
++	var disabled memory.CompilerActivation
++	if err := json.Unmarshal(f.command(t, "disable", "--request", "disable", "--id", active.ID, "--revision", "1"), &disabled); err != nil {
++		t.Fatal(err)
++	}
++	if disabled.ThroughPosition == nil || *disabled.ThroughPosition != 2 || !disabled.WorkPaused || disabled.Revision != 2 {
++		t.Fatalf("disable did not close captured selection: %+v", disabled)
++	}
++	f.appendOwnerEvent(t, "private source while disabled")
++	var resumed memory.CompilerActivation
++	if err := json.Unmarshal(f.command(t, "resume", "--request", "resume", "--id", active.ID, "--revision", strconv.FormatInt(disabled.Revision, 10), "--config", f.configPath), &resumed); err != nil {
++		t.Fatal(err)
++	}
++	if resumed.WorkPaused || resumed.ThroughPosition == nil || *resumed.ThroughPosition != 2 || resumed.ID != active.ID {
++		t.Fatalf("resume reopened live selection: %+v", resumed)
++	}
++	var status memory.CompilerActivationStatus
++	if err := json.Unmarshal(f.command(t, "status"), &status); err != nil {
++		t.Fatal(err)
++	}
++	if status.SelectedEvents != 1 || status.OutsideSelectionEvents != 2 || len(status.Activations) != 1 {
++		t.Fatalf("CLI lost selection boundaries: %+v", status)
++	}
++	var jobs int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_jobs`).Scan(&jobs); err != nil {
++		t.Fatal(err)
++	}
++	if jobs != 0 || f.inferences.Load() != 0 {
++		t.Fatalf("short CLI drained compilation: jobs=%d inference=%d", jobs, f.inferences.Load())
++	}
++}
++
++func TestCompilerActivationCLIRequiresExplicitConfiguration(t *testing.T) {
++	f := newCompilerRuntimeFixture(t, nil)
++	handled, err := runCompilerActivationManagement(context.Background(), []string{
++		"memory-compiler", "activate", "--session", string(f.session.ID), "--request", "unconfigured",
++	}, io.Discard, f.store)
++	if !handled || !errors.Is(err, eviedb.ErrCompilerNotConfigured) {
++		t.Fatalf("unconfigured activation handled=%v error=%v", handled, err)
++	}
++	var status memory.CompilerActivationStatus
++	if err := json.Unmarshal(f.command(t, "status"), &status); err != nil {
++		t.Fatal(err)
++	}
++	if len(status.Activations) != 0 || f.inferences.Load() != 0 {
++		t.Fatalf("unconfigured activation created work: %+v", status)
++	}
++}
+diff --git a/cmd/evie/compiler_host.go b/cmd/evie/compiler_host.go
+new file mode 100644
+index 0000000..439d781
+--- /dev/null
++++ b/cmd/evie/compiler_host.go
+@@ -0,0 +1,51 @@
++package main
++
++import (
++	"context"
++	"errors"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerHostKernel interface {
++	RunCompilerHost(context.Context, eviedb.CompilerSupervisorConfig) error
++}
++
++// Only long-lived actual runtime entries call this adapter. Empty configuration
++// leaves conversation and explicit memory available without background jobs.
++func startConfiguredCompilerHost(ctx context.Context, path string, kernel compilerHostKernel) (func() error, error) {
++	if path == "" {
++		return func() error { return nil }, nil
++	}
++	config, extractor, err := readCompilerHostConfiguration(path)
++	if err != nil {
++		return nil, err
++	}
++	id, _, err := memory.CompilerGenerationIdentity(config.Generation)
++	if err != nil {
++		return nil, err
++	}
++	return startCompilerHost(ctx, kernel, eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: extractor}}), nil
++}
++
++func startCompilerHost(ctx context.Context, kernel compilerHostKernel, config eviedb.CompilerSupervisorConfig) func() error {
++	ctx, cancel := context.WithCancel(ctx)
++	done := make(chan error, 1)
++	go func() { done <- kernel.RunCompilerHost(ctx, config) }()
++	return func() error {
++		cancel()
++		timer := time.NewTimer(5 * time.Second)
++		defer timer.Stop()
++		select {
++		case err := <-done:
++			if err == context.Canceled {
++				return nil
++			}
++			return err
++		case <-timer.C:
++			return errors.New("compiler shutdown cleanup exceeded five seconds")
++		}
++	}
++}
+diff --git a/cmd/evie/compiler_host_lifecycle_test.go b/cmd/evie/compiler_host_lifecycle_test.go
+new file mode 100644
+index 0000000..9329a37
+--- /dev/null
++++ b/cmd/evie/compiler_host_lifecycle_test.go
+@@ -0,0 +1,218 @@
++package main
++
++import (
++	"bufio"
++	"context"
++	"io"
++	"net/http"
++	"os"
++	"path/filepath"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++)
++
++type compilerForegroundClient struct{}
++
++func (compilerForegroundClient) ChatStream(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
++	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", Content: "Noted."}}}}, nil
++}
++
++func compilerForegroundSession(f *compilerRuntimeFixture) *agent.Session {
++	return agent.New(compilerForegroundClient{}, evieTestContextProfile("fixture"),
++		f.store.BindHistory(f.session.ID, "foreground"), f.session.ScopeContext(),
++		f.store.BindTurnOwner(f.session.ID, "foreground"))
++}
++
++func runCompilerForegroundTurn(t *testing.T, ctx context.Context, session *agent.Session, input string) {
++	t.Helper()
++	finished := make(chan struct{})
++	started := time.Now()
++	go func() {
++		defer close(finished)
++		runREPLContextIO(ctx, session, bufio.NewScanner(strings.NewReader(input+"\n")), io.Discard)
++	}()
++	select {
++	case <-finished:
++		t.Logf("REPL foreground finalization=%s", time.Since(started))
++	case <-time.After(2 * time.Second):
++		t.Fatal("foreground REPL awaited background extraction")
++	}
++}
++
++func TestCompilerConfiguredHostDoesNotBlockREPLDuringStalledExtraction(t *testing.T) {
++	extractionStarted := make(chan struct{})
++	extractionCancelled := make(chan struct{})
++	release := make(chan struct{})
++	f := newCompilerRuntimeFixture(t, func(_ http.ResponseWriter, r *http.Request) {
++		_, _ = io.Copy(io.Discard, r.Body)
++		close(extractionStarted)
++		select {
++		case <-r.Context().Done():
++			close(extractionCancelled)
++		case <-release:
++		}
++	})
++	t.Cleanup(func() { close(release) })
++	f.activate(t)
++	ctx, cancel := context.WithCancel(context.Background())
++	t.Cleanup(cancel)
++	stop, err := startConfiguredCompilerHost(ctx, f.configPath, f.store)
++	if err != nil {
++		t.Fatal(err)
++	}
++	stop = sync.OnceValue(stop)
++	t.Cleanup(func() {
++		if err := stop(); err != nil {
++			t.Error(err)
++		}
++	})
++	session := compilerForegroundSession(f)
++	runCompilerForegroundTurn(t, ctx, session, "I prefer tea.")
++	select {
++	case <-extractionStarted:
++	case <-time.After(3 * time.Second):
++		t.Fatal("configured host did not begin selected extraction")
++	}
++	runCompilerForegroundTurn(t, ctx, session, "I also prefer coffee.")
++	var finals int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM events WHERE session_id=? AND event_type='assistant_message'`, f.session.ID).Scan(&finals); err != nil {
++		t.Fatal(err)
++	}
++	if finals != 2 || f.inferences.Load() != 1 {
++		t.Fatalf("foreground finalization=%d inference requests=%d", finals, f.inferences.Load())
++	}
++	cancel()
++	if err := stop(); err != nil {
++		t.Fatal(err)
++	}
++	select {
++	case <-extractionCancelled:
++	case <-time.After(time.Second):
++		t.Fatal("host shutdown did not cancel active extractor HTTP request")
++	}
++}
++
++func TestCompilerUnconfiguredHostLeavesREPLAvailableWithoutPendingJobs(t *testing.T) {
++	f := newCompilerRuntimeFixture(t, nil)
++	stop, err := startConfiguredCompilerHost(context.Background(), "", f.store)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer func() {
++		if err := stop(); err != nil {
++			t.Error(err)
++		}
++	}()
++	runCompilerForegroundTurn(t, context.Background(), compilerForegroundSession(f), "I prefer tea.")
++	var finals, jobs, activations int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM events WHERE event_type='assistant_message'`).Scan(&finals); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_jobs`).Scan(&jobs); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_activations`).Scan(&activations); err != nil {
++		t.Fatal(err)
++	}
++	if finals != 1 || jobs != 0 || activations != 0 || f.inferences.Load() != 0 {
++		t.Fatalf("unconfigured foreground finals=%d jobs=%d activations=%d inference=%d", finals, jobs, activations, f.inferences.Load())
++	}
++}
++
++func TestCompilerUnavailableConfiguredHostLeavesREPLAvailable(t *testing.T) {
++	f := newCompilerRuntimeFixture(t, nil)
++	f.activate(t)
++	f.server.Close()
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	stop, err := startConfiguredCompilerHost(ctx, f.configPath, f.store)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer func() {
++		if err := stop(); err != nil {
++			t.Error(err)
++		}
++	}()
++	runCompilerForegroundTurn(t, ctx, compilerForegroundSession(f), "I prefer tea.")
++	deadline := time.NewTimer(3 * time.Second)
++	defer deadline.Stop()
++	ticker := time.NewTicker(10 * time.Millisecond)
++	defer ticker.Stop()
++	for {
++		var retrying int
++		if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_jobs WHERE state='retry_wait' AND attempts=1`).Scan(&retrying); err != nil {
++			t.Fatal(err)
++		}
++		if retrying == 1 {
++			break
++		}
++		select {
++		case <-ticker.C:
++		case <-deadline.C:
++			t.Fatal("configured unavailable endpoint did not leave bounded retry state")
++		}
++	}
++	var finals int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM events WHERE event_type='assistant_message'`).Scan(&finals); err != nil {
++		t.Fatal(err)
++	}
++	if finals != 1 || f.inferences.Load() != 0 {
++		t.Fatalf("unavailable foreground finals=%d inference=%d", finals, f.inferences.Load())
++	}
++}
++
++func TestRuntimeCancellationReleasesREPLScannerWithoutMoreInput(t *testing.T) {
++	for _, waiting := range []string{"prompt", "approval"} {
++		t.Run(waiting, func(t *testing.T) {
++			reader, writer := io.Pipe()
++			defer reader.Close()
++			defer writer.Close()
++			barrier := newScanReadBarrier(reader)
++			ctx, cancel := context.WithCancel(context.Background())
++			defer cancel()
++			stopInput := closeInputOnCancellation(ctx, reader)
++			defer stopInput()
++			history := &recordingREPLHistory{}
++			var client agent.Client = &replCancellationClient{}
++			if waiting == "approval" {
++				path := filepath.Join(t.TempDir(), "note.txt")
++				if err := os.WriteFile(path, []byte("hello world"), 0o600); err != nil {
++					t.Fatal(err)
++				}
++				client = &replApprovalClient{called: make(chan struct{}), path: path}
++			}
++			session := agent.New(client, evieTestContextProfile("fixture"), history,
++				memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session"}, testTurnOwner{})
++			finished := make(chan struct{})
++			go func() {
++				defer close(finished)
++				runREPLContextIO(ctx, session, bufio.NewScanner(barrier), io.Discard)
++			}()
++			waitForScannerRead(t, barrier, 1)
++			if waiting == "approval" {
++				if _, err := io.WriteString(writer, "edit it\n"); err != nil {
++					t.Fatal(err)
++				}
++				waitForScannerRead(t, barrier, 2)
++			}
++			cancel()
++			select {
++			case <-finished:
++			case <-time.After(time.Second):
++				t.Fatal("runtime cancellation left scanner blocked")
++			}
++			for _, event := range history.events {
++				if event.Type == memory.EventApproval || event.Type == memory.EventToolSucceeded {
++					t.Fatal("cancelled input produced an approval or tool success")
++				}
++			}
++		})
++	}
++}
+diff --git a/cmd/evie/compiler_host_test.go b/cmd/evie/compiler_host_test.go
+new file mode 100644
+index 0000000..5befafc
+--- /dev/null
++++ b/cmd/evie/compiler_host_test.go
+@@ -0,0 +1,40 @@
++package main
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++)
++
++type compilerHostShutdownResult struct{ err error }
++
++func (h compilerHostShutdownResult) RunCompilerHost(ctx context.Context, _ eviedb.CompilerSupervisorConfig) error {
++	<-ctx.Done()
++	return h.err
++}
++
++func TestCompilerHostShutdownPreservesJoinedCleanupFailure(t *testing.T) {
++	cleanup := errors.New("fixture cleanup deadline exceeded")
++	for _, test := range []struct {
++		name        string
++		hostError   error
++		wantFailure bool
++	}{
++		{"plain cancellation", context.Canceled, false},
++		{"cancellation and cleanup failure", errors.Join(context.Canceled, cleanup), true},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			stop := startCompilerHost(context.Background(), compilerHostShutdownResult{err: test.hostError}, eviedb.CompilerSupervisorConfig{})
++			err := stop()
++			if test.wantFailure {
++				if !errors.Is(err, cleanup) {
++					t.Fatalf("cleanup error suppressed: %v", err)
++				}
++			} else if err != nil {
++				t.Fatalf("plain cancellation reported failure: %v", err)
++			}
++		})
++	}
++}
+diff --git a/cmd/evie/docs/active/memory-stage-4-activation.implementation.md b/cmd/evie/docs/active/memory-stage-4-activation.implementation.md
+new file mode 100644
+index 0000000..fb8fcda
+--- /dev/null
++++ b/cmd/evie/docs/active/memory-stage-4-activation.implementation.md
+@@ -0,0 +1,105 @@
++# New-evidence compiler activation
++
++Engineering record for [#138](https://github.com/davidadel66/evie/issues/138),
++under the binding [work contract](memory-stage-4-work-contract.decisions.md)
++and [closure contract](memory-stage-4-evidence-contract.decisions.md).
++
++The owner explicitly activates one exact source lineage and destination under
++a verified generation. The default CLI selector is one session. `--lineage`
++selects all sessions in that session's exact unscoped, Workspace, or project
++lineage; it never widens a Workspace or project into global evidence.
++`--session-scope` makes the destination the exact source session and cannot be
++combined with `--lineage`.
++
++The activation transaction captures the database append position. Its frontier
++means selection starts afterward; older and legacy events remain outside live
++selection. An event-position trigger writes a coalesced per-session obligation
++inside the original append transaction. Notification loss and a full job queue
++cannot lose that obligation. Reconciliation separately discovers bounded event
++ancestry and revisits root obligations. Queueing, evidence cutoff, lease check,
++source seal, generation identity, and new-evidence priority are committed in the
++same serialized decision. No extraction runs during event commitment.
++
++Ownership may be materialized out of order. Reconciliation finds the earliest
++unowned interval within the activation's own bounds, stops before an existing
++owner, and keeps any remainder revisitable. Resuming an older activation cannot
++adopt a later suffix in place of its earlier evidence or select the disabled
++interval between them. Existing explicit historical jobs retain their scheduling
++and pause authority when activation discovers already-owned evidence.
++
++Each discovery transaction reads the selected event once and follows at most
++127 ancestors from that cached row. A chain that still requires another ancestor
++is an explicit `source_inspection_limit` gap, not invalid lineage or a truncated
++successful source. Each sealing transaction reads its root source once and at
++most 127 other source events; the cached root participates in the full unchanged
++128-event window. Sequence-only index coordinates and aggregate counts locate
++the interval without inspecting content, ancestry, or source eligibility. The
++boundary tests count every actual source/ancestry projection, including the
++cached seed and root, and exercise both 128 and 129-event cases.
++
++An open activation may be replaced by a new generation using its selector's
++current revision. Replacement closes the old position interval and keeps its
++selected work pinned. Disable closes selection and pauses that exact activation's
++incomplete work. Resume requires its exact activation ID and original verified
++generation; it resumes prior work without selecting the disabled interval or
++reopening live selection. Activation and operation request IDs are idempotent.
++The pause epoch prevents a pre-disable attempt from regaining publication
++authority after a fast resume. Proven request-specific server release remains
++separate from publication authority.
++
++Activation and resume perform bounded metadata-only local endpoint verification
++before capturing their frontier. This checks the configured model manifest,
++runtime version, template, tokenizer and quantization and never calls inference.
++A previously successful request returns its recorded frontier even if the
++endpoint subsequently becomes unavailable. An already activated endpoint that
++later becomes unavailable uses the worker's bounded retry policy. No configured
++extractor creates no new materialized jobs. No production model has passed the
++outstanding Stage 4 quality and runtime release gates; this implementation does
++not install a configuration, choose a default model, or claim actual-model
++acceptance.
++
++## Owner demonstration
++
++Use a complete, explicitly supplied local extractor JSON configuration and an
++existing source session. The commands run before conversational provider
++construction and exit without draining extraction:
++
++```sh
++evie memory-compiler activate --session SESSION --request activate-1 --revision 0 --config /absolute/path/compiler.json
++evie memory-compiler status --session SESSION
++evie memory-compiler disable --session SESSION --id ACTIVATION_ID --request disable-1 --revision 1
++evie memory-compiler resume --session SESSION --id ACTIVATION_ID --request resume-1 --revision 2 --config /absolute/path/compiler.json
++```
++
++To start a fresh live interval after disable, use `activate` with a new request
++ID and the current selector revision. Resuming a prior segment after replacement
++still uses the selector's latest revision and the prior segment's exact ID.
++
++Only long-lived REPL and web entries start configured supervision:
++
++```sh
++EVIE_COMPILER_CONFIG=/absolute/path/compiler.json evie
++EVIE_COMPILER_CONFIG=/absolute/path/compiler.json evie serve
++```
++
++These hosts select and extract independently. Closing the host stops new claims,
++cancels clients, and allows at most five seconds for worker cleanup. SQLite
++retains unresolved work for a later configured host. Capacity with uncertain
++server release stays blocked until the established worker release contract can
++prove release; changing an endpoint or restarting Evie is not such proof.
++
++## Deterministic observations
++
++The real SQLite regression suite covers activation/append and replacement races,
++rollback, post-frontier root suffixes, reopening without notifications, live
++deferral, final/failed/interrupted/later-root/no-lease closures, queue saturation,
++disabled intervals, and unavailable/unconfigured extraction. It records elapsed
++foreground durable-finalization time while a scripted extractor stalls.
++`CompilerReconciliation.DurationNanos` records each bounded scheduling pass.
++These observations are fixture timings, not a production latency budget or pilot
++measurement. The later pilot must measure realistic history and graph sizes,
++foreground finalization, scheduling delay, and the selected model independently.
++
++Review starts at the activation transaction and causal position trigger, then
++the obligation reconciliation and worker epoch gates. CLI and runtime adapters
++contain no authority or generation fallback.
+diff --git a/cmd/evie/main.go b/cmd/evie/main.go
+index a62952e..711704f 100644
+--- a/cmd/evie/main.go
++++ b/cmd/evie/main.go
+@@ -10,7 +10,9 @@ import (
+ 	"context"
+ 	"log"
+ 	"os"
++	"os/signal"
+ 	"path/filepath"
++	"syscall"
+ 
+ 	"github.com/davidadel66/evie/internal/agent"
+ 	"github.com/davidadel66/evie/internal/eviedb"
+@@ -55,6 +57,12 @@ func main() {
+ 	}
+ 	defer db.Close()
+ 	kernelStore := eviedb.NewStore(db)
++	if handled, err := runCompilerActivationManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
++		if err != nil {
++			log.Fatalf("memory compiler activation: %v", err)
++		}
++		return
++	}
+ 	if handled, err := runCompilerManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+ 		if err != nil {
+ 			log.Fatalf("memory compiler: %v", err)
+@@ -105,8 +113,8 @@ func main() {
+ 	// cron-exec runs headless under launchd with no API key — it must
+ 	// never pay for (or die on) client construction, so the session is
+ 	// built inside the arms that talk to the model.
+-	newSession := func(selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
+-		defaultComposition, err := pluginManager.ResolvePresetContext(context.Background(), "")
++	newSession := func(ctx context.Context, selectStoredSession func(*eviedb.Store, plugins.ResolvedComposition) (storedSessionSelection, error)) *agent.Session {
++		defaultComposition, err := pluginManager.ResolvePresetContext(ctx, "")
+ 		if err != nil {
+ 			log.Fatalf("failed to resolve default Agent Preset: %v", err)
+ 		}
+@@ -118,7 +126,7 @@ func main() {
+ 		if model == "" {
+ 			model = agent.DefaultModel
+ 		}
+-		profile, err := client.ResolveContextProfile(context.Background(), model)
++		profile, err := client.ResolveContextProfile(ctx, model)
+ 		if err != nil {
+ 			log.Fatalf("failed to resolve context profile: %v", err)
+ 		}
+@@ -136,7 +144,7 @@ func main() {
+ 
+ 		holderID := memory.LeaseHolderID(holderUUID.String())
+ 		resolvedComposition, err := bindSessionComposition(
+-			context.Background(), store, pluginManager, selection.ID, defaultComposition,
++			ctx, store, pluginManager, selection.ID, defaultComposition,
+ 			selection.createdComposition,
+ 		)
+ 		if err != nil {
+@@ -154,31 +162,54 @@ func main() {
+ 			resolvedComposition.Resolved.Toolset,
+ 		)
+ 	}
++	startCompilerForRuntime := func(ctx context.Context) func() {
++		stop, err := startConfiguredCompilerHost(ctx, os.Getenv("EVIE_COMPILER_CONFIG"), kernelStore)
++		if err != nil {
++			log.Printf("memory compiler unavailable: %v", err)
++			return func() {}
++		}
++		return func() {
++			if err := stop(); err != nil {
++				log.Printf("memory compiler shutdown: %v", err)
++			}
++		}
++	}
+ 
+ 	switch cmd {
+ 	case "":
++		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
++		defer stopSignals()
++		stopInput := closeInputOnCancellation(runtimeCtx, os.Stdin)
++		defer stopInput()
+ 		launchDir, err := os.Getwd()
+ 		if err != nil {
+ 			log.Fatalf("failed to read launch directory: %v", err)
+ 		}
+ 		scanner := bufio.NewScanner(os.Stdin)
+-		session := newSession(func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
++		session := newSession(runtimeCtx, func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
+ 			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved}
+ 			selected, err := selectREPLSession(
+-				context.Background(), boundStore,
++				runtimeCtx, boundStore,
+ 				launchDir, scanner, os.Stdout,
+ 			)
+ 			return boundStore.selection(selected), err
+ 		})
+-		runREPLWithMemory(session, scanner, kernelStore)
++		stopCompiler := startCompilerForRuntime(runtimeCtx)
++		runREPLContextIOWithMemory(runtimeCtx, session, scanner, os.Stdout, kernelStore)
++		stopCompiler()
+ 	case "serve":
+-		presetReport, err := pluginManager.ValidatePresetContext(context.Background(), "")
++		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
++		defer stopSignals()
++		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
+ 		if err != nil {
+ 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
+ 		}
+ 		if !presetReport.Valid {
+ 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
+-			if err := web.ServeManaged(nil, pluginManager, kernelStore); err != nil {
++			stopCompiler := startCompilerForRuntime(runtimeCtx)
++			serveErr := web.ServeWithContext(runtimeCtx, web.NewManagedServer(nil, pluginManager, kernelStore))
++			stopCompiler()
++			if err := serveErr; err != nil {
+ 				log.Fatalf("serve degraded management: %v", err)
+ 			}
+ 			break
+@@ -191,7 +222,7 @@ func main() {
+ 		if model == "" {
+ 			model = agent.DefaultModel
+ 		}
+-		profile, err := client.ResolveContextProfile(context.Background(), model)
++		profile, err := client.ResolveContextProfile(runtimeCtx, model)
+ 		if err != nil {
+ 			log.Fatalf("failed to resolve context profile: %v", err)
+ 		}
+@@ -210,7 +241,10 @@ func main() {
+ 				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
+ 			), nil
+ 		})
+-		if err := web.ServeContextManaged(pluginManager, kernelStore, controller, kernelStore); err != nil {
++		stopCompiler := startCompilerForRuntime(runtimeCtx)
++		serveErr := web.ServeWithContext(runtimeCtx, web.NewContextMemoryServer(nil, pluginManager, kernelStore, controller, kernelStore))
++		stopCompiler()
++		if err := serveErr; err != nil {
+ 			log.Fatalf("serve: %v", err)
+ 		}
+ 	default:
+diff --git a/cmd/evie/runtime_lifecycle.go b/cmd/evie/runtime_lifecycle.go
+new file mode 100644
+index 0000000..daeaf19
+--- /dev/null
++++ b/cmd/evie/runtime_lifecycle.go
+@@ -0,0 +1,12 @@
++package main
++
++import (
++	"context"
++	"io"
++)
++
++// The process owns its REPL input. Closing it on shutdown releases the one
++// scanner whether it is waiting at the chooser, prompt, or approval gate.
++func closeInputOnCancellation(ctx context.Context, input io.Closer) func() bool {
++	return context.AfterFunc(ctx, func() { _ = input.Close() })
++}
+diff --git a/internal/eviedb/compiler_activation.go b/internal/eviedb/compiler_activation.go
+new file mode 100644
+index 0000000..42c5af3
+--- /dev/null
++++ b/internal/eviedb/compiler_activation.go
+@@ -0,0 +1,287 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++var ErrCompilerActivationConflict = errors.New("compiler activation revision or selector conflict")
++
++// Activation verifies operational metadata before capturing its frontier, never
++// by dispatching inference. Scripted adapters explicitly implement this seam.
++type CompilerConfigurationVerifier interface {
++	VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error
++}
++
++func verifyCompilerActivation(ctx context.Context, g memory.CompilerGeneration, e CompilerExtractor) error {
++	v, ok := e.(CompilerConfigurationVerifier)
++	if !ok {
++		return ErrCompilerConfiguration
++	}
++	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	return v.VerifyCompilerConfiguration(ctx, g)
++}
++
++// ActivateCompiler captures the append frontier together with owner authority,
++// the exact selector and pinned manifest. Extract is never called here.
++func (s *Store) ActivateCompiler(ctx context.Context, owner memory.ScopeContext, req memory.CompilerActivationRequest, generation memory.CompilerGeneration, extractor CompilerExtractor) (memory.CompilerActivation, error) {
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return memory.CompilerActivation{}, ErrCompilerNotConfigured
++	}
++	id, manifest, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	generation = memory.CompilerGeneration{}
++	if err := json.Unmarshal(manifest, &generation); err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	if prior, found, err := s.priorCompilerActivation(ctx, owner, "activate", req, id); found || err != nil {
++		return prior, err
++	}
++	if err := verifyCompilerActivation(ctx, generation, extractor); err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	return s.changeCompilerActivation(ctx, owner, "activate", req, id, manifest)
++}
++
++func (s *Store) DisableCompilerActivation(ctx context.Context, owner memory.ScopeContext, req memory.CompilerActivationRequest) (memory.CompilerActivation, error) {
++	return s.changeCompilerActivation(ctx, owner, "disable", req, "", nil)
++}
++
++// ResumeCompilerActivation resumes an exact prior segment's selected work. It
++// does not reopen live selection or include events from the disabled interval.
++func (s *Store) ResumeCompilerActivation(ctx context.Context, owner memory.ScopeContext, req memory.CompilerActivationRequest, generation memory.CompilerGeneration, extractor CompilerExtractor) (memory.CompilerActivation, error) {
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return memory.CompilerActivation{}, ErrCompilerNotConfigured
++	}
++	id, manifest, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	generation = memory.CompilerGeneration{}
++	if err := json.Unmarshal(manifest, &generation); err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	if prior, found, err := s.priorCompilerActivation(ctx, owner, "resume", req, id); found || err != nil {
++		return prior, err
++	}
++	if err := verifyCompilerActivation(ctx, generation, extractor); err != nil {
++		return memory.CompilerActivation{}, err
++	}
++	return s.changeCompilerActivation(ctx, owner, "resume", req, id, manifest)
++}
++
++func authorizeCompilerActivation(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, selector memory.CompilerLiveSelector) error {
++	if selector.SourceScope != scopeKeyForContext(owner) || (selector.SessionID != "" && selector.SessionID != owner.SessionID) {
++		return errors.New("compiler activation source lineage mismatch")
++	}
++	if selector.Destination == "session:"+string(owner.SessionID) && selector.SessionID != owner.SessionID {
++		return errors.New("session destination requires exact source session")
++	}
++	return compilerAuthorize(ctx, conn, owner, memory.CompilationSelection{SessionID: owner.SessionID, Destination: selector.Destination})
++}
++
++func compilerActivationRequestHash(action string, req memory.CompilerActivationRequest, generationID string) string {
++	return memory.CompilerHash(compilerJSON(struct {
++		Action     string
++		Request    memory.CompilerActivationRequest
++		Generation string
++	}{action, req, generationID}))
++}
++
++func (s *Store) priorCompilerActivation(ctx context.Context, owner memory.ScopeContext, action string, req memory.CompilerActivationRequest, generationID string) (result memory.CompilerActivation, found bool, err error) {
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := authorizeCompilerActivation(ctx, conn, owner, req.Selector); err != nil {
++			return err
++		}
++		var hash string
++		var data []byte
++		err := conn.QueryRowContext(ctx, `SELECT request_hash,response FROM memory_compiler_activation_requests WHERE request_id=?`, req.RequestID).Scan(&hash, &data)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		found = true
++		if hash != compilerActivationRequestHash(action, req, generationID) {
++			return ErrCompilerActivationConflict
++		}
++		return json.Unmarshal(data, &result)
++	})
++	return
++}
++
++func (s *Store) changeCompilerActivation(ctx context.Context, owner memory.ScopeContext, action string, req memory.CompilerActivationRequest, generationID string, manifest []byte) (result memory.CompilerActivation, err error) {
++	if req.RequestID == "" || len(req.RequestID) > 256 || req.ExpectedRevision < 0 {
++		return result, errors.New("activation requires bounded request ID and nonnegative revision")
++	}
++	requestHash := compilerActivationRequestHash(action, req, generationID)
++	selectorKey := memory.CompilerHash(compilerJSON(req.Selector))
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := authorizeCompilerActivation(ctx, conn, owner, req.Selector); err != nil {
++			return err
++		}
++		var priorHash string
++		var response []byte
++		err := conn.QueryRowContext(ctx, `SELECT request_hash,response FROM memory_compiler_activation_requests WHERE request_id=?`, req.RequestID).Scan(&priorHash, &response)
++		if err == nil {
++			if priorHash != requestHash {
++				return ErrCompilerActivationConflict
++			}
++			return json.Unmarshal(response, &result)
++		}
++		if !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		var revision int64
++		if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision),0) FROM memory_compiler_activations WHERE selector_key=?`, selectorKey).Scan(&revision); err != nil {
++			return err
++		}
++		if revision != req.ExpectedRevision {
++			return ErrCompilerActivationConflict
++		}
++		var frontier int64
++		if err := conn.QueryRowContext(ctx, `SELECT value FROM memory_compiler_position_counter WHERE singleton=1`).Scan(&frontier); err != nil {
++			return err
++		}
++		if action == "activate" {
++			if req.ActivationID != "" {
++				return errors.New("new activation does not accept a prior activation ID")
++			}
++			var conflict int
++			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_activations WHERE through_position IS NULL AND destination=? AND source_scope=? AND selector_key<>? AND (source_session='' OR ?='' OR source_session=?)`, req.Selector.Destination, req.Selector.SourceScope, selectorKey, req.Selector.SessionID, req.Selector.SessionID).Scan(&conflict); err != nil {
++				return err
++			}
++			if conflict != 0 {
++				return ErrCompilerActivationConflict
++			}
++			if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_generations VALUES(?,?)`, generationID, manifest); err != nil {
++				return err
++			}
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activations SET through_position=? WHERE selector_key=? AND through_position IS NULL`, frontier, selectorKey); err != nil {
++				return err
++			}
++			result = memory.CompilerActivation{ID: memory.CompilerHash([]byte(req.RequestID)), Selector: req.Selector, GenerationID: generationID, Revision: revision + 1, AfterPosition: frontier}
++			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_activations(activation_id,selector_key,source_scope,source_session,destination,generation_id,revision,after_position) VALUES(?,?,?,?,?,?,?,?)`, result.ID, selectorKey, req.Selector.SourceScope, req.Selector.SessionID, req.Selector.Destination, generationID, result.Revision, frontier); err != nil {
++				return err
++			}
++		} else {
++			if req.ActivationID == "" {
++				return errors.New("disable/resume requires the exact activation ID")
++			}
++			row := conn.QueryRowContext(ctx, `SELECT activation_id,source_scope,source_session,destination,generation_id,revision,after_position,through_position,work_paused FROM memory_compiler_activations WHERE selector_key=? AND activation_id=?`, selectorKey, req.ActivationID)
++			if err := scanCompilerActivation(row, &result); err != nil {
++				return err
++			}
++			if action == "disable" {
++				if result.WorkPaused {
++					return ErrCompilerActivationConflict
++				}
++				if result.ThroughPosition == nil {
++					result.ThroughPosition = &frontier
++				}
++				result.WorkPaused = true
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activations SET through_position=COALESCE(through_position,?),work_paused=1,work_epoch=work_epoch+1,revision=? WHERE activation_id=?`, frontier, revision+1, result.ID); err != nil {
++					return err
++				}
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_capacity SET state='release_pending' WHERE job_id IN (SELECT job_id FROM memory_compiler_activation_jobs WHERE activation_id=?)`, result.ID); err != nil {
++					return err
++				}
++			} else {
++				if !result.WorkPaused || result.GenerationID != generationID {
++					return fmt.Errorf("%w: resume requires the paused generation", ErrCompilerActivationConflict)
++				}
++				result.WorkPaused = false
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activations SET work_paused=0,revision=? WHERE activation_id=?`, revision+1, result.ID); err != nil {
++					return err
++				}
++			}
++			result.Revision = revision + 1
++		}
++		_, err = conn.ExecContext(ctx, `INSERT INTO memory_compiler_activation_requests VALUES(?,?,?)`, req.RequestID, requestHash, compilerJSON(result))
++		return err
++	})
++	return
++}
++
++func scanCompilerActivation(row interface{ Scan(...any) error }, result *memory.CompilerActivation) error {
++	return row.Scan(&result.ID, &result.Selector.SourceScope, &result.Selector.SessionID, &result.Selector.Destination, &result.GenerationID, &result.Revision, &result.AfterPosition, &result.ThroughPosition, &result.WorkPaused)
++}
++
++// Status returns content-free selection counts for this exact owner lineage.
++func (s *Store) InspectCompilerActivations(ctx context.Context, owner memory.ScopeContext) (result memory.CompilerActivationStatus, err error) {
++	result.Activations = []memory.CompilerActivation{}
++	result.Roots = []memory.CompilerActivationRootStatus{}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := compilerAuthorize(ctx, conn, owner, memory.CompilationSelection{SessionID: owner.SessionID, Destination: scopeKeyForContext(owner)}); err != nil {
++			return err
++		}
++		rows, err := conn.QueryContext(ctx, `SELECT activation_id,source_scope,source_session,destination,generation_id,revision,after_position,through_position,work_paused FROM memory_compiler_activations WHERE source_scope=? AND (source_session='' OR source_session=?) ORDER BY revision DESC,activation_id LIMIT 129`, scopeKeyForContext(owner), owner.SessionID)
++		if err != nil {
++			return err
++		}
++		defer rows.Close()
++		for rows.Next() {
++			var a memory.CompilerActivation
++			if err := scanCompilerActivation(rows, &a); err != nil {
++				return err
++			}
++			result.Activations = append(result.Activations, a)
++		}
++		if err := rows.Err(); err != nil {
++			return err
++		}
++		rows.Close()
++		if len(result.Activations) > 128 {
++			result.ActivationsTruncated = true
++			result.Activations = result.Activations[:128]
++		}
++		roots, err := conn.QueryContext(ctx, `SELECT r.activation_id,r.root_id,r.first_sequence,r.last_sequence,r.state,r.reason,r.selection_id,COALESCE(j.state,''),COALESCE(j.reason,'') FROM memory_compiler_activation_roots r LEFT JOIN memory_compiler_selections s ON s.selection_id=r.selection_id LEFT JOIN memory_compiler_jobs j ON j.job_id=s.job_id WHERE r.session_id=? ORDER BY r.position DESC,r.activation_id LIMIT 129`, owner.SessionID)
++		if err != nil {
++			return err
++		}
++		defer roots.Close()
++		for roots.Next() {
++			var r memory.CompilerActivationRootStatus
++			var jobState, jobReason string
++			if err := roots.Scan(&r.ActivationID, &r.RootID, &r.FirstSequence, &r.LastSequence, &r.State, &r.Reason, &r.SelectionID, &jobState, &jobReason); err != nil {
++				return err
++			}
++			// A pending extension owns a fresh discovery obligation even when its
++			// preceding selected prefix already finished. Otherwise show the live
++			// worker state, not the queue state captured at materialization time.
++			if r.State != "selected_unmaterialized" && r.State != "deferred_live" && jobState != "" {
++				r.State = jobState
++				r.Reason = safeCompilerReason(jobReason)
++			}
++			result.Roots = append(result.Roots, r)
++		}
++		if err := roots.Err(); err != nil {
++			return err
++		}
++		roots.Close()
++		if len(result.Roots) > 128 {
++			result.RootsTruncated = true
++			result.Roots = result.Roots[:128]
++		}
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND EXISTS(SELECT 1 FROM memory_compiler_activations a WHERE a.source_scope=? AND (a.source_session='' OR a.source_session=e.session_id) AND p.commit_position>a.after_position AND (a.through_position IS NULL OR p.commit_position<=a.through_position))`, owner.SessionID, scopeKeyForContext(owner)).Scan(&result.SelectedEvents); err != nil {
++			return err
++		}
++		var total int64
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=?`, owner.SessionID).Scan(&total); err != nil {
++			return err
++		}
++		result.OutsideSelectionEvents = total - result.SelectedEvents
++		return conn.QueryRowContext(ctx, `SELECT COALESCE(SUM(state IN ('selected_unmaterialized','deferred_live')),0),COALESCE(SUM(state='failed'),0) FROM memory_compiler_activation_roots WHERE session_id=?`, owner.SessionID).Scan(&result.PendingRoots, &result.SourceErrors)
++	})
++	return
++}
+diff --git a/internal/eviedb/compiler_activation_interval_test.go b/internal/eviedb/compiler_activation_interval_test.go
+new file mode 100644
+index 0000000..eab6000
+--- /dev/null
++++ b/internal/eviedb/compiler_activation_interval_test.go
+@@ -0,0 +1,135 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"github.com/davidadel66/evie/internal/memory"
++	"testing"
++)
++
++func TestCompilerActivationResumedEarlierSegmentRetainsItsOwnInterval(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	a := activationStart(t, f)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	req := activationRequest(f, "disable-original", 1)
++	req.ActivationID = a.ID
++	if _, err := f.store.DisableCompilerActivation(ctx, f.owner, req); err != nil {
++		t.Fatal(err)
++	}
++	gap := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "Disabled interval remains historical."})
++	b, err := f.store.ActivateCompiler(ctx, f.owner, activationRequest(f, "activate-next", 2), f.generation, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	end := activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	activationReconcile(t, f, 4)
++	var laterWindow []byte
++	if err := f.db.QueryRow(`SELECT window FROM memory_compiler_selections`).Scan(&laterWindow); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE session_turn_leases SET expires_at='2000-01-01T00:00:00Z' WHERE session_id=?`, f.owner.SessionID); err != nil {
++		t.Fatal(err)
++	}
++	req = activationRequest(f, "resume-original", 3)
++	req.ActivationID = a.ID
++	if _, err := f.store.ResumeCompilerActivation(ctx, f.owner, req, f.generation, &activationScript{}); err != nil {
++		t.Fatal(err)
++	}
++	activationReconcile(t, f, 6)
++	var oldSel, newSel, oldState, newState string
++	if err := f.db.QueryRow(`SELECT selection_id,state FROM memory_compiler_activation_roots WHERE activation_id=?`, a.ID).Scan(&oldSel, &oldState); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT selection_id,state FROM memory_compiler_activation_roots WHERE activation_id=?`, b.ID).Scan(&newSel, &newState); err != nil {
++		t.Fatal(err)
++	}
++	var first, last int64
++	if err := f.db.QueryRow(`SELECT first_sequence,last_sequence FROM memory_compiler_selections WHERE selection_id=?`, oldSel).Scan(&first, &last); err != nil {
++		t.Fatal(err)
++	}
++	t.Logf("original root=%d disabled gap=%d new final=%d; A state=%s selection=%s; B state=%s selection=%s; adopted interval=%d..%d", root.Sequence, gap.Sequence, end.Sequence, oldState, oldSel, newState, newSel, first, last)
++	if oldSel == newSel || first != root.Sequence || last != root.Sequence {
++		t.Fatalf("old selected prefix was replaced by later suffix; root assertion remains unowned")
++	}
++	var sameWindow []byte
++	if err := f.db.QueryRow(`SELECT window FROM memory_compiler_selections WHERE selection_id=?`, newSel).Scan(&sameWindow); err != nil {
++		t.Fatal(err)
++	}
++	if string(sameWindow) != string(laterWindow) {
++		t.Fatal("resuming earlier work changed the immutable later window")
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_selections WHERE first_sequence<=? AND last_sequence>=?`, gap.Sequence, gap.Sequence); got != 0 {
++		t.Fatal("disabled gap acquired ownership")
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(DISTINCT activation_id) FROM memory_compiler_activation_jobs`); got != 2 {
++		t.Fatalf("ownership was attached to another activation: %d", got)
++	}
++	status, err := f.store.InspectCompilerActivations(ctx, f.owner)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if status.SelectedEvents != 2 || status.OutsideSelectionEvents != 1 {
++		t.Fatalf("disabled gap no longer outside selection: %+v", status)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); !worked || err != nil {
++		t.Fatalf("old selected assertion cannot compile: %v %v", worked, err)
++	}
++}
++
++func TestCompilerActivationRevisitsRemainderAroundExistingHistoricalIntervals(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	a := activationStart(t, f)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "An owner assertion."})
++	for n := 2; n <= 7; n++ {
++		activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "Additional support."})
++	}
++	if _, err := f.db.Exec(`UPDATE session_turn_leases SET expires_at='2000-01-01T00:00:00Z' WHERE session_id=?`, f.owner.SessionID); err != nil {
++		t.Fatal(err)
++	}
++	generation, manifest, err := memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var pinned memory.CompilerGeneration
++	if err := json.Unmarshal(manifest, &pinned); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		for _, point := range []int64{3, 5} {
++			_, _, err := selectCompilerUnitInTransaction(ctx, conn, f.owner, memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: point, Destination: "global"}, generation, manifest, pinned, compilerScheduling{FirstSequence: point, Lane: "historical"})
++			if err != nil {
++				return err
++			}
++		}
++		return nil
++	}); err != nil {
++		t.Fatal(err)
++	}
++	activationReconcile(t, f, 12)
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs`); got != 5 {
++		t.Fatalf("remaining intervals were lost or duplicated: %d jobs", got)
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs a JOIN memory_compiler_jobs b ON a.job_id<b.job_id AND a.first_sequence<=b.last_sequence AND b.first_sequence<=a.last_sequence`); got != 0 {
++		t.Fatal("activation overlapped an existing owner")
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activation_jobs`); got != 3 {
++		t.Fatalf("historical jobs acquired activation authority: %d", got)
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activation_roots WHERE state IN ('selected_unmaterialized','deferred_live')`); got != 0 {
++		t.Fatal("remainder not revisited")
++	}
++	req := activationRequest(f, "disable-new-work", 1)
++	req.ActivationID = a.ID
++	if _, err := f.store.DisableCompilerActivation(ctx, f.owner, req); err != nil {
++		t.Fatal(err)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); !worked || err != nil {
++		t.Fatalf("activation pause stopped independently selected history: %v %v", worked, err)
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q USING(job_id) WHERE j.state='completed_empty' AND q.lane='historical'`); got != 1 {
++		t.Fatal("wrong authority/lane resumed")
++	}
++}
+diff --git a/internal/eviedb/compiler_activation_schema.go b/internal/eviedb/compiler_activation_schema.go
+new file mode 100644
+index 0000000..e1b7b98
+--- /dev/null
++++ b/internal/eviedb/compiler_activation_schema.go
+@@ -0,0 +1,66 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++)
++
++func ensureCompilerActivationSchema(ctx context.Context, db *sql.DB) error {
++	return withImmediateTransactionResolver(ctx, db, executeImmediateTransactionStatement, transactionResolutionContext, func(conn *sql.Conn) error {
++		_, err := conn.ExecContext(ctx, compilerActivationSchema)
++		return err
++	})
++}
++
++// The position trigger is downstream of the position INSERT in the original
++// append trigger. It does not depend on ordering between sibling event triggers.
++const compilerActivationSchema = `
++CREATE TABLE IF NOT EXISTS memory_compiler_activations (
++ activation_id TEXT PRIMARY KEY, selector_key TEXT NOT NULL, source_scope TEXT NOT NULL,
++ source_session TEXT NOT NULL, destination TEXT NOT NULL, generation_id TEXT NOT NULL REFERENCES memory_compiler_generations,
++ revision INTEGER NOT NULL, after_position INTEGER NOT NULL, through_position INTEGER,
++ work_paused INTEGER NOT NULL DEFAULT 0 CHECK(work_paused IN (0,1)), work_epoch INTEGER NOT NULL DEFAULT 0
++);
++CREATE UNIQUE INDEX IF NOT EXISTS memory_compiler_activation_open ON memory_compiler_activations(selector_key) WHERE through_position IS NULL;
++CREATE TABLE IF NOT EXISTS memory_compiler_activation_requests (
++ request_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, response BLOB NOT NULL
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_activation_dirty (
++ activation_id TEXT NOT NULL REFERENCES memory_compiler_activations, session_id TEXT NOT NULL REFERENCES sessions,
++ high_position INTEGER NOT NULL, scanned_position INTEGER NOT NULL DEFAULT 0, scan_order INTEGER NOT NULL DEFAULT 0,
++ PRIMARY KEY(activation_id,session_id)
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_activation_roots (
++ activation_id TEXT NOT NULL REFERENCES memory_compiler_activations, session_id TEXT NOT NULL REFERENCES sessions,
++ root_id TEXT NOT NULL REFERENCES events, first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL,
++ position INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'selected_unmaterialized', reason TEXT NOT NULL DEFAULT '',
++ selection_id TEXT NOT NULL DEFAULT '', checked_order INTEGER NOT NULL DEFAULT 0,
++ PRIMARY KEY(activation_id,root_id)
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_activation_jobs (
++ job_id TEXT PRIMARY KEY REFERENCES memory_compiler_jobs, activation_id TEXT NOT NULL REFERENCES memory_compiler_activations
++);
++CREATE VIEW IF NOT EXISTS memory_compiler_activation_paused_jobs AS
++ SELECT l.job_id FROM memory_compiler_activation_jobs l JOIN memory_compiler_activations a USING(activation_id) WHERE a.work_paused=1;
++CREATE TABLE IF NOT EXISTS memory_compiler_activation_claims (
++ job_id TEXT PRIMARY KEY REFERENCES memory_compiler_jobs, fence INTEGER NOT NULL, work_epoch INTEGER NOT NULL
++);
++CREATE TRIGGER IF NOT EXISTS memory_compiler_activation_claim AFTER UPDATE OF fence,holder ON memory_compiler_jobs WHEN NEW.holder IS NOT NULL BEGIN
++ INSERT INTO memory_compiler_activation_claims(job_id,fence,work_epoch)
++ SELECT NEW.job_id,NEW.fence,a.work_epoch FROM memory_compiler_activation_jobs l JOIN memory_compiler_activations a USING(activation_id) WHERE l.job_id=NEW.job_id
++ ON CONFLICT(job_id) DO UPDATE SET fence=excluded.fence,work_epoch=excluded.work_epoch;
++END;
++CREATE VIEW IF NOT EXISTS memory_compiler_activation_invalid_claims AS
++ SELECT l.job_id FROM memory_compiler_activation_jobs l JOIN memory_compiler_activations a USING(activation_id)
++ JOIN memory_compiler_jobs j USING(job_id) LEFT JOIN memory_compiler_activation_claims c USING(job_id)
++ WHERE a.work_paused=1 OR c.job_id IS NULL OR c.fence<>j.fence OR c.work_epoch<>a.work_epoch;
++CREATE TRIGGER IF NOT EXISTS memory_compiler_activation_append AFTER INSERT ON memory_compiler_event_positions BEGIN
++ INSERT INTO memory_compiler_activation_dirty(activation_id,session_id,high_position)
++ SELECT a.activation_id,e.session_id,NEW.commit_position
++ FROM events e JOIN sessions s ON s.id=e.session_id JOIN memory_compiler_activations a
++ ON a.source_scope=CASE WHEN s.workspace_id IS NOT NULL THEN 'workspace:'||s.workspace_id WHEN s.project_id IS NOT NULL THEN 'project:'||s.project_id ELSE 'global' END
++ AND (a.source_session='' OR a.source_session=e.session_id)
++ WHERE e.id=NEW.event_id AND a.through_position IS NULL AND NEW.commit_position>a.after_position
++ ON CONFLICT(activation_id,session_id) DO UPDATE SET high_position=excluded.high_position;
++END;
++`
+diff --git a/internal/eviedb/compiler_activation_status_test.go b/internal/eviedb/compiler_activation_status_test.go
+new file mode 100644
+index 0000000..4f61728
+--- /dev/null
++++ b/internal/eviedb/compiler_activation_status_test.go
+@@ -0,0 +1,85 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestCompilerActivationStatusFollowsJobAndPreservesPendingSuffix(t *testing.T) {
++	for _, outcome := range []string{"completed_empty", "retry_wait", "failed", "cancelled"} {
++		t.Run(outcome, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			activationStart(t, f)
++			root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++			activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++			activationReconcile(t, f, 3)
++			before, err := f.store.InspectCompilerActivations(ctx, f.owner)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if len(before.Roots) != 1 || before.Roots[0].State != "queued" {
++				t.Fatalf("initial roots %+v", before.Roots)
++			}
++			if outcome == "cancelled" {
++				if _, err := f.store.CancelCompilation(ctx, f.owner, before.Roots[0].SelectionID); err != nil {
++					t.Fatal(err)
++				}
++			} else {
++				extractor := &workerScript{}
++				if outcome == "retry_wait" {
++					extractor.run = func(context.Context, memory.CompilerRequest) (CompilerExtraction, error) {
++						return CompilerExtraction{ReleaseEvidence: "not_dispatched"}, errors.New("unavailable fixture")
++					}
++				}
++				if outcome == "failed" {
++					extractor.run = func(context.Context, memory.CompilerRequest) (CompilerExtraction, error) {
++						return CompilerExtraction{ReleaseEvidence: "not_dispatched"}, ErrCompilerConfiguration
++					}
++				}
++				worked, err := f.store.RunCompilerStep(ctx, f.config(extractor))
++				if !worked || (outcome == "completed_empty" && err != nil) || (outcome != "completed_empty" && err == nil) {
++					t.Fatalf("worker outcome %v %v", worked, err)
++				}
++			}
++			status, err := f.store.InspectCompilerActivations(ctx, f.owner)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if len(status.Roots) != 1 || status.Roots[0].State != outcome {
++				t.Fatalf("status did not follow %s: %+v", outcome, status.Roots)
++			}
++			if outcome == "completed_empty" {
++				activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "A newly selected suffix."})
++				if err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++					var r memory.CompilerReconciliation
++					return discoverCompilerEvidenceInTransaction(ctx, conn, &r)
++				}); err != nil {
++					t.Fatal(err)
++				}
++				pending, err := f.store.InspectCompilerActivations(ctx, f.owner)
++				if err != nil {
++					t.Fatal(err)
++				}
++				if pending.Roots[0].State != "selected_unmaterialized" || pending.PendingRoots != 1 {
++					t.Fatalf("finished prefix hid pending suffix: %+v", pending)
++				}
++			} else {
++				if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET reason='protected raw diagnostic'`); err != nil {
++					t.Fatal(err)
++				}
++				safe, err := f.store.InspectCompilerActivations(ctx, f.owner)
++				if err != nil {
++					t.Fatal(err)
++				}
++				if safe.Roots[0].Reason != "unavailable_detail" {
++					t.Fatalf("unsafe reason escaped: %+v", safe.Roots)
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/eviedb/compiler_activation_test.go b/internal/eviedb/compiler_activation_test.go
+new file mode 100644
+index 0000000..2995f8c
+--- /dev/null
++++ b/internal/eviedb/compiler_activation_test.go
+@@ -0,0 +1,503 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type activationScript struct{ workerScript }
++
++func (*activationScript) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return nil
++}
++
++type unavailableActivationScript struct{ activationScript }
++
++func (*unavailableActivationScript) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return errors.New("metadata unavailable")
++}
++
++func TestCompilerActivationPreflightAndIdempotence(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	req := activationRequest(f, "preflight", 0)
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, nil); !errors.Is(err, ErrCompilerNotConfigured) {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &workerScript{}); !errors.Is(err, ErrCompilerConfiguration) {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &unavailableActivationScript{}); err == nil {
++		t.Fatal("unverified configuration activated")
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activations`); got != 0 {
++		t.Fatal("failed preflight activated")
++	}
++	a, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	again, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &unavailableActivationScript{})
++	if err != nil || again.ID != a.ID {
++		t.Fatalf("idempotence requires a fresh network preflight: %+v %v", again, err)
++	}
++}
++
++func TestCompilerActivationReplacementRaceAndSelectorOverlap(t *testing.T) {
++	f := newWorkerFixture(t)
++	activationStart(t, f)
++	other := f.second(t)
++	ctx := context.Background()
++	start := make(chan struct{})
++	out := make(chan error, 2)
++	for n, store := range []*Store{f.store, other} {
++		go func(n int, store *Store) {
++			<-start
++			_, err := store.ActivateCompiler(ctx, f.owner, activationRequest(f, fmt.Sprintf("replace-%d", n), 1), f.generation, &activationScript{})
++			out <- err
++		}(n, store)
++	}
++	close(start)
++	success, conflicts := 0, 0
++	for range 2 {
++		err := <-out
++		if err == nil {
++			success++
++		} else if errors.Is(err, ErrCompilerActivationConflict) {
++			conflicts++
++		} else {
++			t.Fatal(err)
++		}
++	}
++	if success != 1 || conflicts != 1 {
++		t.Fatalf("success %d conflicts %d", success, conflicts)
++	}
++	req := activationRequest(f, "overlap", 0)
++	req.Selector.SessionID = ""
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &activationScript{}); !errors.Is(err, ErrCompilerActivationConflict) {
++		t.Fatalf("overlapping lineage accepted: %v", err)
++	}
++	req = activationRequest(f, "session-destination", 0)
++	req.Selector.Destination = "session:" + string(f.owner.SessionID)
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &activationScript{}); err != nil {
++		t.Fatal("distinct session destination", err)
++	}
++}
++
++func TestCompilerActivationQueueFullRetainsRevisitableObligation(t *testing.T) {
++	f := newWorkerFixture(t)
++	activationStart(t, f)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	// Populate queue metadata without making 1,024 inference calls. These are
++	// independent audit jobs; only the activation root is later reconciled.
++	_, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1024) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'full-'||x,?,'global',?,?,10000+x,10000+x,'fixture','{}','queued' FROM n`, f.generationID, f.owner.SessionID, root.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	activationReconcile(t, f, 4)
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activation_roots WHERE state='selected_unmaterialized' AND reason='job_capacity'`); got != 1 {
++		t.Fatalf("lost full-queue obligation: %d", got)
++	}
++	activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "I also prefer green tea."})
++	activationReconcile(t, f, 2)
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET state='failed' WHERE job_id IN ('full-1','full-2')`); err != nil {
++		t.Fatal(err)
++	}
++	f.store = f.second(t)
++	activationReconcile(t, f, 4)
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id NOT LIKE 'full-%' AND state='queued'`); got != 2 {
++		t.Fatalf("not rediscovered: %d", got)
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_selections WHERE state='selected_unmaterialized'`); got != 0 {
++		t.Fatalf("extension hid older queuefull prefix: %d", got)
++	}
++}
++
++func TestCompilerActivationUnconfiguredAndUnavailableAreIndependentOfAppend(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Unconfigured durable evidence."})
++	if _, err := f.store.ReconcileCompilerEvidence(ctx, CompilerSupervisorConfig{}); !errors.Is(err, ErrCompilerNotConfigured) {
++		t.Fatal(err)
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs`); got != 0 {
++		t.Fatal("unconfigured pending job")
++	}
++	activationStart(t, f)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Configured durable evidence."})
++	activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	activationReconcile(t, f, 4)
++	unavailable := &workerScript{run: func(context.Context, memory.CompilerRequest) (CompilerExtraction, error) {
++		return CompilerExtraction{ReleaseEvidence: "not_dispatched"}, errors.New("configured endpoint unreachable")
++	}}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(unavailable)); !worked || err == nil {
++		t.Fatalf("unavailable endpoint result %v %v", worked, err)
++	}
++	activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Foreground still commits."})
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE state='retry_wait' AND attempts=1`); got != 1 {
++		t.Fatalf("bounded unavailable retry: %d", got)
++	}
++}
++
++func activationRequest(f *workerFixture, id string, revision int64) memory.CompilerActivationRequest {
++	return memory.CompilerActivationRequest{RequestID: id, ExpectedRevision: revision, Selector: memory.CompilerLiveSelector{SourceScope: "global", Destination: "global", SessionID: f.owner.SessionID}}
++}
++func activationAppend(t *testing.T, f *workerFixture, input memory.EventInput) memory.Event {
++	t.Helper()
++	e, err := f.store.AppendEventWithLease(context.Background(), f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, input)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return e
++}
++func activationStart(t *testing.T, f *workerFixture) memory.CompilerActivation {
++	t.Helper()
++	a, err := f.store.ActivateCompiler(context.Background(), f.owner, activationRequest(f, "activate", 0), f.generation, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return a
++}
++func activationReconcile(t *testing.T, f *workerFixture, n int) {
++	t.Helper()
++	for i := 0; i < n; i++ {
++		if _, err := f.store.ReconcileCompilerEvidence(context.Background(), f.config(&workerScript{})); err != nil {
++			t.Fatal(err)
++		}
++	}
++}
++func activationCount(t *testing.T, db *sql.DB, query string, args ...any) int {
++	t.Helper()
++	var n int
++	if err := db.QueryRow(query, args...).Scan(&n); err != nil {
++		t.Fatal(err)
++	}
++	return n
++}
++
++func TestCompilerActivationAppendCASAndRollback(t *testing.T) {
++	for i := 0; i < 12; i++ {
++		t.Run(fmt.Sprint(i), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			other := f.second(t)
++			ctx := context.Background()
++			start := make(chan struct{})
++			var wg sync.WaitGroup
++			var a memory.CompilerActivation
++			var event memory.Event
++			var activateErr, appendErr error
++			wg.Add(2)
++			go func() {
++				defer wg.Done()
++				<-start
++				a, activateErr = other.ActivateCompiler(ctx, f.owner, activationRequest(f, "race", 0), f.generation, &activationScript{})
++			}()
++			go func() {
++				defer wg.Done()
++				<-start
++				event, appendErr = f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++			}()
++			close(start)
++			wg.Wait()
++			if activateErr != nil || appendErr != nil {
++				t.Fatal(activateErr, appendErr)
++			}
++			position := activationCount(t, f.db, `SELECT commit_position FROM memory_compiler_event_positions WHERE event_id=?`, event.ID)
++			want := 0
++			if int64(position) > a.AfterPosition {
++				want = 1
++			}
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activation_dirty`); got != want {
++				t.Fatalf("dirty=%d want=%d frontier=%d position=%d", got, want, a.AfterPosition, position)
++			}
++			again, err := f.store.ActivateCompiler(ctx, f.owner, activationRequest(f, "race", 0), f.generation, &activationScript{})
++			if err != nil || again.AfterPosition != a.AfterPosition || again.ID != a.ID {
++				t.Fatalf("idempotence: %+v %v", again, err)
++			}
++			before := activationCount(t, f.db, `SELECT value FROM memory_compiler_position_counter`)
++			rollback := errors.New("roll back append")
++			err = f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++				_, err := conn.ExecContext(ctx, `INSERT INTO events(id,session_id,sequence,event_type,role,content,recorded_at,format_version) VALUES('rolled-back',?,999,'user_message','user','do not retain',datetime('now'),1)`, f.owner.SessionID)
++				if err != nil {
++					return err
++				}
++				return rollback
++			})
++			if !errors.Is(err, rollback) {
++				t.Fatal(err)
++			}
++			if got := activationCount(t, f.db, `SELECT value FROM memory_compiler_position_counter`); got != before {
++				t.Fatalf("rollback changed position: %d %d", got, before)
++			}
++		})
++	}
++}
++
++func TestCompilerActivationPostFrontierSuffixAndRestart(t *testing.T) {
++	f := newWorkerFixture(t)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	a := activationStart(t, f)
++	post := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "I also prefer green tea."})
++	activationReconcile(t, f, 1)
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs`); got != 0 {
++		t.Fatal("live root materialized", got)
++	}
++	end := activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++	f.store = f.second(t)
++	activationReconcile(t, f, 5)
++	var raw []byte
++	if err := f.db.QueryRow(`SELECT request FROM memory_compiler_jobs`).Scan(&raw); err != nil {
++		t.Fatal(err)
++	}
++	var request memory.CompilerRequest
++	if err := json.Unmarshal(raw, &request); err != nil {
++		t.Fatal(err)
++	}
++	if request.Window.FirstSequence != post.Sequence || request.Window.Selection.Cutoff != end.Sequence {
++		t.Fatalf("suffix %+v frontier %+v", request.Window, a)
++	}
++	for _, id := range request.Window.NewEventIDs {
++		if id == root.ID {
++			t.Fatal("selected pre-frontier root")
++		}
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_job_schedule WHERE lane='new' AND position=?`, a.AfterPosition+1); got != 1 {
++		t.Fatalf("atomic new scheduling %d", got)
++	}
++	status, err := f.store.InspectCompilerActivations(context.Background(), f.owner)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if status.SelectedEvents != 2 || status.OutsideSelectionEvents != 1 {
++		t.Fatalf("status %+v", status)
++	}
++}
++
++func TestCompilerActivationReplacementDisableAndResume(t *testing.T) {
++	f := newWorkerFixture(t)
++	a := activationStart(t, f)
++	ctx := context.Background()
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	activationReconcile(t, f, 4)
++	req := activationRequest(f, "disable", 1)
++	req.ActivationID = a.ID
++	disabled, err := f.store.DisableCompilerActivation(ctx, f.owner, req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "This disabled interval is historical."})
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); err != nil || worked {
++		t.Fatalf("disabled worker worked=%v err=%v", worked, err)
++	}
++	g2 := f.generation
++	g2.Prompt += " Another generation."
++	next, err := f.store.ActivateCompiler(ctx, f.owner, activationRequest(f, "reactivate", 2), g2, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if next.AfterPosition <= *disabled.ThroughPosition {
++		t.Fatal("missing disabled interval")
++	}
++	req = activationRequest(f, "resume-old", 3)
++	req.ActivationID = a.ID
++	resumed, err := f.store.ResumeCompilerActivation(ctx, f.owner, req, f.generation, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if resumed.ThroughPosition == nil || resumed.WorkPaused {
++		t.Fatalf("resume reopened selection %+v", resumed)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); err != nil || !worked {
++		t.Fatalf("resumed work=%v err=%v", worked, err)
++	}
++	status, err := f.store.InspectCompilerActivations(ctx, f.owner)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if status.OutsideSelectionEvents != 1 {
++		t.Fatalf("disabled interval selected %+v", status)
++	}
++}
++
++func TestCompilerActivationAllClosureClasses(t *testing.T) {
++	for _, closure := range []string{"final", "failed", "interrupted", "crashed", "command", "later_root"} {
++		t.Run(closure, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			activationStart(t, f)
++			root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++			switch closure {
++			case "final":
++				activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++			case "failed", "interrupted":
++				kind := memory.EventTurnFailed
++				if closure == "interrupted" {
++					kind = memory.EventTurnInterrupted
++				}
++				payload := memory.TurnTerminalPayload{TurnID: root.ID, Stage: "provider", Classification: "provider_error"}
++				if closure == "interrupted" {
++					payload.Classification = memory.ClassificationCallerCancelled
++				}
++				activationAppend(t, f, memory.EventInput{Type: kind, ParentID: root.ID, Content: payload.SafeContent(), Payload: compilerJSON(payload)})
++			case "crashed", "command":
++				if _, err := f.db.Exec(`UPDATE session_turn_leases SET expires_at='2000-01-01T00:00:00Z' WHERE session_id=?`, f.owner.SessionID); err != nil {
++					t.Fatal(err)
++				}
++			case "later_root":
++				activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Another turn."})
++			}
++			before := activationCount(t, f.db, `SELECT COUNT(*) FROM events`)
++			activationReconcile(t, f, 6)
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE root_id=? AND state='queued'`, root.ID); got != 1 {
++				t.Fatalf("closed root not queued: %d", got)
++			}
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM events`); got != before {
++				t.Fatal("synthetic terminal")
++			}
++		})
++	}
++}
++
++func TestCompilerActivationStalledExtractionDoesNotBlockForeground(t *testing.T) {
++	f := newWorkerFixture(t)
++	activationStart(t, f)
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	started := make(chan struct{})
++	extractor := &workerScript{run: func(ctx context.Context, _ memory.CompilerRequest) (CompilerExtraction, error) {
++		close(started)
++		<-ctx.Done()
++		return CompilerExtraction{}, ctx.Err()
++	}}
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	done := make(chan error, 1)
++	go func() { done <- f.store.RunCompilerHost(ctx, f.config(extractor)) }()
++	select {
++	case <-started:
++	case <-time.After(3 * time.Second):
++		t.Fatal("extractor did not start")
++	}
++	foreground := time.Now()
++	newRoot := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer coffee."})
++	activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: newRoot.ID, Content: "Noted."})
++	t.Logf("scripted foreground durable finalization=%s", time.Since(foreground))
++	cancel()
++	select {
++	case <-done:
++	case <-time.After(6 * time.Second):
++		t.Fatal("host shutdown exceeded cleanup bound")
++	}
++}
++
++func TestCompilerActivationDisableResumeDoesNotReviveInFlightAuthority(t *testing.T) {
++	for _, knownRelease := range []bool{false, true} {
++		t.Run(fmt.Sprint(knownRelease), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			a := activationStart(t, f)
++			ctx := context.Background()
++			root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++			activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++			activationReconcile(t, f, 3)
++			started := make(chan struct{})
++			cancelled := make(chan struct{})
++			release := make(chan struct{})
++			e := &workerScript{run: func(callCtx context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++				close(started)
++				<-callCtx.Done()
++				close(cancelled)
++				<-release
++				if knownRelease {
++					return CompilerExtraction{Raw: compilerJSON(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{}}), ReleaseEvidence: "completed"}, nil
++				}
++				return CompilerExtraction{}, callCtx.Err()
++			}}
++			done := make(chan error, 1)
++			go func() { _, err := f.store.RunCompilerStep(ctx, f.config(e)); done <- err }()
++			select {
++			case <-started:
++			case <-time.After(time.Second):
++				t.Fatal("dispatch did not start")
++			}
++			req := activationRequest(f, "disable-inflight", 1)
++			req.ActivationID = a.ID
++			if _, err := f.store.DisableCompilerActivation(ctx, f.owner, req); err != nil {
++				t.Fatal(err)
++			}
++			req = activationRequest(f, "resume-inflight", 2)
++			req.ActivationID = a.ID
++			if _, err := f.store.ResumeCompilerActivation(ctx, f.owner, req, f.generation, &activationScript{}); err != nil {
++				t.Fatal(err)
++			}
++			select {
++			case <-cancelled:
++			case <-time.After(time.Second):
++				t.Fatal("old epoch revived after resume")
++			}
++			close(release)
++			select {
++			case err := <-done:
++				if err == nil {
++					t.Fatal("stale dispatch reported success")
++				}
++			case <-time.After(2 * time.Second):
++				t.Fatal("stale dispatch did not stop")
++			}
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_candidate_groups`); got != 0 {
++				t.Fatal("stale output published")
++			}
++			want := 1
++			if knownRelease {
++				want = 0
++			}
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_capacity`); got != want {
++				t.Fatalf("capacity=%d want=%d", got, want)
++			}
++			if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE attempts=1 AND state='retry_wait'`); got != 1 {
++				t.Fatalf("attempt budget lost: %d", got)
++			}
++		})
++	}
++}
++
++func TestCompilerActivationDeferredRootDoesNotHideIndependentSession(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	req := activationRequest(f, "lineage", 0)
++	req.Selector.SessionID = ""
++	if _, err := f.store.ActivateCompiler(ctx, f.owner, req, f.generation, &activationScript{}); err != nil {
++		t.Fatal(err)
++	}
++	activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Still live."})
++	other, err := f.store.CreateGlobalSession(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	lease, err := f.store.AcquireTurnLease(ctx, other.ID, "other-session", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	r, err := f.store.AppendEventWithLease(ctx, other.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Independent assertion."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.AppendEventWithLease(ctx, other.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: r.ID, Content: "Noted."}); err != nil {
++		t.Fatal(err)
++	}
++	activationReconcile(t, f, 8)
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_activation_roots WHERE session_id=? AND state='deferred_live'`, f.owner.SessionID); got != 1 {
++		t.Fatal("live root vanished")
++	}
++	if got := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE session_id=? AND state='queued'`, other.ID); got != 1 {
++		t.Fatal("independent session starved")
++	}
++}
+diff --git a/internal/eviedb/compiler_intervals.go b/internal/eviedb/compiler_intervals.go
+new file mode 100644
+index 0000000..78afdd8
+--- /dev/null
++++ b/internal/eviedb/compiler_intervals.go
+@@ -0,0 +1,51 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerInterval struct {
++	First, Last               int64
++	SelectionID, JobID, State string
++}
++
++// nextCompilerInterval returns one earliest unowned interval, capped before the
++// next immutable owner. Endpoints are ledger coordinates, not source reads.
++// A later owned suffix cannot advance the beginning of an earlier selection.
++// If every requested coordinate is already owned, return its final existing
++// unit; no completion or new ownership is inferred from that reuse.
++func nextCompilerInterval(ctx context.Context, conn compilerQueryer, generation string, selection memory.CompilationSelection, first int64) (result compilerInterval, err error) {
++	if first > selection.Cutoff {
++		return result, errors.New("invalid selected interval bounds")
++	}
++	args := []any{generation, selection.Destination, selection.SessionID, selection.RootID, first, selection.Cutoff}
++	var uncovered sql.NullInt64
++	err = conn.QueryRowContext(ctx, `WITH starts(value) AS (
++ SELECT ?5 UNION SELECT last_sequence+1 FROM memory_compiler_selections
++ WHERE generation_id=?1 AND destination=?2 AND session_id=?3 AND root_id=?4 AND last_sequence>=?5 AND last_sequence<?6
++) SELECT MIN(value) FROM starts WHERE value BETWEEN ?5 AND ?6 AND NOT EXISTS (
++ SELECT 1 FROM memory_compiler_selections s WHERE s.generation_id=?1 AND s.destination=?2 AND s.session_id=?3 AND s.root_id=?4 AND s.first_sequence<=value AND s.last_sequence>=value
++)`, args...).Scan(&uncovered)
++	if err != nil {
++		return result, err
++	}
++	if !uncovered.Valid {
++		err = conn.QueryRowContext(ctx, `SELECT first_sequence,last_sequence,selection_id,COALESCE(job_id,''),state FROM memory_compiler_selections WHERE generation_id=?1 AND destination=?2 AND session_id=?3 AND root_id=?4 AND first_sequence<=?6 AND last_sequence>=?6 ORDER BY first_sequence DESC LIMIT 1`, args...).Scan(&result.First, &result.Last, &result.SelectionID, &result.JobID, &result.State)
++		return result, err
++	}
++	result.First = uncovered.Int64
++	result.Last = selection.Cutoff
++	var next sql.NullInt64
++	err = conn.QueryRowContext(ctx, `SELECT MIN(first_sequence) FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=? AND first_sequence>? AND first_sequence<=?`, generation, selection.Destination, selection.SessionID, selection.RootID, result.First, result.Last).Scan(&next)
++	if err != nil {
++		return result, err
++	}
++	if next.Valid {
++		result.Last = next.Int64 - 1
++	}
++	return result, nil
++}
+diff --git a/internal/eviedb/compiler_intervals_test.go b/internal/eviedb/compiler_intervals_test.go
+new file mode 100644
+index 0000000..e6535b7
+--- /dev/null
++++ b/internal/eviedb/compiler_intervals_test.go
+@@ -0,0 +1,60 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"fmt"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestCompilerIntervalsFillEarlierGapsWithoutOverlappingLaterOwners(t *testing.T) {
++	f := newWorkerFixture(t)
++	activationStart(t, f)
++	ctx := context.Background()
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "An assertion."})
++	selection := memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: 7, Destination: "global"}
++	err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		own := func(first, last int64) error {
++			_, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_selections(selection_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,state,window) VALUES(?,?,'global',?,?,?,?,'failed','{}')`, fmt.Sprintf("interval-%d-%d", first, last), f.generationID, f.owner.SessionID, root.ID, first, last)
++			return err
++		}
++		if err := own(3, 3); err != nil {
++			return err
++		}
++		if err := own(5, 5); err != nil {
++			return err
++		}
++		for _, want := range [][2]int64{{1, 2}, {4, 4}, {6, 7}} {
++			interval, err := nextCompilerInterval(ctx, conn, f.generationID, selection, 1)
++			if err != nil {
++				return err
++			}
++			if interval.First != want[0] || interval.Last != want[1] || interval.SelectionID != "" {
++				t.Fatalf("next unowned interval %+v want%v", interval, want)
++			}
++			if err := own(interval.First, interval.Last); err != nil {
++				return err
++			}
++		}
++		reused, err := nextCompilerInterval(ctx, conn, f.generationID, selection, 1)
++		if err != nil {
++			return err
++		}
++		if reused.SelectionID != "interval-6-7" || reused.State != "failed" {
++			t.Fatalf("existing unresolved owner changed: %+v", reused)
++		}
++		var overlaps int
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_selections a JOIN memory_compiler_selections b ON a.selection_id<b.selection_id AND a.first_sequence<=b.last_sequence AND b.first_sequence<=a.last_sequence`).Scan(&overlaps); err != nil {
++			return err
++		}
++		if overlaps != 0 {
++			t.Fatal("filled intervals overlap immutable owners")
++		}
++		return nil
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++}
+diff --git a/internal/eviedb/compiler_reconciliation.go b/internal/eviedb/compiler_reconciliation.go
+new file mode 100644
+index 0000000..1ea5491
+--- /dev/null
++++ b/internal/eviedb/compiler_reconciliation.go
+@@ -0,0 +1,219 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// ReconcileCompilerEvidence performs two bounded transactions: discover one
++// selected event's ancestry, then reconsider one root. Discovery cursors are
++// independent of root obligations, so deferred roots cannot hide later work.
++// Configuration controls materialization, never event commitment or selection.
++func (s *Store) ReconcileCompilerEvidence(ctx context.Context, config CompilerSupervisorConfig) (result memory.CompilerReconciliation, err error) {
++	started := time.Now()
++	defer func() { result.DurationNanos = time.Since(started).Nanoseconds() }()
++	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
++		return result, ErrCompilerNotConfigured
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		return discoverCompilerEvidenceInTransaction(ctx, conn, &result)
++	})
++	if err != nil {
++		return result, err
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var activation, session, root, generationID, destination, pendingSelection string
++		var first, last, position, after, high int64
++		var manifest []byte
++		// Check one revisit candidate, even when another root remains live.
++		err := conn.QueryRowContext(ctx, `SELECT r.activation_id,r.session_id,r.root_id,a.generation_id,a.destination,r.first_sequence,r.last_sequence,r.position,a.after_position,d.high_position,g.manifest,r.selection_id FROM memory_compiler_activation_roots r JOIN memory_compiler_activations a USING(activation_id) JOIN memory_compiler_activation_dirty d ON d.activation_id=r.activation_id AND d.session_id=r.session_id JOIN memory_compiler_generations g USING(generation_id) WHERE a.work_paused=0 AND r.state IN ('selected_unmaterialized','deferred_live') ORDER BY r.checked_order,r.position,r.activation_id LIMIT 1`).Scan(&activation, &session, &root, &generationID, &destination, &first, &last, &position, &after, &high, &manifest, &pendingSelection)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET checked_order=(SELECT COALESCE(MAX(checked_order),0)+1 FROM memory_compiler_activation_roots) WHERE activation_id=? AND root_id=?`, activation, root); err != nil {
++			return err
++		}
++		extractor := config.Extractors[generationID]
++		if extractor == nil || extractor.ServerIdentity() == "" {
++			result.State = "configuration_paused"
++			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET reason='configuration_unavailable' WHERE activation_id=? AND root_id=?`, activation, root)
++			return err
++		}
++		var generation memory.CompilerGeneration
++		if err := json.Unmarshal(manifest, &generation); err != nil {
++			return err
++		}
++		var workspace, project sql.NullString
++		if err := conn.QueryRowContext(ctx, `SELECT workspace_id,project_id FROM sessions WHERE id=?`, session).Scan(&workspace, &project); err != nil {
++			return err
++		}
++		owner := memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: memory.SessionID(session), WorkspaceID: memory.WorkspaceID(workspace.String), ProjectID: memory.ProjectID(project.String)}
++		// Include a selected later root solely as the closure boundary. Earlier
++		// roots own only their actual members; its content cannot become support.
++		var cutoff int64
++		err = conn.QueryRowContext(ctx, `SELECT e.sequence FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND p.commit_position>? AND p.commit_position<=? AND e.event_type='user_message' AND e.role='user' AND e.parent_id IS NULL AND e.sequence>(SELECT sequence FROM events WHERE id=?) ORDER BY e.sequence LIMIT 1`, session, after, high, root).Scan(&cutoff)
++		if errors.Is(err, sql.ErrNoRows) {
++			err = conn.QueryRowContext(ctx, `SELECT e.sequence FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id WHERE e.session_id=? AND p.commit_position>? AND p.commit_position<=? ORDER BY e.sequence DESC LIMIT 1`, session, after, high).Scan(&cutoff)
++		}
++		if err != nil {
++			return err
++		}
++		if cutoff < last {
++			cutoff = last
++		}
++		desiredCutoff := cutoff
++		if pendingSelection != "" {
++			var pendingCutoff int64
++			err := conn.QueryRowContext(ctx, `SELECT last_sequence FROM memory_compiler_selections WHERE selection_id=? AND state='selected_unmaterialized' AND job_id IS NULL`, pendingSelection).Scan(&pendingCutoff)
++			if err == nil {
++				cutoff = pendingCutoff
++			} else if !errors.Is(err, sql.ErrNoRows) {
++				return err
++			}
++		}
++		selectionID, jobID, err := selectCompilerUnitInTransaction(ctx, conn, owner, memory.CompilationSelection{SessionID: owner.SessionID, RootID: memory.EventID(root), Cutoff: cutoff, Destination: destination}, generationID, manifest, generation, compilerScheduling{Lane: "new", Position: position, FirstSequence: first, AwaitClosure: true})
++		if err != nil {
++			return err
++		}
++		if selectionID == "" {
++			result.State = "deferred_live"
++			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET state='deferred_live',reason='unfinished_live_turn' WHERE activation_id=? AND root_id=?`, activation, root)
++			return err
++		}
++
++		result.SelectionID = selectionID
++		var state, reason string
++		var sealedLast int64
++		if err := conn.QueryRowContext(ctx, `SELECT state,reason,last_sequence FROM memory_compiler_selections WHERE selection_id=?`, selectionID).Scan(&state, &reason, &sealedLast); err != nil {
++			return err
++		}
++		result.State = state
++		if jobID != "" {
++			// Explicit historical work keeps its original scheduling/authority.
++			// Reuse cannot attach another activation to a different owned window.
++			if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_activation_jobs SELECT ?,? WHERE EXISTS(SELECT 1 FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q USING(job_id) WHERE j.job_id=? AND q.lane='new' AND j.first_sequence>=? AND j.last_sequence<=?)`, jobID, activation, jobID, first, desiredCutoff); err != nil {
++				return err
++			}
++		}
++		rootState, rootReason := state, reason
++		if desiredCutoff > sealedLast && state != "selected_unmaterialized" && state != "deferred_live" {
++			rootState = "selected_unmaterialized"
++			rootReason = ""
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET state=?,reason=?,selection_id=? WHERE activation_id=? AND root_id=?`, rootState, rootReason, selectionID, activation, root)
++		return err
++	})
++	return
++}
++
++type compilerActivationTransaction interface {
++	compilerQueryer
++	ExecContext(context.Context, string, ...any) (sql.Result, error)
++}
++
++// Discovery reads the selected event once, then seeds the bounded ancestry walk
++// with that cached row. At depth128 it has inspected1+127 events, not129.
++func discoverCompilerEvidenceInTransaction(ctx context.Context, conn compilerActivationTransaction, result *memory.CompilerReconciliation) error {
++	var activation, session string
++	var scanned, high int64
++	err := conn.QueryRowContext(ctx, `SELECT d.activation_id,d.session_id,d.scanned_position,d.high_position FROM memory_compiler_activation_dirty d JOIN memory_compiler_activations a USING(activation_id) WHERE d.scanned_position<d.high_position AND a.work_paused=0 ORDER BY d.scan_order,d.activation_id,d.session_id LIMIT 1`).Scan(&activation, &session, &scanned, &high)
++	if errors.Is(err, sql.ErrNoRows) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	var event, kind, role, payload string
++	var parent sql.NullString
++	var seq, position int64
++	err = conn.QueryRowContext(ctx, `SELECT e.id,e.sequence,e.event_type,p.commit_position,e.parent_id,COALESCE(e.role,''),CASE WHEN length(CAST(e.payload_json AS BLOB))<=8192 THEN COALESCE(e.payload_json,'') ELSE '' END FROM events e JOIN memory_compiler_event_positions p ON p.event_id=e.id JOIN memory_compiler_activations a ON a.activation_id=? WHERE e.session_id=? AND p.commit_position>MAX(?,a.after_position) AND p.commit_position<=? ORDER BY p.commit_position LIMIT 1`, activation, session, scanned, high).Scan(&event, &seq, &kind, &position, &parent, &role, &payload)
++	if err != nil {
++		return err
++	}
++	// Follow parent/terminal turn identity, never "most recent root". Only
++	// metadata is loaded; the separate sealing transaction bounds raw input.
++	var root, rootKind, rootRole string
++	var rootseq, depth int64
++	var rootParent sql.NullString
++	err = conn.QueryRowContext(ctx, `WITH RECURSIVE ancestry(id,parent_id,sequence,event_type,role,payload_json,depth) AS (
++ VALUES(?,?,?,?,?,?,1)
++ UNION ALL SELECT e.id,e.parent_id,e.sequence,e.event_type,COALESCE(e.role,''),CASE WHEN length(CAST(e.payload_json AS BLOB))<=8192 THEN COALESCE(e.payload_json,'') ELSE '' END,a.depth+1 FROM ancestry a JOIN events e ON e.id=CASE WHEN a.event_type IN ('turn_failed','turn_interrupted') AND json_valid(a.payload_json) THEN json_extract(a.payload_json,'$.turn_id') ELSE a.parent_id END
++ WHERE e.session_id=? AND e.sequence<a.sequence AND a.depth<128
++) SELECT id,sequence,event_type,role,parent_id,depth FROM ancestry ORDER BY depth DESC LIMIT 1`, event, parent, seq, kind, role, payload, session).Scan(&root, &rootseq, &rootKind, &rootRole, &rootParent, &depth)
++	if err != nil {
++		return err
++	}
++	state, reason := "selected_unmaterialized", ""
++	if rootKind != "user_message" || rootRole != "user" || rootParent.Valid {
++		root = event
++		rootseq = seq
++		state = "failed"
++		reason = "invalid_source_ancestry"
++		if depth == 128 {
++			reason = "source_inspection_limit"
++		}
++		if kind == string(memory.EventContextCompacted) || kind == string(memory.EventContextSnapshot) {
++			state = "excluded"
++			reason = "prohibited_source"
++		}
++	}
++
++	_, err = conn.ExecContext(ctx, `INSERT INTO memory_compiler_activation_roots(activation_id,session_id,root_id,first_sequence,last_sequence,position,state,reason) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(activation_id,root_id) DO UPDATE SET last_sequence=MAX(last_sequence,excluded.last_sequence),state=CASE WHEN excluded.last_sequence>last_sequence THEN excluded.state ELSE state END,reason=CASE WHEN excluded.last_sequence>last_sequence THEN excluded.reason ELSE reason END`, activation, session, root, seq, seq, position, state, reason)
++	if err != nil {
++		return err
++	}
++	_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_activation_dirty SET scanned_position=?,scan_order=(SELECT COALESCE(MAX(scan_order),0)+1 FROM memory_compiler_activation_dirty) WHERE activation_id=? AND session_id=?`, position, activation, session)
++	result.Discovered = true
++	return err
++}
++
++// RunCompilerHost owns independent selection and extraction loops. A blocked
++// local request cannot prevent new obligations from being materialized.
++func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorConfig) error {
++	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
++		return ErrCompilerNotConfigured
++	}
++	pinned := make(map[string]CompilerExtractor, len(config.Extractors))
++	for id, extractor := range config.Extractors {
++		if extractor == nil || extractor.ServerIdentity() == "" {
++			return ErrCompilerNotConfigured
++		}
++		pinned[id] = extractor
++	}
++	config.Extractors = pinned
++	ctx, cancel := context.WithCancel(ctx)
++	defer cancel()
++	done := make(chan error, 1)
++	go func() { done <- s.RunCompilerSupervisor(ctx, config) }()
++	ticker := time.NewTicker(25 * time.Millisecond)
++	defer ticker.Stop()
++	for {
++		select {
++		case err := <-done:
++			return err
++		case <-ctx.Done():
++			cancel()
++			timer := time.NewTimer(5 * time.Second)
++			defer timer.Stop()
++			select {
++			case <-done:
++				return ctx.Err()
++			case <-timer.C:
++				return errors.Join(ctx.Err(), errors.New("compiler host cleanup deadline"))
++			}
++		case <-ticker.C:
++			_, err := s.ReconcileCompilerEvidence(ctx, config)
++			if err != nil && ctx.Err() == nil {
++				continue
++			} // obligations remain durable
++		}
++	}
++}
+diff --git a/internal/eviedb/compiler_reconciliation_bound_test.go b/internal/eviedb/compiler_reconciliation_bound_test.go
+new file mode 100644
+index 0000000..131e161
+--- /dev/null
++++ b/internal/eviedb/compiler_reconciliation_bound_test.go
+@@ -0,0 +1,135 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"strconv"
++	"strings"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// Count actual source/ancestry projections, including a root metadata read.
++// Aggregate COUNT and sequence-only index endpoints are coordinate lookups;
++// they do not inspect role, ancestry, content, payload or policy eligibility.
++// The extra COUNT queries here measure result cardinality without fetching the
++// projected source fields into the test or changing the transaction's data.
++type compilerCountedSelection struct {
++	*sql.Conn
++	inspections int
++	coordinates int
++	t           *testing.T
++}
++
++func (q *compilerCountedSelection) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
++	q.t.Helper()
++	switch {
++	case strings.HasPrefix(query, "WITH RECURSIVE ancestry"):
++		end := strings.LastIndex(query, " SELECT id,sequence,event_type,role,parent_id,depth FROM ancestry")
++		if end < 0 {
++			q.t.Fatal("ancestry instrumentation must follow the source query")
++		}
++		var depth int
++		if err := q.Conn.QueryRowContext(ctx, query[:end]+" SELECT COUNT(*) FROM ancestry", args...).Scan(&depth); err != nil {
++			q.t.Fatal(err)
++		}
++		if strings.Contains(query, "VALUES(") {
++			depth--
++		} // cached seed incurs no second source read
++		q.inspections += depth
++	case strings.Contains(query, "payload_json") || strings.Contains(query, "sequence,event_type,role,parent_id FROM events"):
++		q.inspections++
++	case strings.Contains(query, "FROM events"):
++		q.coordinates++
++	}
++	return q.Conn.QueryRowContext(ctx, query, args...)
++}
++
++func (q *compilerCountedSelection) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
++	if strings.Contains(query, "payload_json") {
++		var count int
++		if err := q.Conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM ("+query+")", args...).Scan(&count); err != nil {
++			q.t.Fatal(err)
++		}
++		q.inspections += count
++	} else if strings.Contains(query, "FROM events") {
++		q.coordinates++
++	}
++	return q.Conn.QueryContext(ctx, query, args...)
++}
++
++func TestCompilerActivationDiscoveryInspectsMaximumAncestryOnce(t *testing.T) {
++	for _, depth := range []int{128, 129} {
++		t.Run(strconv.Itoa(depth), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			var previous memory.Event
++			for n := 1; n < depth; n++ {
++				previous = activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: previous.ID, Content: "An owner assertion."})
++			}
++			activationStart(t, f)
++			last := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: previous.ID, Content: "The newly selected assertion."})
++			err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++				counted := &compilerCountedSelection{Conn: conn, t: t}
++				var result memory.CompilerReconciliation
++				if err := discoverCompilerEvidenceInTransaction(ctx, counted, &result); err != nil {
++					return err
++				}
++				if !result.Discovered || counted.inspections != 128 {
++					t.Fatalf("depth%d inspected%d events; want128", depth, counted.inspections)
++				}
++				var root, state, reason string
++				if err := conn.QueryRowContext(ctx, `SELECT root_id,state,reason FROM memory_compiler_activation_roots`).Scan(&root, &state, &reason); err != nil {
++					return err
++				}
++				if depth == 128 {
++					if root == string(last.ID) || state != "selected_unmaterialized" || reason != "" {
++						t.Fatalf("valid depth128 was truncated or misclassified: %s %s %s", root, state, reason)
++					}
++				} else if root != string(last.ID) || state != "failed" || reason != "source_inspection_limit" {
++					t.Fatalf("depth129 lost explicit inspection gap: %s %s %s", root, state, reason)
++				}
++				return nil
++			})
++			if err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
++
++func TestCompilerActivationCaptureInspectsMaximumWindowOnce(t *testing.T) {
++	for _, count := range []int{128, 129} {
++		t.Run(strconv.Itoa(count), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "The owner assertion."})
++			var end memory.Event
++			for n := 1; n < count; n++ {
++				end = activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Context only."})
++			}
++			err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++				counted := &compilerCountedSelection{Conn: conn, t: t}
++				window, state, reason, err := captureCompilerWindow(ctx, counted, f.owner, memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: end.Sequence, Destination: "global"}, root.Sequence)
++				if err != nil {
++					return err
++				}
++				if counted.inspections > 128 {
++					t.Fatalf("inspected%d sourceevents; coordinate queries%d", counted.inspections, counted.coordinates)
++				}
++				if count == 128 {
++					if counted.inspections != 128 || state != "queued" || len(window.NewEventIDs) != 128 {
++						t.Fatalf("maximum window changed: inspections%d state%s reason%s new%d", counted.inspections, state, reason, len(window.NewEventIDs))
++					}
++				} else if state != "failed" || reason != "source_inspection_limit" {
++					t.Fatalf("over-bound window truncated: %s %s", state, reason)
++				}
++				return nil
++			})
++			if err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
+diff --git a/internal/eviedb/compiler_source.go b/internal/eviedb/compiler_source.go
+index 065c946..fc42486 100644
+--- a/internal/eviedb/compiler_source.go
++++ b/internal/eviedb/compiler_source.go
+@@ -35,6 +35,7 @@ func compilerHasSecret(text string) bool {
+ 
+ type compilerEvent struct {
+ 	id, parent                 memory.EventID
++	hasParent                  bool
+ 	seq                        int64
+ 	kind                       memory.EventType
+ 	role                       memory.EventRole
+@@ -42,6 +43,18 @@ type compilerEvent struct {
+ 	size, version              int
+ }
+ 
++// Index coordinates and aggregate counts do not inspect source fields. The
++// complete bounded event projection below is the counted source-read boundary.
++const compilerEventColumns = `id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version`
++
++func readCompilerEvent(row interface{ Scan(...any) error }) (e compilerEvent, err error) {
++	var parent sql.NullString
++	err = row.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version)
++	e.parent = memory.EventID(parent.String)
++	e.hasParent = parent.Valid
++	return
++}
++
+ // Owner authority is independent of the source session's active/closed state.
+ // Registry identity is checked against SQLite; names and paths grant nothing.
+ func compilerAuthorize(ctx context.Context, q interface {
+@@ -82,17 +95,19 @@ func compilerAuthorize(ctx context.Context, q interface {
+ 	return requireSemanticScopeKeysAvailable(ctx, q, []string{"global", destination, sel.Destination})
+ }
+ 
+-func captureCompilerWindow(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, sel memory.CompilationSelection, first int64) (memory.CompilerWindow, string, string, error) {
++func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memory.ScopeContext, sel memory.CompilationSelection, first int64) (memory.CompilerWindow, string, string, error) {
+ 	w := memory.CompilerWindow{Selection: sel, FirstSequence: first, NewEventIDs: []memory.EventID{}, Sources: []memory.CompilerSource{}, Omissions: []memory.CompilerOmission{}}
+-	var rootseq int64
+-	var rootType, rootRole string
+-	var rootParent sql.NullString
+-	if err := conn.QueryRowContext(ctx, `SELECT sequence,event_type,role,parent_id FROM events WHERE id=? AND session_id=?`, sel.RootID, sel.SessionID).Scan(&rootseq, &rootType, &rootRole, &rootParent); err != nil {
++	// Root eligibility is source inspection too. Cache its complete bounded row
++	// and omit it from the range read below, so a 128-event window is read once.
++	root, err := readCompilerEvent(conn.QueryRowContext(ctx, `SELECT `+compilerEventColumns+` FROM events WHERE id=? AND session_id=?`, sel.RootID, sel.SessionID))
++	if err != nil {
+ 		return w, "failed", "invalid_root", err
+ 	}
+-	if rootType != "user_message" || rootRole != "user" || rootParent.Valid || sel.Cutoff < rootseq || first < rootseq {
++	rootseq := root.seq
++	if root.kind != memory.EventUserMessage || root.role != memory.RoleUser || root.hasParent || sel.Cutoff < rootseq || first < rootseq {
+ 		return w, "failed", "invalid_root", nil
+ 	}
++
+ 	var last int64
+ 	if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0) FROM events WHERE session_id=?`, sel.SessionID).Scan(&last); err != nil {
+ 		return w, "", "", err
+@@ -129,28 +144,30 @@ func captureCompilerWindow(ctx context.Context, conn *sql.Conn, owner memory.Sco
+ 	if count > 128 {
+ 		return w, "failed", "source_inspection_limit", nil
+ 	}
+-	rows, err = conn.QueryContext(ctx, `SELECT id,parent_id,sequence,event_type,COALESCE(role,''),CASE WHEN length(CAST(content AS BLOB))<=32768 THEN COALESCE(content,'') ELSE '' END,length(CAST(COALESCE(content,'') AS BLOB)),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END,recorded_at,format_version FROM events WHERE session_id=? AND sequence BETWEEN ? AND ? ORDER BY sequence`, sel.SessionID, start, sel.Cutoff)
++	rows, err = conn.QueryContext(ctx, `SELECT `+compilerEventColumns+` FROM events WHERE session_id=? AND sequence BETWEEN ? AND ? AND id<>? ORDER BY sequence`, sel.SessionID, start, sel.Cutoff, sel.RootID)
+ 	if err != nil {
+ 		return w, "", "", err
+ 	}
+-	events := []compilerEvent{}
+-	byID := map[memory.EventID]compilerEvent{}
++	events := []compilerEvent{root}
+ 	for rows.Next() {
+-		var e compilerEvent
+-		var parent sql.NullString
+-		if err := rows.Scan(&e.id, &parent, &e.seq, &e.kind, &e.role, &e.content, &e.size, &e.payload, &e.observed, &e.version); err != nil {
++		e, err := readCompilerEvent(rows)
++		if err != nil {
+ 			rows.Close()
+ 			return w, "", "", err
+ 		}
+-		e.parent = memory.EventID(parent.String)
+ 		events = append(events, e)
+-		byID[e.id] = e
+ 	}
+ 	err = rows.Err()
+ 	rows.Close()
+ 	if err != nil {
+ 		return w, "", "", err
+ 	}
++	sort.Slice(events, func(i, j int) bool { return events[i].seq < events[j].seq })
++	byID := make(map[memory.EventID]compilerEvent, len(events))
++	for _, e := range events {
++		byID[e.id] = e
++	}
++
+ 	rootOf := func(e compilerEvent) (memory.EventID, error) {
+ 		visited := map[memory.EventID]bool{}
+ 		for n := 0; n < 128; n++ {
+diff --git a/internal/eviedb/compiler_work.go b/internal/eviedb/compiler_work.go
+index 59b3335..8662b8d 100644
+--- a/internal/eviedb/compiler_work.go
++++ b/internal/eviedb/compiler_work.go
+@@ -111,7 +111,7 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
+ 			case <-ticker.C:
+ 				checkCtx, checkCancel := context.WithTimeout(callCtx, 500*time.Millisecond)
+ 				var current int
+-				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running'`, jobID, holder, fence).Scan(&current)
++				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, jobID, holder, fence).Scan(&current)
+ 				if err == nil && current != 1 {
+ 					err = ErrCompilerFence
+ 				}
+@@ -179,6 +179,9 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
+ 			reason = "invalid_source_or_effect"
+ 		}
+ 		err = s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence), reason, errors.Is(extractErr, ErrCompilerConfiguration) || errors.Is(extractErr, ErrCompilerTerminalOutput))
++		if errors.Is(err, ErrCompilerFence) {
++			err = errors.Join(err, s.stopCompilerClaim(cleanupCtx, claim, compilerReleaseKnown(extracted.ReleaseEvidence)))
++		}
+ 		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
+ 		return result, errors.Join(extractErr, err, readErr)
+ 	}
+@@ -194,6 +197,9 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
+ 			reason = "invalid_source"
+ 		}
+ 		failedErr := s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, true, reason, terminal)
++		if errors.Is(failedErr, ErrCompilerFence) {
++			failedErr = errors.Join(failedErr, s.stopCompilerClaim(cleanupCtx, claim, true))
++		}
+ 		return memory.Compilation{}, errors.Join(err, failedErr)
+ 	}
+ 	if err = s.publishCompilerResult(publicationCtx, owner, jobID, string(holder), fence, request); err != nil {
+@@ -225,44 +231,41 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner
+ 		if err := compilerAuthorize(ctx, conn, owner, selection); err != nil {
+ 			return err
+ 		}
+-		// Any previously owned covering prefix is reused, including failed work.
+-		var existingState string
+-		err := conn.QueryRowContext(ctx, `SELECT selection_id,COALESCE(job_id,''),state FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=? AND last_sequence>=? ORDER BY last_sequence LIMIT 1`, generationID, selection.Destination, selection.SessionID, selection.RootID, selection.Cutoff).Scan(&selectionID, &jobID, &existingState)
+-		if err == nil && existingState != "deferred_live" && existingState != "selected_unmaterialized" {
+-			return nil
++		var requestedFirst int64
++		if err := conn.QueryRowContext(ctx, `SELECT sequence FROM events WHERE id=? AND session_id=?`, selection.RootID, selection.SessionID).Scan(&requestedFirst); err != nil {
++			return err
++		}
++		if scheduling.FirstSequence > requestedFirst {
++			requestedFirst = scheduling.FirstSequence
+ 		}
+-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
++		interval, err := nextCompilerInterval(ctx, conn, generationID, selection, requestedFirst)
++		if err != nil {
+ 			return err
+ 		}
+-		newSelection := errors.Is(err, sql.ErrNoRows)
+-		var first int64
++		first := interval.First
++		selection.Cutoff = interval.Last
++		selectionID, jobID = interval.SelectionID, interval.JobID
++		newSelection := selectionID == ""
++		if !newSelection && interval.State != "deferred_live" && interval.State != "selected_unmaterialized" {
++			return nil
++		}
+ 		if newSelection {
+-			if err := conn.QueryRowContext(ctx, `SELECT sequence FROM events WHERE id=? AND session_id=?`, selection.RootID, selection.SessionID).Scan(&first); err != nil {
+-				return err
+-			}
+-			var last sql.NullInt64
+-			if err := conn.QueryRowContext(ctx, `SELECT MAX(last_sequence) FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=?`, generationID, selection.Destination, selection.SessionID, selection.RootID).Scan(&last); err != nil {
+-				return err
+-			}
+-			if last.Valid {
+-				first = last.Int64 + 1
+-			}
+-			if scheduling.FirstSequence > first {
+-				first = scheduling.FirstSequence
+-			}
+ 			selectionID = memory.CompilerHash(compilerJSON(struct {
+ 				Generation string
+ 				Selection  memory.CompilationSelection
+ 			}{generationID, selection}))
+-		} else {
+-			if err := conn.QueryRowContext(ctx, `SELECT first_sequence,last_sequence FROM memory_compiler_selections WHERE selection_id=?`, selectionID).Scan(&first, &selection.Cutoff); err != nil {
+-				return err
+-			}
+ 		}
++
+ 		window, state, reason, err := captureCompilerWindow(ctx, conn, owner, selection, first)
+ 		if err != nil {
+ 			return err
+ 		}
++		// Live activation owns its revisit obligation separately. Do not create
++		// an immutable-looking partial cut before its exact root can be sealed.
++		if state == "deferred_live" && scheduling.AwaitClosure {
++			selectionID = ""
++			return nil
++		}
+ 		if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_generations VALUES(?,?)`, generationID, manifest); err != nil {
+ 			return err
+ 		}
+@@ -328,7 +331,7 @@ func compilerChanged(result sql.Result, err error) error {
+ }
+ func compilerFence(ctx context.Context, conn *sql.Conn, job, holder string, fence int64, state string) error {
+ 	var n int
+-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=?`, job, holder, fence, state).Scan(&n); err != nil {
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, job, holder, fence, state).Scan(&n); err != nil {
+ 		return err
+ 	}
+ 	if n != 1 {
+diff --git a/internal/eviedb/compiler_worker.go b/internal/eviedb/compiler_worker.go
+index 07be6be..17d80bc 100644
+--- a/internal/eviedb/compiler_worker.go
++++ b/internal/eviedb/compiler_worker.go
+@@ -19,6 +19,7 @@ import (
+ // Neither retries nor a different supervisor can rewrite its original lane.
+ type compilerScheduling struct {
+ 	FirstSequence   int64
++	AwaitClosure    bool
+ 	Lane            string
+ 	Position        int64
+ 	HistoricalOrder int64
+@@ -119,7 +120,7 @@ func claimCompilerJob(ctx context.Context, conn *sql.Conn, owner memory.ScopeCon
+ 		return c, err
+ 	}
+ 	var ready int
+-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
+ 		return c, err
+ 	}
+ 	if ready != 1 {
+@@ -193,7 +194,7 @@ func reserveCompilerResources(ctx context.Context, conn compilerStageTransaction
+ 
+ func (s *Store) renewCompilerClaim(ctx context.Context, claim compilerClaim) error {
+ 	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+-		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged')`, claim.JobID, claim.Holder, claim.Fence)
++		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged') AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, claim.JobID, claim.Holder, claim.Fence)
+ 		return compilerChanged(result, err)
+ 	})
+ }
+@@ -357,7 +358,7 @@ func adoptCompilerStageInTransaction(ctx context.Context, conn compilerStageTran
+ 			return err
+ 		}
+ 		var eligible int
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason=''`, jobID).Scan(&eligible); err != nil {
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs)`, jobID).Scan(&eligible); err != nil {
+ 			return err
+ 		}
+ 		if eligible != 1 {
+@@ -442,6 +443,14 @@ func (s *Store) ResumeCompilation(ctx context.Context, owner memory.ScopeContext
+ 		case "completed_candidates", "completed_empty", "excluded", "failed":
+ 			return errors.New("terminal compilation cannot be resumed")
+ 		}
++		var paused int
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_activation_paused_jobs WHERE job_id=?`, inspection.JobID).Scan(&paused); err != nil {
++			return err
++		}
++		if paused != 0 {
++			return ErrCompilerFence
++		}
++
+ 		if inspection.State == "cancelled" {
+ 			var unfinished int
+ 			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE state IN ('queued','running','retry_wait','staged')`).Scan(&unfinished); err != nil {
+@@ -564,7 +573,7 @@ func (s *Store) RunCompilerStep(ctx context.Context, config CompilerSupervisorCo
+ 		}
+ 		marks := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
+ 		// The fairness predicate includes due/configured/unpaused work only.
+-		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
++		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
+ 		var session memory.SessionID
+ 		var state string
+ 		if err := conn.QueryRowContext(ctx, query, args...).Scan(&jobID, &session, &state); err != nil {
+diff --git a/internal/eviedb/db.go b/internal/eviedb/db.go
+index bb09e0d..20b9304 100644
+--- a/internal/eviedb/db.go
++++ b/internal/eviedb/db.go
+@@ -1166,6 +1166,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
+ 		db.Close()
+ 		return nil, fmt.Errorf("create memory compiler schema: %w", err)
+ 	}
++	if err := ensureCompilerActivationSchema(ctx, db); err != nil {
++		db.Close()
++		return nil, fmt.Errorf("create memory compiler activation schema: %w", err)
++	}
+ 	if err := ensureCandidateReviewSchema(ctx, db); err != nil {
+ 		db.Close()
+ 		return nil, fmt.Errorf("create candidate review schema: %w", err)
+diff --git a/internal/localextractor/activation.go b/internal/localextractor/activation.go
+new file mode 100644
+index 0000000..03337ff
+--- /dev/null
++++ b/internal/localextractor/activation.go
+@@ -0,0 +1,74 @@
++package localextractor
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"strings"
++	"time"
++)
++
++// VerifyCompilerConfiguration performs bounded metadata-only verification. It
++// never loads a model or sends evidence to the generation endpoint.
++func (o *Ollama) VerifyCompilerConfiguration(ctx context.Context, g memory.CompilerGeneration) error {
++	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	id, _, err := memory.CompilerGenerationIdentity(g)
++	if err != nil || id != o.generationID {
++		return fmt.Errorf("%w: compiler generation identity mismatch", eviedb.ErrCompilerConfiguration)
++	}
++	var version struct {
++		Version string `json:"version"`
++	}
++	if err := o.call(ctx, "GET", "/api/version", nil, &version); err != nil {
++		return err
++	}
++	if version.Version != g.RuntimeVersion {
++		return fmt.Errorf("%w: pinned runtime version mismatch", eviedb.ErrCompilerConfiguration)
++	}
++	var tags struct {
++		Models []struct {
++			Name   string `json:"name"`
++			Digest string `json:"digest"`
++		} `json:"models"`
++	}
++	if err := o.call(ctx, "GET", "/api/tags", nil, &tags); err != nil {
++		return err
++	}
++	matched := 0
++	for _, model := range tags.Models {
++		if model.Name == g.ModelArtifact && strings.TrimPrefix(model.Digest, "sha256:") == g.ModelManifestSHA256 {
++			matched++
++		}
++	}
++	if matched != 1 {
++		return fmt.Errorf("%w: pinned model artifact mismatch", eviedb.ErrCompilerConfiguration)
++	}
++	var show struct {
++		Template string `json:"template"`
++		System   string `json:"system"`
++		Details  struct {
++			Quantization string `json:"quantization_level"`
++		} `json:"details"`
++		ModelInfo map[string]json.RawMessage `json:"model_info"`
++	}
++	if err := o.call(ctx, "POST", "/api/show", map[string]any{"model": g.ModelArtifact, "verbose": true}, &show); err != nil {
++		return err
++	}
++	tokenizer := map[string]json.RawMessage{}
++	for key, value := range show.ModelInfo {
++		if strings.HasPrefix(key, "tokenizer.") {
++			tokenizer[key] = value
++		}
++	}
++	tokenizerJSON, err := json.Marshal(tokenizer)
++	if err != nil {
++		return err
++	}
++	if show.Template != g.Template || show.System != "" || show.Details.Quantization != g.Quantization || len(tokenizer) == 0 || memory.CompilerHash(tokenizerJSON) != g.TokenizerSHA256 {
++		return fmt.Errorf("%w: pinned template, system, tokenizer or quantization mismatch", eviedb.ErrCompilerConfiguration)
++	}
++	return nil
++}
+diff --git a/internal/localextractor/ollama.go b/internal/localextractor/ollama.go
+index d8fe358..d3f3e38 100644
+--- a/internal/localextractor/ollama.go
++++ b/internal/localextractor/ollama.go
+@@ -12,7 +12,6 @@ import (
+ 	"net"
+ 	"net/http"
+ 	"net/url"
+-	"strings"
+ 	"text/template"
+ 	"time"
+ 
+@@ -55,57 +54,9 @@ func (o *Ollama) Extract(ctx context.Context, g memory.CompilerGeneration, reque
+ 	if err := memory.CompilerInputBudget(g, request); err != nil {
+ 		return noDispatch, err
+ 	}
+-	var version struct {
+-		Version string `json:"version"`
+-	}
+-	if err := o.call(ctx, "GET", "/api/version", nil, &version); err != nil {
+-		return noDispatch, err
+-	}
+-	if version.Version != g.RuntimeVersion {
+-		return noDispatch, fmt.Errorf("%w: pinned runtime version mismatch", eviedb.ErrCompilerConfiguration)
+-	}
+-	var tags struct {
+-		Models []struct {
+-			Name   string `json:"name"`
+-			Digest string `json:"digest"`
+-		} `json:"models"`
+-	}
+-	if err := o.call(ctx, "GET", "/api/tags", nil, &tags); err != nil {
++	if err := o.VerifyCompilerConfiguration(ctx, g); err != nil {
+ 		return noDispatch, err
+ 	}
+-	matched := 0
+-	for _, model := range tags.Models {
+-		if model.Name == g.ModelArtifact && strings.TrimPrefix(model.Digest, "sha256:") == g.ModelManifestSHA256 {
+-			matched++
+-		}
+-	}
+-	if matched != 1 {
+-		return noDispatch, fmt.Errorf("%w: pinned model artifact mismatch", eviedb.ErrCompilerConfiguration)
+-	}
+-	var show struct {
+-		Template string `json:"template"`
+-		System   string `json:"system"`
+-		Details  struct {
+-			Quantization string `json:"quantization_level"`
+-		} `json:"details"`
+-		ModelInfo map[string]json.RawMessage `json:"model_info"`
+-	}
+-	if err := o.call(ctx, "POST", "/api/show", map[string]any{"model": g.ModelArtifact, "verbose": true}, &show); err != nil {
+-		return noDispatch, err
+-	}
+-	tokenizer := map[string]json.RawMessage{}
+-	for key, value := range show.ModelInfo {
+-		if strings.HasPrefix(key, "tokenizer.") {
+-			tokenizer[key] = value
+-		}
+-	}
+-	tokenizerJSON, err := json.Marshal(tokenizer)
+-	if err != nil {
+-		return noDispatch, err
+-	}
+-	if show.Template != g.Template || show.System != "" || show.Details.Quantization != g.Quantization || len(tokenizer) == 0 || memory.CompilerHash(tokenizerJSON) != g.TokenizerSHA256 {
+-		return noDispatch, fmt.Errorf("%w: pinned template, system, tokenizer or quantization mismatch", eviedb.ErrCompilerConfiguration)
+-	}
+ 	prompt, err := render(g, request)
+ 	if err != nil {
+ 		return noDispatch, err
+diff --git a/internal/memory/compiler_activation.go b/internal/memory/compiler_activation.go
+new file mode 100644
+index 0000000..9e4d574
+--- /dev/null
++++ b/internal/memory/compiler_activation.go
+@@ -0,0 +1,55 @@
++package memory
++
++// CompilerLiveSelector selects one exact source lineage, optionally restricted
++// to a session. Global denotes unscoped source sessions, never all scopes.
++type CompilerLiveSelector struct {
++	SourceScope string    `json:"source_scope"`
++	SessionID   SessionID `json:"session_id,omitempty"`
++	Destination string    `json:"destination"`
++}
++
++type CompilerActivationRequest struct {
++	RequestID        string               `json:"request_id"`
++	ActivationID     string               `json:"activation_id,omitempty"`
++	ExpectedRevision int64                `json:"expected_revision"`
++	Selector         CompilerLiveSelector `json:"selector"`
++}
++
++// The frontier bounds selection; it is never a claim of historical coverage.
++type CompilerActivation struct {
++	ID              string               `json:"activation_id"`
++	Selector        CompilerLiveSelector `json:"selector"`
++	GenerationID    string               `json:"generation_id"`
++	Revision        int64                `json:"revision"`
++	AfterPosition   int64                `json:"after_position"`
++	ThroughPosition *int64               `json:"through_position,omitempty"`
++	WorkPaused      bool                 `json:"work_paused"`
++}
++
++type CompilerActivationStatus struct {
++	Activations            []CompilerActivation           `json:"activations"`
++	ActivationsTruncated   bool                           `json:"activations_truncated"`
++	Roots                  []CompilerActivationRootStatus `json:"roots"`
++	RootsTruncated         bool                           `json:"roots_truncated"`
++	SelectedEvents         int64                          `json:"selected_events"`
++	OutsideSelectionEvents int64                          `json:"outside_selection_events"`
++	PendingRoots           int64                          `json:"pending_roots"`
++	SourceErrors           int64                          `json:"source_errors"`
++}
++
++type CompilerActivationRootStatus struct {
++	ActivationID  string  `json:"activation_id"`
++	RootID        EventID `json:"root_id"`
++	FirstSequence int64   `json:"first_sequence"`
++	LastSequence  int64   `json:"last_sequence"`
++	State         string  `json:"state"`
++	Reason        string  `json:"reason,omitempty"`
++	SelectionID   string  `json:"selection_id,omitempty"`
++}
++
++type CompilerReconciliation struct {
++	Discovered    bool   `json:"discovered"`
++	SelectionID   string `json:"selection_id,omitempty"`
++	State         string `json:"state,omitempty"`
++	DurationNanos int64  `json:"duration_nanos"`
++}
+diff --git a/internal/web/lifecycle.go b/internal/web/lifecycle.go
+new file mode 100644
+index 0000000..85024a7
+--- /dev/null
++++ b/internal/web/lifecycle.go
+@@ -0,0 +1,69 @@
++package web
++
++import (
++	"context"
++	"errors"
++	"log"
++	"net"
++	"net/http"
++	"time"
++)
++
++type runtimeContextKey struct{}
++
++// A browser disconnect only owns approval visibility. The independent runtime
++// context ends turns when the process shuts down, as the legacy Background root
++// did for ordinary disconnects.
++func turnLifecycleContext(request *http.Request) context.Context {
++	if ctx, ok := request.Context().Value(runtimeContextKey{}).(context.Context); ok {
++		return ctx
++	}
++	return context.Background()
++}
++
++// ServeWithContext owns the HTTP listener and active request lifetime for a
++// long-lived runtime. Cancellation stops accepting requests and interrupts
++// provider/tool work before waiting for bounded HTTP cleanup.
++func ServeWithContext(ctx context.Context, server *Server) error {
++	if ctx.Err() != nil {
++		return nil
++	}
++	addr, err := listenAddr()
++	if err != nil {
++		return err
++	}
++	listener, err := net.Listen("tcp", addr)
++	if err != nil {
++		return err
++	}
++	log.Printf("evie serve listening on http://%s", listener.Addr())
++	return serveListenerContext(ctx, listener, server.Handler())
++}
++
++func serveListenerContext(ctx context.Context, listener net.Listener, handler http.Handler) error {
++	ctx, cancel := context.WithCancel(ctx)
++	defer cancel()
++	server := &http.Server{
++		Handler: handler,
++		BaseContext: func(net.Listener) context.Context {
++			return context.WithValue(ctx, runtimeContextKey{}, ctx)
++		},
++	}
++	shutdown := make(chan error, 1)
++	go func() {
++		<-ctx.Done()
++		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
++		defer stop()
++		err := server.Shutdown(cleanup)
++		if err != nil {
++			err = errors.Join(err, server.Close())
++		}
++		shutdown <- err
++	}()
++	err := server.Serve(listener)
++	cancel()
++	if errors.Is(err, http.ErrServerClosed) {
++		err = nil
++	}
++	return errors.Join(err, <-shutdown)
++}
+diff --git a/internal/web/lifecycle_test.go b/internal/web/lifecycle_test.go
+new file mode 100644
+index 0000000..7ffe579
+--- /dev/null
++++ b/internal/web/lifecycle_test.go
+@@ -0,0 +1,180 @@
++package web
++
++import (
++	"context"
++	"errors"
++	"io"
++	"net"
++	"net/http"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++)
++
++type lifecycleClient struct {
++	started       chan struct{}
++	cancelled     chan struct{}
++	activeContext context.Context
++}
++
++func (c *lifecycleClient) ChatStream(ctx context.Context, _ openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
++	c.activeContext = ctx
++	close(c.started)
++	<-ctx.Done()
++	close(c.cancelled)
++	return openrouter.ChatResponse{}, ctx.Err()
++}
++
++func TestServeListenerContextKeepsTurnAliveAfterBrowserDisconnect(t *testing.T) {
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer listener.Close()
++	client := &lifecycleClient{started: make(chan struct{}), cancelled: make(chan struct{})}
++	session := agent.New(client, webTestContextProfile("lifecycle"), &fakeHistory{}, memory.ScopeContext{
++		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
++	}, webTestTurnOwner{})
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	disconnected := make(chan struct{})
++	handler := NewServer(session).Handler()
++	served := make(chan error, 1)
++	go func() {
++		served <- serveListenerContext(ctx, listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			go func() { <-r.Context().Done(); close(disconnected) }()
++			handler.ServeHTTP(w, r)
++		}))
++	}()
++	requestCtx, disconnect := context.WithCancel(context.Background())
++	defer disconnect()
++	request, err := http.NewRequestWithContext(requestCtx, http.MethodPost, "http://"+listener.Addr().String()+"/api/chat", strings.NewReader(`{"message":"hello"}`))
++	if err != nil {
++		t.Fatal(err)
++	}
++	request.Header.Set("Content-Type", "application/json")
++	response := make(chan error, 1)
++	go func() {
++		resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(request)
++		if resp != nil {
++			_ = resp.Body.Close()
++		}
++		response <- err
++	}()
++	select {
++	case <-client.started:
++	case <-time.After(3 * time.Second):
++		t.Fatal("HTTP chat did not reach provider")
++	}
++	disconnect()
++	select {
++	case <-disconnected:
++	case <-time.After(time.Second):
++		t.Fatal("server did not observe browser disconnect")
++	}
++	if err := client.activeContext.Err(); err != nil {
++		t.Fatalf("browser disconnect cancelled independent turn: %v", err)
++	}
++	if err := <-response; !errors.Is(err, context.Canceled) {
++		t.Fatalf("browser request cancellation: %v", err)
++	}
++	cancel()
++	select {
++	case err := <-served:
++		if err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(2 * time.Second):
++		t.Fatal("runtime failed to cancel disconnected turn during shutdown")
++	}
++}
++
++func TestServeListenerContextCancelsActiveChatAndClosesListener(t *testing.T) {
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer listener.Close()
++	client := &lifecycleClient{started: make(chan struct{}), cancelled: make(chan struct{})}
++	history := &fakeHistory{}
++	session := agent.New(client, webTestContextProfile("lifecycle"), history, memory.ScopeContext{
++		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
++	}, webTestTurnOwner{})
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	served := make(chan error, 1)
++	go func() { served <- serveListenerContext(ctx, listener, NewServer(session).Handler()) }()
++	response := make(chan error, 1)
++	go func() {
++		httpClient := &http.Client{Timeout: 3 * time.Second}
++		resp, err := httpClient.Post("http://"+listener.Addr().String()+"/api/chat", "application/json", strings.NewReader(`{"message":"hello"}`))
++		if err != nil {
++			response <- err
++			return
++		}
++		_, err = io.Copy(io.Discard, resp.Body)
++		response <- errors.Join(err, resp.Body.Close())
++	}()
++	select {
++	case <-client.started:
++	case err := <-response:
++		t.Fatalf("HTTP chat ended before reaching provider: %v", err)
++	case <-time.After(3 * time.Second):
++		t.Fatal("HTTP chat did not reach provider")
++	}
++	cancel()
++	select {
++	case <-client.cancelled:
++	case <-time.After(time.Second):
++		t.Fatal("runtime cancellation did not reach active provider")
++	}
++	select {
++	case err := <-served:
++		if err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(2 * time.Second):
++		t.Fatal("HTTP server did not finish shutdown")
++	}
++	select {
++	case err := <-response:
++		if err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("active HTTP response was not completed")
++	}
++	conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
++	if err == nil {
++		conn.Close()
++		t.Fatal("shutdown listener still accepts connections")
++	}
++	for _, event := range history.events {
++		if event.Type == memory.EventAssistantMessage {
++			t.Fatal("cancelled provider persisted a late final response")
++		}
++	}
++}
++
++func TestServeWithContextPreservesLoopbackValidation(t *testing.T) {
++	t.Setenv("EVIE_ADDR", "0.0.0.0:0")
++	if err := ServeWithContext(context.Background(), NewServer(nil)); err == nil || !strings.Contains(err.Error(), "loopback only") {
++		t.Fatalf("non-loopback runtime listener: %v", err)
++	}
++}
++
++func TestServeWithContextReturnsListenerFailure(t *testing.T) {
++	listener, err := net.Listen("tcp", "127.0.0.1:0")
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer listener.Close()
++	t.Setenv("EVIE_ADDR", listener.Addr().String())
++	if err := ServeWithContext(context.Background(), NewServer(nil)); err == nil {
++		t.Fatal("runtime hid listener startup failure")
++	}
++}
+diff --git a/internal/web/serve.go b/internal/web/serve.go
+index 770317d..32b3352 100644
+--- a/internal/web/serve.go
++++ b/internal/web/serve.go
+@@ -257,7 +257,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 
+-	sendErr := session.Send(context.Background(), req.Message, ev, s.approver(r.Context(), ev))
++	sendErr := session.Send(turnLifecycleContext(r), req.Message, ev, s.approver(r.Context(), ev))
+ 
+ 	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
+ 		jsonError(w, http.StatusConflict, "a turn is already in progress")

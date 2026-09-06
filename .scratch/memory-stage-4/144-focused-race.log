@@ -1,0 +1,6 @@
+ok  	github.com/davidadel66/evie/internal/eviedb	191.288s
+# github.com/davidadel66/evie/internal/web
+internal/web/candidate_review.go:64:9: undefined: validateCandidateJSON
+FAIL	github.com/davidadel66/evie/cmd/evie [build failed]
+ok  	github.com/davidadel66/evie/internal/memory	1.175s [no tests to run]
+FAIL

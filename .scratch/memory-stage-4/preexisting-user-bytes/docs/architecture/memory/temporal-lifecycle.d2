@@ -1,0 +1,57 @@
+direction: right
+
+classes: {
+  old: { style: { fill: "#f3f4f5"; stroke: "#747d86"; font-color: "#303740"; border-radius: 8 } }
+  active: { style: { fill: "#edf5ef"; stroke: "#4e8467"; font-color: "#204c38"; border-radius: 8 } }
+  accepted: { style: { fill: "#e8f1f8"; stroke: "#356b91"; font-color: "#17324d"; border-radius: 8 } }
+  warning: { style: { fill: "#f7f0df"; stroke: "#a4843c"; font-color: "#624d1d"; border-radius: 8 } }
+}
+
+overview: {
+  grid-columns: 2
+  grid-rows: 2
+
+changed: {
+  label: "REAL-WORLD CHANGE - TWO CLOCKS"
+  direction: down
+  old_claim: "Old claim\nValid until Aug 15" { class: old }
+  boundary: "WORLD TIME\nAug 15 effective change" { shape: diamond; class: warning }
+  new_claim: "Replacement claim\nValid from Aug 15" { class: active }
+  learned: "TRANSACTION TIME\nEvie accepts correction Sep 1" { class: accepted }
+  old_claim -> boundary: "valid_to excludes boundary"
+  boundary -> new_claim: "valid_from includes boundary"
+  learned -> old_claim: "append superseded state"
+  learned -> new_claim: "create replacement"
+}
+
+questions: {
+  label: "BITEMPORAL QUESTIONS"
+  direction: down
+  valid: "valid_at\nWhat was true in the represented world?" { class: active }
+  known: "as_known_at\nWhat had Evie accepted by then?" { class: accepted }
+  both: "valid_at + as_known_at\nWhat did Evie believe then about that world time?" { class: warning }
+  valid -> both
+  known -> both
+}
+
+error: {
+  label: "PRIOR ERROR"
+  direction: down
+  incorrect: "Incorrect claim\nHistorical and superseded" { class: old }
+  correction: "error correction\nInherits prior validity unless explicitly replaced" { class: accepted }
+  replacement: "Correct replacement claim" { class: active }
+  incorrect -> correction -> replacement
+}
+
+lifecycle: {
+  label: "REVERSIBLE LIFECYCLE"
+  direction: down
+  current: "active + supported\nIncluded in current reads" { class: active }
+  retired: "retired\nHidden but retained" { class: old }
+  unsupported: "unsupported\nNo eligible active sources" { class: warning }
+  current -> retired: "retire"
+  retired -> current: "restore if still legal"
+  current -> unsupported: "retract last eligible source"
+  unsupported -> current: "restore eligible source"
+}
+}

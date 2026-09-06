@@ -1,0 +1,65 @@
+{
+  "version": "memory-stage4-pilot-preparation-v1",
+  "ticket": 150,
+  "pilot_status": "incomplete",
+  "selected_adequate_model": null,
+  "ongoing_compilation_enabled": false,
+  "approved_source_gold": {
+    "windows": 24,
+    "status": "approved_by_David",
+    "approval_timestamp": "2026-09-05T02:45:30.356184+00:00"
+  },
+  "model_output_adjudication": {
+    "status": "pending",
+    "source_gold_approval_is_output_approval": false
+  },
+  "already_exposed_development_windows": [
+    "N01-a", "N01-b", "N02-a", "N02-b", "N03-b", "N04-b",
+    "N05-b", "N06-a", "N08-b", "N09-a"
+  ],
+  "actual_owner_review": {
+    "status": "pending_actual_David_sessions",
+    "observations": [],
+    "active_seconds": null,
+    "candidates_per_useful_accepted_change": null,
+    "required_actions": ["accept", "edit", "reject", "defer"],
+    "required_provenance": [
+      "pinned configuration hash",
+      "candidate interpretation and review revisions",
+      "scope and producing generation",
+      "explicit active-time intervals",
+      "actual reason and owner usefulness judgment",
+      "verified Kernel decision or edit receipt"
+    ]
+  },
+  "release_gates": {
+    "status": "not_frozen",
+    "reason": "A selected adequate model, integrated model measurements, and actual owner-review observations are pending.",
+    "zero_tolerance": [
+      "scope or implicit-promotion violation",
+      "source or original-authority binding violation",
+      "accepted-state mutation without exact review",
+      "partial atomic effects or duplicate accepted operation",
+      "model or external effects during replay",
+      "concurrent local extraction beyond shared capacity",
+      "foreground awaiting extraction"
+    ],
+    "numerical_gates_to_freeze_from_pilot": [
+      "supported useful precision on raw and retained proposals",
+      "required-memory recall",
+      "identity, temporal, attribution and unwanted-suggestion error limits",
+      "paired foreground terminal-commit and finalization overhead",
+      "queue and candidate freshness",
+      "Evie and model-server resource budgets",
+      "source arrival versus compilation capacity",
+      "candidate arrival versus owner-review capacity",
+      "active review seconds and candidates per useful accepted change"
+    ]
+  },
+  "final_holdout": {
+    "created": false,
+    "exposed": false,
+    "run": false,
+    "custody_protocol": "../../memory-stage-4-spike/v1/holdout-custody.md"
+  }
+}

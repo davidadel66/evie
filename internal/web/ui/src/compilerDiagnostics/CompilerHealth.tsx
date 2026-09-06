@@ -21,7 +21,7 @@ export function CompilerHealth() {
 export function CompilerHealthView({ state, controller }: { state: DiagnosticsState; controller: CompilerDiagnosticsController }) {
  const scope = state.scopes?.scopes.find((item) => item.scope_key === state.scope);
  return <section aria-label="Compiler health" className="text-body flex min-h-0 flex-1 flex-col overflow-auto p-5 text-sm">
-  <header className="mb-5"><h2 className="text-ink text-lg font-medium">Compiler health</h2><p className="text-muted-text mt-1 text-xs">Inspect background progress and review workload for one exact scope and session, including closed conversations.</p></header>
+  <header className="mb-5"><h2 className="text-ink text-lg font-medium">Background activity</h2></header>
   <div className="border-hair flex flex-wrap items-end gap-3 border-b pb-4">
    <label className="flex min-w-48 flex-col gap-1 text-xs">Memory scope<select className={input} value={state.scope} onChange={(event) => void controller.selectScope(event.target.value)}>
     <option value="">Choose a scope…</option>{state.scope && !scope && <option value={state.scope}>{state.scope}</option>}
@@ -42,7 +42,7 @@ export function CompilerHealthView({ state, controller }: { state: DiagnosticsSt
    <datalist id="compiler-diagnostic-generations">{state.generations.map((id) => <option key={id} value={id}/>)}</datalist>
    <p className="text-muted-text w-full text-xs">Choose a generation explicitly from job, candidate, activation, or history metadata. Its identity does not establish that a configured runtime is currently available.</p>
   </div>}
-  <div className="my-4 flex flex-wrap items-center gap-3"><button type="button" className={button} disabled={!state.session || state.busy || (state.view === "selection" && !state.generation)} onClick={() => void controller.load()}>Refresh diagnostics</button>{state.page?.next_cursor && <button type="button" className={button} disabled={state.busy} onClick={() => void controller.load(state.page?.next_cursor)}>Next diagnostic page</button>}<p className="text-muted-text text-xs">Each page is a fresh snapshot. Next advances the current listing; refresh starts at the first page.</p></div>
+  <div className="my-4 flex flex-wrap items-center gap-3"><button type="button" className={button} disabled={!state.session || state.busy || (state.view === "selection" && !state.generation)} onClick={() => void controller.load()}>Refresh diagnostics</button>{state.page?.next_cursor && <button type="button" className={button} disabled={state.busy} onClick={() => void controller.load(state.page?.next_cursor)}>Next diagnostic page</button>}</div>
   {(state.busy || state.scopesBusy) && <p role="status" className="text-muted-text py-3">Loading bounded diagnostics…</p>}
   {state.problem && <p role="alert" className="border-danger-hair text-danger-ink my-3 rounded border p-3">{state.problem}</p>}
   {!state.scope && <p className="text-muted-text py-6">Choose a memory scope to begin.</p>}

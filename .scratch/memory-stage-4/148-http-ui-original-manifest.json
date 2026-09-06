@@ -1,0 +1,10 @@
+[
+  {
+    "path": "internal/web/candidate_review.go",
+    "before_sha256": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5"
+  },
+  {
+    "path": "internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx",
+    "before_sha256": "a50a3a7c523959e240420aafaf9530048bee5fc00438ead72d8374f49754546e"
+  }
+]

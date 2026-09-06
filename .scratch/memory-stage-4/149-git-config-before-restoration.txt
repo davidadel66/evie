@@ -1,0 +1,47 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+	worktree = /private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-ciorhth3
+[remote "origin"]
+	url = https://github.com/davidadel66/evie.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "master"]
+	remote = origin
+	merge = refs/heads/master
+[branch "codex/2-mem-1-1-explicit-repl-scope-selection"]
+	remote = origin
+	merge = refs/heads/codex/2-mem-1-1-explicit-repl-scope-selection
+[branch "codex/3-mem-1-2-durable-turn-lease-storage"]
+	remote = origin
+	merge = refs/heads/codex/3-mem-1-2-durable-turn-lease-storage
+[branch "codex/55-cancellable-tool-lifecycle"]
+	remote = origin
+	merge = refs/heads/codex/55-cancellable-tool-lifecycle
+[branch "codex/57-lease-own-fence-live-turn"]
+	remote = origin
+	merge = refs/heads/codex/57-lease-own-fence-live-turn
+[branch "codex/59-select-resume-titled-repl-sessions"]
+	remote = origin
+	merge = refs/heads/codex/59-select-resume-titled-repl-sessions
+[branch "codex/61-persist-provider-usage"]
+	remote = origin
+	merge = refs/heads/codex/61-persist-provider-usage
+[branch "codex/simplify-delivery-loop"]
+	remote = origin
+	merge = refs/heads/codex/simplify-delivery-loop
+[branch "codex/stage-2-context-management"]
+	remote = origin
+	merge = refs/heads/codex/stage-2-context-management
+[branch "codex/plugin-system-phase-1-core"]
+	remote = origin
+	merge = refs/heads/codex/plugin-system-phase-1-core
+[branch "codex/memory-stage-3"]
+	remote = origin
+	merge = refs/heads/codex/memory-stage-3
+[branch "codex/todo-youtube-task-trees"]
+	remote = origin
+	merge = refs/heads/codex/todo-youtube-task-trees

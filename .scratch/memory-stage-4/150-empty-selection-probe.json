@@ -1,0 +1,6 @@
+{
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-empty-selection-probe-92xla0ym",
+  "base_tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+  "changed_production": "internal/eviedb/compiler_reconciliation.go",
+  "probe": "subtract only the later-root closure boundary from selected cutoff"
+}

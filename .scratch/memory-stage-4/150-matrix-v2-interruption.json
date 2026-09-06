@@ -1,0 +1,160 @@
+{
+  "version": "memory-stage4-pilot-interruption-v1",
+  "at": "2026-09-05T14:18:49.316688+00:00",
+  "status": "terminated_after_active_trial_cleanup",
+  "reason": "Independent Spec review found a plausible explicit-history/foreign-root empty interval; public regression pending.",
+  "scheduler_pid": 75089,
+  "active_trial_pid": 77149,
+  "active_trial_command": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-matrix-v2/memory-stage4-pilot",
+  "last_completed_files": [
+    "retained-events-100000-r2-disabled.resources.json",
+    "baseline-r3-disabled.json",
+    "retained-events-100000-r1-new.resources.json",
+    "baseline-r3-disabled.resources.json",
+    "baseline-r2-new.resources.json",
+    "retained-events-100000-r2-disabled.json",
+    "retained-events-100000-r3-history.json",
+    "retained-events-100000-r1-disabled.json",
+    "plan.json",
+    "baseline-r1-new.resources.json",
+    "retained-events-100000-r2-new.json",
+    "retained-events-100000-r3-new.json",
+    "retained-events-100000-r2-new.resources.json",
+    "retained-events-100000-r2-history.json",
+    "retained-events-1000000-r1-disabled.resources.json",
+    "baseline-r2-history.json",
+    "baseline-r2-new.json",
+    "baseline-r3-new.json",
+    "baseline-r3-history.json",
+    "retained-events-100000-r1-disabled.resources.json",
+    "baseline-r3-history.resources.json",
+    "baseline-r1-history.json",
+    "retained-events-100000-r3-history.resources.json",
+    "retained-events-100000-r1-new.json",
+    "baseline-r2-disabled.resources.json",
+    "retained-events-100000-r3-disabled.resources.json",
+    "baseline-r1-history.resources.json",
+    "retained-events-1000000-r1-new.json",
+    "retained-events-100000-r1-history.resources.json",
+    "baseline-r1-disabled.json",
+    "retained-events-100000-r3-new.resources.json",
+    "baseline-r1-disabled.resources.json",
+    "retained-events-1000000-r1-disabled.json",
+    "retained-events-100000-r2-history.resources.json",
+    "baseline-r2-disabled.json",
+    "baseline-r2-history.resources.json",
+    "baseline-r1-new.json",
+    "retained-events-100000-r3-disabled.json",
+    "retained-events-100000-r1-history.json",
+    "baseline-r3-new.resources.json"
+  ],
+  "finished_at": "2026-09-05T14:20:30.105575+00:00",
+  "active_trial_cleanup_confirmed": true,
+  "active_trial_report_sha256": "4c580ca4ce92f91043440fabcaebc052eb01066f0ee904477174af9f7cfdcdfc",
+  "resource_sampling_interrupted": true,
+  "completed_raw_trial_receipts": [
+    {
+      "path": "baseline-r1-disabled.json",
+      "sha256": "1e44038a647dc90d124c7ad2de74818f0054a72774bfe2ec7535c13a7bcaca4f",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r1-history.json",
+      "sha256": "ec15461061fd67a674a724615918dbb0f809dacf4383d3c0ef5c1e5156ad9696",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r1-new.json",
+      "sha256": "1404e13b48c03bfdc2cdcb1251df5e26a2df7858770548bb038c414193f917fb",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r2-disabled.json",
+      "sha256": "bebe3fc96b5fafdedb3af6f9ea178f6821b0878a0a4127ccfe447d8402003423",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r2-history.json",
+      "sha256": "bdaaf2e1913d7cc7ed35c777e0cfe2cda11acbc1e36b5681851545d698cc402a",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r2-new.json",
+      "sha256": "1377230cfafec4b3949e8c6c0d423b3bdc2817ef0b825bf2b34711ec982791a7",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r3-disabled.json",
+      "sha256": "275bab50cd59c451530f967deb81c360dc15939a247fffd7d7239683897e1f61",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r3-history.json",
+      "sha256": "3b7a8c6f1148774ee4df337ae6e38aa64aef31aa9f3eb0b7c41fbd99124926e5",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "baseline-r3-new.json",
+      "sha256": "d9ab642a4555a316778fa6825c4c8da4e07c9ad9ad178484f073f447fdc2ca8d",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r1-disabled.json",
+      "sha256": "f1927686273f3d177e6c5ddcfa58dc70b1543f7063b549fdfdb2db79328634a1",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r1-history.json",
+      "sha256": "ca3ecc6790a6e06b305467fe1e71b995b30202122b2fd8cc6d5578fae48aa959",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r1-new.json",
+      "sha256": "e26d85c14d787242432ea5f356a991eeda2dbf3972127121ba1e304a45897bd2",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r2-disabled.json",
+      "sha256": "d891d7bf8e81c2789e235cd95f3a3843b0476b06812c8c6a3de876def86eeebe",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r2-history.json",
+      "sha256": "b01e2c91d6a11e39c921d117ddbef468af1ee9bfb5b0de858f1aa892d0bc5fdf",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r2-new.json",
+      "sha256": "e63c0dcd4279a544af1137c12af5f134a1539da7aed63aab8a9fbc3b655a5902",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r3-disabled.json",
+      "sha256": "ee708c685c15d48d560c2b6ca610e2f5e161a5bd5c34cecb58883a2dffddd676",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r3-history.json",
+      "sha256": "f685ff6153806c963576e172a25dcd18db6ffb5c5a181be086c8d3b2b45cd3b4",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-100000-r3-new.json",
+      "sha256": "1f9dc385734b15a058adcd15fe03ef4b2e21b14a8b8e360e9d7caa63c319d6c1",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-1000000-r1-disabled.json",
+      "sha256": "57bbcb460ba46f9e0b45946a5bcff03d17ef72921e20dcb45dc3ed279bfcb446",
+      "resource_receipt_available": true
+    },
+    {
+      "path": "retained-events-1000000-r1-new.json",
+      "sha256": "4c580ca4ce92f91043440fabcaebc052eb01066f0ee904477174af9f7cfdcdfc",
+      "resource_receipt_available": false
+    }
+  ],
+  "partial_matrix_status": "interrupted_for_confirmed_contract_failure",
+  "release_eligible": false,
+  "all_trials_cleanup_confirmed": true
+}

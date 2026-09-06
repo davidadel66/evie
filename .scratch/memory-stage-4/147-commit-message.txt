@@ -1,0 +1,3 @@
+feat(memory): preserve review decisions across compiler generations (#147)
+
+Record bounded immutable recurrence and lineage projections, suppress exact retained decisions only while their accepted effects remain current, and preserve source, scope and generation boundaries. Verify persisted changed-correction projections for native and compound acceptance.

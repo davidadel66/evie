@@ -1,0 +1,11 @@
+[codex/memory-stage-4 830e043] feat(memory): review sourced identities and Predicate definitions (#141)
+ 20 files changed, 2315 insertions(+), 96 deletions(-)
+ create mode 100644 cmd/evie/candidate_identity_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-identity-review.md
+ create mode 100644 internal/eviedb/candidate_review_identity.go
+ create mode 100644 internal/eviedb/candidate_review_identity_effect.go
+ create mode 100644 internal/eviedb/candidate_review_identity_encoding_test.go
+ create mode 100644 internal/eviedb/candidate_review_identity_test.go
+ create mode 100644 internal/eviedb/compiler_identity.go
+ create mode 100644 internal/eviedb/testdata/candidate_review_encoding_v2.json
+ create mode 100644 internal/memory/candidate_identity.go

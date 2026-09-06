@@ -255,3 +255,13 @@ func decodeEventPayload(event memory.Event, destination any) error {
 	}
 	return nil
 }
+
+// HistoryEvents returns saved evidence for a frontend, without replaying tools
+// or applying model-context compaction. It never exposes a partial local turn.
+func (s *Session) HistoryEvents(ctx context.Context) ([]memory.Event, error) {
+	if !s.mu.TryLock() {
+		return nil, ErrBusy
+	}
+	defer s.mu.Unlock()
+	return s.history.Events(ctx)
+}

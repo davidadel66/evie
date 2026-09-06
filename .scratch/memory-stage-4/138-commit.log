@@ -1,0 +1,22 @@
+[codex/memory-stage-4 8e667f7] feat(memory): activate background compilation at explicit frontiers (#138)
+ 27 files changed, 2788 insertions(+), 107 deletions(-)
+ create mode 100644 cmd/evie/compiler_activation.go
+ create mode 100644 cmd/evie/compiler_activation_cli_test.go
+ create mode 100644 cmd/evie/compiler_host.go
+ create mode 100644 cmd/evie/compiler_host_lifecycle_test.go
+ create mode 100644 cmd/evie/compiler_host_test.go
+ create mode 100644 cmd/evie/docs/active/memory-stage-4-activation.implementation.md
+ create mode 100644 cmd/evie/runtime_lifecycle.go
+ create mode 100644 internal/eviedb/compiler_activation.go
+ create mode 100644 internal/eviedb/compiler_activation_interval_test.go
+ create mode 100644 internal/eviedb/compiler_activation_schema.go
+ create mode 100644 internal/eviedb/compiler_activation_status_test.go
+ create mode 100644 internal/eviedb/compiler_activation_test.go
+ create mode 100644 internal/eviedb/compiler_intervals.go
+ create mode 100644 internal/eviedb/compiler_intervals_test.go
+ create mode 100644 internal/eviedb/compiler_reconciliation.go
+ create mode 100644 internal/eviedb/compiler_reconciliation_bound_test.go
+ create mode 100644 internal/localextractor/activation.go
+ create mode 100644 internal/memory/compiler_activation.go
+ create mode 100644 internal/web/lifecycle.go
+ create mode 100644 internal/web/lifecycle_test.go

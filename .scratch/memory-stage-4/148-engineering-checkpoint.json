@@ -1,0 +1,276 @@
+{
+  "ticket": 148,
+  "branch": "codex/memory-stage-4",
+  "head_at_freeze": "da24aeecdcc7995cd34fb5800d74f01c3300287f",
+  "predecessor_ticket": 147,
+  "recorded_utc": "2026-09-05T12:40:03.485162+00:00",
+  "status": "output_finalization_fix_frozen_focused_normal_race_pass_root_final_gates_pending",
+  "files": [
+    {
+      "path": "internal/memory/compiler_diagnostics.go",
+      "before_sha256": "absent",
+      "after_sha256": "0b69224a8190e9bd25ad3b8c6ddf497bfcc2c5c11b1a78263eec55807d21fbac",
+      "bytes": 5986
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics.go",
+      "before_sha256": "absent",
+      "after_sha256": "47b18780c3f1d7d3bd94112b8dd88ec51aa60ae51cdc8e4675b7ad23e230b988",
+      "bytes": 10867
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_views.go",
+      "before_sha256": "absent",
+      "after_sha256": "3bf75c2e653d6f8a73a4c08ddf4174ff798ac7a089dbdcc4e5f2b5b7adbdf33b",
+      "bytes": 16572
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_schema.go",
+      "before_sha256": "absent",
+      "after_sha256": "78da85436890d0b6a5b6f6266b3ec09648ab83131f37d76e6341f929fd6111ec",
+      "bytes": 11052
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_measurement.go",
+      "before_sha256": "absent",
+      "after_sha256": "a618ab79cfad39071e291ce16e8f3c938305a4fd70545ab807845a031e1e9afa",
+      "bytes": 4092
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "8c288379af117d2064fe8de5bd8667d41d776fc3b57174f12fd719943d0583f2",
+      "bytes": 19121
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_public_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "457a7e22018d9c8ad6a9489746f1294df7a80dd77544c8ac7ec506f393c1fb50",
+      "bytes": 2806
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "6ee8b7e5ac6d51fac3bdf4e1eafba278664213e02e5af3a38bd6d4a74cec7367",
+      "after_sha256": "a0826aa3ab94c0499325dd760efe45d04fb5802a6ccb411ad0480a0d72caf0d1",
+      "bytes": 27030
+    },
+    {
+      "path": "internal/eviedb/compiler_worker.go",
+      "before_sha256": "15ca8e7447ec2c6f31ebc1a5df2b6238fac18c6a8a25301b64f822284b72ee03",
+      "after_sha256": "2356d0820b3f4601396a0f76f34c95b30629b8ef6b81f7a5de87b34f8d81e4e3",
+      "bytes": 31468
+    },
+    {
+      "path": "internal/eviedb/compiler_worker_inspection.go",
+      "before_sha256": "bcb70493b97e8a5dbc0d7442f4fc55f269ea9428f8c20db8e807f9534ae7e5f1",
+      "after_sha256": "dabcc06a8df06b75996a79e720ac27c5b5a4de584b8168d996729399563ff3ef",
+      "bytes": 4022
+    },
+    {
+      "path": "internal/agent/agent.go",
+      "before_sha256": "9c3ee86cf99c816dbc0c1945e959b93a1f8f9b007fa8d73897c105a97756693d",
+      "after_sha256": "c7f8b44e728d31fef63b400ff7a65735f18c8444a5058d1978386f5ecb43c96c",
+      "bytes": 14047
+    },
+    {
+      "path": "internal/agent/turn.go",
+      "before_sha256": "857264fa1b53af25d3f60e21b9f8af6133a2684714b3d20721e29b3fed6bb137",
+      "after_sha256": "d6764b6a6e89056fd1a98fb25734985f2ed6f879c6035910cc69388148fd61d4",
+      "bytes": 22182
+    },
+    {
+      "path": "internal/agent/foreground_measurement.go",
+      "before_sha256": "absent",
+      "after_sha256": "3d27af57606d2155f465d582f1a2eb7981ea2380383d7986b2963551ec230b83",
+      "bytes": 2856
+    },
+    {
+      "path": "internal/agent/foreground_measurement_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "cebd8795a8e7e4b9c9ba736b06b5b12288a89a3feb988ea5c82dab394ed6cfc6",
+      "bytes": 4233
+    },
+    {
+      "path": "internal/localextractor/ollama.go",
+      "before_sha256": "d0d0db92d7ce457595800c49621f6aa4025ef40cdb8cd74acc573396e4180512",
+      "after_sha256": "d0605ab0b82da630c7fde714bc03aeb79b1379ed679745c71b928e8177f1da5f",
+      "bytes": 6418
+    },
+    {
+      "path": "internal/localextractor/diagnostics_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "60fa64365f85a55a5a3fe5a7596d83a67646a11b5ef606383bc0d146db559f88",
+      "bytes": 1291
+    },
+    {
+      "path": "cmd/evie/compiler_diagnostics.go",
+      "before_sha256": "absent",
+      "after_sha256": "4f8ddd078047a852960bbe5b103fed0a0df4664246e005110d545385ff5c69dc",
+      "bytes": 2512
+    },
+    {
+      "path": "cmd/evie/compiler_diagnostics_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "d1d4f311b20b01b36d33a55f4316c4a5b7732a07a6bd58db65925884694886df",
+      "bytes": 3309
+    },
+    {
+      "path": "cmd/evie/repl.go",
+      "before_sha256": "94c6efc646ae7a0e45066fdf75af0a9c058f8cacb78ad3a257e5d62b4ba12b46",
+      "after_sha256": "6bd5e81edab974015a048425a85900c22c31fcf6baab366f2efc74992a23ecaf",
+      "bytes": 44326
+    },
+    {
+      "path": "cmd/evie/docs/active/memory-stage-4-diagnostics.implementation.md",
+      "before_sha256": "absent",
+      "after_sha256": "2ace24a78d22544d086094cdeafef5ca46c38711f2e0ad7241e1a82aeb556d74",
+      "bytes": 11697
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_navigation.go",
+      "before_sha256": "absent",
+      "after_sha256": "e8cefd234cbc63b490ec2607dadd585d2d2bee8c1d2f8371685217da91d52c89",
+      "bytes": 3823
+    },
+    {
+      "path": "internal/eviedb/candidate_review_scopes.go",
+      "before_sha256": "1aa8fbe36c9f8245e7da0d33886c57ce362526615ccf5316071988fba622cde6",
+      "after_sha256": "61f4a1895b69817bb3299723e21a7f10b9719f32b1b615347c2186f527851813",
+      "bytes": 6064
+    },
+    {
+      "path": "internal/web/candidate_review.go",
+      "before_sha256": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5",
+      "after_sha256": "0345761257586252e8cfcf0c5cee7169f7e72fcc3e7c5f89a8d57b085e3de162",
+      "bytes": 11070
+    },
+    {
+      "path": "internal/web/compiler_diagnostics.go",
+      "before_sha256": "absent",
+      "after_sha256": "adbe7a3bfc0735a32d4674f4a86f9a78b880ad16007dafe782e0381d269910e8",
+      "bytes": 3320
+    },
+    {
+      "path": "internal/web/compiler_diagnostics_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "98713d5f7d16e0402a10a1e4369e239011d9402ee595a9d648e114950e486d4d",
+      "bytes": 16759
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx",
+      "before_sha256": "a50a3a7c523959e240420aafaf9530048bee5fc00438ead72d8374f49754546e",
+      "after_sha256": "2d06c3c7b31abe91dab533a44a5d77732a070644703b83d644c7e2d4e32f56b9",
+      "bytes": 1205
+    },
+    {
+      "path": "internal/web/ui/src/api/compilerDiagnostics.ts",
+      "before_sha256": "absent",
+      "after_sha256": "0d4f5926957b4999e361e6f77fedef7f1d7e679bc00529f8bfc0bf8dae49edc9",
+      "bytes": 4084
+    },
+    {
+      "path": "internal/web/ui/src/api/compilerDiagnostics.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "b4b863006945ce60c659bcbcf56cf606dc920d5f05367eeaf852ded489b21e1e",
+      "bytes": 1955
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "9ec98769a8794f1c20e9704b909346b46b1bc69edf7757d4de8ee49d30d055af",
+      "bytes": 6052
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/CompilerHealth.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "908a63b4fb04d78764da907771ed35e7232af43793cf27f8d2f67d292f20ee60",
+      "bytes": 17883
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/controller.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "138c91ed95bf05028890d3e18d7cfbc993e2578bf8e1492ea5267dd506dad273",
+      "bytes": 6522
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/controller.ts",
+      "before_sha256": "absent",
+      "after_sha256": "43f62a6956a357fdc47ec7dcfe8f825265cb604d83781299332fea2852bb3c76",
+      "bytes": 4408
+    },
+    {
+      "path": "internal/web/ui/src/compilerDiagnostics/fixtures.test-support.ts",
+      "before_sha256": "absent",
+      "after_sha256": "6fe4f81eedac8cd9215f6e7abf0fa9a5befef9e89411ca9d3ea5b130daa658e2",
+      "bytes": 2399
+    },
+    {
+      "path": "internal/eviedb/compiler_activation.go",
+      "before_sha256": "ef97faaa06372204b0bc50c3d5571216a47e73b0791cb113957a259a487914dc",
+      "after_sha256": "4189769f57e2b3bad8107d21509f5c0ccf8e46f7609556ba2df79e6b6caac15c",
+      "bytes": 14255
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "before_sha256": "350c31d55960e21400628d152e98a1ac6fc078ea21fdd92d8fa8cbd2814406c3",
+      "after_sha256": "ab5ecc2593c45a94fcfe72278ddefed9b2cc7a9b3183f097b86581cf4db9c79f",
+      "bytes": 5663
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection.go",
+      "before_sha256": "absent",
+      "after_sha256": "8f37753b5faa25a1ca7bf096a3ab7c9b9f254c3745aabfe1fc26c43f22f94857",
+      "bytes": 11989
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "a6aade7e167c822cb4f78b27dd88f543bad432bec32d9a513c6f3c636c0d4c66",
+      "bytes": 17621
+    },
+    {
+      "path": "internal/web/events.go",
+      "before_sha256": "a0d84e210f88d8942b33afed0804dfaa004bb5f2c46e1ebfad86b27b027efcc8",
+      "after_sha256": "73ea636a45c9786132db52e85a42ffef2c8807e2f9bce743350413022fc5e960",
+      "bytes": 4434
+    },
+    {
+      "path": "internal/web/foreground_measurement_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "fe6fbf930aefb40d50b107611ea3f9bcc73905f26b3620d01cadf91e8e6aeed6",
+      "bytes": 3260
+    },
+    {
+      "path": "cmd/evie/repl_output.go",
+      "before_sha256": "absent",
+      "after_sha256": "d4a3f96b45ec0b10361c77e6e4f7a05c35ec2463371357d55375044a68878bd6",
+      "bytes": 1040
+    },
+    {
+      "path": "cmd/evie/repl_foreground_measurement_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "922c40ce70bc75f02325a210fc854e98d0a17d7008af35c8f6c4e4113cf60cd2",
+      "bytes": 4129
+    }
+  ],
+  "file_count": 41,
+  "bytes": 393822,
+  "owner_manifest": "148-owner-frozen-manifest.json",
+  "contributions": [
+    "148-http-ui-frozen-manifest.json",
+    "148-legacy-frozen-manifest.json"
+  ],
+  "root_hooks_excluded": "148-root-frozen-manifest.json",
+  "verification": {
+    "normal": "148-navigation-normal.log",
+    "race": "148-navigation-race.log",
+    "clock_normal": "148-clock-order-normal.log",
+    "clock_race": "148-clock-order-race.log",
+    "final_all_normal": "148-final-all-normal.log",
+    "legacy": "148-legacy-verification.json",
+    "http_ui": "148-http-ui-verification.json",
+    "summary": "148-focused-verification.json",
+    "output_fix": "148-output-fix-verification.json"
+  },
+  "revision": "output-finalization-fix-v1"
+}

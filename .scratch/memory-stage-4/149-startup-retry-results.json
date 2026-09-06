@@ -1,0 +1,2886 @@
+{
+  "base_tree": "fae9bdd86e9e0f0f2f42bac18d0cbc063684412c",
+  "prototype_only": true,
+  "rows": [
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 70,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 70,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 25,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 52,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 29,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 51,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 60,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 23,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 24,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 50,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 56,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 24,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 69,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 28,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 39,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 61,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 57,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 22,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 74,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 68,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 5,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 27,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 59,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 52,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 57,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 64,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 76,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 70,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 77,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 51,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 50,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 8,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 22,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 51,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 5,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 23,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 57,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 23,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 52,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 65,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 25,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 56,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 38,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 28,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 48,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 25,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 99,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 67,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 73,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 52,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 31,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 52,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 58,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 24,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 72,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 11,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 22,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 90,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 82,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 23,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 55,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 13,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 26,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 51,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 55,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 7,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 20,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 61,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 19,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 66,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 49,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 15,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 9,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 50,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 64,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 23,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 18,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 54,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 10,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 27,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 47,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 64,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 14,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 16,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "fresh",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "fresh",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "fresh",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "fresh",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 62,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "existing",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 12,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "existing",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 6,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "existing",
+      "process": 2,
+      "exit_code": 0,
+      "duration_ms": 17,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "phase": "existing",
+      "process": 3,
+      "exit_code": 0,
+      "duration_ms": 21,
+      "journal_mode": "wal",
+      "ok": true
+    }
+  ]
+}

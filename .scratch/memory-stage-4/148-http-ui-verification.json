@@ -1,0 +1,16 @@
+{
+  "status": "engineering-frozen",
+  "files": 11,
+  "normal_http": "PASS 0.532s",
+  "normal_web_all": "PASS 3.175s",
+  "race_http": "PASS 7.787s",
+  "typescript": "PASS",
+  "focused_ui": "PASS 3 files, 18 tests",
+  "full_ui_log": "148-http-ui-vitest-all.log",
+  "lint": "PASS; pre-existing user Icon.tsx warning",
+  "build": "PASS; existing chunk warning",
+  "whitespace": "PASS",
+  "full_verify": "root aggregate pending",
+  "independent_reviews": "root aggregate pending",
+  "browser": "root pending; no owner pilot"
+}

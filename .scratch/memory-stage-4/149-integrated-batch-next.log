@@ -1,0 +1,5 @@
+=== RUN   TestStage4AtomicBatchPolicyConformance
+    memory_stage4_review_conformance_test.go:190: STAGE4_EVIDENCE {"details":{"accepted_truth_preserved":true,"atomic_claims":2,"atomic_effect_sha256":"sha256:6fb2a330777e4f9bfcee39bb821b8a549d4b42f9930b13d16c40cb5f56197c32","canonical_replay":true,"duplicate_adapter_results_equal":true,"historical_acceptance_sha256":"6ee1d352034e5f165cb1ae6c3e5aaa8028554ae60fbca82f86ff406396155cbf","original_source_closed":true,"outer_rollback":true,"permanent_partial_result":true,"preview_sha256":"sha256:1de7d86dc6c5cf37e34f6f4a752986b441d472d5dca8586f39a9ff3a5fca9cfc","source_policy_redacts":true},"scenario":"atomic_batch_source_policy","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4AtomicBatchPolicyConformance (0.15s)
+PASS
+ok  	github.com/davidadel66/evie/cmd/evie	0.479s

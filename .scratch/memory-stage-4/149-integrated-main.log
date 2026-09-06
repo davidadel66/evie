@@ -1,0 +1,5 @@
+--- FAIL: TestStage4ForegroundRestartClosedReviewReplay (0.09s)
+    memory_stage4_conformance_test.go:384: original source authority {ID:a5089402-82a4-49e6-b8db-1db6024bb0ab OperationID:6d8cb31d-1856-43ce-b7a8-a832cb01cdd6 EventID:fe295057-77df-44ae-a180-7f38a8e38068 SessionID:f1a86656-85b8-46f7-99a5-10b2dcfbf508 ScopeKey:global EventPart:content LocatorKind:whole LocatorValue: EvidenceSHA256:sha256:42b7e81be79161494a4e8441cdcf300db8d1f6166b28df2bafed03a763d9cb0f Actor:owner SourceType:user_message Authority:owner_statement ObservedAt:2026-09-05T12:28:30.263326Z Evidence:I prefer café as my standing drink. Eligibility:eligible Create:true}
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.403s
+FAIL

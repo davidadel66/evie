@@ -1,0 +1,82 @@
+EVIE
+Chat
+Memory
+Whiteboard
+Reports
+System
+A
+a
+Accepted memory
+Review candidates
+Compiler health
+Compiler health
+
+Inspect background progress and review workload for one exact scope and session, including closed conversations.
+
+Memory scope
+Choose a scope…
+Global memory · global
+Refresh scopes
+Session
+Choose a session…
+71b683ba-0c8c-4c5a-aa8f-cef291ff7915
+c8d5c6bd-209a-4469-9381-3be7e863a1bd
+Refresh sessions
+Diagnostic view
+Jobs and coverage
+Selected units
+Live selection obligations
+Review backlog
+Activations
+Historical selection
+Event selection
+Foreground timings
+Refresh diagnostics
+Next diagnostic page
+
+Each page is a fresh snapshot. Next advances the current listing; refresh starts at the first page.
+
+Exact scope: global · session: 71b683ba-0c8c-4c5a-aa8f-cef291ff7915
+
+Snapshot: 2026-09-05T12:28:31.850Z · revision 11
+
+Shared compiler capacity: Available
+
+Counts for this scope and session
+
+Counts cover the indexed records in this scope and session, across generations. Page rows are a bounded portion. Unresolved counts exclude suppressed repeats.
+
+Queued jobs
+0
+Running jobs
+0
+Jobs waiting to retry
+1
+Staged jobs
+0
+Jobs completed with candidates
+1
+Jobs completed empty
+0
+Excluded jobs
+0
+Failed jobs
+1
+Cancelled jobs
+0
+Unresolved inbox candidates
+1
+Accepted candidates
+0
+Rejected candidates
+0
+Suppressed repeat candidates
+0
+Inference attempts
+3
+Cancellations
+0
+
+Elapsed inbox age is time since publication for a current unresolved item. Active measured review time must be collected during the pilot; it is unavailable here. Approval rate is not accuracy.
+
+No records in this page. A next page can still contain records.

@@ -1,0 +1,36 @@
+EVIE
+Chat
+Memory
+Whiteboard
+Reports
+System
+A
+a
+Accepted memory
+Review candidates
+Compiler health
+Compiler health
+
+Inspect background progress and review workload for one exact scope and session, including closed conversations.
+
+Memory scope
+Choose a scope…
+Global memory · global
+Refresh scopes
+Session
+Choose a session…
+Refresh sessions
+Diagnostic view
+Jobs and coverage
+Selected units
+Live selection obligations
+Review backlog
+Activations
+Historical selection
+Event selection
+Foreground timings
+Refresh diagnostics
+
+Each page is a fresh snapshot. Next advances the current listing; refresh starts at the first page.
+
+Choose a memory scope to begin.

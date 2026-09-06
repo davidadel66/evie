@@ -85,6 +85,7 @@ type Server struct {
 	semanticMemory    agent.SemanticGraphMemory
 	databaseInspector DatabaseInspector
 	candidateReview   CandidateReviewKernel
+	usageReader       UsageReader
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -173,6 +174,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.contextSessions != nil {
 		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
+		mux.Handle("/api/context-sessions/history", s.managementRoute(s.handleContextSessionHistory))
 		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
 		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
 	}
@@ -184,6 +186,9 @@ func (s *Server) Handler() http.Handler {
 	if s.databaseInspector != nil {
 		mux.Handle("/api/data/database/schema", s.managementRoute(s.handleDatabaseSchema))
 		mux.Handle("/api/data/database/rows", s.managementRoute(s.handleDatabaseRows))
+	}
+	if s.usageReader != nil {
+		mux.Handle("/api/data/usage/summary", s.managementRoute(s.handleUsage))
 	}
 	s.registerCandidateReviewRoutes(mux)
 	mux.Handle("/", s.staticHandler())
@@ -247,10 +252,24 @@ func isLoopbackHost(host string) bool {
 // been written yet when TryLock fails, so the response is still free for
 // a plain 409.
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Message   string           `json:"message"`
+		SessionID memory.SessionID `json:"sessionId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "body must be JSON with a message field")
+		return
+	}
+
 	s.sessionMu.Lock()
 	if s.selectingSession {
 		s.sessionMu.Unlock()
 		jsonError(w, http.StatusConflict, "a Context Scope selection is in progress")
+		return
+	}
+	if s.contextSessions != nil && (req.SessionID == "" || req.SessionID != s.activeSession.ID) {
+		s.sessionMu.Unlock()
+		jsonError(w, http.StatusConflict, "the active conversation changed; reload before sending")
 		return
 	}
 	session := s.session
@@ -267,13 +286,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.activeTurns--
 		s.sessionMu.Unlock()
 	}()
-	var req struct {
-		Message string `json:"message"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "body must be JSON with a message field")
-		return
-	}
 
 	ev, err := newSSEEvents(w)
 	if err != nil {

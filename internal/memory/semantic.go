@@ -430,6 +430,7 @@ type SemanticNeighborhood struct {
 }
 
 type RememberLiteralRequest struct {
+	Destination          MemoryDestination `json:",omitempty"`
 	IdempotencyKey       string
 	SourceEventID        EventID
 	Predicate            string
@@ -615,6 +616,7 @@ type EntitySelector struct {
 }
 
 type RememberEntityRequest struct {
+	Destination          MemoryDestination `json:",omitempty"`
 	IdempotencyKey       string
 	SourceEventID        EventID
 	Predicate            string

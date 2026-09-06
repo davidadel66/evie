@@ -1,0 +1,64 @@
+{
+  "ticket": 137,
+  "status": "review-fix engineering frozen; updated isolated full verification and focused/race checks PASS; independent Standards rereview and Spec review assigned to root",
+  "modified_originals": {
+    "internal/memory/compiler.go": "7741fbab6ead774245373aaac12b487197bdd08a4cd1f20312dd797b3769590b",
+    "internal/eviedb/compiler_schema.go": "ff5139abfe96dbb78d1cac9ac656fb404af48b7693a5b23dfe73150ea20c06cc",
+    "internal/eviedb/compiler_work.go": "3c9b2e167d95ecb497eba30be451c97d87a606eeab147597115e30f6ce864d80",
+    "cmd/evie/compiler_management.go": "95247d7b3a971305c44194575c9192b557d67d21149aeba9a3ca0065ca70d1c3",
+    "cmd/evie/compiler_management_test.go": "3f864c8c331d38916b72b469bb8b3db2b9cb92f4bac44ac66f3aeb6c6feb7e9b",
+    "internal/eviedb/compiler_validation.go": "d93987efa4a3894782458e3a00838ebce3c0ceb686d939505a3a953e4ce3fdeb",
+    "internal/eviedb/compiler_public_test.go": "125a9a64a6ae6078d501fd29ef6657da3ebff7198893fcec9bd1f468782d6652"
+  },
+  "new_files": [
+    "internal/memory/compiler_status.go",
+    "internal/eviedb/compiler_worker.go",
+    "internal/eviedb/compiler_worker_inspection.go",
+    "internal/eviedb/compiler_worker_test.go",
+    "internal/eviedb/compiler_worker_http_test.go",
+    "internal/eviedb/compiler_worker_public_test.go",
+    "internal/eviedb/compiler_worker_crash_test.go",
+    "cmd/evie/docs/research/memory-stage-4-worker-recovery.md",
+    "internal/eviedb/compiler_adoption_bound_test.go",
+    "internal/eviedb/compiler_generation_race_test.go"
+  ],
+  "owned_files": {
+    "internal/memory/compiler.go": "9326c5544d2c7b36f4089dc7b2928a335ca5ab4011336f654e89afb27b083bcf",
+    "internal/eviedb/compiler_schema.go": "42cccff6ae69ff3460f90460b656cc9d4f3f984a84425ef396b1e97324476ce5",
+    "internal/eviedb/compiler_work.go": "0dfce2501e9c55a49fcbf0bb69b7176bfaf7e67d88f1a1c3ba651a4548f730c7",
+    "cmd/evie/compiler_management.go": "7f5a0b7b109c7984b8ef948b0a53d1737834ade0322f1868391917359f40e01b",
+    "cmd/evie/compiler_management_test.go": "34a04377a64b9ff0e16e3e471a3765e85e06710d0c13aee2de40664c58bf4cc3",
+    "internal/eviedb/compiler_validation.go": "f22e1737f79cf93f0a8f8139a60baa3b63c62f637f7f9a266187b98bfc8ea1a0",
+    "internal/eviedb/compiler_public_test.go": "49885ad39781acc926611d13de352aa07a258d7f2acea99bbe5f46cb995d0356",
+    "internal/memory/compiler_status.go": "fec3e352456ab9d567a535304be4ad830a2d385268dad74955edf2535fe87e08",
+    "internal/eviedb/compiler_worker.go": "ab99ad8675924e3297e78ee64d9097392a7074f7b38c365f82415d003734462e",
+    "internal/eviedb/compiler_worker_inspection.go": "bcb70493b97e8a5dbc0d7442f4fc55f269ea9428f8c20db8e807f9534ae7e5f1",
+    "internal/eviedb/compiler_worker_test.go": "a5e7fe854c4bbf45316579b81c37e0b4806192ec3c7ae1998e7f07ffaeb5cb3f",
+    "internal/eviedb/compiler_worker_http_test.go": "5bbea2a1fef46c24253db2e38d738b962210bf740a84a1ecc088d5eab55f0de4",
+    "internal/eviedb/compiler_worker_public_test.go": "c25965f38623792ad44494df45e75709ee0e2a7025528899133e5cdac99d30e6",
+    "internal/eviedb/compiler_worker_crash_test.go": "51c014d6f3da5b985d5abc99051805a575fd725d223fc9eef44ebd7ae6b60738",
+    "cmd/evie/docs/research/memory-stage-4-worker-recovery.md": "accd3a5477dd40039d77a495a5b1c7f270d6aa8f79a4a4ed4f1091017cdf1563",
+    "internal/eviedb/compiler_adoption_bound_test.go": "909a7f4d098ad7197332613f56ae8a131d1cecce17847dab24aaec299e552e37",
+    "internal/eviedb/compiler_generation_race_test.go": "08cfdde2b3a8e2becbccc1222337496080dc351f2a5f3a99e56635b9543f69ad"
+  },
+  "snapshot_directory": ".scratch/memory-stage-4/137-frozen-files",
+  "source_baseline_directory": ".scratch/memory-stage-4/137-original",
+  "shared_hooks": "No main.go/db.go changes. ensureCompilerSchema runs compilerWorkerSchema. No #138 references/gates included.",
+  "verification": {
+    "race": "PASS final isolated tree fddc252c6a29da7be77b1db4e214cd827511e97c: go test -race ./internal/eviedb -run ^TestCompiler(Worker|Cancellation) -count=1 -timeout=90s;30.160s, including88-source adoption and shared-caller-generation concurrency regressions.",
+    "full": "PASS updated isolated tree fddc252c6a29da7be77b1db4e214cd827511e97c: python3 .scratch/memory-stage-4/build-137-checkpoint.py; python3 .scratch/memory-stage-4/verify-137-checkpoint.py invokes ./scripts/verify-change.sh. Exit0: full Go tests/vet, UI lint/build, staged/unstaged whitespace. Log .scratch/memory-stage-4/verify-137-isolated.log. Existing nonblocking UI chunk>500kB warning.",
+    "focused": "PASS final frozen snapshot: go test ./internal/eviedb ./internal/localextractor ./cmd/evie ./internal/tools -run ^Test(Compiler(Worker|Cancellation|CLI|Rejects)|PinnedLocal|LocalTransport) -count=1 -timeout=60s; eviedb3.005s, localextractor0.439s, cmd0.947s, tools0.593s(no matching tests). Earlier broad136+137 tools/compiler checks PASS before active138tests were added.",
+    "integration_note": "Broad compiler pattern also picked up active #138 activation tests, whose pause/epoch gates are not yet integrated. #137 frozen files contain no #138 symbols; use isolated tree for full checks.",
+    "whitespace": "PASS isolated full verify whitespace plus all17frozenfile hashes/trailing whitespace/CR/final-newline audit.",
+    "review_regression_focused": "PASS go test ./internal/eviedb -run ^TestCompilerWorker(AdoptionReadsMaximumWindowOnce|GenerationSchemaRemainsCallerOwned|ConcurrentGenerationSchemaIsDetached)$ -count=1 -timeout=30s;0.655s."
+  },
+  "runtime_limit": "No actual selected-runtime acceptance. Production Ollama has no authenticated request-status/controlled-restart release verifier; unknown release remains capacity_blocked.",
+  "root_integration": "#138 may overlay narrow pause/activation epoch gates only after this snapshot; those hunks belong to138, not137.",
+  "review_fixes": {
+    "adoption_bound": "An88-source maximum window now has exactly88 source-row reads in adoption; envelope validation reuses already validated sources. Publication separately resolves current sources and rejects changed source bytes.",
+    "generation_alias": "QueueCandidateUnit and CompileCandidateUnit decode canonical manifests into zeroed local generations, preserving caller-owned RawMessage buffers; normal and concurrent regressions added.",
+    "red_regressions": ".scratch/memory-stage-4/137-review-regressions-red.log",
+    "overlays_preserved": "Identical narrow137delta applied independently to live work/worker,137-frozen-files,138-originals,138-frozen-files; no141source or138gate edits."
+  },
+  "review_ready_tree": "fddc252c6a29da7be77b1db4e214cd827511e97c"
+}

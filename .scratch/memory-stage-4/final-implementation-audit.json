@@ -1,0 +1,27 @@
+{
+  "branch": "codex/memory-stage-4",
+  "head": "10dc6759680f4b0fc23a54f0d9ff8595073eb501",
+  "ticket_commits": 20,
+  "one_per_ticket": true,
+  "final_tree": "237a699dd5b5b5c4248234335d2a51b72d3badfa",
+  "final_code_identical_to_full_verified_tree": true,
+  "report_only_additions_after_full_check": [
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-conformance-evidence.tar.gz",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-matrix-v3.tar.gz",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-audit.json",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-observations.json",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-results.md",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/interrupted-matrix-v2.tar.gz",
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/original-matrix-v1.tar.gz"
+  ],
+  "protected_user_paths_unchanged": 217,
+  "unexpected_user_changes": [],
+  "staged_changes": false,
+  "pending_experimental_tickets": [
+    135,
+    136,
+    150,
+    151
+  ],
+  "parent_unchanged": 131
+}

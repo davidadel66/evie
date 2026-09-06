@@ -1,0 +1,15 @@
+feat(memory): activate background compilation at explicit frontiers (#138)
+
+Capture exact generation and source selection frontiers atomically with
+append scheduling. Reconcile bounded obligations without making foreground
+conversation wait for extraction, and preserve old selected work across
+replacement, disable, and explicit resume.
+
+Wire configured supervision into the actual REPL and web lifetimes, with
+signal cancellation and bounded cleanup. Verify local runtime metadata
+before activation without inference, and expose activation/status commands.
+Preserve browser-disconnect behavior and report current worker states.
+
+Validation: required isolated full verification and focused normal/race
+checks cover activation/append races, closure classes, maximum inspection
+bounds, queue saturation, stalled extraction, status, restart, and shutdown.

@@ -1,0 +1,63 @@
+
+ RUN  v4.1.10 /Users/davidboktor/code/evie/internal/web/ui
+
+ ❯ src/candidateInbox/advancedController.test.ts (26 tests | 5 failed) 11ms
+     × loads the requested kind in a shared identity/edit/correction sequence without changing current interpretation 2ms
+     × bounds requested revision before dispatch and refuses redacted history reads 0ms
+     × rejects returned history for a different candidate, scope, revision, or parent binding 0ms
+     × fences delayed history by scope, candidate selection and candidate refresh 0ms
+     × clears historical disclosure on source or freshness failures and does not relabel unknown failures as missing history 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/candidateInbox/advancedController.test.ts > mixed immutable interpretation history > loads the requested kind in a shared identity/edit/correction sequence without changing current interpretation
+TypeError: controller.loadHistoryRevision is not a function
+ ❯ src/candidateInbox/advancedController.test.ts:62:21
+     60|   const controller = new CandidateInboxController(fakeAPI({ ...history…
+     61|   for (const [kind, value] of [["identity", identity], ["edit", edit],…
+     62|    await controller.loadHistoryRevision(kind, value.revision); expect(…
+       |                     ^
+     63|   }
+     64|   expect(identityRevision).toHaveBeenCalledExactlyOnceWith("global", c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/candidateInbox/advancedController.test.ts > mixed immutable interpretation history > bounds requested revision before dispatch and refuses redacted history reads
+TypeError: controller.loadHistoryRevision is not a function
+ ❯ src/candidateInbox/advancedController.test.ts:70:77
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/candidateInbox/advancedController.test.ts > mixed immutable interpretation history > rejects returned history for a different candidate, scope, revision, or parent binding
+TypeError: controller.loadHistoryRevision is not a function
+ ❯ src/candidateInbox/advancedController.test.ts:76:160
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/candidateInbox/advancedController.test.ts > mixed immutable interpretation history > fences delayed history by scope, candidate selection and candidate refresh
+TypeError: controller.loadHistoryRevision is not a function
+ ❯ src/candidateInbox/advancedController.test.ts:83:31
+     81|   for (const navigation of ["scope", "candidate", "refresh"]) {
+     82|    const response = deferred<TemporalRevision>(); const controller = n…
+     83|    const reading = controller.loadHistoryRevision("correction", 3);
+       |                               ^
+     84|    if (navigation === "scope") await controller.selectScope("session:o…
+     85|    else await controller.inspect(navigation === "candidate" ? "other" …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/candidateInbox/advancedController.test.ts > mixed immutable interpretation history > clears historical disclosure on source or freshness failures and does not relabel unknown failures as missing history
+TypeError: controller.loadHistoryRevision is not a function
+ ❯ src/candidateInbox/advancedController.test.ts:92:21
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 21 passed (26)
+   Start at  07:38:00
+   Duration  130ms (transform 38ms, setup 0ms, import 49ms, tests 11ms, environment 0ms)
+

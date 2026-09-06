@@ -1,0 +1,10 @@
+{
+  "ticket": 146,
+  "parent": "aab5b88357b025098c419dc9a93400ac398f20e3",
+  "commit": "da24aeecdcc7995cd34fb5800d74f01c3300287f",
+  "tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "isolated_tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "files": 18,
+  "issue_closed": true,
+  "note": "Commit records verified engineering; acceptance/model/human gates remain separately tracked."
+}

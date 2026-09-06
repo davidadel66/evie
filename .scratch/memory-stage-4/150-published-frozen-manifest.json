@@ -1,0 +1,173 @@
+{
+  "version": "memory-stage-4-owner-contribution-v1",
+  "ticket": 150,
+  "status": "engineering_complete_actual_model_owner_pilot_and_release_gates_incomplete",
+  "created_at": "2026-09-05T15:01:37.270925+00:00",
+  "base": "ebb84af94f37b5bb5278d54208dc1d9f2dba73c7",
+  "measured_tree": "4b29071dc69018a9fedb2464315453baab0c9025",
+  "unchanged_measured_file_count": 13,
+  "report_only_additions": 7,
+  "files": [
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-conformance-evidence.tar.gz",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "b7b360dc0ffe675ffb07152ff719fbde014373293f490b031f09352b352d8ac9",
+      "bytes": 216756,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-matrix-v3.tar.gz",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "91642e94a35c8b5718490b1912619b9806592702e004fdee2a3282662476260c",
+      "bytes": 815678,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-audit.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "05151580dbd461292085454904da0c22766eac62ccb4c1dbc89803accbac8fba",
+      "bytes": 810,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-observations.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "8ef5a3aab291183f319f71f969ddc5956f8d503fd2e4de520af7476e88f970f2",
+      "bytes": 40925,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-results.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "2c2424c575c70b08c06be042cf6b85ab8f83da81988e1ed1d5bf031c00f89444",
+      "bytes": 11129,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/interrupted-matrix-v2.tar.gz",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "dddddaaef984180af98be2cb1f9456745db4cc1db4f465951b1743ecc8181aeb",
+      "bytes": 191926,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/original-matrix-v1.tar.gz",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "46c1c7ef8e0e9eeda3d6dfcfa02ba2616feda4fdff2eef1ad0c7924d0131fd40",
+      "bytes": 822209,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "6581b6a482c80e3418f45619510ed60b1487332e89fd6545c0184643d6fee33c",
+      "bytes": 2445,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "before_sha256": "ab5ecc2593c45a94fcfe72278ddefed9b2cc7a9b3183f097b86581cf4db9c79f",
+      "before_state": "existing_base_file",
+      "after_sha256": "c9ddbe0db056463974441974379d53de3d3ac6427fae01d240896c664302b098",
+      "bytes": 5682,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "before_sha256": "cc2b0012a84c66d7430aae35c186c3aa44bbddae9ca28342204e426fbc363a45",
+      "before_state": "existing_base_file",
+      "after_sha256": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6",
+      "bytes": 12325,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "a0826aa3ab94c0499325dd760efe45d04fb5802a6ccb411ad0480a0d72caf0d1",
+      "before_state": "existing_base_file",
+      "after_sha256": "854be83b0085c0b07d198480bc056a6d72963481cf8ab98d784375a3bd7c25d2",
+      "bytes": 27610,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "30ddbc10c07f068f5a10c54ff27ba9378acb295b42e6e7ac337694d6ac3ace86",
+      "bytes": 9833,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/fixture.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "0dd7284b830379baea2e3549db9907dae01415ec4a3a4b0972e761270d0e89c4",
+      "bytes": 9177,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/main.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "ac503426e053a7d72962190474482d81cedf8f3ac0f8ce57b99a149e7f44b87a",
+      "bytes": 3779,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/main_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "cd6dad5e0c14db7085b389c7e8978252e5f9fcb3582d9ba528ea93ad54b7faa6",
+      "bytes": 8186,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/measure.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "596b002f680c39c690e00e37f55bf9213dc0c5df1b9621215fa97fc26d86de8a",
+      "bytes": 15214,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/measure_test.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "a339a1692c6a7b0a6274076a978e77161979eaad948bedf31067f373e1fd53e8",
+      "bytes": 5421,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/review.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "844f0a9415c7ca179c2dfff4dbe2ee05352bd01393559b814fba6d011f783eb2",
+      "bytes": 6020,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/run.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "25edd25e55f56b7c289150db2b79ed89389ed783b83ad15dd9f20b56dc16798b",
+      "bytes": 19352,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/selection_regression_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "41c2b0de59e35738f8cd2d861347863085f1feab7b55607eb20908a2e72957bf",
+      "bytes": 21526,
+      "executable": false
+    }
+  ],
+  "total_bytes": 2246003
+}

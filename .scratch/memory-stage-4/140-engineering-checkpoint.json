@@ -1,0 +1,215 @@
+{
+  "ticket": 140,
+  "branch": "codex/memory-stage-4",
+  "head": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "recorded_utc": "2026-09-05T09:00:37.820045+00:00",
+  "status": "engineering_checkpoint_frozen_review_fixes_pending_rereview",
+  "new_owned_files": [
+    {
+      "path": "internal/memory/candidate_review.go",
+      "sha256": "d8ec2b5c7f10320f123a73524a351c105df33c3cf2b352aee1030d79c7e69a46",
+      "bytes": 4510
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "sha256": "28914960a747877d6610afa58b53bff12215738d5f051107e85bcf0c0ffb1b8b",
+      "bytes": 20810
+    },
+    {
+      "path": "internal/eviedb/candidate_review_authority.go",
+      "sha256": "c745aa4b8404b049a1076e259b122902c2c681763d3285fdff4f31a72049fea0",
+      "bytes": 4613
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "sha256": "886d1b44ccf53e90b24d03c093a3b926fb6df3d44691107defd6956fe2e63004",
+      "bytes": 2291
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding_test.go",
+      "sha256": "ead30169944168287ed9f125ddcc7f9ff5d4f79147ce96aae30f383c70598b67",
+      "bytes": 1801
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history.go",
+      "sha256": "cfdd908a61f93174124131b1446f5da71927f7df9433ee99cda75b459cfda090",
+      "bytes": 5924
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history_test.go",
+      "sha256": "fb4774f5f80225cf2c1e11a9c3eafb1b469140477a5f0651c05da12a2b7842ed",
+      "bytes": 10290
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "sha256": "55815b2935bf35bd5a38b6c02453683a5c62404c57ebaba8a42388390b5c8b11",
+      "bytes": 8455
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "sha256": "26f1fbab267b0ab66451151105468d536af4f35baee04bb3bc2b5cd4ed1fb2fb",
+      "bytes": 11615
+    },
+    {
+      "path": "internal/eviedb/candidate_review_promotion_test.go",
+      "sha256": "a9d852707bd914de9834a1edcfb4d933f2de579ef9f21783e283506814b9c248",
+      "bytes": 6279
+    },
+    {
+      "path": "internal/eviedb/candidate_review_provenance.go",
+      "sha256": "80f673360f811b9e2f3ee6ea65ba93434acc3cd09b2cd0a3e6f6a1721235511f",
+      "bytes": 7224
+    },
+    {
+      "path": "internal/eviedb/candidate_review_public_test.go",
+      "sha256": "d8a69b3bf4623f66487e80d0e4252b83585587951d20952a378c6c21412d456d",
+      "bytes": 22036
+    },
+    {
+      "path": "internal/eviedb/candidate_review_replay.go",
+      "sha256": "2b54bada10cb3e8dc9dc66bc83d8d38e6c77c6d8a4f2a11a59d3680ed03c2cb1",
+      "bytes": 2192
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "sha256": "af63f6665393511a28f02a49a4931e1aa55fd899f479e6e713b868111110789e",
+      "bytes": 5566
+    },
+    {
+      "path": "internal/eviedb/candidate_review_sources.go",
+      "sha256": "3acf3d69f88a3a0a10e41c19943fdf5eef07ab6cecd1bf8275817d3e00a8042e",
+      "bytes": 4617
+    },
+    {
+      "path": "internal/eviedb/testdata/candidate_review_encoding_v1.json",
+      "sha256": "b96b9e44c89f755ccd7ef4a2690e72d6855032d13cbd0854c8c6102da0f8ac26",
+      "bytes": 13874
+    },
+    {
+      "path": "cmd/evie/candidate_review.go",
+      "sha256": "c6357fc63ba2e081b02e4c9c692a6ca30fd7803d1102a834d69baa007b563755",
+      "bytes": 4769
+    },
+    {
+      "path": "cmd/evie/candidate_review_test.go",
+      "sha256": "4da2c377a86b539063870852542ff213a3b9c2f7a4f19489af91682ec3c6db15",
+      "bytes": 7110
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-owner-review.md",
+      "sha256": "df9c20b743ff8fa813c1dbd9116780bf12c82df2b16edfcae347ad28416952fc",
+      "bytes": 6499
+    },
+    {
+      "path": "internal/eviedb/candidate_review_resolution_test.go",
+      "sha256": "03e797b0f75d164f28ef77f6a5889ad11681a9c5599735ba3dd3e907d9b06c7b",
+      "bytes": 3796
+    }
+  ],
+  "owned_tracked_hook_files": [
+    {
+      "path": "internal/eviedb/semantic.go",
+      "sha256": "001b567d0a45218fa7ffabd0c8783131a94872c77f2eaaccceb61af3e45e99b4",
+      "bytes": 86699
+    },
+    {
+      "path": "internal/eviedb/semantic_replay.go",
+      "sha256": "d71f98ed3f3cdb5cca68f3b9233c4379c658148ef0b5aed58d0fa30a570f47d5",
+      "bytes": 61700
+    },
+    {
+      "path": "internal/eviedb/semantic_lifecycle.go",
+      "sha256": "80b9fea005ec7ba406e50abe5b1a56632c8f361e94668ec06c412318d8c5e813",
+      "bytes": 54050
+    },
+    {
+      "path": "internal/eviedb/semantic_correction.go",
+      "sha256": "0155b9ed61e129efcad5f9fa95319b260df2328dd6fe258d59c498c6668961e8",
+      "bytes": 54702
+    },
+    {
+      "path": "internal/eviedb/semantic_promotion.go",
+      "sha256": "2fb2eca9be8ce07561a830d268100f7650cc59d564395779402ea65d28519dd6",
+      "bytes": 37840
+    },
+    {
+      "path": "internal/eviedb/semantic_lifecycle_test.go",
+      "sha256": "1b94d946dc3839c69535d8eb62a38212f8b2aac447c38d1d99afcfe15bc36b81",
+      "bytes": 51703
+    }
+  ],
+  "root_integrated_hook_files_do_not_stage_whole": [
+    {
+      "path": "internal/eviedb/db.go",
+      "sha256": "68d72d91afcdf63e3b770d8140179ab540a617b2bc5fa2234aa26d4aa98c81df",
+      "bytes": 56618
+    },
+    {
+      "path": "cmd/evie/main.go",
+      "sha256": "5a826078251cc7f7607774aab6d14831d00f4773b0347c87e4899ef418134575",
+      "bytes": 7534
+    },
+    {
+      "path": "cmd/evie/semantic_memory_stage3_acceptance_test.go",
+      "sha256": "6e5526d88a77fa14b848cdb3e8bc828f1505918843e67acadc2005e32dff08fe",
+      "bytes": 33813
+    }
+  ],
+  "checks": [
+    {
+      "command": "go test ./internal/eviedb -run '^TestOwnerReview' -count=1",
+      "result": "PASS internal/eviedb 2.839s; child historical implementation checkpoint, includes both new promotion regressions"
+    },
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie -run 'TestOwnerReview|TestPromotion|TestSemanticScopeContainment' -count=1",
+      "result": "PASS internal/eviedb 4.577s; cmd/evie 0.588s; final frozen source-policy version pin and provenance/doc checkpoint",
+      "previous_result": "PASS internal/eviedb 4.412s; cmd/evie 0.373s before final version pin"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS; no output"
+    },
+    {
+      "command": "git diff --no-index --check /dev/null EACH_NEW_OWNED_FILE",
+      "issues": []
+    },
+    {
+      "command": "./scripts/verify-change.sh",
+      "result": "Root combined #136/#140 pass in verify-136-140-category-schema.log predates current P1/P2 fixes; root isolated #136 pass tree b444a6e81510591b131b83ca40d8d74ee810ed92 is baseline only; new isolated #140 full verification pending root orchestration."
+    }
+  ],
+  "review_status": "Independent Standards/Spec review identified P1 promotion policy provenance and P2 historical source validation. Both fixed with focused regressions; independent rereviews pending root scheduling.",
+  "required_full_verification": "Root overlays exact checkpoint-owned files on frozen #136 tree using build-140-checkpoint.py, then runs isolated ./scripts/verify-change.sh. Owner avoids shared #137 edits and duplicate full-suite work per root instruction.",
+  "human_evaluation": "No extractor selected/qualified or human output labels approved by this ticket.",
+  "known_deferred_scope": "New identity/Predicate choices #141; corrections #142; tool observations #143; edits/dependent batches #144; web #145+. This version prepares exactly one existing-identity CandidateRef.",
+  "commit_authority": "No stage/commit by owner. Root must select exact #140 paths/hunks, one commit per ticket. db.go/main.go include separate #136/root integration.",
+  "review_fixes": [
+    {
+      "priority": 1,
+      "finding": "Promotion drops review-source current-policy protection",
+      "resolution": "Follow exact accepted Promotion Source Link lineage to original v6 review; validate original supporting and context sources before prepare/apply and when rendering later Source Links/Claim evidence/stored Promotion operation payloads. Reject empty/redacted review evidence. Internal replay-only context uses historical validation independently of current source policy/authorization. No accepted history rewriting.",
+      "tests": [
+        "TestOwnerReviewPromotionRevalidatesPolicyBeforeApply",
+        "TestOwnerReviewPromotionRetainsPolicyAndContextAfterCommit"
+      ]
+    },
+    {
+      "priority": 2,
+      "finding": "Accepted v6 replay does not verify historical support/context against events",
+      "resolution": "Validate immutable event/session/source-scope lineage, sequence, event type/role/version/observed time, exact whole or UTF8 byte-range bytes/hash for both support and assistant context. Current policy/auth/registry/session availability do not gate historical replay. Immutable v6 source-policy version no longer couples to current compiler constant.",
+      "tests": "candidate_review_history_test.go corruption/quarantine and current policy/auth/registry/session replay regressions"
+    }
+  ],
+  "freeze": "No further owned Go edits until independent rereview findings; all files hashed after focused tests/gofmt. No stage/commit.",
+  "root_terminal_fix": {
+    "files": [
+      "internal/eviedb/candidate_review_apply.go",
+      "internal/eviedb/candidate_review_resolution_test.go"
+    ],
+    "red": "policy/authrevision stale_preview and source_ineligible reproduced before fix",
+    "behavior": "Current authority, scope, preview integrity then terminal outcome; fresh acceptance alone checks preview freshness/current source eligibility",
+    "independent_spec": "Pass by review_140_final_spec; no remaining finding",
+    "independent_standards": "pending final narrow delta rereview",
+    "full": "rerun isolated root tree pending"
+  }
+}

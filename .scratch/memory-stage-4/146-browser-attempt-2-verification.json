@@ -1,0 +1,71 @@
+{
+  "tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "browser": "isolated headless Chrome",
+  "driver": "playwright-core 1.55.0; scratch only",
+  "synthetic": true,
+  "owner_pilot": false,
+  "steps": [
+    {
+      "name": "Closed-session value edit, original evidence, immutable history and v5 exact acceptance",
+      "pass": true,
+      "candidate": "23e3acaf6148fc7e539b1159dbe2e8bd4ff4b0f3d61c982171537788883941ed",
+      "operation": "806d89db-0a5a-4128-af1e-1e85cd96f1bb"
+    }
+  ],
+  "responses": [
+    {
+      "route": "scopes",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "edit",
+      "status": 200
+    },
+    {
+      "route": "edit/revision",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "identity/options",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "browser_version": "142.0.7444.176",
+  "pass": false,
+  "error": "AssertionError [ERR_ASSERTION]: false == true\n    at /Users/davidboktor/code/evie/.scratch/memory-stage-4/browser-driver/check-146.cjs:27:172",
+  "server_exit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixture_directory_removed": true,
+  "driver_sha256": "632faeb76102d7c1a4408389d823fe5934ce5519678cb0b6b487b912c09ade31"
+}

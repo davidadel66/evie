@@ -19,7 +19,7 @@ import (
 const (
 	MemoryPluginID              PluginID = "memory"
 	MemoryContractVersion                = "1.0.0"
-	memoryImplementationVersion          = "1.0.0"
+	memoryImplementationVersion          = "1.1.0"
 	memoryReadOutputLimit                = 64 * 1024
 )
 
@@ -123,8 +123,14 @@ func (p *Memory) Manifest() Manifest {
 	for i, capability := range capabilities {
 		contracts[i] = CapabilityContract{ID: capability.ID, Version: MemoryContractVersion}
 	}
+	legacy := p.ResumableToolCapabilities("1.0.0")
+	evidence := make([]CapabilityCompatibility, len(legacy))
+	for i, c := range legacy {
+		evidence[i] = CapabilityCompatibility{ID: c.ID, ContractVersion: c.ContractVersion, SchemaSHA256: schemaHash(c.Tool.Schema)}
+	}
 	return Manifest{
-		ID: MemoryPluginID, ImplementationVersion: memoryImplementationVersion,
+		ResumableFrom: []ImplementationCompatibility{{ImplementationVersion: "1.0.0", Capabilities: evidence}},
+		ID:            MemoryPluginID, ImplementationVersion: memoryImplementationVersion,
 		KernelCompatibility: VersionRange{Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0"},
 		Capabilities:        contracts,
 	}
@@ -137,6 +143,36 @@ func (p *Memory) ToolCapabilities() []ToolCapability {
 			continue
 		}
 		capabilities = append(capabilities, ToolCapability{ID: descriptor.id, ContractVersion: MemoryContractVersion, Tool: descriptor.build(p)})
+	}
+	return capabilities
+}
+
+// Existing sessions retain their exact pre-applicability schemas and behavior.
+// New sessions use the current capabilities; no saved receipt is rewritten.
+func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
+	if version != "1.0.0" {
+		return nil
+	}
+	capabilities := p.ToolCapabilities()
+	for i := range capabilities {
+		tool := &capabilities[i].Tool
+		if capabilities[i].ID != MemoryRememberLiteralCapabilityID && capabilities[i].ID != MemoryRememberEntityCapabilityID {
+			continue
+		}
+		delete(tool.Schema.Function.Parameters.Properties, "destination")
+		prepare := tool.Prepare
+		tool.Prepare = func(ctx context.Context, raw string) (tools.PreparedTool, error) {
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+				return tools.PreparedTool{}, err
+			}
+			for key := range fields {
+				if strings.EqualFold(key, "destination") {
+					return tools.PreparedTool{}, errors.New("this conversation uses the original memory tools; start a new conversation to recommend applicability")
+				}
+			}
+			return prepare(ctx, raw)
+		}
 	}
 	return capabilities
 }
@@ -552,6 +588,7 @@ func mutationProperties() map[string]openrouter.Property {
 
 func (p *Memory) rememberLiteralTool() tools.Tool {
 	properties := mutationProperties()
+	properties["destination"] = openrouter.Property{Type: "string", Enum: []string{"everywhere", "workspace", "session"}, Description: "Recommend where this memory applies: everywhere for general owner preferences, workspace for this area, session for temporary conversational instructions. Approval confirms the exact scope; omit only to retain the current context default."}
 	properties["predicate"] = stringProperty("Canonical Predicate token.")
 	properties["predicate_label"] = stringProperty("Human-readable Predicate label.")
 	properties["cardinality"] = enumProperty("one", "many")
@@ -565,7 +602,8 @@ func (p *Memory) rememberLiteralTool() tools.Tool {
 		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
 			var args struct {
 				temporalArgs
-				IdempotencyKey string `json:"idempotency_key"`
+				Destination    memory.MemoryDestination `json:"destination"`
+				IdempotencyKey string                   `json:"idempotency_key"`
 				Predicate      string
 				PredicateLabel string `json:"predicate_label"`
 				Cardinality    string
@@ -584,7 +622,7 @@ func (p *Memory) rememberLiteralTool() tools.Tool {
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			proposal, err := p.semantic.PrepareRememberLiteral(ctx, invocation.Scope, memory.RememberLiteralRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Literal: memory.TypedLiteral{Kind: memory.LiteralKind(args.LiteralKind), Value: args.LiteralValue}, Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid})
+			proposal, err := p.semantic.PrepareRememberLiteral(ctx, invocation.Scope, memory.RememberLiteralRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Literal: memory.TypedLiteral{Kind: memory.LiteralKind(args.LiteralKind), Value: args.LiteralValue}, Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid})
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
@@ -601,6 +639,7 @@ func selector(id string, create bool, name, entityType, alias string) memory.Ent
 
 func (p *Memory) rememberEntityTool() tools.Tool {
 	properties := mutationProperties()
+	properties["destination"] = openrouter.Property{Type: "string", Enum: []string{"everywhere", "workspace", "session"}, Description: "Recommend where this memory applies: everywhere for general owner preferences, workspace for this area, session for temporary conversational instructions. Approval confirms the exact scope; omit only to retain the current context default."}
 	for name, property := range map[string]openrouter.Property{
 		"predicate": stringProperty("Canonical Predicate token."), "predicate_label": stringProperty("Human-readable Predicate label."),
 		"cardinality": enumProperty("one", "many"), "polarity": enumProperty("affirmed", "denied"),
@@ -617,7 +656,8 @@ func (p *Memory) rememberEntityTool() tools.Tool {
 		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
 			var args struct {
 				temporalArgs
-				IdempotencyKey        string `json:"idempotency_key"`
+				Destination           memory.MemoryDestination `json:"destination"`
+				IdempotencyKey        string                   `json:"idempotency_key"`
 				Predicate             string
 				PredicateLabel        string `json:"predicate_label"`
 				Cardinality, Polarity string
@@ -643,7 +683,7 @@ func (p *Memory) rememberEntityTool() tools.Tool {
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			request := memory.RememberEntityRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid, Subject: selector(args.SubjectEntityID, args.SubjectCreate, args.SubjectName, args.SubjectType, args.SubjectAlias), Object: selector(args.ObjectEntityID, args.ObjectCreate, args.ObjectName, args.ObjectType, args.ObjectAlias), UseSessionScope: false}
+			request := memory.RememberEntityRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid, Subject: selector(args.SubjectEntityID, args.SubjectCreate, args.SubjectName, args.SubjectType, args.SubjectAlias), Object: selector(args.ObjectEntityID, args.ObjectCreate, args.ObjectName, args.ObjectType, args.ObjectAlias), UseSessionScope: false}
 			proposal, err := p.semantic.PrepareRememberEntity(ctx, invocation.Scope, request)
 			if err != nil {
 				return tools.PreparedTool{}, err

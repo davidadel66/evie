@@ -1,0 +1,12 @@
+[codex/memory-stage-4 c8872ed] feat(memory): recover fenced compiler work across processes (#137)
+ 17 files changed, 2478 insertions(+), 85 deletions(-)
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-worker-recovery.md
+ create mode 100644 internal/eviedb/compiler_adoption_bound_test.go
+ create mode 100644 internal/eviedb/compiler_generation_race_test.go
+ create mode 100644 internal/eviedb/compiler_worker.go
+ create mode 100644 internal/eviedb/compiler_worker_crash_test.go
+ create mode 100644 internal/eviedb/compiler_worker_http_test.go
+ create mode 100644 internal/eviedb/compiler_worker_inspection.go
+ create mode 100644 internal/eviedb/compiler_worker_public_test.go
+ create mode 100644 internal/eviedb/compiler_worker_test.go
+ create mode 100644 internal/memory/compiler_status.go

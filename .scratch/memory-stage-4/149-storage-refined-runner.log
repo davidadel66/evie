@@ -1,0 +1,15 @@
+Running environment-go: go version
+environment-go: exit 0 (0.0s)
+Running environment-node: node --version
+environment-node: exit 0 (0.0s)
+Running environment-npm: npm --version
+environment-npm: exit 0 (0.1s)
+Running environment-sqlite_driver: go list -m -json modernc.org/sqlite
+environment-sqlite_driver: exit 0 (0.0s)
+Running report-boundaries: /opt/homebrew/opt/python@3.13/bin/python3.13 scripts/memory_stage4_conformance_test.py
+report-boundaries: exit 0 (0.1s)
+Running integrated: go test -json ./cmd/evie ./internal/eviedb -run ^(TestStage4ForegroundRestartClosedReviewReplay|TestStage4ScopeAdapterConformance|TestStage4GenericStorageConformance|TestStage4HistoryGapEmptyAndGenerationConformance|TestStage4AtomicBatchPolicyConformance|TestStage4StartupRetryBoundaries|TestStage4StartupIndependentProcesses|TestStage4StartupIncompatibleSchemaFailsWithoutRewrite|TestStage4ProcessConformanceWorkerRecovery|TestStage4ProcessConformanceReviewCommitRecovery)$ -count=1
+integrated: exit 0 (5.1s)
+Running integrated-race: go test -race -json ./cmd/evie ./internal/eviedb -run ^(TestStage4ForegroundRestartClosedReviewReplay|TestStage4ScopeAdapterConformance|TestStage4GenericStorageConformance|TestStage4HistoryGapEmptyAndGenerationConformance|TestStage4AtomicBatchPolicyConformance|TestStage4StartupRetryBoundaries|TestStage4StartupIndependentProcesses|TestStage4StartupIncompatibleSchemaFailsWithoutRewrite|TestStage4ProcessConformanceWorkerRecovery|TestStage4ProcessConformanceReviewCommitRecovery)$ -count=1
+integrated-race: exit 0 (53.7s)
+incomplete: /Users/davidboktor/code/evie/.scratch/memory-stage-4/149-conformance-storage-refined-v1/report.json

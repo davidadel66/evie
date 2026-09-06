@@ -1,0 +1,177 @@
+{
+  "ticket": 143,
+  "status": "frozen_focused_checks_passed",
+  "originals": ".scratch/memory-stage-4/143-owned/originals",
+  "frozen_files": ".scratch/memory-stage-4/143-frozen-files",
+  "files": [
+    {
+      "path": "cmd/evie/candidate_clock_test.go",
+      "before_sha256": null,
+      "after_sha256": "d52fefe77ccc7823baa0a1a4349ee85e019e81fcdb7e9802a31e824faf79e0df",
+      "bytes": 8187
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-clock-observation.md",
+      "before_sha256": null,
+      "after_sha256": "9fb2f7a0a66bc2df1215c405b8a1bb272599a8d095ba04b34962b0353caf6014",
+      "bytes": 4199
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "before_sha256": "6b41d8dee79cbdd96dae1a9c6dad5f9bf730cbf309e8da01d90443c3ab0ef1e7",
+      "after_sha256": "e8c2978675fe2007c440faa247c664601d4de05d3292654b53f9dda8508908b8",
+      "bytes": 22189
+    },
+    {
+      "path": "internal/eviedb/candidate_review_clock_encoding_test.go",
+      "before_sha256": null,
+      "after_sha256": "960c82fb971bfe860987eb5b0db71fdb909ea01a36742bfb7bee9ef1c58517aa",
+      "bytes": 2370
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "before_sha256": "99f5a2ca1dcfcd49cf653aaa9ae3a243db10cb1396fc712667ce049dac51db34",
+      "after_sha256": "f33cd87ca57ed93822e4685fcd67f4edf3b4bb7bce1c76e6955e9dea57eb7df5",
+      "bytes": 3065
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history.go",
+      "before_sha256": "cfdd908a61f93174124131b1446f5da71927f7df9433ee99cda75b459cfda090",
+      "after_sha256": "998237dc3d36076041ba98b72dd2b323fd5033aa113130509f7caf57399ffb70",
+      "bytes": 6250
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "before_sha256": "d4603c46357c8ba4a0b348c7ffa6659aadf9c02b8d37fc34986ded44361bacba",
+      "after_sha256": "b75dac66492ed99fc047fcb770c8e955ba9f3ef658550232d513a29940e5adea",
+      "bytes": 12741
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "before_sha256": "4f058f4aad97d398aca4c5ff2ddb79469071dc865cc46a32695c54833a715692",
+      "after_sha256": "e84711086d889c78eee75a84f46a875d39066c35349552aed364f62b800288dd",
+      "bytes": 9097
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "before_sha256": "8a9227803bd01350d91c3becf59f433d2a26dceb1601b41cfce90d1f140bc75b",
+      "after_sha256": "b4b1ba62d7351feca484dd538697beabda6fc96bace43bc6743b61ed78567d98",
+      "bytes": 12760
+    },
+    {
+      "path": "internal/eviedb/candidate_review_provenance.go",
+      "before_sha256": "80f673360f811b9e2f3ee6ea65ba93434acc3cd09b2cd0a3e6f6a1721235511f",
+      "after_sha256": "212103640448a995dfb7e9a6e0ea5f63afacc9004f3375946f0a08f3a40e56ce",
+      "bytes": 7148
+    },
+    {
+      "path": "internal/eviedb/candidate_review_sources.go",
+      "before_sha256": "3acf3d69f88a3a0a10e41c19943fdf5eef07ab6cecd1bf8275817d3e00a8042e",
+      "after_sha256": "60658be061ac80711a871c5e823e19849ccd0052e1e3210e1793e060659d3ed4",
+      "bytes": 4577
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_effect.go",
+      "before_sha256": "c944023aae5ca908ca3586e0dfa86e1cc84e87546ff6a8ead3117742f5acb7be",
+      "after_sha256": "c0132f6932194305a89852f09d3e5c3f0d3b42c660fe6d3ec8fb080484b2149e",
+      "bytes": 9205
+    },
+    {
+      "path": "internal/eviedb/compiler_inspection.go",
+      "before_sha256": "502ae7552d7c6d962767e76572b99155856f07d878ab013eea009b99d015e85d",
+      "after_sha256": "c33134f2632cf25b924f3285863e60d692909fa3007fbc19a7e2e595d3fe6af9",
+      "bytes": 5498
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "before_sha256": "bceb7b4ede6c6d35573314d0240a638fef9d84a99a2266b0e0c4d73e72c9d2a7",
+      "after_sha256": "b9f261334299358ebedf0378975b43cf35b9e83ff8f7d5b177e6ed15d393b66f",
+      "bytes": 19003
+    },
+    {
+      "path": "internal/eviedb/compiler_tool_observation.go",
+      "before_sha256": null,
+      "after_sha256": "5cf45b1a20bfb088ff8bbd5f4e514ac3cfaf0a4b1262da48cadd83231ecb9dba",
+      "bytes": 12419
+    },
+    {
+      "path": "internal/eviedb/compiler_tool_observation_bound_test.go",
+      "before_sha256": null,
+      "after_sha256": "c9601716425af60baf5195ba96e22923bf962c41268117d7a34db175760f89c5",
+      "bytes": 3921
+    },
+    {
+      "path": "internal/eviedb/compiler_tool_observation_test.go",
+      "before_sha256": null,
+      "after_sha256": "68e4eb2be9234b43e8b713370e31c79cdace28807246a234a522aca03b9b663c",
+      "bytes": 27239
+    },
+    {
+      "path": "internal/eviedb/compiler_validation.go",
+      "before_sha256": "19bfaf2a56deb04436ef2e6ad1e79a6bbde4d90651809afb1bb4412b88b61732",
+      "after_sha256": "99c86936c689ef63b518b1fee43c3315151e9f0a5cb90eac103e73e79ba5b6ea",
+      "bytes": 10107
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "805f7e053531520d970b65020627e2d1233a3239151b75bdc6546bf587de82c2",
+      "after_sha256": "013118f2e27943750317ae6029ad92fd0e933c7119e54bf1db68b32b6386e4ea",
+      "bytes": 25460
+    },
+    {
+      "path": "internal/eviedb/testdata/candidate_review_encoding_v4.json",
+      "before_sha256": null,
+      "after_sha256": "558db300023a88acd6f2708a0fa4ab689bdfb35724a7a430b9ee0a809b2bf8da",
+      "bytes": 18702
+    },
+    {
+      "path": "internal/memory/compiler.go",
+      "before_sha256": "b623fca04dedd4d1bcda75d100b927813e2898393aca322ec44a7baf9d805326",
+      "after_sha256": "7eaeb35cd5f8bd21b97f6209d0e4431d2d969b429e6b3b6bdd3bc72159939f6f",
+      "bytes": 6388
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "before_sha256": "f73ba03922be19691dd635a53998c1e677bd00d0463441965fcd40a4c028e2fc",
+      "after_sha256": "91d9bd8a06042424908bf4458a25b53742f606f0a3ed3e4d51f76ee08b649959",
+      "bytes": 6966
+    },
+    {
+      "path": "internal/memory/compiler_observation.go",
+      "before_sha256": null,
+      "after_sha256": "bd5ca5ec09ef3771e40f1acc9aea01086d2524c831d8b532bee57411d17d84c1",
+      "bytes": 988
+    }
+  ],
+  "verification": [
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie -run '^(TestCompilerClock|TestOwnerReviewClock|TestOwnerReview.*Encoding|TestCompilerWorkerAdoptionReadsMaximumWindowOnce)' -count=1",
+      "result": "PASS; DB4.682s CLI0.682s; final boundary tests, before final SQL-error classification and secret omission reason refinements"
+    },
+    {
+      "command": "go test ./internal/eviedb -run '^TestCompilerClock' -count=1",
+      "result": "PASS; DB4.203s; after final refinements"
+    },
+    {
+      "command": "go test -race ./internal/eviedb ./cmd/evie -run '^(TestCompilerClock|TestOwnerReviewClock|TestOwnerReview.*Encoding|TestCompilerWorkerAdoptionReadsMaximumWindowOnce)' -count=1",
+      "result": "PASS; final frozen bytes; DB56.323s CLI3.518s"
+    },
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie ./internal/memory",
+      "result": "PASS; DB51.426s CLI11.987s memory0.319s; before final SQL-error classification and secret omission reason refinements"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS; no output"
+    },
+    {
+      "command": "./scripts/verify-change.sh",
+      "result": "DEFERRED to root isolated frozen-tree verification as assigned; no full-change completion claim until that passes"
+    }
+  ],
+  "notes": [
+    "No stage, commit, branch, push, live model invocation, capability installation, or production dependency changes.",
+    "Root owns independent two-axis review, full isolated verification, and commit.",
+    "Source/gold engineering fixtures passed; semantic owner-reference/entailment quality and human output judgment remain separate pending evaluation."
+  ]
+}

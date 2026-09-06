@@ -1,0 +1,5 @@
+=== RUN   TestSpecProbeSameHistoryCanManufactureClusters
+CONFIRMED: ready=true with one unique HistoryID assigned to two reported independent narrative families
+--- PASS: TestSpecProbeSameHistoryCanManufactureClusters (0.02s)
+PASS
+ok github.com/davidadel66/evie/internal/memoryeval 0.175s

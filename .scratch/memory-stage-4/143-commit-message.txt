@@ -1,0 +1,14 @@
+feat(memory): review contracted local clock observations (#143)
+
+Admit only the versioned get_time observation contract with durable matching
+execution ancestry, exact valid unzoned display bytes, and owner support.
+Preserve tool authority and source lineage through closed-session review,
+promotion, accepted-source inspection, and canonical replay.
+
+Cache bounded source and control lookups per validation transaction. Preserve
+infrastructure and cancellation errors so read failures leave valid queued
+work retryable; only proven missing or malformed ancestry is invalid evidence.
+
+Validation: isolated ./scripts/verify-change.sh, focused SQLite and CLI normal
+and race checks, scripted foreground-to-review flows, v4 encoding goldens,
+bounded-source tests, and independent Standards/Spec reviews.

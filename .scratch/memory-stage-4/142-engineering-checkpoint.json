@@ -1,0 +1,203 @@
+{
+  "ticket": 142,
+  "base_commit": "830e0436ab6c081aa318b498089d038606acc981",
+  "branch": "codex/memory-stage-4",
+  "files": [
+    {
+      "path": "internal/memory/compiler.go",
+      "before_sha256": "b885e6e6b4158ec1642c05b324af699ceb65e702870c9f26ececa9d397a51b72",
+      "after_sha256": "b623fca04dedd4d1bcda75d100b927813e2898393aca322ec44a7baf9d805326",
+      "bytes": 6232
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "before_sha256": "b424f70570dc9c84045964af8cbd96bb5a88d4210f2f35de6b72d6c8f1856c15",
+      "after_sha256": "f73ba03922be19691dd635a53998c1e677bd00d0463441965fcd40a4c028e2fc",
+      "bytes": 6813
+    },
+    {
+      "path": "internal/memory/candidate_review.go",
+      "before_sha256": "c889804ef551314df62c211666b22bf9d9a0558686831b1debbffaf9d7fd3983",
+      "after_sha256": "3664e3d60d2fd06726cccdc8685bd0835f86f22afacdb04a40a06bdbc3de1d07",
+      "bytes": 4852
+    },
+    {
+      "path": "internal/eviedb/compiler_identity.go",
+      "before_sha256": "0a2901deaea12daf1ed995aef8f11c81b2e00c8b4bf54deb68728367ca4d95b8",
+      "after_sha256": "83de8c1f4546cc0605fef55d7690c38cb21292f3c2ba131c92bd0dc87f2ac4e1",
+      "bytes": 7964
+    },
+    {
+      "path": "internal/eviedb/compiler_validation.go",
+      "before_sha256": "0f77ba7ff8c1c666c016ce4275ca148878894e9a765e8747c617145ec7fd8494",
+      "after_sha256": "19bfaf2a56deb04436ef2e6ad1e79a6bbde4d90651809afb1bb4412b88b61732",
+      "bytes": 9431
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "before_sha256": "e1da85f6c096a1bd27f6adc04775b6924569ab88ca88da8b99172be9fc5b797a",
+      "after_sha256": "4f058f4aad97d398aca4c5ff2ddb79469071dc865cc46a32695c54833a715692",
+      "bytes": 8843
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "before_sha256": "7cf1c41c4c9887f7c5c3dd0781df38e218418dda0c829f132b40eb28578327d3",
+      "after_sha256": "8a9227803bd01350d91c3becf59f433d2a26dceb1601b41cfce90d1f140bc75b",
+      "bytes": 12447
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "before_sha256": "20b887321d07c05597b0477ae4a65babe7deab58ae58e60af084eac0d2a968f7",
+      "after_sha256": "6b41d8dee79cbdd96dae1a9c6dad5f9bf730cbf309e8da01d90443c3ab0ef1e7",
+      "bytes": 22056
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "before_sha256": "6aeb2895ee2e93aa2b6bdca0bb3fd84105222d8781444bc6db94d4ef258cd86e",
+      "after_sha256": "99f5a2ca1dcfcd49cf653aaa9ae3a243db10cb1396fc712667ce049dac51db34",
+      "bytes": 2841
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "before_sha256": "42d45128254c49f5ea7dc444cedc4d0b8a38301ececc5a5176c6b71106a46c70",
+      "after_sha256": "d4603c46357c8ba4a0b348c7ffa6659aadf9c02b8d37fc34986ded44361bacba",
+      "bytes": 12590
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "before_sha256": "62466747ec54f696cad915b20fe44572a048724ab9321b355bfec3f55d6f1c14",
+      "after_sha256": "4cc3669d294a9b1ec3b6e16f7b19fea790471725e02c2dbf9fb6df9937dd867a",
+      "bytes": 5612
+    },
+    {
+      "path": "cmd/evie/candidate_review.go",
+      "before_sha256": "05544a8505589d383e4f027bca4019659513e3f3b6213382327cf80a35bf3452",
+      "after_sha256": "809a022600ac64623bef5ef2b0f39c9059fb48eac73c236186a4594ad1278f42",
+      "bytes": 8755
+    },
+    {
+      "path": "internal/memory/candidate_temporal.go",
+      "before_sha256": "absent",
+      "after_sha256": "707b0121aa0aea2428853ecbc57119f737aefacd2bad00aca4d43ec3208529eb",
+      "bytes": 3022
+    },
+    {
+      "path": "internal/eviedb/compiler_temporal.go",
+      "before_sha256": "absent",
+      "after_sha256": "e1d40ba45dcc569cc2bf01938a42887b717410000d80d3883aba2f994a7ad65f",
+      "bytes": 4563
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal.go",
+      "before_sha256": "absent",
+      "after_sha256": "efaaf6760874d997a9c48b53276d095d07150f10ec650fa79230bf6740b930a7",
+      "bytes": 10822
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_effect.go",
+      "before_sha256": "absent",
+      "after_sha256": "c944023aae5ca908ca3586e0dfa86e1cc84e87546ff6a8ead3117742f5acb7be",
+      "bytes": 8979
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "a82221375f5f7d59a3498fbcf198ce72ea3e04446a5aa52ddb8346fbcdbefc6c",
+      "bytes": 22125
+    },
+    {
+      "path": "internal/eviedb/compiler_temporal_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "2e98f9b46fb389f016c6c91dcf4ed25b579edbd95e666cb7641dc8cbaa845f30",
+      "bytes": 4790
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_encoding_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "3a88f51944bb5ccb6a100b6267bd842641e82c5334bc416165ddfe60d1df64c0",
+      "bytes": 1866
+    },
+    {
+      "path": "internal/eviedb/testdata/candidate_review_encoding_v3.json",
+      "before_sha256": "absent",
+      "after_sha256": "022eda37ca0e4edf21157220072b7b2d53acc20a283848315f2b8ae1ffd72f73",
+      "bytes": 27754
+    },
+    {
+      "path": "cmd/evie/candidate_temporal_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "69d86d72eeb2a794873363b2b18e7046540e86ac2294333ca895d70c5971e8ba",
+      "bytes": 8379
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-temporal-review.md",
+      "before_sha256": "absent",
+      "after_sha256": "0ae50a5a8ef174ac1dbc7ca3dd6b9bba71c085fed793c2524b7041cee82b7ba1",
+      "bytes": 4914
+    }
+  ],
+  "status": "frozen; focused normal and race checks passed; root exact full verification passed; independent reviews pending",
+  "focused_verification": [
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie -run 'TestOwnerReview|TestCompilerTemporal|TestReviewTemporal' -count=1",
+      "environment": "shared working tree before final freeze",
+      "exit_code": 0,
+      "log": ".scratch/memory-stage-4/142-focused-normal.log",
+      "results": "eviedb7.165s; cmd/evie1.697s"
+    },
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie -run 'TestOwnerReview|TestCompilerTemporal|TestReviewTemporal' -count=1",
+      "environment": "isolated committed141 plus exact142 frozen files",
+      "exit_code": 1,
+      "log": ".scratch/memory-stage-4/142-focused-isolated-normal.log",
+      "results": "eviedb PASS7.261s; CLI setup initially lacked embedded ui/dist; recovered below"
+    },
+    {
+      "command": "go test -race ./internal/eviedb ./cmd/evie -run 'TestOwnerReviewTemporal|TestCompilerTemporal|TestReviewTemporal' -count=1",
+      "environment": "same isolated frozen files",
+      "exit_code": 1,
+      "log": ".scratch/memory-stage-4/142-focused-isolated-race.log",
+      "results": "eviedb PASS26.573s; CLI setup initially lacked embedded ui/dist; recovered below"
+    },
+    {
+      "command": "npm --prefix internal/web/ui run build",
+      "environment": "same isolated frozen files, root node_modules symlink",
+      "exit_code": 0,
+      "log": ".scratch/memory-stage-4/142-focused-isolated-ui-build.log",
+      "warnings": [
+        "Existing Vite bundle above500kB"
+      ]
+    },
+    {
+      "command": "go test ./cmd/evie -run 'TestOwnerReview' -count=1",
+      "environment": "same isolated frozen files after UI build",
+      "exit_code": 0,
+      "log": ".scratch/memory-stage-4/142-focused-isolated-cli-normal.log",
+      "results": "PASS1.277s"
+    },
+    {
+      "command": "go test -race ./cmd/evie -run 'TestOwnerReviewTemporal' -count=1",
+      "environment": "same isolated frozen files after UI build",
+      "exit_code": 0,
+      "log": ".scratch/memory-stage-4/142-focused-isolated-cli-race.log",
+      "results": "PASS12.611s"
+    }
+  ],
+  "full_verification": {
+    "command": "./scripts/verify-change.sh",
+    "runner": "root",
+    "tree": "8c14c7748eff2f594efa29f7a7d1348660dd2554",
+    "status": "PASS reported by root: all Go tests/vet, UI lint/build, whitespace"
+  },
+  "reviews": "root independent Standards and Spec reviews pending; code-review skill read; no child review spawned because root coordinates slots",
+  "notes": [
+    "No compiler_source.go changes;139 source delta is inherited from its commit.",
+    "Old v1/v2 canonical fixture bytes unchanged.",
+    "V3 source time normalization preserves original candidate event timestamp spelling and event evidence."
+  ],
+  "warnings": [
+    "Earlier shared-tree checks were interrupted by in-progress139/143 test/schema changes; isolated142 package checks pass.",
+    "No model evaluation, production activation, or human output judgment claimed."
+  ],
+  "final_hash_audit": "22/22 live files match frozen SHA256; originals saved142-originals; no main/db/compiler_source.go ownership"
+}

@@ -1,0 +1,13 @@
+{
+  "asked_at": "2026-09-05T07:36:53.350580+00:00",
+  "status": "pending",
+  "packet": "cmd/evie/docs/fixtures/memory-stage-4-spike/v1/qwen-compact-v2/output-adjudication-packet.md",
+  "packet_sha256": "1daf6dc29e09cd4081f5a53e250a0db23fa0549c0dfc12c973180757988c44e4",
+  "proposed_sha256": "0d3677374e98a4446f5f657d34aff104603923ae5e5f4741f4d4dc2cf72fc381",
+  "recommendation": "Approve all proposed compact-v2 labels: V11 optional useful, V15 required useful, V04 unwanted but true, others unsupported/ineligible.",
+  "choices": [
+    "Approve all proposed compact-v2 labels",
+    "Approve except V15 caf\u00e9 equivalence",
+    "I have corrections"
+  ]
+}

@@ -125,19 +125,23 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return value;
 }
 
-export function listMemoryScopes(): Promise<SemanticScopePage> {
-  return postJSON("/api/memory/scopes", {});
+export async function listMemoryScopes(): Promise<SemanticScopePage> {
+  const value = await postJSON<SemanticScopePage>("/api/memory/scopes", {});
+  return { ...value, scopes: value.scopes ?? [] };
 }
 
-export function listMemoryObjects(query: MemoryObjectQuery): Promise<SemanticObjectPage> {
-  return postJSON("/api/memory/objects", query);
+export async function listMemoryObjects(query: MemoryObjectQuery): Promise<SemanticObjectPage> {
+  const value = await postJSON<SemanticObjectPage>("/api/memory/objects", query);
+  return { ...value, objects: value.objects ?? [] };
 }
 
-export function inspectMemoryObject(
+export async function inspectMemoryObject(
   scopeKey: string,
   kind: SemanticObjectSummary["object_kind"],
   id: string,
   filter: MemoryTimeFilter,
 ): Promise<SemanticObjectInspection> {
-  return postJSON("/api/memory/inspect", { scopeKey, kind, id, ...filter });
+  const value = await postJSON<SemanticObjectInspection>("/api/memory/inspect", { scopeKey, kind, id, ...filter });
+  // Go encodes absent collection slices as null.
+  return { ...value, sources: value.sources ?? [], lifecycle: value.lifecycle ?? [], operations: value.operations ?? [], conflicts: value.conflicts ?? [] };
 }

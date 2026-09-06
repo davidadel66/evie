@@ -1,0 +1,2614 @@
+diff --git a/cmd/evie/compiler_history.go b/cmd/evie/compiler_history.go
+new file mode 100644
+index 0000000..47597da
+--- /dev/null
++++ b/cmd/evie/compiler_history.go
+@@ -0,0 +1,116 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"flag"
++	"io"
++	"os"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerHistoryKernel interface {
++	GetSession(context.Context, memory.SessionID) (memory.Session, error)
++	SelectCompilerHistory(context.Context, []memory.ScopeContext, memory.CompilerHistoryRequest, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerHistoryReceipt, error)
++	CancelCompilerHistory(context.Context, []memory.ScopeContext, memory.CompilerHistoryChange) (memory.CompilerHistoryState, error)
++	ResumeCompilerHistory(context.Context, []memory.ScopeContext, memory.CompilerHistoryChange, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerHistoryState, error)
++	InspectCompilerHistory(context.Context, []memory.ScopeContext, string, int, int64, int) (memory.CompilerHistoryProgress, error)
++}
++
++// memory-backfill takes the exact reviewable selection JSON for every command.
++// Its source sessions are independently resolved through the trusted local
++// Kernel. No active conversational lease or provider is constructed.
++func runCompilerHistoryManagement(ctx context.Context, args []string, out io.Writer, kernel compilerHistoryKernel) (bool, error) {
++	if len(args) == 0 || args[0] != "memory-backfill" {
++		return false, nil
++	}
++	if len(args) < 2 {
++		return true, errors.New("usage: memory-backfill select|status|cancel|resume --selection FILE")
++	}
++	action := args[1]
++	if action != "select" && action != "status" && action != "cancel" && action != "resume" {
++		return true, errors.New("unknown history action; skip is not supported")
++	}
++	flags := flag.NewFlagSet("memory-backfill", flag.ContinueOnError)
++	flags.SetOutput(io.Discard)
++	path := flags.String("selection", "", "exact bounded selection JSON")
++	configPath := flags.String("config", "", "pinned local configuration")
++	operation := flags.String("operation", "", "idempotent cancellation/resume operation ID")
++	revision := flags.Int64("revision", 0, "expected request revision")
++	rangeIndex := flags.Int("range", 0, "zero-based receipt range index")
++	after := flags.Int64("after", 0, "last sequence from the previous progress page")
++	limit := flags.Int("limit", 64, "maximum returned intervals, 1 through 64")
++	if err := flags.Parse(args[2:]); err != nil {
++		return true, err
++	}
++	if flags.NArg() != 0 || *path == "" {
++		return true, errors.New("history requires --selection and no positional arguments")
++	}
++	file, err := os.Open(*path)
++	if err != nil {
++		return true, err
++	}
++	data, readErr := io.ReadAll(io.LimitReader(file, memory.CompilerMaxBytes+1))
++	closeErr := file.Close()
++	if readErr != nil || closeErr != nil {
++		return true, errors.Join(readErr, closeErr)
++	}
++	var req memory.CompilerHistoryRequest
++	if err := memory.DecodeCompilerJSON(data, &req); err != nil {
++		return true, err
++	}
++	if len(req.Ranges) < 1 || len(req.Ranges) > 100 {
++		return true, errors.New("history requires 1 through 100 exact ranges")
++	}
++	owners := []memory.ScopeContext{}
++	seen := map[memory.SessionID]bool{}
++	for _, r := range req.Ranges {
++		if seen[r.SessionID] {
++			continue
++		}
++		session, err := kernel.GetSession(ctx, r.SessionID)
++		if err != nil {
++			return true, err
++		}
++		owners = append(owners, session.ScopeContext())
++		seen[r.SessionID] = true
++	}
++	if action != "status" && (*rangeIndex != 0 || *after != 0 || *limit != 64) {
++		return true, errors.New("pagination applies only to status")
++	}
++	if (action == "status" || action == "select") && (*operation != "" || *revision != 0) {
++		return true, errors.New("operation and revision apply only to cancel/resume")
++	}
++	var result any
++	switch action {
++	case "status":
++		if *configPath != "" {
++			return true, errors.New("status does not accept configuration")
++		}
++		result, err = kernel.InspectCompilerHistory(ctx, owners, req.RequestID, *rangeIndex, *after, *limit)
++	case "cancel":
++		if *configPath != "" {
++			return true, errors.New("cancel does not accept configuration")
++		}
++		result, err = kernel.CancelCompilerHistory(ctx, owners, memory.CompilerHistoryChange{RequestID: req.RequestID, OperationID: *operation, ExpectedRevision: *revision})
++	default:
++		config, extractor, readErr := readCompilerHostConfiguration(*configPath)
++		if readErr != nil {
++			return true, readErr
++		}
++		if action == "select" {
++			result, err = kernel.SelectCompilerHistory(ctx, owners, req, config.Generation, extractor)
++		} else {
++			result, err = kernel.ResumeCompilerHistory(ctx, owners, memory.CompilerHistoryChange{RequestID: req.RequestID, OperationID: *operation, ExpectedRevision: *revision}, config.Generation, extractor)
++		}
++	}
++	if err != nil {
++		return true, err
++	}
++	encoder := json.NewEncoder(out)
++	encoder.SetIndent("", "  ")
++	return true, encoder.Encode(result)
++}
+diff --git a/cmd/evie/compiler_history_test.go b/cmd/evie/compiler_history_test.go
+new file mode 100644
+index 0000000..8509696
+--- /dev/null
++++ b/cmd/evie/compiler_history_test.go
+@@ -0,0 +1,146 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type cliHistoryScript struct{}
++
++func (*cliHistoryScript) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return nil
++}
++func (*cliHistoryScript) ServerIdentity() string { return "scripted:history-cli" }
++func (*cliHistoryScript) Extract(_ context.Context, _ memory.CompilerGeneration, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++	data, err := json.Marshal(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{}})
++	return eviedb.CompilerExtraction{Raw: data, ReleaseEvidence: "completed"}, err
++}
++
++func TestCompilerHistoryCLIMultiScopeSelectionProgressCancellationAndReopen(t *testing.T) {
++	f := newCompilerRuntimeFixture(t, nil)
++	ctx := context.Background()
++	global := f.appendOwnerEvent(t, "Global private source.")
++	project, err := f.store.RegisterProject(ctx, "Selected project", t.TempDir())
++	if err != nil {
++		t.Fatal(err)
++	}
++	session, err := f.store.CreateProjectSession(ctx, project.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	lease, err := f.store.AcquireTurnLease(ctx, session.ID, "history-cli", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	scoped, err := f.store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Project private source."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	sourceScope := "project:" + string(project.ID)
++	req := memory.CompilerHistoryRequest{RequestID: "cli-history", Ranges: []memory.CompilerHistoryRange{
++		{SourceScope: "global", Destination: "global", SessionID: f.session.ID, FirstSequence: global.Sequence, LastSequence: global.Sequence, FirstEventID: global.ID, LastEventID: global.ID},
++		{SourceScope: sourceScope, Destination: sourceScope, SessionID: session.ID, FirstSequence: scoped.Sequence, LastSequence: scoped.Sequence, FirstEventID: scoped.ID, LastEventID: scoped.ID},
++	}}
++	path := filepath.Join(t.TempDir(), "selection.json")
++	raw, err := json.Marshal(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(path, raw, 0600); err != nil {
++		t.Fatal(err)
++	}
++	command := func(action string, args ...string) []byte {
++		t.Helper()
++		var out bytes.Buffer
++		all := append([]string{"memory-backfill", action, "--selection", path}, args...)
++		handled, err := runCompilerHistoryManagement(ctx, all, &out, f.store)
++		if !handled || err != nil {
++			t.Fatalf("%s %v %v", action, handled, err)
++		}
++		for _, secret := range []string{"private source", f.generation.Prompt, f.server.URL} {
++			if strings.Contains(out.String(), secret) {
++				t.Fatal("metadata leaked source/configuration")
++			}
++		}
++		return out.Bytes()
++	}
++	selected := command("select", "--config", f.configPath)
++	if string(command("select", "--config", f.configPath)) != string(selected) {
++		t.Fatal("CLI idempotent receipt changed")
++	}
++	var receipt memory.CompilerHistoryReceipt
++	if err := json.Unmarshal(selected, &receipt); err != nil {
++		t.Fatal(err)
++	}
++	if receipt.SelectedEvents != 2 || len(receipt.Request.Ranges) != 2 {
++		t.Fatalf("receipt %+v", receipt)
++	}
++	// Each source authorization is independent; a global context cannot authorize
++	// the project source even when both occur in an otherwise valid request.
++	if _, err := f.store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.session.ScopeContext()}, req, f.generation, &cliHistoryScript{}); err == nil {
++		t.Fatal("missing exact scope authorization")
++	}
++	id, _, err := memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	config := eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: &cliHistoryScript{}}}
++	for range 6 {
++		if _, err := f.store.ReconcileCompilerHistory(ctx, config); err != nil {
++			t.Fatal(err)
++		}
++	}
++	for range 2 {
++		if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err != nil {
++			t.Fatal(worked, err)
++		}
++	}
++	for index, arg := range []string{"0", "1"} {
++		var progress memory.CompilerHistoryProgress
++		if err := json.Unmarshal(command("status", "--range", arg, "--limit", "1"), &progress); err != nil {
++			t.Fatal(err)
++		}
++		if progress.RangeIndex != index || len(progress.Intervals) != 1 || progress.Intervals[0].State != "completed_empty" || progress.ContiguousFrontier != 1 {
++			t.Fatalf("scope progress %+v", progress)
++		}
++	}
++	command("cancel", "--operation", "cli-cancel", "--revision", "1")
++	command("resume", "--operation", "cli-resume", "--revision", "2", "--config", f.configPath)
++	var after memory.CompilerHistoryProgress
++	if err := json.Unmarshal(command("status"), &after); err != nil {
++		t.Fatal(err)
++	}
++	if after.RequestState.Revision != 3 || after.RequestState.Cancelled || after.Intervals[0].State != "completed_empty" {
++		t.Fatal("completion lost", after)
++	}
++	if f.inferences.Load() != 0 {
++		t.Fatal("management command dispatched inference")
++	}
++	// This is a second Store over the same real SQLite file, not a mock Kernel.
++	var dbPath string
++	if err := f.db.QueryRow(`SELECT file FROM pragma_database_list WHERE name='main'`).Scan(&dbPath); err != nil {
++		t.Fatal(err)
++	}
++	db, err := eviedb.OpenDBAt(dbPath)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	f.store = eviedb.NewStore(db)
++	if string(command("select", "--config", f.configPath)) != string(selected) {
++		t.Fatal("reopen changed receipt")
++	}
++	t.Logf("real-SQLite CLI: %d explicit source ranges; two completed_empty frontiers; cancel/resume revision %d; original receipt retained after reopen", len(receipt.Request.Ranges), after.RequestState.Revision)
++}
+diff --git a/cmd/evie/docs/research/memory-stage-4-bounded-history.md b/cmd/evie/docs/research/memory-stage-4-bounded-history.md
+new file mode 100644
+index 0000000..7a2d533
+--- /dev/null
++++ b/cmd/evie/docs/research/memory-stage-4-bounded-history.md
+@@ -0,0 +1,114 @@
++# Stage 4 bounded historical selection (#139)
++
++The shared Kernel selects retained history through `SelectCompilerHistory`,
++separately from live activation. Every range names its exact source lineage,
++destination, session, inclusive first/last sequence, and boundary event IDs.
++The trusted local adapter resolves and authorizes each source independently.
++
++One transaction admits 1–100 ranges and at most 10,000 distinct selected events.
++Its immutable receipt pins original ranges, generation, count, and selection
++order. Later appends do not extend it. Identical request deliveries return that
++original receipt after restart or cancellation; changed content conflicts.
++Legacy events keep their original coordinates without fabricated commit positions.
++
++A reconciliation step discovers one event's ancestry and seals one root in
++separate transactions. Live and historical discovery share the same resolver.
++Each transaction inspects at most 128 events and mutates fewer than 64 ledger
++rows. Indexed pending-request counters exclude retained completed/cancelled
++histories from discovery. A separate bounded explicit-resume queue avoids
++polling all retained cancelled jobs. Indexed coordinates and aggregate counts are separate from source-field
++inspection. Root obligations remain revisitable through live leases, missing
++configuration, full queues, and restarts. An archived Project, inactive
++Workspace, missing registry identity, or typed semantic quarantine pauses its
++source obligation with `source_scope_unavailable`. Only safe scheduling metadata
++is committed, allowing other selections and explicit resumes to progress.
++Restoration reconsiders the original cutoff; a closed source session remains
++eligible. Unexpected SQL, cancellation, or transaction failures are errors, not
++authorization pauses. A later root outside a selected cutoff can establish
++closure without supplying outside evidence or coverage.
++
++Selection reuses owned intervals and job budgets, including failed work. The
++persistent scheduler gives new work its existing priority and gives the oldest
++ready historical selection the ninth saturated dispatch after eight new attempts.
++Later independent candidates remain reviewable across an earlier failure gap.
++
++Only jobs newly created by historical scheduling acquire history cancellation
++authority. Reused explicit/live jobs retain their original authority and lane.
++Cancelling a request leaves its jobs untouched when another active historical
++request selects overlapping evidence. The explicit owner cancellation
++transaction fences at most the existing 1,024 unfinished jobs. Explicit owner
++select/cancel/resume also adjusts at most 20,000 exact source/destination
++reference rows: 10,000 selected events with at most two permitted destinations
++per source. Self-overlapping ranges count once per destination, and repeated
++operation deliveries never adjust twice. Background gates probe the indexed
++references for only the job's at-most-128 sealed event IDs, avoiding scans of
++retained overlapping receipts. Background transactions retain their separate
++64-mutation limit. Cancellation changes fences
++before interrupting clients, preserves stages and audit, and retains unknown
++server capacity. A proven late completion releases only its exact original
++reservation; it cannot publish a cancelled result or release a replacement.
++
++Explicit resume verifies the pinned configuration and records a new resume
++order. Background work readmits one cancelled job through the existing resource
++and attempt checks. Merely submitting another overlapping selection does not
++resume cancelled work. No skip action, cleanup, implicit historical generation,
++accepted-memory change, or default model configuration is introduced.
++
++## CLI demonstration
++
++Prepare `selection.json`, replacing example identifiers with retained event IDs:
++
++```json
++{
++  "request_id": "history-example-1",
++  "ranges": [{
++    "source_scope": "global",
++    "destination": "global",
++    "session_id": "SESSION_ID",
++    "first_sequence": 1,
++    "last_sequence": 12,
++    "first_event_id": "FIRST_EVENT_ID",
++    "last_event_id": "LAST_EVENT_ID"
++  }]
++}
++```
++
++```sh
++evie memory-backfill select --selection selection.json --config compiler.json
++evie memory-backfill status --selection selection.json --range 0 --limit 64
++evie memory-backfill status --selection selection.json --range 0 --after 6 --limit 64
++evie memory-backfill cancel --selection selection.json --operation cancel-1 --revision 1
++evie memory-backfill resume --selection selection.json --operation resume-1 --revision 2 --config compiler.json
++```
++
++Select/resume verify metadata without inference. A configured long-lived REPL or
++web host performs reconciliation and extraction. Status returns a bounded page
++of exact intervals for one receipt range, its contiguous frontier, and counts of
++selected/outside events for the same session, generation, and destination.
++`next_sequence` is a page cursor, not a frontier. Each range/session has its own
++frontier; disjoint selections cannot bridge unselected history. Successful
++candidate groups, successful empty results, deterministic exclusions, failures,
++retries, cancellation, and pending work remain distinct. Review decisions do not
++advance coverage.
++
++## Deterministic verification
++
++`TestCompilerHistoryCLIMultiScopeSelectionProgressCancellationAndReopen` executes
++the actual CLI adapter against real SQLite, two source sessions, and global and
++Project destinations. A local HTTP fixture verifies configuration metadata and
++asserts management commands make zero inference requests. Scripted extraction
++through the real worker produces independently inspectable successful-empty
++frontiers; cancel/resume and original receipts survive database reopen.
++
++Kernel fixtures cover range/event limits and exact IDs, missing scope authority,
++concurrent overlapping requests/reconcilers, persistent 8:1 fairness using actual
++live/history selections, failed early work with later reviewable candidates,
++source exclusion/oversize distinction, queue-full restart, ancestry 128/129
++boundaries, cancellation rollback, cancel/resume ABA fences, explicit-resume-only
++semantics, and prompt client cancellation with known/unknown release. Rejection
++of a later candidate leaves exact coverage and the old failure gap unchanged.
++
++The parent implementation checkpoint records repository-wide isolated
++verification and independent Standards/Spec review before the ticket commit.
++These deterministic checks establish durable work behavior, not model adequacy
++or human evaluation quality.
+diff --git a/cmd/evie/main.go b/cmd/evie/main.go
+index d0e1405..1556aca 100644
+--- a/cmd/evie/main.go
++++ b/cmd/evie/main.go
+@@ -57,6 +57,12 @@ func main() {
+ 	}
+ 	defer db.Close()
+ 	kernelStore := eviedb.NewStore(db)
++	if handled, err := runCompilerHistoryManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
++		if err != nil {
++			log.Fatalf("memory compiler history: %v", err)
++		}
++		return
++	}
+ 	if handled, err := runCompilerActivationManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
+ 		if err != nil {
+ 			log.Fatalf("memory compiler activation: %v", err)
+diff --git a/internal/eviedb/compiler_ancestry.go b/internal/eviedb/compiler_ancestry.go
+new file mode 100644
+index 0000000..072b1e0
+--- /dev/null
++++ b/internal/eviedb/compiler_ancestry.go
+@@ -0,0 +1,30 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++)
++
++type compilerAncestryEvent struct {
++	ID, Kind, Role, Payload string
++	Parent                  sql.NullString
++	Sequence                int64
++}
++
++type compilerAncestryRoot struct {
++	ID, Kind, Role  string
++	Parent          sql.NullString
++	Sequence, Depth int64
++}
++
++// Live and historical discovery share the same terminal turn_id/parent rules.
++// The caller already read the seed: at most 127 additional metadata projections
++// are inspected, and no cross-session or non-decreasing ancestry is admitted.
++func resolveCompilerAncestry(ctx context.Context, conn compilerQueryer, session string, event compilerAncestryEvent) (root compilerAncestryRoot, err error) {
++	err = conn.QueryRowContext(ctx, `WITH RECURSIVE ancestry(id,parent_id,sequence,event_type,role,payload_json,depth) AS (
++ VALUES(?,?,?,?,?,?,1)
++ UNION ALL SELECT e.id,e.parent_id,e.sequence,e.event_type,COALESCE(e.role,''),CASE WHEN length(CAST(e.payload_json AS BLOB))<=8192 THEN COALESCE(e.payload_json,'') ELSE '' END,a.depth+1 FROM ancestry a JOIN events e ON e.id=CASE WHEN a.event_type IN ('turn_failed','turn_interrupted') AND json_valid(a.payload_json) THEN json_extract(a.payload_json,'$.turn_id') ELSE a.parent_id END
++ WHERE e.session_id=? AND e.sequence<a.sequence AND a.depth<128
++) SELECT id,sequence,event_type,role,parent_id,depth FROM ancestry ORDER BY depth DESC LIMIT 1`, event.ID, event.Parent, event.Sequence, event.Kind, event.Role, event.Payload, session).Scan(&root.ID, &root.Sequence, &root.Kind, &root.Role, &root.Parent, &root.Depth)
++	return
++}
+diff --git a/internal/eviedb/compiler_history.go b/internal/eviedb/compiler_history.go
+new file mode 100644
+index 0000000..3c4e9bb
+--- /dev/null
++++ b/internal/eviedb/compiler_history.go
+@@ -0,0 +1,306 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++var ErrCompilerHistoryConflict = errors.New("compiler history request or revision conflict")
++
++func authorizeCompilerHistory(ctx context.Context, conn *sql.Conn, owners []memory.ScopeContext, ranges []memory.CompilerHistoryRange) error {
++	if len(owners) < 1 || len(owners) > 100 {
++		return errors.New("history requires 1 through 100 exact source authorizations")
++	}
++	for _, r := range ranges {
++		var owner *memory.ScopeContext
++		for i := range owners {
++			if owners[i].SessionID == r.SessionID {
++				if owner != nil {
++					return errors.New("duplicate source authorization")
++				}
++				owner = &owners[i]
++			}
++		}
++		if owner == nil || scopeKeyForContext(*owner) != r.SourceScope {
++			return errors.New("history source scope not authorized")
++		}
++		if err := compilerAuthorize(ctx, conn, *owner, memory.CompilationSelection{SessionID: r.SessionID, Destination: r.Destination}); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++// SelectCompilerHistory seals finite source coordinates, never source contents.
++// No inference runs here and no live activation is created or changed.
++func (s *Store) SelectCompilerHistory(ctx context.Context, owners []memory.ScopeContext, req memory.CompilerHistoryRequest, generation memory.CompilerGeneration, extractor CompilerExtractor) (result memory.CompilerHistoryReceipt, err error) {
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return result, ErrCompilerNotConfigured
++	}
++	if req.RequestID == "" || len(req.RequestID) > 256 || len(req.Ranges) < 1 || len(req.Ranges) > 100 {
++		return result, errors.New("history requires a bounded request ID and 1 through 100 ranges")
++	}
++	generationID, manifest, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		return result, err
++	}
++	generation = memory.CompilerGeneration{}
++	if err = json.Unmarshal(manifest, &generation); err != nil {
++		return result, err
++	}
++	// Freeze caller storage before preflight or transaction use.
++	var frozen memory.CompilerHistoryRequest
++	if err = json.Unmarshal(compilerJSON(req), &frozen); err != nil {
++		return result, err
++	}
++	req = frozen
++	requestHash := memory.CompilerHash(compilerJSON(struct {
++		Request    memory.CompilerHistoryRequest
++		Generation string
++	}{req, generationID}))
++	prior := false
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := authorizeCompilerHistory(ctx, conn, owners, req.Ranges); err != nil {
++			return err
++		}
++		var hash string
++		var raw []byte
++		err := conn.QueryRowContext(ctx, `SELECT request_hash,receipt FROM memory_compiler_history_requests WHERE request_id=?`, req.RequestID).Scan(&hash, &raw)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		prior = true
++		if hash != requestHash {
++			return ErrCompilerHistoryConflict
++		}
++		return json.Unmarshal(raw, &result)
++	})
++	if err != nil || prior {
++		return result, err
++	}
++	if err = verifyCompilerActivation(ctx, generation, extractor); err != nil {
++		return result, err
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := authorizeCompilerHistory(ctx, conn, owners, req.Ranges); err != nil {
++			return err
++		}
++		var hash string
++		var raw []byte
++		err := conn.QueryRowContext(ctx, `SELECT request_hash,receipt FROM memory_compiler_history_requests WHERE request_id=?`, req.RequestID).Scan(&hash, &raw)
++		if err == nil {
++			if hash != requestHash {
++				return ErrCompilerHistoryConflict
++			}
++			return json.Unmarshal(raw, &result)
++		}
++		if !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		var total int64
++		// Count each distinct event only once even if this receipt overlaps itself.
++		// These bounded index-coordinate queries do not inspect evidence fields.
++		for i, r := range req.Ranges {
++			if r.FirstSequence <= 0 || r.LastSequence < r.FirstSequence || r.FirstEventID == "" || r.LastEventID == "" {
++				return errors.New("history requires exact inclusive boundaries")
++			}
++			var first, last string
++			if err := conn.QueryRowContext(ctx, `SELECT id FROM events WHERE session_id=? AND sequence=?`, r.SessionID, r.FirstSequence).Scan(&first); err != nil {
++				return err
++			}
++			if err := conn.QueryRowContext(ctx, `SELECT id FROM events WHERE session_id=? AND sequence=?`, r.SessionID, r.LastSequence).Scan(&last); err != nil {
++				return err
++			}
++			if first != string(r.FirstEventID) || last != string(r.LastEventID) {
++				return errors.New("history boundary event mismatch")
++			}
++			// Sum unique coordinate intervals after subtracting previous same-session
++			// ranges using JSON parameters; the original order/receipt is retained.
++			var n int64
++			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM events e WHERE e.session_id=? AND e.sequence BETWEEN ? AND ? AND NOT EXISTS(SELECT 1 FROM json_each(?) p WHERE json_extract(p.value,'$.session_id')=e.session_id AND e.sequence BETWEEN json_extract(p.value,'$.first_sequence') AND json_extract(p.value,'$.last_sequence')) LIMIT 10001)`, r.SessionID, r.FirstSequence, r.LastSequence, compilerJSON(req.Ranges[:i])).Scan(&n); err != nil {
++				return err
++			}
++			total += n
++			if total > 10000 {
++				return errors.New("history exceeds 10000 selected events")
++			}
++		}
++		var order int64
++		if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(selection_order),0)+1 FROM memory_compiler_history_requests`).Scan(&order); err != nil {
++			return err
++		}
++		result = memory.CompilerHistoryReceipt{Request: req, GenerationID: generationID, SelectedEvents: total, SelectionOrder: order}
++		if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO memory_compiler_generations VALUES(?,?)`, generationID, manifest); err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_requests(request_id,request_hash,owner_id,generation_id,selection_order,receipt,pending_ranges) VALUES(?,?,'local',?,?,?,?)`, req.RequestID, requestHash, generationID, order, compilerJSON(result), len(req.Ranges)); err != nil {
++			return err
++		}
++		if err := updateHistorySelectionRefs(ctx, conn, result, 1); err != nil {
++			return err
++		}
++		for i, r := range req.Ranges {
++			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_ranges(request_id,ordinal,source_scope,destination,session_id,first_sequence,last_sequence,first_event_id,last_event_id,scanned_sequence) VALUES(?,?,?,?,?,?,?,?,?,?)`, req.RequestID, i, r.SourceScope, r.Destination, r.SessionID, r.FirstSequence, r.LastSequence, r.FirstEventID, r.LastEventID, r.FirstSequence-1); err != nil {
++				return err
++			}
++		}
++		return nil
++	})
++	return
++}
++
++func loadCompilerHistory(ctx context.Context, conn *sql.Conn, owners []memory.ScopeContext, id string) (receipt memory.CompilerHistoryReceipt, state memory.CompilerHistoryState, err error) {
++	var raw []byte
++	state.RequestID = id
++	err = conn.QueryRowContext(ctx, `SELECT receipt,revision,cancelled FROM memory_compiler_history_requests WHERE request_id=? AND owner_id='local'`, id).Scan(&raw, &state.Revision, &state.Cancelled)
++	if err != nil {
++		return
++	}
++	if err = json.Unmarshal(raw, &receipt); err != nil {
++		return
++	}
++	err = authorizeCompilerHistory(ctx, conn, owners, receipt.Request.Ranges)
++	return
++}
++
++// Cancellation is an explicit owner transaction, bounded by the global 1024
++// unfinished-job cap. Dynamic union membership is checked after the request
++// changes state; an overlapping active request keeps its existing job alive.
++func (s *Store) CancelCompilerHistory(ctx context.Context, owners []memory.ScopeContext, change memory.CompilerHistoryChange) (memory.CompilerHistoryState, error) {
++	return s.changeCompilerHistory(ctx, owners, change, true, "", nil)
++}
++func (s *Store) ResumeCompilerHistory(ctx context.Context, owners []memory.ScopeContext, change memory.CompilerHistoryChange, generation memory.CompilerGeneration, extractor CompilerExtractor) (memory.CompilerHistoryState, error) {
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return memory.CompilerHistoryState{}, ErrCompilerNotConfigured
++	}
++	id, manifest, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		return memory.CompilerHistoryState{}, err
++	}
++	generation = memory.CompilerGeneration{}
++	if err = json.Unmarshal(manifest, &generation); err != nil {
++		return memory.CompilerHistoryState{}, err
++	}
++	return s.changeCompilerHistory(ctx, owners, change, false, id, func() error { return verifyCompilerActivation(ctx, generation, extractor) })
++}
++func (s *Store) changeCompilerHistory(ctx context.Context, owners []memory.ScopeContext, change memory.CompilerHistoryChange, cancelled bool, generationID string, verify func() error) (result memory.CompilerHistoryState, err error) {
++	if change.OperationID == "" || len(change.OperationID) > 256 || change.ExpectedRevision < 1 {
++		return result, errors.New("history change requires bounded operation ID and exact revision")
++	}
++	hash := memory.CompilerHash(compilerJSON(struct {
++		Change     memory.CompilerHistoryChange
++		Cancel     bool
++		Generation string
++	}{change, cancelled, generationID}))
++	// Preflight stays outside SQLite. An exact prior delivery needs no network.
++	prior := false
++	check := func(conn *sql.Conn) error {
++		receipt, state, err := loadCompilerHistory(ctx, conn, owners, change.RequestID)
++		if err != nil {
++			return err
++		}
++		var oldHash string
++		var raw []byte
++		err = conn.QueryRowContext(ctx, `SELECT request_hash,response FROM memory_compiler_history_changes WHERE operation_id=?`, change.OperationID).Scan(&oldHash, &raw)
++		if err == nil {
++			prior = true
++			if oldHash != hash {
++				return ErrCompilerHistoryConflict
++			}
++			return json.Unmarshal(raw, &result)
++		}
++		if !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		if state.Revision != change.ExpectedRevision || state.Cancelled == cancelled {
++			return ErrCompilerHistoryConflict
++		}
++		if !cancelled && receipt.GenerationID != generationID {
++			return ErrCompilerConfiguration
++		}
++		result = state
++		result.Revision++
++		result.Cancelled = cancelled
++		return nil
++	}
++	if err = s.withImmediateTransaction(ctx, check); err != nil || prior {
++		return result, err
++	}
++	if verify != nil {
++		if err = verify(); err != nil {
++			return result, err
++		}
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := check(conn); err != nil || prior {
++			return err
++		}
++		var changeOrder int64
++		if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(change_order),0)+1 FROM memory_compiler_history_changes`).Scan(&changeOrder); err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_requests SET revision=?,cancelled=?,resume_order=CASE WHEN ?=0 THEN ? ELSE resume_order END WHERE request_id=?`, result.Revision, result.Cancelled, result.Cancelled, changeOrder, change.RequestID); err != nil {
++			return err
++		}
++		receipt, _, err := loadCompilerHistory(ctx, conn, owners, change.RequestID)
++		if err != nil {
++			return err
++		}
++		delta := 1
++		if cancelled {
++			delta = -1
++		}
++		if err := updateHistorySelectionRefs(ctx, conn, receipt, delta); err != nil {
++			return err
++		}
++		if cancelled {
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_jobs SET cancel_order=? WHERE job_id IN (SELECT job_id FROM memory_compiler_history_paused_jobs) AND job_id IN (SELECT job_id FROM memory_compiler_jobs WHERE state IN ('queued','running','retry_wait','staged'))`, changeOrder); err != nil {
++				return err
++			}
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_capacity SET state='release_pending' WHERE job_id IN (SELECT job_id FROM memory_compiler_history_paused_jobs)`); err != nil {
++				return err
++			}
++			if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id IN (SELECT job_id FROM memory_compiler_history_paused_jobs)`); err != nil {
++				return err
++			}
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state='cancelled',reason='history_cancelled',fence=fence+1,holder=NULL,lease_until=NULL WHERE state IN ('queued','running','retry_wait','staged') AND job_id IN (SELECT job_id FROM memory_compiler_history_paused_jobs)`); err != nil {
++				return err
++			}
++		}
++		if cancelled {
++			if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_history_resume_queue WHERE request_id=?`, change.RequestID); err != nil {
++				return err
++			}
++		} else {
++			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_resume_queue(request_id,change_order) VALUES(?,?) ON CONFLICT(request_id) DO UPDATE SET change_order=excluded.change_order`, change.RequestID, changeOrder); err != nil {
++				return err
++			}
++		}
++		_, err = conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_changes VALUES(?,?,?,?)`, change.OperationID, hash, compilerJSON(result), changeOrder)
++		return err
++	})
++	return
++}
++
++// Explicit owner actions maintain union reference counts for only their bounded
++// coordinate selection. Background worker gates probe at most the sealed job's
++// 128 event IDs and never enumerate retained overlapping request receipts.
++func updateHistorySelectionRefs(ctx context.Context, conn *sql.Conn, receipt memory.CompilerHistoryReceipt, delta int) error {
++	ranges := compilerJSON(receipt.Request.Ranges)
++	if delta == 1 {
++		_, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_selection_refs(generation_id,destination,session_id,event_id,active_requests)
++ SELECT DISTINCT ?,json_extract(r.value,'$.destination'),e.session_id,e.id,1 FROM json_each(?) r JOIN events e ON e.session_id=json_extract(r.value,'$.session_id') AND e.sequence BETWEEN json_extract(r.value,'$.first_sequence') AND json_extract(r.value,'$.last_sequence') WHERE 1
++ ON CONFLICT(generation_id,destination,session_id,event_id) DO UPDATE SET active_requests=active_requests+1`, receipt.GenerationID, ranges)
++		return err
++	}
++	_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_selection_refs SET active_requests=active_requests-1 WHERE generation_id=? AND (destination,session_id,event_id) IN (
++ SELECT DISTINCT json_extract(r.value,'$.destination'),e.session_id,e.id FROM json_each(?) r JOIN events e ON e.session_id=json_extract(r.value,'$.session_id') AND e.sequence BETWEEN json_extract(r.value,'$.first_sequence') AND json_extract(r.value,'$.last_sequence'))`, receipt.GenerationID, ranges)
++	return err
++}
+diff --git a/internal/eviedb/compiler_history_bound_test.go b/internal/eviedb/compiler_history_bound_test.go
+new file mode 100644
+index 0000000..bbb6c03
+--- /dev/null
++++ b/internal/eviedb/compiler_history_bound_test.go
+@@ -0,0 +1,185 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"fmt"
++	"strings"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type countedHistoryDiscovery struct {
++	*sql.Conn
++	reads int
++	t     *testing.T
++}
++
++func (q *countedHistoryDiscovery) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
++	if strings.HasPrefix(query, "WITH RECURSIVE ancestry") {
++		end := strings.LastIndex(query, ") SELECT ")
++		if end < 0 {
++			q.t.Fatal("ancestry counter no longer matches query")
++		}
++		var depth int
++		if err := q.Conn.QueryRowContext(ctx, query[:end+1]+" SELECT COUNT(*) FROM ancestry", args...).Scan(&depth); err != nil {
++			q.t.Fatal(err)
++		}
++		q.reads += depth - 1
++	} else if strings.Contains(query, "payload_json") {
++		q.reads++
++	}
++	return q.Conn.QueryRowContext(ctx, query, args...)
++}
++
++func TestCompilerHistoryDiscoveryHonors128EventAnd64MutationBounds(t *testing.T) {
++	for _, depth := range []int{128, 129} {
++		t.Run(fmt.Sprint(depth), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			var previous memory.Event
++			for range depth {
++				previous = activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: previous.ID, Content: "A bounded assertion."})
++			}
++			historySelect(t, f, "deep", historyRange(f, previous, previous))
++			if err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++				var before, after int
++				if err := conn.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&before); err != nil {
++					return err
++				}
++				counted := &countedHistoryDiscovery{Conn: conn, t: t}
++				var result memory.CompilerReconciliation
++				if err := discoverCompilerHistory(ctx, counted, &result); err != nil {
++					return err
++				}
++				if err := conn.QueryRowContext(ctx, `SELECT total_changes()`).Scan(&after); err != nil {
++					return err
++				}
++				if counted.reads != 128 || after-before > 64 {
++					t.Fatalf("source reads %d ledger mutations %d", counted.reads, after-before)
++				}
++				var state, reason string
++				if err := conn.QueryRowContext(ctx, `SELECT state,reason FROM memory_compiler_history_roots`).Scan(&state, &reason); err != nil {
++					return err
++				}
++				if depth == 128 && state != "selected_unmaterialized" {
++					t.Fatal("valid boundary lost", state, reason)
++				}
++				if depth == 129 && (state != "failed" || reason != "source_inspection_limit") {
++					t.Fatal("over-bound ancestry disappeared", state, reason)
++				}
++				return nil
++			}); err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
++
++func TestCompilerHistoryDiscoveryUsesPendingIndexesAcrossRetainedHistory(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "An assertion.")
++	historySelect(t, f, "pending", historyRange(f, root, end))
++	// These retained request metadata fixtures represent completed and cancelled
++	// histories. The ready indexes must exclude them instead of scanning them on
++	// every background tick; original receipt/source data is never deleted.
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<2000) INSERT INTO memory_compiler_history_requests(request_id,request_hash,owner_id,generation_id,selection_order,receipt,pending_ranges,pending_roots,cancelled) SELECT 'retained-'||x,'fixture','local',generation_id,selection_order+x,receipt,CASE WHEN x>1000 THEN 1 ELSE 0 END,CASE WHEN x>1000 THEN 1 ELSE 0 END,CASE WHEN x>1000 THEN 1 ELSE 0 END FROM n CROSS JOIN memory_compiler_history_requests WHERE request_id='pending'`); err != nil {
++		t.Fatal(err)
++	}
++	plans := []struct {
++		query, index string
++		args         []any
++	}{
++		{historyNextDiscoveryRequest, "memory_compiler_history_discovery_ready", nil},
++		{historyNextRootRequest, "memory_compiler_history_roots_ready", nil},
++		{historyNextDiscoveryRange, "memory_compiler_history_range_pending", []any{"pending"}},
++		{historyNextRootRange, "memory_compiler_history_range_discovered", []any{"pending"}},
++	}
++	for _, test := range plans {
++		rows, err := f.db.Query(`EXPLAIN QUERY PLAN `+test.query, test.args...)
++		if err != nil {
++			t.Fatal(err)
++		}
++		var details strings.Builder
++		for rows.Next() {
++			var id, parent, unused int
++			var detail string
++			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
++				t.Fatal(err)
++			}
++			details.WriteString(detail)
++			details.WriteByte('\n')
++		}
++		err = rows.Err()
++		rows.Close()
++		if err != nil {
++			t.Fatal(err)
++		}
++		if !strings.Contains(details.String(), test.index) || strings.Contains(details.String(), "TEMP B-TREE") {
++			t.Fatalf("not an indexed bounded choice: %s", details.String())
++		}
++	}
++	historyReconcile(t, f, 4)
++	var pending int
++	if err := f.db.QueryRow(`SELECT pending_ranges+pending_roots FROM memory_compiler_history_requests WHERE request_id='pending'`).Scan(&pending); err != nil {
++		t.Fatal(err)
++	}
++	if pending != 0 {
++		t.Fatal("completed selection stayed in ready indexes", pending)
++	}
++	var chosen string
++	if err := f.db.QueryRowContext(ctx, historyNextDiscoveryRequest).Scan(&chosen); err != sql.ErrNoRows {
++		t.Fatal("retained cancelled/completed work remained ready", chosen, err)
++	}
++}
++
++func TestCompilerHistoryWorkerGateProbesOneJobAndBoundedMemberReferences(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "An assertion.")
++	historySelect(t, f, "gate", historyRange(f, root, end))
++	historyReconcile(t, f, 4)
++	var job string
++	if err := f.db.QueryRow(`SELECT job_id FROM memory_compiler_jobs`).Scan(&job); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<2000) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'retained-gate-'||x,generation_id,destination,session_id,root_id,10000+x,10000+x,window_hash,request,'completed_empty' FROM n CROSS JOIN memory_compiler_jobs WHERE job_id=?`, job); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`INSERT INTO memory_compiler_history_jobs(job_id) SELECT job_id FROM memory_compiler_jobs WHERE job_id LIKE 'retained-gate-%'`); err != nil {
++		t.Fatal(err)
++	}
++	for _, view := range []string{"memory_compiler_paused_jobs", "memory_compiler_invalid_claims"} {
++		query := `SELECT job_id FROM memory_compiler_jobs j WHERE j.job_id=? AND NOT EXISTS(SELECT 1 FROM ` + view + ` p WHERE p.job_id=j.job_id)`
++		rows, err := f.db.Query(`EXPLAIN QUERY PLAN `+query, job)
++		if err != nil {
++			t.Fatal(err)
++		}
++		var details strings.Builder
++		for rows.Next() {
++			var id, parent, unused int
++			var detail string
++			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
++				t.Fatal(err)
++			}
++			details.WriteString(detail)
++			details.WriteByte('\n')
++		}
++		err = rows.Err()
++		rows.Close()
++		if err != nil {
++			t.Fatal(err)
++		}
++		text := details.String()
++		t.Log(text)
++		if !strings.Contains(text, "memory_compiler_history_selection_refs") || strings.Contains(text, "SCAN h") || strings.Contains(text, "SCAN r") || strings.Contains(text, "MATERIALIZE p") {
++			t.Fatalf("worker gate scans retained history: %s", text)
++		}
++		var got string
++		if err := f.db.QueryRowContext(ctx, query, job).Scan(&got); err != nil || got != job {
++			t.Fatal("indexed ready check", got, err)
++		}
++	}
++}
+diff --git a/internal/eviedb/compiler_history_inspection.go b/internal/eviedb/compiler_history_inspection.go
+new file mode 100644
+index 0000000..48ebdb8
+--- /dev/null
++++ b/internal/eviedb/compiler_history_inspection.go
+@@ -0,0 +1,119 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// InspectCompilerHistory pages content-free exact intervals for one receipt
++// range. Indexed coordinates and persisted manifests determine progress; a
++// scanning cursor or accepted/rejected candidate never establishes completion.
++func (s *Store) InspectCompilerHistory(ctx context.Context, owners []memory.ScopeContext, id string, rangeIndex int, afterSequence int64, limit int) (result memory.CompilerHistoryProgress, err error) {
++	result.Intervals = []memory.CompilerHistoryInterval{}
++	if limit < 1 || limit > 64 || rangeIndex < 0 || afterSequence < 0 {
++		return result, errors.New("history progress requires a range index, nonnegative cursor, and limit 1 through 64")
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		receipt, state, err := loadCompilerHistory(ctx, conn, owners, id)
++		if err != nil {
++			return err
++		}
++		if rangeIndex >= len(receipt.Request.Ranges) {
++			return errors.New("history range index outside receipt")
++		}
++		result.Receipt = receipt
++		result.RequestState = state
++		result.RangeIndex = rangeIndex
++		r := receipt.Request.Ranges[rangeIndex]
++		// All rows below are bounded by the receipt's <=10,000 event selection.
++		// Event ID joins preserve holes/control members and interleaved ancestry.
++		rows, err := conn.QueryContext(ctx, `SELECT e.sequence,
++  CASE WHEN c.outcome IS NOT NULL AND EXISTS(SELECT 1 FROM json_each(c.event_ids) WHERE value=e.id) THEN c.outcome
++       WHEN h.state='excluded' AND h.selection_id='' THEN 'excluded'
++       WHEN j.job_id IS NOT NULL THEN j.state
++       WHEN s.state='failed' OR h.state='failed' THEN 'failed'
++       WHEN ? THEN 'cancelled'
++       WHEN s.selection_id IS NOT NULL THEN s.state
++       ELSE COALESCE(h.state,'selected_unmaterialized') END,
++  COALESCE(j.reason,s.reason,h.reason,''),COALESCE(j.job_id,''),COALESCE(s.selection_id,''),COALESCE(j.attempts,0),COALESCE(j.retry_at,0)
++ FROM events e
++ LEFT JOIN memory_compiler_history_events m ON m.request_id=? AND m.range_ordinal=? AND m.event_id=e.id
++ LEFT JOIN memory_compiler_history_roots h ON h.request_id=m.request_id AND h.range_ordinal=m.range_ordinal AND h.root_id=m.root_id
++ LEFT JOIN memory_compiler_selections s ON s.generation_id=? AND s.destination=? AND s.session_id=e.session_id AND s.root_id=m.root_id AND e.sequence BETWEEN s.first_sequence AND s.last_sequence
++ LEFT JOIN memory_compiler_jobs j ON j.job_id=s.job_id
++ LEFT JOIN memory_compiler_coverage c ON c.job_id=j.job_id
++ WHERE e.session_id=? AND e.sequence BETWEEN ? AND ? ORDER BY e.sequence`, state.Cancelled, id, rangeIndex, receipt.GenerationID, r.Destination, r.SessionID, r.FirstSequence, r.LastSequence)
++		if err != nil {
++			return err
++		}
++		frontier := r.FirstSequence - 1
++		blocked := false
++		var all []memory.CompilerHistoryInterval
++		for rows.Next() {
++			var item memory.CompilerHistoryInterval
++			if err := rows.Scan(&item.FirstSequence, &item.State, &item.Reason, &item.JobID, &item.SelectionID, &item.Attempts, &item.RetryAt); err != nil {
++				rows.Close()
++				return err
++			}
++			item.LastSequence = item.FirstSequence
++			item.Reason = safeHistoryReason(item.Reason)
++			completed := item.State == "completed_candidates" || item.State == "completed_empty" || item.State == "excluded"
++			if !blocked && completed {
++				frontier = item.LastSequence
++			} else if !completed {
++				blocked = true
++			}
++			if len(all) > 0 {
++				last := &all[len(all)-1]
++				if last.LastSequence+1 == item.FirstSequence && last.State == item.State && last.JobID == item.JobID && last.SelectionID == item.SelectionID && last.Reason == item.Reason {
++					last.LastSequence = item.LastSequence
++					continue
++				}
++			}
++			all = append(all, item)
++		}
++		err = rows.Err()
++		rows.Close()
++		if err != nil {
++			return err
++		}
++		result.ContiguousFrontier = frontier
++		for _, item := range all {
++			if item.LastSequence <= afterSequence {
++				continue
++			}
++			if item.FirstSequence <= afterSequence {
++				item.FirstSequence = afterSequence + 1
++			}
++			if len(result.Intervals) == limit {
++				result.NextSequence = result.Intervals[len(result.Intervals)-1].LastSequence
++				break
++			}
++			result.Intervals = append(result.Intervals, item)
++		}
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events e WHERE e.session_id=? AND (
++ EXISTS(SELECT 1 FROM memory_compiler_history_ranges r JOIN memory_compiler_history_requests q USING(request_id) WHERE r.session_id=e.session_id AND r.destination=? AND q.generation_id=? AND e.sequence BETWEEN r.first_sequence AND r.last_sequence)
++ OR EXISTS(SELECT 1 FROM memory_compiler_event_positions p JOIN memory_compiler_activations a ON a.generation_id=? AND a.destination=? AND (a.source_session='' OR a.source_session=e.session_id) AND a.source_scope=? WHERE p.event_id=e.id AND p.commit_position>a.after_position AND (a.through_position IS NULL OR p.commit_position<=a.through_position)))`, r.SessionID, r.Destination, receipt.GenerationID, receipt.GenerationID, r.Destination, r.SourceScope).Scan(&result.SelectedSessionEvents); err != nil {
++			return err
++		}
++		var total int64
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE session_id=?`, r.SessionID).Scan(&total); err != nil {
++			return err
++		}
++		result.OutsideSelectionEvents = total - result.SelectedSessionEvents
++		return nil
++	})
++	return
++}
++
++func safeHistoryReason(reason string) string {
++	switch reason {
++	case "source_scope_unavailable", "history_cancelled", "job_capacity", "unfinished_live_turn", "invalid_source_ancestry", "source_inspection_limit", "prohibited_source", "no_admitted_support", "secret_field":
++		return reason
++	default:
++		return safeCompilerReason(reason)
++	}
++}
+diff --git a/internal/eviedb/compiler_history_public_test.go b/internal/eviedb/compiler_history_public_test.go
+new file mode 100644
+index 0000000..5666622
+--- /dev/null
++++ b/internal/eviedb/compiler_history_public_test.go
+@@ -0,0 +1,94 @@
++package eviedb_test
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type historyPublicScript struct{ scriptedCompiler }
++
++func (*historyPublicScript) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return nil
++}
++
++func TestCompilerHistoryLaterCandidatesReviewableAcrossEarlierFailure(t *testing.T) {
++	f := newCompilerFixture(t)
++	ctx := context.Background()
++	first := f.selection(t, "I prefer tea.", true)
++	second := f.selection(t, "I prefer café.", true)
++	var firstSequence int64
++	var endID memory.EventID
++	if err := f.db.QueryRow(`SELECT sequence FROM events WHERE id=?`, first.RootID).Scan(&firstSequence); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT id FROM events WHERE session_id=? AND sequence=?`, second.SessionID, second.Cutoff).Scan(&endID); err != nil {
++		t.Fatal(err)
++	}
++	req := memory.CompilerHistoryRequest{RequestID: "two-roots", Ranges: []memory.CompilerHistoryRange{{SourceScope: "global", Destination: "global", SessionID: f.session.ID, FirstSequence: firstSequence, LastSequence: second.Cutoff, FirstEventID: first.RootID, LastEventID: endID}}}
++	extractor := &historyPublicScript{scriptedCompiler: scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		if r.Window.Selection.RootID == first.RootID {
++			return eviedb.CompilerExtraction{ReleaseEvidence: "completed"}, eviedb.ErrCompilerTerminalOutput
++		}
++		return compilerOutput(r, []memory.ExtractorCandidate{f.candidate(r)}), nil
++	}}}
++	generation := compilerGeneration()
++	id, _, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	config := eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: extractor}}
++	if _, err := f.store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.session.ScopeContext()}, req, generation, extractor); err != nil {
++		t.Fatal(err)
++	}
++	for range 8 {
++		if _, err := f.store.ReconcileCompilerHistory(ctx, config); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || !errors.Is(err, eviedb.ErrCompilerTerminalOutput) {
++		t.Fatal(worked, err)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err != nil {
++		t.Fatal(worked, err)
++	}
++	before, err := f.store.InspectCompilerHistory(ctx, []memory.ScopeContext{f.session.ScopeContext()}, req.RequestID, 0, 0, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(before.Intervals) != 1 || before.Intervals[0].State != "failed" || before.NextSequence == 0 || before.ContiguousFrontier != firstSequence-1 {
++		t.Fatalf("first page %+v", before)
++	}
++	next, err := f.store.InspectCompilerHistory(ctx, []memory.ScopeContext{f.session.ScopeContext()}, req.RequestID, 0, before.NextSequence, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(next.Intervals) != 1 || next.Intervals[0].State != "completed_candidates" || next.NextSequence != 0 {
++		t.Fatalf("later candidates %+v", next)
++	}
++	compiled, err := f.store.InspectCompilation(ctx, f.session.ScopeContext(), next.Intervals[0].JobID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	owner, err := f.store.LocalOwnerReviewContext(ctx, "global")
++	if err != nil {
++		t.Fatal(err)
++	}
++	preview, err := f.store.PrepareOwnerCandidateReview(ctx, owner, candidateRef(compiled), "reject")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ResolveOwnerCandidateReview(ctx, owner, decisionFor(preview, "90000000-0000-4000-8000-000000000139")); err != nil {
++		t.Fatal(err)
++	}
++	after, err := f.store.InspectCompilerHistory(ctx, []memory.ScopeContext{f.session.ScopeContext()}, req.RequestID, 0, 0, 64)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if after.ContiguousFrontier != before.ContiguousFrontier || after.Intervals[1].State != "completed_candidates" {
++		t.Fatal("review changed coverage")
++	}
++}
+diff --git a/internal/eviedb/compiler_history_reconciliation.go b/internal/eviedb/compiler_history_reconciliation.go
+new file mode 100644
+index 0000000..fbdcada
+--- /dev/null
++++ b/internal/eviedb/compiler_history_reconciliation.go
+@@ -0,0 +1,241 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// ReconcileCompilerHistory does one ancestry discovery and one sealed root
++// decision in separate transactions. Neither can exceed 128 source inspections;
++// at most one job is materialized or resumed in a step. Range cursors only aid
++// discovery: unresolved roots keep their separate, restartable obligations.
++func (s *Store) ReconcileCompilerHistory(ctx context.Context, config CompilerSupervisorConfig) (result memory.CompilerReconciliation, err error) {
++	started := time.Now()
++	defer func() { result.DurationNanos = time.Since(started).Nanoseconds() }()
++	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
++		return result, ErrCompilerNotConfigured
++	}
++	if err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error { return discoverCompilerHistory(ctx, conn, &result) }); err != nil {
++		return
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var request, session, root, generationID, destination string
++		var ordinal, first, last, order int64
++		var manifest []byte
++		err := conn.QueryRowContext(ctx, historyNextRootRequest).Scan(&request)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		check, err := nextHistoryCheck(ctx, conn)
++		if err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_requests SET root_checked=? WHERE request_id=?`, check, request); err != nil {
++			return err
++		}
++		err = conn.QueryRowContext(ctx, historyNextRootRange, request).Scan(&ordinal)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_ranges SET checked_order=? WHERE request_id=? AND ordinal=?`, check, request, ordinal); err != nil {
++			return err
++		}
++		err = conn.QueryRowContext(ctx, `SELECT x.session_id,r.root_id,q.generation_id,x.destination,r.first_sequence,r.last_sequence,q.selection_order,g.manifest FROM memory_compiler_history_roots r JOIN memory_compiler_history_ranges x ON x.request_id=r.request_id AND x.ordinal=r.range_ordinal JOIN memory_compiler_history_requests q ON q.request_id=r.request_id JOIN memory_compiler_generations g USING(generation_id) WHERE r.request_id=? AND r.range_ordinal=? AND r.state IN ('selected_unmaterialized','deferred_live') ORDER BY r.checked_order,r.first_sequence,r.root_id LIMIT 1`, request, ordinal).Scan(&session, &root, &generationID, &destination, &first, &last, &order, &manifest)
++		if err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET checked_order=? WHERE request_id=? AND range_ordinal=? AND root_id=?`, check, request, ordinal, root); err != nil {
++			return err
++		}
++		extractor := config.Extractors[generationID]
++		if extractor == nil || extractor.ServerIdentity() == "" {
++			result.State = "configuration_paused"
++			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET reason='configuration_unavailable' WHERE request_id=? AND range_ordinal=? AND root_id=?`, request, ordinal, root)
++			return err
++		}
++		var generation memory.CompilerGeneration
++		if err := json.Unmarshal(manifest, &generation); err != nil {
++			return err
++		}
++		owner, err := reviewSourceContext(ctx, conn, memory.SessionID(session))
++		available := false
++		if err == nil {
++			available, err = compilerHistorySourceAvailable(ctx, conn, owner, destination)
++		} else if errors.Is(err, sql.ErrNoRows) {
++			// Missing retained registry identity is unavailable, not authority
++			// to replace it or evidence that this interval completed.
++			err = nil
++		}
++		if err != nil {
++			return err
++		}
++		if !available {
++			// The source is still rejected. Commit only safe scheduling metadata
++			// so its retained obligation cannot monopolize later requests.
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET reason='source_scope_unavailable' WHERE request_id=? AND range_ordinal=? AND root_id=?`, request, ordinal, root); err != nil {
++				return err
++			}
++			result.State = "authorization_paused"
++			return nil
++		}
++		cutoff := last
++		// A different overlapping request may own a queue-full earlier prefix.
++		// Revisit that owner before considering the final already-owned suffix.
++		var pendingLast int64
++		err = conn.QueryRowContext(ctx, historyPendingOwnership, generationID, destination, session, root, last, first).Scan(&pendingLast)
++		if err == nil && pendingLast < cutoff {
++			cutoff = pendingLast
++		} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		selectionID, _, err := selectCompilerUnitInTransaction(ctx, conn, owner, memory.CompilationSelection{SessionID: owner.SessionID, RootID: memory.EventID(root), Cutoff: cutoff, Destination: destination}, generationID, manifest, generation, compilerScheduling{Lane: "historical", HistoricalOrder: order, FirstSequence: first, AwaitClosure: true, HistorySelected: true})
++		if err != nil {
++			return err
++		}
++		state, reason := "deferred_live", "unfinished_live_turn"
++		var sealedLast int64
++		if selectionID != "" {
++			if err := conn.QueryRowContext(ctx, `SELECT state,reason,last_sequence FROM memory_compiler_selections WHERE selection_id=?`, selectionID).Scan(&state, &reason, &sealedLast); err != nil {
++				return err
++			}
++			pendingErr := conn.QueryRowContext(ctx, historyPendingOwnership, generationID, destination, session, root, last, first).Scan(&pendingLast)
++			if pendingErr != nil && !errors.Is(pendingErr, sql.ErrNoRows) {
++				return pendingErr
++			}
++			if (sealedLast < last || pendingErr == nil) && state != "selected_unmaterialized" && state != "deferred_live" {
++				state = "selected_unmaterialized"
++				reason = ""
++			}
++		}
++		result.SelectionID = selectionID
++		result.State = state
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET state=?,reason=?,selection_id=? WHERE request_id=? AND range_ordinal=? AND root_id=?`, state, reason, selectionID, request, ordinal, root)
++		return err
++	})
++	if err != nil {
++		return
++	}
++	err = s.resumeCompilerHistoryStep(ctx, config)
++	return
++}
++
++func discoverCompilerHistory(ctx context.Context, conn compilerActivationTransaction, result *memory.CompilerReconciliation) error {
++	var request, session string
++	var ordinal, scanned, last int64
++	err := conn.QueryRowContext(ctx, historyNextDiscoveryRequest).Scan(&request)
++	if errors.Is(err, sql.ErrNoRows) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	check, err := nextHistoryCheck(ctx, conn)
++	if err != nil {
++		return err
++	}
++	if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_requests SET range_checked=? WHERE request_id=?`, check, request); err != nil {
++		return err
++	}
++	err = conn.QueryRowContext(ctx, historyNextDiscoveryRange, request).Scan(&ordinal, &session, &scanned, &last)
++	if err != nil {
++		return err
++	}
++	var event, kind, role, payload string
++	var parent sql.NullString
++	var seq int64
++	err = conn.QueryRowContext(ctx, `SELECT id,sequence,event_type,parent_id,COALESCE(role,''),CASE WHEN length(CAST(payload_json AS BLOB))<=8192 THEN COALESCE(payload_json,'') ELSE '' END FROM events WHERE session_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT 1`, session, scanned, last).Scan(&event, &seq, &kind, &parent, &role, &payload)
++	if err != nil {
++		return err
++	}
++	ancestry, err := resolveCompilerAncestry(ctx, conn, session, compilerAncestryEvent{ID: event, Parent: parent, Sequence: seq, Kind: kind, Role: role, Payload: payload})
++	if err != nil {
++		return err
++	}
++	root := ancestry.ID
++	state, reason := "selected_unmaterialized", ""
++	if ancestry.Kind != "user_message" || ancestry.Role != "user" || ancestry.Parent.Valid {
++		root = event
++		state = "failed"
++		reason = "invalid_source_ancestry"
++		if ancestry.Depth == 128 {
++			reason = "source_inspection_limit"
++		}
++		if kind == string(memory.EventContextCompacted) || kind == string(memory.EventContextSnapshot) {
++			state = "excluded"
++			reason = "prohibited_source"
++		}
++	}
++	if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_roots(request_id,range_ordinal,root_id,first_sequence,last_sequence,state,reason) VALUES(?,?,?,?,?,?,?) ON CONFLICT(request_id,range_ordinal,root_id) DO UPDATE SET last_sequence=MAX(last_sequence,excluded.last_sequence)`, request, ordinal, root, seq, seq, state, reason); err != nil {
++		return err
++	}
++	if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_events VALUES(?,?,?,?,?)`, request, ordinal, event, seq, root); err != nil {
++		return err
++	}
++	_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_history_ranges SET scanned_sequence=?,checked_order=? WHERE request_id=? AND ordinal=?`, seq, check, request, ordinal)
++	result.Discovered = true
++	return err
++}
++
++// Pending-request indexes exclude all retained completed and cancelled history.
++// Child range choices visit at most the receipt's100 ranges; root choices use
++// the exact request/range pending index, never all historical roots.
++const historyNextDiscoveryRequest = `SELECT request_id FROM memory_compiler_history_requests WHERE cancelled=0 AND pending_ranges>0 ORDER BY range_checked,selection_order,request_id LIMIT 1`
++const historyNextDiscoveryRange = `SELECT ordinal,session_id,scanned_sequence,last_sequence FROM memory_compiler_history_ranges WHERE request_id=? AND scanned_sequence<last_sequence ORDER BY checked_order,ordinal LIMIT 1`
++const historyNextRootRequest = `SELECT request_id FROM memory_compiler_history_requests WHERE cancelled=0 AND pending_roots>0 ORDER BY root_checked,selection_order,request_id LIMIT 1`
++const historyNextRootRange = `SELECT ordinal FROM memory_compiler_history_ranges x WHERE request_id=? AND scanned_sequence=last_sequence AND EXISTS(SELECT 1 FROM memory_compiler_history_roots r WHERE r.request_id=x.request_id AND r.range_ordinal=x.ordinal AND r.state IN ('selected_unmaterialized','deferred_live')) ORDER BY checked_order,ordinal LIMIT 1`
++const historyPendingOwnership = `SELECT last_sequence FROM memory_compiler_selections WHERE generation_id=? AND destination=? AND session_id=? AND root_id=? AND first_sequence<=? AND last_sequence>=? AND job_id IS NULL AND state IN ('selected_unmaterialized','deferred_live') ORDER BY first_sequence LIMIT 1`
++
++func nextHistoryCheck(ctx context.Context, conn compilerActivationTransaction) (int64, error) {
++	var check int64
++	err := conn.QueryRowContext(ctx, `UPDATE memory_compiler_history_schedule_counter SET value=value+1 WHERE singleton=1 RETURNING value`).Scan(&check)
++	return check, err
++}
++
++// This preflight recognizes only proven unavailable registry states and the
++// typed quarantine outcome. It does not grant authorization: available work
++// still passes the shared compilerAuthorize inside the selector. Unexpected
++// query/cancellation/transaction failures are never converted to a pause.
++func compilerHistorySourceAvailable(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, destination string) (bool, error) {
++	if owner.WorkspaceID != "" {
++		var state string
++		err := conn.QueryRowContext(ctx, `SELECT lifecycle_state FROM workspaces WHERE id=?`, owner.WorkspaceID).Scan(&state)
++		if errors.Is(err, sql.ErrNoRows) {
++			return false, nil
++		}
++		if err != nil {
++			return false, err
++		}
++		if state != "active" {
++			return false, nil
++		}
++	}
++	if owner.ProjectID != "" {
++		var archived int
++		err := conn.QueryRowContext(ctx, `SELECT archived FROM projects WHERE id=?`, owner.ProjectID).Scan(&archived)
++		if errors.Is(err, sql.ErrNoRows) {
++			return false, nil
++		}
++		if err != nil {
++			return false, err
++		}
++		if archived != 0 {
++			return false, nil
++		}
++	}
++	err := requireSemanticScopeKeysAvailable(ctx, conn, []string{"global", scopeKeyForContext(owner), destination})
++	if errors.Is(err, ErrSemanticScopeQuarantined) {
++		return false, nil
++	}
++	return err == nil, err
++}
+diff --git a/internal/eviedb/compiler_history_resume.go b/internal/eviedb/compiler_history_resume.go
+new file mode 100644
+index 0000000..bd43211
+--- /dev/null
++++ b/internal/eviedb/compiler_history_resume.go
+@@ -0,0 +1,58 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// The explicit-resume queue contains only outstanding resume operations. A
++// polling host never scans all retained cancelled jobs looking for permission.
++func (s *Store) resumeCompilerHistoryStep(ctx context.Context, config CompilerSupervisorConfig) error {
++	var selection string
++	var owner memory.ScopeContext
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var request, generation string
++		var resumeOrder int64
++		err := conn.QueryRowContext(ctx, `SELECT z.request_id,q.generation_id,z.change_order FROM memory_compiler_history_resume_queue z JOIN memory_compiler_history_requests q USING(request_id) WHERE q.cancelled=0 ORDER BY z.checked_order,z.change_order,z.request_id LIMIT 1`).Scan(&request, &generation, &resumeOrder)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		check, err := nextHistoryCheck(ctx, conn)
++		if err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_resume_queue SET checked_order=? WHERE request_id=?`, check, request); err != nil {
++			return err
++		}
++		if extractor := config.Extractors[generation]; extractor == nil || extractor.ServerIdentity() == "" {
++			return nil
++		}
++		var session string
++		err = conn.QueryRowContext(ctx, `SELECT s.selection_id,j.session_id FROM memory_compiler_history_ranges r JOIN memory_compiler_jobs j ON j.generation_id=? AND j.destination=r.destination AND j.session_id=r.session_id AND j.first_sequence<=r.last_sequence AND j.last_sequence>=r.first_sequence JOIN memory_compiler_history_jobs h USING(job_id) JOIN memory_compiler_selections s USING(job_id) WHERE r.request_id=? AND j.state='cancelled' AND j.reason='history_cancelled' AND h.cancel_order<? AND (j.attempts<5 OR EXISTS(SELECT 1 FROM memory_compiler_stages st WHERE st.job_id=j.job_id AND st.consumed=0)) ORDER BY r.ordinal,j.last_sequence,j.first_sequence LIMIT 1`, generation, request, resumeOrder).Scan(&selection, &session)
++		if errors.Is(err, sql.ErrNoRows) {
++			_, err = conn.ExecContext(ctx, `DELETE FROM memory_compiler_history_resume_queue WHERE request_id=?`, request)
++			return err
++		}
++		if err != nil {
++			return err
++		}
++		owner, err = reviewSourceContext(ctx, conn, memory.SessionID(session))
++		return err
++	})
++	if err != nil || selection == "" {
++		return err
++	}
++	// The existing API repeats current authority and pause checks in its own
++	// serialized resource transaction, including a concurrent request cancellation.
++	_, err = s.ResumeCompilation(ctx, owner, selection)
++	if errors.Is(err, ErrCompilerCapacityBlocked) || errors.Is(err, ErrCompilerFence) {
++		return nil
++	}
++	return err
++}
+diff --git a/internal/eviedb/compiler_history_schema.go b/internal/eviedb/compiler_history_schema.go
+new file mode 100644
+index 0000000..32329a7
+--- /dev/null
++++ b/internal/eviedb/compiler_history_schema.go
+@@ -0,0 +1,84 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++)
++
++func ensureCompilerHistorySchema(ctx context.Context, db *sql.DB) error {
++	return withImmediateTransactionResolver(ctx, db, executeImmediateTransactionStatement, transactionResolutionContext, func(conn *sql.Conn) error {
++		_, err := conn.ExecContext(ctx, compilerHistorySchema)
++		return err
++	})
++}
++
++const compilerHistorySchema = `
++CREATE TABLE IF NOT EXISTS memory_compiler_history_requests (
++ request_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, owner_id TEXT NOT NULL,
++ generation_id TEXT NOT NULL REFERENCES memory_compiler_generations,
++ selection_order INTEGER NOT NULL UNIQUE, receipt BLOB NOT NULL,
++ pending_ranges INTEGER NOT NULL DEFAULT 0, pending_roots INTEGER NOT NULL DEFAULT 0, range_checked INTEGER NOT NULL DEFAULT 0, root_checked INTEGER NOT NULL DEFAULT 0, resume_order INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1, cancelled INTEGER NOT NULL DEFAULT 0 CHECK(cancelled IN (0,1))
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_history_schedule_counter(singleton INTEGER PRIMARY KEY CHECK(singleton=1),value INTEGER NOT NULL);
++INSERT OR IGNORE INTO memory_compiler_history_schedule_counter VALUES(1,0);
++CREATE INDEX IF NOT EXISTS memory_compiler_history_discovery_ready ON memory_compiler_history_requests(range_checked,selection_order,request_id) WHERE cancelled=0 AND pending_ranges>0;
++CREATE INDEX IF NOT EXISTS memory_compiler_history_roots_ready ON memory_compiler_history_requests(root_checked,selection_order,request_id) WHERE cancelled=0 AND pending_roots>0;
++CREATE TRIGGER IF NOT EXISTS memory_compiler_history_receipt_immutable BEFORE UPDATE OF request_id,request_hash,owner_id,generation_id,selection_order,receipt ON memory_compiler_history_requests BEGIN SELECT RAISE(ABORT,'immutable history selection receipt'); END;
++CREATE TABLE IF NOT EXISTS memory_compiler_history_ranges (
++ request_id TEXT NOT NULL REFERENCES memory_compiler_history_requests, ordinal INTEGER NOT NULL,
++ source_scope TEXT NOT NULL, destination TEXT NOT NULL, session_id TEXT NOT NULL REFERENCES sessions,
++ first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL,
++ first_event_id TEXT NOT NULL REFERENCES events, last_event_id TEXT NOT NULL REFERENCES events,
++ scanned_sequence INTEGER NOT NULL, checked_order INTEGER NOT NULL DEFAULT 0,
++ PRIMARY KEY(request_id,ordinal)
++);
++CREATE TRIGGER IF NOT EXISTS memory_compiler_history_range_immutable BEFORE UPDATE OF request_id,ordinal,source_scope,destination,session_id,first_sequence,last_sequence,first_event_id,last_event_id ON memory_compiler_history_ranges BEGIN SELECT RAISE(ABORT,'immutable history range'); END;
++CREATE INDEX IF NOT EXISTS memory_compiler_history_coordinate ON memory_compiler_history_ranges(session_id,destination,first_sequence,last_sequence);
++CREATE TABLE IF NOT EXISTS memory_compiler_history_roots (
++ request_id TEXT NOT NULL, range_ordinal INTEGER NOT NULL, root_id TEXT NOT NULL REFERENCES events,
++ first_sequence INTEGER NOT NULL, last_sequence INTEGER NOT NULL,
++ state TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', selection_id TEXT NOT NULL DEFAULT '',
++ checked_order INTEGER NOT NULL DEFAULT 0,
++ PRIMARY KEY(request_id,range_ordinal,root_id),
++ FOREIGN KEY(request_id,range_ordinal) REFERENCES memory_compiler_history_ranges(request_id,ordinal)
++);
++CREATE INDEX IF NOT EXISTS memory_compiler_history_range_pending ON memory_compiler_history_ranges(request_id,checked_order,ordinal) WHERE scanned_sequence<last_sequence;
++CREATE INDEX IF NOT EXISTS memory_compiler_history_range_discovered ON memory_compiler_history_ranges(request_id,checked_order,ordinal) WHERE scanned_sequence=last_sequence;
++CREATE INDEX IF NOT EXISTS memory_compiler_history_root_pending ON memory_compiler_history_roots(request_id,range_ordinal,checked_order,first_sequence,root_id) WHERE state IN ('selected_unmaterialized','deferred_live');
++CREATE INDEX IF NOT EXISTS memory_compiler_history_unmaterialized ON memory_compiler_selections(generation_id,destination,session_id,root_id,first_sequence,last_sequence) WHERE job_id IS NULL AND state IN ('selected_unmaterialized','deferred_live');
++CREATE INDEX IF NOT EXISTS memory_compiler_history_cancelled ON memory_compiler_jobs(session_id,first_sequence,job_id) WHERE state='cancelled' AND reason='history_cancelled';
++CREATE TRIGGER IF NOT EXISTS memory_compiler_history_range_discovered_count AFTER UPDATE OF scanned_sequence ON memory_compiler_history_ranges WHEN OLD.scanned_sequence<OLD.last_sequence AND NEW.scanned_sequence=NEW.last_sequence BEGIN UPDATE memory_compiler_history_requests SET pending_ranges=pending_ranges-1 WHERE request_id=NEW.request_id; END;
++CREATE TRIGGER IF NOT EXISTS memory_compiler_history_root_insert_count AFTER INSERT ON memory_compiler_history_roots WHEN NEW.state IN ('selected_unmaterialized','deferred_live') BEGIN UPDATE memory_compiler_history_requests SET pending_roots=pending_roots+1 WHERE request_id=NEW.request_id; END;
++CREATE TRIGGER IF NOT EXISTS memory_compiler_history_root_update_count AFTER UPDATE OF state ON memory_compiler_history_roots WHEN (NEW.state IN ('selected_unmaterialized','deferred_live'))<>(OLD.state IN ('selected_unmaterialized','deferred_live')) BEGIN UPDATE memory_compiler_history_requests SET pending_roots=pending_roots+(NEW.state IN ('selected_unmaterialized','deferred_live'))-(OLD.state IN ('selected_unmaterialized','deferred_live')) WHERE request_id=NEW.request_id; END;
++CREATE TABLE IF NOT EXISTS memory_compiler_history_events (
++ request_id TEXT NOT NULL, range_ordinal INTEGER NOT NULL, event_id TEXT NOT NULL REFERENCES events,
++ sequence INTEGER NOT NULL, root_id TEXT NOT NULL REFERENCES events,
++ PRIMARY KEY(request_id,range_ordinal,event_id),
++ FOREIGN KEY(request_id,range_ordinal) REFERENCES memory_compiler_history_ranges(request_id,ordinal)
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_history_jobs (
++ job_id TEXT PRIMARY KEY REFERENCES memory_compiler_jobs, cancel_order INTEGER NOT NULL DEFAULT 0
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_history_changes (
++ operation_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, response BLOB NOT NULL, change_order INTEGER NOT NULL UNIQUE
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_history_resume_queue(request_id TEXT PRIMARY KEY REFERENCES memory_compiler_history_requests,change_order INTEGER NOT NULL,checked_order INTEGER NOT NULL DEFAULT 0);
++CREATE INDEX IF NOT EXISTS memory_compiler_history_resume_ready ON memory_compiler_history_resume_queue(checked_order,change_order,request_id);
++CREATE INDEX IF NOT EXISTS memory_compiler_history_cancelled_coordinate ON memory_compiler_jobs(generation_id,destination,session_id,last_sequence,first_sequence) WHERE state='cancelled' AND reason='history_cancelled';
++CREATE TABLE IF NOT EXISTS memory_compiler_history_selection_refs (
++ generation_id TEXT NOT NULL REFERENCES memory_compiler_generations,destination TEXT NOT NULL,session_id TEXT NOT NULL REFERENCES sessions,event_id TEXT NOT NULL REFERENCES events,
++ active_requests INTEGER NOT NULL CHECK(active_requests>=0),
++ PRIMARY KEY(generation_id,destination,session_id,event_id)
++);
++CREATE VIEW IF NOT EXISTS memory_compiler_history_paused_jobs AS
++ SELECT j.job_id FROM memory_compiler_history_jobs h JOIN memory_compiler_jobs j USING(job_id)
++ WHERE NOT EXISTS (
++ SELECT 1 FROM json_each(j.request,'$.window.new_event_ids') member
++ JOIN memory_compiler_history_selection_refs r ON r.generation_id=j.generation_id AND r.destination=j.destination AND r.session_id=j.session_id AND r.event_id=member.value
++ WHERE r.active_requests>0
++ );
++CREATE VIEW IF NOT EXISTS memory_compiler_paused_jobs AS
++ SELECT job_id FROM memory_compiler_activation_paused_jobs UNION ALL SELECT job_id FROM memory_compiler_history_paused_jobs;
++CREATE VIEW IF NOT EXISTS memory_compiler_invalid_claims AS
++ SELECT job_id FROM memory_compiler_activation_invalid_claims UNION ALL SELECT job_id FROM memory_compiler_history_paused_jobs;
++`
+diff --git a/internal/eviedb/compiler_history_test.go b/internal/eviedb/compiler_history_test.go
+new file mode 100644
+index 0000000..788e2f6
+--- /dev/null
++++ b/internal/eviedb/compiler_history_test.go
+@@ -0,0 +1,548 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"fmt"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func historyRange(f *workerFixture, first, last memory.Event) memory.CompilerHistoryRange {
++	return memory.CompilerHistoryRange{SourceScope: "global", Destination: "global", SessionID: f.owner.SessionID, FirstSequence: first.Sequence, LastSequence: last.Sequence, FirstEventID: first.ID, LastEventID: last.ID}
++}
++func historyRoot(t *testing.T, f *workerFixture, text string) (memory.Event, memory.Event) {
++	t.Helper()
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: text})
++	end := activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	return root, end
++}
++func historySelect(t *testing.T, f *workerFixture, id string, ranges ...memory.CompilerHistoryRange) memory.CompilerHistoryReceipt {
++	t.Helper()
++	r, err := f.store.SelectCompilerHistory(context.Background(), []memory.ScopeContext{f.owner}, memory.CompilerHistoryRequest{RequestID: id, Ranges: ranges}, f.generation, &activationScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return r
++}
++func historyReconcile(t *testing.T, f *workerFixture, n int) {
++	t.Helper()
++	for range n {
++		if _, err := f.store.ReconcileCompilerHistory(context.Background(), f.config(&activationScript{})); err != nil {
++			t.Fatal(err)
++		}
++	}
++}
++func historyProgress(t *testing.T, f *workerFixture, id string, index int) memory.CompilerHistoryProgress {
++	t.Helper()
++	p, err := f.store.InspectCompilerHistory(context.Background(), []memory.ScopeContext{f.owner}, id, index, 0, 64)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return p
++}
++
++func TestCompilerHistoryFrozenSelectionOverlapFailureGapAndReopen(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	a, ae := historyRoot(t, f, "I prefer tea.")
++	b, be := historyRoot(t, f, "I prefer coffee.")
++	receipt := historySelect(t, f, "first", historyRange(f, a, be))
++	// Retained legacy rows keep their coordinates without inventing positions.
++	if _, err := f.db.Exec(`DELETE FROM memory_compiler_event_positions`); err != nil {
++		t.Fatal(err)
++	}
++	extra, _ := historyRoot(t, f, "Outside captured history.")
++	again := historySelect(t, f, "first", historyRange(f, a, be))
++	if string(compilerJSON(receipt)) != string(compilerJSON(again)) {
++		t.Fatal("receipt changed")
++	}
++	historySelect(t, f, "overlap", historyRange(f, b, be))
++	historyReconcile(t, f, 14)
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs`); n != 2 {
++		t.Fatalf("overlap jobs %d", n)
++	}
++	var firstJob string
++	if err := f.db.QueryRow(`SELECT job_id FROM memory_compiler_jobs WHERE first_sequence=?`, a.Sequence).Scan(&firstJob); err != nil {
++		t.Fatal(err)
++	}
++	bad := &workerScript{run: func(_ context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++		return CompilerExtraction{ReleaseEvidence: "completed"}, ErrCompilerTerminalOutput
++	}}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(bad)); !worked || err == nil {
++		t.Fatal(worked, err)
++	}
++	f.store = f.second(t)
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); !worked || err != nil {
++		t.Fatal(worked, err)
++	}
++	p := historyProgress(t, f, "first", 0)
++	if p.ContiguousFrontier != a.Sequence-1 || len(p.Intervals) != 2 || p.Intervals[0].State != "failed" || p.Intervals[1].State != "completed_empty" || p.OutsideSelectionEvents != 2 || p.SelectedSessionEvents != 4 {
++		t.Fatalf("progress %+v", p)
++	}
++	if p.Intervals[0].LastSequence != ae.Sequence || p.Intervals[1].LastSequence != be.Sequence || p.Intervals[1].LastSequence >= extra.Sequence {
++		t.Fatal("exact ranges lost")
++	}
++	historySelect(t, f, "third", historyRange(f, a, be))
++	historyReconcile(t, f, 12)
++	var attempts int
++	if err := f.db.QueryRow(`SELECT attempts FROM memory_compiler_jobs WHERE job_id=?`, firstJob).Scan(&attempts); err != nil || attempts != 1 {
++		t.Fatal(attempts, err)
++	}
++	if _, err := f.store.ResumeCompilation(ctx, f.owner, firstJob); err == nil {
++		t.Fatal("failed same generation restarted")
++	}
++}
++
++func TestCompilerHistoryBoundsAndAtomicAuthorizations(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	a, end := historyRoot(t, f, "An assertion.")
++	r := historyRange(f, a, end)
++	cases := []memory.CompilerHistoryRequest{{RequestID: "empty"}, {RequestID: "wrong-id", Ranges: []memory.CompilerHistoryRange{r}}, {RequestID: "wide", Ranges: []memory.CompilerHistoryRange{r}}}
++	cases[1].Ranges[0].LastEventID = "wrong"
++	cases[2].Ranges[0].Destination = "workspace:other"
++	for _, req := range cases {
++		if _, err := f.store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.owner}, req, f.generation, &activationScript{}); err == nil {
++			t.Fatalf("accepted %+v", req)
++		}
++	}
++	req := memory.CompilerHistoryRequest{RequestID: "101", Ranges: make([]memory.CompilerHistoryRange, 101)}
++	for i := range req.Ranges {
++		req.Ranges[i] = r
++	}
++	if _, err := f.store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.owner}, req, f.generation, &activationScript{}); err == nil {
++		t.Fatal("101 ranges")
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_requests`); n != 0 {
++		t.Fatal("partial request")
++	}
++	// Populate source coordinate fixtures to exercise the exact 10,000-event
++	// admission boundary without dispatching or inspecting their source contents.
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(3) UNION ALL SELECT x+1 FROM n WHERE x<10001) INSERT INTO events(id,session_id,sequence,event_type,role,content,recorded_at,format_version) SELECT 'history-bound-'||x,?,x,'user_message','user','assertion',strftime('%Y-%m-%dT%H:%M:%fZ','now'),1 FROM n`, f.owner.SessionID); err != nil {
++		t.Fatal(err)
++	}
++	r.LastSequence = 10000
++	r.LastEventID = "history-bound-10000"
++	historySelect(t, f, "10000", r)
++	r.LastSequence = 10001
++	r.LastEventID = "history-bound-10001"
++	if _, err := f.store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryRequest{RequestID: "10001", Ranges: []memory.CompilerHistoryRange{r}}, f.generation, &activationScript{}); err == nil {
++		t.Fatal("10001 events")
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_requests`); n != 1 {
++		t.Fatal("partial oversized receipt")
++	}
++}
++
++func TestCompilerHistoryCancellationUnionRollbackAndABAFence(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "I prefer tea.")
++	historySelect(t, f, "a", historyRange(f, root, end))
++	historySelect(t, f, "b", historyRange(f, root, end))
++	historyReconcile(t, f, 8)
++	var job string
++	if err := f.db.QueryRow(`SELECT job_id FROM memory_compiler_jobs`).Scan(&job); err != nil {
++		t.Fatal(err)
++	}
++	claim, err := f.store.claimCompilerJob(ctx, f.owner, job, &workerScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	change := memory.CompilerHistoryChange{RequestID: "a", OperationID: "cancel-a", ExpectedRevision: 1}
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, change); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.renewCompilerClaim(ctx, claim); err != nil {
++		t.Fatal("overlap cancellation fenced shared work", err)
++	}
++	// Failure at the durable receipt commit rolls back request, fence, resources
++	// and capacity together. No partial cancellation becomes observable.
++	if _, err := f.db.Exec(`CREATE TRIGGER fail_history_cancel BEFORE INSERT ON memory_compiler_history_changes WHEN NEW.operation_id='cancel-b' BEGIN SELECT RAISE(ABORT,'fixture rollback'); END`); err != nil {
++		t.Fatal(err)
++	}
++	change = memory.CompilerHistoryChange{RequestID: "b", OperationID: "cancel-b", ExpectedRevision: 1}
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, change); err == nil {
++		t.Fatal("rollback trigger ignored")
++	}
++	if err := f.store.renewCompilerClaim(ctx, claim); err != nil {
++		t.Fatal("rolled back cancellation changed fence", err)
++	}
++	if _, err := f.db.Exec(`DROP TRIGGER fail_history_cancel`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, change); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.renewCompilerClaim(ctx, claim); !errors.Is(err, ErrCompilerFence) {
++		t.Fatal("cancel did not fence", err)
++	}
++	resume := memory.CompilerHistoryChange{RequestID: "b", OperationID: "resume-b", ExpectedRevision: 2}
++	if _, err := f.store.ResumeCompilerHistory(ctx, []memory.ScopeContext{f.owner}, resume, f.generation, &activationScript{}); err != nil {
++		t.Fatal(err)
++	}
++	historyReconcile(t, f, 2)
++	if err := f.store.stageCompilerResult(ctx, f.owner, claim.JobID, string(claim.Holder), claim.Fence, claim.Request, []memory.MemoryCandidate{}); !errors.Is(err, ErrCompilerFence) {
++		t.Fatal("stale result after resume", err)
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_capacity WHERE state='release_pending'`); n != 1 {
++		t.Fatal("unknown release was freed")
++	}
++	if n := activationCount(t, f.db, `SELECT attempts FROM memory_compiler_jobs`); n != 1 {
++		t.Fatal("resume reset attempts")
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_coverage`); n != 0 {
++		t.Fatal("cancelled result covered")
++	}
++}
++
++func TestCompilerHistoryClosureAndQueueFullObligation(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Captured assertion."})
++	historySelect(t, f, "bounded", historyRange(f, root, root))
++	historyReconcile(t, f, 2)
++	if p := historyProgress(t, f, "bounded", 0); p.Intervals[0].State != "deferred_live" {
++		t.Fatalf("unfinished %+v", p)
++	}
++	// Newer unselected root closes this prefix while the session still has a
++	// live lease. It supplies neither support nor coverage to the old request.
++	outside := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Unselected later root."})
++	historyReconcile(t, f, 2)
++	var requestRaw []byte
++	if err := f.db.QueryRow(`SELECT request FROM memory_compiler_jobs`).Scan(&requestRaw); err != nil {
++		t.Fatal(err)
++	}
++	if strings.Contains(string(requestRaw), string(outside.ID)) || strings.Contains(string(requestRaw), "Unselected later") {
++		t.Fatal("outside selection entered sealed request")
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); !worked || err != nil {
++		t.Fatal(worked, err)
++	}
++	p := historyProgress(t, f, "bounded", 0)
++	if p.ContiguousFrontier != root.Sequence || p.OutsideSelectionEvents != 1 {
++		t.Fatalf("cutoff %+v", p)
++	}
++	// The independent full-queue selection stays durable until capacity returns.
++	q, qe := historyRoot(t, f, "Queue-full assertion.")
++	historySelect(t, f, "full", historyRange(f, q, qe))
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1024) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'full-history-'||x,?,'global',?,?,20000+x,20000+x,'fixture','{}','queued' FROM n`, f.generationID, f.owner.SessionID, q.ID); err != nil {
++		t.Fatal(err)
++	}
++	historyReconcile(t, f, 5)
++	if p := historyProgress(t, f, "full", 0); p.Intervals[0].State != "selected_unmaterialized" {
++		t.Fatalf("lost queue full %+v", p)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET state='failed' WHERE job_id='full-history-1'`); err != nil {
++		t.Fatal(err)
++	}
++	f.store = f.second(t)
++	historyReconcile(t, f, 2)
++	if p := historyProgress(t, f, "full", 0); p.Intervals[0].State != "queued" {
++		t.Fatalf("not rediscovered %+v", p)
++	}
++}
++
++func TestCompilerHistoryConcurrentOverlapSingleOwnership(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "Asserted once.")
++	other := f.second(t)
++	start := make(chan struct{})
++	errs := make(chan error, 2)
++	for i, store := range []*Store{f.store, other} {
++		go func(i int, store *Store) {
++			<-start
++			_, err := store.SelectCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryRequest{RequestID: fmt.Sprintf("race-%d", i), Ranges: []memory.CompilerHistoryRange{historyRange(f, root, end)}}, f.generation, &activationScript{})
++			errs <- err
++		}(i, store)
++	}
++	close(start)
++	for range 2 {
++		if err := <-errs; err != nil {
++			t.Fatal(err)
++		}
++	}
++	var wg sync.WaitGroup
++	for _, store := range []*Store{f.store, other} {
++		wg.Add(1)
++		go func(store *Store) {
++			defer wg.Done()
++			for range 8 {
++				if _, err := store.ReconcileCompilerHistory(ctx, f.config(&activationScript{})); err != nil {
++					errs <- err
++					return
++				}
++			}
++		}(store)
++	}
++	wg.Wait()
++	select {
++	case err := <-errs:
++		t.Fatal(err)
++	default:
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs`); n != 1 {
++		t.Fatal("duplicate interval ownership", n)
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_requests`); n != 2 {
++		t.Fatal("original request lost", n)
++	}
++}
++
++func TestCompilerHistoryNewEvidenceFairnessUsesRealSelections(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	old1, _ := historyRoot(t, f, "First selected history.")
++	old2, end := historyRoot(t, f, "Second selected history.")
++	historySelect(t, f, "catch-up", historyRange(f, old1, end))
++	historyReconcile(t, f, 10)
++	activationStart(t, f)
++	for range 16 {
++		historyRoot(t, f, "New asserted evidence.")
++	}
++	activationReconcile(t, f, 75)
++	order := []memory.EventID{}
++	extractor := &workerScript{run: func(_ context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++		order = append(order, r.Window.Selection.RootID)
++		return CompilerExtraction{Raw: compilerJSON(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{}}), ReleaseEvidence: "completed"}, nil
++	}}
++	for n := 1; n <= 18; n++ {
++		if worked, err := f.second(t).RunCompilerStep(ctx, f.config(extractor)); !worked || err != nil {
++			t.Fatalf("dispatch %d: %v %v", n, worked, err)
++		}
++		historical := order[n-1] == old1.ID || order[n-1] == old2.ID
++		if historical != (n == 9 || n == 18) {
++			t.Fatalf("history fairness dispatch %d root %s", n, order[n-1])
++		}
++	}
++	if order[8] != old1.ID || order[17] != old2.ID {
++		t.Fatal("oldest historical order changed")
++	}
++}
++
++func TestCompilerHistoryReselectionDoesNotResumeCancellation(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "An assertion.")
++	historySelect(t, f, "original", historyRange(f, root, end))
++	historyReconcile(t, f, 4)
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "original", OperationID: "cancel", ExpectedRevision: 1}); err != nil {
++		t.Fatal(err)
++	}
++	historySelect(t, f, "repeat", historyRange(f, root, end))
++	historyReconcile(t, f, 5)
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE state='cancelled' AND attempts=0`); n != 1 {
++		t.Fatal("reselection implicitly resumed", n)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); worked || err != nil {
++		t.Fatal("cancelled job dispatched", worked, err)
++	}
++}
++
++func TestCompilerHistoryExclusionAndOversizeRemainDistinct(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	secret, secretEnd := historyRoot(t, f, "password=not-a-real-password-fixture")
++	large, largeEnd := historyRoot(t, f, strings.Repeat("x", 32769))
++	historySelect(t, f, "outcomes", historyRange(f, secret, largeEnd))
++	historyReconcile(t, f, 10)
++	p := historyProgress(t, f, "outcomes", 0)
++	if len(p.Intervals) != 2 || p.Intervals[0].State != "excluded" || p.Intervals[0].LastSequence != secretEnd.Sequence || p.Intervals[1].State != "failed" || p.Intervals[1].Reason != "oversized_input" || p.Intervals[1].FirstSequence != large.Sequence || p.ContiguousFrontier != secretEnd.Sequence {
++		t.Fatalf("outcomes %+v", p)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(&workerScript{})); worked || err != nil {
++		t.Fatal("excluded/oversized input dispatched", worked, err)
++	}
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "outcomes", OperationID: "cancel-outcomes", ExpectedRevision: 1}); err != nil {
++		t.Fatal(err)
++	}
++	p = historyProgress(t, f, "outcomes", 0)
++	if p.Intervals[0].State != "excluded" || p.Intervals[1].State != "failed" {
++		t.Fatal("cancellation conflated prior outcomes")
++	}
++}
++
++func TestCompilerHistoryRunningCancellationReturnsPromptlyAndReleasesOnlyProvenCapacity(t *testing.T) {
++	for _, known := range []bool{false, true} {
++		t.Run(fmt.Sprint(known), func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			root, end := historyRoot(t, f, "An assertion.")
++			historySelect(t, f, "running", historyRange(f, root, end))
++			historyReconcile(t, f, 4)
++			entered := make(chan struct{})
++			done := make(chan error, 1)
++			extractor := &workerScript{run: func(ctx context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++				close(entered)
++				<-ctx.Done()
++				release := ""
++				if known {
++					release = "completed"
++				}
++				return CompilerExtraction{ReleaseEvidence: release}, ctx.Err()
++			}}
++			go func() { _, err := f.store.RunCompilerStep(ctx, f.config(extractor)); done <- err }()
++			select {
++			case <-entered:
++			case <-time.After(time.Second):
++				t.Fatal("worker did not dispatch")
++			}
++			if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "running", OperationID: "cancel", ExpectedRevision: 1}); err != nil {
++				t.Fatal(err)
++			}
++			select {
++			case <-done:
++			case <-time.After(time.Second):
++				t.Fatal("cancelled client remained blocked")
++			}
++			want := 1
++			if known {
++				want = 0
++			}
++			if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_capacity`); n != want {
++				t.Fatal("capacity release evidence mismatch", n, want)
++			}
++			if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_coverage`); n != 0 {
++				t.Fatal("late cancelled result published")
++			}
++		})
++	}
++}
++
++func TestCompilerHistoryCancelledFifthStageResumesWithoutSixthAttempt(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "An assertion.")
++	historySelect(t, f, "stage", historyRange(f, root, end))
++	historyReconcile(t, f, 4)
++	var job string
++	if err := f.db.QueryRow(`SELECT job_id FROM memory_compiler_jobs`).Scan(&job); err != nil {
++		t.Fatal(err)
++	}
++	script := &workerScript{}
++	for range 4 {
++		claim, err := f.store.claimCompilerJob(ctx, f.owner, job, script)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err := f.store.failCompilerAttempt(ctx, job, claim.Holder, claim.Fence, true, "invalid_or_missing_output", false); err != nil {
++			t.Fatal(err)
++		}
++		if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now') WHERE job_id=?`, job); err != nil {
++			t.Fatal(err)
++		}
++	}
++	claim, err := f.store.claimCompilerJob(ctx, f.owner, job, script)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.stageCompilerResult(ctx, f.owner, job, claim.Holder, claim.Fence, claim.Request, []memory.MemoryCandidate{}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "stage", OperationID: "cancel-stage", ExpectedRevision: 1}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ResumeCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "stage", OperationID: "resume-stage", ExpectedRevision: 2}, f.generation, &activationScript{}); err != nil {
++		t.Fatal(err)
++	}
++	f.store = f.second(t)
++	historyReconcile(t, f, 2)
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(script)); !worked || err != nil {
++		t.Fatal(worked, err)
++	}
++	got, err := f.store.InspectCompilation(ctx, f.owner, job)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got.State != "completed_empty" || got.Attempts != 5 || script.calls.Load() != 0 {
++		t.Fatalf("saved stage %+v calls %d", got, script.calls.Load())
++	}
++}
++
++func TestCompilerHistoryOverlapRetainsAnotherRequestsQueueFullPrefix(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "Earlier assertion.")
++	historySelect(t, f, "original", historyRange(f, root, end))
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1024) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'overlap-full-'||x,?,'global',?,?,20000+x,20000+x,'fixture','{}','queued' FROM n`, f.generationID, f.owner.SessionID, root.ID); err != nil {
++		t.Fatal(err)
++	}
++	historyReconcile(t, f, 3)
++	late := activationAppend(t, f, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, ParentID: root.ID, Content: "Later assertion."})
++	last := activationAppend(t, f, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Noted."})
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET state='failed' WHERE job_id='overlap-full-1'`); err != nil {
++		t.Fatal(err)
++	}
++	_, manifest, err := memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		_, _, err := selectCompilerUnitInTransaction(ctx, conn, f.owner, memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: last.Sequence, Destination: "global"}, f.generationID, manifest, f.generation, compilerScheduling{Lane: "historical", FirstSequence: late.Sequence})
++		return err
++	}); err != nil {
++		t.Fatal(err)
++	}
++	historySelect(t, f, "overlap", historyRange(f, root, last))
++	historyReconcile(t, f, 10)
++	if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "original", OperationID: "cancel-prefix-owner", ExpectedRevision: 1}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET state='failed' WHERE job_id='overlap-full-2'`); err != nil {
++		t.Fatal(err)
++	}
++	historyReconcile(t, f, 4)
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE first_sequence=1 AND last_sequence=2`); n != 1 {
++		t.Fatal("overlap lost the earlier queue-full prefix", n)
++	}
++	if n := activationCount(t, f.db, `SELECT pending_roots FROM memory_compiler_history_requests WHERE request_id='overlap'`); n != 0 {
++		t.Fatal("completed union ownership stayed pending", n)
++	}
++}
++
++func TestCompilerHistorySelectionRefsDeduplicateRangesDestinationsAndDeliveries(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	root, end := historyRoot(t, f, "An assertion.")
++	base := historyRange(f, root, end)
++	session := base
++	session.Destination = "session:" + string(f.owner.SessionID)
++	ranges := make([]memory.CompilerHistoryRange, 100)
++	for i := range ranges {
++		ranges[i] = base
++	}
++	ranges[99] = session
++	receipt := historySelect(t, f, "references", ranges...)
++	historySelect(t, f, "references", ranges...)
++	if receipt.SelectedEvents != 2 {
++		t.Fatal("range duplicates changed source bound", receipt.SelectedEvents)
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_selection_refs WHERE active_requests=1`); n != 4 {
++		t.Fatal("per-event/destination reference count", n)
++	}
++	cancel := memory.CompilerHistoryChange{RequestID: "references", OperationID: "cancel-refs", ExpectedRevision: 1}
++	for range 2 {
++		if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, cancel); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if n := activationCount(t, f.db, `SELECT SUM(active_requests) FROM memory_compiler_history_selection_refs`); n != 0 {
++		t.Fatal("cancel did not adjust exact refs", n)
++	}
++	resume := memory.CompilerHistoryChange{RequestID: "references", OperationID: "resume-refs", ExpectedRevision: 2}
++	for range 2 {
++		if _, err := f.store.ResumeCompilerHistory(ctx, []memory.ScopeContext{f.owner}, resume, f.generation, &activationScript{}); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if n := activationCount(t, f.db, `SELECT SUM(active_requests) FROM memory_compiler_history_selection_refs`); n != 4 {
++		t.Fatal("duplicate resume adjusted twice", n)
++	}
++}
+diff --git a/internal/eviedb/compiler_history_unavailable_test.go b/internal/eviedb/compiler_history_unavailable_test.go
+new file mode 100644
+index 0000000..4374da6
+--- /dev/null
++++ b/internal/eviedb/compiler_history_unavailable_test.go
+@@ -0,0 +1,225 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"fmt"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func historyScopedFixture(t *testing.T, f *workerFixture, kind string) (*workerFixture, func(bool)) {
++	t.Helper()
++	ctx := context.Background()
++	scoped := *f
++	var session memory.Session
++	var err error
++	if kind == "workspace" {
++		workspace, e := f.store.RegisterWorkspace(ctx, "Temporarily unavailable history")
++		if e != nil {
++			t.Fatal(e)
++		}
++		session, err = f.store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, standardReceipt(t))
++	} else {
++		project, e := f.store.RegisterProject(ctx, "Temporarily unavailable history", t.TempDir())
++		if e != nil {
++			t.Fatal(e)
++		}
++		session, err = f.store.CreateProjectSession(ctx, project.ID)
++	}
++	if err != nil {
++		t.Fatal(err)
++	}
++	scoped.owner = session.ScopeContext()
++	scoped.lease, err = f.store.AcquireTurnLease(ctx, session.ID, "history-unavailable", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	toggle := func(unavailable bool) {
++		t.Helper()
++		var err error
++		switch kind {
++		case "workspace":
++			state := "active"
++			if unavailable {
++				state = "archived"
++			}
++			_, err = f.db.Exec(`UPDATE workspaces SET lifecycle_state=? WHERE id=?`, state, session.WorkspaceID)
++		case "project":
++			_, err = f.db.Exec(`UPDATE projects SET archived=? WHERE id=?`, unavailable, session.ProjectID)
++		case "quarantined":
++			scope := scopeKeyForContext(scoped.owner)
++			if unavailable {
++				if _, err = f.db.Exec(`INSERT OR IGNORE INTO semantic_scopes(scope_id,scope_key,scope_kind,registry_id,revision) VALUES('history-quarantine',?,'project',?,0)`, scope, session.ProjectID); err != nil {
++					t.Fatal(err)
++				}
++				_, err = f.db.Exec(`INSERT INTO semantic_projection_quarantine(scope_id,reason,verified_at) SELECT scope_id,'fixture quarantine',strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM semantic_scopes WHERE scope_key=?`, scope)
++			} else {
++				_, err = f.db.Exec(`DELETE FROM semantic_projection_quarantine WHERE scope_id IN (SELECT scope_id FROM semantic_scopes WHERE scope_key=?)`, scope)
++			}
++		}
++		if err != nil {
++			t.Fatal(err)
++		}
++	}
++	return &scoped, toggle
++}
++
++func scopedHistoryRange(f *workerFixture, first, last memory.Event) memory.CompilerHistoryRange {
++	r := historyRange(f, first, last)
++	r.SourceScope = scopeKeyForContext(f.owner)
++	r.Destination = r.SourceScope
++	return r
++}
++
++func TestCompilerHistoryUnavailableScopeRotatesWithoutStarvingSelectionOrResume(t *testing.T) {
++	for _, kind := range []string{"project", "workspace", "quarantined"} {
++		t.Run(kind, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			ctx := context.Background()
++			// Prepare a separate global explicit-resume obligation before the older
++			// scoped root becomes unavailable. Root failure must not skip this lane.
++			resumeRoot, resumeEnd := historyRoot(t, f, "Global work selected for later resume.")
++			historySelect(t, f, "global-resume", historyRange(f, resumeRoot, resumeEnd))
++			historyReconcile(t, f, 4)
++			if _, err := f.store.CancelCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "global-resume", OperationID: "cancel-resume", ExpectedRevision: 1}); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.store.ResumeCompilerHistory(ctx, []memory.ScopeContext{f.owner}, memory.CompilerHistoryChange{RequestID: "global-resume", OperationID: "resume-global", ExpectedRevision: 2}, f.generation, &activationScript{}); err != nil {
++				t.Fatal(err)
++			}
++			scoped, toggle := historyScopedFixture(t, f, kind)
++			root, end := historyRoot(t, scoped, "Original captured scoped assertion.")
++			original := historySelect(t, scoped, "unavailable", scopedHistoryRange(scoped, root, end))
++			global, globalEnd := historyRoot(t, f, "Independent later global assertion.")
++			historySelect(t, f, "later-global", historyRange(f, global, globalEnd))
++			toggle(true)
++			paused := false
++			for range 16 {
++				r, err := f.store.ReconcileCompilerHistory(ctx, f.config(&activationScript{}))
++				if err != nil {
++					t.Fatal("known unavailable scope became infrastructure failure", err)
++				}
++				paused = paused || r.State == "authorization_paused"
++			}
++			if !paused {
++				t.Fatal("unavailable authority had no safe disposition")
++			}
++			if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE session_id=?`, scoped.owner.SessionID); n != 0 {
++				t.Fatal("unavailable source was materialized", n)
++			}
++			if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE session_id=? AND state='queued'`, f.owner.SessionID); n != 2 {
++				t.Fatal("independent selection/resume starved", n)
++			}
++			if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_roots WHERE request_id='unavailable' AND reason='source_scope_unavailable' AND state='selected_unmaterialized'`); n != 1 {
++				t.Fatal("original obligation lost", n)
++			}
++			if n := activationCount(t, f.db, `SELECT pending_roots FROM memory_compiler_history_requests WHERE request_id='unavailable'`); n != 1 {
++				t.Fatal("unavailable work removed from revisit index")
++			}
++			if _, err := f.store.InspectCompilerHistory(ctx, []memory.ScopeContext{scoped.owner}, "unavailable", 0, 0, 64); err == nil {
++				t.Fatal("progress inspection bypassed unavailable scope authority")
++			}
++			script := &workerScript{}
++			for range 2 {
++				if worked, err := f.store.RunCompilerStep(ctx, f.config(script)); !worked || err != nil {
++					t.Fatal("independent worker failed", worked, err)
++				}
++			}
++			toggle(false)
++			outside := activationAppend(t, scoped, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Later unselected scoped assertion."})
++			if err := f.store.ReleaseTurnLease(ctx, scoped.owner.SessionID, scoped.lease.HolderID, scoped.lease.FencingToken); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, scoped.owner.SessionID); err != nil {
++				t.Fatal(err)
++			}
++			f.store = f.second(t)
++			scoped.store = f.store
++			historyReconcile(t, f, 4)
++			var raw []byte
++			var attempts int
++			var cutoff int64
++			if err := f.db.QueryRow(`SELECT request,attempts,last_sequence FROM memory_compiler_jobs WHERE session_id=?`, scoped.owner.SessionID).Scan(&raw, &attempts, &cutoff); err != nil {
++				t.Fatal(err)
++			}
++			if attempts != 0 || cutoff != end.Sequence || strings.Contains(string(raw), string(outside.ID)) {
++				t.Fatal("restoration widened cutoff or consumed an attempt", attempts, cutoff)
++			}
++			if repeated := historySelect(t, scoped, "unavailable", scopedHistoryRange(scoped, root, end)); string(compilerJSON(repeated)) != string(compilerJSON(original)) {
++				t.Fatal("restoration/reopen changed receipt")
++			}
++			if worked, err := f.store.RunCompilerStep(ctx, f.config(script)); !worked || err != nil {
++				t.Fatal("restored closed source did not progress", worked, err)
++			}
++			progress, err := f.store.InspectCompilerHistory(ctx, []memory.ScopeContext{scoped.owner}, "unavailable", 0, 0, 64)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if progress.ContiguousFrontier != end.Sequence || progress.OutsideSelectionEvents != 1 || progress.Intervals[0].State != "completed_empty" || progress.Intervals[0].Attempts != 1 {
++				t.Fatalf("restored exact progress %+v", progress)
++			}
++		})
++	}
++}
++
++func TestCompilerHistoryUnavailableDispositionDoesNotSwallowDatabaseOrCancellationErrors(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	scoped, toggle := historyScopedFixture(t, f, "project")
++	root, end := historyRoot(t, scoped, "An assertion.")
++	historySelect(t, scoped, "unavailable", scopedHistoryRange(scoped, root, end))
++	// Discover without materializing so the archived root is the next decision.
++	for range 2 {
++		if err := f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++			var r memory.CompilerReconciliation
++			return discoverCompilerHistory(ctx, conn, &r)
++		}); err != nil {
++			t.Fatal(err)
++		}
++	}
++	toggle(true)
++	if _, err := f.db.Exec(`CREATE TRIGGER fail_history_unavailable BEFORE UPDATE OF reason ON memory_compiler_history_roots WHEN NEW.reason='source_scope_unavailable' BEGIN SELECT RAISE(ABORT,'fixture disposition write failed'); END`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ReconcileCompilerHistory(ctx, f.config(&activationScript{})); err == nil {
++		t.Fatal("failed pause write reported success")
++	}
++	if n := activationCount(t, f.db, `SELECT root_checked FROM memory_compiler_history_requests WHERE request_id='unavailable'`); n != 0 {
++		t.Fatal("failed transaction committed root rotation")
++	}
++	if n := activationCount(t, f.db, `SELECT COUNT(*) FROM memory_compiler_history_roots WHERE reason=''`); n != 1 {
++		t.Fatal("failed transaction committed a disposition")
++	}
++	if _, err := f.db.Exec(`DROP TRIGGER fail_history_unavailable`); err != nil {
++		t.Fatal(err)
++	}
++	cancelled, cancel := context.WithCancel(ctx)
++	cancel()
++	if _, err := f.store.ReconcileCompilerHistory(cancelled, f.config(&activationScript{})); !errors.Is(err, context.Canceled) {
++		t.Fatal("cancellation converted to pause", err)
++	}
++	if n := activationCount(t, f.db, `SELECT root_checked FROM memory_compiler_history_requests WHERE request_id='unavailable'`); n != 0 {
++		t.Fatal("cancelled decision mutated scheduling")
++	}
++	result, err := f.store.ReconcileCompilerHistory(ctx, f.config(&activationScript{}))
++	if err != nil || result.State != "authorization_paused" {
++		t.Fatal("safe disposition failed", result, err)
++	}
++	// An actual closed connection must stay an error, even when scope metadata
++	// would otherwise prove an unavailable source.
++	conn, err := f.db.Conn(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := conn.Close(); err != nil {
++		t.Fatal(err)
++	}
++	if available, err := compilerHistorySourceAvailable(ctx, conn, scoped.owner, scopeKeyForContext(scoped.owner)); available || !errors.Is(err, sql.ErrConnDone) {
++		t.Fatal(fmt.Sprintf("connection error converted to availability: %v %v", available, err))
++	}
++}
+diff --git a/internal/eviedb/compiler_reconciliation.go b/internal/eviedb/compiler_reconciliation.go
+index 1ea5491..1bb31fb 100644
+--- a/internal/eviedb/compiler_reconciliation.go
++++ b/internal/eviedb/compiler_reconciliation.go
+@@ -140,24 +140,17 @@ func discoverCompilerEvidenceInTransaction(ctx context.Context, conn compilerAct
+ 	}
+ 	// Follow parent/terminal turn identity, never "most recent root". Only
+ 	// metadata is loaded; the separate sealing transaction bounds raw input.
+-	var root, rootKind, rootRole string
+-	var rootseq, depth int64
+-	var rootParent sql.NullString
+-	err = conn.QueryRowContext(ctx, `WITH RECURSIVE ancestry(id,parent_id,sequence,event_type,role,payload_json,depth) AS (
+- VALUES(?,?,?,?,?,?,1)
+- UNION ALL SELECT e.id,e.parent_id,e.sequence,e.event_type,COALESCE(e.role,''),CASE WHEN length(CAST(e.payload_json AS BLOB))<=8192 THEN COALESCE(e.payload_json,'') ELSE '' END,a.depth+1 FROM ancestry a JOIN events e ON e.id=CASE WHEN a.event_type IN ('turn_failed','turn_interrupted') AND json_valid(a.payload_json) THEN json_extract(a.payload_json,'$.turn_id') ELSE a.parent_id END
+- WHERE e.session_id=? AND e.sequence<a.sequence AND a.depth<128
+-) SELECT id,sequence,event_type,role,parent_id,depth FROM ancestry ORDER BY depth DESC LIMIT 1`, event, parent, seq, kind, role, payload, session).Scan(&root, &rootseq, &rootKind, &rootRole, &rootParent, &depth)
++	ancestry, err := resolveCompilerAncestry(ctx, conn, session, compilerAncestryEvent{ID: event, Parent: parent, Sequence: seq, Kind: kind, Role: role, Payload: payload})
+ 	if err != nil {
+ 		return err
+ 	}
++	root := ancestry.ID
+ 	state, reason := "selected_unmaterialized", ""
+-	if rootKind != "user_message" || rootRole != "user" || rootParent.Valid {
++	if ancestry.Kind != "user_message" || ancestry.Role != "user" || ancestry.Parent.Valid {
+ 		root = event
+-		rootseq = seq
+ 		state = "failed"
+ 		reason = "invalid_source_ancestry"
+-		if depth == 128 {
++		if ancestry.Depth == 128 {
+ 			reason = "source_inspection_limit"
+ 		}
+ 		if kind == string(memory.EventContextCompacted) || kind == string(memory.EventContextSnapshot) {
+@@ -214,6 +207,7 @@ func (s *Store) RunCompilerHost(ctx context.Context, config CompilerSupervisorCo
+ 			if err != nil && ctx.Err() == nil {
+ 				continue
+ 			} // obligations remain durable
++			_, _ = s.ReconcileCompilerHistory(ctx, config)
+ 		}
+ 	}
+ }
+diff --git a/internal/eviedb/compiler_source.go b/internal/eviedb/compiler_source.go
+index 11f9ef8..aebd123 100644
+--- a/internal/eviedb/compiler_source.go
++++ b/internal/eviedb/compiler_source.go
+@@ -305,6 +305,18 @@ func captureCompilerWindow(ctx context.Context, conn compilerQueryer, owner memo
+ 	choose(contexts, 4096, 8)
+ 	sort.Slice(w.Sources, func(i, j int) bool { return w.Sources[i].Sequence < w.Sources[j].Sequence })
+ 	sort.Slice(w.Omissions, func(i, j int) bool { return w.Omissions[i].Sequence < w.Omissions[j].Sequence })
++	if w.Closure == "" {
++		// A later root closes this captured historical prefix even when that
++		// root is outside selection. This indexed count loads no outside text
++		// and does not extend the immutable evidence cutoff or covered IDs.
++		var later int
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM events WHERE session_id=? AND sequence>? AND event_type='user_message' AND role='user' AND parent_id IS NULL LIMIT 1)`, sel.SessionID, sel.Cutoff).Scan(&later); err != nil {
++			return w, "", "", err
++		}
++		if later != 0 {
++			w.Closure = "later_root"
++		}
++	}
+ 	if w.Closure == "" {
+ 		var live int
+ 		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM session_turn_leases WHERE session_id=? AND holder_id IS NOT NULL AND julianday(expires_at)>julianday('now')`, sel.SessionID).Scan(&live); err != nil {
+diff --git a/internal/eviedb/compiler_work.go b/internal/eviedb/compiler_work.go
+index 8662b8d..fe0d38e 100644
+--- a/internal/eviedb/compiler_work.go
++++ b/internal/eviedb/compiler_work.go
+@@ -111,7 +111,7 @@ func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext,
+ 			case <-ticker.C:
+ 				checkCtx, checkCancel := context.WithTimeout(callCtx, 500*time.Millisecond)
+ 				var current int
+-				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, jobID, holder, fence).Scan(&current)
++				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running' AND NOT EXISTS (SELECT 1 FROM memory_compiler_invalid_claims p WHERE p.job_id=memory_compiler_jobs.job_id)`, jobID, holder, fence).Scan(&current)
+ 				if err == nil && current != 1 {
+ 					err = ErrCompilerFence
+ 				}
+@@ -304,6 +304,11 @@ func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner
+ 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_job_schedule SET lane=?,position=?,historical_order=? WHERE job_id=?`, scheduling.Lane, scheduling.Position, scheduling.HistoricalOrder, jobID); err != nil {
+ 			return err
+ 		}
++		if scheduling.HistorySelected {
++			if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_history_jobs(job_id) VALUES(?)`, jobID); err != nil {
++				return err
++			}
++		}
+ 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_selections SET job_id=?,state=?,reason=? WHERE selection_id=?`, jobID, state, reason, selectionID); err != nil {
+ 			return err
+ 		}
+@@ -331,7 +336,7 @@ func compilerChanged(result sql.Result, err error) error {
+ }
+ func compilerFence(ctx context.Context, conn *sql.Conn, job, holder string, fence int64, state string) error {
+ 	var n int
+-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, job, holder, fence, state).Scan(&n); err != nil {
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state=? AND NOT EXISTS (SELECT 1 FROM memory_compiler_invalid_claims p WHERE p.job_id=memory_compiler_jobs.job_id)`, job, holder, fence, state).Scan(&n); err != nil {
+ 		return err
+ 	}
+ 	if n != 1 {
+diff --git a/internal/eviedb/compiler_worker.go b/internal/eviedb/compiler_worker.go
+index 17d80bc..8d2ccf1 100644
+--- a/internal/eviedb/compiler_worker.go
++++ b/internal/eviedb/compiler_worker.go
+@@ -20,6 +20,7 @@ import (
+ type compilerScheduling struct {
+ 	FirstSequence   int64
+ 	AwaitClosure    bool
++	HistorySelected bool
+ 	Lane            string
+ 	Position        int64
+ 	HistoricalOrder int64
+@@ -120,7 +121,7 @@ func claimCompilerJob(ctx context.Context, conn *sql.Conn, owner memory.ScopeCon
+ 		return c, err
+ 	}
+ 	var ready int
+-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND NOT EXISTS (SELECT 1 FROM memory_compiler_paused_jobs p WHERE p.job_id=j.job_id) AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
+ 		return c, err
+ 	}
+ 	if ready != 1 {
+@@ -194,7 +195,7 @@ func reserveCompilerResources(ctx context.Context, conn compilerStageTransaction
+ 
+ func (s *Store) renewCompilerClaim(ctx context.Context, claim compilerClaim) error {
+ 	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+-		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged') AND job_id NOT IN (SELECT job_id FROM memory_compiler_activation_invalid_claims)`, claim.JobID, claim.Holder, claim.Fence)
++		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged') AND NOT EXISTS (SELECT 1 FROM memory_compiler_invalid_claims p WHERE p.job_id=memory_compiler_jobs.job_id)`, claim.JobID, claim.Holder, claim.Fence)
+ 		return compilerChanged(result, err)
+ 	})
+ }
+@@ -358,7 +359,7 @@ func adoptCompilerStageInTransaction(ctx context.Context, conn compilerStageTran
+ 			return err
+ 		}
+ 		var eligible int
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs)`, jobID).Scan(&eligible); err != nil {
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason='' AND NOT EXISTS (SELECT 1 FROM memory_compiler_paused_jobs p WHERE p.job_id=j.job_id)`, jobID).Scan(&eligible); err != nil {
+ 			return err
+ 		}
+ 		if eligible != 1 {
+@@ -444,7 +445,7 @@ func (s *Store) ResumeCompilation(ctx context.Context, owner memory.ScopeContext
+ 			return errors.New("terminal compilation cannot be resumed")
+ 		}
+ 		var paused int
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_activation_paused_jobs WHERE job_id=?`, inspection.JobID).Scan(&paused); err != nil {
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_paused_jobs WHERE job_id=?`, inspection.JobID).Scan(&paused); err != nil {
+ 			return err
+ 		}
+ 		if paused != 0 {
+@@ -573,7 +574,7 @@ func (s *Store) RunCompilerStep(ctx context.Context, config CompilerSupervisorCo
+ 		}
+ 		marks := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
+ 		// The fairness predicate includes due/configured/unpaused work only.
+-		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND j.job_id NOT IN (SELECT job_id FROM memory_compiler_activation_paused_jobs) AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
++		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND NOT EXISTS (SELECT 1 FROM memory_compiler_paused_jobs p WHERE p.job_id=j.job_id) AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
+ 		var session memory.SessionID
+ 		var state string
+ 		if err := conn.QueryRowContext(ctx, query, args...).Scan(&jobID, &session, &state); err != nil {
+@@ -653,6 +654,13 @@ func (s *Store) stopCompilerClaim(ctx context.Context, c compilerClaim, known bo
+ 		var state string
+ 		err := conn.QueryRowContext(ctx, `SELECT state FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now')`, c.JobID, c.Holder, c.Fence).Scan(&state)
+ 		if errors.Is(err, sql.ErrNoRows) {
++			// Owner history cancellation already invalidated this job fence.
++			// A subsequently proven transport completion may release only its
++			// unchanged request reservation, never a replacement's slot.
++			if known {
++				_, err = conn.ExecContext(ctx, `DELETE FROM memory_compiler_capacity WHERE job_id=? AND holder=? AND fence=?`, c.JobID, c.Holder, c.Fence)
++				return err
++			}
+ 			return nil
+ 		}
+ 		if err != nil {
+diff --git a/internal/eviedb/db.go b/internal/eviedb/db.go
+index 96707b9..3cd633c 100644
+--- a/internal/eviedb/db.go
++++ b/internal/eviedb/db.go
+@@ -1170,6 +1170,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
+ 		db.Close()
+ 		return nil, fmt.Errorf("create memory compiler activation schema: %w", err)
+ 	}
++	if err := ensureCompilerHistorySchema(ctx, db); err != nil {
++		db.Close()
++		return nil, fmt.Errorf("create memory compiler history schema: %w", err)
++	}
+ 	if err := ensureCandidateReviewSchema(ctx, db); err != nil {
+ 		db.Close()
+ 		return nil, fmt.Errorf("create candidate review schema: %w", err)
+diff --git a/internal/memory/compiler_history.go b/internal/memory/compiler_history.go
+new file mode 100644
+index 0000000..e86caa7
+--- /dev/null
++++ b/internal/memory/compiler_history.go
+@@ -0,0 +1,63 @@
++package memory
++
++// CompilerHistoryRange is an explicit inclusive selection. Boundary event IDs
++// prevent a stale or mistyped sequence from selecting a different episode.
++type CompilerHistoryRange struct {
++	SourceScope   string    `json:"source_scope"`
++	Destination   string    `json:"destination"`
++	SessionID     SessionID `json:"session_id"`
++	FirstSequence int64     `json:"first_sequence"`
++	LastSequence  int64     `json:"last_sequence"`
++	FirstEventID  EventID   `json:"first_event_id"`
++	LastEventID   EventID   `json:"last_event_id"`
++}
++
++type CompilerHistoryRequest struct {
++	RequestID string                 `json:"request_id"`
++	Ranges    []CompilerHistoryRange `json:"ranges"`
++}
++
++// The original receipt never changes after cancellation, resume, or appends.
++type CompilerHistoryReceipt struct {
++	Request        CompilerHistoryRequest `json:"request"`
++	GenerationID   string                 `json:"generation_id"`
++	SelectedEvents int64                  `json:"selected_events"`
++	SelectionOrder int64                  `json:"selection_order"`
++}
++
++type CompilerHistoryChange struct {
++	RequestID        string `json:"request_id"`
++	OperationID      string `json:"operation_id"`
++	ExpectedRevision int64  `json:"expected_revision"`
++}
++
++type CompilerHistoryState struct {
++	RequestID string `json:"request_id"`
++	Revision  int64  `json:"revision"`
++	Cancelled bool   `json:"cancelled"`
++}
++
++type CompilerHistoryInterval struct {
++	FirstSequence int64  `json:"first_sequence"`
++	LastSequence  int64  `json:"last_sequence"`
++	State         string `json:"state"`
++	Reason        string `json:"reason,omitempty"`
++	JobID         string `json:"job_id,omitempty"`
++	SelectionID   string `json:"selection_id,omitempty"`
++	Attempts      int    `json:"attempts"`
++	RetryAt       int64  `json:"retry_at,omitempty"`
++}
++
++// Progress is for one exact request range. Its frontier never crosses a gap or
++// borrows a sequence from another session; exclusions remain separate outcomes.
++type CompilerHistoryProgress struct {
++	Receipt                CompilerHistoryReceipt    `json:"receipt"`
++	RequestState           CompilerHistoryState      `json:"request_state"`
++	RangeIndex             int                       `json:"range_index"`
++	Intervals              []CompilerHistoryInterval `json:"intervals"`
++	NextSequence           int64                     `json:"next_sequence,omitempty"`
++	ContiguousFrontier     int64                     `json:"contiguous_frontier"`
++	SelectedSessionEvents  int64                     `json:"selected_session_events"`
++	OutsideSelectionEvents int64                     `json:"outside_selection_events"`
++	SkipSupported          bool                      `json:"skip_supported"`
++}

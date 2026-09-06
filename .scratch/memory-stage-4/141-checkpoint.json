@@ -1,0 +1,31 @@
+{
+  "base": "feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63",
+  "tree": "39acbc3f8ab892b90feaeb5d3e14c0cb88fbd608",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/141-checkpoint.index",
+  "files": {
+    "cmd/evie/candidate_identity_test.go": "e2769775d9ca70402f7ba347d47df0d4c3e3d8dd6ef5000fb8855c4d98ef7a1a",
+    "cmd/evie/candidate_review.go": "05544a8505589d383e4f027bca4019659513e3f3b6213382327cf80a35bf3452",
+    "cmd/evie/docs/research/memory-stage-4-identity-review.md": "5e26ff15b5b7dd867af7ab5ba507af067afdc905d8eb48b82f3a6511db340312",
+    "internal/eviedb/candidate_review_apply.go": "20b887321d07c05597b0477ae4a65babe7deab58ae58e60af084eac0d2a968f7",
+    "internal/eviedb/candidate_review_encoding.go": "6aeb2895ee2e93aa2b6bdca0bb3fd84105222d8781444bc6db94d4ef258cd86e",
+    "internal/eviedb/candidate_review_identity.go": "d49f82b9463f8866bd012dd75365e8a63333ecc3c4b627c25d920fab35d8c276",
+    "internal/eviedb/candidate_review_identity_effect.go": "42d45128254c49f5ea7dc444cedc4d0b8a38301ececc5a5176c6b71106a46c70",
+    "internal/eviedb/candidate_review_identity_encoding_test.go": "3af4aed7c14d8cc89cc9a738f7ea19b3eb35be577f80b1d5e230ac8e01050232",
+    "internal/eviedb/candidate_review_identity_test.go": "72c0e73824d5d74579296771ef7c8276f6d716f209779b24760a13b7ba52f89d",
+    "internal/eviedb/candidate_review_inspection.go": "e1da85f6c096a1bd27f6adc04775b6924569ab88ca88da8b99172be9fc5b797a",
+    "internal/eviedb/candidate_review_prepare.go": "7cf1c41c4c9887f7c5c3dd0781df38e218418dda0c829f132b40eb28578327d3",
+    "internal/eviedb/candidate_review_schema.go": "62466747ec54f696cad915b20fe44572a048724ab9321b355bfec3f55d6f1c14",
+    "internal/eviedb/compiler_identity.go": "0a2901deaea12daf1ed995aef8f11c81b2e00c8b4bf54deb68728367ca4d95b8",
+    "internal/eviedb/compiler_source.go": "454b8cc1fb3af05f9c3c71c317831fa9f6797d4e35f3720f06606b3eeb122e9e",
+    "internal/eviedb/compiler_validation.go": "0f77ba7ff8c1c666c016ce4275ca148878894e9a765e8747c617145ec7fd8494",
+    "internal/eviedb/testdata/candidate_review_encoding_v2.json": "aa934bb94771cde1d1e9869dbb887d3b8dfd9d0dc00ec8a85ddae09b1defc2f1",
+    "internal/memory/candidate_identity.go": "b0e8fbebf6b167b63f675efd639f7668087a01cb2b6e41e98b74137739ff4301",
+    "internal/memory/candidate_review.go": "c889804ef551314df62c211666b22bf9d9a0558686831b1debbffaf9d7fd3983",
+    "internal/memory/compiler.go": "b885e6e6b4158ec1642c05b324af699ceb65e702870c9f26ececa9d397a51b72",
+    "internal/memory/compiler_contract.go": "b424f70570dc9c84045964af8cbd96bb5a88d4210f2f35de6b72d6c8f1856c15"
+  },
+  "note": "141 frozen files on final138 tree; excludes145 and preexisting user changes.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-141-checkpoint-kaa91lsc",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-141-isolated.log",
+  "verification_exit_code": 0
+}

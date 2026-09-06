@@ -1,0 +1,297 @@
+{
+  "ticket": 146,
+  "branch": "codex/memory-stage-4",
+  "head_at_freeze": "aab5b88357b025098c419dc9a93400ac398f20e3",
+  "predecessor_ticket": 144,
+  "recorded_utc": "2026-09-05T11:44:05.744834+00:00",
+  "status": "engineering_frozen_pending_root_isolated_full_verification_two_axis_review_and_browser_demonstration",
+  "files": [
+    {
+      "path": "internal/web/candidate_review.go",
+      "before_sha256": "8cb692d9bd9f3b4d924ec3bf553c7b0c61ce65b3dfa4cba60b2544b00b9b3616",
+      "after_sha256": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5",
+      "bytes": 11029
+    },
+    {
+      "path": "internal/web/candidate_review_advanced.go",
+      "before_sha256": "absent",
+      "after_sha256": "aababc03ee5c843250d261a3630a577f8b83332129509fd513e2498d98b500ec",
+      "bytes": 5375
+    },
+    {
+      "path": "internal/web/candidate_review_advanced_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "2702c53d23eda3476e6519dc9513007fe29926f50376e910307590b6f19e4288",
+      "bytes": 25595
+    },
+    {
+      "path": "internal/web/candidate_review_input_error_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "330991e1982ba3906442350eb36e77103e8c416219b2f0f3ad4a9ffd21ee7e44",
+      "bytes": 6481
+    },
+    {
+      "path": "internal/web/candidate_review_json.go",
+      "before_sha256": "absent",
+      "after_sha256": "8eb0cdaad6e05b06be91da093d49d54007767eb2e9950a9d12497945c5033f4e",
+      "bytes": 1518
+    },
+    {
+      "path": "internal/web/ui/src/api/candidateReview.ts",
+      "before_sha256": "2eb4b8d4647b6ca0bb0b96d79f64636d99c9dcffc3d67227ab6988caa1633069",
+      "after_sha256": "62d2af1b01e2d7a89a8b5b859c19ffa1fed573fc7b9757f1e8c052dff7fd9e01",
+      "bytes": 11035
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "4bb4cca6b5ed1363a12d655d8692af8c66b8621ccbc81f2f45d7b53e6e1dd88a",
+      "bytes": 17711
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/BatchReview.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "dac778a368962b04c6ece1c80c9ce51d55a0f820728220d47259553520131b21",
+      "bytes": 11107
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx",
+      "before_sha256": "68c3ac16fe2bb5764283da9393394e74ed82bef2f5bc120c43895f77438a2f99",
+      "after_sha256": "49e40735c17bf377388b2ccb9d94485863b26fa419f5cdd22712b58ccaadf1c0",
+      "bytes": 3746
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/CandidateInbox.tsx",
+      "before_sha256": "1a9b67e8bfa95871eba57d87d0725ee4ff35ab74935f74ed05fc9748d77cd38b",
+      "after_sha256": "39e2105f118b4f7e29338a5d7645fc503c94a2497cad6818f101e795b1d34c36",
+      "bytes": 11590
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "ec312efc692a1b80b9963f5f179b1585b5d45113356edf2c642d4a415bf6e33e",
+      "bytes": 16581
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/advanced.test-support.ts",
+      "before_sha256": "absent",
+      "after_sha256": "166cd98f628a257248c1a204e884658e725d3acee79cc067c94b5bcafda4776b",
+      "bytes": 6194
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/advancedController.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "7372996b9861d609261e5693c59974cf5201a689fdac332a544e9f28ef448590",
+      "bytes": 21432
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "5897194687d756b66a859d28aba2ad60c823ab41fe2f0b6db69922ed162b0c09",
+      "bytes": 8838
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/controller.ts",
+      "before_sha256": "0738e00b07a04e617c8bcc6d975ea639909ca8a64ef57fe3330db66001ea2db0",
+      "after_sha256": "114441963153fa62a93fed4c19d0150f5826dc748135a986564e51910c57d650",
+      "bytes": 20031
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/fixtures.test-support.ts",
+      "before_sha256": "0a0ac57ef4277312f3dc68938f458dadee790cf1ed533763048a054f86b6cb9e",
+      "after_sha256": "174cbf7f0f658d91897afac0cb395b4440d484282a2f666e420942e26874cc54",
+      "bytes": 4569
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/pendingDecision.ts",
+      "before_sha256": "9f5fb93d7d1532257b1dba4ce42bd6ef6ea8b65f7db294a27b01032d8e329518",
+      "after_sha256": "24cd1a6d86cb7ddbc16cfd9df1bce2758414f9dee2fa5c1f6fe4bbedb5933b01",
+      "bytes": 2867
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/previewSupport.ts",
+      "before_sha256": "absent",
+      "after_sha256": "772a8db9f52ba500bcdc1a0c16c659269b4faadf5b2f595ea04eb77822cee87f",
+      "bytes": 2209
+    }
+  ],
+  "root_hook_files": [],
+  "verification": [
+    {
+      "name": "web-focused",
+      "command": [
+        "go",
+        "test",
+        "./internal/web",
+        "-run",
+        "CandidateReview|CandidateAdvancedHTTP",
+        "-count=1"
+      ],
+      "cwd": "/Users/davidboktor/code/evie",
+      "exit_code": 0,
+      "elapsed_seconds": 4.553,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-web-focused.log"
+    },
+    {
+      "name": "web-race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./internal/web",
+        "-run",
+        "CandidateReview|CandidateAdvancedHTTP",
+        "-count=1"
+      ],
+      "cwd": "/Users/davidboktor/code/evie",
+      "exit_code": 0,
+      "elapsed_seconds": 46.01,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-web-race.log"
+    },
+    {
+      "name": "ui-typecheck",
+      "command": [
+        "npx",
+        "tsc",
+        "-b"
+      ],
+      "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+      "exit_code": 0,
+      "elapsed_seconds": 2.069,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-typecheck.log"
+    },
+    {
+      "name": "ui-tests",
+      "command": [
+        "npx",
+        "vitest",
+        "run"
+      ],
+      "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+      "exit_code": 0,
+      "elapsed_seconds": 1.264,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-tests.log"
+    },
+    {
+      "name": "ui-lint",
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+      "exit_code": 0,
+      "elapsed_seconds": 0.169,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-lint.log"
+    },
+    {
+      "name": "ui-build",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+      "exit_code": 0,
+      "elapsed_seconds": 2.21,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-build.log"
+    },
+    {
+      "command": "git diff --check -- all 8 history-fix paths; gofmt on 3 changed Go paths; exact all-18-file newline/trailing whitespace and original before-hash audit",
+      "exit_code": 0
+    }
+  ],
+  "results": {
+    "web_normal": "PASS 2.006s",
+    "web_race": "PASS 41.501s",
+    "ui_tests": "PASS 27 files / 155 tests, includes pre-existing user UI tests",
+    "ui_typecheck": "PASS",
+    "ui_lint": "PASS, existing user-owned Icon FastRefresh warning only",
+    "ui_build": "PASS, existing >500kB chunk warning"
+  },
+  "required_remaining": [
+    "Root ./scripts/verify-change.sh against exact isolated predecessor144 +146 frozen bytes",
+    "Root independent Standards and Spec reviews",
+    "Root CUA browser demonstration using146-browser-fixture and146-browser-steps.md"
+  ],
+  "known_failed_checks_resolved": [
+    "First Vitest invocation ran from repository root and included scratch fixture copies; corrected explicit UI cwd and complete final suite passed.",
+    "First new HTTP input-refusal test queried semantic_operations.kind instead of operation_kind; fixture assertion corrected and real test passed.",
+    "The inherited compiler JSON validator unintentionally capped edit transport at128KiB; web-owned strict JSON validation now honors the explicitly bounded route body.",
+    "Inherited simple resolve8KiB and initially proposed batch16KiB could not carry a legal4KiB maximally escaped reason; both exact resolve transports and metadata-only recovery journal now use32KiB.",
+    "Plain Kernel pretransaction input errors looked retryable; predecessor144 now owns typed ErrReviewInvalidRequest, and146 maps it definitively without duplicating secret policy.",
+    "History controller regression first failed because only loadEditRevision existed; all three kinds now dispatch explicitly and pass mixed-revision, binding and source/scope/selection fencing tests.",
+    "HTTP real SQLite wrong-kind/missing history first returned 503; only proven sql.ErrNoRows from authorized history reads now returns 404 with shared-sequence navigation guidance. Unknown database and cancellation failures remain 503."
+  ],
+  "bounds": {
+    "simple_request_bytes": 8192,
+    "resolve_request_bytes": 32768,
+    "edit_request_bytes": 270336,
+    "batch_prepare_request_bytes": 65536,
+    "journal_utf8_bytes": 32768,
+    "reason_utf8_bytes": 4096,
+    "canonical_disclosure": "Kernel256KiB ceiling, never truncated by adapter/UI"
+  },
+  "browser_fixture": ".scratch/memory-stage-4/146-browser-fixture",
+  "browser_steps": ".scratch/memory-stage-4/146-browser-steps.md",
+  "no_commit": true,
+  "no_new_dependencies": true,
+  "preservation": "No root hooks, shared kernel files, App/Memory graph/DataHub/database/theme/shell or user-owned api/memory.ts edits.",
+  "history_followup": {
+    "finding": "P2: shared interpretation revisions offered only through edit history endpoint",
+    "status": "fixed_frozen_pending_root_final_checks_and_reviews",
+    "previous_snapshot": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-before-history-fix",
+    "changed_files": [
+      {
+        "path": "internal/web/candidate_review.go",
+        "previous_frozen_sha256": "771f9b01ce89f8b553b893ffc7ebf5618901d512d81b9165bfe1269bc46edad9",
+        "after_sha256": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5",
+        "bytes": 11029
+      },
+      {
+        "path": "internal/web/candidate_review_advanced.go",
+        "previous_frozen_sha256": "8107544dd04f95fd22da5355ab81f9024b7d7f198f8bdf679e5cc5019bd511dd",
+        "after_sha256": "aababc03ee5c843250d261a3630a577f8b83332129509fd513e2498d98b500ec",
+        "bytes": 5375
+      },
+      {
+        "path": "internal/web/candidate_review_input_error_test.go",
+        "previous_frozen_sha256": "b5db93e8a26a02d6e1b458c48fb3d3bbddab5c24ada4d6e9f67c390c302d161b",
+        "after_sha256": "330991e1982ba3906442350eb36e77103e8c416219b2f0f3ad4a9ffd21ee7e44",
+        "bytes": 6481
+      },
+      {
+        "path": "internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx",
+        "previous_frozen_sha256": "d49a0eac5dc589e5123b9ad4213d86298c4da2937e6d62d76830fdf1fea9a7bc",
+        "after_sha256": "4bb4cca6b5ed1363a12d655d8692af8c66b8621ccbc81f2f45d7b53e6e1dd88a",
+        "bytes": 17711
+      },
+      {
+        "path": "internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx",
+        "previous_frozen_sha256": "f10747f056c021e8a90663792d83a81919f2402515966049c21c79c5166b609f",
+        "after_sha256": "ec312efc692a1b80b9963f5f179b1585b5d45113356edf2c642d4a415bf6e33e",
+        "bytes": 16581
+      },
+      {
+        "path": "internal/web/ui/src/candidateInbox/advancedController.test.ts",
+        "previous_frozen_sha256": "7ab8f581c224d3765cf7d8aab6f79d3abf0b615080923a3105de13de52753338",
+        "after_sha256": "7372996b9861d609261e5693c59974cf5201a689fdac332a544e9f28ef448590",
+        "bytes": 21432
+      },
+      {
+        "path": "internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx",
+        "previous_frozen_sha256": "f1e8832992b993ee7c52ec4b6f7f0ea274b188fe2298df794c90d26ad4f6e774",
+        "after_sha256": "5897194687d756b66a859d28aba2ad60c823ab41fe2f0b6db69922ed162b0c09",
+        "bytes": 8838
+      },
+      {
+        "path": "internal/web/ui/src/candidateInbox/controller.ts",
+        "previous_frozen_sha256": "2245d7d590a27b1cc1902cc1df709ad75cf56b21331e659363fd5432bfeb1ca6",
+        "after_sha256": "114441963153fa62a93fed4c19d0150f5826dc748135a986564e51910c57d650",
+        "bytes": 20031
+      }
+    ],
+    "handoff": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-fix-handoff.md",
+    "diff": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-fix.diff"
+  }
+}

@@ -31,7 +31,7 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	plugin := NewMemory(&stubSemanticKernel{})
 	manifest := plugin.Manifest()
-	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.0.0" {
+	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.1.0" {
 		t.Fatalf("manifest identity = %s@%s", manifest.ID, manifest.ImplementationVersion)
 	}
 	if err := plugin.Start(context.Background()); err != nil {
@@ -628,5 +628,73 @@ func TestFailedMemoryPluginStaysOutOfComposition(t *testing.T) {
 	}
 	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs()) {
 		t.Fatalf("failed Memory Plugin composition = warnings %v schemas %v", composition.Warnings, composition.Toolset.Schemas())
+	}
+}
+
+type originalMemoryPlugin struct{ *Memory }
+
+func (p originalMemoryPlugin) Manifest() Manifest {
+	m := p.Memory.Manifest()
+	m.ImplementationVersion = "1.0.0"
+	m.ResumableFrom = nil
+	return m
+}
+func (p originalMemoryPlugin) ToolCapabilities() []ToolCapability {
+	return p.Memory.ResumableToolCapabilities("1.0.0")
+}
+
+func TestOriginalMemoryReceiptsResumeWithFrozenTools(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
+	makeManager := func(plugin Plugin) *Manager {
+		m, err := NewManager(tools.NewToolset(nil), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}), plugin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
+			if err := m.Enable(context.Background(), id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return m
+	}
+	p := NewMemory(&stubSemanticKernel{})
+	frozen := map[CapabilityID]string{MemoryRememberLiteralCapabilityID: "26ae25ad4ff36acb2a404e72cfb3e698cfe442623e0a322f15ae2bb5beafde05", MemoryRememberEntityCapabilityID: "b1b30d22be3a758a3593619ae14baf4e49dfc1a03b6c3be7732299cb8e3678cf"}
+	for _, c := range p.ResumableToolCapabilities("1.0.0") {
+		if hash, ok := frozen[c.ID]; ok && schemaHash(c.Tool.Schema) != hash {
+			t.Fatalf("original schema changed: %s", c.ID)
+		}
+	}
+
+	old, err := makeManager(originalMemoryPlugin{p}).ResolvePreset(StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := makeManager(p)
+	resumed, err := current.ResumeComposition(old.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(old.Receipt, resumed.Receipt) || !reflect.DeepEqual(old.Toolset.Schemas(), resumed.Toolset.Schemas()) || len(resumed.CompatibilityResolutions) != 1 {
+		t.Fatal("legacy memory receipt changed")
+	}
+	fresh, err := current.ResolvePreset(StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range fresh.Toolset.Schemas() {
+		if schema.Function.Name == "memory_remember_literal" {
+			if _, ok := schema.Function.Parameters.Properties["destination"]; !ok {
+				t.Fatal("new session lacks destination")
+			}
+		}
+	}
+	for _, c := range p.ResumableToolCapabilities("1.0.0") {
+		if c.ID == MemoryRememberLiteralCapabilityID || c.ID == MemoryRememberEntityCapabilityID {
+			for _, key := range []string{"destination", "Destination", "DESTINATION"} {
+				if _, err := c.Tool.Prepare(context.Background(), `{"`+key+`":"everywhere"}`); err == nil || !strings.Contains(err.Error(), "original memory tools") {
+					t.Fatalf("legacy scope override: %v", err)
+				}
+			}
+		}
 	}
 }

@@ -1,0 +1,82 @@
+[
+  {
+    "path": "internal/eviedb/compiler_work.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": false
+  },
+  {
+    "path": "internal/eviedb/candidate_review_schema.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/memory/compiler_contract.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "cmd/evie/candidate_review.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_encoding.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_public_test.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_storage_test.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_schema.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_budget_test.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_inspection.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_encoding_test.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/memory/compiler_recurrence.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "internal/eviedb/testdata/compiler-recurrence-v2.json",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "cmd/evie/candidate_recurrence_test.go",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  },
+  {
+    "path": "cmd/evie/docs/research/memory-stage-4-generation-lineage.md",
+    "frozen_sha256_matches": true,
+    "live_matches_frozen": true
+  }
+]

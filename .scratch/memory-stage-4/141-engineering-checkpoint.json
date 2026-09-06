@@ -1,0 +1,145 @@
+{
+  "ticket": 141,
+  "title": "Identity and Predicate owner review",
+  "branch": "codex/memory-stage-4",
+  "frozen_at": "2026-09-05T09:43:08.732269+00:00",
+  "files": [
+    {
+      "path": "cmd/evie/candidate_identity_test.go",
+      "before_sha256": null,
+      "after_sha256": "e2769775d9ca70402f7ba347d47df0d4c3e3d8dd6ef5000fb8855c4d98ef7a1a",
+      "bytes": 6939
+    },
+    {
+      "path": "cmd/evie/candidate_review.go",
+      "before_sha256": "c6357fc63ba2e081b02e4c9c692a6ca30fd7803d1102a834d69baa007b563755",
+      "after_sha256": "05544a8505589d383e4f027bca4019659513e3f3b6213382327cf80a35bf3452",
+      "bytes": 6851
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-identity-review.md",
+      "before_sha256": null,
+      "after_sha256": "5e26ff15b5b7dd867af7ab5ba507af067afdc905d8eb48b82f3a6511db340312",
+      "bytes": 5164
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "before_sha256": "28914960a747877d6610afa58b53bff12215738d5f051107e85bcf0c0ffb1b8b",
+      "after_sha256": "20b887321d07c05597b0477ae4a65babe7deab58ae58e60af084eac0d2a968f7",
+      "bytes": 21555
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "before_sha256": "886d1b44ccf53e90b24d03c093a3b926fb6df3d44691107defd6956fe2e63004",
+      "after_sha256": "6aeb2895ee2e93aa2b6bdca0bb3fd84105222d8781444bc6db94d4ef258cd86e",
+      "bytes": 2614
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity.go",
+      "before_sha256": null,
+      "after_sha256": "d49f82b9463f8866bd012dd75365e8a63333ecc3c4b627c25d920fab35d8c276",
+      "bytes": 15206
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "before_sha256": null,
+      "after_sha256": "42d45128254c49f5ea7dc444cedc4d0b8a38301ececc5a5176c6b71106a46c70",
+      "bytes": 12345
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_encoding_test.go",
+      "before_sha256": null,
+      "after_sha256": "3af4aed7c14d8cc89cc9a738f7ea19b3eb35be577f80b1d5e230ac8e01050232",
+      "bytes": 1765
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_test.go",
+      "before_sha256": null,
+      "after_sha256": "72c0e73824d5d74579296771ef7c8276f6d716f209779b24760a13b7ba52f89d",
+      "bytes": 26261
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "before_sha256": "55815b2935bf35bd5a38b6c02453683a5c62404c57ebaba8a42388390b5c8b11",
+      "after_sha256": "e1da85f6c096a1bd27f6adc04775b6924569ab88ca88da8b99172be9fc5b797a",
+      "bytes": 8756
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "before_sha256": "26f1fbab267b0ab66451151105468d536af4f35baee04bb3bc2b5cd4ed1fb2fb",
+      "after_sha256": "7cf1c41c4c9887f7c5c3dd0781df38e218418dda0c829f132b40eb28578327d3",
+      "bytes": 11981
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "before_sha256": "af63f6665393511a28f02a49a4931e1aa55fd899f479e6e713b868111110789e",
+      "after_sha256": "62466747ec54f696cad915b20fe44572a048724ab9321b355bfec3f55d6f1c14",
+      "bytes": 5591
+    },
+    {
+      "path": "internal/eviedb/compiler_identity.go",
+      "before_sha256": null,
+      "after_sha256": "0a2901deaea12daf1ed995aef8f11c81b2e00c8b4bf54deb68728367ca4d95b8",
+      "bytes": 7788
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "before_sha256": "3c10453a4e1f3f984e5fee94f707c0240df00e9a725e8ef9da1f117609d78141",
+      "after_sha256": "454b8cc1fb3af05f9c3c71c317831fa9f6797d4e35f3720f06606b3eeb122e9e",
+      "bytes": 16460
+    },
+    {
+      "path": "internal/eviedb/compiler_validation.go",
+      "before_sha256": "f22e1737f79cf93f0a8f8139a60baa3b63c62f637f7f9a266187b98bfc8ea1a0",
+      "after_sha256": "0f77ba7ff8c1c666c016ce4275ca148878894e9a765e8747c617145ec7fd8494",
+      "bytes": 9213
+    },
+    {
+      "path": "internal/eviedb/testdata/candidate_review_encoding_v2.json",
+      "before_sha256": null,
+      "after_sha256": "aa934bb94771cde1d1e9869dbb887d3b8dfd9d0dc00ec8a85ddae09b1defc2f1",
+      "bytes": 21711
+    },
+    {
+      "path": "internal/memory/candidate_identity.go",
+      "before_sha256": null,
+      "after_sha256": "b0e8fbebf6b167b63f675efd639f7668087a01cb2b6e41e98b74137739ff4301",
+      "bytes": 3288
+    },
+    {
+      "path": "internal/memory/candidate_review.go",
+      "before_sha256": "d8ec2b5c7f10320f123a73524a351c105df33c3cf2b352aee1030d79c7e69a46",
+      "after_sha256": "c889804ef551314df62c211666b22bf9d9a0558686831b1debbffaf9d7fd3983",
+      "bytes": 4702
+    },
+    {
+      "path": "internal/memory/compiler.go",
+      "before_sha256": "9326c5544d2c7b36f4089dc7b2928a335ca5ab4011336f654e89afb27b083bcf",
+      "after_sha256": "b885e6e6b4158ec1642c05b324af699ceb65e702870c9f26ececa9d397a51b72",
+      "bytes": 6154
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "before_sha256": "2ac223de8ee37d2594e0d4c1fd49bb9f869e5c0ba68573aa08428b8634532c2f",
+      "after_sha256": "b424f70570dc9c84045964af8cbd96bb5a88d4210f2f35de6b72d6c8f1856c15",
+      "bytes": 6767
+    }
+  ],
+  "verification": {
+    "focused_normal": "PASS: go test ./internal/eviedb ./cmd/evie -run 'TestOwnerReviewIdentity|TestOwnerReviewEncodingGolden' -count=1; latest final normal run recorded in owner handoff",
+    "broader": "PASS: go test ./internal/memory ./internal/eviedb ./internal/localextractor -run Compiler|OwnerReview -count=1; eviedb12.511s; other packages no matching tests",
+    "focused_race": "PASS: go test -race ./internal/eviedb ./cmd/evie -run 'TestOwnerReviewIdentity|TestOwnerReviewEncodingGolden' -count=1; eviedb15.190s CLI3.257s. Followed only by pure inactive-error discrimination (normal tests rerun).",
+    "whitespace": "PASS exact owned before/after git diff --no-index --check including new files; exit1 denotes differences, no whitespace diagnostic",
+    "gofmt": "PASS all owned Go files",
+    "full_required": "root runs ./scripts/verify-change.sh on isolated exact ticket tree",
+    "independent_review": "pending root two-axis review"
+  },
+  "notes": [
+    "No staging, commit, push, branch, model configuration, or live inference.",
+    "Original v1 candidate/request/preview/v6 bytes preserved with omitted extensions; golden v1 unchanged, new golden v2 added.",
+    "141-originals compiler_source.go includes final138 root-bound fix, excluding only141 compilerIdentityContext hook.",
+    "Saved137 originals compiler.go/compiler_validation.go match137 frozen files.",
+    "New identity choice revisions are the narrow binding-contract prerequisite; general editing/batches remain144.",
+    "Earlier combined race run CLI compile was transiently blocked by145 symbols; separate CLI rerun passed."
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "tree": "2f33759f8a50026d36aa22a9ba8dd09056c5f531",
+  "command": "npx vitest run",
+  "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-148-checkpoint-n1rn6t8r/internal/web/ui",
+  "exit_code": 0,
+  "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-ui-isolated-vitest.log"
+}

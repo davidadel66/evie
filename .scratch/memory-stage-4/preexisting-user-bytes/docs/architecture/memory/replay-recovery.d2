@@ -1,0 +1,57 @@
+direction: down
+
+classes: {
+  canonical: { style: { fill: "#e8f1f8"; stroke: "#356b91"; font-color: "#17324d"; border-radius: 8 } }
+  live: { style: { fill: "#edf5ef"; stroke: "#4e8467"; font-color: "#204c38"; border-radius: 8 } }
+  check: { style: { fill: "#f7f0df"; stroke: "#a4843c"; font-color: "#624d1d"; border-radius: 8 } }
+  danger: { style: { fill: "#f9e7e7"; stroke: "#a95252"; font-color: "#632929"; border-radius: 8 } }
+}
+
+operations: "Accepted Semantic Operations\nCanonical append-only history\nIDs + normalized effects + revisions" { class: canonical }
+
+projections: {
+  label: "TWO INDEPENDENT PROJECTIONS"
+  direction: right
+
+  live: {
+    label: "LIVE QUERY PROJECTION"
+    class: live
+    rows: "Entities, aliases, predicates, claims, sources, links"
+    state: "Lifecycle and current-state columns"
+    frontier: "Per-scope revision and operation frontier"
+  }
+
+  shadow_projection: {
+    label: "TEMPORARY SHADOW REPLAY"
+    class: live
+    rows: "Replay every known operation schema"
+    checks: "Canonical rows, hashes, paths, revisions, frontiers"
+  }
+}
+
+compare: "Read-only verification\nCompare live and shadow per scope" { shape: diamond; class: check }
+outcomes: {
+  label: "VERIFICATION OUTCOMES"
+  direction: right
+  valid: "MATCH\nLive state remains available" { class: live }
+  invalid: "MISMATCH\nQuarantine only affected scopes" { class: danger }
+}
+rebuild: "Owner-only fenced rebuild\nReplay -> validate -> atomic swap" { class: check }
+restored: "Verified projection restored\nOperations and Episodic Memory unchanged" { class: live }
+
+operations -> projections.live: "normal accepted transactions maintain"
+operations -> projections.shadow_projection: "deterministic replay; no model, network, plugin, or event recompilation"
+projections.live -> compare
+projections.shadow_projection -> compare
+compare -> outcomes.valid: "equal"
+compare -> outcomes.invalid: "divergent"
+outcomes.invalid -> rebuild: "owner action"
+operations -> rebuild: "canonical input"
+rebuild -> restored: "swap only after complete verification"
+
+unknown: "Unknown or malformed operation version fails closed; it is never skipped and no partial shadow becomes live." {
+  shape: rectangle
+  class: danger
+}
+
+unknown -> projections.shadow_projection: "blocks replay"

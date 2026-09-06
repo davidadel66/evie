@@ -1,0 +1,18 @@
+{
+  "output.gbnf": {
+    "sha256": "4bc1014edc8eb48abcd5a58d9a8176996d69ed71f0bb7a40ed090e01b8ad5316",
+    "bytes": 6213
+  },
+  "reference.gbnf": {
+    "sha256": "69bbd8915bb4691f2b01e6cb3bc3a4af687422cdf6acef40e65b18466f5c7db6",
+    "bytes": 1203
+  },
+  "reference.schema.json": {
+    "sha256": "1ce3e9c691cc02bff706c7be5d303c2616c31b01b296fd6637446f740e3921c9",
+    "bytes": 538
+  },
+  "results.txt": {
+    "sha256": "572d13182e5870cf5a5f1fc54baff294b8cb2b20d6ff9bff9b575862aa9ab8c6",
+    "bytes": 3159
+  }
+}

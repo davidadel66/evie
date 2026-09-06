@@ -62,6 +62,14 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
 	if CompilerHash([]byte(g.Template)) != g.TemplateSHA256 {
 		return "", nil, errors.New("template digest mismatch")
 	}
+	if g.ScopePolicy != "" && g.ScopePolicy != CompilerScopePolicyV1 {
+		return "", nil, errors.New("unsupported compiler scope policy")
+	}
+	if g.ScopePolicy == CompilerScopePolicyV1 {
+		if err := validateCompilerScopeSchema(g.Schema); err != nil {
+			return "", nil, err
+		}
+	}
 	if g.EvidencePolicy != CompilerPolicyVersion && g.EvidencePolicy != CompilerClockEvidencePolicy {
 		return "", nil, errors.New("unsupported compiler evidence policy")
 	}
@@ -200,7 +208,7 @@ func CompilerInputBudget(g CompilerGeneration, r CompilerRequest) error {
 	if err != nil {
 		return err
 	}
-	n := len(b) + len(g.Prompt) + len(g.Schema) + len(g.Template)
+	n := len(b) + len(CompilerSystemPrompt(g)) + len(g.Schema) + len(g.Template)
 	if n > CompilerMaxBytes {
 		return errors.New("serialized_input_limit")
 	}

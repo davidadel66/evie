@@ -1,0 +1,299 @@
+{
+  "effect_sha256": "sha256:d7f43548c27d3ec22ce97aa4518e07b4221d1bdd39817c813c4614198121fc30",
+  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v2\",\"effect\":{\"identity\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"a07bae55-e62a-47ac-926f-e09b9ab244c1\",\"owner_id\":\"local\",\"authentication_binding\":\"4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"subject\":[],\"object\":[],\"predicates\":[],\"options_sha256\":\"5eeabde4c25f09ae0a8999268886bb5e204463f3f57bde33bcd528ead6c6c37b\"},\"choices\":{\"subject\":null,\"object\":{\"entity_id\":\"\",\"create\":true},\"predicate\":{\"predicate_id\":\"\",\"create\":true}}},\"aliases\":[{\"alias_id\":\"b31cf6f4-8963-4c68-a67c-29c40edda69e\",\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\",\"scope_key\":\"global\",\"value\":\"Maya\",\"normalized_value\":\"maya\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"source_event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"create\":true}]},\"version\":\"owner-review-effect-v2\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"scope\":{\"scope_id\":\"f7c8f1c0-8cab-427c-8901-300a325bab69\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"f7c8f1c0-8cab-427c-8901-300a325bab69\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"7139fc5c-3f78-4c86-bbd3-10aa60433e4d\",\"scope_key\":\"global\",\"subject_entity_id\":\"80a661fb-78c0-4198-9801-057f1c133cee\",\"predicate\":{\"predicate_id\":\"dfa0825e-dbb7-4a3b-92b5-d6f88abcab67\",\"token\":\"works_with\",\"version\":1,\"label\":\"works with\",\"object_constraint\":\"entity\",\"cardinality\":\"many\",\"create\":true},\"object\":{\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\"},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"80a661fb-78c0-4198-9801-057f1c133cee\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"dfa0825e-dbb7-4a3b-92b5-d6f88abcab67\",\"token\":\"works_with\",\"version\":1,\"label\":\"works with\",\"object_constraint\":\"entity\",\"cardinality\":\"many\",\"create\":true},\"object_entity\":{\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\",\"scope_key\":\"global\",\"canonical_name\":\"Maya\",\"entity_type\":\"person\",\"anchor_kind\":\"\",\"create\":true},\"sources\":[{\"source_link_id\":\"c0b4fc18-c6d2-4259-baf8-c1d4457534dd\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"session_id\":\"80b65f78-9950-4ef9-8867-b21fd1b3a6f2\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T09:33:49.003752Z\",\"evidence\":\"I work with Maya.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]}}",
+  "preview_sha256": "sha256:7bed5320638e55c713c0935c0bc51296b7c41df94b77489cb98516b5d6e5c6fb",
+  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v2\",\"preview\":{\"version\":\"owner-review-preview-v2\",\"preview_id\":\"80f2b5ae-3078-4fe3-85b3-61495a911864\",\"owner_id\":\"local\",\"authentication_binding\":\"4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"2f112077addc6971dbbee4e61d99c1684076defb17fd1c7a87f9b031e457ff33\",\"generation_id\":\"294a1a53bf5e69ceba1c0c565b74e38a4dc5b01891c6b3f5c3a9efc0463b146f\",\"action\":\"accept\",\"candidates\":[{\"identity\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"a07bae55-e62a-47ac-926f-e09b9ab244c1\",\"owner_id\":\"local\",\"authentication_binding\":\"4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"subject\":[],\"object\":[],\"predicates\":[],\"options_sha256\":\"5eeabde4c25f09ae0a8999268886bb5e204463f3f57bde33bcd528ead6c6c37b\"},\"choices\":{\"subject\":null,\"object\":{\"entity_id\":\"\",\"create\":true},\"predicate\":{\"predicate_id\":\"\",\"create\":true}}},\"ref\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"2f112077addc6971dbbee4e61d99c1684076defb17fd1c7a87f9b031e457ff33\",\"generation_id\":\"294a1a53bf5e69ceba1c0c565b74e38a4dc5b01891c6b3f5c3a9efc0463b146f\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"proposal\":{\"identity\":{\"subject\":null,\"object\":{\"name\":\"Maya\",\"entity_type\":\"person\",\"support\":{\"event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43\"}},\"predicate\":{\"token\":\"works_with\",\"label\":\"works with\",\"object_constraint\":\"entity\",\"cardinality\":\"many\"},\"uncertainty\":\"Maya may refer to a different person; owner must resolve.\",\"confidence\":0.35},\"proposition\":{\"subject_entity_id\":\"80a661fb-78c0-4198-9801-057f1c133cee\",\"predicate_id\":\"\",\"object\":{},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43\"},\"session_id\":\"80b65f78-9950-4ef9-8867-b21fd1b3a6f2\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T09:33:49.003752Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I work with Maya.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"identity\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"a07bae55-e62a-47ac-926f-e09b9ab244c1\",\"owner_id\":\"local\",\"authentication_binding\":\"4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"subject\":[],\"object\":[],\"predicates\":[],\"options_sha256\":\"5eeabde4c25f09ae0a8999268886bb5e204463f3f57bde33bcd528ead6c6c37b\"},\"choices\":{\"subject\":null,\"object\":{\"entity_id\":\"\",\"create\":true},\"predicate\":{\"predicate_id\":\"\",\"create\":true}}},\"aliases\":[{\"alias_id\":\"b31cf6f4-8963-4c68-a67c-29c40edda69e\",\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\",\"scope_key\":\"global\",\"value\":\"Maya\",\"normalized_value\":\"maya\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"source_event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"create\":true}]},\"version\":\"owner-review-effect-v2\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"scope\":{\"scope_id\":\"f7c8f1c0-8cab-427c-8901-300a325bab69\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"f7c8f1c0-8cab-427c-8901-300a325bab69\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"7139fc5c-3f78-4c86-bbd3-10aa60433e4d\",\"scope_key\":\"global\",\"subject_entity_id\":\"80a661fb-78c0-4198-9801-057f1c133cee\",\"predicate\":{\"predicate_id\":\"dfa0825e-dbb7-4a3b-92b5-d6f88abcab67\",\"token\":\"works_with\",\"version\":1,\"label\":\"works with\",\"object_constraint\":\"entity\",\"cardinality\":\"many\",\"create\":true},\"object\":{\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\"},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"80a661fb-78c0-4198-9801-057f1c133cee\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"dfa0825e-dbb7-4a3b-92b5-d6f88abcab67\",\"token\":\"works_with\",\"version\":1,\"label\":\"works with\",\"object_constraint\":\"entity\",\"cardinality\":\"many\",\"create\":true},\"object_entity\":{\"entity_id\":\"de0db7d4-dacf-4601-bc6f-50af010ede04\",\"scope_key\":\"global\",\"canonical_name\":\"Maya\",\"entity_type\":\"person\",\"anchor_kind\":\"\",\"create\":true},\"sources\":[{\"source_link_id\":\"c0b4fc18-c6d2-4259-baf8-c1d4457534dd\",\"operation_id\":\"6977618e-cca9-4ef2-8161-c13435708c11\",\"event_id\":\"311a2ccd-54fb-4790-ba5d-a3b4b93288d9\",\"session_id\":\"80b65f78-9950-4ef9-8867-b21fd1b3a6f2\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T09:33:49.003752Z\",\"evidence\":\"I work with Maya.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]},\"effect_sha256\":\"sha256:d7f43548c27d3ec22ce97aa4518e07b4221d1bdd39817c813c4614198121fc30\",\"preview_sha256\":\"\"}}",
+  "preview": {
+    "version": "owner-review-preview-v2",
+    "preview_id": "80f2b5ae-3078-4fe3-85b3-61495a911864",
+    "owner_id": "local",
+    "authentication_binding": "4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd",
+    "authorization_revision": 1,
+    "scope_key": "global",
+    "job_id": "2f112077addc6971dbbee4e61d99c1684076defb17fd1c7a87f9b031e457ff33",
+    "generation_id": "294a1a53bf5e69ceba1c0c565b74e38a4dc5b01891c6b3f5c3a9efc0463b146f",
+    "action": "accept",
+    "candidates": [
+      {
+        "identity": {
+          "revision": 1,
+          "parent_revision": 0,
+          "review_revision": 1,
+          "audit_id": "a07bae55-e62a-47ac-926f-e09b9ab244c1",
+          "owner_id": "local",
+          "authentication_binding": "4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd",
+          "authorization_revision": 1,
+          "options": {
+            "candidate": {
+              "candidate_id": "fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a",
+              "interpretation_revision": 0,
+              "review_revision": 0
+            },
+            "scope_key": "global",
+            "scope_revisions": [
+              {
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "subject": [],
+            "object": [],
+            "predicates": [],
+            "options_sha256": "5eeabde4c25f09ae0a8999268886bb5e204463f3f57bde33bcd528ead6c6c37b"
+          },
+          "choices": {
+            "subject": null,
+            "object": {
+              "entity_id": "",
+              "create": true
+            },
+            "predicate": {
+              "predicate_id": "",
+              "create": true
+            }
+          }
+        },
+        "ref": {
+          "candidate_id": "fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a",
+          "interpretation_revision": 1,
+          "review_revision": 1
+        },
+        "job_id": "2f112077addc6971dbbee4e61d99c1684076defb17fd1c7a87f9b031e457ff33",
+        "generation_id": "294a1a53bf5e69ceba1c0c565b74e38a4dc5b01891c6b3f5c3a9efc0463b146f",
+        "destination": "global",
+        "candidate": {
+          "review_revision": 1,
+          "candidate_id": "fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a",
+          "proposal": {
+            "identity": {
+              "subject": null,
+              "object": {
+                "name": "Maya",
+                "entity_type": "person",
+                "support": {
+                  "event_id": "311a2ccd-54fb-4790-ba5d-a3b4b93288d9",
+                  "event_part": "content",
+                  "locator_kind": "whole",
+                  "locator_value": "",
+                  "evidence_sha256": "2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43"
+                }
+              },
+              "predicate": {
+                "token": "works_with",
+                "label": "works with",
+                "object_constraint": "entity",
+                "cardinality": "many"
+              },
+              "uncertainty": "Maya may refer to a different person; owner must resolve.",
+              "confidence": 0.35
+            },
+            "proposition": {
+              "subject_entity_id": "80a661fb-78c0-4198-9801-057f1c133cee",
+              "predicate_id": "",
+              "object": {},
+              "polarity": "affirmed"
+            },
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "temporal_qualification": "",
+            "support": [
+              {
+                "event_id": "311a2ccd-54fb-4790-ba5d-a3b4b93288d9",
+                "event_part": "content",
+                "locator_kind": "whole",
+                "locator_value": "",
+                "evidence_sha256": "2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43"
+              }
+            ],
+            "context": []
+          },
+          "support": [
+            {
+              "source_type": "user_message",
+              "locator": {
+                "event_id": "311a2ccd-54fb-4790-ba5d-a3b4b93288d9",
+                "event_part": "content",
+                "locator_kind": "whole",
+                "locator_value": "",
+                "evidence_sha256": "2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43"
+              },
+              "session_id": "80b65f78-9950-4ef9-8867-b21fd1b3a6f2",
+              "scope_key": "global",
+              "sequence": 2,
+              "format_version": 1,
+              "observed_at": "2026-09-05T09:33:49.003752Z",
+              "actor": "owner",
+              "authority": "owner_statement",
+              "usage": "new_support",
+              "evidence": "I work with Maya."
+            }
+          ],
+          "context": [],
+          "review_state": "unresolved"
+        },
+        "redacted": false
+      }
+    ],
+    "source_policy": "owner-assertions-v1",
+    "effect": {
+      "identity": {
+        "revision": {
+          "revision": 1,
+          "parent_revision": 0,
+          "review_revision": 1,
+          "audit_id": "a07bae55-e62a-47ac-926f-e09b9ab244c1",
+          "owner_id": "local",
+          "authentication_binding": "4a70e071f0eacfab5385d5d6272a4a09eeaefe17f50cfda26794580bd19385bd",
+          "authorization_revision": 1,
+          "options": {
+            "candidate": {
+              "candidate_id": "fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a",
+              "interpretation_revision": 0,
+              "review_revision": 0
+            },
+            "scope_key": "global",
+            "scope_revisions": [
+              {
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "subject": [],
+            "object": [],
+            "predicates": [],
+            "options_sha256": "5eeabde4c25f09ae0a8999268886bb5e204463f3f57bde33bcd528ead6c6c37b"
+          },
+          "choices": {
+            "subject": null,
+            "object": {
+              "entity_id": "",
+              "create": true
+            },
+            "predicate": {
+              "predicate_id": "",
+              "create": true
+            }
+          }
+        },
+        "aliases": [
+          {
+            "alias_id": "b31cf6f4-8963-4c68-a67c-29c40edda69e",
+            "entity_id": "de0db7d4-dacf-4601-bc6f-50af010ede04",
+            "scope_key": "global",
+            "value": "Maya",
+            "normalized_value": "maya",
+            "operation_id": "6977618e-cca9-4ef2-8161-c13435708c11",
+            "source_event_id": "311a2ccd-54fb-4790-ba5d-a3b4b93288d9",
+            "create": true
+          }
+        ]
+      },
+      "version": "owner-review-effect-v2",
+      "operation_id": "6977618e-cca9-4ef2-8161-c13435708c11",
+      "scope": {
+        "scope_id": "f7c8f1c0-8cab-427c-8901-300a325bab69",
+        "scope_key": "global",
+        "revision": 1
+      },
+      "scopes": [
+        {
+          "scope_id": "f7c8f1c0-8cab-427c-8901-300a325bab69",
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "claims": [
+        {
+          "candidate": {
+            "candidate_id": "fbc7a40dffa66b5aaea03a9ef1d383050a348e51a9c78856a3d5e04608bc485a",
+            "interpretation_revision": 1,
+            "review_revision": 1
+          },
+          "claim": {
+            "claim_id": "7139fc5c-3f78-4c86-bbd3-10aa60433e4d",
+            "scope_key": "global",
+            "subject_entity_id": "80a661fb-78c0-4198-9801-057f1c133cee",
+            "predicate": {
+              "predicate_id": "dfa0825e-dbb7-4a3b-92b5-d6f88abcab67",
+              "token": "works_with",
+              "version": 1,
+              "label": "works with",
+              "object_constraint": "entity",
+              "cardinality": "many",
+              "create": true
+            },
+            "object": {
+              "entity_id": "de0db7d4-dacf-4601-bc6f-50af010ede04"
+            },
+            "polarity": "affirmed",
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "created_operation_id": "6977618e-cca9-4ef2-8161-c13435708c11",
+            "transaction_time": "0001-01-01T00:00:00Z"
+          },
+          "create": true,
+          "subject": {
+            "entity_id": "80a661fb-78c0-4198-9801-057f1c133cee",
+            "scope_key": "global",
+            "canonical_name": "owner",
+            "entity_type": "person",
+            "anchor_kind": "owner",
+            "create": false
+          },
+          "predicate": {
+            "predicate_id": "dfa0825e-dbb7-4a3b-92b5-d6f88abcab67",
+            "token": "works_with",
+            "version": 1,
+            "label": "works with",
+            "object_constraint": "entity",
+            "cardinality": "many",
+            "create": true
+          },
+          "object_entity": {
+            "entity_id": "de0db7d4-dacf-4601-bc6f-50af010ede04",
+            "scope_key": "global",
+            "canonical_name": "Maya",
+            "entity_type": "person",
+            "anchor_kind": "",
+            "create": true
+          },
+          "sources": [
+            {
+              "source_link_id": "c0b4fc18-c6d2-4259-baf8-c1d4457534dd",
+              "operation_id": "6977618e-cca9-4ef2-8161-c13435708c11",
+              "event_id": "311a2ccd-54fb-4790-ba5d-a3b4b93288d9",
+              "session_id": "80b65f78-9950-4ef9-8867-b21fd1b3a6f2",
+              "source_scope_key": "global",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:2e609464acd4834575df3af780547808f6882fc7d7decf5a9f8fe7f9e152bd43",
+              "actor": "owner",
+              "source_type": "user_message",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-05T09:33:49.003752Z",
+              "evidence": "I work with Maya.",
+              "eligibility": "eligible",
+              "create": true
+            }
+          ],
+          "conflicts": [],
+          "context": [],
+          "temporal_qualification": ""
+        }
+      ]
+    },
+    "effect_sha256": "sha256:d7f43548c27d3ec22ce97aa4518e07b4221d1bdd39817c813c4614198121fc30",
+    "preview_sha256": "sha256:7bed5320638e55c713c0935c0bc51296b7c41df94b77489cb98516b5d6e5c6fb"
+  }
+}

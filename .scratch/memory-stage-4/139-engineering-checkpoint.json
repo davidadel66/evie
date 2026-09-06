@@ -1,0 +1,153 @@
+{
+  "issue": 139,
+  "base": "f6bdaafd2869139e601ffb55bd97f59454af5a43",
+  "files": [
+    {
+      "path": "cmd/evie/compiler_history.go",
+      "before_sha256": null,
+      "after_sha256": "4fe739c694df00792f77e0bfbc4401fd5398309bc8147a1facd08f6254b73263",
+      "bytes": 4777
+    },
+    {
+      "path": "cmd/evie/compiler_history_test.go",
+      "before_sha256": null,
+      "after_sha256": "8a77f7ae3a04cbe2db3464632f9a5c45661d50e05a784aa66c4948ee4528d006",
+      "bytes": 5829
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-bounded-history.md",
+      "before_sha256": null,
+      "after_sha256": "3e60aab455b166a6dc94a84179e5d235528f9fcbb03b97daa811576c8f59e19b",
+      "bytes": 6546
+    },
+    {
+      "path": "internal/eviedb/compiler_ancestry.go",
+      "before_sha256": null,
+      "after_sha256": "db73a3cebd8e8c5e6d053b8f998cb2dc32f6d74e97368f17b5a5673e6965a80e",
+      "bytes": 1580
+    },
+    {
+      "path": "internal/eviedb/compiler_history.go",
+      "before_sha256": null,
+      "after_sha256": "7192daa80250f98914e19040001b9896e109195f50c1ec22f37623945d3256ad",
+      "bytes": 14371
+    },
+    {
+      "path": "internal/eviedb/compiler_history_bound_test.go",
+      "before_sha256": null,
+      "after_sha256": "ef4c0c9991eb57940708517fd00f73750586aa9f03937823f594a89edad0c3b9",
+      "bytes": 7298
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "before_sha256": null,
+      "after_sha256": "350c31d55960e21400628d152e98a1ac6fc078ea21fdd92d8fa8cbd2814406c3",
+      "bytes": 5722
+    },
+    {
+      "path": "internal/eviedb/compiler_history_public_test.go",
+      "before_sha256": null,
+      "after_sha256": "07f23f8c52c9f724c37e1cfa4d28f275a12f3c59bf2f902b6ee10c4bc4ed1a5d",
+      "bytes": 3885
+    },
+    {
+      "path": "internal/eviedb/compiler_history_reconciliation.go",
+      "before_sha256": null,
+      "after_sha256": "32d6464fb95d6a2fbcba40b7ca08102d5d6db3734d7d54fa87d2f413d1fa42b3",
+      "bytes": 11886
+    },
+    {
+      "path": "internal/eviedb/compiler_history_resume.go",
+      "before_sha256": null,
+      "after_sha256": "0267309eaa98a3cf74c3c753c5dc0bbac5133c2f65df716002c679ae42fa0796",
+      "bytes": 2751
+    },
+    {
+      "path": "internal/eviedb/compiler_history_schema.go",
+      "before_sha256": null,
+      "after_sha256": "b02140f0fda53f2f379c5d879d4094750426fd5d53570ba4c59840f8f3910b18",
+      "bytes": 7929
+    },
+    {
+      "path": "internal/eviedb/compiler_history_test.go",
+      "before_sha256": null,
+      "after_sha256": "9f78e3376404d3d9332b6574a8a0b463312bb95f8a6fd2444efb6ba9ddfa97ec",
+      "bytes": 24520
+    },
+    {
+      "path": "internal/eviedb/compiler_history_unavailable_test.go",
+      "before_sha256": null,
+      "after_sha256": "8280f3118b128102c34882aa7670fd5cb1a3d6df037a04bdf47f2a8d5d9aa3ca",
+      "bytes": 10025
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "before_sha256": "b7545aa01977cb8025ee0c21e4fa62d2fdc33bdd8df7e67e164fed344f67f6b1",
+      "after_sha256": "cc2b0012a84c66d7430aae35c186c3aa44bbddae9ca28342204e426fbc363a45",
+      "bytes": 11222
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "before_sha256": "454b8cc1fb3af05f9c3c71c317831fa9f6797d4e35f3720f06606b3eeb122e9e",
+      "after_sha256": "bceb7b4ede6c6d35573314d0240a638fef9d84a99a2266b0e0c4d73e72c9d2a7",
+      "bytes": 17045
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "55c0612f64c403f1da1bf671692f39d5641684293dac672b85266e39de53e889",
+      "after_sha256": "805f7e053531520d970b65020627e2d1233a3239151b75bdc6546bf587de82c2",
+      "bytes": 25230
+    },
+    {
+      "path": "internal/eviedb/compiler_worker.go",
+      "before_sha256": "e2deafad6f5f824e66c91027b9d1fa29058c84ec89e0a22c8a6427c51090d5b1",
+      "after_sha256": "15ca8e7447ec2c6f31ebc1a5df2b6238fac18c6a8a25301b64f822284b72ee03",
+      "bytes": 31334
+    },
+    {
+      "path": "internal/memory/compiler_history.go",
+      "before_sha256": null,
+      "after_sha256": "f0edb9402fb50d3e2bed682d080a7003aa5ec119d39609aec710a228d4c575ff",
+      "bytes": 2674
+    }
+  ],
+  "root_hooks": ".scratch/memory-stage-4/139-root-hooks.json",
+  "focused_verification": {
+    "status": "PASS",
+    "record": ".scratch/memory-stage-4/139-isolated-focused-verification.json",
+    "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-cw_73z0u",
+    "normal_output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t9.955s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t0.764s\n",
+    "race_output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t37.755s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t2.786s\n",
+    "ui_build": "PASS; existing Vite >500kB chunk warning"
+  },
+  "reviews": "PASS; independent Standards and Spec including final unavailable-source fix; review-139.md",
+  "full_verification": "PASS; final tree 77937e4d220cd12bcd396c72adfba12484dc518c; verify-139-isolated.log",
+  "query_bounds": "indexed pending request/range/root choices, explicit resume queue, correlated per-job union gates, at most128 indexed event-ref probes; EXPLAIN fixtures exclude2000 retained completed/cancelled records",
+  "whitespace_verification": {
+    "status": "PASS",
+    "issues": []
+  },
+  "frozen_file_audit": {
+    "status": "PASS",
+    "paths": 18,
+    "issues": []
+  },
+  "unavailable_scope_fix": {
+    "status": "PASS focused normal/race, independent rereviews, and full isolated verification",
+    "changed_files": [
+      "internal/eviedb/compiler_history_reconciliation.go",
+      "internal/eviedb/compiler_history_inspection.go",
+      "internal/eviedb/compiler_history_unavailable_test.go",
+      "cmd/evie/docs/research/memory-stage-4-bounded-history.md"
+    ],
+    "disposition": "proven unavailable scope retains pending obligation and commits bounded rotation; DB/cancellation/write errors propagate"
+  },
+  "prior_focused_verification_before_unavailable_scope_fix": {
+    "status": "PASS",
+    "record": ".scratch/memory-stage-4/139-isolated-focused-verification.json",
+    "normal": "go test ./internal/eviedb ./cmd/evie -run ^TestCompiler(History|Activation|Worker|Intervals) -count=1",
+    "race": "go test -race ./internal/eviedb ./cmd/evie -run ^TestCompilerHistory -count=1",
+    "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-glo4n_5r",
+    "ui_build": "npm --prefix internal/web/ui run build PASS; required embedded assets built from exact isolated source"
+  }
+}

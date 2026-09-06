@@ -1,0 +1,28 @@
+{
+  "base": "b444a6e81510591b131b83ca40d8d74ee810ed92",
+  "tree": "fddc252c6a29da7be77b1db4e214cd827511e97c",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/137-checkpoint.index",
+  "files": {
+    "internal/memory/compiler.go": "9326c5544d2c7b36f4089dc7b2928a335ca5ab4011336f654e89afb27b083bcf",
+    "internal/eviedb/compiler_schema.go": "42cccff6ae69ff3460f90460b656cc9d4f3f984a84425ef396b1e97324476ce5",
+    "internal/eviedb/compiler_work.go": "0dfce2501e9c55a49fcbf0bb69b7176bfaf7e67d88f1a1c3ba651a4548f730c7",
+    "cmd/evie/compiler_management.go": "7f5a0b7b109c7984b8ef948b0a53d1737834ade0322f1868391917359f40e01b",
+    "cmd/evie/compiler_management_test.go": "34a04377a64b9ff0e16e3e471a3765e85e06710d0c13aee2de40664c58bf4cc3",
+    "internal/eviedb/compiler_validation.go": "f22e1737f79cf93f0a8f8139a60baa3b63c62f637f7f9a266187b98bfc8ea1a0",
+    "internal/eviedb/compiler_public_test.go": "49885ad39781acc926611d13de352aa07a258d7f2acea99bbe5f46cb995d0356",
+    "internal/memory/compiler_status.go": "fec3e352456ab9d567a535304be4ad830a2d385268dad74955edf2535fe87e08",
+    "internal/eviedb/compiler_worker.go": "ab99ad8675924e3297e78ee64d9097392a7074f7b38c365f82415d003734462e",
+    "internal/eviedb/compiler_worker_inspection.go": "bcb70493b97e8a5dbc0d7442f4fc55f269ea9428f8c20db8e807f9534ae7e5f1",
+    "internal/eviedb/compiler_worker_test.go": "a5e7fe854c4bbf45316579b81c37e0b4806192ec3c7ae1998e7f07ffaeb5cb3f",
+    "internal/eviedb/compiler_worker_http_test.go": "5bbea2a1fef46c24253db2e38d738b962210bf740a84a1ecc088d5eab55f0de4",
+    "internal/eviedb/compiler_worker_public_test.go": "c25965f38623792ad44494df45e75709ee0e2a7025528899133e5cdac99d30e6",
+    "internal/eviedb/compiler_worker_crash_test.go": "51c014d6f3da5b985d5abc99051805a575fd725d223fc9eef44ebd7ae6b60738",
+    "cmd/evie/docs/research/memory-stage-4-worker-recovery.md": "accd3a5477dd40039d77a495a5b1c7f270d6aa8f79a4a4ed4f1091017cdf1563",
+    "internal/eviedb/compiler_adoption_bound_test.go": "909a7f4d098ad7197332613f56ae8a131d1cecce17847dab24aaec299e552e37",
+    "internal/eviedb/compiler_generation_race_test.go": "08cfdde2b3a8e2becbccc1222337496080dc351f2a5f3a99e56635b9543f69ad"
+  },
+  "note": "Independent137 on frozen136; excludes140,138 and user changes. Uses frozen owner bytes, not active shared files.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-137-checkpoint-gc53jcn2",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-137-isolated.log",
+  "verification_exit_code": 0
+}

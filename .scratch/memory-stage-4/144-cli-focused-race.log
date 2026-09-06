@@ -1,0 +1,5 @@
+--- FAIL: TestOwnerReviewBatchCLIMixedEditsClosedSessionAndReplay (1.57s)
+    candidate_batch_test.go:207: edit overwrote original extraction or scope 2
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	18.362s
+FAIL

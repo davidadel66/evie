@@ -1,0 +1,1879 @@
+diff --git a/internal/web/candidate_review.go b/internal/web/candidate_review.go
+index 34d6985..828cd71 100644
+--- a/internal/web/candidate_review.go
++++ b/internal/web/candidate_review.go
+@@ -34,6 +34,7 @@ func (s *Server) registerCandidateReviewRoutes(mux *http.ServeMux) {
+ 	if s.candidateReview == nil {
+ 		return
+ 	}
++	s.registerAdvancedCandidateReviewRoutes(mux)
+ 	for path, handler := range map[string]http.HandlerFunc{
+ 		"scopes": s.handleCandidateScopes, "list": s.handleCandidateList, "inspect": s.handleCandidateInspect,
+ 		"prepare": s.handleCandidatePrepare, "resolve": s.handleCandidateResolve, "operation": s.handleCandidateOperation,
+@@ -43,11 +44,15 @@ func (s *Server) registerCandidateReviewRoutes(mux *http.ServeMux) {
+ }
+ 
+ func decodeCandidateRequest(w http.ResponseWriter, r *http.Request, request any) bool {
++	return decodeCandidateRequestLimit(w, r, request, 8192)
++}
++
++func decodeCandidateRequestLimit(w http.ResponseWriter, r *http.Request, request any, limit int64) bool {
+ 	// Evidence and accepted operation bodies must not enter browser caches.
+ 	w.Header().Set("Cache-Control", "no-store")
+ 	// The 4 KiB owner reason plus its exact preview envelope needs more than
+ 	// the legacy 4 KiB management-body budget. The complete request caps at 8 KiB.
+-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
++	r.Body = http.MaxBytesReader(w, r.Body, limit)
+ 	defer r.Body.Close()
+ 	b, err := io.ReadAll(r.Body)
+ 	status := http.StatusBadRequest
+@@ -56,7 +61,7 @@ func decodeCandidateRequest(w http.ResponseWriter, r *http.Request, request any)
+ 		status = http.StatusRequestEntityTooLarge
+ 	}
+ 	if err == nil && strings.HasPrefix(strings.TrimSpace(string(b)), "{") {
+-		err = memory.ValidateCompilerJSON(b)
++		err = validateCandidateJSON(b)
+ 		if err == nil {
+ 			decoder := json.NewDecoder(bytes.NewReader(b))
+ 			decoder.DisallowUnknownFields()
+@@ -192,7 +197,7 @@ func (s *Server) handleCandidateResolve(w http.ResponseWriter, r *http.Request)
+ 		Scope    string                `json:"scope_key"`
+ 		Decision memory.ReviewDecision `json:"decision"`
+ 	}
+-	if !decodeCandidateRequest(w, r, &request) {
++	if !decodeCandidateRequestLimit(w, r, &request, 32*1024) {
+ 		return
+ 	}
+ 	a, ok := s.candidateAuthority(w, r, request.Scope)
+@@ -224,6 +229,10 @@ func candidateAction(action string) bool { return action == "accept" || action =
+ func writeCandidateError(w http.ResponseWriter, err error) {
+ 	status, code, message := http.StatusServiceUnavailable, "review_retryable", "the review service could not confirm this request; retry the same decision if one was submitted"
+ 	switch {
++	case errors.Is(err, errCandidateHistoryInput):
++		status, code, message = http.StatusBadRequest, "invalid_history_request", "provide a candidate ID and a positive interpretation revision"
++	case errors.Is(err, errCandidateHistoryMissing):
++		status, code, message = http.StatusNotFound, "review_revision_not_found", "no history of this kind was found at that revision; edits, identity choices and correction choices share one sequence, so select the matching kind and revision"
+ 	case errors.Is(err, eviedb.ErrOwnerReviewUnauthorized):
+ 		status, code, message = http.StatusForbidden, "review_unauthorized", "this memory scope or candidate is not available"
+ 	case errors.Is(err, eviedb.ErrReviewStale), errors.Is(err, eviedb.ErrStaleScopeRevision):
+@@ -234,12 +243,18 @@ func writeCandidateError(w http.ResponseWriter, err error) {
+ 		status, code, message = http.StatusConflict, "idempotency_conflict", "this delivery key belongs to a different decision; inspect the recorded result before trying again"
+ 	case errors.Is(err, eviedb.ErrReviewInvalidSource):
+ 		status, code, message = http.StatusConflict, "source_ineligible", "supporting evidence is no longer eligible; acceptance is blocked, but you may inspect and reject the candidate"
++	case errors.Is(err, eviedb.ErrReviewInvalidRequest):
++		status, code, message = http.StatusBadRequest, "invalid_review_request", "the delivery or reason was refused before any change; use a valid delivery and a bounded reason without secrets"
++	case errors.Is(err, eviedb.ErrReviewTooLarge):
++		status, code, message = http.StatusRequestEntityTooLarge, "review_too_large", "the complete review exceeds a bound; select fewer complete groups or shorten the edit"
++	case errors.Is(err, eviedb.ErrReviewDependencies):
++		status, code, message = http.StatusConflict, "review_dependencies", "review the complete dependency groups and prepare a new exact batch"
+ 	case errors.Is(err, eviedb.ErrInvalidCursor):
+ 		status, code, message = http.StatusBadRequest, "invalid_cursor", "restart this paginated listing"
+ 	case errors.Is(err, eviedb.ErrSemanticScopeQuarantined):
+ 		status, code, message = http.StatusLocked, "review_scope_quarantined", "this memory scope needs local verification or repair before review"
+ 	case strings.HasPrefix(err.Error(), "needs_choice:"):
+-		status, code, message = http.StatusConflict, "needs_choice", "this candidate needs an explicit identity choice through local review before acceptance"
++		status, code, message = http.StatusConflict, "needs_choice", "this candidate needs an explicit identity or correction choice before acceptance"
+ 	}
+ 	managementJSONError(w, status, code, message)
+ }
+diff --git a/internal/web/candidate_review_advanced.go b/internal/web/candidate_review_advanced.go
+new file mode 100644
+index 0000000..b226cf6
+--- /dev/null
++++ b/internal/web/candidate_review_advanced.go
+@@ -0,0 +1,106 @@
++package web
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"net/http"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// AdvancedCandidateReviewKernel owns all interpretation and atomic-group rules.
++// The HTTP adapter only authenticates one exact scope and decodes bounded input.
++type AdvancedCandidateReviewKernel interface {
++	OwnerCandidateIdentityOptions(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef) (memory.ReviewIdentityOptions, error)
++	ChooseOwnerCandidateIdentity(context.Context, eviedb.OwnerReviewContext, memory.ReviewIdentityDecision) (memory.OwnerCandidate, error)
++	OwnerCandidateTemporalOptions(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef) (memory.ReviewTemporalOptions, error)
++	ChooseOwnerCandidateTemporal(context.Context, eviedb.OwnerReviewContext, memory.ReviewTemporalDecision) (memory.OwnerCandidate, error)
++	EditOwnerCandidate(context.Context, eviedb.OwnerReviewContext, memory.ReviewEditDecision) (memory.OwnerCandidate, error)
++	InspectOwnerCandidateEditRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewEditRevision, error)
++	InspectOwnerCandidateIdentityRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewIdentityRevision, error)
++	InspectOwnerCandidateTemporalRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewTemporalRevision, error)
++	PrepareOwnerCandidateBatch(context.Context, eviedb.OwnerReviewContext, memory.ReviewBatchRequest) (memory.ReviewBatchPreview, error)
++	InspectOwnerCandidateBatch(context.Context, eviedb.OwnerReviewContext, string) (memory.ReviewBatchPreview, error)
++	ResolveOwnerCandidateBatch(context.Context, eviedb.OwnerReviewContext, memory.ReviewBatchDecision) (memory.ReviewBatchResult, error)
++}
++
++type candidateRevisionRequest struct {
++	ID       string `json:"id"`
++	Revision int64  `json:"revision"`
++}
++
++var errCandidateHistoryInput = errors.New("invalid candidate history input")
++var errCandidateHistoryMissing = errors.New("candidate history revision not found")
++
++// A complete edited proposal can approach 256 KiB. Reserve another 8 KiB for
++// its request envelope/reason; the Kernel applies its canonical disclosure bound.
++// Batch input has at most 64 references and 20 groups; 64 KiB admits its full
++// closure. Responses are never truncated to either request-body limit.
++func (s *Server) registerAdvancedCandidateReviewRoutes(mux *http.ServeMux) {
++	k, ok := s.candidateReview.(AdvancedCandidateReviewKernel)
++	if !ok {
++		return
++	}
++	for path, handler := range map[string]http.HandlerFunc{
++		"identity/options":  advancedReviewRoute(s, 8192, k.OwnerCandidateIdentityOptions),
++		"identity/choose":   advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateIdentity),
++		"temporal/options":  advancedReviewRoute(s, 8192, k.OwnerCandidateTemporalOptions),
++		"temporal/choose":   advancedReviewRoute(s, 8192, k.ChooseOwnerCandidateTemporal),
++		"edit":              advancedReviewRoute(s, 264*1024, k.EditOwnerCandidate),
++		"edit/revision":     candidateHistoryRoute(s, k.InspectOwnerCandidateEditRevision),
++		"identity/revision": candidateHistoryRoute(s, k.InspectOwnerCandidateIdentityRevision),
++		"temporal/revision": candidateHistoryRoute(s, k.InspectOwnerCandidateTemporalRevision),
++		"batch/prepare":     advancedReviewRoute(s, 64*1024, k.PrepareOwnerCandidateBatch),
++		"batch/inspect": advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, r candidateRevisionRequest) (memory.ReviewBatchPreview, error) {
++			return k.InspectOwnerCandidateBatch(ctx, a, r.ID)
++		}),
++		"batch/resolve": advancedReviewRoute(s, 32*1024, k.ResolveOwnerCandidateBatch),
++	} {
++		mux.Handle("/api/memory/candidates/"+path, s.managementRoute(handler))
++	}
++}
++
++func candidateHistoryRoute[Response any](s *Server, call func(context.Context, eviedb.OwnerReviewContext, string, int64) (Response, error)) http.HandlerFunc {
++	return advancedReviewRoute(s, 8192, func(ctx context.Context, a eviedb.OwnerReviewContext, request candidateRevisionRequest) (Response, error) {
++		var out Response
++		if request.ID == "" || request.Revision < 1 {
++			return out, errCandidateHistoryInput
++		}
++		out, err := call(ctx, a, request.ID, request.Revision)
++		// These read-only routes share revision numbers but query separate kinds.
++		// A proven absent row is ordinary navigation; infrastructure, source and
++		// authorization errors retain their existing classifications.
++		if errors.Is(err, sql.ErrNoRows) {
++			err = errCandidateHistoryMissing
++		}
++		return out, err
++	})
++}
++
++func advancedReviewRoute[Request, Response any](s *Server, limit int64, call func(context.Context, eviedb.OwnerReviewContext, Request) (Response, error)) http.HandlerFunc {
++	return func(w http.ResponseWriter, r *http.Request) {
++		var request struct {
++			Scope string   `json:"scope_key"`
++			Input *Request `json:"input"`
++		}
++		if !decodeCandidateRequestLimit(w, r, &request, limit) {
++			return
++		}
++		if request.Input == nil {
++			managementJSONError(w, http.StatusBadRequest, "invalid_review_request", "provide the complete typed review input")
++			return
++		}
++		a, ok := s.candidateAuthority(w, r, request.Scope)
++		if !ok {
++			return
++		}
++		out, err := call(r.Context(), a, *request.Input)
++		if err != nil {
++			writeCandidateError(w, err)
++			return
++		}
++		writeJSON(w, http.StatusOK, out)
++	}
++}
+diff --git a/internal/web/candidate_review_advanced_test.go b/internal/web/candidate_review_advanced_test.go
+new file mode 100644
+index 0000000..587b2c7
+--- /dev/null
++++ b/internal/web/candidate_review_advanced_test.go
+@@ -0,0 +1,468 @@
++package web_test
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http/httptest"
++	"reflect"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++func advancedPost(t *testing.T, f *webReviewFixture, route string, input any) *httptest.ResponseRecorder {
++	t.Helper()
++	return reviewPost(t, f.handler, route, map[string]any{"scope_key": "global", "input": input})
++}
++
++func advancedError(t *testing.T, w *httptest.ResponseRecorder, status int, code string) {
++	t.Helper()
++	out := reviewResponse[struct {
++		Code string `json:"code"`
++	}](t, w, status)
++	if out.Code != code || strings.Contains(w.Body.String(), "café") || strings.Contains(w.Body.String(), "Maya") {
++		t.Fatalf("unsafe or unexpected error: %s", w.Body)
++	}
++}
++
++func TestCandidateAdvancedHTTPGuardsAndTypedBounds(t *testing.T) {
++	f := newWebReviewFixture(t)
++	routes := []struct {
++		path  string
++		limit int
++	}{
++		{"identity/options", 8192}, {"identity/choose", 8192}, {"identity/revision", 8192},
++		{"temporal/options", 8192}, {"temporal/choose", 8192}, {"temporal/revision", 8192},
++		{"edit", 264 * 1024}, {"edit/revision", 8192}, {"batch/prepare", 64 * 1024},
++		{"batch/inspect", 8192}, {"batch/resolve", 32 * 1024},
++	}
++	for _, route := range routes {
++		t.Run(route.path, func(t *testing.T) {
++			const scopeProbe = `{"scope_key":"workspace:missing","input":{}}`
++			for _, test := range []struct {
++				name, method, host, origin, content, body string
++				status                                    int
++			}{
++				{"origin", "POST", "127.0.0.1", "https://evil.example", "application/json", `{}`, 403},
++				{"host", "POST", "evil.example", "", "application/json", `{}`, 403},
++				{"method", "GET", "127.0.0.1", "", "application/json", `{}`, 405},
++				{"content type", "POST", "127.0.0.1", "", "text/plain", `{}`, 403},
++				{"null input", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":null}`, 400},
++				{"missing input", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global"}`, 400},
++				{"array input", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":[]}`, 400},
++				{"duplicate input", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":{},"input":{}}`, 400},
++				{"nested owner", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":{"owner_id":"local"}}`, 400},
++				{"outer authority", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":{},"authority":{}}`, 400},
++				{"foreign scope", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"workspace:missing","input":{}}`, 403},
++				{"trailing", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":{}}{}`, 400},
++				{"invalid UTF-8", "POST", "127.0.0.1", "", "application/json", "{\"scope_key\":\"global\",\"input\":{\"id\":\"\xff\"}}", 400},
++				{"excessive nesting", "POST", "127.0.0.1", "", "application/json", `{"scope_key":"global","input":` + strings.Repeat("[", 34) + "0" + strings.Repeat("]", 34) + "}", 400},
++				{"oversize", "POST", "127.0.0.1", "", "application/json", strings.Repeat(" ", route.limit+1), 413},
++				{"inclusive limit", "POST", "127.0.0.1", "", "application/json", scopeProbe + strings.Repeat(" ", route.limit-len(scopeProbe)), 403},
++			} {
++				t.Run(test.name, func(t *testing.T) {
++					r := httptest.NewRequest(test.method, "http://"+test.host+"/api/memory/candidates/"+route.path, strings.NewReader(test.body))
++					r.Header.Set("Origin", test.origin)
++					r.Header.Set("Content-Type", test.content)
++					w := httptest.NewRecorder()
++					f.handler.ServeHTTP(w, r)
++					if w.Code != test.status || strings.Contains(w.Body.String(), "café") {
++						t.Fatalf("guard %d: %s", w.Code, w.Body)
++					}
++				})
++			}
++		})
++	}
++	// Nested duplicate fields must fail before an edit can advance either revision.
++	ref, err := json.Marshal(f.candidate.Ref)
++	if err != nil {
++		t.Fatal(err)
++	}
++	r := httptest.NewRequest("POST", "http://127.0.0.1/api/memory/candidates/edit", strings.NewReader(`{"scope_key":"global","input":{"candidate":`+string(ref)+`,"candidate":`+string(ref)+`}}`))
++	r.Header.Set("Content-Type", "application/json")
++	w := httptest.NewRecorder()
++	f.handler.ServeHTTP(w, r)
++	advancedError(t, w, 400, "invalid_review_request")
++	tooMany := memory.ReviewBatchRequest{}
++	for i := 0; i < 21; i++ {
++		tooMany.Groups = append(tooMany.Groups, memory.ReviewBatchGroupRequest{ID: fmt.Sprintf("group%d", i), Action: "accept", Candidates: []memory.CandidateRef{{ID: fmt.Sprintf("candidate%d", i)}}})
++	}
++	advancedError(t, advancedPost(t, f, "batch/prepare", tooMany), 413, "review_too_large")
++	var edits, batches int
++	if err = f.db.QueryRow(`SELECT (SELECT count(*) FROM memory_review_edit_revisions),(SELECT count(*) FROM memory_review_batch_previews)`).Scan(&edits, &batches); err != nil || edits+batches != 0 {
++		t.Fatalf("malformed request mutated review: %d/%d %v", edits, batches, err)
++	}
++}
++
++type advancedExtractor struct {
++	webReviewExtractor
++	adapt func(memory.ExtractorCandidate) []memory.ExtractorCandidate
++}
++
++func (x advancedExtractor) Extract(ctx context.Context, g memory.CompilerGeneration, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++	base, err := x.webReviewExtractor.Extract(ctx, g, r)
++	if err != nil {
++		return base, err
++	}
++	var response memory.CompilerResponse
++	if err = json.Unmarshal(base.Raw, &response); err != nil {
++		return base, err
++	}
++	response.Candidates = x.adapt(response.Candidates[0])
++	base.Raw, err = json.Marshal(response)
++	return base, err
++}
++
++// Compilation occurs in a real source episode; every review call below occurs
++// only after releasing its lease and closing that source session again.
++func advancedCompile(t *testing.T, f *webReviewFixture, content, policy string, adapt func(memory.ExtractorCandidate) []memory.ExtractorCandidate) []memory.OwnerCandidate {
++	t.Helper()
++	ctx := context.Background()
++	if _, err := f.db.Exec(`UPDATE sessions SET status='active' WHERE id=?`, f.session.ID); err != nil {
++		t.Fatal(err)
++	}
++	var err error
++	f.lease, err = f.store.AcquireTurnLease(ctx, f.session.ID, "advanced-web-source", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	root := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: content})
++	last := f.append(t, memory.EventInput{ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "Recorded."})
++	g := webReviewGeneration()
++	g.EntityPolicy, g.PredicatePolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy = policy, policy, policy, policy, policy
++	out, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), memory.CompilationSelection{SessionID: f.session.ID, RootID: root.ID, Cutoff: last.Sequence, Destination: "global"}, g, advancedExtractor{webReviewExtractor{f.subject, f.predicate}, adapt})
++	if err != nil || out.State != "completed_candidates" {
++		t.Fatalf("compile advanced %s/%s: %v", out.State, out.Reason, err)
++	}
++	if err = f.store.ReleaseTurnLease(ctx, f.session.ID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, f.session.ID); err != nil {
++		t.Fatal(err)
++	}
++	items := []memory.OwnerCandidate{}
++	for _, c := range out.Candidates {
++		items = append(items, reviewResponse[memory.OwnerCandidate](t, reviewPost(t, f.handler, "inspect", map[string]any{"scope_key": "global", "id": c.ID}), 200))
++	}
++	return items
++}
++
++func advancedChooseIdentity(t *testing.T, f *webReviewFixture, item memory.OwnerCandidate) memory.OwnerCandidate {
++	t.Helper()
++	o := reviewResponse[memory.ReviewIdentityOptions](t, advancedPost(t, f, "identity/options", item.Ref), 200)
++	d := memory.ReviewIdentityDecision{Candidate: item.Ref, OptionsSHA256: o.SHA256, Choices: memory.ReviewIdentityChoices{Subject: &memory.ReviewEntityChoice{Create: true}, Predicate: &memory.ReviewPredicateChoice{Create: true}}}
++	bad := d
++	bad.OptionsSHA256 = strings.Repeat("0", 64)
++	advancedError(t, advancedPost(t, f, "identity/choose", bad), 409, "stale_preview")
++	chosen := reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, "identity/choose", d), 200)
++	history := reviewResponse[memory.ReviewIdentityRevision](t, advancedPost(t, f, "identity/revision", map[string]any{"id": item.Ref.ID, "revision": chosen.Ref.InterpretationRevision}), 200)
++	if chosen.Identity == nil || !reflect.DeepEqual(history, *chosen.Identity) || !reflect.DeepEqual(history.Options, o) {
++		t.Fatal("identity route lost exact options or immutable revision")
++	}
++	return chosen
++}
++
++func advancedSharedBatch(t *testing.T) (*webReviewFixture, memory.ReviewBatchRequest) {
++	t.Helper()
++	f := newWebReviewFixture(t)
++	items := advancedCompile(t, f, "Maya likes tea and coffee.", memory.CompilerIdentityPolicyV2, func(base memory.ExtractorCandidate) []memory.ExtractorCandidate {
++		out := []memory.ExtractorCandidate{}
++		for _, value := range []string{"tea", "coffee"} {
++			c := base
++			c.Proposition.SubjectEntityID, c.Proposition.PredicateID = "", ""
++			c.Proposition.Object.Literal = &memory.TypedLiteral{Kind: memory.LiteralText, Value: value}
++			c.Identity = &memory.CandidateIdentityProposal{Subject: &memory.EntityMention{Name: "Maya", EntityType: "person", Support: c.Support[0]}, Predicate: &memory.PredicateDefinition{Token: "likes", Label: "likes", ObjectConstraint: memory.PredicateObjectConstraint(memory.LiteralText), Cardinality: memory.CardinalityMany}}
++			out = append(out, c)
++		}
++		return out
++	})
++	if len(items) != 2 {
++		t.Fatalf("shared candidates: %d", len(items))
++	}
++	refs := []memory.CandidateRef{}
++	for _, item := range items {
++		refs = append(refs, advancedChooseIdentity(t, f, item).Ref)
++	}
++	return f, memory.ReviewBatchRequest{Groups: []memory.ReviewBatchGroupRequest{
++		{ID: "shared", Action: "accept", Candidates: refs, Dependencies: []memory.ReviewDependency{
++			{CandidateID: refs[1].ID, Field: "subject", FromCandidateID: refs[0].ID, FromField: "subject"},
++			{CandidateID: refs[1].ID, Field: "predicate", FromCandidateID: refs[0].ID, FromField: "predicate"},
++		}},
++		{ID: "independent", Action: "accept", Candidates: []memory.CandidateRef{f.candidate.Ref}, Dependencies: []memory.ReviewDependency{}},
++	}}
++}
++
++func advancedBatchDecision(p memory.ReviewBatchPreview) memory.ReviewBatchDecision {
++	d := memory.ReviewBatchDecision{DeliveryKey: "idem:v1:90000000-0000-4000-8000-000000004146", PreviewID: p.ID, PreviewSHA256: p.SHA256}
++	for _, g := range p.Groups {
++		d.Actions = append(d.Actions, memory.ReviewBatchAction{GroupID: g.ID, Action: g.Preview.Action})
++	}
++	return d
++}
++
++func advancedReopen(t *testing.T, f *webReviewFixture) {
++	t.Helper()
++	if err := f.db.Close(); err != nil {
++		t.Fatal(err)
++	}
++	var err error
++	f.db, err = eviedb.OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.store = eviedb.NewStore(f.db)
++	f.handler = web.WithCandidateReview(web.NewServer(nil), f.store).Handler()
++}
++
++func advancedVerify(t *testing.T, f *webReviewFixture) {
++	t.Helper()
++	v, err := f.store.VerifySemanticProjection(context.Background())
++	if err != nil || !v.Valid {
++		t.Fatalf("advanced replay: %+v %v", v, err)
++	}
++	var status string
++	var leases int
++	if err = f.db.QueryRow(`SELECT status,(SELECT count(*) FROM session_turn_leases WHERE holder_id IS NOT NULL) FROM sessions WHERE id=?`, f.session.ID).Scan(&status, &leases); err != nil || status != "closed" || leases != 0 {
++		t.Fatalf("advanced review altered source lifecycle: %s/%d %v", status, leases, err)
++	}
++}
++
++type uncertainAdvancedKernel struct {
++	*eviedb.Store
++	failed bool
++}
++
++func (k *uncertainAdvancedKernel) ResolveOwnerCandidateBatch(ctx context.Context, a eviedb.OwnerReviewContext, d memory.ReviewBatchDecision) (memory.ReviewBatchResult, error) {
++	r, err := k.Store.ResolveOwnerCandidateBatch(ctx, a, d)
++	if err == nil && !k.failed {
++		k.failed = true
++		return memory.ReviewBatchResult{}, errors.New("lost commit acknowledgement: protected Maya source")
++	}
++	return r, err
++}
++
++func TestCandidateAdvancedHTTPCompoundBatchExactRecoveryAndPartialFailure(t *testing.T) {
++	for _, partial := range []bool{false, true} {
++		t.Run(fmt.Sprintf("partial_%t", partial), func(t *testing.T) {
++			f, request := advancedSharedBatch(t)
++			bad := request
++			bad.Groups = append([]memory.ReviewBatchGroupRequest(nil), request.Groups...)
++			bad.Groups[0].Dependencies = bad.Groups[0].Dependencies[:1]
++			advancedError(t, advancedPost(t, f, "batch/prepare", bad), 409, "review_dependencies")
++			p := reviewResponse[memory.ReviewBatchPreview](t, advancedPost(t, f, "batch/prepare", request), 200)
++			inspected := reviewResponse[memory.ReviewBatchPreview](t, advancedPost(t, f, "batch/inspect", map[string]any{"id": p.ID}), 200)
++			if !reflect.DeepEqual(p, inspected) || len(p.Groups) != 2 || p.FailureBehavior == "" {
++				t.Fatal("batch inspection changed exact disclosure")
++			}
++			shared := p.Groups[0].Preview
++			if shared.BatchID != p.ID || shared.Version != "owner-review-preview-v5" || len(shared.Effect.Members) != 2 || len(shared.Effect.Dependencies) != 2 || shared.Effect.Claims[0].Subject.ID != shared.Effect.Claims[1].Subject.ID || shared.Effect.Claims[0].Predicate.ID != shared.Effect.Claims[1].Predicate.ID {
++				t.Fatalf("incomplete compound disclosure: %+v", shared)
++			}
++			// An exact group preview cannot bypass approval of its containing batch.
++			advancedError(t, reviewPost(t, f.handler, "resolve", map[string]any{"scope_key": "global", "decision": webDecision(shared)}), 409, "review_dependencies")
++			if partial {
++				if _, err := f.db.Exec(fmt.Sprintf(`CREATE TRIGGER advanced_fail_source BEFORE INSERT ON semantic_source_links WHEN NEW.source_link_id='%s' BEGIN SELECT RAISE(ABORT,'protected Maya details'); END`, shared.Effect.Claims[1].Sources[0].ID)); err != nil {
++					t.Fatal(err)
++				}
++			}
++			d := advancedBatchDecision(p)
++			// The Kernel's inclusive 4 KiB reason bound counts decoded bytes.
++			// JSON escaping can require six transport bytes for each such byte.
++			d.Reason = strings.Repeat("\x01", 4096)
++			forged := d
++			forged.PreviewSHA256 = strings.Repeat("0", 64)
++			advancedError(t, advancedPost(t, f, "batch/resolve", forged), 409, "stale_preview")
++			f.handler = web.WithCandidateReview(web.NewServer(nil), &uncertainAdvancedKernel{Store: f.store}).Handler()
++			advancedError(t, advancedPost(t, f, "batch/resolve", d), 503, "review_retryable")
++			// Reopen before retrying the same request, as a browser would after a lost response.
++			advancedReopen(t, f)
++			result := reviewResponse[memory.ReviewBatchResult](t, advancedPost(t, f, "batch/resolve", d), 200)
++			receipt, err := json.Marshal(result)
++			if err != nil || strings.Contains(string(receipt), "protected") || strings.Contains(string(receipt), "Maya") {
++				t.Fatalf("group error exposed underlying source details: %s %v", receipt, err)
++			}
++			if len(result.Groups) != 2 || result.Groups[1].Outcome != "accepted" {
++				t.Fatalf("ordered outcomes %+v", result)
++			}
++			wantShared := "accepted"
++			if partial {
++				wantShared = "failed"
++			}
++			if result.Groups[0].Outcome != wantShared {
++				t.Fatalf("atomic outcome %+v", result)
++			}
++			var entities, predicates, claims, resolutions int
++			if err := f.db.QueryRow(`SELECT (SELECT count(*) FROM semantic_entities WHERE canonical_name='Maya'),(SELECT count(*) FROM semantic_predicates WHERE token='likes'),(SELECT count(*) FROM semantic_claims WHERE created_operation_id=?),(SELECT count(*) FROM memory_review_resolutions WHERE candidate_id IN (?,?))`, shared.Effect.OperationID, request.Groups[0].Candidates[0].ID, request.Groups[0].Candidates[1].ID).Scan(&entities, &predicates, &claims, &resolutions); err != nil {
++				t.Fatal(err)
++			}
++			if partial {
++				if entities+predicates+claims+resolutions != 0 || result.Groups[0].Result != nil || result.Groups[0].FailureCode == "" {
++					t.Fatal("failed dependent group leaked effects or lost safe failure")
++				}
++				if _, err := f.db.Exec(`DROP TRIGGER advanced_fail_source`); err != nil {
++					t.Fatal(err)
++				}
++			} else if entities != 1 || predicates != 1 || claims != 2 || resolutions != 2 {
++				t.Fatalf("shared definitions were duplicated: %d/%d/%d/%d", entities, predicates, claims, resolutions)
++			}
++			a, err := f.store.LocalOwnerReviewContext(context.Background(), "global")
++			if err != nil {
++				t.Fatal(err)
++			}
++			kernel, err := f.store.ResolveOwnerCandidateBatch(context.Background(), a, d)
++			if err != nil || !reflect.DeepEqual(kernel, result) {
++				t.Fatalf("Kernel/HTTP delivery parity %+v %v", kernel, err)
++			}
++			retry := reviewResponse[memory.ReviewBatchResult](t, advancedPost(t, f, "batch/resolve", d), 200)
++			if !reflect.DeepEqual(result, retry) {
++				t.Fatal("immutable receipt retried its failed group")
++			}
++			for _, group := range result.Groups {
++				if group.Result == nil || group.Result.Operation == nil {
++					continue
++				}
++				op := reviewResponse[memory.OwnerReviewOperation](t, reviewPost(t, f.handler, "operation", map[string]any{"scope_key": "global", "id": group.Result.Operation.OperationID}), 200)
++				if op.Batch == nil || op.Batch.PreviewID != p.ID || op.Batch.GroupID != group.GroupID {
++					t.Fatal("durable operation lost batch lineage")
++				}
++			}
++			d.Reason = "changed approval"
++			advancedError(t, advancedPost(t, f, "batch/resolve", d), 409, "idempotency_conflict")
++			advancedVerify(t, f)
++			if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='batch-redaction'`); err != nil {
++				t.Fatal(err)
++			}
++			advancedError(t, advancedPost(t, f, "batch/inspect", map[string]any{"id": p.ID}), 409, "source_ineligible")
++			advancedError(t, advancedPost(t, f, "identity/revision", map[string]any{"id": request.Groups[0].Candidates[0].ID, "revision": request.Groups[0].Candidates[0].InterpretationRevision}), 409, "source_ineligible")
++		})
++	}
++}
++
++func TestCandidateAdvancedHTTPBatchScopeAndWholePreviewStaleness(t *testing.T) {
++	f, request := advancedSharedBatch(t)
++	p := reviewResponse[memory.ReviewBatchPreview](t, advancedPost(t, f, "batch/prepare", request), 200)
++	d := advancedBatchDecision(p)
++	for _, call := range []struct {
++		route string
++		input any
++	}{
++		{"batch/inspect", map[string]any{"id": p.ID}},
++		{"batch/resolve", d},
++		{"identity/options", request.Groups[0].Candidates[0]},
++	} {
++		advancedError(t, reviewPost(t, f.handler, call.route, map[string]any{"scope_key": "session:" + string(f.session.ID), "input": call.input}), 403, "review_unauthorized")
++	}
++	if _, err := f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-before-batch'`); err != nil {
++		t.Fatal(err)
++	}
++	advancedError(t, advancedPost(t, f, "batch/resolve", d), 409, "stale_preview")
++	var deliveries, resolutions, entities int
++	if err := f.db.QueryRow(`SELECT (SELECT count(*) FROM memory_review_batch_deliveries),(SELECT count(*) FROM memory_review_resolutions),(SELECT count(*) FROM semantic_entities WHERE canonical_name='Maya')`).Scan(&deliveries, &resolutions, &entities); err != nil || deliveries+resolutions+entities != 0 {
++		t.Fatalf("whole-preview stale left mutations: %d/%d/%d %v", deliveries, resolutions, entities, err)
++	}
++}
++
++func TestCandidateAdvancedHTTPEditLineageStalenessAndCurrentRedaction(t *testing.T) {
++	f := newWebReviewFixture(t)
++	old := webPrepare(t, f, "accept")
++	proposal := f.candidate.Candidate.Proposal
++	proposal.Proposition.Object.Literal = &memory.TypedLiteral{Kind: memory.LiteralText, Value: "coffee"}
++	d := memory.ReviewEditDecision{Candidate: f.candidate.Ref, Proposal: proposal, Reason: "Use the English drink name."}
++	edited := reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, "edit", d), 200)
++	if edited.Edit == nil || edited.Original == nil || edited.Edit.ParentRevision != 0 || edited.Ref.InterpretationRevision != 1 || edited.Ref.ReviewRevision != 1 || edited.Original.Proposal.Proposition.Object.Literal.Value != "café" || edited.Candidate.Proposal.Proposition.Object.Literal.Value != "coffee" {
++		t.Fatalf("edit lineage %+v", edited)
++	}
++	advancedError(t, advancedPost(t, f, "edit", d), 409, "stale_preview")
++	advancedError(t, reviewPost(t, f.handler, "resolve", map[string]any{"scope_key": "global", "decision": webDecision(old)}), 409, "stale_preview")
++	history := reviewResponse[memory.ReviewEditRevision](t, advancedPost(t, f, "edit/revision", map[string]any{"id": edited.Ref.ID, "revision": 1}), 200)
++	if !reflect.DeepEqual(history, *edited.Edit) || history.Before.Support[0].Authority != memory.AuthorityOwnerStatement || history.After.Support[0].Locator != history.Before.Support[0].Locator {
++		t.Fatal("edit inspection lost immutable source authority")
++	}
++	foreign := reviewPost(t, f.handler, "edit/revision", map[string]any{"scope_key": "session:" + string(f.session.ID), "input": map[string]any{"id": edited.Ref.ID, "revision": 1}})
++	advancedError(t, foreign, 403, "review_unauthorized")
++	f.candidate = edited
++	p := webPrepare(t, f, "accept")
++	if p.Version != "owner-review-preview-v5" || p.Effect.Claims[0].Claim.Object.Literal.Value != "coffee" || p.Candidates[0].Edit == nil {
++		t.Fatal("edited effect or original extraction omitted")
++	}
++	decision := webDecision(p)
++	decision.Reason = strings.Repeat("\x01", 4096)
++	result := reviewResponse[memory.ReviewResult](t, reviewPost(t, f.handler, "resolve", map[string]any{"scope_key": "global", "decision": decision}), 200)
++	advancedReopen(t, f)
++	persisted := reviewResponse[memory.ReviewEditRevision](t, advancedPost(t, f, "edit/revision", map[string]any{"id": edited.Ref.ID, "revision": 1}), 200)
++	if !reflect.DeepEqual(history, persisted) || result.Operation == nil {
++		t.Fatal("closed-source edit or operation did not persist")
++	}
++	advancedVerify(t, f)
++	if _, err := f.db.Exec(`UPDATE memory_review_authorization SET source_policy='advanced-redaction'`); err != nil {
++		t.Fatal(err)
++	}
++	advancedError(t, advancedPost(t, f, "edit/revision", map[string]any{"id": edited.Ref.ID, "revision": 1}), 409, "source_ineligible")
++}
++
++func TestCandidateAdvancedHTTPTemporalCorrectionChoiceAndPersistence(t *testing.T) {
++	for _, mode := range []memory.CorrectionMode{memory.CorrectionError, memory.CorrectionChanged} {
++		t.Run(string(mode), func(t *testing.T) {
++			f := newWebReviewFixture(t)
++			effective := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
++			content := "I was mistaken about tea. I have always drunk coffee."
++			if mode == memory.CorrectionChanged {
++				content = "I now drink coffee, beginning May 1 2025. Previously I drank tea."
++			}
++			items := advancedCompile(t, f, content, memory.CompilerTemporalPolicyV3, func(c memory.ExtractorCandidate) []memory.ExtractorCandidate {
++				c.Proposition.Object.Literal = &memory.TypedLiteral{Kind: memory.LiteralText, Value: "coffee"}
++				c.Temporal = &memory.CandidateTemporalProposal{Meaning: "assertion", Correction: &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{mode}}}
++				if mode == memory.CorrectionChanged {
++					c.Temporal.Correction.EffectiveTime, c.ValidTime.From = &effective, &effective
++				}
++				return []memory.ExtractorCandidate{c}
++			})
++			if len(items) != 1 {
++				t.Fatal("missing correction")
++			}
++			item := items[0]
++			o := reviewResponse[memory.ReviewTemporalOptions](t, advancedPost(t, f, "temporal/options", item.Ref), 200)
++			if len(o.Alternatives) != 1 || o.Alternatives[0].Claim.Object.Literal.Value != "tea" {
++				t.Fatalf("prior alternatives %+v", o)
++			}
++			d := memory.ReviewTemporalDecision{Candidate: item.Ref, OptionsSHA256: o.SHA256, Choice: memory.ReviewTemporalChoice{OldClaimID: o.Alternatives[0].Claim.ID, Mode: mode}}
++			bad := d
++			bad.OptionsSHA256 = strings.Repeat("0", 64)
++			advancedError(t, advancedPost(t, f, "temporal/choose", bad), 409, "stale_preview")
++			chosen := reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, "temporal/choose", d), 200)
++			history := reviewResponse[memory.ReviewTemporalRevision](t, advancedPost(t, f, "temporal/revision", map[string]any{"id": item.Ref.ID, "revision": chosen.Ref.InterpretationRevision}), 200)
++			if chosen.Temporal == nil || !reflect.DeepEqual(history, *chosen.Temporal) {
++				t.Fatal("temporal revision mismatch")
++			}
++			advancedError(t, advancedPost(t, f, "temporal/choose", d), 409, "stale_preview")
++			f.candidate = chosen
++			p := webPrepare(t, f, "accept")
++			if p.Effect.Correction == nil || p.Effect.Correction.Mode != mode || p.Effect.Correction.OldClaim.ID != d.Choice.OldClaimID {
++				t.Fatal("correction disclosure changed")
++			}
++			if mode == memory.CorrectionError && p.Effect.Correction.EffectiveTime != nil {
++				t.Fatal("error invented world time")
++			}
++			if mode == memory.CorrectionChanged && (p.Effect.Correction.ValidTimeEffect.OldAfter.To == nil || !p.Effect.Correction.ValidTimeEffect.OldAfter.To.Equal(effective)) {
++				t.Fatal("change lost exact world date")
++			}
++			result := reviewResponse[memory.ReviewResult](t, reviewPost(t, f.handler, "resolve", map[string]any{"scope_key": "global", "decision": webDecision(p)}), 200)
++			advancedReopen(t, f)
++			op := reviewResponse[memory.OwnerReviewOperation](t, reviewPost(t, f.handler, "operation", map[string]any{"scope_key": "global", "id": result.Operation.OperationID}), 200)
++			if !reflect.DeepEqual(op.Preview, p) {
++				t.Fatal("durable correction differs from HTTP approval")
++			}
++			advancedVerify(t, f)
++			if _, err := f.db.Exec(`UPDATE memory_review_authorization SET source_policy='temporal-redaction'`); err != nil {
++				t.Fatal(err)
++			}
++			advancedError(t, advancedPost(t, f, "temporal/revision", map[string]any{"id": item.Ref.ID, "revision": chosen.Ref.InterpretationRevision}), 409, "source_ineligible")
++		})
++	}
++}
+diff --git a/internal/web/candidate_review_input_error_test.go b/internal/web/candidate_review_input_error_test.go
+new file mode 100644
+index 0000000..5f65ce5
+--- /dev/null
++++ b/internal/web/candidate_review_input_error_test.go
+@@ -0,0 +1,129 @@
++package web_test
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"fmt"
++	"strings"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/web"
++)
++
++func TestCandidateAdvancedHTTPInputRefusalIsDefinitiveWithoutPersistence(t *testing.T) {
++	for _, route := range []string{"resolve", "batch/resolve", "edit"} {
++		for _, reason := range []struct{ name, value string }{
++			{"secret", "password=synthetic-fixture-value"},
++			{"oversized", strings.Repeat("x", 4097)},
++		} {
++			t.Run(route+"/"+reason.name, func(t *testing.T) {
++				f := newWebReviewFixture(t)
++				single := webPrepare(t, f, "reject")
++				batch := reviewResponse[memory.ReviewBatchPreview](t, advancedPost(t, f, "batch/prepare", memory.ReviewBatchRequest{Groups: []memory.ReviewBatchGroupRequest{{ID: "group", Action: "reject", Candidates: []memory.CandidateRef{f.candidate.Ref}}}}), 200)
++				decision := webDecision(single)
++				decision.Reason = reason.value
++				batchDecision := memory.ReviewBatchDecision{DeliveryKey: decision.DeliveryKey, PreviewID: batch.ID, PreviewSHA256: batch.SHA256, Actions: []memory.ReviewBatchAction{{GroupID: "group", Action: "reject"}}, Reason: reason.value}
++				edit := memory.ReviewEditDecision{Candidate: f.candidate.Ref, Proposal: f.candidate.Candidate.Proposal, Reason: reason.value}
++				switch route {
++				case "resolve":
++					advancedError(t, reviewPost(t, f.handler, route, map[string]any{"scope_key": "global", "decision": decision}), 400, "invalid_review_request")
++				case "batch/resolve":
++					advancedError(t, advancedPost(t, f, route, batchDecision), 400, "invalid_review_request")
++				case "edit":
++					advancedError(t, advancedPost(t, f, route, edit), 400, "invalid_review_request")
++				}
++				var deliveries, edits, resolutions, operations int
++				err := f.db.QueryRow(`SELECT
++      (SELECT count(*) FROM memory_review_deliveries)+(SELECT count(*) FROM memory_review_batch_deliveries),
++      (SELECT count(*) FROM memory_review_edit_revisions),
++      (SELECT count(*) FROM memory_review_resolutions),
++      (SELECT count(*) FROM semantic_operations WHERE operation_kind='owner_candidate_review')`).Scan(&deliveries, &edits, &resolutions, &operations)
++				if err != nil || deliveries+edits+resolutions+operations != 0 {
++					t.Fatalf("refused request changed durable state: %d/%d/%d/%d %v", deliveries, edits, resolutions, operations, err)
++				}
++				// The definitive refusal leaves the same preview/ref available for a new
++				// explicit decision with a corrected reason; no unknown delivery is stored.
++				switch route {
++				case "resolve":
++					decision.Reason = "Reviewed"
++					reviewResponse[memory.ReviewResult](t, reviewPost(t, f.handler, route, map[string]any{"scope_key": "global", "decision": decision}), 200)
++				case "batch/resolve":
++					batchDecision.Reason = "Reviewed"
++					reviewResponse[memory.ReviewBatchResult](t, advancedPost(t, f, route, batchDecision), 200)
++				case "edit":
++					edit.Reason = "Reviewed"
++					reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, route, edit), 200)
++				}
++			})
++		}
++	}
++}
++
++func TestCandidateAdvancedHTTPHistoryKindAndMissingRevision(t *testing.T) {
++	f := newWebReviewFixture(t)
++	edit := reviewResponse[memory.OwnerCandidate](t, advancedPost(t, f, "edit", memory.ReviewEditDecision{Candidate: f.candidate.Ref, Proposal: f.candidate.Candidate.Proposal, Reason: "Review history fixture"}), 200)
++	for _, route := range []string{"edit/revision", "identity/revision", "temporal/revision"} {
++		t.Run(route, func(t *testing.T) {
++			input := map[string]any{"id": edit.Ref.ID, "revision": edit.Ref.InterpretationRevision}
++			if route == "edit/revision" {
++				recorded := reviewResponse[memory.ReviewEditRevision](t, advancedPost(t, f, route, input), 200)
++				if recorded.Revision != edit.Ref.InterpretationRevision || recorded.CandidateID != edit.Ref.ID {
++					t.Fatal("history returned a different binding")
++				}
++			} else {
++				advancedError(t, advancedPost(t, f, route, input), 404, "review_revision_not_found")
++			}
++			input["revision"] = edit.Ref.InterpretationRevision + 1
++			advancedError(t, advancedPost(t, f, route, input), 404, "review_revision_not_found")
++			input["revision"] = 0
++			advancedError(t, advancedPost(t, f, route, input), 400, "invalid_history_request")
++			input["revision"] = 1
++			input["id"] = ""
++			advancedError(t, advancedPost(t, f, route, input), 400, "invalid_history_request")
++			// Even a missing revision cannot reveal a candidate outside its scope.
++			input["id"] = edit.Ref.ID
++			advancedError(t, reviewPost(t, f.handler, route, map[string]any{"scope_key": "session:unavailable", "input": input}), 403, "review_unauthorized")
++		})
++	}
++}
++
++type historyReadFailureKernel struct {
++	*eviedb.Store
++	err error
++}
++
++func (k historyReadFailureKernel) InspectOwnerCandidateEditRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewEditRevision, error) {
++	return memory.ReviewEditRevision{}, k.err
++}
++func (k historyReadFailureKernel) InspectOwnerCandidateIdentityRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewIdentityRevision, error) {
++	return memory.ReviewIdentityRevision{}, k.err
++}
++func (k historyReadFailureKernel) InspectOwnerCandidateTemporalRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewTemporalRevision, error) {
++	return memory.ReviewTemporalRevision{}, k.err
++}
++
++func TestCandidateAdvancedHTTPHistoryReadErrorsRetainTheirMeaning(t *testing.T) {
++	f := newWebReviewFixture(t)
++	for _, test := range []struct {
++		name   string
++		err    error
++		status int
++		code   string
++	}{
++		{"proven missing row", fmt.Errorf("history lookup: %w", sql.ErrNoRows), 404, "review_revision_not_found"},
++		{"untyped similar text", errors.New(sql.ErrNoRows.Error()), 503, "review_retryable"},
++		{"database read", errors.New("synthetic database failure"), 503, "review_retryable"},
++		{"cancellation", context.Canceled, 503, "review_retryable"},
++		{"current source", eviedb.ErrReviewInvalidSource, 409, "source_ineligible"},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			f.handler = web.WithCandidateReview(web.NewServer(nil), historyReadFailureKernel{Store: f.store, err: test.err}).Handler()
++			for _, route := range []string{"edit/revision", "identity/revision", "temporal/revision"} {
++				advancedError(t, advancedPost(t, f, route, map[string]any{"id": f.candidate.Ref.ID, "revision": 1}), test.status, test.code)
++			}
++		})
++	}
++}
+diff --git a/internal/web/candidate_review_json.go b/internal/web/candidate_review_json.go
+new file mode 100644
+index 0000000..a38d663
+--- /dev/null
++++ b/internal/web/candidate_review_json.go
+@@ -0,0 +1,67 @@
++package web
++
++import (
++	"bytes"
++	"encoding/json"
++	"errors"
++	"io"
++	"unicode/utf8"
++)
++
++// The route has already applied its byte ceiling. Review envelopes have a
++// different ceiling from compiler model responses, but retain strict UTF-8,
++// unique object keys, bounded nesting and exactly one JSON value.
++func validateCandidateJSON(raw []byte) error {
++	if !utf8.Valid(raw) {
++		return errors.New("invalid review JSON encoding")
++	}
++	decoder := json.NewDecoder(bytes.NewReader(raw))
++	if err := candidateJSONValue(decoder, 0); err != nil {
++		return err
++	}
++	if _, err := decoder.Token(); err != io.EOF {
++		return errors.New("trailing review JSON")
++	}
++	return nil
++}
++func candidateJSONValue(decoder *json.Decoder, depth int) error {
++	if depth > 32 {
++		return errors.New("review JSON nesting limit")
++	}
++	token, err := decoder.Token()
++	if err != nil {
++		return err
++	}
++	delimiter, ok := token.(json.Delim)
++	if !ok {
++		return nil
++	}
++	switch delimiter {
++	case '{':
++		seen := map[string]bool{}
++		for decoder.More() {
++			key, err := decoder.Token()
++			if err != nil {
++				return err
++			}
++			name, ok := key.(string)
++			if !ok || seen[name] {
++				return errors.New("duplicate review JSON key")
++			}
++			seen[name] = true
++			if err := candidateJSONValue(decoder, depth+1); err != nil {
++				return err
++			}
++		}
++	case '[':
++		for decoder.More() {
++			if err := candidateJSONValue(decoder, depth+1); err != nil {
++				return err
++			}
++		}
++	default:
++		return errors.New("invalid review JSON delimiter")
++	}
++	_, err = decoder.Token()
++	return err
++}
+diff --git a/internal/web/ui/src/api/candidateReview.ts b/internal/web/ui/src/api/candidateReview.ts
+index 1c02740..0857a93 100644
+--- a/internal/web/ui/src/api/candidateReview.ts
++++ b/internal/web/ui/src/api/candidateReview.ts
+@@ -1,33 +1,37 @@
+-import type { SemanticClaim, SemanticEntity, SemanticPredicate, ScopeRevision } from "./memory";
++import type { SemanticClaim, SemanticEntity, SemanticPredicate, ScopeRevision, SemanticState } from "./memory";
+ 
+ export type CandidateRef = { candidate_id: string; interpretation_revision: number; review_revision: number };
+ export type EvidenceLocator = { event_id: string; event_part: string; locator_kind: string; locator_value: string; evidence_sha256: string };
+-export type CandidateSource = { locator: EvidenceLocator; session_id: string; scope_key: string; observed_at: string; authority: string; evidence: string; usage: string };
++export type Observation = { contract: string; root_id: string; execution_id: string; call_id: string; ancestry_sha256: string };
++export type CandidateSource = { observation?: Observation; actor?: string; source_type?: string; format_version?: number; sequence?: number; locator: EvidenceLocator; session_id: string; scope_key: string; observed_at: string; authority: string; evidence: string; usage: string };
+ export type CandidateProposal = {
+   proposition: { subject_entity_id: string; predicate_id: string; object: SemanticClaim["object"]; polarity: string };
+   valid_time: SemanticClaim["valid_time"];
+   temporal_qualification: string;
+-  identity?: unknown;
++  identity?: IdentityProposal | null;
++  temporal?: { meaning: string; correction: { modes: string[]; effective_time: string | null } | null } | null;
++  support?: EvidenceLocator[]; context?: EvidenceLocator[];
+ };
+ export type OwnerCandidate = {
+   ref: CandidateRef; job_id: string; generation_id: string; destination: string; redacted: boolean;
+-  identity?: unknown;
++  identity?: IdentityRevision; temporal?: TemporalRevision; edit?: EditRevision; original?: OwnerCandidate["candidate"];
+   candidate: { candidate_id: string; proposal: CandidateProposal; support: CandidateSource[] | null; context: CandidateSource[] | null; review_state: string; review_revision: number };
+ };
+ export type CandidatePage = { scope_key: string; revision: number; candidates: OwnerCandidate[]; next_cursor: string };
+ export type CandidateScope = { scope_key: string; kind: string; label: string };
+ export type CandidateScopes = { scopes: CandidateScope[]; next_cursor: string; indexing: boolean };
+-export type ReviewSource = EvidenceLocator & { source_link_id: string; session_id: string; source_scope_key: string; authority: string; observed_at: string; evidence: string; create: boolean };
++export type ReviewSource = EvidenceLocator & { actor?: string; source_type?: string; eligibility?: string; source_link_id: string; session_id: string; source_scope_key: string; authority: string; observed_at: string; evidence: string; create: boolean };
+ export type ReviewClaimEffect = {
+-  candidate: CandidateRef; claim: SemanticClaim; create: boolean; subject: SemanticEntity; predicate: SemanticPredicate;
+-  object_entity: SemanticEntity | null; sources: ReviewSource[]; context: CandidateSource[];
++  candidate: CandidateRef; claim: SemanticClaim; create: boolean; subject: SemanticEntity & { create?: boolean }; predicate: SemanticPredicate & { create?: boolean };
++  object_entity: (SemanticEntity & { create?: boolean }) | null; sources: ReviewSource[]; context: CandidateSource[];
+   conflicts: { code: string; predicate_token: string; claim_ids: string[] }[];
+   temporal_qualification: string;
+ };
+ export type ReviewPreview = {
+   version: string; preview_id: string; preview_sha256: string; effect_sha256: string; scope_key: string;
+   action: "accept" | "reject"; candidates: OwnerCandidate[]; generation_id: string;
+-  effect: { version: string; operation_id: string; prior_revisions: ScopeRevision[]; claims: ReviewClaimEffect[]; identity?: unknown } | null;
++  effect: ReviewEffect | null;
++  batch_preview_id?: string; dependencies?: ReviewDependency[]; source_policy?: string;
+ };
+ export type ReviewDecision = { delivery_key: string; preview_id: string; preview_sha256: string; action: "accept" | "reject"; reason: string };
+ export type ReviewResult = { delivery_key: string; preview_id: string; action: string; candidates: CandidateRef[]; audit_id: string; operation: { operation_id: string; claim_ids: string[]; source_link_ids: string[]; transaction_time: string; resulting_revisions: ScopeRevision[] } | null };
+@@ -39,7 +43,7 @@ export class CandidateReviewError extends Error {
+   constructor(code: string, message: string, result?: ReviewResult) { super(message); this.code = code; this.result = result; }
+ }
+ 
+-async function post<T>(path: string, body: unknown): Promise<T> {
++export async function postCandidateReview<T>(path: string, body: unknown): Promise<T> {
+   const response = await fetch(`/api/memory/candidates/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+   const value = await response.json();
+   if (!response.ok) throw new CandidateReviewError(value.code ?? "request_failed", value.error ?? `Review request failed (${response.status})`, value.result);
+@@ -47,11 +51,49 @@ async function post<T>(path: string, body: unknown): Promise<T> {
+ }
+ 
+ export const candidateReviewAPI = {
+-  scopes: (cursor = ""): Promise<CandidateScopes> => post("scopes", { limit: 50, cursor }),
+-  list: (scope_key: string, cursor = ""): Promise<CandidatePage> => post("list", { scope_key, limit: 25, cursor }),
+-  inspect: (scope_key: string, id: string): Promise<OwnerCandidate> => post("inspect", { scope_key, id }),
+-  prepare: (scope_key: string, candidate: CandidateRef, action: "accept" | "reject"): Promise<ReviewPreview> => post("prepare", { scope_key, candidate, action }),
+-  resolve: (scope_key: string, decision: ReviewDecision): Promise<ReviewResult> => post("resolve", { scope_key, decision }),
+-  operation: (scope_key: string, id: string): Promise<ReviewOperation> => post("operation", { scope_key, id }),
++  scopes: (cursor = ""): Promise<CandidateScopes> => postCandidateReview("scopes", { limit: 50, cursor }),
++  list: (scope_key: string, cursor = ""): Promise<CandidatePage> => postCandidateReview("list", { scope_key, limit: 25, cursor }),
++  inspect: (scope_key: string, id: string): Promise<OwnerCandidate> => postCandidateReview("inspect", { scope_key, id }),
++  prepare: (scope_key: string, candidate: CandidateRef, action: "accept" | "reject"): Promise<ReviewPreview> => postCandidateReview("prepare", { scope_key, candidate, action }),
++  resolve: (scope_key: string, decision: ReviewDecision): Promise<ReviewResult> => postCandidateReview("resolve", { scope_key, decision }),
++  identityOptions: (scope_key: string, input: CandidateRef): Promise<IdentityOptions> => postCandidateReview("identity/options", { scope_key, input }),
++  chooseIdentity: (scope_key: string, input: IdentityDecision): Promise<OwnerCandidate> => postCandidateReview("identity/choose", { scope_key, input }),
++  temporalOptions: (scope_key: string, input: CandidateRef): Promise<TemporalOptions> => postCandidateReview("temporal/options", { scope_key, input }),
++  chooseTemporal: (scope_key: string, input: TemporalDecision): Promise<OwnerCandidate> => postCandidateReview("temporal/choose", { scope_key, input }),
++  edit: (scope_key: string, input: EditDecision): Promise<OwnerCandidate> => postCandidateReview("edit", { scope_key, input }),
++  editRevision: (scope_key: string, id: string, revision: number): Promise<EditRevision> => postCandidateReview("edit/revision", { scope_key, input: { id, revision } }),
++  identityRevision: (scope_key: string, id: string, revision: number): Promise<IdentityRevision> => postCandidateReview("identity/revision", { scope_key, input: { id, revision } }),
++  temporalRevision: (scope_key: string, id: string, revision: number): Promise<TemporalRevision> => postCandidateReview("temporal/revision", { scope_key, input: { id, revision } }),
++  prepareBatch: (scope_key: string, input: BatchRequest): Promise<BatchPreview> => postCandidateReview("batch/prepare", { scope_key, input }),
++  inspectBatch: (scope_key: string, id: string): Promise<BatchPreview> => postCandidateReview("batch/inspect", { scope_key, input: { id, revision: 0 } }),
++  resolveBatch: (scope_key: string, input: BatchDecision): Promise<BatchResult> => postCandidateReview("batch/resolve", { scope_key, input }),
++  operation: (scope_key: string, id: string): Promise<ReviewOperation> => postCandidateReview("operation", { scope_key, id }),
+ };
+ export type CandidateReviewAPI = typeof candidateReviewAPI;
++
++export type EntityMention = { name: string; entity_type: string; support: EvidenceLocator };
++export type PredicateDefinition = Pick<SemanticPredicate, "token" | "label" | "object_constraint" | "cardinality">;
++export type IdentityProposal = { subject: EntityMention | null; object: EntityMention | null; predicate: PredicateDefinition | null; uncertainty: string; confidence: number | null };
++export type SemanticAlias = { alias_id: string; entity_id: string; scope_key: string; value: string; normalized_value: string; source_event_id: string; create: boolean };
++export type EntityAlternative = { entity: SemanticEntity; aliases: SemanticAlias[]; context: SemanticClaim[] };
++export type IdentityOptions = { candidate: CandidateRef; scope_key: string; scope_revisions: ScopeRevision[]; subject: EntityAlternative[]; object: EntityAlternative[]; predicates: SemanticPredicate[]; options_sha256: string };
++export type EntityChoice = { entity_id: string; create: boolean };
++export type IdentityChoices = { subject: EntityChoice | null; object: EntityChoice | null; predicate: { predicate_id: string; create: boolean } | null };
++export type IdentityDecision = { candidate: CandidateRef; options_sha256: string; choices: IdentityChoices };
++export type InterpretationRevision = { revision: number; parent_revision: number; review_revision: number; audit_id: string };
++export type IdentityRevision = InterpretationRevision & { options: IdentityOptions; choices: IdentityChoices };
++export type TemporalOptions = { candidate: CandidateRef; scope_key: string; scope_revisions: ScopeRevision[]; alternatives: { claim: SemanticClaim; state: SemanticState }[]; modes: string[]; effective_time: string | null; options_sha256: string };
++export type TemporalDecision = { candidate: CandidateRef; options_sha256: string; choice: { old_claim_id: string; mode: string } };
++export type TemporalRevision = InterpretationRevision & { options: TemporalOptions; choice: TemporalDecision["choice"] };
++export type CorrectionEffect = { revision: TemporalRevision; old_claim: SemanticClaim; old_state: SemanticState; mode: string; effective_time: string | null; valid_time_effect: { old_before: SemanticClaim["valid_time"]; old_after: SemanticClaim["valid_time"]; replacement: SemanticClaim["valid_time"] }; transition: { object_kind: string; object_id: string; state: string } };
++export type EditMeaning = { proposal: CandidateProposal; support: CandidateSource[]; context: CandidateSource[]; identity: IdentityRevision | null; temporal: TemporalRevision | null };
++export type EditRevision = InterpretationRevision & { candidate_id: string; before: EditMeaning; after: EditMeaning; reason: string };
++export type EditDecision = { candidate: CandidateRef; proposal: CandidateProposal; reason: string };
++export type ReviewDependency = { candidate_id: string; field: string; from_candidate_id: string; from_field: string };
++export type ReviewEffectRecord = { kind: string; id: string; action: string; before_state: string; after_state: string };
++export type ReviewEffect = { version: string; operation_id: string; prior_revisions: ScopeRevision[]; claims: ReviewClaimEffect[]; identity?: { revision: IdentityRevision; aliases: SemanticAlias[] }; correction?: CorrectionEffect; members?: ReviewEffect[]; dependencies?: ReviewDependency[]; records?: ReviewEffectRecord[] };
++export type BatchGroupRequest = { group_id: string; action: "accept" | "reject"; candidates: CandidateRef[]; dependencies: ReviewDependency[] };
++export type BatchRequest = { groups: BatchGroupRequest[] };
++export type BatchPreview = { version: string; preview_id: string; scope_key: string; source_policy: string; prior_revisions: ScopeRevision[]; failure_behavior: string; groups: { group_id: string; preview: ReviewPreview }[]; preview_sha256: string };
++export type BatchDecision = { delivery_key: string; preview_id: string; preview_sha256: string; actions: { group_id: string; action: "accept" | "reject" }[]; reason: string };
++export type BatchResult = { delivery_key: string; preview_id: string; groups: { group_id: string; outcome: string; failure_code: string; result: ReviewResult | null; prior_resolutions?: ReviewResult[] }[] };
+diff --git a/internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx b/internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx
+new file mode 100644
+index 0000000..3960c43
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx
+@@ -0,0 +1,74 @@
++import { useState } from "react";
++import type { CandidateProposal, IdentityChoices, IdentityOptions, OwnerCandidate, TemporalOptions } from "../api/candidateReview";
++import type { CandidateInboxController, InboxState, InterpretationHistory } from "./controller";
++import { IdentityLineage, CorrectionLineage, CandidateSources, EditLineage, ProposalMeaning } from "./ReviewDisclosure";
++
++const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
++const input = "border-hair-input bg-app w-full rounded border px-3 py-2 text-xs";
++
++export function AdvancedReviewForms({ state, controller }: { state: InboxState; controller?: CandidateInboxController }) {
++ const item = state.detail; const [editing, setEditing] = useState(false);
++ if (!item || item.redacted) return null;
++ return <section aria-label="Interpretation review" className="mt-4 space-y-3">
++  {item.original && <details><summary>Original extraction retained</summary><ProposalMeaning proposal={item.original.proposal}/><CandidateSources title="Original supporting evidence" sources={item.original.support ?? []}/><CandidateSources title="Original context" sources={item.original.context ?? []}/></details>}
++  {item.identity && <IdentityLineage identity={item.identity}/>}
++  {item.temporal && <CorrectionLineage correction={item.temporal}/>}
++  {item.candidate.review_state === "unresolved" && <>
++   {item.candidate.proposal.identity && <><p className="text-amber-ink">Additional identity review: explicitly choose an existing identity or create a distinct definition.</p><button className={button} disabled={state.busy || !controller} onClick={() => void controller?.loadIdentityOptions()}>Inspect identity alternatives</button></>}
++   {state.identityOptions && <IdentityForm key={state.identityOptions.options_sha256} item={item} options={state.identityOptions} disabled={state.busy || !controller} onChoose={(choices) => void controller?.chooseIdentity({ candidate: state.identityOptions!.candidate, options_sha256: state.identityOptions!.options_sha256, choices })}/>}
++   {item.candidate.proposal.temporal?.correction && <><p>Choose the exact earlier claim and whether it was wrong or the world changed. Unknown effective times remain unknown.</p><button className={button} disabled={state.busy || !controller} onClick={() => void controller?.loadTemporalOptions()}>Inspect correction alternatives</button></>}
++   {state.temporalOptions && <TemporalForm key={state.temporalOptions.options_sha256} options={state.temporalOptions} disabled={state.busy || !controller} onChoose={(choice) => void controller?.chooseTemporal({ candidate: state.temporalOptions!.candidate, options_sha256: state.temporalOptions!.options_sha256, choice })}/>}
++   <button className={`${button} block`} disabled={state.busy || !controller} onClick={() => setEditing(!editing)}>{editing ? "Close edit draft" : "Edit interpretation"}</button>
++   {editing && <EditForm item={item} disabled={state.busy || !controller} onEdit={(proposal, reason, candidate) => void controller?.edit({ candidate, proposal, reason })}/>}
++  </>}
++  {item.ref.interpretation_revision > 0 && <HistoryForm maximum={item.ref.interpretation_revision} state={state} controller={controller}/>}
++ </section>;
++}
++
++function HistoryForm({ maximum, state, controller }: { maximum: number; state: InboxState; controller?: CandidateInboxController }) {
++ const [kind, setKind] = useState<InterpretationHistory["kind"]>("edit"); const [revision, setRevision] = useState(1);
++ const history = state.history?.kind === kind && state.history.value.revision === revision ? state.history : undefined;
++ const valid = Number.isSafeInteger(revision) && revision >= 1 && revision <= maximum;
++ return <details><summary>Inspect interpretation history</summary><p className="mt-2 text-xs">Edits, identity choices and correction choices share one revision sequence. Select the recorded kind and revision; a number may belong to a different kind.</p><form className="mt-2 space-y-2" onSubmit={(event) => { event.preventDefault(); if (valid) void controller?.loadHistoryRevision(kind, revision); }}><fieldset disabled={state.busy || !controller} className="space-y-2"><label className="block text-xs">History kind<select aria-label="Interpretation history kind" className={input} value={kind} onChange={(event) => { const value = event.target.value; if (value === "edit" || value === "identity" || value === "correction") setKind(value); }}><option value="edit">Owner edit</option><option value="identity">Identity choice</option><option value="correction">Correction choice</option></select></label><label className="block text-xs">Interpretation revision<input aria-label="Interpretation history revision" className={input} type="number" min={1} max={maximum} step={1} value={revision} onChange={(event) => setRevision(Number(event.target.value))}/></label><button className={button} disabled={!valid} type="submit">Load immutable history revision</button></fieldset></form>{history?.kind === "edit" && <EditLineage edit={history.value}/>} {history?.kind === "identity" && <IdentityLineage identity={history.value}/>} {history?.kind === "correction" && <CorrectionLineage correction={history.value}/>}</details>;
++}
++
++function IdentityForm({ item, options, disabled, onChoose }: { item: OwnerCandidate; options: IdentityOptions; disabled: boolean; onChoose: (choices: IdentityChoices) => void }) {
++ const [selected, setSelected] = useState({ subject: "", object: "", predicate: "" }); const proposal = item.candidate.proposal.identity!;
++ const choose = (field: keyof typeof selected, value: string) => setSelected({ ...selected, [field]: value });
++ const complete = (!proposal.subject || selected.subject) && (!proposal.object || selected.object) && (!proposal.predicate || selected.predicate);
++ return <form aria-label="Identity choices" className="border-hair space-y-4 rounded border p-3" onSubmit={(event) => { event.preventDefault(); if (!complete) return; onChoose({ subject: proposal.subject ? { entity_id: selected.subject === "create" ? "" : selected.subject, create: selected.subject === "create" } : null, object: proposal.object ? { entity_id: selected.object === "create" ? "" : selected.object, create: selected.object === "create" } : null, predicate: proposal.predicate ? { predicate_id: selected.predicate === "create" ? "" : selected.predicate, create: selected.predicate === "create" } : null }); }}>
++  {(["subject", "object"] as const).map((field) => proposal[field] && <fieldset key={field} disabled={disabled}><legend className="font-medium">{field === "subject" ? "Subject" : "Object"}: {proposal[field]!.name} ({proposal[field]!.entity_type})</legend>{options[field].map((alternative) => <label className="mt-3 block text-xs" key={alternative.entity.entity_id}><input type="radio" name={`identity-${field}`} value={alternative.entity.entity_id} checked={selected[field] === alternative.entity.entity_id} onChange={(event) => choose(field, event.target.value)}/> Reuse {alternative.entity.canonical_name} · {alternative.entity.entity_type} · {alternative.entity.scope_key} · {alternative.entity.entity_id}<span className="text-muted-text mt-1 block">Aliases: {alternative.aliases.map((alias) => alias.value).join(", ") || "None"}</span>{alternative.context.map((claim) => <span className="mt-1 block" key={claim.claim_id}>Known context: {claim.predicate.label} · {claim.polarity} · {claim.object.literal?.value ?? claim.object.entity_id} · claim {claim.claim_id} · {claim.valid_time.from ?? "Unknown"} / {claim.valid_time.to ?? "Unknown"}</span>)}</label>)}<label className="mt-3 block text-xs"><input type="radio" name={`identity-${field}`} value="create" checked={selected[field] === "create"} onChange={() => choose(field, "create")}/> Create distinct Entity “{proposal[field]!.name}” in {item.destination}</label></fieldset>)}
++  {proposal.predicate && <fieldset disabled={disabled}><legend className="font-medium">Relationship definition (global)</legend><p className="text-xs">Proposed: {proposal.predicate.label} · token {proposal.predicate.token} · object {proposal.predicate.object_constraint} · cardinality {proposal.predicate.cardinality}</p>{options.predicates.map((predicate) => <label className="mt-2 block text-xs" key={predicate.predicate_id}><input type="radio" name="identity-predicate" checked={selected.predicate === predicate.predicate_id} onChange={() => choose("predicate", predicate.predicate_id)}/> Reuse {predicate.label} · {predicate.token} v{predicate.version} · {predicate.object_constraint} · {predicate.cardinality} · {predicate.predicate_id}</label>)}<label className="mt-2 block text-xs"><input type="radio" name="identity-predicate" checked={selected.predicate === "create"} onChange={() => choose("predicate", "create")}/> Create the displayed new global Predicate definition</label></fieldset>}
++  <p className="text-muted-text text-xs">This records interpretation only. Preview the generated identities, Aliases and claims before accepting.</p><button className={button} disabled={disabled || !complete} type="submit">Record these identity choices</button>
++ </form>;
++}
++
++function TemporalForm({ options, disabled, onChoose }: { options: TemporalOptions; disabled: boolean; onChoose: (choice: { old_claim_id: string; mode: string }) => void }) {
++ const [claim, setClaim] = useState(""); const [mode, setMode] = useState("");
++ return <form aria-label="Correction choices" className="border-hair space-y-3 rounded border p-3" onSubmit={(event) => { event.preventDefault(); if (claim && mode) onChoose({ old_claim_id: claim, mode }); }}><fieldset disabled={disabled}><legend>Exact earlier claim</legend>{options.alternatives.map((alt) => <label className="mt-2 block text-xs" key={alt.claim.claim_id}><input type="radio" name="old-claim" checked={claim === alt.claim.claim_id} onChange={() => setClaim(alt.claim.claim_id)}/> {alt.claim.predicate.label}: {alt.claim.polarity} {alt.claim.object.literal?.value ?? alt.claim.object.entity_id} · {alt.state.state} · {alt.claim.claim_id} · valid {alt.claim.valid_time.from ?? "Unknown"} / {alt.claim.valid_time.to ?? "Unknown"}</label>)}</fieldset><fieldset disabled={disabled}><legend>Correction meaning</legend>{options.modes.map((value) => <label className="mt-2 block text-xs" key={value}><input type="radio" name="correction-mode" checked={mode === value} onChange={() => setMode(value)}/> {value === "error" ? "Error: earlier statement was wrong" : value === "changed" ? "Changed: the real-world state changed" : value}</label>)}</fieldset><p>Source-proposed effective time: {options.effective_time ?? "Unknown; a changed correction may require an edited, sourced interpretation or a separate assertion."}</p><button className={button} type="submit" disabled={disabled || !claim || !mode}>Record this correction choice</button></form>;
++}
++
++function EditForm({ item, disabled, onEdit }: { item: OwnerCandidate; disabled: boolean; onEdit: (proposal: CandidateProposal, reason: string, ref: OwnerCandidate["ref"]) => void }) {
++ // Keep the draft bound to its starting revision across an asynchronous refresh.
++ // The owner can inspect a newer revision, but must explicitly restart this edit.
++ const [start] = useState(item); const [proposal, setProposal] = useState<CandidateProposal>(() => structuredClone({ ...item.candidate.proposal, support: item.candidate.proposal.support ?? item.candidate.support?.map((source) => source.locator) ?? [], context: item.candidate.proposal.context ?? item.candidate.context?.map((source) => source.locator) ?? [] })); const [reason, setReason] = useState("");
++ const stale = start.ref.interpretation_revision !== item.ref.interpretation_revision || start.ref.review_revision !== item.ref.review_revision;
++ const setProp = (patch: Partial<CandidateProposal>) => setProposal({ ...proposal, ...patch });
++ const objectKind = proposal.proposition.object.literal?.kind ?? "entity";
++ return <form aria-label="Edit candidate interpretation" className="border-hair space-y-3 rounded border p-3" onSubmit={(event) => { event.preventDefault(); onEdit(proposal, reason, start.ref); }}><p>Editing interpretation {start.ref.interpretation_revision}, review {start.ref.review_revision}. Original extraction and evidence remain retained.</p>{stale && <p role="alert">The candidate has a newer revision. This draft remains bound to its original revision. Close and reopen the edit to start from the refreshed interpretation.</p>}<div className="grid gap-3 md:grid-cols-2"><section><h4>Before</h4><ProposalMeaning proposal={start.candidate.proposal}/></section><section><h4>Draft after edit</h4><ProposalMeaning proposal={proposal}/></section></div>
++  <fieldset disabled={disabled || stale} className="space-y-3">
++   <label className="block text-xs">Subject Entity ID<input aria-label="Edited subject Entity ID" className={input} value={proposal.proposition.subject_entity_id} onChange={(event) => setProp({ proposition: { ...proposal.proposition, subject_entity_id: event.target.value } })}/></label>
++   <label className="block text-xs">Predicate ID<input aria-label="Edited Predicate ID" className={input} value={proposal.proposition.predicate_id} onChange={(event) => setProp({ proposition: { ...proposal.proposition, predicate_id: event.target.value } })}/></label>
++   <label className="block text-xs">Object kind<select className={input} value={objectKind} onChange={(event) => setProp({ proposition: { ...proposal.proposition, object: event.target.value === "entity" ? { entity_id: "" } : { literal: { kind: event.target.value, value: "" } } } })}>{["entity", "text", "integer", "decimal", "boolean", "date", "datetime"].map((kind) => <option key={kind}>{kind}</option>)}</select></label>
++   <label className="block text-xs">{objectKind === "entity" ? "Object Entity ID" : "Literal value"}<input aria-label="Edited object value" className={input} value={proposal.proposition.object.literal?.value ?? proposal.proposition.object.entity_id ?? ""} onChange={(event) => setProp({ proposition: { ...proposal.proposition, object: objectKind === "entity" ? { entity_id: event.target.value } : { literal: { kind: objectKind, value: event.target.value } } } })}/></label>
++   <label className="block text-xs">Polarity<select aria-label="Edited polarity" className={input} value={proposal.proposition.polarity} onChange={(event) => setProp({ proposition: { ...proposal.proposition, polarity: event.target.value } })}><option value="affirmed">Affirmed</option><option value="denied">Denied</option></select></label>
++   {(["from", "to"] as const).map((bound) => <label className="block text-xs" key={bound}>Valid {bound === "from" ? "from" : "until"} (empty means unknown)<input aria-label={`Edited valid ${bound}`} className={input} value={proposal.valid_time[bound] ?? ""} onChange={(event) => setProp({ valid_time: { ...proposal.valid_time, [bound]: event.target.value || null } })}/></label>)}
++   <label className="block text-xs">Time qualification<input aria-label="Edited time qualification" className={input} value={proposal.temporal_qualification} onChange={(event) => setProp({ temporal_qualification: event.target.value })}/></label>
++   {proposal.temporal && <><label className="block text-xs">Meaning<select aria-label="Edited meaning" className={input} value={proposal.temporal.meaning} onChange={(event) => setProp({ temporal: { ...proposal.temporal!, meaning: event.target.value } })}>{["assertion", "plan", "possibility"].map((meaning) => <option key={meaning}>{meaning}</option>)}</select></label>{proposal.temporal.correction && <><label className="block text-xs">Correction effective time (empty means unknown)<input aria-label="Edited correction effective time" className={input} value={proposal.temporal.correction.effective_time ?? ""} onChange={(event) => setProp({ temporal: { ...proposal.temporal!, correction: { ...proposal.temporal!.correction!, effective_time: event.target.value || null } } })}/></label><button type="button" className={button} onClick={() => setProp({ temporal: { ...proposal.temporal!, correction: null } })}>Interpret as separate assertion without superseding an earlier claim</button></>}</>}
++   {proposal.identity && <><h4>Sourced unresolved definitions</h4>{(["subject", "object"] as const).map((field) => proposal.identity?.[field] && <label key={field} className="block text-xs">{field} mention<input className={input} value={proposal.identity[field]!.name} onChange={(event) => setProp({ identity: { ...proposal.identity!, [field]: { ...proposal.identity![field], name: event.target.value } } })}/></label>)}{proposal.identity.predicate && (["token", "label", "object_constraint", "cardinality"] as const).map((field) => <label className="block text-xs" key={field}>Predicate {field}<input className={input} value={proposal.identity!.predicate![field]} onChange={(event) => setProp({ identity: { ...proposal.identity!, predicate: { ...proposal.identity!.predicate!, [field]: event.target.value } } })}/></label>)}</>}
++   <p className="text-muted-text text-xs">Supporting and context locators stay bound to the original source window. The Kernel validates the edited meaning and all source eligibility.</p><CandidateSources title="Evidence retained by this edit" sources={start.candidate.support ?? []}/><CandidateSources title="Interpretation context retained by this edit" sources={start.candidate.context ?? []}/>
++   <label className="block text-xs">Edit reason<input aria-label="Edit reason" className={input} value={reason} onChange={(event) => setReason(event.target.value)}/></label>
++   <button className={button} type="submit">Record edited interpretation</button>
++  </fieldset>
++ </form>;
++}
+diff --git a/internal/web/ui/src/candidateInbox/BatchReview.tsx b/internal/web/ui/src/candidateInbox/BatchReview.tsx
+new file mode 100644
+index 0000000..355aa2d
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/BatchReview.tsx
+@@ -0,0 +1,58 @@
++import { useState } from "react";
++import type { BatchRequest, OwnerCandidate, ReviewDependency } from "../api/candidateReview";
++import type { CandidateInboxController, InboxState } from "./controller";
++import { DependencyDisclosure, ProposalMeaning, ReviewEffects, CanonicalDisclosure } from "./ReviewDisclosure";
++import { supportedBatch } from "./previewSupport";
++
++const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
++const input = "border-hair-input bg-app rounded border px-2 py-1 text-xs";
++type Row = { item: OwnerCandidate; group: string; action: "accept" | "reject" };
++
++export function BatchReview({ state, controller }: { state: InboxState; controller: CandidateInboxController }) {
++ const [rows, setRows] = useState<Row[]>([]); const [dependencies, setDependencies] = useState<ReviewDependency[]>([]);
++ const [target, setTarget] = useState(""); const [provider, setProvider] = useState(""); const [field, setField] = useState("subject"); const [fromField, setFromField] = useState("subject"); const [problem, setProblem] = useState("");
++ const changed = () => { controller.invalidateBatchDraft(); setProblem(""); };
++ const add = () => {
++  const item = state.detail; if (!item) return; changed();
++  const index = rows.findIndex((row) => row.item.ref.candidate_id === item.ref.candidate_id);
++  if (index >= 0) setRows(rows.map((row, i) => i === index ? { ...row, item } : row));
++  else setRows([...rows, { item, group: `group-${rows.length + 1}`, action: "accept" }]);
++ };
++ const prepare = () => {
++  const request: BatchRequest = { groups: [] };
++  for (const row of rows) {
++   let group = request.groups.find((entry) => entry.group_id === row.group);
++   if (!group) { group = { group_id: row.group, action: row.action, candidates: [], dependencies: [] }; request.groups.push(group); }
++   if (group.action !== row.action) { setProblem("Every candidate in one atomic group must have the same action. Choose matching actions before preparing."); return; }
++   group.candidates.push(row.item.ref);
++  }
++  for (const dependency of dependencies) {
++   const group = request.groups.find((entry) => entry.candidates.some((ref) => ref.candidate_id === dependency.candidate_id));
++   if (!group) { setProblem("A dependency refers to an omitted candidate. Restore its complete group before preparing."); return; }
++   group.dependencies.push(dependency);
++  }
++  void controller.prepareBatch(request);
++ };
++ if (!state.scope) return null;
++ return <section aria-label="Batch review" className="border-hair my-4 space-y-3 rounded border p-4">
++  <h3 className="text-ink font-medium">Review dependent candidates together</h3>
++  <p className="text-muted-text text-xs">Add inspected candidates, assign the same group name to changes that must succeed together, and explicitly bind any shared new identity. Separate groups may succeed independently. Nothing is accepted until the complete batch preview is confirmed.</p>
++  <button className={button} type="button" disabled={state.busy || !state.detail || state.detail.candidate.review_state !== "unresolved" || rows.length >= 64 && !rows.some((row) => row.item.ref.candidate_id === state.detail?.ref.candidate_id)} onClick={add}>{rows.some((row) => row.item.ref.candidate_id === state.detail?.ref.candidate_id) ? "Replace selection with inspected revision" : "Add inspected candidate to batch"}</button>
++  {rows.map((row, index) => <section className="border-hair space-y-2 border-t pt-3" key={row.item.ref.candidate_id}><p className="break-all text-xs">Selected {index + 1}: {row.item.ref.candidate_id} · interpretation {row.item.ref.interpretation_revision} · review {row.item.ref.review_revision}</p>{state.detail?.ref.candidate_id === row.item.ref.candidate_id && !state.detail.redacted && state.detail.ref.interpretation_revision === row.item.ref.interpretation_revision && <ProposalMeaning proposal={state.detail.candidate.proposal}/>}<label className="mr-3 inline-flex flex-col text-xs">Atomic group<input aria-label={`Atomic group for candidate ${index + 1}`} className={input} value={row.group} disabled={state.busy} onChange={(event) => { changed(); setRows(rows.map((entry,i) => i === index ? { ...entry, group: event.target.value } : entry)); }}/></label><label className="mr-3 inline-flex flex-col text-xs">Group action<select aria-label={`Action for candidate ${index + 1}`} className={input} value={row.action} disabled={state.busy} onChange={(event) => { changed(); setRows(rows.map((entry,i) => i === index ? { ...entry, action: event.target.value as "accept" | "reject" } : entry)); }}><option value="accept">Accept</option><option value="reject">Reject</option></select></label><button className={button} disabled={state.busy} onClick={() => { changed(); setRows(rows.filter((_,i) => i !== index)); }}>Remove from selection</button></section>)}
++  {!!rows.length && <>
++   <fieldset className="border-hair space-y-2 border-t pt-3" disabled={state.busy}><legend className="pt-3">Explicit shared identity dependency</legend><p className="text-muted-text text-xs">The provider must precede its dependent in the same atomic group. Both candidates must explicitly choose the compatible new definition. A dependency does not merge Entities or grant permission.</p>
++    <label className="mr-2 inline-flex flex-col text-xs">Dependent candidate<select aria-label="Dependent candidate" className={input} value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Choose…</option>{rows.map((row,i) => <option key={row.item.ref.candidate_id} value={row.item.ref.candidate_id}>{i + 1}: {row.item.ref.candidate_id}</option>)}</select></label>
++    <label className="mr-2 inline-flex flex-col text-xs">Dependent field<select aria-label="Dependent field" className={input} value={field} onChange={(event) => setField(event.target.value)}>{["subject","object","predicate"].map((value) => <option key={value}>{value}</option>)}</select></label>
++    <label className="mr-2 inline-flex flex-col text-xs">Provider candidate<select aria-label="Provider candidate" className={input} value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Choose…</option>{rows.map((row,i) => <option key={row.item.ref.candidate_id} value={row.item.ref.candidate_id}>{i + 1}: {row.item.ref.candidate_id}</option>)}</select></label>
++    <label className="mr-2 inline-flex flex-col text-xs">Provider field<select aria-label="Provider field" className={input} value={fromField} onChange={(event) => setFromField(event.target.value)}>{["subject","object","predicate"].map((value) => <option key={value}>{value}</option>)}</select></label>
++    <button className={button} disabled={!target || !provider} type="button" onClick={() => { changed(); setDependencies([...dependencies,{candidate_id:target, field, from_candidate_id:provider, from_field:fromField}]); }}>Add explicit dependency</button>
++   </fieldset>
++   <DependencyDisclosure dependencies={dependencies}/>{dependencies.map((_,i) => <button className={`${button} mr-2`} disabled={state.busy} key={i} onClick={() => { changed(); setDependencies(dependencies.filter((_,index) => index !== i)); }}>Remove dependency {i + 1}</button>)}
++   <p className="text-muted-text text-xs">The complete request is checked against the selected revisions and all dependency closure rules. Limits: 20 groups, 64 candidates, 256 semantic records and 256 KiB of complete disclosure. Reduce complete groups if a bound is exceeded.</p>
++   <button type="button" className={button} disabled={state.busy} onClick={prepare}>Prepare complete batch preview</button>
++  </>}
++  {problem && <p role="alert">{problem}</p>}
++  {state.batchPreview && <article aria-label="Exact batch preview" className="border-teal-hair space-y-4 rounded border p-3"><h4 className="font-medium">Review every atomic group and its exact changes</h4><p>Each group succeeds or fails together. Independent successful groups may commit while another group fails. Failed groups in this delivery are recorded and never retried automatically.</p>{state.batchPreview.groups.map((group) => <section className="border-hair border-t pt-3" key={group.group_id}><h5>{group.group_id}: {group.preview.action}</h5>{group.preview.action === "reject" && <p>Reject every displayed candidate in this group. Accepted memory remains unchanged.</p>}<ReviewEffects preview={group.preview}/></section>)}<CanonicalDisclosure value={state.batchPreview} title="Complete batch binding and revision vector"/><label className="block text-xs">Optional batch reason<input aria-label="Optional batch reason" className={`${input} ml-2`} value={state.reason} disabled={state.busy || !!state.batchPending} onChange={(event) => controller.setReason(event.target.value)}/></label><button className={button} disabled={state.busy || !supportedBatch(state.batchPreview)} onClick={() => void controller.resolveBatch()}>{state.batchPending ? "Retry the exact batch delivery" : "Confirm all displayed group actions"}</button></article>}
++  {state.batchResult && <article aria-label="Recorded batch decision"><h4>Durable batch results</h4><p className="break-all text-xs">Preview {state.batchResult.preview_id} · delivery {state.batchResult.delivery_key}</p><ol>{state.batchResult.groups.map((group) => <li className="mt-3" key={group.group_id}><p>{group.group_id}: {group.outcome}{group.failure_code && ` · ${group.failure_code}`}</p>{group.result && <p className="break-all text-xs">Audit {group.result.audit_id}{group.result.operation && ` · operation ${group.result.operation.operation_id} · ${group.result.operation.transaction_time}`}</p>}{group.prior_resolutions?.map((prior) => <section className="border-hair mt-2 border-l pl-3" key={prior.delivery_key}><h5>Earlier recorded decision: {prior.action}</h5><p className="break-all text-xs">Delivery {prior.delivery_key} · audit {prior.audit_id} · candidate revisions {prior.candidates.map((ref) => `${ref.candidate_id}: ${ref.interpretation_revision}/${ref.review_revision}`).join(", ")}</p>{prior.operation && <p className="break-all text-xs">Earlier operation {prior.operation.operation_id} · {prior.operation.transaction_time}</p>}<p className="text-xs">This earlier decision is not a successful change by the current failed group.</p></section>)}{!group.result && <p className="text-xs">No accepted operation recorded for this group. Inspect current candidates, prepare a new complete group and explicitly approve again.</p>}</li>)}</ol>{state.batchOperations?.map((operation) => <section key={operation.operation_id}><h5 className="mt-3 break-all">Recorded operation {operation.operation_id}</h5><ReviewEffects preview={operation.preview}/></section>)}{state.batchPriorOperations?.map(({group_id,operation}) => <section key={`${group_id}:${operation.operation_id}`}><h5 className="mt-3 break-all">Earlier accepted operation for {group_id}: {operation.operation_id}</h5><p className="text-xs">Recorded before this failed group; displayed under current source permissions.</p><ReviewEffects preview={operation.preview}/></section>)}</article>}
++ </section>;
++}
+diff --git a/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx b/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+index fc55675..1149e81 100644
+--- a/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
++++ b/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+@@ -22,7 +22,7 @@ describe("candidate review disclosure", () => {
+   });
+ 
+   it("never offers acceptance of an undisclosed identity effect", () => {
+-    const advanced = { ...candidate, candidate: { ...candidate.candidate, proposal: { ...candidate.candidate.proposal, identity: {} } } };
++    const advanced = { ...candidate, candidate: { ...candidate.candidate, proposal: { ...candidate.candidate.proposal, identity: { subject: null, object: null, predicate: null, uncertainty: "", confidence: null } } } };
+     const html = render({ ...state, detail: advanced, preview: { ...preview, version: "owner-review-preview-v2" } });
+     expect(html).toContain("Additional identity review"); expect(html).toMatch(/disabled=""[^>]*>Accept this exact memory/);
+   });
+diff --git a/internal/web/ui/src/candidateInbox/CandidateInbox.tsx b/internal/web/ui/src/candidateInbox/CandidateInbox.tsx
+index 337250e..4b8406f 100644
+--- a/internal/web/ui/src/candidateInbox/CandidateInbox.tsx
++++ b/internal/web/ui/src/candidateInbox/CandidateInbox.tsx
+@@ -1,6 +1,10 @@
+ import { useEffect, useState, useSyncExternalStore } from "react";
+-import { candidateReviewAPI, type CandidateSource, type OwnerCandidate, type ReviewClaimEffect, type ReviewPreview, type ReviewSource } from "../api/candidateReview";
+-import { CandidateInboxController, simpleAcceptPreview, type InboxState } from "./controller";
++import { candidateReviewAPI, type OwnerCandidate, type ReviewPreview } from "../api/candidateReview";
++import { CandidateInboxController, type InboxState } from "./controller";
++import { CandidateSources, ProposalMeaning, ReviewEffects, EditLineage } from "./ReviewDisclosure";
++import { supportedPreview } from "./previewSupport";
++import { AdvancedReviewForms } from "./AdvancedReviewForms";
++import { BatchReview } from "./BatchReview";
+ import { browserPendingDecisionJournal } from "./pendingDecision";
+ 
+ const button = "border-hair-input text-body hover:bg-hover rounded border px-3 py-2 text-xs disabled:opacity-40";
+@@ -9,11 +13,11 @@ export function CandidateInbox() {
+   const [controller] = useState(() => new CandidateInboxController(candidateReviewAPI, undefined, browserPendingDecisionJournal()));
+   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
+   useEffect(() => { void controller.loadScopes(); return () => controller.invalidate(); }, [controller]);
+-  return <CandidateInboxView state={state} onScope={(scope) => void controller.selectScope(scope)} onScopes={(cursor) => void controller.loadScopes(cursor)} onLoad={(cursor) => void controller.load(cursor)} onInspect={(id) => void controller.inspect(id)} onPrepare={(action) => void controller.prepare(action)} onResolve={() => void controller.resolve()} onRecover={() => void controller.recover()} onReason={(reason) => controller.setReason(reason)} />;
++  return <CandidateInboxView state={state} onScope={(scope) => void controller.selectScope(scope)} onScopes={(cursor) => void controller.loadScopes(cursor)} onLoad={(cursor) => void controller.load(cursor)} onInspect={(id) => void controller.inspect(id)} onPrepare={(action) => void controller.prepare(action)} onResolve={() => void controller.resolve()} onRecover={() => void controller.recover()} onReason={(reason) => controller.setReason(reason)} controller={controller} />;
+ }
+ 
+-export function CandidateInboxView({ state, onScope, onScopes, onLoad, onInspect, onPrepare, onResolve, onRecover, onReason }: {
+-  state: InboxState; onScope: (scope: string) => void; onScopes: (cursor?: string) => void; onLoad: (cursor?: string) => void;
++export function CandidateInboxView({ state, onScope, onScopes, onLoad, onInspect, onPrepare, onResolve, onRecover, onReason, controller }: {
++  controller?: CandidateInboxController; state: InboxState; onScope: (scope: string) => void; onScopes: (cursor?: string) => void; onLoad: (cursor?: string) => void;
+   onInspect: (id: string) => void; onPrepare: (action: "accept" | "reject") => void; onResolve: () => void; onRecover: () => void; onReason: (reason: string) => void;
+ }) {
+   const selected = state.scopes?.scopes.find((scope) => scope.scope_key === state.scope);
+@@ -36,7 +40,7 @@ export function CandidateInboxView({ state, onScope, onScopes, onLoad, onInspect
+     {state.scopesBusy && <p role="status" className="text-muted-text py-3">Loading memory scopes…</p>}
+     {state.problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink my-3 rounded border p-3">{state.problem}</p>}
+     {state.notice && <p role="status" className="text-ok-ink my-3">{state.notice}</p>}
+-    {state.recovery && state.recovery.decision.preview_id !== state.preview?.preview_id && <div className="border-amber-hair text-amber-ink my-3 rounded border p-3"><p>An earlier {state.recovery.decision.action} decision has no confirmed response. Retry its exact delivery in {state.recovery.scope} before confirming another candidate.</p><button className={`${button} mt-2`} type="button" disabled={state.busy} onClick={onRecover}>Recover earlier decision</button></div>}
++    {state.recovery && state.recovery.decision.preview_id !== state.preview?.preview_id && state.recovery.decision.preview_id !== state.batchPreview?.preview_id && <div className="border-amber-hair text-amber-ink my-3 rounded border p-3"><p>An earlier {"actions" in state.recovery.decision ? "batch" : state.recovery.decision.action} decision has no confirmed response. Retry its exact delivery in {state.recovery.scope} before confirming another candidate.</p><button className={`${button} mt-2`} type="button" disabled={state.busy} onClick={onRecover}>Recover earlier decision</button></div>}
+     {state.busy && <p role="status" className="text-muted-text py-3">Loading the current review…</p>}
+     {!state.scope && <p className="text-muted-text py-8">Choose a scope to inspect its suggestions, including suggestions from closed conversations.</p>}
+     {state.scope && <p className="text-muted-text mt-3 break-all text-xs">Exact scope: {state.scope}{state.page ? ` · inbox revision ${state.page.revision}` : ""}</p>}
+@@ -57,19 +61,20 @@ export function CandidateInboxView({ state, onScope, onScopes, onLoad, onInspect
+         {item.candidate.proposal.temporal_qualification && <p className="mt-3">Time qualification: {item.candidate.proposal.temporal_qualification}</p>}
+       </>}
+       <details className="text-muted-text mt-3 break-all text-xs"><summary>Candidate origin</summary><dl className="mt-2 space-y-1"><div><dt>Candidate</dt><dd>{item.ref.candidate_id}</dd></div><div><dt>Generation</dt><dd>{item.generation_id}</dd></div><div><dt>Compilation</dt><dd>{item.job_id}</dd></div><div><dt>Destination</dt><dd>{item.destination}</dd></div></dl></details>
+-      {!!item.candidate.proposal.identity && <p className="text-amber-ink mt-3">Additional identity review is required. Use local review to inspect identity choices and compound effects before acceptance.</p>}
++      {!item.redacted && <><ProposalMeaning proposal={item.candidate.proposal}/>{item.edit && <EditLineage edit={item.edit}/>}<AdvancedReviewForms key={item.ref.candidate_id} state={state} controller={controller}/></>}
+       {item.candidate.review_state === "unresolved" && <div className="mt-4 flex gap-3">
+-        <button type="button" className={button} disabled={state.busy || item.redacted || !!item.candidate.proposal.identity} onClick={() => onPrepare("accept")}>Preview acceptance</button>
++        <button type="button" className={button} disabled={state.busy || item.redacted} onClick={() => onPrepare("accept")}>Preview acceptance</button>
+         <button type="button" className={button} disabled={state.busy} onClick={() => onPrepare("reject")}>Preview rejection</button>
+       </div>}
+     </article>}
++    {controller && <BatchReview key={`${state.scope}:${state.disclosureEpoch ?? 0}`} state={state} controller={controller}/>}
+     {state.preview && <article className="border-teal-hair bg-panel my-4 rounded border p-4" aria-label="Exact review preview">
+       <h3 className="text-ink font-medium">{state.preview.action === "accept" ? "Review the exact memory change" : "Review rejection"}</h3>
+       {state.preview.action === "accept" ? <ReviewEffects preview={state.preview} /> : <p className="mt-3">Reject this candidate at the displayed interpretation and review revisions. No accepted memory will change.</p>}
+       <PreviewIdentity preview={state.preview} />
+-      <label className="mt-4 flex flex-col gap-1 text-xs">Optional reason<input aria-label="Optional reason" maxLength={1024} className="border-hair-input bg-app rounded border px-3 py-2" value={state.reason} disabled={state.busy || !!state.pending} onChange={(event) => onReason(event.target.value)} /></label>
++      <label className="mt-4 flex flex-col gap-1 text-xs">Optional reason<input aria-label="Optional reason" maxLength={4096} className="border-hair-input bg-app rounded border px-3 py-2" value={state.reason} disabled={state.busy || !!state.pending} onChange={(event) => onReason(event.target.value)} /></label>
+       <p className="text-muted-text my-3 text-xs">Confirming applies only to this exact preview. A changed preview requires your approval again.</p>
+-      <button type="button" className={`${button} border-teal-hair text-teal`} disabled={state.busy || (state.preview.action === "accept" && !simpleAcceptPreview(state.preview))} onClick={onResolve}>{state.pending ? "Retry the same decision" : state.preview.action === "accept" ? "Accept this exact memory" : "Reject this candidate"}</button>
++      <button type="button" className={`${button} border-teal-hair text-teal`} disabled={state.busy || (state.preview.action === "accept" && !supportedPreview(state.preview))} onClick={onResolve}>{state.pending ? "Retry the same decision" : state.preview.action === "accept" ? "Accept this exact memory" : "Reject this candidate"}</button>
+     </article>}
+     {state.result && <article aria-label="Recorded review decision" className="border-hair my-4 rounded border p-4">
+       <h3 className="text-ink font-medium">Recorded decision: {state.result.action === "accept" ? "accepted" : "rejected"}</h3>
+@@ -82,37 +87,8 @@ export function CandidateInboxView({ state, onScope, onScopes, onLoad, onInspect
+ function candidateMeaning(item: OwnerCandidate): string {
+   if (item.redacted) return "Candidate with unavailable evidence";
+   const prop = item.candidate.proposal.proposition;
+-  if (item.candidate.proposal.identity) return "Candidate requiring identity review";
++  if (item.candidate.proposal.identity) return `${item.candidate.proposal.identity.subject?.name ?? prop.subject_entity_id} · ${item.candidate.proposal.identity.predicate?.label ?? prop.predicate_id} · ${item.candidate.proposal.identity.object?.name ?? prop.object.literal?.value ?? prop.object.entity_id}`;
+   return `${prop.polarity === "denied" ? "Denied: " : ""}${prop.object.literal?.value ?? "Entity relationship"}`;
+ }
+ 
+-function CandidateSources({ title, sources }: { title: string; sources: CandidateSource[] }) {
+-  if (!sources.length) return null;
+-  return <section className="mt-4"><h4 className="text-muted-text text-xs font-medium">{title}</h4>{sources.map((source, index) => <Evidence key={`${source.locator.event_id}:${index}`} evidence={source.evidence} authority={source.authority} session={source.session_id} scope={source.scope_key} observedAt={source.observed_at} locator={source.locator} />)}</section>;
+-}
+-
+-function Evidence({ evidence, authority, session, scope, observedAt, locator }: { evidence: string; authority: string; session: string; scope: string; observedAt: string; locator: CandidateSource["locator"] }) {
+-  return <div className="border-hair mt-2 border-l-2 pl-3"><blockquote className="whitespace-pre-wrap break-words py-1">{evidence || "Evidence unavailable under current source policy."}</blockquote><p className="text-muted-text text-xs">Authority: {authority} · observed {observedAt}</p><details className="text-muted-text mt-1 break-all text-xs"><summary>Exact source</summary><p>Conversation: {session}</p><p>Scope: {scope}</p><p>Event: {locator.event_id} · {locator.event_part} · {locator.locator_kind} {locator.locator_value}</p><p>Evidence hash: {locator.evidence_sha256}</p></details></div>;
+-}
+-
+-function SupportingSource({ source }: { source: ReviewSource }) { return <Evidence evidence={source.evidence} authority={source.authority} session={source.session_id} scope={source.source_scope_key} observedAt={source.observed_at} locator={source} />; }
+-
+-function ClaimEffect({ effect }: { effect: ReviewClaimEffect }) {
+-  const claim = effect.claim;
+-  return <section className="border-hair mt-4 border-t pt-3">
+-    <p className="text-ink font-medium">{effect.subject.canonical_name} · {effect.predicate.label} · {effect.object_entity?.canonical_name ?? claim.object.literal?.value}</p>
+-    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs"><dt>Change</dt><dd>{effect.create ? "Create claim" : "Reuse existing claim"}</dd><dt>Polarity</dt><dd>{claim.polarity}</dd><dt>Scope</dt><dd className="break-all">{claim.scope_key}</dd><dt>Value type</dt><dd>{claim.object.literal?.kind ?? "Entity"}</dd><dt>Valid from</dt><dd>{claim.valid_time.from ?? "Unknown"}</dd><dt>Valid until</dt><dd>{claim.valid_time.to ?? "Unknown"}</dd><dt>Predicate</dt><dd>{effect.predicate.token} · version {effect.predicate.version} · {effect.predicate.object_constraint} · {effect.predicate.cardinality}</dd></dl>
+-    {effect.temporal_qualification && <p className="mt-2 text-xs">Time qualification: {effect.temporal_qualification}</p>}
+-    {effect.conflicts.map((conflict, i) => <p key={i} className="text-amber-ink mt-2 break-all text-xs">Conflict: {conflict.code} · claims {conflict.claim_ids.join(", ")}. This review does not choose a winner.</p>)}
+-    <h4 className="text-muted-text mt-4 text-xs">Supporting Source Links</h4>{effect.sources.map((source) => <div key={source.source_link_id}><p className="text-muted-text mt-2 text-xs">{source.create ? "Add source" : "Reuse source"}</p><SupportingSource source={source} /></div>)}
+-    <CandidateSources title="Interpretation context (authority none)" sources={effect.context} />
+-    <details className="text-muted-text mt-3 break-all text-xs"><summary>Exact effect identities</summary><p>Claim: {claim.claim_id}</p><p>Subject: {effect.subject.entity_id}</p><p>Predicate: {effect.predicate.predicate_id}</p>{effect.object_entity && <p>Object: {effect.object_entity.entity_id}</p>}{effect.sources.map((source) => <p key={source.source_link_id}>Source Link: {source.source_link_id}</p>)}</details>
+-  </section>;
+-}
+-
+-function ReviewEffects({ preview }: { preview: ReviewPreview }) {
+-  if (!simpleAcceptPreview(preview)) return <p className="text-amber-ink mt-3">Additional review is required to display all effects of this operation.</p>;
+-  return <>{preview.effect?.claims.map((effect) => <ClaimEffect key={effect.claim.claim_id} effect={effect} />)}</>;
+-}
+-
+ function PreviewIdentity({ preview }: { preview: ReviewPreview }) { return <details className="text-muted-text mt-3 break-all text-xs"><summary>Preview binding</summary><p>Scope: {preview.scope_key}</p><p>Generation: {preview.generation_id}</p><p>Preview: {preview.preview_id}</p><p>Preview digest: {preview.preview_sha256}</p><p>Effect digest: {preview.effect_sha256}</p>{preview.candidates.map((item) => <p key={item.ref.candidate_id}>Candidate: {item.ref.candidate_id} · interpretation {item.ref.interpretation_revision} · review {item.ref.review_revision}</p>)}</details>; }
+diff --git a/internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx b/internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx
+new file mode 100644
+index 0000000..62b997a
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx
+@@ -0,0 +1,55 @@
++import type { CandidateSource, ReviewClaimEffect, ReviewSource, ReviewPreview, ReviewEffect, CandidateProposal, EditRevision, IdentityRevision, TemporalRevision, InterpretationRevision } from "../api/candidateReview";
++import { supportedPreview } from "./previewSupport";
++export function CandidateSources({ title, sources }: { title: string; sources: CandidateSource[] }) {
++  if (!sources.length) return null;
++  return <section className="mt-4"><h4 className="text-muted-text text-xs font-medium">{title}</h4>{sources.map((source, index) => <Evidence key={`${source.locator.event_id}:${index}`} evidence={source.evidence} authority={source.authority} session={source.session_id} scope={source.scope_key} observedAt={source.observed_at} locator={source.locator} observation={source.observation} actor={source.actor} sourceType={source.source_type} />)}</section>;
++}
++
++function Evidence({ evidence, authority, session, scope, observedAt, locator, observation, actor, sourceType }: { evidence: string; authority: string; session: string; scope: string; observedAt: string; locator: CandidateSource["locator"]; observation?: CandidateSource["observation"]; actor?: string; sourceType?: string }) {
++  return <div className="border-hair mt-2 border-l-2 pl-3"><blockquote className="whitespace-pre-wrap break-words py-1">{evidence || "Evidence unavailable under current source policy."}</blockquote><p className="text-muted-text text-xs">Authority: {authority} · observed {observedAt}</p><details className="text-muted-text mt-1 break-all text-xs"><summary>Exact source</summary><p>Conversation: {session}</p><p>Scope: {scope}</p><p>Event: {locator.event_id} · {locator.event_part} · {locator.locator_kind} {locator.locator_value}</p><p>Evidence hash: {locator.evidence_sha256}</p><p>Original actor: {actor ?? "See source authority"} · event type: {sourceType ?? "See exact source"}</p>{observation && <p>Observation contract: {observation.contract} · root {observation.root_id} · execution {observation.execution_id} · call {observation.call_id} · ancestry {observation.ancestry_sha256}. Local display has no inferred timezone.</p>}</details></div>;
++}
++
++function SupportingSource({ source }: { source: ReviewSource }) { return <Evidence evidence={source.evidence} authority={source.authority} session={source.session_id} scope={source.source_scope_key} observedAt={source.observed_at} locator={source} actor={source.actor} sourceType={source.source_type} />; }
++
++export function ClaimEffect({ effect }: { effect: ReviewClaimEffect }) {
++  const claim = effect.claim;
++  return <section className="border-hair mt-4 border-t pt-3">
++    <p className="text-ink font-medium">{effect.subject.canonical_name} · {effect.predicate.label} · {effect.object_entity?.canonical_name ?? claim.object.literal?.value}</p>
++    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs"><dt>Subject identity</dt><dd>{effect.subject.create ? "Create distinct Entity" : "Reuse Entity"} · {effect.subject.entity_id}</dd>{effect.object_entity && <><dt>Object identity</dt><dd>{effect.object_entity.create ? "Create distinct Entity" : "Reuse Entity"} · {effect.object_entity.entity_id}</dd></>}<dt>Predicate definition</dt><dd>{effect.predicate.create ? "Create global Predicate definition" : "Reuse Predicate definition"}</dd><dt>Change</dt><dd>{effect.create ? "Create claim" : "Reuse existing claim"}</dd><dt>Polarity</dt><dd>{claim.polarity}</dd><dt>Scope</dt><dd className="break-all">{claim.scope_key}</dd><dt>Value type</dt><dd>{claim.object.literal?.kind ?? "Entity"}</dd><dt>Valid from</dt><dd>{claim.valid_time.from ?? "Unknown"}</dd><dt>Valid until</dt><dd>{claim.valid_time.to ?? "Unknown"}</dd><dt>Predicate</dt><dd>{effect.predicate.token} · version {effect.predicate.version} · {effect.predicate.object_constraint} · {effect.predicate.cardinality}</dd></dl>
++    {effect.temporal_qualification && <p className="mt-2 text-xs">Time qualification: {effect.temporal_qualification}</p>}
++    {effect.conflicts.map((conflict, i) => <p key={i} className="text-amber-ink mt-2 break-all text-xs">Conflict: {conflict.code} · claims {conflict.claim_ids.join(", ")}. This review does not choose a winner.</p>)}
++    <h4 className="text-muted-text mt-4 text-xs">Supporting Source Links</h4>{effect.sources.map((source) => <div key={source.source_link_id}><p className="text-muted-text mt-2 text-xs">{source.create ? "Add source" : "Reuse source"}</p><SupportingSource source={source} /></div>)}
++    <CandidateSources title="Interpretation context (authority none)" sources={effect.context} />
++    <details className="text-muted-text mt-3 break-all text-xs"><summary>Exact effect identities</summary><p>Claim: {claim.claim_id}</p><p>Subject: {effect.subject.entity_id}</p><p>Predicate: {effect.predicate.predicate_id}</p>{effect.object_entity && <p>Object: {effect.object_entity.entity_id}</p>}{effect.sources.map((source) => <p key={source.source_link_id}>Source Link: {source.source_link_id}</p>)}</details>
++  </section>;
++}
++
++
++export function ProposalMeaning({ proposal }: { proposal: CandidateProposal }) {
++ return <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs"><dt>Meaning</dt><dd>{proposal.temporal?.meaning ?? "assertion"}</dd><dt>Subject</dt><dd>{proposal.identity?.subject?.name ?? proposal.proposition.subject_entity_id}</dd><dt>Relationship</dt><dd>{proposal.identity?.predicate?.label ?? proposal.proposition.predicate_id}</dd><dt>Object</dt><dd>{proposal.identity?.object?.name ?? proposal.proposition.object.literal?.value ?? proposal.proposition.object.entity_id}</dd><dt>Value kind</dt><dd>{proposal.proposition.object.literal?.kind ?? "Entity"}</dd><dt>Polarity</dt><dd>{proposal.proposition.polarity}</dd><dt>Valid from / until</dt><dd>{proposal.valid_time.from ?? "Unknown"} / {proposal.valid_time.to ?? "Unknown"}</dd><dt>Time qualification</dt><dd>{proposal.temporal_qualification || "None supplied"}</dd>{proposal.identity && <><dt>Identity uncertainty</dt><dd>{proposal.identity.uncertainty || "None supplied"}</dd><dt>Extractor confidence (not authority)</dt><dd>{proposal.identity.confidence ?? "Unknown"}</dd></>}{proposal.temporal?.correction && <><dt>Proposed correction modes</dt><dd>{proposal.temporal.correction.modes.join(", ")}</dd><dt>Proposed effective time</dt><dd>{proposal.temporal.correction.effective_time ?? "Unknown"}</dd></>}</dl>;
++}
++export function EditLineage({ edit }: { edit: EditRevision }) {
++ return <section aria-label="Owner edit lineage" className="border-hair mt-4 border-t pt-3"><h4>Owner interpretation {edit.revision}, from revision {edit.parent_revision}</h4><p className="text-muted-text text-xs">Audit {edit.audit_id}. This edit and its reason are owner interpretation, not new factual evidence.</p><p>Reason: {edit.reason || "None supplied"}</p><div className="grid gap-4 md:grid-cols-2"><section><h5>Before edit</h5><ProposalMeaning proposal={edit.before.proposal}/><CandidateSources title="Prior supporting evidence" sources={edit.before.support}/><CandidateSources title="Prior context" sources={edit.before.context}/></section><section><h5>After edit</h5><ProposalMeaning proposal={edit.after.proposal}/><CandidateSources title="Edited supporting evidence" sources={edit.after.support}/><CandidateSources title="Edited context" sources={edit.after.context}/></section></div><CanonicalDisclosure value={edit} title="Complete edit revision, including prior identity and correction choices"/></section>;
++}
++function RevisionAudit({ revision }: { revision: InterpretationRevision }) {
++ return <p className="text-muted-text text-xs">Interpretation {revision.revision}, from revision {revision.parent_revision}; review revision {revision.review_revision}; audit {revision.audit_id}. This is an immutable owner interpretation, not new factual evidence or approval of memory.</p>;
++}
++export function IdentityLineage({ identity }: { identity: IdentityRevision }) {
++ return <section aria-label="Recorded identity history" className="border-hair mt-4 space-y-2 border-t pt-3"><h4>Recorded identity choice</h4><RevisionAudit revision={identity}/><p className="text-xs">Scope: {identity.options.scope_key} · candidate {identity.options.candidate.candidate_id}</p>{(["subject", "object"] as const).map((field) => {
++  const choice = identity.choices[field]; const alternatives = identity.options[field];
++  return <section key={field}><h5>{field === "subject" ? "Subject" : "Object"} choice</h5><p className="text-xs">{!choice ? "No unresolved identity choice for this field" : choice.create ? "Create a distinct Entity" : `Reuse Entity ${choice.entity_id}`}</p>{alternatives.length > 0 && <details><summary>Recorded {field} alternatives</summary>{alternatives.map((alternative) => <div key={alternative.entity.entity_id} className="mt-2 text-xs"><p>{alternative.entity.canonical_name} · {alternative.entity.entity_type} · {alternative.entity.scope_key} · {alternative.entity.entity_id}{choice && !choice.create && choice.entity_id === alternative.entity.entity_id ? " · Chosen" : ""}</p><p>Aliases: {alternative.aliases.map((alias) => `${alias.value} (${alias.alias_id})`).join(", ") || "None"}</p>{alternative.context.map((claim) => <p key={claim.claim_id}>Known context at this revision: {claim.predicate.label} · {claim.polarity} · {claim.object.literal?.value ?? claim.object.entity_id} · claim {claim.claim_id} · valid {claim.valid_time.from ?? "Unknown"} / {claim.valid_time.to ?? "Unknown"}</p>)}</div>)}</details>}</section>;
++ })}<section><h5>Predicate choice</h5><p className="text-xs">{!identity.choices.predicate ? "No unresolved Predicate choice" : identity.choices.predicate.create ? "Create the sourced global Predicate definition" : `Reuse Predicate ${identity.choices.predicate.predicate_id}`}</p>{identity.options.predicates.length > 0 && <details><summary>Recorded Predicate alternatives</summary>{identity.options.predicates.map((predicate) => <p className="text-xs" key={predicate.predicate_id}>{predicate.label} · {predicate.token} v{predicate.version} · {predicate.object_constraint} · {predicate.cardinality} · {predicate.predicate_id}</p>)}</details>}</section><CanonicalDisclosure value={identity} title="Complete immutable identity revision and reviewed alternatives"/></section>;
++}
++export function CorrectionLineage({ correction }: { correction: TemporalRevision }) {
++ return <section aria-label="Recorded correction history" className="border-hair mt-4 space-y-2 border-t pt-3"><h4>Recorded correction choice</h4><RevisionAudit revision={correction}/><p className="text-xs">Scope: {correction.options.scope_key} · candidate {correction.options.candidate.candidate_id}</p><p>Chosen earlier claim: {correction.choice.old_claim_id}</p><p>Recorded meaning: {correction.choice.mode === "error" ? "Error: earlier statement was wrong" : correction.choice.mode === "changed" ? "Changed: the real-world state changed" : correction.choice.mode}</p><p>Recorded source-proposed effective time: {correction.options.effective_time ?? "Unknown"}</p><p className="text-xs">Offered meanings: {correction.options.modes.join(", ")}</p><details><summary>Recorded earlier claim alternatives</summary>{correction.options.alternatives.map((alternative) => <div className="mt-2 text-xs" key={alternative.claim.claim_id}><p>{alternative.claim.claim_id}{alternative.claim.claim_id === correction.choice.old_claim_id ? " · Chosen" : ""}: {alternative.claim.predicate.label} · {alternative.claim.polarity} · {alternative.claim.object.literal?.value ?? alternative.claim.object.entity_id}</p><p>Lifecycle at this revision: {alternative.state.state} · valid {alternative.claim.valid_time.from ?? "Unknown"} / {alternative.claim.valid_time.to ?? "Unknown"}</p></div>)}</details><CanonicalDisclosure value={correction} title="Complete immutable correction revision and reviewed alternatives"/></section>;
++}
++export function CanonicalDisclosure({ value, title = "Complete canonical disclosure" }: { value: unknown; title?: string }) { return <details className="text-muted-text mt-3 text-xs"><summary>{title}</summary><pre className="whitespace-pre-wrap break-all p-2">{JSON.stringify(value, null, 2)}</pre></details>; }
++export function ReviewEffects({ preview }: { preview: ReviewPreview }) {
++ if (!supportedPreview(preview, !!preview.batch_preview_id)) return <p className="text-amber-ink mt-3">Additional review is required to display all effects of this operation.</p>;
++ return <>{preview.candidates.map((item) => <section key={item.ref.candidate_id} className="mt-4"><p className="text-muted-text text-xs">Candidate {item.ref.candidate_id} · generation {item.generation_id} · interpretation {item.ref.interpretation_revision}</p>{!item.redacted && <><ProposalMeaning proposal={item.candidate.proposal}/><CandidateSources title="Original supporting authority and observation contracts" sources={item.candidate.support ?? []}/>{item.original && <details><summary>Original extraction and unchanged source window</summary><ProposalMeaning proposal={item.original.proposal}/><CandidateSources title="Original supporting evidence" sources={item.original.support ?? []}/><CandidateSources title="Original interpretation context" sources={item.original.context ?? []}/></details>}{item.edit && <EditLineage edit={item.edit}/>}</>}</section>)}{preview.effect && <EffectDisclosure effect={preview.effect}/>}<CanonicalDisclosure value={preview}/></>;
++}
++function EffectDisclosure({ effect }: { effect: ReviewEffect }) {
++ if (effect.version === "owner-review-effect-v5") return <><h4 className="mt-4 font-medium">Atomic group: all member changes succeed together</h4><DependencyDisclosure dependencies={effect.dependencies ?? []}/>{effect.members?.map((member, i) => <section key={i}><h5 className="mt-4">Member {i + 1}</h5><EffectDisclosure effect={member}/></section>)}<h4 className="mt-4">Complete semantic record changes</h4><table className="mt-2 w-full text-left text-xs"><thead><tr><th>Kind and ID</th><th>Action</th><th>Lifecycle</th></tr></thead><tbody>{effect.records?.map((record,i) => <tr key={i}><td className="break-all">{record.kind}: {record.id}</td><td>{record.action}</td><td>{record.before_state || "—"} → {record.after_state || "—"}</td></tr>)}</tbody></table></>;
++ return <>{effect.identity && <section className="mt-4"><h4>Explicit identity decisions</h4><p className="text-xs">Interpretation {effect.identity.revision.revision}; alternatives remain retained. Reusing a name never merges distinct Entities.</p>{effect.identity.aliases.map((alias) => <p className="mt-2 text-xs" key={alias.alias_id}>{alias.create ? "Create Alias" : "Reuse Alias"}: {alias.value} → Entity {alias.entity_id}; Alias {alias.alias_id}; scope {alias.scope_key}; source {alias.source_event_id}</p>)}<CanonicalDisclosure value={effect.identity.revision} title="Chosen identities and all reviewed alternatives"/></section>}{effect.correction && <section aria-label="Correction effects" className="text-amber-ink mt-4"><h4>Correction: {effect.correction.mode === "error" ? "Earlier statement was an error" : "Real-world state changed"}</h4><p>Old claim {effect.correction.old_claim.claim_id}: {effect.correction.old_claim.polarity} {effect.correction.old_claim.object.literal?.value ?? effect.correction.old_claim.object.entity_id}</p><p>Lifecycle: {effect.correction.old_state.state} → {effect.correction.transition.state}</p><p>Effective time: {effect.correction.effective_time ?? "Unknown"}</p><p>Old validity before: {effect.correction.valid_time_effect.old_before.from ?? "Unknown"} / {effect.correction.valid_time_effect.old_before.to ?? "Unknown"}</p><p>Old validity after: {effect.correction.valid_time_effect.old_after.from ?? "Unknown"} / {effect.correction.valid_time_effect.old_after.to ?? "Unknown"}</p><p>Replacement validity: {effect.correction.valid_time_effect.replacement.from ?? "Unknown"} / {effect.correction.valid_time_effect.replacement.to ?? "Unknown"}</p></section>}{effect.claims.map((claim) => <ClaimEffect key={claim.claim.claim_id} effect={claim}/>)}</>;
++}
++export function DependencyDisclosure({ dependencies }: { dependencies: import("../api/candidateReview").ReviewDependency[] }) { return <section className="mt-3"><h4>Explicit dependency closure</h4>{dependencies.length ? <ul>{dependencies.map((dep,i) => <li className="mt-1 break-all text-xs" key={i}>{dep.candidate_id} {dep.field} uses the exact {dep.from_field} created by {dep.from_candidate_id}.</li>)}</ul> : <p className="text-xs">No proposed identities are shared by dependency binding in this group.</p>}</section>; }
+diff --git a/internal/web/ui/src/candidateInbox/advanced.test-support.ts b/internal/web/ui/src/candidateInbox/advanced.test-support.ts
+new file mode 100644
+index 0000000..c98a341
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/advanced.test-support.ts
+@@ -0,0 +1,15 @@
++import type { BatchPreview, BatchResult, IdentityOptions, OwnerCandidate, ReviewEffect, ReviewPreview, TemporalOptions } from "../api/candidateReview";
++import { candidate, preview, result } from "./fixtures.test-support";
++
++export const identityCandidate: OwnerCandidate = { ...structuredClone(candidate), candidate: { ...structuredClone(candidate.candidate), proposal: { ...structuredClone(candidate.candidate.proposal), identity: { subject: { name: "Maya", entity_type: "person", support: candidate.candidate.support![0].locator }, object: null, predicate: { token: "enjoys", label: "Enjoys", object_constraint: "text", cardinality: "many" }, uncertainty: "Two people share this name", confidence: 0.4 } } } };
++export const identityOptions: IdentityOptions = { candidate: candidate.ref, scope_key: "global", options_sha256: "identity-options-hash", scope_revisions: [{ scope_key: "global", revision: 1 }], subject: [1,2].map((n) => ({ entity: { entity_id: `maya-${n}`, canonical_name: "Maya", entity_type: "person", scope_key: "global" }, aliases: [{ alias_id: `alias-${n}`, entity_id: `maya-${n}`, scope_key: "global", value: `Maya ${n}`, normalized_value: `maya ${n}`, source_event_id: `event-${n}`, create: false }], context: [{ ...preview.effect!.claims[0].claim, claim_id: `context-${n}`, object: { literal: { kind: "text", value: n === 1 ? "Designer" : "Physician" } } }] })), object: [], predicates: [] };
++export const chosenCandidate: OwnerCandidate = { ...identityCandidate, ref: { ...candidate.ref, interpretation_revision: 1, review_revision: 1 }, identity: { revision: 1, parent_revision: 0, review_revision: 1, audit_id: "identity-audit", options: identityOptions, choices: { subject: { entity_id: "", create: true }, object: null, predicate: { predicate_id: "", create: true } } } };
++export const identityEffect: ReviewEffect = { ...structuredClone(preview.effect!), version: "owner-review-effect-v2", claims: [{ ...structuredClone(preview.effect!.claims[0]), candidate: chosenCandidate.ref, subject: { entity_id: "new-maya", canonical_name: "Maya", entity_type: "person", scope_key: "global", create: true }, predicate: { predicate_id: "new-enjoys", label: "Enjoys", token: "enjoys", object_constraint: "text", cardinality: "many", version: 1, create: true } }], identity: { revision: chosenCandidate.identity!, aliases: [{ alias_id: "alias-maya", entity_id: "new-maya", scope_key: "global", value: "Maya", normalized_value: "maya", source_event_id: "event-1", create: true }] } };
++export const identityPreview: ReviewPreview = { ...preview, version: "owner-review-preview-v2", candidates: [chosenCandidate], effect: identityEffect };
++export const temporalOptions: TemporalOptions = { candidate: candidate.ref, scope_key: "global", scope_revisions: [{ scope_key: "global", revision: 1 }], options_sha256: "temporal-options-hash", modes: ["error", "changed"], effective_time: null, alternatives: [{ claim: { ...preview.effect!.claims[0].claim, claim_id: "old-tea", object: { literal: { kind: "text", value: "tea" } } }, state: { state: "active", operation_id: "old-op", scope_revision: 1, transaction_time: "2026-01-01T00:00:00Z" } }] };
++export const correctionPreview: ReviewPreview = { ...preview, version: "owner-review-preview-v3", effect: { ...structuredClone(preview.effect!), version: "owner-review-effect-v3", correction: { revision: { revision: 1, parent_revision: 0, review_revision: 1, audit_id: "temporal-audit", options: temporalOptions, choice: { old_claim_id: "old-tea", mode: "error" } }, old_claim: temporalOptions.alternatives[0].claim, old_state: temporalOptions.alternatives[0].state, mode: "error", effective_time: null, valid_time_effect: { old_before: { from: null, to: null }, old_after: { from: null, to: null }, replacement: { from: null, to: null } }, transition: { object_kind: "claim", object_id: "old-tea", state: "superseded" } } } };
++const second = { ...structuredClone(candidate), ref: { ...candidate.ref, candidate_id: "candidate-2" } };
++export const batchRequest = { groups: [{ group_id: "together", action: "accept" as const, candidates: [chosenCandidate.ref, second.ref], dependencies: [{ candidate_id: "candidate-2", field: "subject", from_candidate_id: "candidate-1", from_field: "subject" }] }, { group_id: "independent", action: "reject" as const, candidates: [{ ...candidate.ref, candidate_id: "candidate-3" }], dependencies: [] }] };
++const member2 = { ...structuredClone(identityEffect), claims: [{ ...structuredClone(identityEffect.claims[0]), candidate: second.ref, claim: { ...identityEffect.claims[0].claim, claim_id: "claim-3" } }] };
++export const batchPreview: BatchPreview = { version: "owner-review-batch-v1", preview_id: "batch-1", preview_sha256: "batch-hash", scope_key: "global", source_policy: "policy", prior_revisions: [{ scope_key: "global", revision: 1 }], failure_behavior: "atomic_groups_independent_failures; committed_failures_are_not_retried", groups: [{ group_id: "together", preview: { ...identityPreview, version: "owner-review-preview-v5", preview_id: "group-1", batch_preview_id: "batch-1", candidates: [chosenCandidate,second], dependencies: batchRequest.groups[0].dependencies, effect: { version: "owner-review-effect-v5", operation_id: "operation-1", prior_revisions: [{ scope_key: "global", revision: 1 }], claims: [...identityEffect.claims,...member2.claims], members: [identityEffect,member2], dependencies: batchRequest.groups[0].dependencies, records: [{ kind: "entity", id: "new-maya", action: "create", before_state: "", after_state: "" }, { kind: "state_event", id: "old-tea", action: "transition", before_state: "active", after_state: "superseded" }] } } }, { group_id: "independent", preview: { ...preview, version: "owner-review-preview-v5", preview_id: "group-2", batch_preview_id: "batch-1", action: "reject", candidates: [{ ...candidate, ref: batchRequest.groups[1].candidates[0] }], effect: null } }] };
++export const batchResult: BatchResult = { delivery_key: "idem:v1:batch-delivery", preview_id: "batch-1", groups: [{ group_id: "together", outcome: "accepted", failure_code: "", result }, { group_id: "independent", outcome: "failed", failure_code: "source_ineligible", result: null }] };
+diff --git a/internal/web/ui/src/candidateInbox/advancedController.test.ts b/internal/web/ui/src/candidateInbox/advancedController.test.ts
+new file mode 100644
+index 0000000..fe3e86c
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/advancedController.test.ts
+@@ -0,0 +1,145 @@
++import { describe, expect, it, vi } from "vitest";
++import { CandidateReviewError, type BatchPreview, type EditRevision, type IdentityOptions, type IdentityRevision, type OwnerCandidate, type TemporalRevision } from "../api/candidateReview";
++import { CandidateInboxController } from "./controller";
++import { pendingDecisionJournal } from "./pendingDecision";
++import { supportedPreview } from "./previewSupport";
++import { candidate, fakeAPI, preview } from "./fixtures.test-support";
++import { batchPreview, batchRequest, batchResult, chosenCandidate, correctionPreview, identityCandidate, identityOptions, identityPreview, temporalOptions } from "./advanced.test-support";
++function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; }
++async function ready(controller: CandidateInboxController) { await controller.selectScope("global"); await controller.inspect(candidate.ref.candidate_id); }
++
++describe("advanced interpretation and exact approval", () => {
++ it("loads both same-name alternatives without selecting a winner and records only the explicit typed choices", async () => {
++  const chooseIdentity = vi.fn(async () => chosenCandidate); const controller = new CandidateInboxController(fakeAPI({ inspect: async () => identityCandidate, identityOptions: async () => identityOptions, chooseIdentity, prepare: async () => identityPreview }));
++  await ready(controller); await controller.loadIdentityOptions(); expect(chooseIdentity).not.toHaveBeenCalled(); expect(controller.snapshot().identityOptions?.subject).toHaveLength(2);
++  await controller.chooseIdentity({ candidate: identityOptions.candidate, options_sha256: identityOptions.options_sha256, choices: chosenCandidate.identity!.choices });
++  expect(chooseIdentity).toHaveBeenCalledExactlyOnceWith("global", { candidate: identityOptions.candidate, options_sha256: identityOptions.options_sha256, choices: chosenCandidate.identity!.choices });
++  expect(controller.snapshot().detail?.ref).toEqual(chosenCandidate.ref); expect(controller.snapshot().preview).toBeUndefined(); await controller.prepare("accept"); expect(controller.snapshot().preview).toEqual(identityPreview);
++ });
++ it("records error/changed choices exactly from the displayed alternatives without inventing an effective time", async () => {
++  const chooseTemporal = vi.fn(async () => candidate); const controller = new CandidateInboxController(fakeAPI({ temporalOptions: async () => temporalOptions, chooseTemporal })); await ready(controller); await controller.loadTemporalOptions();
++  expect(controller.snapshot().temporalOptions?.effective_time).toBeNull(); const decision = { candidate: candidate.ref, options_sha256: temporalOptions.options_sha256, choice: { old_claim_id: "old-tea", mode: "error" } }; await controller.chooseTemporal(decision);
++  expect(chooseTemporal).toHaveBeenCalledExactlyOnceWith("global", decision); expect(controller.snapshot().preview).toBeUndefined();
++ });
++ it("edits the exact supplied revision and retains same-candidate reason after a stale edit", async () => {
++  const edit = vi.fn(async () => { throw new CandidateReviewError("stale_preview", "Interpretation changed"); }); const controller = new CandidateInboxController(fakeAPI({ edit })); await ready(controller); controller.setReason("Keep my interpretation");
++  const edited = { ...candidate.candidate.proposal, proposition: { ...candidate.candidate.proposal.proposition, object: { literal: { kind: "text", value: "green tea" } } } }; await controller.edit({ candidate: candidate.ref, proposal: edited, reason: "Correct the extracted value" });
++  expect(edit).toHaveBeenCalledExactlyOnceWith("global", { candidate: candidate.ref, proposal: edited, reason: "Correct the extracted value" }); expect(controller.snapshot().reason).toBe("Keep my interpretation"); expect(controller.snapshot().preview).toBeUndefined(); expect(controller.snapshot().problem).toContain("Refresh");
++ });
++ it("fences delayed identity and mutation responses when the scope changes", async () => {
++  const options = deferred<IdentityOptions>(); const mutation = deferred<OwnerCandidate>(); const controller = new CandidateInboxController(fakeAPI({ identityOptions: async () => options.promise, edit: async () => mutation.promise }));
++  await ready(controller); const loading = controller.loadIdentityOptions(); await controller.selectScope("session:other"); options.resolve(identityOptions); await loading; expect(controller.snapshot().identityOptions).toBeUndefined();
++  await ready(controller); const editing = controller.edit({ candidate: candidate.ref, proposal: candidate.candidate.proposal, reason: "" }); await controller.selectScope(""); mutation.resolve(chosenCandidate); await editing; expect(controller.snapshot().detail).toBeUndefined(); expect(controller.snapshot().scope).toBe("");
++ });
++ it("rejects options bound to a different interpretation or destination", async () => {
++  for (const options of [{ ...identityOptions, scope_key: "session:other" }, { ...identityOptions, candidate: { ...candidate.ref, interpretation_revision: 4 } }]) {
++   const controller = new CandidateInboxController(fakeAPI({ identityOptions: async () => options })); await ready(controller); await controller.loadIdentityOptions(); expect(controller.snapshot().identityOptions).toBeUndefined(); expect(controller.snapshot().problem).toContain("changed");
++  }
++ });
++ it("clears displayed evidence and group drafts after a definitive source or freshness failure while retaining owner reason", async () => {
++  for (const code of ["source_ineligible", "stale_preview", "review_unauthorized", "review_scope_quarantined"]) {
++   const controller = new CandidateInboxController(fakeAPI({ prepare: async () => { throw new CandidateReviewError(code,"Refresh required"); } })); await ready(controller); controller.setReason("My pending decision reason"); await controller.prepare("accept");
++   expect(controller.snapshot().detail).toBeUndefined(); expect(controller.snapshot().page).toBeUndefined(); expect(controller.snapshot().disclosureEpoch).toBe(1); expect(controller.snapshot().reason).toBe("My pending decision reason");
++  }
++ });
++ it("supports complete v2/v3/v4 meanings and refuses unknown versions and standalone batch member approval", async () => {
++  for (const value of [identityPreview, correctionPreview, { ...preview, version: "owner-review-preview-v4", effect: { ...preview.effect!, version: "owner-review-effect-v4" } }]) expect(supportedPreview(value)).toBe(true);
++  expect(supportedPreview({ ...preview, version: "owner-review-preview-v99" })).toBe(false); expect(supportedPreview(batchPreview.groups[0].preview)).toBe(false);
++ });
++});
++
++describe("mixed immutable interpretation history", () => {
++ const meaning = { proposal: candidate.candidate.proposal, support: candidate.candidate.support!, context: candidate.candidate.context!, identity: null, temporal: null };
++ const edit: EditRevision = { candidate_id: candidate.ref.candidate_id, revision: 2, parent_revision: 1, review_revision: 2, audit_id: "edit-audit", before: meaning, after: meaning, reason: "Corrected extraction" };
++ const identity: IdentityRevision = chosenCandidate.identity!;
++ const correction: TemporalRevision = { ...correctionPreview.effect!.correction!.revision, revision: 3, parent_revision: 2, review_revision: 3, options: { ...temporalOptions, candidate: { ...candidate.ref, interpretation_revision: 2, review_revision: 2 } } };
++ const current = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++ const historyAPI = { inspect: async () => current, editRevision: async () => edit, identityRevision: async () => identity, temporalRevision: async () => correction };
++ it("loads the requested kind in a shared identity/edit/correction sequence without changing current interpretation", async () => {
++  const editRevision = vi.fn(historyAPI.editRevision), identityRevision = vi.fn(historyAPI.identityRevision), temporalRevision = vi.fn(historyAPI.temporalRevision);
++  const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision, identityRevision, temporalRevision })); await ready(controller);
++  for (const [kind, value] of [["identity", identity], ["edit", edit], ["correction", correction]] as const) {
++   await controller.loadHistoryRevision(kind, value.revision); expect(controller.snapshot().history).toEqual({ kind, value }); expect(controller.snapshot().detail).toEqual(current);
++  }
++  expect(identityRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 1);
++  expect(editRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 2);
++  expect(temporalRevision).toHaveBeenCalledExactlyOnceWith("global", candidate.ref.candidate_id, 3);
++ });
++ it("bounds requested revision before dispatch and refuses redacted history reads", async () => {
++  const editRevision = vi.fn(historyAPI.editRevision); const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision })); await ready(controller);
++  for (const revision of [0, -1, 1.5, 4, NaN, Infinity]) { await controller.loadHistoryRevision("edit", revision); expect(controller.snapshot().history).toBeUndefined(); }
++  expect(editRevision).not.toHaveBeenCalled();
++  const redacted = new CandidateInboxController(fakeAPI({ ...historyAPI, inspect: async () => ({ ...current, redacted: true }), editRevision })); await ready(redacted); await redacted.loadHistoryRevision("edit", 2); expect(editRevision).not.toHaveBeenCalled();
++ });
++ it("rejects returned history for a different candidate, scope, revision, or parent binding", async () => {
++  for (const value of [{ ...identity, revision: 2 }, { ...identity, parent_revision: 8 }, { ...identity, review_revision: 7 }, { ...identity, options: { ...identity.options, scope_key: "session:other" } }, { ...identity, options: { ...identity.options, candidate: { ...candidate.ref, candidate_id: "other" } } }]) {
++   const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, identityRevision: async () => value })); await ready(controller); await controller.loadHistoryRevision("identity", 1); expect(controller.snapshot().history).toBeUndefined(); expect(controller.snapshot().problem).toContain("does not match");
++  }
++  const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, editRevision: async () => ({ ...edit, candidate_id: "other" }) })); await ready(controller); await controller.loadHistoryRevision("edit", 2); expect(controller.snapshot().history).toBeUndefined();
++ });
++ it("fences delayed history by scope, candidate selection and candidate refresh", async () => {
++  for (const navigation of ["scope", "candidate", "refresh"]) {
++   const response = deferred<TemporalRevision>(); const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, temporalRevision: async () => response.promise })); await ready(controller);
++   const reading = controller.loadHistoryRevision("correction", 3);
++   if (navigation === "scope") await controller.selectScope("session:other");
++   else await controller.inspect(navigation === "candidate" ? "other" : candidate.ref.candidate_id);
++   response.resolve(correction); await reading; expect(controller.snapshot().history).toBeUndefined();
++  }
++ });
++ it("clears historical disclosure on source or freshness failures and does not relabel unknown failures as missing history", async () => {
++  for (const code of ["source_ineligible", "stale_preview", "review_unauthorized", "review_scope_quarantined", "review_revision_not_found", "review_retryable"]) {
++   const controller = new CandidateInboxController(fakeAPI({ ...historyAPI, temporalRevision: async () => { throw new CandidateReviewError(code, code === "review_retryable" ? "Service could not confirm the read" : "Revision unavailable"); } })); await ready(controller);
++   await controller.loadHistoryRevision("identity", 1); expect(controller.snapshot().history).toBeDefined(); await controller.loadHistoryRevision("correction", 3); expect(controller.snapshot().history).toBeUndefined();
++   if (["source_ineligible", "stale_preview", "review_unauthorized", "review_scope_quarantined"].includes(code)) expect(controller.snapshot().detail).toBeUndefined();
++   else expect(controller.snapshot().detail).toEqual(current);
++   if (code === "review_retryable") { expect(controller.snapshot().problem).toBe("Service could not confirm the read"); expect(controller.snapshot().problem).not.toContain("not found"); }
++  }
++ });
++});
++
++describe("atomic group batch delivery", () => {
++ it("prepares exactly selected refs, dependencies and actions, then explicitly delivers the outer preview", async () => {
++  const prepareBatch = vi.fn(async () => batchPreview); const resolveBatch = vi.fn(async () => batchResult); const controller = new CandidateInboxController(fakeAPI({ prepareBatch, resolveBatch }), () => "idem:v1:batch-delivery"); await ready(controller); await controller.prepareBatch(batchRequest);
++  expect(prepareBatch).toHaveBeenCalledExactlyOnceWith("global", batchRequest); expect(resolveBatch).not.toHaveBeenCalled(); expect(controller.snapshot().batchPreview).toEqual(batchPreview); controller.setReason("Accept complete closure"); await controller.resolveBatch();
++  expect(resolveBatch).toHaveBeenCalledExactlyOnceWith("global", { delivery_key: "idem:v1:batch-delivery", preview_id: "batch-1", preview_sha256: "batch-hash", actions: [{ group_id: "together", action: "accept" }, { group_id: "independent", action: "reject" }], reason: "Accept complete closure" }); expect(controller.snapshot().batchResult).toEqual(batchResult); expect(controller.snapshot().batchPreview).toBeUndefined(); await controller.resolveBatch(); expect(resolveBatch).toHaveBeenCalledTimes(1);
++ });
++ it("retains exact outer actions/key/reason across uncertain delivery, scope navigation and browser reload", async () => {
++  const bytes = new Map<string,string>(); const storage = { getItem: (key: string) => bytes.get(key) ?? null, setItem: (key: string,value: string) => { bytes.set(key,value); }, removeItem: (key: string) => { bytes.delete(key); } };
++  const resolveBatch = vi.fn().mockRejectedValueOnce(new CandidateReviewError("review_retryable", "Unknown committed outcome")).mockResolvedValue(batchResult); const api = fakeAPI({ prepareBatch: async () => batchPreview, resolveBatch });
++  const first = new CandidateInboxController(api, () => "idem:v1:batch-delivery", pendingDecisionJournal(storage)); await ready(first); await first.prepareBatch(batchRequest); first.setReason("This exact mixed batch"); await first.resolveBatch(); first.setReason("Changed intent"); expect(first.snapshot().reason).toBe("This exact mixed batch"); await first.selectScope("session:another"); first.invalidate();
++  const raw = [...bytes.values()].join(""); for (const protectedText of ["Maya", "café", "owner_statement", "I prefer", "new-maya", "candidate-1"]) expect(raw).not.toContain(protectedText);
++  const reopened = new CandidateInboxController(api, () => "must-not-create-key", pendingDecisionJournal(storage)); expect(reopened.snapshot().batchPreview).toBeUndefined(); await reopened.recover(); expect(resolveBatch.mock.calls[0]).toEqual(resolveBatch.mock.calls[1]); expect(bytes.size).toBe(0); expect(reopened.snapshot().batchResult?.groups[1].failure_code).toBe("source_ineligible"); await reopened.recover(); expect(resolveBatch).toHaveBeenCalledTimes(2);
++ });
++ it.each(["stale_preview","source_ineligible","review_dependencies","review_too_large","review_unauthorized","invalid_review_request"])("invalidates complete approval after %s and never retries a refreshed intent", async (code) => {
++  const resolveBatch = vi.fn(async () => { throw new CandidateReviewError(code,"Review again"); }); const controller = new CandidateInboxController(fakeAPI({ prepareBatch: async () => batchPreview, resolveBatch })); await ready(controller); await controller.prepareBatch(batchRequest); controller.setReason("Original intent"); await controller.resolveBatch(); expect(controller.snapshot().batchPreview).toBeUndefined(); expect(controller.snapshot().recovery).toBeUndefined(); expect(controller.snapshot().reason).toBe("Original intent"); await controller.resolveBatch(); expect(resolveBatch).toHaveBeenCalledTimes(1);
++ });
++ it("fails closed when an action, revision, dependency or failure behavior differs from the submitted selection", async () => {
++  const variants: BatchPreview[] = [structuredClone(batchPreview),structuredClone(batchPreview),structuredClone(batchPreview),structuredClone(batchPreview)]; variants[0].groups[0].preview.action = "reject"; variants[1].groups[0].preview.candidates[0].ref.review_revision++; variants[2].groups[0].preview.dependencies = []; variants[3].failure_behavior = "best_effort_unknown";
++  for (const value of variants) { const controller = new CandidateInboxController(fakeAPI({ prepareBatch: async () => value })); await ready(controller); await controller.prepareBatch(batchRequest); expect(controller.snapshot().batchPreview).toBeUndefined(); expect(controller.snapshot().problem).toContain("Additional review"); }
++ });
++ it("keeps an uncertain single delivery from being replaced by a batch", async () => {
++  const resolveBatch = vi.fn(async () => batchResult); const controller = new CandidateInboxController(fakeAPI({ resolve: async () => { throw new TypeError("lost"); }, prepareBatch: async () => batchPreview, resolveBatch })); await ready(controller); await controller.prepare("accept"); await controller.resolve(); await controller.prepareBatch(batchRequest); await controller.resolveBatch(); expect(resolveBatch).not.toHaveBeenCalled(); expect(controller.snapshot().problem).toContain("Recover the earlier decision");
++ });
++ it("fences delayed batch preparation on scope navigation and invalidates preview when the group draft changes", async () => {
++  const response = deferred<BatchPreview>(); const controller = new CandidateInboxController(fakeAPI({ prepareBatch: async () => response.promise })); await ready(controller); const work = controller.prepareBatch(batchRequest); await controller.selectScope(""); response.resolve(batchPreview); await work; expect(controller.snapshot().batchPreview).toBeUndefined();
++  const active = new CandidateInboxController(fakeAPI({ prepareBatch: async () => batchPreview })); await ready(active); await active.prepareBatch(batchRequest); active.invalidateBatchDraft(); expect(active.snapshot().batchPreview).toBeUndefined();
++ });
++ it("recovers a maximum escaped reason with twenty maximum-length group actions without truncation", async () => {
++  const bytes = new Map<string,string>(); const storage = { getItem: (key: string) => bytes.get(key) ?? null, setItem: (key: string,value: string) => { bytes.set(key,value); }, removeItem: (key: string) => { bytes.delete(key); } };
++  const reason = "\u0001".repeat(4096);
++  const actions = Array.from({length:20}, (_,i) => ({ group_id: `${i}`.padEnd(64,"x"), action: "accept" as const }));
++  const decision = { delivery_key: "idem:v1:batch-delivery", preview_id: "batch-1", preview_sha256: "digest".repeat(10), actions, reason };
++  pendingDecisionJournal(storage).write({ scope: "global", decision });
++  const raw = [...bytes.values()][0]; expect(new TextEncoder().encode(raw).length).toBeGreaterThan(24*1024); expect(new TextEncoder().encode(raw).length).toBeLessThan(32*1024);
++  const resolveBatch = vi.fn(async () => batchResult); const reopened = new CandidateInboxController(fakeAPI({ resolveBatch }), () => "never-new-key", pendingDecisionJournal(storage)); await reopened.recover(); expect(resolveBatch).toHaveBeenCalledExactlyOnceWith("global",decision); expect(bytes.size).toBe(0);
++  const single = { delivery_key: "idem:v1:single", preview_id: "preview-1", preview_sha256: "digest", action: "reject" as const, reason };
++  pendingDecisionJournal(storage).write({ scope: "global", decision: single }); expect(pendingDecisionJournal(storage).read()?.decision).toEqual(single);
++ });
++ it("shows earlier winning metadata for a failed resolved group without treating it as a current success", async () => {
++  const prior = { ...batchResult.groups[0].result!, delivery_key: "prior-delivery" };
++  const outcome = { ...batchResult, groups: [{ group_id: "together", outcome: "failed", failure_code: "already_resolved", result: null, prior_resolutions: [prior] }] };
++  const operation = vi.fn(fakeAPI().operation); const controller = new CandidateInboxController(fakeAPI({ prepareBatch: async () => batchPreview, resolveBatch: async () => outcome, operation })); await ready(controller); await controller.prepareBatch(batchRequest); await controller.resolveBatch();
++  expect(controller.snapshot().batchResult?.groups[0].outcome).toBe("failed"); expect(controller.snapshot().batchResult?.groups[0].result).toBeNull(); expect(controller.snapshot().batchOperations).toEqual([]); expect(controller.snapshot().batchPriorOperations?.[0].group_id).toBe("together"); expect(operation).toHaveBeenCalledExactlyOnceWith("global",prior.operation!.operation_id);
++ });
++ it("bounds journal metadata by UTF-8 bytes, including non-ASCII reasons", () => { const journal = pendingDecisionJournal(); expect(() => journal.write({ scope: "global", decision: { delivery_key: "key", preview_id: "preview", preview_sha256: "digest", actions: [{ group_id: "one", action: "accept" }], reason: "🌍".repeat(3000) } })).toThrow("too large"); });
++});
+diff --git a/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx b/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
+new file mode 100644
+index 0000000..4f4d807
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
+@@ -0,0 +1,70 @@
++import { renderToStaticMarkup } from "react-dom/server";
++import { describe, expect, it } from "vitest";
++import { ReviewEffects, EditLineage, IdentityLineage, CorrectionLineage } from "./ReviewDisclosure";
++import { AdvancedReviewForms } from "./AdvancedReviewForms";
++import { BatchReview } from "./BatchReview";
++import { CandidateInboxController, type InboxState } from "./controller";
++import { batchPreview, batchResult, chosenCandidate, correctionPreview, identityCandidate, identityOptions, identityPreview, temporalOptions } from "./advanced.test-support";
++import { candidate, fakeAPI, preview } from "./fixtures.test-support";
++import type { EditRevision } from "../api/candidateReview";
++const state: InboxState = { scope: "global", busy: false, scopesBusy: false, problem: "", notice: "", reason: "" };
++function contains(html: string, texts: string[]) { for (const text of texts) expect(html).toContain(text); }
++function controller() { return new CandidateInboxController(fakeAPI()); }
++
++describe("complete advanced owner disclosure", () => {
++ it("offers explicit edit, identity and correction history kinds within the shared revision bounds", () => {
++  const detail = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++  const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail }} controller={controller()}/>);
++  contains(html, ["Inspect interpretation history", "share one revision sequence", 'value="edit"', 'value="identity"', 'value="correction"', "Owner edit", "Identity choice", "Correction choice", 'max="3"', 'step="1"', "Load immutable history revision"]);
++  expect(html).not.toContain("Inspect earlier edit revision");
++ });
++ it("renders readable immutable identity choices, earlier alternatives, parent and audit", () => {
++  const identity = { ...chosenCandidate.identity!, choices: { ...chosenCandidate.identity!.choices, subject: { create: false, entity_id: "maya-2" } } };
++  contains(renderToStaticMarkup(<IdentityLineage identity={identity}/>), ["Recorded identity choice", "Interpretation 1, from revision 0", "review revision 1", "identity-audit", "Reuse Entity maya-2", "Create the sourced global Predicate definition", "maya-1", "maya-2", "Maya 1", "Maya 2", "Designer", "Physician", "Chosen", "not new factual evidence or approval", "Complete immutable identity revision"]);
++ });
++ it("renders a historical correction without implying a current lifecycle transition or invented time", () => {
++  contains(renderToStaticMarkup(<CorrectionLineage correction={correctionPreview.effect!.correction!.revision}/>), ["Recorded correction choice", "temporal-audit", "Chosen earlier claim: old-tea", "earlier statement was wrong", "effective time: Unknown", "Lifecycle at this revision: active", "Offered meanings: error, changed", "Complete immutable correction revision"]);
++ });
++ it("never displays a historical result under a different selected kind or revision", () => {
++  const identity = { ...chosenCandidate.identity!, audit_id: "historical-protected-audit" };
++  const detail = { ...candidate, ref: { ...candidate.ref, interpretation_revision: 3, review_revision: 3 } };
++  const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail, history: { kind: "identity", value: identity } }} controller={controller()}/>);
++  expect(html).not.toContain("historical-protected-audit");
++ });
++ it("renders distinct same-name alternatives, Alias/context and explicit new global Predicate choice without preselection", () => {
++  const html = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail: identityCandidate, identityOptions }} controller={controller()}/>);
++  contains(html,["maya-1","maya-2","Maya 1","Maya 2","Designer","Physician","Create distinct Entity","new global Predicate","Enjoys","enjoys","cardinality many","Record these identity choices"]); expect(html).not.toContain('checked=""');
++ });
++ it("shows chosen new Entity, Predicate and Alias effects before acceptance", () => {
++  contains(renderToStaticMarkup(<ReviewEffects preview={identityPreview}/>),["Create distinct Entity","new-maya","Create global Predicate definition","new-enjoys","Create Alias","alias-maya","Two people share this name","not authority","owner_statement","none","Complete canonical disclosure"]);
++ });
++ it("discloses error versus changed, old lifecycle/polarity and before/after temporal bounds", () => {
++  contains(renderToStaticMarkup(<ReviewEffects preview={correctionPreview}/>),["Earlier statement was an error","old-tea","affirmed tea","active","superseded","Effective time: Unknown","Old validity before","Old validity after","Replacement validity"]);
++  const form = renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail: { ...candidate, candidate: { ...candidate.candidate, proposal: { ...candidate.candidate.proposal, temporal: { meaning: "assertion", correction: { modes: ["error","changed"], effective_time: null } } } } }, temporalOptions }} controller={controller()}/>);
++  contains(form,["earlier statement was wrong","real-world state changed"]); expect(form).not.toContain('checked=""');
++ });
++ it("preserves original contracted clock authority and an unzoned display", () => {
++  const source = { ...candidate.candidate.support![0], evidence: "2026-09-05 10:30:00", authority: "tool_observation", actor: "tool", source_type: "tool_succeeded", observation: { contract: "local-clock-display-v1", root_id: "root-clock", execution_id: "execution-clock", call_id: "call-clock", ancestry_sha256: "ancestry-hash" } };
++  const clock = { ...preview, version: "owner-review-preview-v4", candidates: [{ ...candidate, candidate: { ...candidate.candidate, support: [candidate.candidate.support![0], source] } }], effect: { ...preview.effect!, version: "owner-review-effect-v4" } };
++  contains(renderToStaticMarkup(<ReviewEffects preview={clock}/>),["tool_observation","tool_succeeded","local-clock-display-v1","2026-09-05 10:30:00","no inferred timezone","root-clock","execution-clock","ancestry-hash","owner_statement"]);
++ });
++ it("shows original and edited meaning, both evidence sets, reason and immutable parent audit", () => {
++  const before = { proposal: candidate.candidate.proposal, support: candidate.candidate.support!, context: candidate.candidate.context!, identity: null, temporal: null };
++  const edit: EditRevision = { candidate_id: "candidate-1", revision: 3, parent_revision: 2, review_revision: 4, audit_id: "edit-audit", before, after: { ...before, proposal: { ...before.proposal, proposition: { ...before.proposal.proposition, object: { literal: { kind: "text", value: "green tea" } } } } }, reason: "Owner correction of extraction" };
++  contains(renderToStaticMarkup(<EditLineage edit={edit}/>),["Before edit","After edit","café","green tea","I prefer café.","Recorded.","revision 2","edit-audit","Owner correction of extraction","not new factual evidence"]);
++ });
++ it("renders compound members, dependencies, record lifecycle changes and mixed durable outcomes", () => {
++  contains(renderToStaticMarkup(<BatchReview state={{ ...state, batchPreview, batchResult }} controller={controller()}/>),["all member changes succeed together","Member 1","Member 2","candidate-2 subject uses the exact subject created by candidate-1","Complete semantic record changes","new-maya","state_event","superseded","Independent successful groups may commit","never retried automatically","together: accepted","independent: failed","source_ineligible","new complete group","Confirm all displayed group actions"]);
++ });
++ it("distinguishes earlier recorded decisions from the failed current group", () => {
++  const prior = batchResult.groups[0].result!; const priorResult = { ...batchResult, groups: [{ group_id: "together", outcome: "failed", failure_code: "already_resolved", result: null, prior_resolutions: [prior] }] };
++  contains(renderToStaticMarkup(<BatchReview state={{ ...state, batchResult: priorResult }} controller={controller()}/>),["together: failed","Earlier recorded decision: accept","not a successful change by the current failed group","Earlier operation"]);
++ });
++ it("fails closed on an unknown nested compound effect", () => {
++  const unknown = structuredClone(batchPreview); unknown.groups[0].preview.effect!.members![1].version = "owner-review-effect-v99";
++  const html = renderToStaticMarkup(<BatchReview state={{ ...state, batchPreview: unknown }} controller={controller()}/>); expect(html).toContain("Additional review is required"); expect(html).toMatch(/disabled=""[^>]*>Confirm all displayed group actions/);
++ });
++ it("does not display source or choices from a redacted candidate", () => {
++  expect(renderToStaticMarkup(<AdvancedReviewForms state={{ ...state, detail: { ...identityCandidate, redacted: true }, identityOptions, temporalOptions }} controller={controller()}/>)).toBe("");
++ });
++});
+diff --git a/internal/web/ui/src/candidateInbox/controller.ts b/internal/web/ui/src/candidateInbox/controller.ts
+index 4a85d7c..9089abb 100644
+--- a/internal/web/ui/src/candidateInbox/controller.ts
++++ b/internal/web/ui/src/candidateInbox/controller.ts
+@@ -1,16 +1,16 @@
+-import { CandidateReviewError, type CandidateReviewAPI, type CandidateScopes, type CandidatePage, type OwnerCandidate, type ReviewDecision, type ReviewPreview, type ReviewResult, type ReviewOperation } from "../api/candidateReview";
++import { CandidateReviewError, type CandidateReviewAPI, type CandidateScopes, type CandidatePage, type OwnerCandidate, type ReviewDecision, type ReviewPreview, type ReviewResult, type ReviewOperation, type IdentityOptions, type IdentityDecision, type TemporalOptions, type TemporalDecision, type EditDecision, type EditRevision, type IdentityRevision, type TemporalRevision, type BatchRequest, type BatchPreview, type BatchDecision, type BatchResult } from "../api/candidateReview";
++import { supportedPreview, supportedBatch } from "./previewSupport";
+ import { pendingDecisionJournal, type PendingDecisionJournal, type PendingReview } from "./pendingDecision";
+ 
++export type InterpretationHistory = { kind: "edit"; value: EditRevision } | { kind: "identity"; value: IdentityRevision } | { kind: "correction"; value: TemporalRevision };
+ export type InboxState = {
++  disclosureEpoch?: number; identityOptions?: IdentityOptions; temporalOptions?: TemporalOptions; history?: InterpretationHistory;
++  batchPreview?: BatchPreview; batchResult?: BatchResult; batchOperations?: ReviewOperation[]; batchPriorOperations?: { group_id: string; operation: ReviewOperation }[]; batchPending?: BatchDecision;
+   scopes?: CandidateScopes; scope: string; page?: CandidatePage; detail?: OwnerCandidate; preview?: ReviewPreview;
+   result?: ReviewResult; operation?: ReviewOperation; reason: string; busy: boolean; scopesBusy: boolean;
+   problem: string; notice: string; pending?: ReviewDecision; recovery?: PendingReview;
+ };
+ 
+-export function simpleAcceptPreview(preview: ReviewPreview): boolean {
+-  return preview.version === "owner-review-preview-v1" && preview.action === "accept" && preview.effect?.version === "owner-review-effect-v1" && !preview.effect.identity && preview.effect.claims.length === 1 && preview.candidates.length === 1;
+-}
+-
+ // Each selected-scope request supersedes earlier reads and previews. A completed
+ // request can commit UI state only while its scope/selection is still current.
+ export class CandidateInboxController {
+@@ -28,30 +28,38 @@ export class CandidateInboxController {
+   }
+   snapshot = () => this.state;
+   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
++  private clearAdvanced = { identityOptions: undefined, temporalOptions: undefined, history: undefined, batchOperations: undefined, batchPriorOperations: undefined, batchResult: undefined, batchPreview: undefined, batchPending: undefined };
+   private set(patch: Partial<InboxState>) { this.state = { ...this.state, ...patch }; this.listeners.forEach((listener) => listener()); }
++  // A definitive freshness/source failure invalidates displayed disclosure too,
++  // including older batch selections. Owner reasons and delivery metadata survive.
++  private fail(error: unknown, patch: Partial<InboxState>) {
++    const protectedRead = error instanceof CandidateReviewError && ["stale_preview", "source_ineligible", "review_unauthorized", "review_scope_quarantined"].includes(error.code);
++    this.set({ ...patch, ...(protectedRead ? { ...this.clearAdvanced, detail: undefined, page: undefined, preview: undefined, operation: undefined, batchResult: this.state.batchResult, disclosureEpoch: (this.state.disclosureEpoch ?? 0) + 1 } : {}) });
++  }
+   invalidate() { this.epoch++; this.scopesEpoch++; }
+-  setReason(reason: string) { if (!this.state.pending && !this.state.busy) this.set({ reason }); }
++  invalidateBatchDraft() { this.set({ batchPreview: undefined, batchPending: undefined }); }
++  setReason(reason: string) { if (!this.state.pending && !this.state.batchPending && !this.state.busy) this.set({ reason }); }
+ 
+   async loadScopes(cursor = "") {
+     const epoch = ++this.scopesEpoch;
+     this.set({ scopesBusy: true });
+     try { const scopes = await this.api.scopes(cursor); if (epoch === this.scopesEpoch) this.set({ scopes, scopesBusy: false }); }
+-    catch (error) { if (epoch === this.scopesEpoch) this.set({ problem: message(error), scopesBusy: false }); }
++    catch (error) { if (epoch === this.scopesEpoch) this.fail(error, { problem: message(error), scopesBusy: false }); }
+   }
+ 
+   async selectScope(scope: string) {
+     this.epoch++;
+     this.reasonCandidateID = "";
+-    this.set({ scope, page: undefined, detail: undefined, preview: undefined, pending: undefined, result: undefined, operation: undefined, reason: "", problem: "", notice: "", busy: false });
++    this.set({ ...this.clearAdvanced, batchResult: undefined, batchOperations: undefined, scope, page: undefined, detail: undefined, preview: undefined, pending: undefined, result: undefined, operation: undefined, reason: "", problem: "", notice: "", busy: false });
+     if (scope) await this.load();
+   }
+ 
+   async load(cursor = "") {
+     const scope = this.state.scope; if (!scope) return;
+     const epoch = ++this.epoch;
+-    this.set({ busy: true, problem: "", detail: undefined, preview: undefined, pending: undefined });
++    this.set({ ...this.clearAdvanced, busy: true, problem: "", detail: undefined, preview: undefined, pending: undefined });
+     try { const page = await this.api.list(scope, cursor); if (epoch === this.epoch) this.set({ page, busy: false }); }
+-    catch (error) { if (epoch === this.epoch) this.set({ busy: false, problem: message(error) }); }
++    catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
+   }
+ 
+   async inspect(id: string) {
+@@ -59,24 +67,24 @@ export class CandidateInboxController {
+     const epoch = ++this.epoch;
+     const reason = this.reasonCandidateID === id ? this.state.reason : "";
+     this.reasonCandidateID = id;
+-    this.set({ busy: true, detail: undefined, preview: undefined, pending: undefined, reason, result: undefined, operation: undefined, problem: "", notice: "" });
++    this.set({ ...this.clearAdvanced, busy: true, detail: undefined, preview: undefined, pending: undefined, reason, result: undefined, operation: undefined, problem: "", notice: "" });
+     try { const detail = await this.api.inspect(scope, id); if (epoch === this.epoch) this.set({ detail, busy: false }); }
+-    catch (error) { if (epoch === this.epoch) this.set({ busy: false, problem: message(error) }); }
++    catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
+   }
+ 
+   async prepare(action: "accept" | "reject") {
+     const { detail, scope, busy } = this.state; if (!detail || busy) return;
+     const epoch = ++this.epoch;
+-    this.set({ busy: true, preview: undefined, pending: undefined, problem: "", notice: "" });
++    this.set({ ...this.clearAdvanced, busy: true, preview: undefined, pending: undefined, problem: "", notice: "" });
+     try {
+       const preview = await this.api.prepare(scope, detail.ref, action);
+       if (epoch !== this.epoch) return;
+       const sameRef = preview.candidates.length === 1 && preview.candidates[0].ref.candidate_id === detail.ref.candidate_id && preview.candidates[0].ref.interpretation_revision === detail.ref.interpretation_revision && preview.candidates[0].ref.review_revision === detail.ref.review_revision;
+-      if (preview.scope_key !== scope || preview.action !== action || !sameRef || (action === "accept" && !simpleAcceptPreview(preview))) {
+-        this.set({ busy: false, problem: "Additional review is required for this candidate. Use local review to inspect all identity or compound effects." }); return;
++      if (preview.scope_key !== scope || preview.action !== action || !sameRef || !supportedPreview(preview)) {
++        this.set({ busy: false, problem: "Additional review is required: this preview contains an unsupported effect or a different candidate binding." }); return;
+       }
+       this.set({ preview, busy: false });
+-    } catch (error) { if (epoch === this.epoch) this.set({ busy: false, problem: message(error) }); }
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
+   }
+ 
+   async resolve() {
+@@ -96,8 +104,9 @@ export class CandidateInboxController {
+     if (!pending) { this.set({ recovery: undefined }); return; }
+     const epoch = ++this.epoch;
+     this.reasonCandidateID = "";
+-    this.set({ scope: pending.scope, page: undefined, detail: undefined, preview: undefined, result: undefined, operation: undefined, recovery: pending, notice: "", reason: pending.decision.reason });
+-    await this.deliver(epoch, pending.scope, pending.decision);
++    this.set({ scope: pending.scope, page: undefined, detail: undefined, preview: undefined, result: undefined, operation: undefined, recovery: pending, notice: "", reason: pending.decision.reason, ...this.clearAdvanced });
++    if ("actions" in pending.decision) await this.deliverBatch(epoch, pending.scope, pending.decision);
++    else await this.deliver(epoch, pending.scope, pending.decision);
+   }
+ 
+   private async deliver(epoch: number, scope: string, decision: ReviewDecision) {
+@@ -119,10 +128,101 @@ export class CandidateInboxController {
+       }
+       // Definitive Kernel conflicts require a freshly inspected and explicitly
+       // approved preview. An uncertain transport result retains this exact key.
+-      const definitive = error instanceof CandidateReviewError && ["stale_preview", "source_ineligible", "idempotency_conflict", "review_unauthorized", "already_resolved", "invalid_review_request", "review_scope_quarantined"].includes(error.code);
++      const definitive = error instanceof CandidateReviewError && ["stale_preview", "source_ineligible", "idempotency_conflict", "review_unauthorized", "already_resolved", "invalid_review_request", "review_scope_quarantined", "review_dependencies", "review_too_large", "needs_choice"].includes(error.code);
+       if (definitive) this.journal.clear(decision.delivery_key);
+       if (epoch !== this.epoch) return;
+-      this.set({ busy: false, problem: message(error), ...(definitive ? { preview: undefined, pending: undefined, recovery: undefined } : {}) });
++      this.fail(error, { busy: false, problem: message(error), ...(definitive ? { preview: undefined, pending: undefined, recovery: undefined } : {}) });
++    }
++  }
++
++  async loadIdentityOptions() {
++    const { detail, scope, busy } = this.state; if (!detail || busy) return;
++    const epoch = ++this.epoch; this.set({ busy: true, problem: "", preview: undefined, identityOptions: undefined });
++    try { const options = await this.api.identityOptions(scope, detail.ref); if (epoch !== this.epoch) return;
++      if (options.scope_key !== scope || !sameRef(options.candidate, detail.ref)) throw new Error("Identity alternatives changed. Inspect the candidate again.");
++      this.set({ identityOptions: options, busy: false });
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
++  }
++  async loadTemporalOptions() {
++    const { detail, scope, busy } = this.state; if (!detail || busy) return;
++    const epoch = ++this.epoch; this.set({ busy: true, problem: "", preview: undefined, temporalOptions: undefined });
++    try { const options = await this.api.temporalOptions(scope, detail.ref); if (epoch !== this.epoch) return;
++      if (options.scope_key !== scope || !sameRef(options.candidate, detail.ref)) throw new Error("Correction alternatives changed. Inspect the candidate again.");
++      this.set({ temporalOptions: options, busy: false });
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
++  }
++  async chooseIdentity(decision: IdentityDecision) { await this.interpret(() => this.api.chooseIdentity(this.state.scope, decision)); }
++  async chooseTemporal(decision: TemporalDecision) { await this.interpret(() => this.api.chooseTemporal(this.state.scope, decision)); }
++  async edit(decision: EditDecision) { await this.interpret(() => this.api.edit(this.state.scope, decision)); }
++  private async interpret(call: () => Promise<OwnerCandidate>) {
++    const { scope, detail, busy } = this.state; if (busy || !detail) return;
++    const epoch = ++this.epoch; this.set({ ...this.clearAdvanced, busy: true, preview: undefined, problem: "", notice: "" });
++    try { const item = await call(); if (epoch !== this.epoch) return;
++      if (item.destination !== scope || item.ref.candidate_id !== detail.ref.candidate_id) throw new Error("The returned interpretation does not match this candidate.");
++      this.set({ detail: item, busy: false, notice: "Interpretation recorded. Review a new exact preview before accepting memory." });
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: `${message(error)} Refresh to inspect the recorded interpretation before another edit or choice.` }); }
++  }
++  async loadHistoryRevision(kind: InterpretationHistory["kind"], revision: number) {
++    const { scope, detail, busy } = this.state; if (!detail || detail.redacted || busy) return;
++    if (!Number.isSafeInteger(revision) || revision < 1 || revision > detail.ref.interpretation_revision) {
++      this.set({ history: undefined, problem: `Choose an interpretation revision from 1 to ${detail.ref.interpretation_revision}.` }); return;
++    }
++    const epoch = ++this.epoch; this.set({ busy: true, problem: "", history: undefined });
++    try {
++      const id = detail.ref.candidate_id;
++      let history: InterpretationHistory;
++      if (kind === "edit") history = { kind, value: await this.api.editRevision(scope, id, revision) };
++      else if (kind === "identity") history = { kind, value: await this.api.identityRevision(scope, id, revision) };
++      else history = { kind, value: await this.api.temporalRevision(scope, id, revision) };
++      if (epoch !== this.epoch) return;
++      const value = history.value;
++      const bound = value.revision === revision && value.parent_revision === revision - 1 && value.review_revision > 0 && value.review_revision <= detail.ref.review_revision;
++      const candidateBound = history.kind === "edit" ? history.value.candidate_id === id :
++        history.value.options.scope_key === scope && history.value.options.candidate.candidate_id === id &&
++        history.value.options.candidate.interpretation_revision === value.parent_revision && history.value.options.candidate.review_revision === value.review_revision - 1;
++      if (!bound || !candidateBound) throw new Error("The returned history does not match the requested candidate, kind or revision. Refresh and inspect again.");
++      this.set({ history, busy: false });
++    }
++    catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
++  }
++  async prepareBatch(request: BatchRequest) {
++    const { scope, busy } = this.state; if (!scope || busy) return;
++    const epoch = ++this.epoch; this.set({ ...this.clearAdvanced, busy: true, preview: undefined, problem: "", batchResult: undefined, batchOperations: undefined });
++    try { const batchPreview = await this.api.prepareBatch(scope, request); if (epoch !== this.epoch) return;
++      const bound = batchPreview.groups.length === request.groups.length && batchPreview.groups.every((group, i) => {
++        const wanted = request.groups[i];
++        return group.group_id === wanted.group_id && group.preview.action === wanted.action && group.preview.candidates.length === wanted.candidates.length && group.preview.candidates.every((candidate, j) => sameRef(candidate.ref, wanted.candidates[j])) && JSON.stringify(sortedDependencies(group.preview.dependencies ?? [])) === JSON.stringify(sortedDependencies(wanted.dependencies));
++      });
++      if (batchPreview.scope_key !== scope || !supportedBatch(batchPreview) || !bound) throw new Error("Additional review is required: batch effects or exact group bindings are unsupported.");
++      this.set({ batchPreview, busy: false });
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error) }); }
++  }
++  async resolveBatch() {
++    const { scope, batchPreview, busy, batchPending, reason } = this.state; if (!batchPreview || busy || !supportedBatch(batchPreview)) return;
++    const decision = batchPending ?? { delivery_key: this.deliveryKey(), preview_id: batchPreview.preview_id, preview_sha256: batchPreview.preview_sha256, actions: batchPreview.groups.map((group) => ({ group_id: group.group_id, action: group.preview.action })), reason };
++    try { this.journal.write({ scope, decision }); } catch (error) { this.set({ problem: message(error) }); return; }
++    const epoch = ++this.epoch; this.set({ recovery: { scope, decision } });
++    await this.deliverBatch(epoch, scope, decision);
++  }
++  private async deliverBatch(epoch: number, scope: string, decision: BatchDecision) {
++    this.set({ busy: true, batchPending: decision, problem: "" });
++    try {
++      const batchResult = await this.api.resolveBatch(scope, decision);
++      this.journal.clear(decision.delivery_key); if (epoch !== this.epoch) return;
++      this.set({ batchResult, disclosureEpoch: (this.state.disclosureEpoch ?? 0) + 1, batchPreview: undefined, batchPending: undefined, recovery: undefined, detail: undefined, reason: "", notice: "Batch decision recorded. Failed groups require a new preview and explicit approval." });
++      const page = await this.api.list(scope); if (epoch !== this.epoch) return; this.set({ page });
++      const operations: ReviewOperation[] = [];
++      for (const group of batchResult.groups) if (group.result?.operation) { const op = await this.api.operation(scope, group.result.operation.operation_id); if (epoch !== this.epoch) return; operations.push(op); }
++      const priorOperations: { group_id: string; operation: ReviewOperation }[] = [];
++      for (const group of batchResult.groups) for (const prior of group.prior_resolutions ?? []) if (prior.operation) {
++        const operation = await this.api.operation(scope, prior.operation.operation_id); if (epoch !== this.epoch) return;
++        priorOperations.push({ group_id: group.group_id, operation });
++      }
++      this.set({ batchOperations: operations, batchPriorOperations: priorOperations, busy: false });
++    } catch (error) {
++      const definitive = error instanceof CandidateReviewError && ["stale_preview", "source_ineligible", "idempotency_conflict", "review_unauthorized", "already_resolved", "invalid_review_request", "review_scope_quarantined", "review_dependencies", "review_too_large", "needs_choice"].includes(error.code);
++      if (definitive) this.journal.clear(decision.delivery_key);
++      if (epoch === this.epoch) this.fail(error, { busy: false, problem: message(error), ...(definitive ? { batchPreview: undefined, batchPending: undefined, recovery: undefined } : {}) });
+     }
+   }
+ 
+@@ -137,8 +237,11 @@ export class CandidateInboxController {
+         this.set({ operation });
+       }
+       this.set({ busy: false });
+-    } catch (error) { if (epoch === this.epoch) this.set({ busy: false, problem: `Decision recorded. Refresh to load the current inbox and provenance. ${message(error)}` }); }
++    } catch (error) { if (epoch === this.epoch) this.fail(error, { busy: false, problem: `Decision recorded. Refresh to load the current inbox and provenance. ${message(error)}` }); }
+   }
+ }
+ 
+ function message(error: unknown) { return error instanceof Error ? error.message : "Candidate review is unavailable. Try refreshing."; }
++
++function sameRef(a: import("../api/candidateReview").CandidateRef, b: import("../api/candidateReview").CandidateRef) { return a.candidate_id === b.candidate_id && a.interpretation_revision === b.interpretation_revision && a.review_revision === b.review_revision; }
++function sortedDependencies(deps: import("../api/candidateReview").ReviewDependency[]) { return deps.map((dep) => JSON.stringify([dep.candidate_id, dep.field, dep.from_candidate_id, dep.from_field])).sort(); }
+diff --git a/internal/web/ui/src/candidateInbox/fixtures.test-support.ts b/internal/web/ui/src/candidateInbox/fixtures.test-support.ts
+index f39a116..239cfde 100644
+--- a/internal/web/ui/src/candidateInbox/fixtures.test-support.ts
++++ b/internal/web/ui/src/candidateInbox/fixtures.test-support.ts
+@@ -27,6 +27,17 @@ export function fakeAPI(overrides: Partial<CandidateReviewAPI> = {}): CandidateR
+     prepare: async (_scope, _ref, action) => ({ ...preview, action, effect: action === "reject" ? null : preview.effect }),
+     resolve: async () => result,
+     operation: async () => ({ operation_id: "operation-1", preview, audit_id: "audit-1" }),
++    identityOptions: async () => { throw new Error("No identity fixture"); },
++    chooseIdentity: async () => candidate,
++    temporalOptions: async () => { throw new Error("No temporal fixture"); },
++    chooseTemporal: async () => candidate,
++    edit: async () => candidate,
++    editRevision: async () => { throw new Error("No edit fixture"); },
++    identityRevision: async () => { throw new Error("No identity revision fixture"); },
++    temporalRevision: async () => { throw new Error("No temporal revision fixture"); },
++    prepareBatch: async () => { throw new Error("No batch fixture"); },
++    inspectBatch: async () => { throw new Error("No batch fixture"); },
++    resolveBatch: async () => { throw new Error("No batch fixture"); },
+     ...overrides,
+   };
+ }
+diff --git a/internal/web/ui/src/candidateInbox/pendingDecision.ts b/internal/web/ui/src/candidateInbox/pendingDecision.ts
+index 1be4af5..80a3d3a 100644
+--- a/internal/web/ui/src/candidateInbox/pendingDecision.ts
++++ b/internal/web/ui/src/candidateInbox/pendingDecision.ts
+@@ -1,6 +1,6 @@
+-import type { ReviewDecision } from "../api/candidateReview";
++import type { ReviewDecision, BatchDecision } from "../api/candidateReview";
+ 
+-export type PendingReview = { scope: string; decision: ReviewDecision };
++export type PendingReview = { scope: string; decision: ReviewDecision | BatchDecision };
+ export interface PendingDecisionJournal {
+   read(): PendingReview | undefined;
+   write(value: PendingReview): void;
+@@ -8,23 +8,25 @@ export interface PendingDecisionJournal {
+ }
+ 
+ // Only the exact delivery request is retained, never candidate/source/preview
+-// contents. One uncertain decision is recovered before another can replace it.
++// contents. The 32 KiB byte ceiling admits a 4 KiB reason even when JSON
++// escaping expands every byte, plus twenty maximum-length group actions.
++// One uncertain decision is recovered before another can replace it.
+ export function pendingDecisionJournal(storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">): PendingDecisionJournal {
+   const key = "evie.owner-review.pending.v1";
+   let memory: PendingReview | undefined;
+   const read = () => {
+     const raw = storage?.getItem(key);
+     if (!raw) return memory;
+-    if (raw.length > 8192) return undefined;
++    if (new TextEncoder().encode(raw).length > 32*1024) return undefined;
+     try {
+       const value = JSON.parse(raw) as PendingReview;
+-      if (typeof value.scope !== "string" || !value.scope || !value.decision || !["accept", "reject"].includes(value.decision.action) || ![value.decision.delivery_key, value.decision.preview_id, value.decision.preview_sha256, value.decision.reason].every((field) => typeof field === "string")) return undefined;
++      if (typeof value.scope !== "string" || !value.scope || !value.decision || !("actions" in value.decision ? Array.isArray(value.decision.actions) && value.decision.actions.length > 0 && value.decision.actions.length <= 20 && value.decision.actions.every((action) => typeof action.group_id === "string" && ["accept", "reject"].includes(action.action)) : ["accept", "reject"].includes(value.decision.action)) || ![value.decision.delivery_key, value.decision.preview_id, value.decision.preview_sha256, value.decision.reason].every((field) => typeof field === "string")) return undefined;
+       return value;
+     } catch { return undefined; }
+   };
+   return {
+     read,
+-    write(value) { const previous = read(); if (previous && previous.decision.delivery_key !== value.decision.delivery_key) throw new Error("Recover the earlier decision before confirming another candidate."); const raw = JSON.stringify(value); if (raw.length > 8192) throw new Error("This decision is too large to retain safely; shorten the optional reason."); storage?.setItem(key, raw); memory = value; },
++    write(value) { if (new TextEncoder().encode(value.decision.reason).length > 4096) throw new Error("This reason is too large; use at most 4 KiB of text."); const previous = read(); if (previous && previous.decision.delivery_key !== value.decision.delivery_key) throw new Error("Recover the earlier decision before confirming another candidate."); const raw = JSON.stringify(value); if (new TextEncoder().encode(raw).length > 32*1024) throw new Error("This decision is too large to retain safely; shorten the optional reason."); storage?.setItem(key, raw); memory = value; },
+     clear(deliveryKey) { if (read()?.decision.delivery_key === deliveryKey) { storage?.removeItem(key); memory = undefined; } },
+   };
+ }
+diff --git a/internal/web/ui/src/candidateInbox/previewSupport.ts b/internal/web/ui/src/candidateInbox/previewSupport.ts
+new file mode 100644
+index 0000000..2b3efa0
+--- /dev/null
++++ b/internal/web/ui/src/candidateInbox/previewSupport.ts
+@@ -0,0 +1,20 @@
++import type { BatchPreview, ReviewEffect, ReviewPreview } from "../api/candidateReview";
++
++// This is a rendering-capability check, never an acceptance/authority policy.
++// Unknown versions fail closed even if they resemble a supported payload.
++export function supportedEffect(effect: ReviewEffect): boolean {
++  if (effect.version === "owner-review-effect-v5") return Array.isArray(effect.members) && effect.members.length > 0 && effect.members.every((member) => member.version !== "owner-review-effect-v5" && supportedEffect(member)) && Array.isArray(effect.records) && (!effect.dependencies || Array.isArray(effect.dependencies)) && effect.claims.length === effect.members.length && effect.members.every((member, i) => JSON.stringify(member.claims[0]) === JSON.stringify(effect.claims[i]));
++  if (!["owner-review-effect-v1", "owner-review-effect-v2", "owner-review-effect-v3", "owner-review-effect-v4"].includes(effect.version) || effect.claims.length !== 1 || effect.members?.length || effect.records?.length) return false;
++  if (effect.version === "owner-review-effect-v1" && (effect.identity || effect.correction)) return false;
++  if (effect.version === "owner-review-effect-v2" && effect.correction) return false;
++  return true;
++}
++export function supportedPreview(preview: ReviewPreview, batch = false): boolean {
++  const version = /^owner-review-preview-v([1-5])$/.exec(preview.version)?.[1];
++  if (!version || (!batch && !!preview.batch_preview_id) || !preview.candidates.length) return false;
++  if (preview.action === "reject") return !preview.effect;
++  return preview.action === "accept" && !!preview.effect && preview.effect.version === `owner-review-effect-v${version}` && supportedEffect(preview.effect);
++}
++export function supportedBatch(preview: BatchPreview): boolean {
++  return preview.version === "owner-review-batch-v1" && preview.failure_behavior === "atomic_groups_independent_failures; committed_failures_are_not_retried" && preview.groups.length > 0 && preview.groups.every((group) => group.preview.scope_key === preview.scope_key && group.preview.batch_preview_id === preview.preview_id && group.preview.version === "owner-review-preview-v5" && supportedPreview(group.preview, true));
++}

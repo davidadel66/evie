@@ -9,7 +9,9 @@ import {
   type SemanticObjectSummary,
   type SemanticScope,
 } from "../api/memory";
-import { Database, Layers } from "../ui/Icon";
+import { Layers } from "../ui/Icon";
+import type { ContextSessionSnapshot } from "../api/contextSessions";
+import { MemoryPresentationProvider, MemoryScopeSelect, useMemoryPresentation, entityLabel, scopeLabel } from "./presentation";
 import { MemoryReviewTabs } from "../candidateInbox/MemoryReviewTabs";
 import { LatestMemoryRequest } from "./latestRequest";
 import { buildKnowledgeGraph, layoutKnowledgeGraph, parallelEdgeOffset, type KnowledgeEdge, type KnowledgeLayoutNode } from "./knowledgeGraph";
@@ -18,14 +20,16 @@ import { metadataTimeFilter, pinMemoryRead, sameMemorySnapshot } from "./readSna
 type ListKind = "entity" | "claim";
 export type MemoryViewMode = "graph" | "records";
 
-export function Memory(props: { onOpenDetail?: (detail: SemanticObjectInspection) => void } = {}) {
-  return <MemoryReviewTabs><AcceptedMemory {...props} /></MemoryReviewTabs>;
+export function Memory({ snapshot, onOpenDetail }: { snapshot?: ContextSessionSnapshot; onOpenDetail?: (detail: SemanticObjectInspection) => void } = {}) {
+  return <MemoryPresentationProvider snapshot={snapshot}><MemoryReviewTabs><AcceptedMemory onOpenDetail={onOpenDetail} /></MemoryReviewTabs></MemoryPresentationProvider>;
 }
 
 function AcceptedMemory({ onOpenDetail }: { onOpenDetail?: (detail: SemanticObjectInspection) => void } = {}) {
+  const { preferredScope } = useMemoryPresentation();
+  const [selection, setSelection] = useState<SemanticObjectSummary>();
   const [scopes, setScopes] = useState<SemanticScope[]>([]);
   const [scopeKey, setScopeKey] = useState("");
-  const [view, setView] = useState<MemoryViewMode>("graph");
+  const [view, setView] = useState<MemoryViewMode>("records");
   const [recordKind, setRecordKind] = useState<ListKind>("claim");
   const [atTime, setAtTime] = useState(false);
   const [validAt, setValidAt] = useState("");
@@ -39,11 +43,32 @@ function AcceptedMemory({ onOpenDetail }: { onOpenDetail?: (detail: SemanticObje
   const graphRequest = useRef(0);
   const detailRequests = useRef(new LatestMemoryRequest());
 
-  useEffect(() => {
-    void listMemoryScopes()
-      .then((result) => { setScopes(result.scopes); setProblem(""); })
-      .catch((error: unknown) => setProblem(errorMessage(error, "Memory scopes are unavailable")));
+  const resetRead = useCallback(() => {
+    graphRequest.current++;
+    detailRequests.current.invalidate();
+    setEntityPage(undefined);
+    setClaimPage(undefined);
+    setEntityRecordPage(undefined);
+    setClaimRecordPage(undefined);
+    setDetail(undefined);
   }, []);
+  const scopeRequests = useRef(new LatestMemoryRequest());
+  useEffect(() => {
+    resetRead();
+    setScopeKey("");
+    setScopes([]);
+    setProblem("");
+    void scopeRequests.current.run(
+      () => listMemoryScopes(),
+      (result) => {
+        setScopes(result.scopes);
+        setScopeKey(result.scopes.some((scope) => scope.scope_key === preferredScope) ? preferredScope : result.scopes.find((scope) => scope.scope_key === "global")?.scope_key ?? "");
+      },
+      (error) => setProblem(errorMessage(error, "Memory scopes are unavailable")),
+    );
+    const requests = scopeRequests.current;
+    return () => requests.invalidate();
+  }, [preferredScope, resetRead]);
 
   const filter = useCallback((): MemoryTimeFilter => ({
     history: atTime,
@@ -84,8 +109,8 @@ function AcceptedMemory({ onOpenDetail }: { onOpenDetail?: (detail: SemanticObje
     const metadata = claimPage?.metadata ?? entityPage?.metadata;
     const temporal = metadata ? metadataTimeFilter(metadata, atTime) : pinMemoryRead(filter());
     await detailRequests.current.run(
-      () => inspectMemoryObject(scopeKey, object.object_kind, object.object_id, temporal),
-      (result) => { setDetail(result); onOpenDetail?.(result); setProblem(""); },
+      () => inspectMemoryObject(object.scope_key, object.object_kind, object.object_id, temporal),
+      (result) => { setSelection(object); setDetail(result); onOpenDetail?.(result); setProblem(""); },
       (error) => setProblem(errorMessage(error, "Memory detail failed")),
     );
   };
@@ -106,15 +131,7 @@ function AcceptedMemory({ onOpenDetail }: { onOpenDetail?: (detail: SemanticObje
     }
   };
 
-  const resetRead = () => {
-    graphRequest.current++;
-    detailRequests.current.invalidate();
-    setEntityPage(undefined);
-    setClaimPage(undefined);
-    setEntityRecordPage(undefined);
-    setClaimRecordPage(undefined);
-    setDetail(undefined);
-  };
+
 
   return (
     <MemoryView
@@ -130,6 +147,8 @@ function AcceptedMemory({ onOpenDetail }: { onOpenDetail?: (detail: SemanticObje
       entityRecordPage={entityRecordPage}
       claimRecordPage={claimRecordPage}
       detail={detail}
+      selection={selection}
+      onBack={() => { detailRequests.current.invalidate(); setDetail(undefined); setSelection(undefined); }}
       problem={problem}
       onScope={(value) => { resetRead(); setScopeKey(value); }}
       onView={setView}
@@ -158,6 +177,8 @@ export function MemoryView({
   entityRecordPage,
   claimRecordPage,
   detail,
+  selection,
+  onBack,
   problem,
   onScope,
   onView,
@@ -182,6 +203,8 @@ export function MemoryView({
   entityRecordPage?: SemanticObjectPage;
   claimRecordPage?: SemanticObjectPage;
   detail?: SemanticObjectInspection;
+  selection?: SemanticObjectSummary;
+  onBack?: () => void;
   problem?: string;
   onScope: (value: string) => void;
   onView: (view: MemoryViewMode) => void;
@@ -194,69 +217,57 @@ export function MemoryView({
   onInspect: (object: SemanticObjectSummary) => void;
   detailPlacement?: "inline" | "inspector";
 }) {
+  const { ownerName, names } = useMemoryPresentation();
   const selectedScope = scopes.find((scope) => scope.scope_key === scopeKey);
   const metadata = claimPage?.metadata ?? entityPage?.metadata;
-  const selectedRevision = metadata?.scope_revisions.find((revision) => revision.scope_key === scopeKey)?.revision ?? selectedScope?.revision;
   return (
     <section aria-label="Semantic Memory" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="border-hair bg-docked flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2.5 sm:px-5">
-        <div className="mr-1 flex items-center gap-2">
-          <span className="text-teal"><Layers size={14} /></span>
-          <div><h2 className="text-body text-[11.5px] font-medium">Knowledge Graph</h2><p className="text-ghost text-[9.5px]">Semantic Memory</p></div>
+      {detail && detailPlacement === "inline" ? <MemoryDetail detail={detail} selection={selection} onBack={onBack} related={claimPage?.objects ?? []} onInspect={onInspect} /> : <>
+        <div className="border-hair flex flex-none flex-wrap items-center gap-3 border-b px-5 py-3 sm:px-7">
+          <MemoryScopeSelect scopes={scopes} value={scopeKey} onChange={onScope} />
+          <div className="flex-1" />
+          <div aria-label="Memory display" className="bg-selected/60 flex rounded-lg p-1">
+            {(["records", "graph"] as const).map((item) => <button key={item} type="button" aria-pressed={view === item} onClick={() => onView(item)} className={`${view === item ? "bg-sidebar text-ink shadow-sm" : "text-muted-text hover:text-body"} rounded-md px-3 py-1.5 text-sm`}>{item === "records" ? "List" : "Graph"}</button>)}
+          </div>
+          <button type="button" disabled={!scopeKey} onClick={onRefresh} className="text-muted-text hover:text-body rounded px-2 py-2 text-sm disabled:opacity-40">Refresh</button>
+          <details className="relative">
+            <summary className="text-muted-text hover:text-body cursor-pointer rounded px-2 py-2 text-sm">Options</summary>
+            <div className="border-hair bg-sidebar absolute right-0 top-full z-30 mt-2 w-72 space-y-4 rounded-lg border p-4 text-sm shadow-lg">
+              <label className="flex items-center justify-between gap-3">Show<select aria-label="Memory record type" className="border-hair bg-app rounded border px-2 py-1.5" value={recordKind} onChange={(event) => { onRecordKind(event.target.value as ListKind); onView("records"); }}><option value="claim">Memories</option><option value="entity">People &amp; places</option></select></label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={atTime} onChange={(event) => onAtTime(event.target.checked)} />History</label>
+              {atTime && <div className="space-y-3">
+                <label className="block">Valid at<input aria-label="Valid at" type="datetime-local" className="border-hair bg-app mt-1 w-full rounded border px-2 py-1" value={validAt} onChange={(event) => onValidAt(event.target.value)} /></label>
+                <label className="block">Known by Evie at<input aria-label="Known by Evie at" type="datetime-local" className="border-hair bg-app mt-1 w-full rounded border px-2 py-1" value={asKnownAt} onChange={(event) => onAsKnownAt(event.target.value)} /></label>
+              </div>}
+              {metadata && <p className="text-muted-text text-xs">Revision {metadata.scope_revisions.find((revision) => revision.scope_key === scopeKey)?.revision ?? "—"}</p>}
+            </div>
+          </details>
         </div>
-        <label className="text-fainter flex items-center gap-2 text-[10px]">
-          Memory Scope
-          <select className="border-hair-input bg-app text-body min-w-[190px] rounded-[5px] border px-2.5 py-1.5 font-mono text-[10px]" value={scopeKey} onChange={(event) => onScope(event.target.value)}>
-            <option value="">Choose one exact scope…</option>
-            {scopes.map((scope) => <option key={scope.scope_key} value={scope.scope_key}>{scope.scope_key}{scope.quarantined ? " — quarantined" : ""}</option>)}
-          </select>
-        </label>
-        {selectedScope && <div className="text-ghost flex items-center gap-2 text-[9.5px]"><span className="border-hair rounded border px-1.5 py-0.5">Exact scope</span><span className="font-mono">revision {selectedRevision}</span></div>}
-        <div className="flex-1" />
-        <label className="text-faint flex cursor-pointer items-center gap-2 text-[10px]"><input type="checkbox" checked={atTime} onChange={(event) => onAtTime(event.target.checked)} />View at time</label>
-        <button type="button" disabled={!scopeKey} onClick={onRefresh} className="text-faint hover:text-body disabled:text-ghost text-[10px]">Refresh</button>
-      </div>
-
-      {atTime && <div className="border-hair bg-card flex flex-none flex-wrap items-center gap-4 border-b px-4 py-2 sm:px-5">
-        <label className="text-fainter flex items-center gap-2 text-[9.5px]">Valid at<input aria-label="Valid at" type="datetime-local" className="border-hair bg-app text-body rounded border px-2 py-1 font-mono text-[9.5px]" value={validAt} onChange={(event) => onValidAt(event.target.value)} /></label>
-        <label className="text-fainter flex items-center gap-2 text-[9.5px]">Known by Evie at<input aria-label="Known by Evie at" type="datetime-local" className="border-hair bg-app text-body rounded border px-2 py-1 font-mono text-[9.5px]" value={asKnownAt} onChange={(event) => onAsKnownAt(event.target.value)} /></label>
-        <p className="text-ghost text-[9px]">World time and acceptance time are independent.</p>
-      </div>}
-
-      <div className="border-hair flex h-[38px] flex-none items-stretch border-b px-4 sm:px-5">
-        {(["graph", "records"] as const).map((item) => <button key={item} type="button" aria-pressed={view === item} onClick={() => onView(item)} className={`${view === item ? "border-teal text-body" : "border-transparent text-faint hover:text-body"} border-b px-3 text-[10.5px]`}>{item === "graph" ? "Graph" : "Records"}</button>)}
-        {view === "records" && <div className="border-hair ml-3 flex items-center gap-1 border-l pl-3">
-          {(["entity", "claim"] as const).map((kind) => <button key={kind} type="button" aria-pressed={recordKind === kind} onClick={() => onRecordKind(kind)} className={`${recordKind === kind ? "bg-selected text-body" : "text-faint hover:text-body"} rounded px-2 py-1 text-[9.5px]`}>{kind === "entity" ? "Entities" : "Claims"}</button>)}
-        </div>}
-        <div className="flex-1" />
-        {metadata && <div className="text-ghost flex items-center font-mono text-[8.5px]">Valid {formatCompactTime(metadata.valid_at)} · Known {formatCompactTime(metadata.as_known_at)}</div>}
-      </div>
-
-      {problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-4 py-2 text-[11px]">{problem}</p>}
-      {selectedScope?.quarantined && <p role="status" className="border-amber-hair bg-amber-bg text-amber-ink border-b px-4 py-2 text-[11px]">This scope is quarantined: {selectedScope.quarantine_reason}</p>}
-
-      <div className="min-h-0 flex-1 overflow-auto">
-        {!scopeKey && <MemoryEmpty />}
-        {scopeKey && view === "graph" && <KnowledgeCanvas entityPage={entityPage} claimPage={claimPage} onInspect={onInspect} />}
-        {scopeKey && view === "records" && <RecordList kind={recordKind} page={recordKind === "entity" ? entityRecordPage ?? entityPage : claimRecordPage ?? claimPage} onInspect={onInspect} onNext={onNext} />}
-        {detail && detailPlacement === "inline" && <div className="p-5"><MemoryDetail detail={detail} /></div>}
-      </div>
+        {problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-5 py-3 text-sm">{problem}</p>}
+        {selectedScope?.quarantined && <p role="status" className="border-amber-hair bg-amber-bg text-amber-ink border-b px-5 py-3 text-sm">Memory unavailable: {selectedScope.quarantine_reason}</p>}
+        {atTime && <div role="status" className="border-hair text-amber-ink flex items-center gap-3 border-b px-7 py-2 text-sm">History view<button type="button" onClick={() => onAtTime(false)} className="underline">Back to current</button></div>}
+        <div className="min-h-0 flex-1 overflow-auto">
+          {!scopeKey && <MemoryEmpty />}
+          {scopeKey && view === "graph" && <KnowledgeCanvas entityPage={entityPage} claimPage={claimPage} onInspect={onInspect} />}
+          {scopeKey && view === "records" && <RecordList kind={recordKind} page={recordKind === "entity" ? entityRecordPage ?? entityPage : claimRecordPage ?? claimPage} onInspect={onInspect} onNext={onNext} ownerName={ownerName} title={scopeLabel(scopeKey, names)} />}
+        </div>
+      </>}
     </section>
   );
 }
 
 function KnowledgeCanvas({ entityPage, claimPage, onInspect }: { entityPage?: SemanticObjectPage; claimPage?: SemanticObjectPage; onInspect: (object: SemanticObjectSummary) => void }) {
-  const graph = useMemo(() => buildKnowledgeGraph(entityPage?.objects ?? [], claimPage?.objects ?? []), [claimPage?.objects, entityPage?.objects]);
+  const { ownerName } = useMemoryPresentation();
+  const graph = useMemo(() => buildKnowledgeGraph(entityPage?.objects ?? [], claimPage?.objects ?? [], ownerName), [claimPage?.objects, entityPage?.objects, ownerName]);
   const layout = useMemo(() => layoutKnowledgeGraph(graph), [graph]);
   const byID = useMemo(() => new Map(layout.nodes.map((node) => [node.id, node])), [layout.nodes]);
-  if (!entityPage || !claimPage) return <div className="text-fainter flex min-h-full items-center justify-center p-8 text-xs">Reading accepted knowledge…</div>;
-  if (layout.nodes.length === 0) return <div className="flex min-h-full items-center justify-center p-8 text-center"><div><Layers size={18} className="text-ghost mx-auto" /><h3 className="text-body mt-3 text-xs font-medium">No accepted knowledge here yet</h3><p className="text-fainter mt-1 text-[10.5px]">This graph shows current, supported Claims in one exact scope.</p></div></div>;
+  if (!entityPage || !claimPage) return <div className="text-fainter flex min-h-full items-center justify-center p-8 text-xs">Loading memories…</div>;
+  if (layout.nodes.length === 0) return <div className="flex min-h-full items-center justify-center p-8 text-center"><div><Layers size={18} className="text-ghost mx-auto" /><h3 className="text-body mt-3 text-xs font-medium">No memories yet</h3></div></div>;
   return <div className="relative min-h-full min-w-full overflow-auto">
     <div className="border-hair bg-docked/90 absolute left-4 top-4 z-20 rounded border px-2.5 py-2 text-[9px] backdrop-blur">
-      <p className="text-body">{graph.nodes.filter((node) => node.kind === "entity").length} entities · {graph.edges.length} claims</p>
-      <p className="text-ghost mt-1">Claim labels are selectable relationships.</p>
+      <p className="text-body">{graph.edges.length} {graph.edges.length === 1 ? "memory" : "memories"}</p>
     </div>
-    {(entityPage.next_cursor || claimPage.next_cursor) && <div className="border-hair bg-docked/90 text-ghost absolute right-4 top-4 z-20 rounded border px-2 py-1 text-[9px]">Bounded to the first 100 records per kind</div>}
+    {(entityPage.next_cursor || claimPage.next_cursor) && <div className="border-hair bg-docked/90 text-ghost absolute right-4 top-4 z-20 rounded border px-2 py-1 text-[9px]">Partial graph · more in List</div>}
     <div style={{ width: layout.width, height: layout.height }} className="relative mx-auto my-5">
       <svg aria-label="Semantic knowledge relationships" width={layout.width} height={layout.height} className="pointer-events-none absolute inset-0">
         <defs><marker id="memory-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 8 4 0 8z" fill="currentColor" /></marker></defs>
@@ -283,11 +294,13 @@ function KnowledgeNodeButton({ node, onInspect }: { node: KnowledgeLayoutNode; o
   return <button
     type="button"
     disabled={!interactive}
+    title={node.label}
+    aria-label={`Open ${node.label}`}
     onClick={() => node.summary && onInspect(node.summary)}
     style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
     className={`${node.kind === "entity" ? node.anchor ? "border-teal bg-selected" : "border-hair-input bg-card" : "border-amber-hair bg-amber-card"} absolute z-10 rounded-[9px] border px-3 text-left shadow-[0_10px_28px_rgba(0,0,0,0.22)] enabled:hover:border-teal disabled:cursor-default`}
   >
-    <span className={`${node.kind === "entity" ? "text-body" : "text-amber-ink"} block truncate text-[11px] font-medium`}>{node.label}</span>
+    <span className={`${node.kind === "entity" ? "text-body" : "text-amber-ink"} block line-clamp-2 text-[12px] font-medium`}>{node.label}</span>
     <span className="text-ghost mt-1 block truncate text-[9px]">{node.detail}</span>
   </button>;
 }
@@ -299,53 +312,71 @@ function ClaimButton({ edge, from, to, onInspect }: { edge: KnowledgeEdge; from:
   const top = self ? from.y + from.height / 2 - 12 + offset : (from.y + from.height / 2 + to.y + to.height / 2) / 2 - 12 + offset;
   return <button
     type="button"
-    aria-label={`Claim: ${from.label} ${edge.label} ${to.label}`}
+    title={`${from.label} ${edge.polarity === "denied" ? "does not: " : ""}${edge.label} ${to.label}`}
+    aria-label={`Claim: ${from.label} ${edge.polarity === "denied" ? "not " : ""}${edge.label} ${to.label}`}
     onClick={() => onInspect(edge.summary)}
     style={{ left, top, width: 116 }}
     className={`${edge.polarity === "denied" ? "border-amber-hair text-amber-ink" : "border-teal-hair text-teal"} bg-docked hover:bg-selected absolute z-20 truncate rounded-full border px-2 py-1 font-mono text-[8.5px] shadow-[0_4px_16px_rgba(0,0,0,0.3)]`}
   >{edge.polarity === "denied" ? "not " : ""}{edge.label}</button>;
 }
 
-function RecordList({ kind, page, onInspect, onNext }: { kind: ListKind; page?: SemanticObjectPage; onInspect: (object: SemanticObjectSummary) => void; onNext: (kind: ListKind, cursor: string) => void }) {
-  if (!page) return <div className="text-fainter flex min-h-full items-center justify-center p-8 text-xs">Reading records…</div>;
-  return <div className="mx-auto max-w-[880px] p-5 sm:p-7">
-    <div className="mb-3 flex items-end"><div><h3 className="text-body text-sm font-medium">{kind === "entity" ? "Entities" : "Claims"}</h3><p className="text-ghost mt-1 text-[10px]">Exact scope · revision {page.metadata.scope_revisions.find((revision) => revision.scope_key === page.metadata.selected_scope)?.revision ?? "—"}</p></div><div className="flex-1" /><span className="text-ghost font-mono text-[9px]">{page.objects.length} shown</span></div>
+function RecordList({ kind, page, onInspect, onNext, ownerName = "You", title }: { kind: ListKind; page?: SemanticObjectPage; onInspect: (object: SemanticObjectSummary) => void; onNext: (kind: ListKind, cursor: string) => void; ownerName?: string; title?: string }) {
+  if (!page) return <div role="status" className="text-muted-text p-8 text-sm">Loading memories…</div>;
+  return <div className="mx-auto max-w-[960px] px-5 py-7 sm:px-7">
+    <div className="mb-6 flex items-baseline gap-3"><h2 className="text-ink text-lg font-semibold">{kind === "entity" ? "People & places" : title || "Memories"}</h2><span className="text-muted-text text-sm">{page.objects.length}{page.next_cursor ? "+" : ""}</span></div>
     <div className="border-hair border-t">
-      {page.objects.length === 0 && <p className="text-fainter py-8 text-center text-xs">No records at the selected times.</p>}
-      {page.objects.map((object) => <button type="button" key={object.object_id} className="border-hair hover:bg-hover flex w-full items-center gap-4 border-b px-3 py-3 text-left" onClick={() => onInspect(object)}>
-        <span className={`${object.object_kind === "claim" ? "border-teal-hair text-teal" : "border-hair-input text-faint"} rounded border px-1.5 py-0.5 font-mono text-[8.5px]`}>{object.object_kind}</span>
-        <span className="min-w-0 flex-1"><span className="text-body block truncate text-[11.5px] font-medium">{objectTitle(object)}</span><span className="text-ghost mt-1 block truncate font-mono text-[9px]">{object.object_id}</span></span>
-        <span className="text-fainter text-[9.5px]">{object.status}</span>
+      {page.objects.length === 0 && <p className="text-muted-text py-12 text-sm">{kind === "entity" ? "No people or places yet." : "No memories here yet."}</p>}
+      {page.objects.map((object) => <button type="button" key={object.object_id} className="border-hair hover:bg-hover focus-visible:ring-teal flex w-full items-center gap-5 border-b py-5 pr-3 text-left focus-visible:ring-2 focus-visible:outline-none" onClick={() => onInspect(object)}>
+        <span className="min-w-0 flex-1"><span className="text-body block text-[15px] leading-6 font-medium">{object.entity ? entityLabel(object.entity, ownerName) : objectTitle(object)}</span>
+        {object.claim && <span className="text-muted-text mt-1 block text-sm">{object.subject ? entityLabel(object.subject, ownerName) : "Person"} · {object.claim.predicate.label}</span>}</span>
+        {object.status !== "active" && <span className="text-amber-ink text-xs">{object.status}</span>}
+        <span aria-hidden="true" className="text-muted-text text-lg">›</span>
       </button>)}
     </div>
-    {page.next_cursor && <button type="button" className="border-hair text-faint hover:text-body mt-3 rounded border px-3 py-2 text-[10px]" onClick={() => onNext(kind, page.next_cursor!)}>Next page</button>}
+    {page.next_cursor && <button type="button" className="border-hair text-body hover:bg-hover mt-5 rounded border px-4 py-2 text-sm" onClick={() => onNext(kind, page.next_cursor!)}>Next page</button>}
   </div>;
 }
 
-function MemoryDetail({ detail }: { detail: SemanticObjectInspection }) {
-  return <section aria-label="Memory record detail" className="border-hair bg-surface rounded-lg border p-4">
-    <h2 className="text-body font-semibold">Record detail</h2>
-    <p className="text-fainter mt-1 font-mono text-xs">{detail.object_kind}:{detail.object_id} · {detail.status}</p>
-    {detail.entity && <p className="text-muted mt-3">Entity: {detail.entity.canonical_name} ({detail.entity.entity_type})</p>}
-    {detail.claim && <div className="text-muted mt-3"><p>Claim: {detail.claim.subject_entity_id} {detail.claim.predicate.token} {claimObject(detail.claim)}</p><p>Valid Time: {formatTime(detail.claim.valid_time.from)} → {formatTime(detail.claim.valid_time.to)} · Transaction Time: {formatTime(detail.claim.transaction_time)}</p></div>}
-    <h3 className="text-body mt-4 font-semibold">Evidence</h3>
-    {detail.sources.length === 0 && <p className="text-fainter">No Source Links.</p>}
-    {detail.sources.map(({ source }) => <article key={source.source_link_id ?? source.event_id} className="border-hair mt-2 border-l pl-3"><p className="text-teal text-[10px]">Source episode · <span className="font-mono">{source.event_id}</span></p><p className="text-muted mt-1">{source.authority} · {source.eligibility}</p><p className="text-fainter font-mono text-xs">scope={source.source_scope_key} · observed={source.observed_at}</p><p className="text-body mt-1">{source.evidence || "Source text unavailable in this scope."}</p></article>)}
-    <h3 className="text-body mt-4 font-semibold">Lifecycle</h3>
-    <ol className="text-muted mt-2 list-decimal pl-5">{detail.lifecycle.map((state) => <li key={`${state.operation_id}:${state.state}`}>{state.state} · revision {state.scope_revision} · {formatTime(state.transaction_time)}</li>)}</ol>
-    {detail.conflicts.length > 0 && <><h3 className="text-body mt-4 font-semibold">Conflicts</h3>{detail.conflicts.map((conflict) => <p className="text-amber mt-1" key={`${conflict.code}:${conflict.claim_ids.join(":")}`}>{conflict.code}: {conflict.claim_ids.join(", ")}</p>)}</>}
-    <h3 className="text-body mt-4 font-semibold">Operation history</h3>
-    <ol className="text-muted mt-2 list-decimal pl-5">{detail.operations.map((operation) => <li key={operation.operation_id}><span className="font-mono">{operation.operation_id}</span> · {operation.kind} schema v{operation.schema_version} · {formatTime(operation.transaction_time)}</li>)}</ol>
+function MemoryDetail({ detail, selection, onBack, related, onInspect }: { detail: SemanticObjectInspection; selection?: SemanticObjectSummary; onBack?: () => void; related: SemanticObjectSummary[]; onInspect: (object: SemanticObjectSummary) => void }) {
+  const { ownerName, names } = useMemoryPresentation();
+  const title = detail.entity ? entityLabel(detail.entity, ownerName) : detail.claim ? `${detail.claim.polarity === "denied" ? "Not: " : ""}${selection?.object_entity ? entityLabel(selection.object_entity, ownerName) : claimObject(detail.claim)}` : "Memory";
+  const subject = selection?.subject;
+  return <section aria-label="Memory detail" className="min-h-0 flex-1 overflow-auto">
+    <div className="mx-auto max-w-[860px] px-5 py-6 sm:px-8">
+      <button type="button" onClick={onBack} className="text-muted-text hover:text-body mb-8 rounded py-1 text-sm">‹ Back to memories</button>
+      <h1 className="text-ink max-w-[65ch] text-2xl leading-snug font-semibold">{title}</h1>
+      <div className="text-muted-text mt-4 flex flex-wrap items-center gap-3 text-sm">
+        {subject && <button type="button" className="text-teal hover:underline" onClick={() => onInspect({ object_kind: "entity", object_id: subject.entity_id, scope_key: subject.scope_key, status: "active", entity: subject })}>{entityLabel(subject, ownerName)}</button>}
+        <span>{scopeLabel(detail.scope.scope_key, names)}</span>
+        {detail.status !== "active" && <span className="text-amber-ink">{detail.status}</span>}
+      </div>
+      {detail.claim && <p className="text-muted-text mt-3 text-sm">{detail.claim.predicate.label}</p>}
+      {detail.sources.length > 0 && <section className="mt-9"><h2 className="text-body text-sm font-medium">Source</h2>{detail.sources.map(({ source }) => <blockquote key={source.source_link_id ?? source.event_id} className="border-teal-hair mt-4 border-l-2 pl-5">
+        <p className="text-body whitespace-pre-wrap text-[15px] leading-7">{source.evidence || "Source unavailable."}</p>
+        <footer className="text-muted-text mt-3 text-xs">{source.authority === "owner_statement" ? ownerName : source.authority} · {formatTime(source.observed_at)}</footer>
+      </blockquote>)}</section>}
+      {detail.entity && <div className="mt-8">{related.filter((object) => object.claim?.subject_entity_id === detail.entity?.entity_id).map((object) => <button type="button" key={object.object_id} onClick={() => onInspect(object)} className="border-hair text-body hover:bg-hover flex w-full items-center justify-between gap-4 border-b py-4 text-left text-sm"><span><span className="block">{objectTitle(object)}</span><span className="text-muted-text mt-1 block text-xs">{object.claim?.predicate.label} · {scopeLabel(object.scope_key, names)}</span></span><span aria-hidden="true">›</span></button>)}</div>}
+      {detail.conflicts.length > 0 && <section className="text-amber-ink mt-8"><h2 className="font-medium">Conflicting memories</h2>{detail.conflicts.map((conflict) => <p key={`${conflict.code}:${conflict.claim_ids.join(":")}`} className="mt-2 text-sm">{conflict.code}: {conflict.claim_ids.join(", ")}</p>)}</section>}
+      <details className="border-hair text-muted-text mt-10 border-t pt-5 text-xs"><summary className="cursor-pointer py-1 text-sm">Details &amp; history</summary>
+        <dl className="mt-4 space-y-3 break-all"><div><dt>Record</dt><dd>{detail.object_kind}:{detail.object_id}</dd></div><div><dt>Scope</dt><dd>{detail.scope.scope_key}</dd></div><div><dt>Status</dt><dd>{detail.status}</dd></div>
+        {detail.entity && <div><dt>Canonical identity</dt><dd>{detail.entity.canonical_name} · {detail.entity.entity_type}</dd></div>}
+        {detail.claim && <><div><dt>Valid time</dt><dd>{formatTime(detail.claim.valid_time.from)} – {formatTime(detail.claim.valid_time.to)}</dd></div><div><dt>Saved</dt><dd>{formatTime(detail.claim.transaction_time)}</dd></div></>}
+        </dl>
+        <h3 className="mt-6 font-medium">Source records</h3>{detail.sources.map(({ source }) => <p className="mt-3 break-all" key={source.source_link_id ?? source.event_id}>{source.event_id}<br />{source.source_scope_key}<br />{source.authority} · {source.eligibility}<br />{source.evidence_sha256}</p>)}
+        <h3 className="mt-6 font-medium">History</h3>{detail.lifecycle.map((state) => <p className="mt-2" key={`${state.operation_id}:${state.state}`}>{state.state} · revision {state.scope_revision} · {formatTime(state.transaction_time)}</p>)}
+        <h3 className="mt-6 font-medium">Operations</h3>{detail.operations.map((operation) => <p className="mt-2 break-all" key={operation.operation_id}>{operation.kind} · {formatTime(operation.transaction_time)}<br />{operation.operation_id}</p>)}
+      </details>
+    </div>
   </section>;
 }
 
 function MemoryEmpty() {
-  return <div className="flex min-h-full items-center justify-center p-8 text-center"><div><span className="border-hair-strong text-faint mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] border"><Database size={17} /></span><h3 className="text-body mt-4 text-sm font-medium">Choose a Memory Scope</h3><p className="text-fainter mt-2 max-w-[340px] text-xs leading-5">The graph reads one exact scope at a time. Sibling Workspaces and projects are never combined.</p></div></div>;
+  return <div className="text-muted-text p-8 text-sm">Open a conversation to view its memories.</div>;
 }
 
 function objectTitle(object: SemanticObjectSummary) {
   if (object.entity) return object.entity.canonical_name;
-  if (object.claim) return `${object.subject?.canonical_name ?? shortID(object.claim.subject_entity_id)} ${object.claim.predicate.label} ${object.object_entity?.canonical_name ?? claimObject(object.claim)}`;
+  if (object.claim) return `${object.claim.polarity === "denied" ? "Not: " : ""}${object.object_entity?.canonical_name ?? claimObject(object.claim)}`;
   return `${object.object_kind} ${object.object_id}`;
 }
 
@@ -373,7 +404,6 @@ function toISOString(value: string) {
   return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
 }
 
-function formatTime(value?: string | null) { return value ? new Date(value).toISOString() : "open"; }
-function formatCompactTime(value?: string | null) { return value ? new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "open"; }
+function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString() : "Unknown"; }
 function shortID(value: string) { return value.length > 12 ? `${value.slice(0, 8)}…` : value; }
 function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }

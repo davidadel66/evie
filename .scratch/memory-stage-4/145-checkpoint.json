@@ -1,0 +1,30 @@
+{
+  "base": "39acbc3f8ab892b90feaeb5d3e14c0cb88fbd608",
+  "tree": "0b547213ae2a4f4b3dd040bebb7845f8d0e7be96",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/145-checkpoint.index",
+  "files": {
+    "internal/memory/candidate_review_scopes.go": "70853df581ca4f30ac25fb423180e8f1f4f2f70c6cc37e5421fd3a775de308fc",
+    "internal/eviedb/candidate_review_scopes.go": "1aa8fbe36c9f8245e7da0d33886c57ce362526615ccf5316071988fba622cde6",
+    "internal/web/candidate_review.go": "8cb692d9bd9f3b4d924ec3bf553c7b0c61ce65b3dfa4cba60b2544b00b9b3616",
+    "internal/web/candidate_review_test.go": "a0b0e4fe642975033aa5b4a9f794d8ae74cb5ff7ef2abdb3abc2425a04f92112",
+    "internal/web/candidate_review_navigation_test.go": "bc5b2ebe69a2123693882411c6709575323d820e82f1cdc52ddf9108207b2d49",
+    "internal/web/ui/src/api/candidateReview.ts": "2eb4b8d4647b6ca0bb0b96d79f64636d99c9dcffc3d67227ab6988caa1633069",
+    "cmd/evie/docs/research/memory-stage-4-web-review.md": "bc77d90df1f82fec585510780362b5d29857eb2f344253964dd19d0659e3019a",
+    "internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx": "68c3ac16fe2bb5764283da9393394e74ed82bef2f5bc120c43895f77438a2f99",
+    "internal/web/ui/src/candidateInbox/CandidateInbox.tsx": "1a9b67e8bfa95871eba57d87d0725ee4ff35ab74935f74ed05fc9748d77cd38b",
+    "internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx": "a50a3a7c523959e240420aafaf9530048bee5fc00438ead72d8374f49754546e",
+    "internal/web/ui/src/candidateInbox/controller.test.ts": "802496e0ede5c523a93321a56c0648fe89cf44d4d25b3a64754b36494cdb85d6",
+    "internal/web/ui/src/candidateInbox/controller.ts": "0738e00b07a04e617c8bcc6d975ea639909ca8a64ef57fe3330db66001ea2db0",
+    "internal/web/ui/src/candidateInbox/fixtures.test-support.ts": "0a0ac57ef4277312f3dc68938f458dadee790cf1ed533763048a054f86b6cb9e",
+    "internal/web/ui/src/candidateInbox/pendingDecision.ts": "9f5fb93d7d1532257b1dba4ce42bd6ef6ea8b65f7db294a27b01032d8e329518",
+    "internal/web/candidate_review_recovery_test.go": "a7847e6a2783efef391482c216993d87207b1369567dd2298ff4e96677b6d9d7",
+    "cmd/evie/main.go": "1547f36a95c3c713194f5f5a397aa27ecb86fecaaaad3682c68363fc6f7f1e7b",
+    "internal/eviedb/db.go": "ac12180709deec2a10878f09e5a1a047804b5e0a4587fb175d2e08df7e70d1cf",
+    "internal/web/serve.go": "862f4b8460285c6636531434639437fd9980c803fd46474a70d25904b51a841e",
+    "internal/web/ui/src/memory/Memory.tsx": "c7789431b8ecd5eda28687e4e04b2f31d7341f5faeff3306dc903926c3380bb8"
+  },
+  "note": "145 frozen owner and root hook files on committed141; excludes user changes and139/142.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-145-checkpoint-jdvznndw",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-145-isolated.log",
+  "verification_exit_code": 0
+}

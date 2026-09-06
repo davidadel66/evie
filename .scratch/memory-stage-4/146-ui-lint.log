@@ -1,0 +1,5 @@
+
+> ui@0.0.0 lint
+> oxlint
+
+src/ui/Icon.tsx:16:19: warning react(only-export-components): Fast refresh only works when a file only exports components. Move your component(s) to a separate file.

@@ -1,0 +1,1802 @@
+diff --git a/cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json b/cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json
+new file mode 100644
+index 0000000..2bcdcf6
+--- /dev/null
++++ b/cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json
+@@ -0,0 +1,65 @@
++{
++  "version": "memory-stage4-pilot-preparation-v1",
++  "ticket": 150,
++  "pilot_status": "incomplete",
++  "selected_adequate_model": null,
++  "ongoing_compilation_enabled": false,
++  "approved_source_gold": {
++    "windows": 24,
++    "status": "approved_by_David",
++    "approval_timestamp": "2026-09-05T02:45:30.356184+00:00"
++  },
++  "model_output_adjudication": {
++    "status": "pending",
++    "source_gold_approval_is_output_approval": false
++  },
++  "already_exposed_development_windows": [
++    "N01-a", "N01-b", "N02-a", "N02-b", "N03-b", "N04-b",
++    "N05-b", "N06-a", "N08-b", "N09-a"
++  ],
++  "actual_owner_review": {
++    "status": "pending_actual_David_sessions",
++    "observations": [],
++    "active_seconds": null,
++    "candidates_per_useful_accepted_change": null,
++    "required_actions": ["accept", "edit", "reject", "defer"],
++    "required_provenance": [
++      "pinned configuration hash",
++      "candidate interpretation and review revisions",
++      "scope and producing generation",
++      "explicit active-time intervals",
++      "actual reason and owner usefulness judgment",
++      "verified Kernel decision or edit receipt"
++    ]
++  },
++  "release_gates": {
++    "status": "not_frozen",
++    "reason": "A selected adequate model, integrated model measurements, and actual owner-review observations are pending.",
++    "zero_tolerance": [
++      "scope or implicit-promotion violation",
++      "source or original-authority binding violation",
++      "accepted-state mutation without exact review",
++      "partial atomic effects or duplicate accepted operation",
++      "model or external effects during replay",
++      "concurrent local extraction beyond shared capacity",
++      "foreground awaiting extraction"
++    ],
++    "numerical_gates_to_freeze_from_pilot": [
++      "supported useful precision on raw and retained proposals",
++      "required-memory recall",
++      "identity, temporal, attribution and unwanted-suggestion error limits",
++      "paired foreground terminal-commit and finalization overhead",
++      "queue and candidate freshness",
++      "Evie and model-server resource budgets",
++      "source arrival versus compilation capacity",
++      "candidate arrival versus owner-review capacity",
++      "active review seconds and candidates per useful accepted change"
++    ]
++  },
++  "final_holdout": {
++    "created": false,
++    "exposed": false,
++    "run": false,
++    "custody_protocol": "../../memory-stage-4-spike/v1/holdout-custody.md"
++  }
++}
+diff --git a/scripts/memory-stage4-pilot/README.md b/scripts/memory-stage4-pilot/README.md
+new file mode 100644
+index 0000000..4cd1d1b
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/README.md
+@@ -0,0 +1,150 @@
++# Stage 4 integrated pilot measurements
++
++This is experimental tooling for [ticket #150](https://github.com/davidadel66/evie/issues/150).
++It measures the actual Kernel, SQLite, compiler host, Agent.Send and owner-review
++paths against disposable synthetic load. It does not select a learned model,
++grade meaning, or activate compilation in the owner's database.
++
++Run the matrix from a frozen checkout after the complete Stage 4 conformance
++runner passes:
++
++```sh
++python3 scripts/memory-stage4-pilot/measure.py \
++  --conformance /absolute/path/to/conformance/report.json \
++  --output /absolute/path/to/new-pilot-results \
++  --repetitions 3
++```
++
++The output directory must not exist. The wrapper builds and hashes the Go
++executable, checks both the complete conformance Go path set and its hashes,
++freezes a plan before work, and records a source inventory again afterwards.
++Each report identifies the complete scripted generation, commands, workload,
++environment and repetitions. Development corpus, gold and custody hashes bind
++the experiment to the spike protocol without passing any corpus text to the
++scripted extractor. Its artificial load is a separate infrastructure fixture.
++`--only baseline,retained-events-1000000` selects declared variants for diagnosis;
++it does not make an incomplete matrix a completed pilot.
++
++Missing, interrupted, malformed or failed trial receipts are preserved as failed
++observations. An absent file has a null digest; existing raw bytes and resource
++samples remain available. These failures still produce a versioned matrix report
++and cannot participate in paired performance deltas.
++
++Each variant runs compilation disabled, explicit new-evidence activation, and
++new evidence competing with explicitly selected history. Order rotates across
++repetitions. All modes contain the same declared source history and graph.
++The baseline uses 10,000 archived events, 256-byte foreground inputs, one accepted
++Claim, one exact session destination, a 25ms scripted inference delay, one worker
++process, sixteen foreground turns and sixteen potential historical roots. Each
++variant changes only one factor: 100,000 or 1,000,000 archived events; 4,096 or
++12,000 input bytes; 100 or 1,000 accepted Claims; sixteen exact session
++destinations; 0 or 250ms service delay; or two cooperating worker processes.
++
++Archived events are loaded in bounded transactions outside measured intervals;
++they retain the real schema, indexes and triggers. Foreground conversations are
++separate, small sessions. Graph fixtures use public approved Semantic Operations.
++This experiment measures retained database size rather than feeding a million
++events to the foreground context composer. Session destinations vary scope
++distribution; Workspace and project authorization remain deterministic
++conformance cases, not additional measured throughput claims.
++
++Workers use the production `RunCompilerHost` with its independent reconciliation
++and extraction loops. The scripted service records each actual dispatch interval;
++overlapping extraction intervals fail the run. The historical fixture contains
++one failed older root, one zero-candidate success and later independent work.
++Failed-gap state remains visible. The workload stops after finite catch-up,
++not after assuming a contiguous frontier means success. Cancellation, crash,
++stale delivery and retry recovery remain in the hashed #149 conformance report.
++Measured attempts and actual outcomes remain available in each job's diagnostics.
++
++Every measured foreground turn calls real `Agent.Send` with a constant local
++conversational response. The terminal commit observation comes from the real
++History adapter. Response finalization is marked only after the host writes its
++committed response to `os.DevNull`; it is an actual host boundary with no browser,
++SSE or network transport. The host uses the same fixed 50ms inter-turn delay in
++all modes. These samples isolate infrastructure overhead and do not represent
++conversational-provider latency. Browser and HTTP parity are separately checked
++by deterministic conformance.
++
++JSON retains queue, inference, validation, database completion, publication,
++freshness, foreground commit/finalization and scripted review-operation samples.
++Missing observations remain null. Counts distinguish selected and completed
++events, no-candidate coverage, failed work, candidate backlog and attempts.
++Database, WAL and shared-memory sizes are sampled before and after each run.
++The wrapper samples the complete pilot process tree's RSS and CPU every 100ms,
++including setup. These are sampled observations, not exact process peaks.
++No model server exists in this mode, so its resource field is null.
++
++Persisted foreground-event arrival rate and observed completion rate use the
++same units. The runner counts the actual committed event interval and retains
++per-event-type counts; context snapshots count toward coverage even though they
++cannot support a memory. It does not infer an event count from the turn count.
++Arrival and completion rates are reported separately.
++Candidate-arrival rate and active human review capacity are also separate.
++The latter remains null until actual owner sessions. Finite workload throughput
++does not certify sustained capacity, and a candidate's unresolved age does not
++measure human time. Scripted acceptance/rejection measures database resolution
++cost only. It cannot supply useful precision, required recall, review capacity,
++or an owner quality judgment.
++
++## Real owner session preparation
++
++Use the existing Stage 4 review surface for actual decisions. Start the explicit
++timer in another terminal with the hash of the pinned integrated pilot
++configuration. This command does not modify memory or make review decisions:
++
++```sh
++go run ./scripts/memory-stage4-pilot review-session \
++  --operator David \
++  --configuration-sha256 EXACT_64_HEX_CONFIGURATION_HASH \
++  --output /absolute/path/to/new-private-owner-observations.jsonl
++```
++
++Enter one JSON command per line. The following values are placeholders to replace
++with the exact inspected candidate and generation, not real observations:
++
++```json
++{"command":"start","candidate":{"candidate_id":"EXACT_CANDIDATE","interpretation_revision":1,"review_revision":0},"scope_key":"EXACT_SCOPE","generation_id":"EXACT_GENERATION"}
++{"command":"pause"}
++{"command":"resume"}
++{"command":"finish","action":"defer","reason":"Need to resolve which Maya this refers to.","useful":null}
++```
++
++Use `accept`, `edit`, `reject`, or `defer` and the actual reason. State-changing
++actions require `review_receipt`, pointing to the actual Evie decision/edit
++receipt. Pause while distracted; resume when actively reviewing. The timer sums
++only explicit active intervals, using Go's monotonic clock. It writes completed
++observations immediately to an exclusive mode-0600 file. An unfinished candidate
++is not silently converted into an observation on EOF or cancellation.
++Ctrl-C and SIGTERM terminate the interactive recorder normally, including while
++it waits for input. Previously synced observations remain saved; active unfinished
++timing is not written.
++
++Operator identity, reasons, useful judgments and external receipt references
++are self-attestations. `receipt_verified:false` remains in the observation until
++a separate evaluation process verifies it against the exact Kernel record.
++Do not count an agent's synthetic timer test as David's session. Do not commit
++private source material or personal reasons without the owner's direction.
++
++Use only development or pilot narratives under the spike's pinned scoring
++contract. Preserve raw and retained proposal panels separately. The already
++exposed development window IDs are recorded in the [pilot preparation
++record](../../cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json). The final holdout remains uncreated and unexposed. No numerical release
++gate or chosen configuration is supplied by this infrastructure command.
++
++## Verification
++
++```sh
++go test -count=1 ./scripts/memory-stage4-pilot
++go test -race -count=1 ./scripts/memory-stage4-pilot
++go vet ./scripts/memory-stage4-pilot
++python3 scripts/memory-stage4-pilot/measure_test.py
++./scripts/verify-change.sh
++```
++
++The smoke test uses real temporary SQLite and two real worker processes. It
++checks disabled isolation, measured host boundaries, failed/empty/later work,
++review resolution and cleanup. Timer tests prove pauses are excluded and missing
++receipts/incomplete observations are refused. Python tests prove factor
++independence, absent-metric semantics and refusal of incomplete conformance or
++changed source. Workload measurements remain separate from these small checks.
+diff --git a/scripts/memory-stage4-pilot/fixture.go b/scripts/memory-stage4-pilot/fixture.go
+new file mode 100644
+index 0000000..00786d7
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/fixture.go
+@@ -0,0 +1,205 @@
++package main
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"os"
++	"strings"
++	"time"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++)
++
++type scriptedExtractor struct {
++	Subject, Predicate memory.SemanticID
++	DelayMS            int
++	AuditPath          string
++}
++
++type dispatchObservation struct {
++	RequestID  string `json:"request_id"`
++	PID        int    `json:"pid"`
++	StartedNS  int64  `json:"started_unix_nanos"`
++	FinishedNS int64  `json:"finished_unix_nanos"`
++}
++
++func (scriptedExtractor) ServerIdentity() string { return "scripted:stage4-infrastructure-pilot-v1" }
++func (scriptedExtractor) VerifyCompilerConfiguration(context.Context, memory.CompilerGeneration) error {
++	return nil
++}
++func (x scriptedExtractor) Extract(ctx context.Context, _ memory.CompilerGeneration, r memory.CompilerRequest) (out eviedb.CompilerExtraction, outErr error) {
++	observation := dispatchObservation{RequestID: r.ID, PID: os.Getpid(), StartedNS: time.Now().UnixNano()}
++	defer func() {
++		observation.FinishedNS = time.Now().UnixNano()
++		file, err := os.OpenFile(x.AuditPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
++		if err != nil {
++			outErr = errors.Join(outErr, err)
++			return
++		}
++		b, err := json.Marshal(observation)
++		if err == nil {
++			_, err = file.Write(append(b, '\n'))
++		}
++		outErr = errors.Join(outErr, err, file.Close())
++	}()
++	timer := time.NewTimer(time.Duration(x.DelayMS) * time.Millisecond)
++	defer timer.Stop()
++	select {
++	case <-ctx.Done():
++		return eviedb.CompilerExtraction{ReleaseEvidence: "completed"}, ctx.Err()
++	case <-timer.C:
++	}
++	var support, interpretation []memory.EvidenceLocator
++	var content string
++	for _, source := range r.Window.Sources {
++		if source.Usage == "new_support" {
++			support = append(support, source.Locator)
++			content += source.Evidence
++		}
++		if source.Usage == "context" {
++			interpretation = append(interpretation, source.Locator)
++		}
++	}
++	if strings.Contains(content, "PILOT_FAILED_GAP") {
++		return eviedb.CompilerExtraction{ReleaseEvidence: "completed"}, eviedb.ErrCompilerTerminalOutput
++	}
++	candidates := []memory.ExtractorCandidate{}
++	if len(support) > 0 && !strings.Contains(content, "PILOT_ZERO_CANDIDATES") {
++		candidates = append(candidates, memory.ExtractorCandidate{Proposition: memory.ClaimProposition{SubjectEntityID: x.Subject, PredicateID: x.Predicate, Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: "fixture " + memory.CompilerHash([]byte(content))[:16]}}, Polarity: memory.PolarityAffirmed}, Support: support, Context: interpretation})
++	}
++	b, err := json.Marshal(memory.CompilerResponse{RequestID: r.ID, Candidates: candidates})
++	return eviedb.CompilerExtraction{Raw: b, ReleaseEvidence: "completed"}, err
++}
++
++func generation() memory.CompilerGeneration {
++	g := memory.CompilerGeneration{Version: "compiler-generation-v1", ModelArtifact: "scripted:stage4-infrastructure-pilot-v1", ModelSHA256: strings.Repeat("1", 64), Quantization: "scripted-not-a-model", RuntimeVersion: "scripted-v1", ProtocolVersion: "ollama-generate-v1", TokenizerSHA256: strings.Repeat("2", 64), Template: "{{.System}}\n{{.Prompt}}", Prompt: "Infrastructure fixture only; no quality conclusions.", Schema: json.RawMessage(`{"type":"object"}`), TokenBoundProofSHA256: strings.Repeat("3", 64), TokensPerByte: 1, TemplateTokenOverhead: 8, Decoding: memory.CompilerDecoding{ContextTokens: 131072, OutputTokens: 768, Seed: 17}}
++	g.ModelManifest = []byte(`{"layers":[{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:` + g.ModelSHA256 + `"}]}`)
++	g.ModelManifestSHA256 = memory.CompilerHash(g.ModelManifest)
++	g.TemplateSHA256 = memory.CompilerHash([]byte(g.Template))
++	g.EvidencePolicy = memory.CompilerPolicyVersion
++	g.SecretPolicy = memory.CompilerPolicyVersion
++	g.ClosurePolicy = memory.CompilerPolicyVersion
++	g.WindowPolicy = memory.CompilerPolicyVersion
++	g.PredicatePolicy = memory.CompilerPolicyVersion
++	g.EntityPolicy = memory.CompilerPolicyVersion
++	g.ValidationPolicy = memory.CompilerPolicyVersion
++	g.EquivalencePolicy = memory.CompilerEquivalencePolicyV2
++	g.EffectPolicy = memory.CompilerPolicyVersion
++	return g
++}
++
++// Bulk insertion is deliberately confined to synthetic archived fixture data,
++// outside all measured intervals. No compiler result or accepted graph record is
++// inserted here. The experiment does not measure loading a million-event active
++// conversational context: the foreground session is separate and small.
++func seedRetained(ctx context.Context, db *sql.DB, store *eviedb.Store, count int) error {
++	session, err := store.CreateGlobalSession(ctx)
++	if err != nil {
++		return err
++	}
++	for first := 0; first < count; first += 1000 {
++		last := min(first+1000, count)
++		tx, err := db.BeginTx(ctx, nil)
++		if err != nil {
++			return err
++		}
++		stmt, err := tx.PrepareContext(ctx, `INSERT INTO events(id,session_id,sequence,event_type,role,content,payload_json,recorded_at,format_version) VALUES(?,?,?,'user_message','user','Synthetic archived filler.','{}','2026-01-01T00:00:00Z',1)`)
++		if err != nil {
++			tx.Rollback()
++			return err
++		}
++		for n := first; n < last; n++ {
++			if _, err = stmt.ExecContext(ctx, fmt.Sprintf("pilot-archive-%08d", n), session.ID, n+1); err != nil {
++				stmt.Close()
++				tx.Rollback()
++				return err
++			}
++		}
++		stmt.Close()
++		if err = tx.Commit(); err != nil {
++			return err
++		}
++	}
++	_, err = db.ExecContext(ctx, `UPDATE sessions SET status='closed' WHERE id=?`, session.ID)
++	return err
++}
++
++func appendTurn(ctx context.Context, store *eviedb.Store, session memory.Session, text string) (memory.Event, memory.Event, error) {
++	lease, err := store.AcquireTurnLease(ctx, session.ID, "pilot-fixture", time.Minute)
++	if err != nil {
++		return memory.Event{}, memory.Event{}, err
++	}
++	defer store.ReleaseTurnLease(context.Background(), session.ID, lease.HolderID, lease.FencingToken)
++	first, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: text})
++	if err != nil {
++		return first, memory.Event{}, err
++	}
++	last, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{ParentID: first.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "Acknowledged.", Payload: json.RawMessage(`{"tool_calls":[]}`)})
++	return first, last, err
++}
++
++func seedGraph(ctx context.Context, store *eviedb.Store, count int) (scriptedExtractor, error) {
++	session, err := store.CreateGlobalSession(ctx)
++	if err != nil {
++		return scriptedExtractor{}, err
++	}
++	lease, err := store.AcquireTurnLease(ctx, session.ID, "pilot-graph", time.Minute)
++	if err != nil {
++		return scriptedExtractor{}, err
++	}
++	defer store.ReleaseTurnLease(context.Background(), session.ID, lease.HolderID, lease.FencingToken)
++	var x scriptedExtractor
++	for n := 0; n < count; n++ {
++		e, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: fmt.Sprintf("I prefer fixture value %d.", n)})
++		if err != nil {
++			return x, err
++		}
++		p, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: fmt.Sprintf("idem:v1:90000000-0000-4000-8000-%012d", n+150000), SourceEventID: e.ID, Predicate: "pilot_preference", PredicateLabel: "pilot preference", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: fmt.Sprintf("fixture value %d", n)}})
++		if err != nil {
++			return x, err
++		}
++		if _, err = store.ApplyRememberLiteral(ctx, lease, p); err != nil {
++			return x, err
++		}
++		x.Subject = p.Subject.ID
++		x.Predicate = p.Predicate.ID
++	}
++	return x, nil
++}
++
++type foregroundClient struct{}
++
++func (foregroundClient) ChatStream(_ context.Context, _ openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
++	return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", Content: "Acknowledged."}}}}, nil
++}
++
++type foregroundEvents struct{ output strings.Builder }
++
++func (e *foregroundEvents) Delta(s string)                              { e.output.WriteString(s) }
++func (*foregroundEvents) Reasoning(string)                              {}
++func (*foregroundEvents) ReasoningDone()                                {}
++func (e *foregroundEvents) AssistantDone(s string)                      { e.output.WriteString(s) }
++func (*foregroundEvents) ToolCall(string, string, string)               {}
++func (*foregroundEvents) ToolResult(string, string, bool)               {}
++func (*foregroundEvents) ResponseDiscarded(agent.DiscardReason, string) {}
++
++func fixtureInput(n, bytes int) string {
++	prefix := fmt.Sprintf("I prefer fixture choice %03d. ", n)
++	return prefix + strings.Repeat("x", bytes-len(prefix))
++}
++func checkedID(g memory.CompilerGeneration) (string, error) {
++	id, _, err := memory.CompilerGenerationIdentity(g)
++	if err != nil {
++		return "", err
++	}
++	if id == "" {
++		return "", errors.New("missing generation identity")
++	}
++	return id, nil
++}
+diff --git a/scripts/memory-stage4-pilot/main.go b/scripts/memory-stage4-pilot/main.go
+new file mode 100644
+index 0000000..6d4ef65
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/main.go
+@@ -0,0 +1,109 @@
++// memory-stage4-pilot measures disposable infrastructure fixtures. It does not
++// select a learned extractor, adjudicate quality, or enable production memory.
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"flag"
++	"fmt"
++	"os"
++	"os/signal"
++	"syscall"
++	"time"
++)
++
++type workload struct {
++	Mode           string `json:"mode"`
++	RetainedEvents int    `json:"retained_events"`
++	SourceBytes    int    `json:"source_bytes"`
++	GraphClaims    int    `json:"graph_claims"`
++	Scopes         int    `json:"scopes"`
++	DelayMS        int    `json:"scripted_service_delay_ms"`
++	Processes      int    `json:"worker_processes"`
++	Turns          int    `json:"foreground_turns"`
++	BackfillRoots  int    `json:"backfill_roots"`
++}
++
++func (w workload) validate() error {
++	if w.Mode != "disabled" && w.Mode != "new" && w.Mode != "history" {
++		return errors.New("mode must be disabled, new, or history")
++	}
++	if w.RetainedEvents < 0 || w.RetainedEvents > 1000000 || w.SourceBytes < 64 || w.SourceBytes > 12000 || w.GraphClaims < 1 || w.GraphClaims > 1000 || w.Scopes < 1 || w.Scopes > 16 || w.DelayMS < 0 || w.DelayMS > 1000 || w.Processes < 1 || w.Processes > 2 || w.Turns < 1 || w.Turns > 32 || w.BackfillRoots < 0 || w.BackfillRoots > 64 {
++		return errors.New("workload exceeds the declared disposable experiment bounds")
++	}
++	return nil
++}
++
++func main() {
++	if err := entry(os.Args[1:]); err != nil {
++		fmt.Fprintln(os.Stderr, err)
++		os.Exit(1)
++	}
++}
++
++func entry(args []string) error {
++	// The interactive recorder uses normal OS signal termination. Completed
++	// records are already synced; unfinished active timing stays only in memory.
++	// Installing a context handler here would suppress termination while Scan
++	// waits for terminal input, which does not observe a context.
++	if len(args) > 0 && args[0] == "review-session" {
++		return reviewCommand(args[1:], os.Stdin, os.Stdout)
++	}
++	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
++	defer stop()
++	return command(ctx, args)
++}
++
++func command(ctx context.Context, args []string) error {
++	if len(args) == 0 {
++		return errors.New("usage: memory-stage4-pilot run|worker|review-session")
++	}
++	if args[0] == "worker" {
++		return workerCommand(ctx, args[1:])
++	}
++	if args[0] != "run" {
++		return errors.New("unknown pilot command")
++	}
++	f := flag.NewFlagSet("run", flag.ContinueOnError)
++	var w workload
++	f.StringVar(&w.Mode, "mode", "disabled", "disabled, new, or history")
++	f.IntVar(&w.RetainedEvents, "retained-events", 10000, "archived fixture events")
++	f.IntVar(&w.SourceBytes, "source-bytes", 256, "exact UTF-8 bytes per foreground input")
++	f.IntVar(&w.GraphClaims, "graph-claims", 1, "accepted fixture Claims")
++	f.IntVar(&w.Scopes, "scopes", 1, "distinct exact session destinations")
++	f.IntVar(&w.DelayMS, "delay-ms", 25, "scripted inference service delay")
++	f.IntVar(&w.Processes, "processes", 1, "cooperating worker processes")
++	f.IntVar(&w.Turns, "turns", 16, "fixed foreground turns")
++	f.IntVar(&w.BackfillRoots, "backfill-roots", 16, "historical roots competing with new work")
++	output := f.String("output", "", "new report file; must not already exist")
++	if err := f.Parse(args[1:]); err != nil {
++		return err
++	}
++	if f.NArg() != 0 || *output == "" {
++		return errors.New("run requires --output and no positional arguments")
++	}
++	if err := w.validate(); err != nil {
++		return err
++	}
++	file, err := os.OpenFile(*output, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
++	if err != nil {
++		return err
++	}
++	defer file.Close()
++	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
++	defer cancel()
++	r, runErr := runWorkload(ctx, w)
++	if runErr != nil {
++		r.Error = runErr.Error()
++	}
++	err = json.NewEncoder(file).Encode(r)
++	if err != nil {
++		return err
++	}
++	if err = file.Sync(); err != nil {
++		return err
++	}
++	return runErr
++}
+diff --git a/scripts/memory-stage4-pilot/main_test.go b/scripts/memory-stage4-pilot/main_test.go
+new file mode 100644
+index 0000000..054867d
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/main_test.go
+@@ -0,0 +1,214 @@
++package main
++
++import (
++	"bufio"
++	"context"
++	"encoding/json"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"syscall"
++	"testing"
++	"time"
++)
++
++func TestMain(m *testing.M) {
++	if len(os.Args) > 1 && (os.Args[1] == "worker" || os.Args[1] == "review-session") {
++		err := entry(os.Args[1:])
++		if err != nil {
++			os.Stderr.WriteString(err.Error() + "\n")
++			os.Exit(1)
++		}
++		os.Exit(0)
++	}
++	os.Exit(m.Run())
++}
++
++func TestReviewSessionSignalsPreserveOnlyCompletedObservations(t *testing.T) {
++	for _, signal := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
++		t.Run(signal.String(), func(t *testing.T) {
++			path := filepath.Join(t.TempDir(), "observations.jsonl")
++			executable, err := os.Executable()
++			if err != nil {
++				t.Fatal(err)
++			}
++			cmd := exec.Command(executable, "review-session", "--operator", "fixture", "--configuration-sha256", strings.Repeat("1", 64), "--output", path)
++			input, err := cmd.StdinPipe()
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer input.Close()
++			output, err := cmd.StdoutPipe()
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err = cmd.Start(); err != nil {
++				t.Fatal(err)
++			}
++			defer cmd.Process.Kill()
++			lines := make(chan string, 8)
++			go func() {
++				scanner := bufio.NewScanner(output)
++				for scanner.Scan() {
++					lines <- scanner.Text()
++				}
++				close(lines)
++			}()
++			readLine := func() string {
++				t.Helper()
++				select {
++				case line := <-lines:
++					return line
++				case <-time.After(5 * time.Second):
++					t.Fatal("recorder did not respond")
++					return ""
++				}
++			}
++			if !strings.Contains(readLine(), "Timing is explicit") {
++				t.Fatal("recorder did not start")
++			}
++			start := reviewInput{Command: "start", Scope: "global", GenerationID: "generation"}
++			start.Candidate.ID = "completed-candidate"
++			start.Candidate.InterpretationRevision = 1
++			encoder := json.NewEncoder(input)
++			if err = encoder.Encode(start); err != nil {
++				t.Fatal(err)
++			}
++			if err = encoder.Encode(reviewInput{Command: "finish", Action: "defer", Reason: "fixture completed observation"}); err != nil {
++				t.Fatal(err)
++			}
++			if !strings.Contains(readLine(), "Observation saved") {
++				t.Fatal("completed observation not acknowledged")
++			}
++			start.Candidate.ID = "incomplete-candidate"
++			if err = encoder.Encode(start); err != nil {
++				t.Fatal(err)
++			}
++			// A pause acknowledgement confirms the second candidate was parsed
++			// and the recorder is waiting again with the input pipe still open.
++			if err = encoder.Encode(reviewInput{Command: "pause"}); err != nil {
++				t.Fatal(err)
++			}
++			if !strings.Contains(readLine(), "Timing paused") {
++				t.Fatal("active candidate was not read")
++			}
++			if err = encoder.Encode(reviewInput{Command: "resume"}); err != nil {
++				t.Fatal(err)
++			}
++			if !strings.Contains(readLine(), "Timing resumed") {
++				t.Fatal("active timing was not resumed")
++			}
++			if err = cmd.Process.Signal(signal); err != nil {
++				t.Fatal(err)
++			}
++			wait := make(chan error, 1)
++			go func() { wait <- cmd.Wait() }()
++			select {
++			case err = <-wait:
++				if err == nil {
++					t.Fatal("signal unexpectedly produced a successful session")
++				}
++			case <-time.After(5 * time.Second):
++				t.Fatal("signal left recorder blocked on input")
++			}
++			data, err := os.ReadFile(path)
++			if err != nil {
++				t.Fatal(err)
++			}
++			var observation reviewObservation
++			if err = json.Unmarshal(data, &observation); err != nil {
++				t.Fatalf("saved data was lost or another record appeared: %v", err)
++			}
++			if observation.Candidate.ID != "completed-candidate" || observation.Action != "defer" {
++				t.Fatalf("wrong saved observation: %+v", observation)
++			}
++		})
++	}
++}
++
++func TestPilotRealKernelSmoke(t *testing.T) {
++	for _, mode := range []string{"disabled", "new", "history"} {
++		t.Run(mode, func(t *testing.T) {
++			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
++			defer cancel()
++			r, err := runWorkload(ctx, workload{Mode: mode, RetainedEvents: 8, SourceBytes: 64, GraphClaims: 1, Scopes: 2, DelayMS: 10, Processes: 2, Turns: 3, BackfillRoots: 3})
++			if err != nil {
++				t.Fatalf("pilot: %v, report: %+v", err, r)
++			}
++			if !r.Cleanup || r.ReleaseEligible || r.Kind != "scripted_infrastructure_only" || len(r.Foreground) != 3 {
++				t.Fatalf("incorrect observation boundaries: %+v", r)
++			}
++			if r.Counts["foreground_persisted_events"] != 9 || r.Counts["foreground_event_context_snapshot"] != 3 || r.Counts["foreground_event_user_message"] != 3 || r.Counts["foreground_event_assistant_message"] != 3 {
++				t.Fatalf("persisted foreground interval omitted an event class: %+v", r.Counts)
++			}
++			if mode == "disabled" {
++				if len(r.Jobs) != 0 || len(r.Candidates) != 0 || len(r.WorkerPIDs) != 0 {
++					t.Fatal("disabled compilation performed work")
++				}
++				return
++			}
++			if len(r.WorkerPIDs) != 2 || len(r.Jobs) < 3 || len(r.Candidates) < 3 || len(r.ResolutionNanos) == 0 {
++				t.Fatalf("missing actual Kernel work: %+v", r)
++			}
++			if mode == "new" && r.Counts["completed_events"] != r.Counts["foreground_persisted_events"] {
++				t.Fatalf("arrival/completion units differ: %+v", r.Counts)
++			}
++			if mode == "history" && (r.Counts["jobs_failed"] != 1 || r.Counts["jobs_completed_empty"] != 1 || r.Counts["jobs_completed_candidates"] != 4) {
++				t.Fatalf("failed gap/zero-candidate/later progress: %+v", r.Counts)
++			}
++		})
++	}
++}
++
++func TestReviewActiveTimeAndIncompleteObservation(t *testing.T) {
++	clock := &reviewClock{}
++	start := time.Now()
++	input := reviewInput{Command: "start", Scope: "global", GenerationID: "generation"}
++	input.Candidate.ID = "candidate"
++	input.Candidate.InterpretationRevision = 1
++	if _, err := clock.apply(input, start); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := clock.apply(reviewInput{Command: "pause"}, start.Add(3*time.Second)); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := clock.apply(reviewInput{Command: "resume"}, start.Add(time.Hour)); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := clock.apply(reviewInput{Command: "finish", Action: "accept", Reason: "useful"}, start.Add(time.Hour+2*time.Second)); err == nil {
++		t.Fatal("missing receipt accepted")
++	}
++	r, err := clock.apply(reviewInput{Command: "finish", Action: "defer", Reason: "needs another source"}, start.Add(time.Hour+2*time.Second))
++	if err != nil || r.ActiveNanos != int64(5*time.Second) || r.ReceiptVerified || r.Useful != nil {
++		t.Fatalf("invented observation: %+v %v", r, err)
++	}
++	path := filepath.Join(t.TempDir(), "review.jsonl")
++	bytes, _ := json.Marshal(input)
++	err = reviewCommand([]string{"--operator", "fixture", "--configuration-sha256", strings.Repeat("1", 64), "--output", path}, strings.NewReader(string(bytes)+"\n"), &strings.Builder{})
++	if err == nil {
++		t.Fatal("incomplete session silently passed")
++	}
++	saved, err := os.ReadFile(path)
++	if err != nil || len(saved) != 0 {
++		t.Fatal("incomplete human observation fabricated")
++	}
++}
++
++func TestPilotRejectsOutOfBoundsAndExistingOutput(t *testing.T) {
++	w := workload{Mode: "new", RetainedEvents: 1000001, SourceBytes: 64, GraphClaims: 1, Scopes: 1, Processes: 1, Turns: 1}
++	if w.validate() == nil {
++		t.Fatal("oversized retained fixture admitted")
++	}
++	path := filepath.Join(t.TempDir(), "existing.json")
++	if err := os.WriteFile(path, []byte("preserve"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	if err := command(context.Background(), []string{"run", "--output", path}); err == nil {
++		t.Fatal("existing report overwritten")
++	}
++	b, err := os.ReadFile(path)
++	if err != nil || string(b) != "preserve" {
++		t.Fatal("existing report changed")
++	}
++}
+diff --git a/scripts/memory-stage4-pilot/measure.py b/scripts/memory-stage4-pilot/measure.py
+new file mode 100644
+index 0000000..c2d213d
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/measure.py
+@@ -0,0 +1,275 @@
++#!/usr/bin/env python3
++"""Reproducible, sequential infrastructure experiments; no quality inference."""
++
++import argparse
++import hashlib
++import json
++import math
++import os
++from pathlib import Path
++import platform
++import shutil
++import signal
++import subprocess
++import sys
++import time
++
++
++def digest(path):
++    h = hashlib.sha256()
++    with Path(path).open("rb") as stream:
++        for block in iter(lambda: stream.read(1024 * 1024), b""):
++            h.update(block)
++    return h.hexdigest()
++
++
++def write(path, value):
++    with Path(path).open("x") as stream:
++        json.dump(value, stream, indent=2, sort_keys=True)
++        stream.write("\n")
++
++
++def distribution(values):
++    values = sorted(values)
++    if not values:
++        return {"n": 0, "p50": None, "p95": None, "max": None}
++    return {"n": len(values), "p50": values[math.ceil(len(values) * .5)-1],
++            "p95": values[math.ceil(len(values) * .95)-1], "max": values[-1]}
++
++
++def variants():
++    base = {"retained-events": 10000, "source-bytes": 256, "graph-claims": 1,
++            "scopes": 1, "delay-ms": 25, "processes": 1, "turns": 16, "backfill-roots": 16}
++    out = [("baseline", base)]
++    for factor, values in [("retained-events", [100000, 1000000]),
++                           ("source-bytes", [4096, 12000]),
++                           ("graph-claims", [100, 1000]), ("scopes", [16]),
++                           ("delay-ms", [0, 250]), ("processes", [2])]:
++        for value in values:
++            out.append((f"{factor}-{value}", {**base, factor: value}))
++    return out
++
++
++def process_sample(root_pid):
++    # ps contains only pid/ppid/resource counters, never environment or arguments.
++    result = subprocess.run(["ps", "-axo", "pid=,ppid=,rss=,%cpu="],
++                            text=True, capture_output=True, check=True)
++    rows = {}
++    for line in result.stdout.splitlines():
++        fields = line.split()
++        if len(fields) == 4:
++            rows[int(fields[0])] = (int(fields[1]), int(fields[2]), float(fields[3]))
++    selected = {root_pid}
++    while True:
++        added = {pid for pid, row in rows.items() if row[0] in selected}
++        if added <= selected:
++            break
++        selected |= added
++    return {"monotonic_ns": time.monotonic_ns(), "processes": [
++        {"pid": pid, "rss_kib": rows[pid][1], "cpu_percent": rows[pid][2]}
++        for pid in sorted(selected) if pid in rows]}
++
++
++def stop_process_tree(process):
++    # Popen starts a new session, so this group contains only this owned trial.
++    try:
++        os.killpg(process.pid, signal.SIGTERM)
++    except ProcessLookupError:
++        return
++    try:
++        process.wait(timeout=25)
++    except subprocess.TimeoutExpired:
++        os.killpg(process.pid, signal.SIGKILL)
++        process.wait()
++
++
++def conformance(path):
++    report = json.loads(Path(path).read_text())
++    if report.get("version") != "memory-stage-4-conformance-v1" or report.get("status") != "passed" or report.get("failures") or report.get("skipped_checks"):
++        raise ValueError("a complete passing #149 conformance receipt is required before workload experiments")
++    return {"path": str(Path(path).resolve()), "sha256": digest(path),
++            "version": report["version"], "status": report["status"], "source": report["source"]}
++
++
++def source_identity(root):
++    paths = [root / "go.mod", root / "go.sum"]
++    for directory in ["cmd", "internal", "scripts/memory-stage4-pilot"]:
++        paths.extend(p for p in (root / directory).rglob("*")
++                     if p.is_file() and p.suffix in {".go", ".py"} and "node_modules" not in p.parts)
++    files = {str(path.relative_to(root)): digest(path) for path in sorted(set(paths))}
++    canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
++    return {"files": files, "sha256": hashlib.sha256(canonical).hexdigest()}
++
++
++def validate_baseline_source(baseline, identity):
++    expected = baseline["source"].get("files", [])
++    if not expected:
++        raise ValueError("conformance omits its source inventory")
++    def dependency(name):
++        return ((name.startswith("internal/") or name.startswith("cmd/")) and name.endswith(".go")) or name in {"go.mod", "go.sum"}
++    expected_files = {item["path"]: item["sha256"] for item in expected if dependency(item["path"])}
++    actual_files = {name: sha for name, sha in identity["files"].items() if dependency(name)}
++    if expected_files.keys() != actual_files.keys():
++        added = sorted(actual_files.keys() - expected_files.keys())
++        missing = sorted(expected_files.keys() - actual_files.keys())
++        raise ValueError(f"conformance source path set differs: added={added}, missing={missing}")
++    for name, sha in expected_files.items():
++        if actual_files[name] != sha:
++            raise ValueError(f"conformance source differs from workload source: {name}")
++
++
++def summarize(raw):
++    metrics = {}
++    for name in ["terminal_commit_nanos", "response_finalization_nanos"]:
++        metrics[name] = distribution([m[name] for m in raw["foreground"] if m.get(name) is not None])
++    for name in ["queue_wait_nanos", "inference_nanos", "validation_nanos", "database_completion_nanos"]:
++        metrics[name] = distribution([m[name] for j in raw["jobs"] for m in j["measurements"] if m.get(name) is not None])
++    for name in ["publication_nanos", "candidate_freshness_nanos"]:
++        metrics[name] = distribution([j[name] for j in raw["jobs"] if j.get(name) is not None])
++    metrics["scripted_resolution_nanos"] = distribution(raw["scripted_resolution_nanos"])
++    elapsed = raw["observed_nanos"] / 1e9
++    foreground_elapsed = raw["counts"]["foreground_elapsed_nanos"] / 1e9
++    metrics["observed_completed_events_per_second"] = raw["counts"].get("completed_events", 0) / elapsed
++    metrics["offered_foreground_events_per_second"] = raw["counts"]["foreground_persisted_events"] / foreground_elapsed
++    metrics["observed_candidate_arrivals_per_second"] = len(raw["candidates"]) / elapsed
++    # The observation window includes worker startup and finite catch-up, so
++    # every completed job belongs to its denominator. This is a workload rate,
++    # not saturated model service capacity.
++    metrics["active_human_review_candidates_per_second"] = None
++    metrics["source_arrival_capacity_viable"] = None
++    metrics["candidate_arrival_review_capacity_viable"] = None
++    metrics["oldest_unresolved_age_ms_before_scripted_review"] = None
++    # Candidate age uses the actual latest diagnostic clock, never active time.
++    published = [c["published_at_unix_ms"] for c in raw["candidates"]
++                 if c.get("published_at_unix_ms") is not None and c["review_state"] == "unresolved"]
++    if published:
++        metrics["oldest_unresolved_age_ms_before_scripted_review"] = max(0, raw["diagnostics_as_of_unix_ms"] - min(published))
++    return metrics
++
++
++def trial_observation(path, exit_code):
++    """A failed/missing receipt is evidence, not an aggregation exception."""
++    observation = {"report_sha256": None, "status": "failed"}
++    try:
++        observation["report_sha256"] = digest(path)
++        raw = json.loads(Path(path).read_text())
++        if not isinstance(raw, dict):
++            raise ValueError("trial receipt must be a JSON object")
++        if exit_code != 0:
++            raise ValueError(raw.get("error") or f"trial process exited with status {exit_code}")
++        if raw.get("error"):
++            raise ValueError(raw["error"])
++        if raw.get("version") != "memory-stage4-pilot-infrastructure-v1" or raw.get("kind") != "scripted_infrastructure_only" or raw.get("release_eligible") is not False:
++            raise ValueError("trial receipt has an invalid infrastructure identity")
++        if raw.get("disposable_database_removed") is not True:
++            raise ValueError("worker did not confirm disposable database cleanup")
++        observation["metrics"] = summarize(raw)
++        observation["status"] = "passed"
++    except (OSError, UnicodeError, ValueError, TypeError, KeyError, ZeroDivisionError) as error:
++        observation["error"] = f"incomplete trial receipt: {error}"
++    return observation
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--conformance", required=True, type=Path)
++    parser.add_argument("--output", required=True, type=Path)
++    parser.add_argument("--repetitions", type=int, default=3)
++    parser.add_argument("--only", help="comma-separated declared variant IDs")
++    args = parser.parse_args()
++    if args.repetitions < 2 or args.repetitions > 5:
++        parser.error("use 2–5 paired repetitions; one run does not quantify repetition")
++    baseline = conformance(args.conformance)
++    root = Path(__file__).resolve().parents[2]
++    identity = source_identity(root)
++    validate_baseline_source(baseline, identity)
++    args.output.mkdir(parents=True, exist_ok=False)
++    binary = args.output / "memory-stage4-pilot"
++    subprocess.run(["go", "build", "-o", str(binary.resolve()), "./scripts/memory-stage4-pilot"], cwd=root, check=True)
++    selected = variants()
++    if args.only:
++        ids = set(args.only.split(","))
++        selected = [v for v in selected if v[0] in ids]
++        if {v[0] for v in selected} != ids:
++            parser.error("unknown variant")
++    corpus = root / "cmd/evie/docs/fixtures/memory-stage-4-spike/v1"
++    metadata = {"version": "memory-stage4-pilot-matrix-v1", "kind": "scripted_infrastructure_only",
++                "release_eligible": False, "conformance": baseline, "source": identity,
++                "binary_sha256": digest(binary), "environment": {"platform": platform.platform(),
++                "machine": platform.machine(), "python": platform.python_version(), "cpu_count": os.cpu_count()},
++                "spike_contract": {name: digest(corpus / name) for name in ["development.json", "development.gold.json", "holdout-custody.md"]},
++                "repetitions": args.repetitions, "variant_ids": [v[0] for v in selected],
++                "quality": {"status": "pending_human_output_adjudication_and_selected_model", "supported_useful_precision": None,
++                            "required_memory_recall": None, "raw_proposals_graded": None, "retained_proposals_graded": None},
++                "human_review": {"status": "pending_actual_David_sessions", "active_seconds": None, "capacity": None},
++                "chosen_configuration": None, "numerical_release_gates": None, "model_server_resources": None,
++                "final_holdout": {"created": False, "exposed": False, "run": False}, "runs": [], "paired_deltas": [],
++                "limitations": ["Scripted infrastructure measurements cannot establish model quality or runtime fitness.",
++                "Modes rotate across repetitions; each run has a new database and identical declared fixtures, with fresh OS-cache state uncontrolled.",
++                "Each variant changes one factor from baseline; factors are not combined into capacity promises.",
++                "ps samples whole pilot process trees at 100ms including setup; RSS is sampled, not an exact peak. CPU percentages are ps interval estimates.",
++                "Archived rows vary retained database size, not the size of an active foreground conversation.",
++                "Source and candidate throughput are observed workload rates, not sustained compilation or human review capacity.",
++                "No quality thresholds are frozen without selected-model and actual-human pilot observations."]}
++    write(args.output / "plan.json", {k:v for k,v in metadata.items() if k not in {"runs", "paired_deltas"}})
++    failures = []
++    for variant_id, variant in selected:
++        for repetition in range(args.repetitions):
++            modes = ["disabled", "new", "history"]
++            modes = modes[repetition % 3:] + modes[:repetition % 3]
++            pair = {}
++            for mode in modes:
++                if shutil.disk_usage(args.output).free < 3 * 1024**3:
++                    raise RuntimeError("less than 3 GiB free; preserved completed reports without another fixture")
++                run_id = f"{variant_id}-r{repetition+1}-{mode}"
++                report_path = args.output / f"{run_id}.json"
++                command = [str(binary.resolve()), "run", "--mode", mode, "--output", str(report_path.resolve())]
++                for key, value in variant.items():
++                    command.extend([f"--{key}", str(value)])
++                samples = []
++                started = time.monotonic()
++                with (args.output / f"{run_id}.stderr").open("x") as stderr:
++                    process = subprocess.Popen(command, cwd=root, stderr=stderr, stdout=stderr, start_new_session=True)
++                    try:
++                        while process.poll() is None:
++                            samples.append(process_sample(process.pid))
++                            if time.monotonic() - started > 660:
++                                stop_process_tree(process)
++                                break
++                            time.sleep(.1)
++                    except BaseException:
++                        stop_process_tree(process)
++                        raise
++                resources = {"samples": samples, "sampled_peak_process_tree_rss_kib": max(
++                    (sum(p["rss_kib"] for p in s["processes"]) for s in samples), default=None)}
++                resource_path = args.output / f"{run_id}.resources.json"
++                write(resource_path, resources)
++                entry = {"id": run_id, "variant": variant_id, "repetition": repetition+1, "mode": mode,
++                         "command": command, "exit_code": process.returncode,
++                         "resources_sha256": digest(resource_path), "sampled_peak_process_tree_rss_kib": resources["sampled_peak_process_tree_rss_kib"]}
++                entry.update(trial_observation(report_path, process.returncode))
++                if entry["status"] != "passed":
++                    failures.append(run_id)
++                else:
++                    pair[mode] = entry
++                metadata["runs"].append(entry)
++                print(f"{run_id}: {entry['status']}", flush=True)
++            for mode in ["new", "history"]:
++                if "disabled" in pair and mode in pair:
++                    for metric in ["terminal_commit_nanos", "response_finalization_nanos"]:
++                        left, right = pair["disabled"]["metrics"][metric], pair[mode]["metrics"][metric]
++                        metadata["paired_deltas"].append({"variant": variant_id, "repetition": repetition+1,
++                            "mode": mode, "metric": metric, "baseline_n": left["n"], "current_n": right["n"],
++                            "p50_delta": right["p50"]-left["p50"], "p95_delta": right["p95"]-left["p95"]})
++    metadata["source_after_sha256"] = source_identity(root)["sha256"]
++    if metadata["source_after_sha256"] != identity["sha256"]:
++        failures.append("source_changed_during_measurement")
++    metadata["failures"] = failures
++    metadata["infrastructure_status"] = "failed" if failures else "passed"
++    metadata["pilot_status"] = "incomplete"
++    write(args.output / "report.json", metadata)
++    return bool(failures)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/scripts/memory-stage4-pilot/measure_test.py b/scripts/memory-stage4-pilot/measure_test.py
+new file mode 100644
+index 0000000..aaccbdd
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/measure_test.py
+@@ -0,0 +1,106 @@
++import importlib.util
++import json
++from pathlib import Path
++import tempfile
++import unittest
++from unittest import mock
++
++spec = importlib.util.spec_from_file_location("pilot_measure", Path(__file__).with_name("measure.py"))
++measure = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(measure)
++
++
++class PilotReportTest(unittest.TestCase):
++    def test_independent_factors_and_retained_levels(self):
++        variants = measure.variants()
++        base = variants[0][1]
++        for _, variant in variants[1:]:
++            self.assertEqual(sum(variant[k] != base[k] for k in base), 1)
++        self.assertEqual({v["retained-events"] for _, v in variants}, {10000, 100000, 1000000})
++
++    def test_counts_and_missing_measurements_are_not_zero(self):
++        self.assertEqual(measure.distribution([]), {"n": 0, "p50": None, "p95": None, "max": None})
++        self.assertEqual(measure.distribution([3, 1, 2]), {"n": 3, "p50": 2, "p95": 3, "max": 3})
++
++    def test_incomplete_conformance_and_changed_kernel_are_rejected(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "conformance.json"
++            path.write_text(json.dumps({"version": "memory-stage-4-conformance-v1", "status": "incomplete"}))
++            with self.assertRaises(ValueError):
++                measure.conformance(path)
++        receipt = {"source": {"files": [{"path": "internal/eviedb/db.go", "sha256": "old"}]}}
++        with self.assertRaises(ValueError):
++            measure.validate_baseline_source(receipt, {"files": {"internal/eviedb/db.go": "new"}})
++
++    def test_added_kernel_file_cannot_borrow_conformance(self):
++        receipt = {"source": {"files": [{"path": "internal/eviedb/db.go", "sha256": "same"}]}}
++        original = {"files": {"internal/eviedb/db.go": "same", "scripts/memory-stage4-pilot/run.go": "new tooling"}}
++        measure.validate_baseline_source(receipt, original)
++        for actual in [
++            {"internal/eviedb/db.go": "same", "internal/eviedb/extra.go": "new"},
++            {"internal/eviedb/db.go": "same", "cmd/evie/extra.go": "new"},
++            {},
++        ]:
++            with self.assertRaises(ValueError):
++                measure.validate_baseline_source(receipt, {"files": actual})
++
++    def test_missing_and_malformed_trial_receipts_are_preserved_as_failures(self):
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "trial.json"
++            missing = measure.trial_observation(path, 86)
++            self.assertEqual(missing["status"], "failed")
++            self.assertIsNone(missing["report_sha256"])
++            for content in [b"", b"{interrupted", b"\xff", b"[]", b'{}']:
++                path.write_bytes(content)
++                observed = measure.trial_observation(path, 0)
++                self.assertEqual(observed["status"], "failed")
++                self.assertEqual(observed["report_sha256"], measure.digest(path))
++                self.assertEqual(path.read_bytes(), content)
++
++    def test_failed_trials_still_finish_the_versioned_matrix_report(self):
++        class FailedProcess:
++            returncode = 86
++            pid = 1
++
++            def __init__(self, command, **_):
++                path = Path(command[command.index("--output") + 1])
++                # Missing in one mode, malformed in another, valid JSON with
++                # an explicit infrastructure failure in the third.
++                mode = command[command.index("--mode") + 1]
++                if mode == "new":
++                    path.write_text("{interrupted")
++                elif mode == "history":
++                    path.write_text('{"error":"owned worker failed"}')
++
++            def poll(self):
++                return self.returncode
++
++        def build(command, **_):
++            Path(command[command.index("-o") + 1]).write_bytes(b"fixture executable")
++
++        with tempfile.TemporaryDirectory() as directory:
++            output = Path(directory) / "matrix"
++            identity = {"files": {"internal/eviedb/db.go": "same"}, "sha256": "same"}
++            baseline = {"source": {"files": [{"path": "internal/eviedb/db.go", "sha256": "same"}]}}
++            argv = ["measure", "--conformance", "fixture", "--output", str(output), "--only", "baseline", "--repetitions", "2"]
++            with (
++                mock.patch.object(measure.sys, "argv", argv),
++                mock.patch.object(measure, "conformance", return_value=baseline),
++                mock.patch.object(measure, "source_identity", return_value=identity),
++                mock.patch.object(measure.platform, "platform", return_value="fixture OS"),
++                mock.patch.object(measure.subprocess, "run", side_effect=build),
++                mock.patch.object(measure.subprocess, "Popen", FailedProcess),
++            ):
++                self.assertTrue(measure.main())
++            report = json.loads((output / "report.json").read_text())
++            self.assertEqual(report["version"], "memory-stage4-pilot-matrix-v1")
++            self.assertEqual(report["infrastructure_status"], "failed")
++            self.assertEqual(report["pilot_status"], "incomplete")
++            self.assertEqual(len(report["runs"]), 6)
++            self.assertEqual(len(report["failures"]), 6)
++            self.assertFalse(report["paired_deltas"])
++            self.assertTrue(all(run["status"] == "failed" for run in report["runs"]))
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/scripts/memory-stage4-pilot/review.go b/scripts/memory-stage4-pilot/review.go
+new file mode 100644
+index 0000000..2344821
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/review.go
+@@ -0,0 +1,163 @@
++package main
++
++import (
++	"bufio"
++	"encoding/json"
++	"errors"
++	"flag"
++	"fmt"
++	"io"
++	"os"
++	"regexp"
++	"strings"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type reviewInput struct {
++	Command      string              `json:"command"`
++	Candidate    memory.CandidateRef `json:"candidate"`
++	Scope        string              `json:"scope_key"`
++	GenerationID string              `json:"generation_id"`
++	Action       string              `json:"action"`
++	Reason       string              `json:"reason"`
++	Useful       *bool               `json:"useful"`
++	Receipt      string              `json:"review_receipt"`
++}
++type reviewObservation struct {
++	Version             string              `json:"version"`
++	Operator            string              `json:"operator_self_attestation"`
++	ConfigurationSHA256 string              `json:"configuration_sha256"`
++	Candidate           memory.CandidateRef `json:"candidate"`
++	Scope               string              `json:"scope_key"`
++	GenerationID        string              `json:"generation_id"`
++	StartedAt           time.Time           `json:"started_at"`
++	FinishedAt          time.Time           `json:"finished_at"`
++	ActiveNanos         int64               `json:"active_nanos"`
++	Action              string              `json:"action"`
++	Reason              string              `json:"reason"`
++	Useful              *bool               `json:"owner_reported_useful"`
++	Receipt             string              `json:"external_review_receipt"`
++	ReceiptVerified     bool                `json:"receipt_verified"`
++}
++type reviewClock struct {
++	current     *reviewObservation
++	activeSince time.Time
++	active      bool
++}
++
++func (c *reviewClock) apply(input reviewInput, now time.Time) (*reviewObservation, error) {
++	switch input.Command {
++	case "start":
++		if c.current != nil {
++			return nil, errors.New("finish the current candidate first")
++		}
++		if input.Candidate.ID == "" || input.Candidate.InterpretationRevision < 1 || input.Candidate.ReviewRevision < 0 || input.Scope == "" || input.GenerationID == "" {
++			return nil, errors.New("start requires exact candidate revisions, scope and generation")
++		}
++		c.current = &reviewObservation{Version: "memory-stage4-owner-review-observation-v1", Candidate: input.Candidate, Scope: input.Scope, GenerationID: input.GenerationID, StartedAt: now.UTC()}
++		c.activeSince = now
++		c.active = true
++	case "pause":
++		if c.current == nil || !c.active {
++			return nil, errors.New("no active candidate")
++		}
++		c.current.ActiveNanos += now.Sub(c.activeSince).Nanoseconds()
++		c.active = false
++	case "resume":
++		if c.current == nil || c.active {
++			return nil, errors.New("no paused candidate")
++		}
++		c.activeSince = now
++		c.active = true
++	case "finish":
++		if c.current == nil {
++			return nil, errors.New("no current candidate")
++		}
++		if input.Action != "accept" && input.Action != "edit" && input.Action != "reject" && input.Action != "defer" {
++			return nil, errors.New("finish action must be accept, edit, reject, or defer")
++		}
++		if strings.TrimSpace(input.Reason) == "" || len(input.Reason) > 4096 {
++			return nil, errors.New("finish requires a reason of at most 4096 bytes")
++		}
++		if input.Action != "defer" && strings.TrimSpace(input.Receipt) == "" {
++			return nil, errors.New("state-changing decisions require an external review receipt reference")
++		}
++		if c.active {
++			c.current.ActiveNanos += now.Sub(c.activeSince).Nanoseconds()
++		}
++		r := c.current
++		r.FinishedAt = now.UTC()
++		r.Action = input.Action
++		r.Reason = input.Reason
++		r.Useful = input.Useful
++		r.Receipt = input.Receipt
++		c.current = nil
++		c.active = false
++		return r, nil
++	default:
++		return nil, errors.New("unknown review-session command")
++	}
++	return nil, nil
++}
++
++func reviewCommand(args []string, input io.Reader, output io.Writer) error {
++	f := flag.NewFlagSet("review-session", flag.ContinueOnError)
++	operator := f.String("operator", "", "human operator's explicit self-attestation")
++	configuration := f.String("configuration-sha256", "", "SHA-256 of the pinned pilot configuration")
++	path := f.String("output", "", "new private JSONL observation file")
++	if err := f.Parse(args); err != nil {
++		return err
++	}
++	if f.NArg() != 0 || strings.TrimSpace(*operator) == "" || len(*operator) > 128 || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(*configuration) || *path == "" {
++		return errors.New("review-session requires operator, exact configuration SHA-256 and output")
++	}
++	file, err := os.OpenFile(*path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
++	if err != nil {
++		return err
++	}
++	defer file.Close()
++	fmt.Fprintln(output, "Timing is explicit: start, pause, resume, finish JSON commands. Decisions occur in Evie's review surface. Receipts and identity are self-reported until separately checked. EOF during a candidate discards its incomplete timing.")
++	scanner := bufio.NewScanner(input)
++	scanner.Buffer(make([]byte, 4096), 16384)
++	clock := &reviewClock{}
++	for scanner.Scan() {
++		var command reviewInput
++		decoder := json.NewDecoder(strings.NewReader(scanner.Text()))
++		decoder.DisallowUnknownFields()
++		if err = decoder.Decode(&command); err != nil {
++			return err
++		}
++		var extra any
++		if !errors.Is(decoder.Decode(&extra), io.EOF) {
++			return errors.New("one JSON command per line required")
++		}
++		observation, e := clock.apply(command, time.Now())
++		if e != nil {
++			return e
++		}
++		if observation != nil {
++			observation.Operator = *operator
++			observation.ConfigurationSHA256 = *configuration
++			if err = json.NewEncoder(file).Encode(observation); err != nil {
++				return err
++			}
++			if err = file.Sync(); err != nil {
++				return err
++			}
++			fmt.Fprintln(output, "Observation saved; external receipt verification remains required.")
++		} else if command.Command == "pause" {
++			fmt.Fprintln(output, "Timing paused.")
++		} else if command.Command == "resume" {
++			fmt.Fprintln(output, "Timing resumed.")
++		}
++	}
++	if err = scanner.Err(); err != nil {
++		return err
++	}
++	if clock.current != nil {
++		return errors.New("incomplete candidate timing was not saved")
++	}
++	return nil
++}
+diff --git a/scripts/memory-stage4-pilot/run.go b/scripts/memory-stage4-pilot/run.go
+new file mode 100644
+index 0000000..d1d0c78
+--- /dev/null
++++ b/scripts/memory-stage4-pilot/run.go
+@@ -0,0 +1,461 @@
++package main
++
++import (
++	"bufio"
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"runtime"
++	"time"
++
++	"github.com/davidadel66/evie/internal/agent"
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++	"github.com/davidadel66/evie/internal/openrouter"
++	"github.com/davidadel66/evie/internal/tools"
++)
++
++type report struct {
++	Version         string                                 `json:"version"`
++	Kind            string                                 `json:"kind"`
++	Workload        workload                               `json:"workload"`
++	StartedAt       time.Time                              `json:"started_at"`
++	Environment     map[string]string                      `json:"environment"`
++	Generation      memory.CompilerGeneration              `json:"generation"`
++	GenerationID    string                                 `json:"generation_id"`
++	SetupNanos      int64                                  `json:"setup_nanos"`
++	ObservedNanos   int64                                  `json:"observed_nanos"`
++	Foreground      []memory.CompilerForegroundMeasurement `json:"foreground"`
++	Jobs            []memory.CompilerDiagnosticJob         `json:"jobs"`
++	Candidates      []memory.CompilerDiagnosticCandidate   `json:"candidates"`
++	ResolutionNanos []int64                                `json:"scripted_resolution_nanos"`
++	Counts          map[string]int64                       `json:"counts"`
++	StorageBefore   map[string]int64                       `json:"storage_before"`
++	StorageAfter    map[string]int64                       `json:"storage_after"`
++	WorkerPIDs      []int                                  `json:"worker_pids"`
++	Dispatches      []dispatchObservation                  `json:"dispatches"`
++	DiagnosticsAsOf int64                                  `json:"diagnostics_as_of_unix_ms"`
++	Cleanup         bool                                   `json:"disposable_database_removed"`
++	Error           string                                 `json:"error,omitempty"`
++	Limitations     []string                               `json:"limitations"`
++	ReleaseEligible bool                                   `json:"release_eligible"`
++}
++
++type child struct {
++	cmd  *exec.Cmd
++	wait chan error
++}
++
++func startWorker(ctx context.Context, directory string, x scriptedExtractor) (*child, error) {
++	b, err := json.Marshal(x)
++	if err != nil {
++		return nil, err
++	}
++	executable, err := os.Executable()
++	if err != nil {
++		return nil, err
++	}
++	cmd := exec.Command(executable, "worker", filepath.Join(directory, "pilot.db"), string(b))
++	cmd.Stderr = os.Stderr
++	stdout, err := cmd.StdoutPipe()
++	if err != nil {
++		return nil, err
++	}
++	if err = cmd.Start(); err != nil {
++		return nil, err
++	}
++	c := &child{cmd: cmd, wait: make(chan error, 1)}
++	ready := make(chan error, 1)
++	go func() {
++		scanner := bufio.NewScanner(stdout)
++		if !scanner.Scan() || scanner.Text() != "ready" {
++			ready <- errors.New("worker did not become ready")
++			return
++		}
++		ready <- nil
++		for scanner.Scan() {
++		}
++	}()
++	go func() { c.wait <- cmd.Wait() }()
++	select {
++	case err = <-ready:
++		if err != nil {
++			cmd.Process.Kill()
++			<-c.wait
++			return nil, err
++		}
++		return c, nil
++	case <-ctx.Done():
++		cmd.Process.Kill()
++		<-c.wait
++		return nil, ctx.Err()
++	case <-time.After(30 * time.Second):
++		cmd.Process.Kill()
++		<-c.wait
++		return nil, errors.New("worker startup deadline")
++	}
++}
++func (c *child) stop() error {
++	if err := c.cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
++		return err
++	}
++	select {
++	case err := <-c.wait:
++		return err
++	case <-time.After(10 * time.Second):
++		c.cmd.Process.Kill()
++		<-c.wait
++		return errors.New("worker shutdown deadline")
++	}
++}
++func workerCommand(ctx context.Context, args []string) error {
++	if len(args) != 2 {
++		return errors.New("worker requires a disposable database and scripted configuration")
++	}
++	var x scriptedExtractor
++	if err := json.Unmarshal([]byte(args[1]), &x); err != nil {
++		return err
++	}
++	db, err := eviedb.OpenDBAtContext(ctx, args[0])
++	if err != nil {
++		return err
++	}
++	defer db.Close()
++	id, err := checkedID(generation())
++	if err != nil {
++		return err
++	}
++	fmt.Println("ready")
++	err = eviedb.NewStore(db).RunCompilerHost(ctx, eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: x}})
++	if errors.Is(err, context.Canceled) {
++		return nil
++	}
++	return err
++}
++
++func runWorkload(ctx context.Context, w workload) (r report, retErr error) {
++	r = report{Version: "memory-stage4-pilot-infrastructure-v1", Kind: "scripted_infrastructure_only", Workload: w, StartedAt: time.Now().UTC(), Environment: map[string]string{"go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "foreground_provider": "scripted constant acknowledgement", "response_host": "actual os.DevNull Write; not browser/SSE/network latency", "model_server": "absent; scripted extraction is inside each worker process"}, Generation: generation(), Counts: map[string]int64{}, Foreground: []memory.CompilerForegroundMeasurement{}, Jobs: []memory.CompilerDiagnosticJob{}, Candidates: []memory.CompilerDiagnosticCandidate{}, ResolutionNanos: []int64{}, Limitations: []string{"No learned model, human semantic adjudication, active David review time, or release threshold is measured.", "Archived event bulk fixture setup is outside measured intervals; foreground sessions do not load archived history.", "Scripted service delay varies occupied runtime capacity; it does not predict a model's inference throughput.", "All proposed semantic content and scripted owner decisions are artificial load. Acceptance rate is not quality.", "Resource sampling and paired repetition metadata belong to the matrix wrapper receipt."}}
++	dir, err := os.MkdirTemp("", "evie-stage4-pilot-")
++	if err != nil {
++		return r, err
++	}
++	defer func() {
++		if err := os.RemoveAll(dir); err != nil {
++			retErr = errors.Join(retErr, err)
++		} else {
++			r.Cleanup = true
++		}
++	}()
++	path := filepath.Join(dir, "pilot.db")
++	db, err := eviedb.OpenDBAtContext(ctx, path)
++	if err != nil {
++		return r, err
++	}
++	defer db.Close()
++	store := eviedb.NewStore(db)
++	var sqlite, journal string
++	if err = db.QueryRowContext(ctx, `SELECT sqlite_version()`).Scan(&sqlite); err != nil {
++		return r, err
++	}
++	if err = db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journal); err != nil {
++		return r, err
++	}
++	r.Environment["sqlite"] = sqlite
++	r.Environment["journal_mode"] = journal
++	if err = seedRetained(ctx, db, store, w.RetainedEvents); err != nil {
++		return r, err
++	}
++	x, err := seedGraph(ctx, store, w.GraphClaims)
++	if err != nil {
++		return r, err
++	}
++	x.DelayMS = w.DelayMS
++	x.AuditPath = filepath.Join(dir, "dispatches.jsonl")
++	id, err := checkedID(r.Generation)
++	if err != nil {
++		return r, err
++	}
++	r.GenerationID = id
++	sessions := make([]memory.Session, w.Scopes)
++	for i := range sessions {
++		sessions[i], err = store.CreateGlobalSession(ctx)
++		if err != nil {
++			return r, err
++		}
++	}
++	// Identical warmup and backfill source histories exist in all three modes;
++	// only explicit selection differs. This keeps foreground inputs paired.
++	for i, session := range sessions {
++		roots := 0
++		if i == 0 {
++			roots = w.BackfillRoots
++		}
++		var first, last memory.Event
++		for n := 0; n < roots; n++ {
++			input := fixtureInput(100+n, w.SourceBytes)
++			if n == 0 {
++				input = "PILOT_FAILED_GAP " + input
++			}
++			if n == 1 {
++				input = "PILOT_ZERO_CANDIDATES " + input
++			}
++			a, b, e := appendTurn(ctx, store, session, input)
++			if e != nil {
++				return r, e
++			}
++			if n == 0 {
++				first = a
++			}
++			last = b
++		}
++		if w.Mode == "history" && roots > 0 {
++			_, err = store.SelectCompilerHistory(ctx, []memory.ScopeContext{session.ScopeContext()}, memory.CompilerHistoryRequest{RequestID: fmt.Sprintf("pilot-history-%d", i), Ranges: []memory.CompilerHistoryRange{{SourceScope: "global", Destination: destination(session), SessionID: session.ID, FirstSequence: first.Sequence, LastSequence: last.Sequence, FirstEventID: first.ID, LastEventID: last.ID}}}, r.Generation, x)
++			if err != nil {
++				return r, err
++			}
++		}
++		if w.Mode != "disabled" {
++			_, err = store.ActivateCompiler(ctx, session.ScopeContext(), memory.CompilerActivationRequest{RequestID: fmt.Sprintf("pilot-live-%d", i), Selector: memory.CompilerLiveSelector{SourceScope: "global", SessionID: session.ID, Destination: destination(session)}}, r.Generation, x)
++			if err != nil {
++				return r, err
++			}
++		}
++	}
++	// Foreground source sessions start with the same fixed context in every mode.
++	// The first measured input launches new work; subsequent turns overlap it.
++	if _, err = db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
++		return r, err
++	}
++	r.StorageBefore = storage(path)
++	r.SetupNanos = time.Since(r.StartedAt).Nanoseconds()
++	var children []*child
++	defer func() {
++		for _, c := range children {
++			retErr = errors.Join(retErr, c.stop())
++		}
++	}()
++	started := time.Now()
++	if w.Mode != "disabled" {
++		for n := 0; n < w.Processes; n++ {
++			c, e := startWorker(ctx, dir, x)
++			if e != nil {
++				return r, e
++			}
++			children = append(children, c)
++			r.WorkerPIDs = append(r.WorkerPIDs, c.cmd.Process.Pid)
++		}
++	}
++	profile, err := openrouter.NewExplicitContextProfile("scripted-foreground", 1048576, 524288, 1024)
++	if err != nil {
++		return r, err
++	}
++	output, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
++	if err != nil {
++		return r, err
++	}
++	defer output.Close()
++	foregroundStarts := make([]int64, len(sessions))
++	for i, session := range sessions {
++		if err = db.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0) FROM events WHERE session_id=?`, session.ID).Scan(&foregroundStarts[i]); err != nil {
++			return r, err
++		}
++	}
++	foregroundStarted := time.Now()
++	for n := 0; n < w.Turns; n++ {
++		session := sessions[n%len(sessions)]
++		holder := memory.LeaseHolderID("pilot-foreground")
++		a := agent.NewWithToolset(foregroundClient{}, profile, store.BindHistory(session.ID, holder), session.ScopeContext(), store.BindTurnOwner(session.ID, holder), tools.NewToolset(nil))
++		measured, finish := agent.BeginResponseMeasurement(ctx)
++		ev := &foregroundEvents{}
++		if err = a.Send(measured, fixtureInput(n, w.SourceBytes), ev, nil); err != nil {
++			return r, err
++		}
++		_, writeErr := output.WriteString(ev.output.String() + "\n")
++		if err = finish(writeErr); err != nil {
++			return r, err
++		}
++		if writeErr != nil {
++			return r, writeErr
++		}
++		// A fixed 50ms arrival interval allows production's 25ms reconciler to
++		// compete with the next foreground turn in every mode.
++		select {
++		case <-ctx.Done():
++			return r, ctx.Err()
++		case <-time.After(50 * time.Millisecond):
++		}
++	}
++	r.Counts["foreground_elapsed_nanos"] = time.Since(foregroundStarted).Nanoseconds()
++	// Coverage counts every committed member, including context snapshots that
++	// cannot support a memory. Count the actual foreground interval in the same
++	// persisted-event units; do not infer cardinality from the number of turns.
++	for i, session := range sessions {
++		rows, err := db.QueryContext(ctx, `SELECT event_type,COUNT(*) FROM events WHERE session_id=? AND sequence>? GROUP BY event_type`, session.ID, foregroundStarts[i])
++		if err != nil {
++			return r, err
++		}
++		for rows.Next() {
++			var eventType string
++			var count int64
++			if err = rows.Scan(&eventType, &count); err != nil {
++				rows.Close()
++				return r, err
++			}
++			r.Counts["foreground_persisted_events"] += count
++			r.Counts["foreground_event_"+eventType] += count
++		}
++		if err = errors.Join(rows.Err(), rows.Close()); err != nil {
++			return r, err
++		}
++	}
++	if w.Mode != "disabled" {
++		want := w.Turns
++		if w.Mode == "history" {
++			want += w.BackfillRoots
++		}
++		deadline := time.Now().Add(90 * time.Second)
++		for {
++			var total, unfinished int
++			if err = db.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(state NOT IN ('completed_candidates','completed_empty','failed','cancelled')),0) FROM memory_compiler_jobs`).Scan(&total, &unfinished); err != nil {
++				return r, err
++			}
++			if total >= want && unfinished == 0 {
++				break
++			}
++			if time.Now().After(deadline) {
++				return r, fmt.Errorf("catch-up deadline: jobs=%d expected=%d unfinished=%d", total, want, unfinished)
++			}
++			select {
++			case <-ctx.Done():
++				return r, ctx.Err()
++			case <-time.After(100 * time.Millisecond):
++			}
++		}
++	}
++	r.ObservedNanos = time.Since(started).Nanoseconds()
++	for _, session := range sessions {
++		a, err := store.LocalOwnerReviewContext(ctx, destination(session))
++		if err != nil {
++			return r, err
++		}
++		for _, view := range []string{"foreground", "jobs", "candidates"} {
++			q := memory.CompilerDiagnosticsQuery{SessionID: session.ID, View: view, Limit: 32}
++			for pages := 0; ; pages++ {
++				if pages > 128 {
++					return r, errors.New("diagnostic pagination exceeded workload bound")
++				}
++				d, e := store.InspectOwnerCompilerDiagnostics(ctx, a, q)
++				if e != nil {
++					return r, e
++				}
++				if d.Indexing {
++					return r, errors.New("diagnostic totals remain incomplete")
++				}
++				r.DiagnosticsAsOf = max(r.DiagnosticsAsOf, d.AsOfUnixMS)
++				r.Foreground = append(r.Foreground, d.Foreground...)
++				r.Jobs = append(r.Jobs, d.Jobs...)
++				r.Candidates = append(r.Candidates, d.Candidates...)
++				if d.NextCursor == "" {
++					break
++				}
++				q.Cursor = d.NextCursor
++			}
++		}
++		// Measure actual public preview/resolve cost, independently of human time.
++		page, err := store.ListOwnerCandidates(ctx, a, memory.OwnerCandidateQuery{Limit: 32})
++		if err != nil {
++			return r, err
++		}
++		for n, candidate := range page.Candidates {
++			if n >= 2 {
++				break
++			}
++			start := time.Now()
++			action := "accept"
++			if n == 1 {
++				action = "reject"
++			}
++			preview, e := store.PrepareOwnerCandidateReview(ctx, a, candidate.Ref, action)
++			if e != nil {
++				return r, e
++			}
++			_, e = store.ResolveOwnerCandidateReview(ctx, a, memory.ReviewDecision{DeliveryKey: fmt.Sprintf("idem:v1:90000000-0000-4000-8000-%012d", 1500000+len(r.ResolutionNanos)), PreviewID: preview.ID, PreviewSHA256: preview.SHA256, Action: action, Reason: "Scripted infrastructure resolution; no human quality judgment."})
++			if e != nil {
++				return r, e
++			}
++			r.ResolutionNanos = append(r.ResolutionNanos, time.Since(start).Nanoseconds())
++		}
++	}
++	if len(r.Foreground) != w.Turns {
++		return r, fmt.Errorf("foreground observation count %d != %d", len(r.Foreground), w.Turns)
++	}
++	for _, m := range r.Foreground {
++		if m.TerminalCommitNanos == nil || m.ResponseFinalizationNanos == nil || m.Outcome != "success" {
++			return r, errors.New("missing actual terminal/finalization observation")
++		}
++	}
++	for _, job := range r.Jobs {
++		r.Counts["jobs_"+job.State]++
++		r.Counts["attempts"] += int64(job.Attempts)
++		r.Counts["selected_events"] += job.SelectedNewEvents
++		r.Counts["completed_events"] += job.CompletedNewEvents
++		for _, m := range job.Measurements {
++			r.Counts["observed_attempt_"+m.ObservedOutcome]++
++		}
++	}
++	r.Counts["candidates_before_scripted_review"] = int64(len(r.Candidates))
++	for _, table := range []string{"events", "semantic_claims", "memory_compiler_candidates"} {
++		var count int64
++		if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
++			return r, err
++		}
++		r.Counts["rows_"+table] = count
++	}
++	r.StorageAfter = storage(path)
++	if w.Mode != "disabled" {
++		file, err := os.Open(x.AuditPath)
++		if err != nil {
++			return r, err
++		}
++		decoder := json.NewDecoder(file)
++		for decoder.More() {
++			var d dispatchObservation
++			if err = decoder.Decode(&d); err != nil {
++				file.Close()
++				return r, err
++			}
++			r.Dispatches = append(r.Dispatches, d)
++		}
++		if err = file.Close(); err != nil {
++			return r, err
++		}
++		for i, a := range r.Dispatches {
++			for j, b := range r.Dispatches {
++				if j > i && a.StartedNS < b.FinishedNS && b.StartedNS < a.FinishedNS {
++					return r, errors.New("cooperating scripted extraction intervals overlapped")
++				}
++			}
++		}
++	}
++	return r, nil
++}
++
++func destination(s memory.Session) string { return "session:" + string(s.ID) }
++func storage(path string) map[string]int64 {
++	r := map[string]int64{}
++	for _, suffix := range []string{"", "-wal", "-shm"} {
++		name := "db" + suffix
++		if s, e := os.Stat(path + suffix); e == nil {
++			r[name] = s.Size()
++		} else if os.IsNotExist(e) {
++			r[name] = 0
++		} else {
++			r[name] = -1
++		}
++	}
++	return r
++}

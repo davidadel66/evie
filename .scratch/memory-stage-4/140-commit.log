@@ -1,0 +1,22 @@
+[codex/memory-stage-4 0138e39] feat(memory): review candidates independently of source sessions (#140)
+ 28 files changed, 3544 insertions(+), 13 deletions(-)
+ create mode 100644 cmd/evie/candidate_review.go
+ create mode 100644 cmd/evie/candidate_review_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-owner-review.md
+ create mode 100644 internal/eviedb/candidate_review_apply.go
+ create mode 100644 internal/eviedb/candidate_review_authority.go
+ create mode 100644 internal/eviedb/candidate_review_encoding.go
+ create mode 100644 internal/eviedb/candidate_review_encoding_test.go
+ create mode 100644 internal/eviedb/candidate_review_history.go
+ create mode 100644 internal/eviedb/candidate_review_history_test.go
+ create mode 100644 internal/eviedb/candidate_review_inspection.go
+ create mode 100644 internal/eviedb/candidate_review_prepare.go
+ create mode 100644 internal/eviedb/candidate_review_promotion_test.go
+ create mode 100644 internal/eviedb/candidate_review_provenance.go
+ create mode 100644 internal/eviedb/candidate_review_public_test.go
+ create mode 100644 internal/eviedb/candidate_review_replay.go
+ create mode 100644 internal/eviedb/candidate_review_resolution_test.go
+ create mode 100644 internal/eviedb/candidate_review_schema.go
+ create mode 100644 internal/eviedb/candidate_review_sources.go
+ create mode 100644 internal/eviedb/testdata/candidate_review_encoding_v1.json
+ create mode 100644 internal/memory/candidate_review.go

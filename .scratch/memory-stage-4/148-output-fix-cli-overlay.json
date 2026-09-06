@@ -1,0 +1,7 @@
+{
+  "Replace": {
+    "/Users/davidboktor/code/evie/cmd/evie/memory_stage4_conformance_test.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-isolated-empty-test.go",
+    "/Users/davidboktor/code/evie/cmd/evie/memory_stage4_scope_conformance_test.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-isolated-empty-test.go",
+    "/Users/davidboktor/code/evie/cmd/evie/memory_stage4_history_conformance_test.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-isolated-empty-test.go"
+  }
+}

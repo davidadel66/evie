@@ -193,6 +193,9 @@ func (s *Store) ResolveOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
 // replay supplies the previously accepted envelope and recorded commit time.
 // Neither route uses or changes source-session turn authority.
 func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, op memory.OwnerReviewOperation, clock time.Time) (memory.OwnerReviewOperationResult, error) {
+	if err := validateCandidateDestinations(ctx, conn, op); err != nil {
+		return memory.OwnerReviewOperationResult{}, err
+	}
 	if op.Preview.Version == "owner-review-preview-v5" {
 		return s.applyOwnerCompoundOperation(ctx, conn, op, clock)
 	}
@@ -296,11 +299,10 @@ func reviewInitialState(ctx context.Context, conn *sql.Conn, scope memory.Semant
 }
 
 func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memory.ReviewEffect, item memory.ReviewClaimEffect) error {
-	keys := []string{}
-	for _, scope := range effect.Scopes {
-		keys = append(keys, scope.Key)
+	keys, err := reviewLineageScopeKeys(ctx, q, effect.Scope.Key)
+	if err != nil {
+		return err
 	}
-	var err error
 	for _, expected := range []*memory.SemanticEntity{&item.Subject, item.ObjectEntity} {
 		if expected == nil {
 			continue
@@ -390,6 +392,19 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
 }
 
 func validateOwnerReviewOperation(op memory.OwnerReviewOperation) error {
+	if op.Preview.Effect == nil {
+		return errors.New("missing effect")
+	}
+	for _, candidate := range op.Preview.Candidates {
+		destination, err := candidateEffectDestination(candidate)
+		if err != nil {
+			return err
+		}
+		if destination != op.Preview.Effect.Scope.Key {
+			return errors.New("review destination mismatch")
+		}
+	}
+
 	if op.Preview.Version == "owner-review-preview-v5" {
 		return validateOwnerCompoundOperation(op)
 	}
@@ -400,7 +415,7 @@ func validateOwnerReviewOperation(op memory.OwnerReviewOperation) error {
 		return err
 	}
 	effect := op.Preview.Effect
-	if effect.OperationID != op.OperationID || effect.Scope.Key != op.Preview.ScopeKey {
+	if effect.OperationID != op.OperationID {
 		return errors.New("owner review effect envelope mismatch")
 	}
 	for _, id := range []string{string(op.OperationID), string(op.SessionID), string(op.SourceEventID), op.AuditID, op.Preview.ID, string(effect.Scope.ID)} {

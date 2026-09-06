@@ -1,0 +1,40 @@
+{
+  "focused_normal": {
+    "command": "go test ./cmd/evie -run '^TestOwnerReview(BatchCLI|ClockCLI|TemporalCLI|IdentityCLI)' -count=1",
+    "exit_code": 0,
+    "result": "ok github.com/davidadel66/evie/cmd/evie 1.119s",
+    "log": ".scratch/memory-stage-4/144-cli-final-normal.log"
+  },
+  "focused_race": {
+    "command": "go test -race ./cmd/evie -run '^TestOwnerReview(BatchCLI|ClockCLI|TemporalCLI|IdentityCLI)' -count=1",
+    "exit_code": 0,
+    "result": "ok github.com/davidadel66/evie/cmd/evie 20.199s",
+    "log": ".scratch/memory-stage-4/144-cli-final-race.log"
+  },
+  "ordering_regression": {
+    "command": "go test ./cmd/evie -run '^TestOwnerReviewBatchCLI' -count=10",
+    "exit_code": 0,
+    "result": "ok github.com/davidadel66/evie/cmd/evie 1.876s",
+    "log": ".scratch/memory-stage-4/144-cli-order-regression.log"
+  },
+  "format": {
+    "command": "gofmt -w cmd/evie/candidate_batch_test.go",
+    "exit_code": 0
+  },
+  "whitespace": {
+    "command": "git diff --check -- cmd/evie/candidate_batch_test.go",
+    "exit_code": 0
+  },
+  "full_verification": {
+    "command": "./scripts/verify-change.sh",
+    "status": "root will run on integrated frozen ticket144 tree; deliberately not duplicated by this bounded test-only agent"
+  },
+  "independent_reviews": {
+    "status": "root coordinates ticket144 Standards and Spec reviews; no self-review substituted"
+  },
+  "manifest": "144-cli-frozen-manifest.json",
+  "prior_failure": {
+    "log": "144-cli-focused-race.log",
+    "reason": "Test compared preserved extraction source order against canonicalized CLI inspection order. Corrected to compare Original with original compiled candidate; preserved exact Edit.Before comparison with prior disclosed interpretation. No production bug or code change."
+  }
+}

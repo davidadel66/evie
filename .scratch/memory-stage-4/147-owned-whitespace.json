@@ -1,0 +1,98 @@
+[
+  {
+    "path": "internal/eviedb/compiler_work.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/candidate_review_schema.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/memory/compiler_contract.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "cmd/evie/candidate_review.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_encoding.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_public_test.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_storage_test.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_schema.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_budget_test.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_inspection.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_encoding_test.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/memory/compiler_recurrence.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "internal/eviedb/testdata/compiler-recurrence-v2.json",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "cmd/evie/candidate_recurrence_test.go",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  },
+  {
+    "path": "cmd/evie/docs/research/memory-stage-4-generation-lineage.md",
+    "exit_code": 1,
+    "output": "",
+    "whitespace_clean": true
+  }
+]

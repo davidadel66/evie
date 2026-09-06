@@ -42,7 +42,7 @@ func TestCanonicalRequestEstimatorAccountsForCompleteStreamingRequest(t *testing
 }
 
 func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T)
 }
 
 func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 }
 
 func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 10000, 10000, 1)
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

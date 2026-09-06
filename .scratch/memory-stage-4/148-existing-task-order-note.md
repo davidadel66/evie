@@ -1,0 +1,7 @@
+# Unchanged task-ordering failure observed during ticket 148 verification
+
+The first full 148 isolated check passed. A second check after a documentation-only clarification failed TestTaskScopesDefaultToContextAndRemainIsolated: visible titles were [global child workspace a]. Neither tasks.go nor tasks_scope_test.go is changed in ticket 148. Its 100-repeat focused run on the exact committed 147 base passed (log retained); that does not refute the intermittent failure.
+
+A deterministic diagnostic on the earlier isolated 148 snapshot demonstrated the underlying pre-existing ordering bug: formatTaskTime uses RFC3339Nano, which trims trailing fractional zeros, while ListGlobalTasks sorts textual created_at then ID. An earlier .1Z timestamp sorts after a later .11Z timestamp. Two ordinary CreateGlobalTask calls under the existing controllable Store clock therefore list [second first]. See148-existing-task-order-deterministic.log and148-existing-task-order-diagnosis-test.go. The temporary diagnostic test was removed from that root-owned archive after the run; no live task production/test file was modified.
+
+This is outside the memory diagnostics behavior. Retain the failure and report the limitation; do not pretend that a later passing full run fixes it. Final 148 full verification will rerun after its actual output-measurement fix. No task ordering or timestamp migration is silently included in this memory ticket.

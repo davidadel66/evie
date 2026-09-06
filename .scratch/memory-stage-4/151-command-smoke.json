@@ -1,0 +1,11 @@
+{
+  "version": "memory-stage4-release-command-smoke-v1",
+  "build_exit_code": 0,
+  "command_exit_code": 2,
+  "existing_report_retry_exit_code": 1,
+  "report_sha256": "6c530ef619bb5485be8e57872ca0a9a82ee712b150d409e6c3f41c292279cfa0",
+  "binary_sha256": "e0dff23191472a364bcd1484d3b96bd73d8185de08e7bba95617ef7811a053d7",
+  "stdout": "pending: ready=false; holdout_run_authorized=false; report=/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-151-command-p8oy1afy/pending.json\n",
+  "unchanged_existing_report": true,
+  "final_holdout_touched": false
+}

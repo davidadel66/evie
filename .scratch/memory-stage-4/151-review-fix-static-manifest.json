@@ -1,0 +1,112 @@
+{
+  "version": "memory-stage-4-owner-contribution-v1",
+  "ticket": 151,
+  "status": "static_review_fix_snapshot_tests_waiting_for_pilot_window",
+  "created_at": "2026-09-05T13:41:58.251153+00:00",
+  "files": [
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-release/v1/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "a56c920cad68de1c4598f8d56e870d1a6d86d0c7351f9c38f1fee6800ead6dd3",
+      "bytes": 1928,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "6c530ef619bb5485be8e57872ca0a9a82ee712b150d409e6c3f41c292279cfa0",
+      "bytes": 3556,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-submission.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "627c20e399df4d0ae7d400f4af2b332538511e429141e844e77c1a7bb771383f",
+      "bytes": 55,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "7fdec8ab27e0c65583b4053330b61b7d6ff6592962f4296fdbbe484bcb5e2f4c",
+      "bytes": 23959,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release_evidence.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "df45eb41829a2ca53d651c5847bb21675087b02700372113135f17dd0320621a",
+      "bytes": 2187,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release_gates.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "27e06b1b72e3f5b71a85f67edd62f0f84b4fcfd8c57a30fa8d6b0bffa0585c41",
+      "bytes": 7802,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release_observations.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "4c017d9201568544e932ff1f90ab5a45d8749f2f3d4225592e8939495a0f071e",
+      "bytes": 12961,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release_quality.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "ce3d8c4fffcf165184b3bbbc41fe0211cf7b45e3682c6f725cdd4f922f04ba11",
+      "bytes": 10947,
+      "executable": false
+    },
+    {
+      "path": "internal/memoryeval/stage4_release_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "d512c8158a9946324b550a36d3a628c6293e98ffd413a9db06af7f59fc7967b3",
+      "bytes": 24876,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-release/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "8663f0aec2abe2b676f793a3aaa964bec7f7029ec4c560bf1c803b4c417ad476",
+      "bytes": 10889,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-release/artifacts.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "cb25b92b8280dfbe701de29e0d5996bb39f0fff7377a52dcd9c2793f7576c355",
+      "bytes": 3214,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-release/main.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "b22695d62f493c8d770f1704191a9443321ffe3705383160b5946f61995ea8e0",
+      "bytes": 5333,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-release/main_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "c4c28baadcdadc798049efd8ce504fe444231e9de96e6c45f472303b7d2aa7ed",
+      "bytes": 5685,
+      "executable": false
+    }
+  ]
+}

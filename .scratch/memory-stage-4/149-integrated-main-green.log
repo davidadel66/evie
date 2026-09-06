@@ -1,0 +1,5 @@
+--- FAIL: TestStage4ForegroundRestartClosedReviewReplay (0.08s)
+    memory_stage4_conformance_test.go:403: load active source session: sql: no rows in result set
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.410s
+FAIL

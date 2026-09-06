@@ -1,0 +1,159 @@
+{
+  "ticket": 145,
+  "branch": "codex/memory-stage-4",
+  "head_at_freeze": "830e0436ab6c081aa318b498089d038606acc981",
+  "recorded_utc": "2026-09-05T09:58:02.280124+00:00",
+  "status": "engineering_frozen_pending_root_isolated_full_verification_and_two_axis_review",
+  "files": [
+    {
+      "path": "internal/memory/candidate_review_scopes.go",
+      "before_sha256": "absent",
+      "after_sha256": "70853df581ca4f30ac25fb423180e8f1f4f2f70c6cc37e5421fd3a775de308fc",
+      "bytes": 607
+    },
+    {
+      "path": "internal/eviedb/candidate_review_scopes.go",
+      "before_sha256": "absent",
+      "after_sha256": "1aa8fbe36c9f8245e7da0d33886c57ce362526615ccf5316071988fba622cde6",
+      "bytes": 5788
+    },
+    {
+      "path": "internal/web/candidate_review.go",
+      "before_sha256": "absent",
+      "after_sha256": "8cb692d9bd9f3b4d924ec3bf553c7b0c61ce65b3dfa4cba60b2544b00b9b3616",
+      "bytes": 9688
+    },
+    {
+      "path": "internal/web/candidate_review_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "a0b0e4fe642975033aa5b4a9f794d8ae74cb5ff7ef2abdb3abc2425a04f92112",
+      "bytes": 17121
+    },
+    {
+      "path": "internal/web/candidate_review_navigation_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "bc5b2ebe69a2123693882411c6709575323d820e82f1cdc52ddf9108207b2d49",
+      "bytes": 5811
+    },
+    {
+      "path": "internal/web/ui/src/api/candidateReview.ts",
+      "before_sha256": "absent",
+      "after_sha256": "2eb4b8d4647b6ca0bb0b96d79f64636d99c9dcffc3d67227ab6988caa1633069",
+      "bytes": 4383
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-web-review.md",
+      "before_sha256": "absent",
+      "after_sha256": "bc77d90df1f82fec585510780362b5d29857eb2f344253964dd19d0659e3019a",
+      "bytes": 4638
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "68c3ac16fe2bb5764283da9393394e74ed82bef2f5bc120c43895f77438a2f99",
+      "bytes": 3665
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/CandidateInbox.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "1a9b67e8bfa95871eba57d87d0725ee4ff35ab74935f74ed05fc9748d77cd38b",
+      "bytes": 14928
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx",
+      "before_sha256": "absent",
+      "after_sha256": "a50a3a7c523959e240420aafaf9530048bee5fc00438ead72d8374f49754546e",
+      "bytes": 815
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/controller.test.ts",
+      "before_sha256": "absent",
+      "after_sha256": "802496e0ede5c523a93321a56c0648fe89cf44d4d25b3a64754b36494cdb85d6",
+      "bytes": 12050
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/controller.ts",
+      "before_sha256": "absent",
+      "after_sha256": "0738e00b07a04e617c8bcc6d975ea639909ca8a64ef57fe3330db66001ea2db0",
+      "bytes": 9154
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/fixtures.test-support.ts",
+      "before_sha256": "absent",
+      "after_sha256": "0a0ac57ef4277312f3dc68938f458dadee790cf1ed533763048a054f86b6cb9e",
+      "bytes": 3831
+    },
+    {
+      "path": "internal/web/ui/src/candidateInbox/pendingDecision.ts",
+      "before_sha256": "absent",
+      "after_sha256": "9f5fb93d7d1532257b1dba4ce42bd6ef6ea8b65f7db294a27b01032d8e329518",
+      "bytes": 2223
+    },
+    {
+      "path": "internal/web/candidate_review_recovery_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "a7847e6a2783efef391482c216993d87207b1369567dd2298ff4e96677b6d9d7",
+      "bytes": 2090
+    }
+  ],
+  "root_hook_files": [
+    "cmd/evie/main.go",
+    "internal/eviedb/db.go",
+    "internal/web/serve.go",
+    "internal/web/ui/src/memory/Memory.tsx"
+  ],
+  "verification": [
+    {
+      "command": "go test -race ./internal/web -run '^TestCandidateReview' -count=1",
+      "result": "PASS",
+      "duration_seconds": 14.533
+    },
+    {
+      "command": "go vet ./internal/web ./internal/eviedb",
+      "result": "PASS"
+    },
+    {
+      "command": "cd internal/web/ui && npx tsc -b",
+      "result": "PASS"
+    },
+    {
+      "command": "cd internal/web/ui && npx vitest run",
+      "result": "PASS 25 files / 112 tests"
+    },
+    {
+      "command": "cd internal/web/ui && npx vitest run src/candidateInbox",
+      "result": "PASS 2 files / 25 tests after final ref binding change"
+    },
+    {
+      "command": "npm --prefix internal/web/ui run lint",
+      "result": "PASS; preexisting src/ui/Icon.tsx:16 Fast Refresh warning only"
+    },
+    {
+      "command": "npm --prefix internal/web/ui run build",
+      "result": "PASS; existing >500kB chunk warning"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS; untracked owned paths require isolated indexed verification"
+    }
+  ],
+  "required_remaining": [
+    "Root exact-tree ./scripts/verify-change.sh",
+    "Root two-axis independent review",
+    "Root browser demonstration against temporary scripted SQLite fixture"
+  ],
+  "known_failed_checks_resolved": [
+    "First navigation fixture acquired a closed-session lease; corrected fixture ordering.",
+    "First request decoder incorrectly required omitted optional fields; retained strict duplicate/unknown/trailing checks while allowing omitted optional fields.",
+    "First accepted-source policy test expected redacted success while Kernel returns source_ineligible; test now checks exact safe Kernel outcome.",
+    "One go vet attempt overlapped Vite dist replacement and missed embedded assets; rerun sequentially after build PASS."
+  ],
+  "browser_fixture": ".scratch/memory-stage-4/145-browser-fixture/main.go",
+  "no_commit": true,
+  "no_new_dependencies": true,
+  "root_review_fixes": [
+    "Unknown server outcomes retain exact delivery through explicit reload recovery; HTTP uses safe retryable503.",
+    "Same-candidate stale refresh preserves reason while invalidating all approval/preview state."
+  ],
+  "root_refrozen_utc": "2026-09-05T10:06:57.516713+00:00"
+}

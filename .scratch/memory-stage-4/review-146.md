@@ -1,0 +1,21 @@
+# Ticket146 independent review
+
+Exact base1151a945eab80163516bdbeecb07c8d77f1a1236 -> final97e9768e1d9ef26f44938f4b80de413a4ffda0cb (18paths).
+
+## Standards
+
+Independentreviewer review_146_standards: initialfull18-filePASS; final8-pathhistoryfollowupPASS. No documentedstandard breaches ormaterialsmells. Exactscopeauthority remainsserverowned, persistence/interpretation remainsKernelowned, unknowndelivery retainsits exactrequest, sourcefailures clearprotecteddisclosure andunknown effectversions blockapproval. Typedhistoryabsence remainsdistinctfrominfrastructure/cancellationerrors; responsebindingandepochsprotect currentcandidate/scope.
+
+## Spec
+
+Independentreviewer review_146_spec: initialP2 missingidentity/correctionhistorynavigation. Fixed with explicittypededit/identity/correctionselector, matchingexistingendpoints, readableimmutablerecords andmixedrevision/fencingtests. Final8-pathrereviewPASS; no othermissing/wrong/outofscopebehavior. Originalsourcewindow/extraction, authority, completecompounddependency/recorddisclosure, exactpreviewapproval anddurablepartialoutcomes remainintact.
+
+Finalfindings: Standards0,Spec0. Initialaxesraninparallel; narrowrereviewsstaggeredforagentslots.
+
+## Verification
+
+Finalisolated ./scripts/verify-change.sh PASS: allGo tests/vet, UIlint/build, whitespace. ExistingVite>500kBchunkwarningonly. Exactfinalisolated UI `npx vitest run`:20files137testsPASS. OwnerfinalwebnormalPASS2.006s/race41.501s; liveUI27files155tests includespreexistinguserUItests excludedfromcommit. Exactcommands/results in146-engineering-checkpoint.json and146-history-verification.json.
+
+ActualheadlessChrome142.0.7444.176 usedfreshprofileandrealtemporarySQLite/publicKernel withscriptedextractor. Browserpassedclosed-sessionvalueedit/originalevidence/history/v5approval; twosame-namealternatives andmixedidentity/editrevisionhistory withsafe404wrong-kind; explicitsharedEntity+Predicatebatch andindependentplanrejection; errorcorrectionwithunknowninstant; clockcontractandoriginaltoolauthority; reloadterminalabsence/exactsessionseparation/rejection. Zero pageerrors, fixtureexited0/tempDBremoved. Driverandstepshashes/screenshotsrecorded. InitialMac/CUAcheckblockedbydesktoplock; isolatedheadlessbrowserprovidedtheactualdemonstration. No required browsercheckskipped. Playwrightcore1.55.0 isscratch-onlytesttool, no productiondependency orrepo packagefilechange.
+
+Browserharness firstassertedwrongv5constant thenassumednonmatchingaliases wouldappear; bothfixtureassertionscorrected fromactualtyped/visibleoutput. Priorfailedreceiptsretained. Finalcompleteflowpassedtwice; secondcaptureusesviewport toavoidscroll-containerclipping. No productionchangefromtheseharnessfixes. This isdeterministicconformance, notDavidpilot/modelqualityevidence. The fixturehasnoproductioncontext-server acceptedgraphendpoint; actualoperationprovenanceisverifiedthroughUI andpersistence/replaythroughHTTP/Kerneltests. No claim ofacceptedgraphbrowserdemonstration.

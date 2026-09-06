@@ -1,0 +1,213 @@
+{
+  "issue": 138,
+  "files": [
+    {
+      "path": "cmd/evie/compiler_activation.go",
+      "before_sha256": null,
+      "after_sha256": "46492d903d5d49e04d7d4ccd9ba72f0ecd7adb56baf4d5a3acdfd7935c195bcd",
+      "bytes": 4779
+    },
+    {
+      "path": "cmd/evie/compiler_host.go",
+      "before_sha256": null,
+      "after_sha256": "3ab3b2806899930442818c92e7ddfddd87f008b90e2e680fe60ebe54b21df6b0",
+      "bytes": 1503
+    },
+    {
+      "path": "cmd/evie/compiler_activation_cli_test.go",
+      "before_sha256": null,
+      "after_sha256": "b1c85f49e200bb5d7b0a43090cd3c2d5e6ab773c4e72b0ff5508862bbf0df370",
+      "bytes": 8007
+    },
+    {
+      "path": "cmd/evie/compiler_host_lifecycle_test.go",
+      "before_sha256": null,
+      "after_sha256": "540adbd305589bf76b67a7a02ce9ac369179f667b957ee08e7be4983b0defe4b",
+      "bytes": 7036
+    },
+    {
+      "path": "cmd/evie/runtime_lifecycle.go",
+      "before_sha256": null,
+      "after_sha256": "e0628966c0b7fa4236dba6ffd4c6e3d2809872d508656ce61283a56a69f049bb",
+      "bytes": 339
+    },
+    {
+      "path": "cmd/evie/docs/active/memory-stage-4-activation.implementation.md",
+      "before_sha256": null,
+      "after_sha256": "3b36fce7a9239f0d9839b8b4cb37d68892c83305940630ca6190e06205e5cb21",
+      "bytes": 6237
+    },
+    {
+      "path": "internal/eviedb/compiler_activation.go",
+      "before_sha256": null,
+      "after_sha256": "ef97faaa06372204b0bc50c3d5571216a47e73b0791cb113957a259a487914dc",
+      "bytes": 14270
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_schema.go",
+      "before_sha256": null,
+      "after_sha256": "6bfeecd2bc04cd293af5de15f3837818fdd077443b335b594587b0ac3b7aa31d",
+      "bytes": 4366
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_test.go",
+      "before_sha256": null,
+      "after_sha256": "d63d0a442f8c705a71661152c846a25ff46b2c046a9d296921c5cf66a39ad4a1",
+      "bytes": 21485
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "before_sha256": null,
+      "after_sha256": "b7545aa01977cb8025ee0c21e4fa62d2fdc33bdd8df7e67e164fed344f67f6b1",
+      "bytes": 11872
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "0dfce2501e9c55a49fcbf0bb69b7176bfaf7e67d88f1a1c3ba651a4548f730c7",
+      "after_sha256": "55c0612f64c403f1da1bf671692f39d5641684293dac672b85266e39de53e889",
+      "bytes": 24999
+    },
+    {
+      "path": "internal/eviedb/compiler_worker.go",
+      "before_sha256": "ab99ad8675924e3297e78ee64d9097392a7074f7b38c365f82415d003734462e",
+      "after_sha256": "e2deafad6f5f824e66c91027b9d1fa29058c84ec89e0a22c8a6427c51090d5b1",
+      "bytes": 30901
+    },
+    {
+      "path": "internal/localextractor/activation.go",
+      "before_sha256": null,
+      "after_sha256": "f10b658441ca8353dd5c7594924ffc13d6ee82d7faa8f1ccfaf661ff753056ac",
+      "bytes": 2438
+    },
+    {
+      "path": "internal/localextractor/ollama.go",
+      "before_sha256": "de2db050b6a795b216d41e3323784f47abc08bc436f3fb998a7cad6f2ee8f217",
+      "after_sha256": "d0d0db92d7ce457595800c49621f6aa4025ef40cdb8cd74acc573396e4180512",
+      "bytes": 6190
+    },
+    {
+      "path": "internal/memory/compiler_activation.go",
+      "before_sha256": null,
+      "after_sha256": "096e737528215a3abfd5f210022252351f41d803b11bdb19f0076b5f79d104fb",
+      "bytes": 2466
+    },
+    {
+      "path": "internal/web/lifecycle.go",
+      "before_sha256": null,
+      "after_sha256": "5ff367d351cc059578bb6fc839e21f9c39c694812393f08958407aa906ceb8a3",
+      "bytes": 1824
+    },
+    {
+      "path": "internal/web/lifecycle_test.go",
+      "before_sha256": null,
+      "after_sha256": "49061368c8b6ccf51991edb97b061651bd2c33343a31b6d0539a6db034d39515",
+      "bytes": 5466
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation_bound_test.go",
+      "before_sha256": null,
+      "after_sha256": "6949fae3e8134f21f420c8b0d723c12a8f19b5281eaa1a6c83839f4193a09226",
+      "bytes": 5424
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "before_sha256": "e5fbb0a9ea9a522b26996d94a06b773331f0d2905518e89d71355a29bfa80261",
+      "after_sha256": "3c10453a4e1f3f984e5fee94f707c0240df00e9a725e8ef9da1f117609d78141",
+      "bytes": 16375
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_status_test.go",
+      "before_sha256": null,
+      "after_sha256": "15d72a206a9651b50ec23b214d8e6ad073e65c960b0a551e5d6500222241a685",
+      "bytes": 3221
+    },
+    {
+      "path": "cmd/evie/compiler_host_test.go",
+      "before_sha256": null,
+      "after_sha256": "35dbde8849abd7767437752ddf1b4e3576eaf2eecfafc2b47c57f559acc0051e",
+      "bytes": 1090
+    },
+    {
+      "path": "internal/eviedb/compiler_intervals.go",
+      "before_sha256": null,
+      "after_sha256": "5c124cecb5a03c978f95e4b5221279e639ca26a674e94f518e55fbbe44e522da",
+      "bytes": 2563
+    },
+    {
+      "path": "internal/eviedb/compiler_intervals_test.go",
+      "before_sha256": null,
+      "after_sha256": "ef4571bae46e058b69f3af8a786e8e9f8ae3316326b7a50f1b3aa391d7a194a8",
+      "bytes": 2222
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_interval_test.go",
+      "before_sha256": null,
+      "after_sha256": "2a9a5b9486da95e82bd3c48f54461bba01817bd63a94058ca720100b63695568",
+      "bytes": 6641
+    }
+  ],
+  "root_owned_hooks": [
+    "cmd/evie/main.go",
+    "internal/eviedb/db.go",
+    "internal/web/serve.go"
+  ],
+  "status": "ReviewP1/P2fixes frozen; focused normal/race/whitespace PASS. Awaiting root independent rereview and exact isolated full verification.",
+  "normal_focused": "go test ./internal/eviedb ./internal/localextractor ./cmd/evie ./internal/web -run Compiler|PinnedLocalTransport|LocalTransport|WebRuntime|ServeWithContext -count=1 (PASS all four packages)",
+  "model_gate": "No actual model execution or production configuration. Quality and release gates remain open.",
+  "race_focused": {
+    "command": "go test -race ./internal/eviedb ./cmd/evie ./internal/web -run 'Test(Compiler(Activation|ConfiguredHost|UnconfiguredHost|UnavailableConfiguredHost)|RuntimeCancellation|Serve(ListenerContext|WithContext))' -count=1",
+    "result": "PASS",
+    "packages": {
+      "internal/eviedb": "25.609s",
+      "cmd/evie": "6.993s",
+      "internal/web": "1.692s"
+    }
+  },
+  "whitespace": {
+    "command": "git diff --check",
+    "result": "PASS"
+  },
+  "137_base_review_fixes": "Rebased exact137adoption budget and caller generation buffer detachment fixes into work/worker baseline and frozen overlay; activation gates preserved; full verification to be rerun against updated base.",
+  "bound_fix": "Discovery cached seed1+127 ancestors; sealing cachedroot1+127others; counted128/129-boundary tests PASS. Source frozen excludes141identityhook; live source containsit.",
+  "bound_fix_verification": [
+    {
+      "command": "go test ./internal/eviedb ./cmd/evie -run 'Compiler' -count=1",
+      "result": "PASS internal/eviedb8.702s cmd/evie2.774s"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestCompilerActivation' -count=1",
+      "result": "PASS33.562s (includes128/129bounds)"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestCompilerActivation(Status|DiscoveryInspects|CaptureInspects)' -count=1",
+      "result": "PASS10.133s (includesstatuscompletion/retry/failure/cancel/suffix)"
+    },
+    {
+      "command": "go test ./internal/eviedb -run '^TestCompilerActivationCaptureInspects|^TestCompilerActivationStatus' -count=1",
+      "result": "PASS afterfinalNULLparentcachepreservation"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "review_fixes": {
+    "shutdown": "Suppress only plain context.Canceled; joined cleanup failures preserved with regression.",
+    "ownership": "Find earliestunowned requested interval, cap before next immutableowner, preserve remainder revisits; historical jobs retain origin pause authority.",
+    "repro": "TestCompilerActivationResumedEarlierSegmentRetainsItsOwnInterval passes A1..1 distinct from B3..3, gap2outside selection, immutableB, Acompiles.",
+    "verification": [
+      {
+        "command": "go test ./internal/eviedb ./cmd/evie -run 'Compiler' -count=1",
+        "result": "PASS internal/eviedb9.132s cmd/evie2.968s"
+      },
+      {
+        "command": "go test -race ./internal/eviedb ./cmd/evie -run '^TestCompilerActivation|^TestCompilerIntervals|^TestCompilerHostShutdown' -count=1",
+        "result": "PASS internal/eviedb37.198s cmd/evie3.182s"
+      },
+      {
+        "command": "git diff --check",
+        "result": "PASS"
+      }
+    ]
+  }
+}

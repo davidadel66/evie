@@ -1,0 +1,95 @@
+direction: down
+
+classes: {
+  canonical: {
+    style: {
+      fill: "#e8f1f8"
+      stroke: "#356b91"
+      font-color: "#17324d"
+      border-radius: 8
+    }
+  }
+  graph: {
+    style: {
+      fill: "#edf5ef"
+      stroke: "#4e8467"
+      font-color: "#204c38"
+      border-radius: 8
+    }
+  }
+  history: {
+    style: {
+      fill: "#f7f0df"
+      stroke: "#a4843c"
+      font-color: "#624d1d"
+      border-radius: 8
+    }
+  }
+}
+
+authority: {
+  label: "CANONICAL ACCEPTED HISTORY"
+  class: canonical
+  direction: right
+  operation: "Semantic Operation\nidempotency + proposal/effect hashes\nactor + source event + transaction time"
+  operation_scopes: "Operation Scope Effects\nprior and resulting revisions"
+  operation -> operation_scopes: "records atomic revision effects"
+}
+
+projection: {
+  label: "DETERMINISTIC QUERY PROJECTION"
+  class: graph
+  grid-columns: 3
+
+  identity: {
+    label: "IDENTITY AND VOCABULARY"
+    grid-columns: 2
+    grid-rows: 2
+    scope: "Scope\nglobal | workspace | project | session"
+    predicate: "Predicate\nversioned token + object constraint + cardinality"
+    entity: "Entity\nstable identity + type + optional canonical anchor"
+    alias: "Alias\nnormalized name; ambiguity is preserved"
+  }
+
+  knowledge: {
+    label: "WORLD PROPOSITIONS"
+    direction: down
+    claim: "Claim\nsubject + predicate + entity/literal object + polarity\nvalid time + transaction time"
+    source: "Source Link\nexact event locator + evidence hash + authority\neligible | retracted"
+    correction: "Correction\nold claim -> replacement claim\nerror | changed"
+  }
+
+  structure: {
+    label: "STRUCTURAL RELATIONSHIPS"
+    direction: down
+    graph_link: "Graph Link\nderivation | generalization | contradiction"
+    promotion: "Promotion\nnarrower claim/entities -> broader identities"
+  }
+
+  identity.scope -> identity.entity: "owns"
+  identity.scope -> knowledge.claim: "owns"
+  identity.scope -> structure.graph_link: "owns"
+  identity.predicate -> knowledge.claim: "defines meaning"
+  identity.entity -> identity.alias: "has zero or more"
+  identity.entity -> knowledge.claim: "subject or entity object"
+  knowledge.claim -> knowledge.source: "supported by one or more"
+  knowledge.claim -> knowledge.correction: "superseded through"
+  structure.graph_link -> identity.entity: "may connect semantic records"
+  structure.graph_link -> knowledge.claim: "may connect semantic records"
+  structure.promotion -> knowledge.claim: "maps source and destination"
+}
+
+history: {
+  label: "APPEND-ONLY STATE HISTORY"
+  class: history
+  direction: right
+  transitions: "State Events\nactive | retired | superseded\neligible | retracted"
+  current: "Cached current columns\nDisposable read optimization"
+  transitions -> current: "projects latest legal state"
+}
+
+authority.operation -> projection.identity.scope: "creates or changes complete graph effects"
+authority.operation -> history.transitions: "appends lifecycle transitions"
+history.transitions -> projection.identity.entity: "governs lifecycle"
+history.transitions -> projection.knowledge.claim: "governs lifecycle"
+history.transitions -> projection.knowledge.source: "governs eligibility"

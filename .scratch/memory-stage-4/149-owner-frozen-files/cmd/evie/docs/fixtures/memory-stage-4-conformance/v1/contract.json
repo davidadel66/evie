@@ -1,0 +1,39 @@
+{
+  "version": "memory-stage-4-conformance-v1",
+  "kind": "scripted-engineering-conformance",
+  "packages": {
+    "github.com/davidadel66/evie/cmd/evie": [
+      "TestStage4ForegroundRestartClosedReviewReplay",
+      "TestStage4ScopeAdapterConformance",
+      "TestStage4GenericStorageConformance",
+      "TestStage4HistoryGapEmptyAndGenerationConformance",
+      "TestStage4AtomicBatchPolicyConformance"
+    ],
+    "github.com/davidadel66/evie/internal/eviedb": [
+      "TestStage4StartupRetryBoundaries",
+      "TestStage4StartupIndependentProcesses",
+      "TestStage4StartupIncompatibleSchemaFailsWithoutRewrite",
+      "TestStage4ProcessConformanceWorkerRecovery",
+      "TestStage4ProcessConformanceReviewCommitRecovery"
+    ]
+  },
+  "scenarios": {
+    "foreground_restart_closed_review_replay": "TestStage4ForegroundRestartClosedReviewReplay",
+    "scope_adapter_matrix": "TestStage4ScopeAdapterConformance",
+    "generic_storage_containment": "TestStage4GenericStorageConformance",
+    "history_gap_empty_generation_lineage": "TestStage4HistoryGapEmptyAndGenerationConformance",
+    "atomic_batch_source_policy": "TestStage4AtomicBatchPolicyConformance",
+    "public_sqlite_startup": "TestStage4StartupIndependentProcesses",
+    "process_crash": "TestStage4ProcessConformanceWorkerRecovery",
+    "expired_late_delivery": "TestStage4ProcessConformanceWorkerRecovery",
+    "cancelled_late_delivery": "TestStage4ProcessConformanceWorkerRecovery",
+    "before_commit": "TestStage4ProcessConformanceReviewCommitRecovery",
+    "after_commit": "TestStage4ProcessConformanceReviewCommitRecovery"
+  },
+  "browser": {
+    "version": "memory-stage-4-browser-v1",
+    "cases": ["global", "workspace-1", "workspace-2", "project-1", "project-2", "session-1", "session-2"],
+    "checks": ["scope", "evidence", "preview", "resolution", "reload", "no_implicit_promotion", "accepted_graph"]
+  },
+  "excluded_claims": ["learned extraction quality", "resource fitness", "human pilot", "final holdout", "ongoing compiler activation"]
+}

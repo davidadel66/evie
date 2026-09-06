@@ -1,0 +1,11 @@
+--- FAIL: TestCompilerWorkerAdoptionReadsMaximumWindowOnce (0.10s)
+    compiler_adoption_bound_test.go:81: adoption inspected 176 event rows; maximum window must be checked once (88), bounded by128
+    compiler_adoption_bound_test.go:92: constraint failed: events are append-only (1811)
+--- FAIL: TestCompilerWorkerGenerationSchemaRemainsCallerOwned (0.09s)
+    --- FAIL: TestCompilerWorkerGenerationSchemaRemainsCallerOwned/queue (0.04s)
+        compiler_generation_race_test.go:29: queue rewrote caller Schema buffer: got "{\"type\":\"object\"}ct\" } " want " { \"type\" : \"object\" } "
+    --- FAIL: TestCompilerWorkerGenerationSchemaRemainsCallerOwned/compile (0.05s)
+        compiler_generation_race_test.go:29: compile rewrote caller Schema buffer: got "{\"type\":\"object\"}ct\" } " want " { \"type\" : \"object\" } "
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	0.420s
+FAIL

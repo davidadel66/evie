@@ -1,0 +1,10 @@
+{
+  "ticket": 138,
+  "parent": "c8872ed37c9222e40170113561dc0b406361cb7c",
+  "commit": "8e667f791ee03dac673fa085b28f35bc70c6fa75",
+  "tree": "feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63",
+  "isolated_tree": "feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63",
+  "files": 27,
+  "issue_closed": true,
+  "note": "Ticket138 complete after final independent Standards/Spec rereviews and isolated full verification; focused race regressions passed."
+}

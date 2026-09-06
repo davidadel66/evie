@@ -139,6 +139,12 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 	}
 	candidates := make([]memory.MemoryCandidate, 0, len(response.Candidates))
 	for index, proposal := range response.Candidates {
+		if proposal.Destination != "" && request.ScopePolicy != memory.CompilerScopePolicyV1 {
+			return nil, errors.New("scope recommendation requires a scope-aware compiler generation")
+		}
+		if request.ScopePolicy == memory.CompilerScopePolicyV1 && proposal.Destination == "" {
+			return nil, errors.New("missing candidate scope recommendation")
+		}
 		for _, key := range []string{"proposition", "valid_time", "temporal_qualification", "support", "context"} {
 			value, ok := shape.Candidates[index][key]
 			if !ok || string(value) == "null" {
@@ -219,6 +225,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
 			return nil, errors.Join(ErrCompilerTerminalOutput, err)
 		}
 		if err := validateCompilerIdentitySupport(candidate); err != nil {
+			return nil, err
+		}
+		if _, err := candidateEffectDestination(memory.OwnerCandidate{Destination: request.Window.Selection.Destination, Candidate: candidate}); err != nil {
 			return nil, err
 		}
 		candidates = append(candidates, candidate)

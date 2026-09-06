@@ -1,0 +1,29 @@
+{
+  "head": "92d10a4a62af189fdbdb67e493f77369f7a58c92",
+  "tracked_dirty_hashes": {
+    "AGENTS.md": "6c8b8af10fea512ee9094569647017918dd1f2ea419c235ffc068a8718327c09",
+    "cmd/evie/docs/active/memory.decisions.md": "af841915895c6be5cf05614e7d7ea6308ef2757218147ec075565d837d11cdad",
+    "cmd/evie/docs/active/memory.spec.md": "9c6a6d79f123a48b46fcbe65b145b8164219687e77b3e0fc202b429a44da87c2",
+    "cmd/evie/docs/active/serve.decisions.md": "c42fa112fd719c98997cff74cd54f193b6d42a6612ca58a09a701ecff80458aa",
+    "cmd/evie/docs/active/ui-chat.spec.md": "e62c0b3bca9cf60c8d0a7513a338cd5a8a56c8bb3237e3abd1bd6af3333ba5cc",
+    "cmd/evie/main.go": "8506f2abc07f0225cc8fff1f4b022d799edaf506fcd96df6d74d81499dd50ecc",
+    "internal/eviedb/semantic_graph.go": "8404532ab795c1eb1a83cdbdbd369002dd26a87573f106bc8280e62c561f46fa",
+    "internal/memory/semantic.go": "62de27e502ceea8f695449d6a43a6d6292ced5fd2f4f5d2d8cf7385055abb027",
+    "internal/web/context_sessions.go": "989037c10fc23cf34a7da3b4a590bff4af9737fa60235f01584bd02d517ee1b0",
+    "internal/web/context_sessions_test.go": "0bcb49937bee1b1d9f38c3aacdda91e9c3484b96bce5f1fe9693ac4163a5c7db",
+    "internal/web/memory_test.go": "634596becf26ae76e9b5c694236fffb3992c5425a57b8c2da0e7ef2a9e817653",
+    "internal/web/serve.go": "40013f45afe8fe1e07e1eb49f776356a9d92304dbfbc5a0f428a6efa412c9b4f",
+    "internal/web/ui/src/App.test.tsx": "5390a2240522564a77014e8dc62efac5e75c8f90c4e13ae9fbaca1daa7a6496c",
+    "internal/web/ui/src/App.tsx": "26ec31704fbb26d22314f261e8a2463d51d7cee11324d455ab846ebe8f02b3e6",
+    "internal/web/ui/src/api/memory.ts": "ef4cd144bc9eed7305748660b80f4040ceb3612eafb8e6c059878ece8baf0271",
+    "internal/web/ui/src/artifacts/Panel.tsx": "3e98e21a8cbe4494c7093dae635d3ebbda3c5e1e45bd9f059a71d49262c3cee7",
+    "internal/web/ui/src/context/ContextChooser.test.tsx": "deleted",
+    "internal/web/ui/src/context/ContextChooser.tsx": "deleted",
+    "internal/web/ui/src/memory/Memory.test.tsx": "0179d951e56f8bd099c6998e242dbbb84ed7ae59f3113f426e64d395b50871f0",
+    "internal/web/ui/src/memory/Memory.tsx": "9d1b5c66e75a4c469d18ab5556301670ac69321531e99f4f7ac53d66c7646640",
+    "internal/web/ui/src/theme.css": "044aab6c120aa8002b5434bfbd326b8e15555bd039a05c4d9852ddfd75b1a204",
+    "internal/web/ui/src/ui/Icon.tsx": "4442020d175f4f5360519d7e6179f0b66dafaed6d2855c4550b3685d408e094d",
+    "internal/web/ui/src/ui/TextSizeMenu.tsx": "b07351921e967c33cfe4d313f6cad322dec5716ac85703991cc4c9935f2c2f1e",
+    "node_modules/.vite/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json": "bfb0aa165486fb3b2b10fddf070025e52296ca4160ca02ae638e439a5bc6e161"
+  }
+}

@@ -51,6 +51,11 @@ func temporalOptionsHash(options memory.ReviewTemporalOptions) string {
 }
 
 func reviewTemporalOptions(ctx context.Context, q reviewQuery, a OwnerReviewContext, item memory.OwnerCandidate) (memory.ReviewTemporalOptions, error) {
+	targetKey, vectorKeys, destinationErr := candidateEffectScopes(ctx, q, []memory.OwnerCandidate{item})
+	if destinationErr != nil {
+		return memory.ReviewTemporalOptions{}, destinationErr
+	}
+	a.scope = targetKey
 	out := memory.ReviewTemporalOptions{Candidate: item.Ref, ScopeKey: a.scope, ScopeRevisions: []memory.ScopeRevision{}, Alternatives: []memory.ReviewCorrectionAlternative{}}
 	temporal := item.Candidate.Proposal.Temporal
 	if temporal == nil || temporal.Correction == nil || item.Candidate.Proposal.Identity != nil {
@@ -58,11 +63,11 @@ func reviewTemporalOptions(ctx context.Context, q reviewQuery, a OwnerReviewCont
 	}
 	out.Modes = temporal.Correction.Modes
 	out.EffectiveTime = temporal.Correction.EffectiveTime
-	keys, err := reviewScopeKeys(ctx, q, a.scope)
+	_, err := reviewScopeKeys(ctx, q, a.scope)
 	if err != nil {
 		return out, err
 	}
-	for _, key := range keys {
+	for _, key := range vectorKeys {
 		scope, err := loadSemanticScope(ctx, q, key)
 		if err != nil {
 			return out, err

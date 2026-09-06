@@ -1,0 +1,27 @@
+{
+  "base": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "tree": "f05b5bafcf0c4b4abadd2b64aaa212bcc20ce372",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/147-checkpoint.index",
+  "files": {
+    "internal/eviedb/compiler_work.go": "6ee8b7e5ac6d51fac3bdf4e1eafba278664213e02e5af3a38bd6d4a74cec7367",
+    "internal/eviedb/candidate_review_schema.go": "bcb13ab2ccdea0574ac849027e04eac34888f54361a9d72e4930826c89fb778c",
+    "internal/memory/compiler_contract.go": "1b6802f3da908add83f2db901e9f922a7cddca4855038623269e8402200f0f49",
+    "cmd/evie/candidate_review.go": "a2251a67cb89fe0e51ca07ccb4281a7715060542207121af409ed5836dc771b1",
+    "internal/eviedb/compiler_recurrence_encoding.go": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d",
+    "internal/eviedb/compiler_recurrence_public_test.go": "36487c9c622052cac3563d313d459fc1e7cb205ebcee7a374bb80eb615948928",
+    "internal/eviedb/compiler_recurrence_storage_test.go": "2de644e79523241bd7b835c8861c1a3e86d806cae1dcf63b24d9e5e667b6e176",
+    "internal/eviedb/compiler_recurrence_schema.go": "13f987b9f1cf75e6aefb6e40200bc7e3c22ed06dfa3c08a2b0b4832098b68e03",
+    "internal/eviedb/compiler_recurrence.go": "5f74365253c09b6f8f30b6ded4fd62b1d7fe06be8ac8c3a16d98c8be3beceb3c",
+    "internal/eviedb/compiler_recurrence_budget_test.go": "533120f0b6abd3b911034272b20910db7ea0ada8833fa00f3699b178304cd02d",
+    "internal/eviedb/compiler_recurrence_inspection.go": "3922ab29b23d5cd88cea376b7716056e70726be5574c303fa0f141bc9ca8c351",
+    "internal/eviedb/compiler_recurrence_encoding_test.go": "6715cf9b42102fd9f316956e66dda253e159be8c3987cec7cd7dcea8a1d83c50",
+    "internal/memory/compiler_recurrence.go": "7c99d842e66481347dbe425d6069aca8f140782951b4240da406f64fa228d453",
+    "internal/eviedb/testdata/compiler-recurrence-v2.json": "9db554d25c704b2914a41bd26e3557da6a3a8476b87f1c7a56d2a7394fd5bc04",
+    "cmd/evie/candidate_recurrence_test.go": "f66dc451676c7dfab8e4ac51d42be770c8b1b21c2c99f77c4f91ac281cfa672b",
+    "cmd/evie/docs/research/memory-stage-4-generation-lineage.md": "fb3e5798ebd0e14a605f0b7072f2b8615b526b5bcebc39b2903dd15a4cdcc436"
+  },
+  "note": "147 frozen generation/recurrence files on final146 tree; excludes148 and preexisting user changes.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-checkpoint-h1xh4q9w",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-147-isolated.log",
+  "verification_exit_code": 0
+}

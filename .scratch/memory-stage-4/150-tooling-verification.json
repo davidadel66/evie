@@ -1,0 +1,51 @@
+{
+  "ticket": 150,
+  "status": "tooling_focused_checks_pass_workload_measurements_pending_149",
+  "recorded_at": "2026-09-05T13:05:38.924145+00:00",
+  "checks": [
+    {
+      "command": "go test -count=1 ./scripts/memory-stage4-pilot",
+      "exit_code": 0,
+      "package_seconds": 2.938
+    },
+    {
+      "command": "go test -race -count=1 ./scripts/memory-stage4-pilot",
+      "exit_code": 0,
+      "package_seconds": 13.148
+    },
+    {
+      "command": "go vet ./scripts/memory-stage4-pilot",
+      "exit_code": 0
+    },
+    {
+      "command": "python3 scripts/memory-stage4-pilot/measure_test.py",
+      "exit_code": 0,
+      "tests": 3
+    },
+    {
+      "command": "python3 -m py_compile scripts/memory-stage4-pilot/measure.py",
+      "exit_code": 0
+    }
+  ],
+  "root_checks_pending": [
+    "./scripts/verify-change.sh on final frozen ticket tree",
+    "independent Standards and Spec reviews"
+  ],
+  "experimental_runs_pending": "Full #149 conformance receipt with status passed, no failures or skips, and matching Go dependency inventory is required. Tiny scripted smoke tests above are tooling verification, not workload studies.",
+  "release_status": "blocked_by_unselected_adequate_model_human_output_adjudication_actual_David_review_and_unfrozen_numeric_gates",
+  "review_fixes": {
+    "recorded_at": "2026-09-05T13:25:01.978561+00:00",
+    "tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+    "normal_focused_seconds": 3.072,
+    "race_seconds": 13.17,
+    "python_tests": 6,
+    "go_vet_exit_code": 0,
+    "fixes": [
+      "count actual persisted foreground events including context snapshots",
+      "require exact baseline dependency paths and hashes",
+      "preserve absent or malformed receipts as failed experiments",
+      "honor SIGINT and SIGTERM during interactive review input"
+    ],
+    "matrix": "not_started_waiting_for_narrow_review_and_no_heavy_checks"
+  }
+}

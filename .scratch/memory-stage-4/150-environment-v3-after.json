@@ -1,0 +1,37 @@
+{
+  "version": "memory-stage4-pilot-host-observation-v1",
+  "recorded_at": "2026-09-05T14:56:43.193351+00:00",
+  "phase": "after_final_matrix",
+  "commands": [
+    {
+      "command": [
+        "sysctl",
+        "-n",
+        "machdep.cpu.brand_string",
+        "hw.memsize",
+        "hw.ncpu"
+      ],
+      "exit_code": 0,
+      "stdout": "Apple M3 Pro\n19327352832\n11\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "sw_vers"
+      ],
+      "exit_code": 0,
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t15.7.8\nBuildVersion:\t\t24G809\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "pmset",
+        "-g",
+        "batt"
+      ],
+      "exit_code": 0,
+      "stdout": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22085731)\t99%; finishing charge; 0:04 remaining present: true\n",
+      "stderr": ""
+    }
+  ]
+}

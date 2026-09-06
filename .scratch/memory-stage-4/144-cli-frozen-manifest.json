@@ -1,0 +1,8 @@
+[
+  {
+    "path": "cmd/evie/candidate_batch_test.go",
+    "before_sha256": null,
+    "after_sha256": "e7e032090f315f8f2d11b54ed097988cb194f015869dd7869eeac6cfe21d5a0e",
+    "bytes": 21647
+  }
+]

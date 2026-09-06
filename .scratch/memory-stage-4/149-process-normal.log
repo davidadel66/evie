@@ -1,0 +1,23 @@
+=== RUN   TestStage4ProcessConformanceWorkerRecovery
+=== RUN   TestStage4ProcessConformanceWorkerRecovery/process_crash
+    stage4_process_conformance_test.go:141: STAGE4_EVIDENCE {"assertions":{"duplicate_dispatch_absent":true,"durable_attempts":true,"exact_release_verified":true,"exact_source_authority":true,"mismatched_ack_blocked":true,"real_processes":true,"single_candidate_publication":true,"unaccepted_graph_unchanged":true,"unknown_capacity_blocked":true},"scenario":"process_crash","version":"memory-stage-4-conformance-v1"}
+=== RUN   TestStage4ProcessConformanceWorkerRecovery/expired_late_delivery
+    stage4_process_conformance_test.go:141: STAGE4_EVIDENCE {"assertions":{"duplicate_dispatch_absent":true,"durable_attempts":true,"exact_release_verified":true,"exact_source_authority":true,"mismatched_ack_blocked":true,"real_processes":true,"replacement_capacity_preserved":true,"single_candidate_publication":true,"stale_delivery_fenced":true,"unaccepted_graph_unchanged":true,"unknown_capacity_blocked":true},"scenario":"expired_late_delivery","version":"memory-stage-4-conformance-v1"}
+=== RUN   TestStage4ProcessConformanceWorkerRecovery/cancelled_late_delivery
+    stage4_process_conformance_test.go:141: STAGE4_EVIDENCE {"assertions":{"duplicate_dispatch_absent":true,"durable_attempts":true,"exact_release_verified":true,"exact_source_authority":true,"mismatched_ack_blocked":true,"real_processes":true,"replacement_capacity_preserved":true,"single_candidate_publication":true,"stale_delivery_fenced":true,"unaccepted_graph_unchanged":true,"unknown_capacity_blocked":true},"scenario":"cancelled_late_delivery","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4ProcessConformanceWorkerRecovery (0.43s)
+    --- PASS: TestStage4ProcessConformanceWorkerRecovery/process_crash (0.14s)
+    --- PASS: TestStage4ProcessConformanceWorkerRecovery/expired_late_delivery (0.14s)
+    --- PASS: TestStage4ProcessConformanceWorkerRecovery/cancelled_late_delivery (0.15s)
+=== RUN   TestStage4ProcessConformanceReviewCommitRecovery
+=== RUN   TestStage4ProcessConformanceReviewCommitRecovery/before_commit
+    stage4_process_conformance_test.go:198: STAGE4_EVIDENCE {"assertions":{"atomic_effects":true,"canonical_replay_valid":true,"competing_duplicate_receipts_equal":true,"prior_resolution_visible":true,"real_process_exit_at_review_commit":true,"single_canonical_operation":true},"scenario":"before_commit","version":"memory-stage-4-conformance-v1"}
+=== RUN   TestStage4ProcessConformanceReviewCommitRecovery/after_commit
+    stage4_process_conformance_test.go:198: STAGE4_EVIDENCE {"assertions":{"atomic_effects":true,"canonical_replay_valid":true,"competing_duplicate_receipts_equal":true,"prior_resolution_visible":true,"real_process_exit_at_review_commit":true,"single_canonical_operation":true},"scenario":"after_commit","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4ProcessConformanceReviewCommitRecovery (0.30s)
+    --- PASS: TestStage4ProcessConformanceReviewCommitRecovery/before_commit (0.15s)
+    --- PASS: TestStage4ProcessConformanceReviewCommitRecovery/after_commit (0.14s)
+=== RUN   TestStage4ProcessConformanceChild
+--- PASS: TestStage4ProcessConformanceChild (0.00s)
+PASS
+ok  	github.com/davidadel66/evie/internal/eviedb	0.989s

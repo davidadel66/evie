@@ -34,12 +34,14 @@ func generation(tokenizer map[string]any) memory.CompilerGeneration {
 }
 func request(g memory.CompilerGeneration) memory.CompilerRequest {
 	id, _, _ := memory.CompilerGenerationIdentity(g)
-	return memory.CompilerRequest{ID: "sealed-request", GenerationID: id, Window: memory.CompilerWindow{Sources: []memory.CompilerSource{{Evidence: "café"}}}}
+	return memory.CompilerRequest{ID: "sealed-request", GenerationID: id, ScopePolicy: g.ScopePolicy, Window: memory.CompilerWindow{Sources: []memory.CompilerSource{{Evidence: "café"}}}}
 }
 
 func TestPinnedLocalTransportHandlesManifestAndBoundedVerboseMetadata(t *testing.T) {
 	tokenizer := map[string]any{"tokenizer.ggml.tokens": []string{strings.Repeat("fixture", 30000)}, "tokenizer.ggml.model": "gpt2"}
 	g := generation(tokenizer)
+	g.ScopePolicy = memory.CompilerScopePolicyV1
+	g.Schema = json.RawMessage(`{"type":"object","properties":{"candidates":{"type":"array","items":{"type":"object","properties":{"destination":{"type":"string","enum":["everywhere","workspace","session"]}},"required":["destination"]}}}}`)
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -53,11 +55,15 @@ func TestPinnedLocalTransportHandlesManifestAndBoundedVerboseMetadata(t *testing
 			calls.Add(1)
 			var body struct {
 				Model, Prompt string
+				Format        json.RawMessage
 				Raw, Stream   bool
 				Options       map[string]any
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Error(err)
+			}
+			if !strings.Contains(body.Prompt, memory.MemoryScopeRecommendationInstructions) || !strings.Contains(string(body.Format), `"destination"`) {
+				t.Error("missing scope contract in transport")
 			}
 			if !body.Raw || body.Stream || !strings.Contains(body.Prompt, "café") || body.Options["seed"] != float64(17) || body.Options["num_predict"] != float64(768) {
 				t.Errorf("request contract %+v", body)

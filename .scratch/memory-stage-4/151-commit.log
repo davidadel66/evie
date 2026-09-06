@@ -1,0 +1,16 @@
+[codex/memory-stage-4 10dc675] Add evidence-bound Stage 4 release assessment tooling (#151)
+ 14 files changed, 2787 insertions(+)
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-release/v1/README.md
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report-v2.json
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report.json
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-submission.json
+ create mode 100644 internal/memoryeval/stage4_release.go
+ create mode 100644 internal/memoryeval/stage4_release_evidence.go
+ create mode 100644 internal/memoryeval/stage4_release_gates.go
+ create mode 100644 internal/memoryeval/stage4_release_observations.go
+ create mode 100644 internal/memoryeval/stage4_release_quality.go
+ create mode 100644 internal/memoryeval/stage4_release_test.go
+ create mode 100644 scripts/memory-stage4-release/README.md
+ create mode 100644 scripts/memory-stage4-release/artifacts.go
+ create mode 100644 scripts/memory-stage4-release/main.go
+ create mode 100644 scripts/memory-stage4-release/main_test.go

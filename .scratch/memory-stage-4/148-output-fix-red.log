@@ -1,0 +1,33 @@
+--- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput (0.00s)
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/successful_output (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638836 TerminalCommittedAtUnixMS:0x53e5d7262aa0 TerminalCommitNanos:0x53e5d7262aa8 ResponseFinalizedAtUnixMS:0x53e5d7262af0 ResponseFinalizationNanos:0x53e5d7262af8 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_write_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638837 TerminalCommittedAtUnixMS:0x53e5d7262bc0 TerminalCommitNanos:0x53e5d7262bc8 ResponseFinalizedAtUnixMS:0x53e5d7262bd0 ResponseFinalizationNanos:0x53e5d7262bd8 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_write_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638838 TerminalCommittedAtUnixMS:0x53e5d7262c90 TerminalCommitNanos:0x53e5d7262c98 ResponseFinalizedAtUnixMS:0x53e5d7262cb0 ResponseFinalizationNanos:0x53e5d7262cb8 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/short_write (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638838 TerminalCommittedAtUnixMS:0x53e5d77be050 TerminalCommitNanos:0x53e5d77be058 ResponseFinalizedAtUnixMS:0x53e5d77be080 ResponseFinalizationNanos:0x53e5d77be088 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_flush_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638839 TerminalCommittedAtUnixMS:0x53e5d77be150 TerminalCommitNanos:0x53e5d77be158 ResponseFinalizedAtUnixMS:0x53e5d77be170 ResponseFinalizationNanos:0x53e5d77be178 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_flush_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638839 TerminalCommittedAtUnixMS:0x53e5d77be230 TerminalCommitNanos:0x53e5d77be238 ResponseFinalizedAtUnixMS:0x53e5d77be240 ResponseFinalizationNanos:0x53e5d77be248 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/provider_failure_output_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611638839 TerminalCommittedAtUnixMS:0x53e5d77be3e0 TerminalCommitNanos:0x53e5d77be3e8 ResponseFinalizedAtUnixMS:0x53e5d77be460 ResponseFinalizationNanos:0x53e5d77be468 Outcome:failed}, events=3
+FAIL
+FAIL	github.com/davidadel66/evie/internal/web	0.326s
+--- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput (0.24s)
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/successful_buffered_output (0.04s)
+        repl_foreground_measurement_test.go:105: buffered host output was not flushed
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/smooth_printer_write_fails (0.04s)
+        repl_foreground_measurement_test.go:102: output completion=false, measurement {RootID:d76d81cf-031d-4bcb-85c0-5940e24433cf StartedAtUnixMS:1788611639195 TerminalCommittedAtUnixMS:0x60fc0b48fc98 TerminalCommitNanos:0x60fc0b48fca0 ResponseFinalizedAtUnixMS:0x60fc0b48fca8 ResponseFinalizationNanos:0x60fc0b48fcb0 Outcome:success}
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/short_write (0.04s)
+        repl_foreground_measurement_test.go:102: output completion=false, measurement {RootID:a31970a3-f90f-44b2-ae32-3899245bc4f8 StartedAtUnixMS:1788611639234 TerminalCommittedAtUnixMS:0x60fc0b8982c8 TerminalCommitNanos:0x60fc0b8982d0 ResponseFinalizedAtUnixMS:0x60fc0b8982d8 ResponseFinalizationNanos:0x60fc0b8982e0 Outcome:success}
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/final_output_write_fails (0.04s)
+        repl_foreground_measurement_test.go:102: output completion=false, measurement {RootID:0c73b452-8a26-4611-959f-92ee0fce618b StartedAtUnixMS:1788611639275 TerminalCommittedAtUnixMS:0x60fc0b9de518 TerminalCommitNanos:0x60fc0b9de520 ResponseFinalizedAtUnixMS:0x60fc0b9de528 ResponseFinalizationNanos:0x60fc0b9de530 Outcome:success}
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/flush_fails (0.04s)
+        repl_foreground_measurement_test.go:102: output completion=false, measurement {RootID:5176518e-334f-4095-a061-f69893c26c23 StartedAtUnixMS:1788611639314 TerminalCommittedAtUnixMS:0x60fc0b892948 TerminalCommitNanos:0x60fc0b892950 ResponseFinalizedAtUnixMS:0x60fc0b892958 ResponseFinalizationNanos:0x60fc0b892960 Outcome:success}
+    --- FAIL: TestForegroundREPLMeasurementRequiresSuccessfulOutput/provider_failure_output_fails (0.04s)
+        repl_foreground_measurement_test.go:102: output completion=false, measurement {RootID:7ac630f8-d11a-4edc-8194-4dba0700b03a StartedAtUnixMS:1788611639354 TerminalCommittedAtUnixMS:0x60fc0b8895d8 TerminalCommitNanos:0x60fc0b8895e0 ResponseFinalizedAtUnixMS:0x60fc0b8895e8 ResponseFinalizationNanos:0x60fc0b8895f0 Outcome:failed}
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.626s
+FAIL

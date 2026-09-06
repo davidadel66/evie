@@ -1,0 +1,14 @@
+feat(memory): recover fenced compiler work across processes (#137)
+
+Persist retry attempts, backoff, resource reservations, and scheduling
+fairness. Recover staged output without another inference call while
+fencing cancellation, expired holders, and uncertain server capacity.
+
+Expose bounded status and explicit cancellation/resume through the CLI.
+Seal accepted context on first dispatch and detach caller-owned schema
+buffers. Adoption validates each source once; publication still checks
+fresh source bytes in its own transaction.
+
+Validation: isolated ./scripts/verify-change.sh and focused race tests
+passed, including subprocess crashes, cross-process leases, capacity,
+maximum-window adoption, and shared configuration ownership.

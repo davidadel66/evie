@@ -1,0 +1,10 @@
+[
+  {
+    "path": "internal/eviedb/compiler_source.go",
+    "sha256": "bceb7b4ede6c6d35573314d0240a638fef9d84a99a2266b0e0c4d73e72c9d2a7"
+  },
+  {
+    "path": "internal/eviedb/compiler_work.go",
+    "sha256": "40f596b44c318f41cbb649dcb888f72b7285bb98e1ae5016806de52a10819cd1"
+  }
+]

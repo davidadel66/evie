@@ -1,5 +1,96 @@
 # memory - decisions
 
+- **2026-09-06 — owner Usage analytics is authorized separately.**
+  See [usage.decisions.md](usage.decisions.md) and [usage.spec.md](usage.spec.md).
+  This narrowly extends the 2026-08-25 aggregation/frontend exclusion for
+  content-free owner reporting; immutable capture and evidence boundaries stay
+  intact. Complete runtime usage capture remains deferred.
+
+
+- **2026-09-04 - Stage 4 first-round design choices are accepted.**
+  David accepted Q1–Q10 of the [design interview](../research/memory-stage-4-design-questions.md).
+  The following amendments bind the Stage 4 design; they do not approve its
+  dependent implementation contracts, select a model, or authorize implementation.
+
+- **2026-09-04 - candidates target enduring useful knowledge with explicit uncertainty.**
+  Initial extraction focuses on enduring preferences, people and relationships,
+  Workspace/project decisions and constraints, and meaningful changes. Episodes
+  remain retained when they produce no candidate. Changing Task and other domain
+  records retain their authoritative stores unless a memory use case and
+  freshness policy are defined. A small reviewed Predicate vocabulary starts the
+  extractor; new definitions and identity alternatives remain visible proposals.
+  Unknown dates stay unknown, ambiguous identities remain distinct possibilities,
+  and model confidence does not authorize acceptance. This records Q1 and Q7.
+
+- **2026-09-04 - initial candidate support excludes independent assistant corroboration.**
+  Direct owner assertions and individually contracted tool observations may
+  support initial candidates. Assistant content may provide bounded interpretation
+  context but cannot independently corroborate personal facts; quotations,
+  hypotheticals, and reported speech require explicit evaluation because user
+  role alone does not establish an assertion. Committed eligible evidence remains
+  usable after failed or cancelled turns; unfinished tool intents establish no
+  outcome. This Q2 amendment narrows the compiler evidence allowlist, preserves
+  the existing prohibition on invented terminal outcomes, and is explained in
+  [ADR 0062](../../../../docs/adr/0062-distinguish-candidate-support-from-interpretation-context.md).
+
+- **2026-09-04 - private-history extraction stays local and scales from measurements.**
+  Q3–Q5 retain one owner, one machine, SQLite, bounded Go workers, and support for
+  multiple processes and Context Scopes over years of evidence. Start with one
+  local model request at a time across cooperating processes and bound input,
+  output, queued work, and database batches. New evidence has priority; backfill
+  uses remaining capacity. Turns never await extraction, and paired measurements
+  must establish foreground latency and commit overhead within an agreed budget.
+  Roughly minute-scale freshness and 10,000/100,000/1,000,000-event stress levels
+  are pilot hypotheses, not certified limits; vary bytes, Claims, candidates, and
+  scope/session distribution independently. Hardware, latency, and RAM budgets
+  remain open. A separately selected synthetic-only remote comparison is an
+  optional design choice, not a requirement or permission to send real history.
+  Remote private-history extraction requires its own explicit future policy;
+  remote retrieval opt-in does not grant it, and silent fallback remains forbidden.
+
+- **2026-09-04 - Candidate review belongs to the owner and outlives its source session.**
+  Q6 requires a scope-level inbox with accept, edit, and reject, showing exact
+  sources, scope, identity choices, and temporal effects. A bounded batch may
+  approve an exact preview with compound dependencies visible. Review remains
+  available after the originating conversation closes, without reviving that
+  conversation; original evidence authority remains distinct from approval
+  authority. The acceptance transaction and edit/batch contracts remain for the
+  dependent design round. Stage 3's session-bound explicit commands are unchanged.
+  Measure review seconds per useful accepted change and inbox age; a small daily
+  review session is a usability hypothesis. Explicit acceptance remains required
+  throughout Stage 4. See [ADR 0064](../../../../docs/adr/0064-let-owner-candidate-review-outlive-source-sessions.md).
+
+- **2026-09-04 - candidate progress is independent of contiguous compilation coverage.**
+  Q8 supersedes the 2026-08-12 blocked-head compiler policy: independent jobs may
+  persist unaccepted candidates out of order while recording exact completed
+  ranges and visible gaps. A contiguous frontier cannot cross an unresolved gap;
+  absent output is never treated as a successfully processed empty result, and
+  later jobs cannot depend on earlier unaccepted candidates. Accepted Semantic
+  Operations still serialize with current revision checks. See
+  [ADR 0063](../../../../docs/adr/0063-separate-candidate-progress-from-contiguous-coverage.md).
+
+- **2026-09-04 - compiler activation and historical backfill are separate choices.**
+  Q9 supersedes automatic all-history reconciliation for compiler generations:
+  activate new-evidence processing at an explicit captured frontier and offer
+  bounded historical backfill by scope and range. A changed model, prompt, or
+  evidence policy pins a new Compiler Generation whose output cannot rewrite
+  accepted memory. Reconciliation recovers uncovered work inside selected ranges;
+  excluded history remains visibly outside selection, never marked processed.
+  Preserve prior review decisions when equivalent suggestions recur. Index
+  generation backfill requirements remain unchanged. See
+  [ADR 0065](../../../../docs/adr/0065-separate-compiler-activation-from-historical-backfill.md).
+
+- **2026-09-04 - extractor selection includes useful recall and owner review cost.**
+  Q10 favors precision for suggested changes to existing knowledge while
+  independently measuring recall so universal abstention cannot win. Compare
+  candidates on frozen evidence, session-separated holdout data, and repeated
+  runs; use human-reviewed semantic labels and report error rates. Set numerical
+  gates from the pilot before tuning against the final holdout. Scope, provenance,
+  approval, replay, and other deterministic conformance failures remain release
+  blockers and cannot be averaged into extraction quality. This extends
+  [ADR 0053](../../../../docs/adr/0053-evaluate-memory-as-separate-systems.md);
+  the model, corpus sizes, annotation rules, and thresholds are still open.
+
 - **2026-09-04 - the owner Memory UI is an exact-scope semantic graph projection.**
   The Data hub may visualize current supported Entities and Claims from one
   explicit Semantic Memory scope and pinned Scope Revision. It retains a record
@@ -257,14 +348,13 @@
   The REPL canonicalizes its launch directory and may suggest one matching active
   registered project, but David must explicitly confirm project scope before a
   session is created or resumed. An unmatched directory offers registration or
-  global scope. Later `bash` cwd changes never alter the immutable session scope.
+  explicit Workspace selection or global scope. Later `bash` cwd changes never
+  alter the immutable session scope.
 
-- **2026-08-17 - research topics are an optional first-class scope after the core feature.**
-  A sustained inquiry should not require a fake code-project root or pollute
-  global memory. Optional Stage 10 adds registered `research:<id>` workspaces.
-  Research sessions retrieve only their own session, topic, and eligible global
-  claims; topic-to-global promotion is explicit. This extends, rather than
-  weakens, the existing project/session isolation model.
+- **2026-08-17 - research topics are an optional first-class scope after the core feature. Superseded 2026-08-31.**
+  The underlying need remains valid, but the later general Workspace decision
+  replaces a separate `research:<id>` scope. Research becomes an ordinary
+  Workspace with optional artifact capabilities.
 
 - **2026-08-17 - research artifacts are inspectable files; research claims remain SQLite state.**
   Each topic may expose a manifest plus source, note, and output directories.
@@ -276,11 +366,12 @@
   hard-erasure policy permits deletion; optional Git history and limits for
   unreferenced artifacts remain Stage 10 decisions.
 
-- **2026-08-17 - research access uses the same scope and egress fences as memory.**
-  Project and research bindings are mutually exclusive. Generic file tools cannot
-  access `~/.evie/research`; typed APIs bind the current topic and apply remote
-  opt-in, secret scanning, and untrusted-data rendering. Research extraction may
-  write only its topic; global promotion is explicit and approved.
+- **2026-08-17 - research access uses the same scope and egress fences as memory. Amended 2026-08-31.**
+  Project and Workspace bindings are mutually exclusive. Generic file tools
+  cannot access the managed research artifact root; typed APIs bind the current
+  Workspace and apply remote opt-in, secret scanning, and untrusted-data
+  rendering. Research extraction may write only that Workspace; global promotion
+  is explicit and approved.
 
 - **2026-08-14 - semantic memory is a temporal property graph in SQLite.**
   This supersedes the 2026-08-12 decisions that made Git-backed documents the
@@ -537,6 +628,8 @@
   turns. Complete groups retain their normal provider-neutral ordering.
 
 - **2026-08-14 - compiler and index coverage are generation-keyed.**
+  Compiler activation/backfill selection is amended by the 2026-09-04 decision
+  above; the index-generation requirements here remain in force.
   Compiler runs, FTS, and vector indexes carry immutable configuration hashes and
   durable coverage checkpoints. A new extractor can process all source events
   into a separate candidate group; a new index generation backfills before it
@@ -547,11 +640,11 @@
   reject redirects. There is no remote fallback. Fixture spikes must prove
   structured output, cancellation, malformed-response, and endpoint behavior.
 
-- **2026-08-12 - EVIE stays centralized; projects are registered session scopes.**
+- **2026-08-12 - EVIE stays centralized; Context Scopes are registered session scopes. Amended 2026-08-31.**
   Launch cwd and `EVIE_PROJECT_ROOT` do not grant a project scope. New
-  conversations default to global scope; a project conversation explicitly
-  selects one durable registry entry and keeps that scope immutable. Switching
-  projects creates or resumes another session.
+  conversations default to global scope; a scoped conversation explicitly
+  selects one durable Workspace or project registry entry and keeps that scope
+  immutable. Switching Context Scope creates or resumes another session.
 
 - **2026-08-12 - project IDs are durable random IDs, not path hashes.**
   Registration stores a unique canonical root, display name, and timestamps. An
@@ -561,15 +654,15 @@
 
 - **2026-08-12 - active session scope is always isolated.**
   A global session retrieves its own session claims plus eligible global claims.
-  A project session adds only its selected project's claims. Other sessions and
-  projects are excluded unless an explicit, authorized operation promotes or
-  links their evidence.
+  A scoped session adds only its selected Workspace or project's claims. Other
+  sessions and Context Scopes are excluded unless an explicit, authorized
+  operation promotes or links their evidence.
 
 - **2026-08-12 - write scope is harness-bound, not model-selected.**
-  A global session defaults writes to global; a project session defaults to its
-  selected project. Model-called operations cannot override that immutable
-  value. A local command may choose the current session scope, while project to
-  global writes require explicit promotion.
+  A global session defaults writes to global; a scoped session defaults to its
+  selected Workspace or project. Model-called operations cannot override that
+  immutable value. A local command may choose the current session scope, while
+  Context Scope to global writes require explicit promotion.
 
 - **2026-08-12 - local Go-native implementation, not a hosted memory provider.**
   Zep, Mem0, Letta, and Graphiti are references rather than runtime dependencies.
@@ -583,6 +676,8 @@
   event rows remain append-only in the initial implementation.
 
 - **2026-08-12 - background work uses a durable outbox and bounded workers.**
+  The 2026-09-04 candidate-progress and activation/backfill decisions above
+  supersede this entry's blocked-head and automatic historical coverage defaults.
   Channels only wake workers. SQLite owns jobs, idempotency, ordered source
   ranges, attempts, leases, retry timing, and terminal state. Extraction and
   embedding calls may run concurrently, but accepted mutations are serialized
@@ -609,12 +704,13 @@
   a separately approved encryption and key-management policy; they would remain
   transport state rather than semantic evidence.
 
-- **2026-08-23 - unfinished tool intent does not block later turns.**
-  Tool execution intent remains durable before execution and terminal status is
-  a later event. After restart, an intent without terminal evidence is treated as
-  unfinished without synthesizing success or failure, and later turns may
-  continue. A stronger recovery policy is deferred until observed workflows show
-  that it is necessary.
+- **2026-08-23 - unfinished ordinary conversational tool intent does not block later turns.**
+  Conversational tool execution intent remains durable before execution and
+  terminal status is a later event. After restart, an intent without terminal
+  evidence is treated as unfinished without synthesizing success or failure, and
+  later conversational turns may continue. This decision does not apply to
+  Workflow Runs; the 2026-08-31 workflow-effect decision below supersedes it for
+  dependent workflow execution.
 
 - **2026-08-23 - uncertain cron cancellation cleanup preserves the jobs row.**
   When parent cancellation is observed after a cron mutation starts, cleanup gets
@@ -626,6 +722,48 @@
   This is a cancellation-only exception to the completed cron contract; ordinary
   add failures still roll back their row, and ordinary remove still ignores
   uninstall errors and deletes its row.
+
+- **2026-08-31 - Workspace is a first-class memory scope.**
+  A session has exactly one Context Scope: one Workspace, one filesystem project,
+  or neither. Workspace sessions retrieve only global, their one Workspace, and
+  their one session scope. New writes default to the bound Context Scope and
+  promotion to global remains explicit. This supersedes the optional separate
+  `research` scope: later research artifact areas specialize an ordinary
+  Workspace rather than add another scope kind.
+
+- **2026-08-31 - procedural definitions and Workflow Runs have different authorities.**
+  Procedural Git owns reviewed Workspace Revisions, Agent Presets, Skills, and
+  Workflow Definitions. SQLite owns changing Workflow Run, node, lease,
+  checkpoint, interruption, effect, notification, and migration state. Stage 7
+  delivers reviewed procedural assets only; the separate Workflow Runtime
+  specification governs durable execution.
+
+- **2026-08-31 - conversational turns and Workflow Runs use separate leases.**
+  The session-turn lease continues to fence conversational provider calls,
+  tools, and turn events. A Workflow Run owns independent run and step leases and
+  may continue without an active session. A background run never treats an
+  expired conversational lease as authority.
+
+- **2026-08-31 - only typed Workflow Approval may grant Standing Authority.**
+  Retrieved memory, Skills, free-form Markdown, Agent Presets, and Workspace
+  Access cannot grant permission or alter approval behavior. Owner approval of
+  one exact typed Workflow Definition may activate its code-enforced bounded
+  Standing Authority for future runs. This is a separate authorization object,
+  not an exception that lets memory instructions authorize tools.
+
+- **2026-08-31 - unresolved workflow effects block dependent nodes.**
+  A workflow Effect Intent commits before an external effect and an Effect
+  Receipt commits before dependent execution advances. An intent without a
+  receipt is Outcome Unknown. The runtime reconciles it through connector
+  idempotency or lookup and then explicit human resolution if needed; it never
+  retries blindly. Ordinary conversational turns retain the narrower 2026-08-23
+  recovery rule above.
+
+- **2026-08-31 - semantic replay and workflow resume are distinct.**
+  Semantic-operation replay deterministically rebuilds accepted graph state and
+  performs no model or external calls. Workflow resume continues from a durable
+  workflow checkpoint. Production workflow time-travel replay is deferred
+  because later nodes and effects could execute again.
 
 - **Open - extraction and embedding implementations.**
   Stage 4 must select a local extraction model and structured-output protocol.

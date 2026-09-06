@@ -1,0 +1,120 @@
+{
+  "version": "memory-stage-4-owner-contribution-v1",
+  "ticket": 149,
+  "status": "frozen_focused_normal_and_race_pass_root_aggregate_checks_pending",
+  "created_at": "2026-09-05T12:50:34.929341+00:00",
+  "head_at_freeze": "acf37b7a2975091ad415ff79f17a7106f5bcb105",
+  "files": [
+    {
+      "path": "cmd/evie/memory_stage4_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "d15d08c24c0d5c661086ac83b3ca5f0a589da76f24e9cb61b117a3f9bb200dcb",
+      "bytes": 19603,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_scope_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "36db493f773d8359c76f08e9901e7c103f4cef32b4b78bb88d50f81e709c30cc",
+      "bytes": 8980,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_history_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "26eb6d48641915d3eff671b5479af2c4f150d486557364f1b4fb0a4849b97ed7",
+      "bytes": 9196,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/memory_stage4_review_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "6ed458421e4259d656237e16bd62d7f45c1a0f815193371ff79d2f3ae66e124d",
+      "bytes": 10310,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+      "bytes": 1591,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "620a0da46e352356be2abb50e6b64851ad6c10de568e6d8f09a78faf96c884cc",
+      "bytes": 8033,
+      "executable": false
+    },
+    {
+      "path": "internal/eviedb/stage4_process_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+      "bytes": 22687,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage-4-conformance.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "3f0fd1b3e29cd826421dcf4f16dd3970e7476b9a8ff2d0b187ecaf36aadf5659",
+      "bytes": 13488,
+      "executable": true
+    },
+    {
+      "path": "scripts/memory_stage4_conformance_test.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "cc70e9cbc77d27d38c1eed9d23fce257646fe9437ae7c9ccf1eeb89b59f151af",
+      "bytes": 5833,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "df05cba523bfc807549dec3d9800115ca78fae3e9ce882669b27668a043c071f",
+      "bytes": 2023,
+      "executable": false
+    },
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "4e87388e25e8a3170c4fa76872579277fce846877b746430b527384f2c2ce08d",
+      "bytes": 8559,
+      "executable": false
+    }
+  ],
+  "frozen_files": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-owner-frozen-files",
+  "checks": [
+    {
+      "command": "git diff --no-index --check /dev/null <each of 11 owned files>",
+      "result": "PASS",
+      "note": "No output; no-index exit1 denotes new-file differences."
+    },
+    {
+      "command": "gofmt -l <seven owned Go files>",
+      "result": "PASS"
+    }
+  ],
+  "focused_report": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-conformance-focused-v1/report.json",
+  "focused_report_sha256": "ca123a0dfbbb55153c715229a826c3e7ceb25b2d9e56e13b3df80eb333fd20ea",
+  "scenario_count_each_run": 11,
+  "pending": [
+    "Root-owned db.go hook and browser helper/driver aggregation",
+    "Required isolated ./scripts/verify-change.sh and complete UI Vitest",
+    "Actual browser receipt matching source fingerprint",
+    "Independent Standards and Spec reviews",
+    "Root one-ticket commit"
+  ],
+  "production_hooks": "Root already inserted connectSQLiteStartup(ctx,db) after sql.Open and before any application/schema statements. No db.go bytes included here."
+}

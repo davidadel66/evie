@@ -1,0 +1,3856 @@
+diff --git a/cmd/evie/candidate_review.go b/cmd/evie/candidate_review.go
+new file mode 100644
+index 0000000..3efb472
+--- /dev/null
++++ b/cmd/evie/candidate_review.go
+@@ -0,0 +1,102 @@
++package main
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"flag"
++	"io"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type ownerReviewKernel interface {
++	LocalOwnerReviewContext(context.Context, string) (eviedb.OwnerReviewContext, error)
++	ListOwnerCandidates(context.Context, eviedb.OwnerReviewContext, memory.OwnerCandidateQuery) (memory.OwnerCandidatePage, error)
++	InspectOwnerCandidate(context.Context, eviedb.OwnerReviewContext, string) (memory.OwnerCandidate, error)
++	PrepareOwnerCandidateReview(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef, string) (memory.ReviewPreview, error)
++	ResolveOwnerCandidateReview(context.Context, eviedb.OwnerReviewContext, memory.ReviewDecision) (memory.ReviewResult, error)
++	InspectOwnerReviewOperation(context.Context, eviedb.OwnerReviewContext, memory.SemanticID) (memory.OwnerReviewOperation, error)
++}
++
++// Every invocation is a trusted local owner command selecting one exact scope.
++// A resolve accepts only immutable preview identity, never replacement effects.
++func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer, kernel ownerReviewKernel) (bool, error) {
++	if len(args) == 0 || args[0] != "memory-review" {
++		return false, nil
++	}
++	if len(args) < 2 {
++		return true, errors.New("usage: memory-review inbox|inspect|prepare|resolve|operation --scope SCOPE")
++	}
++	command := args[1]
++	flags := flag.NewFlagSet("memory-review "+command, flag.ContinueOnError)
++	flags.SetOutput(io.Discard)
++	scope := flags.String("scope", "", "one exact global/workspace/project/session scope")
++	id := flags.String("id", "", "candidate or accepted operation ID")
++	revision := flags.Int64("revision", 0, "exact candidate review revision")
++	interpretation := flags.Int64("interpretation", 0, "exact interpretation revision")
++	action := flags.String("action", "", "explicit accept or reject")
++	preview := flags.String("preview", "", "frozen preview ID")
++	digest := flags.String("digest", "", "frozen preview SHA256")
++	delivery := flags.String("delivery", "", "unique idem:v1 UUID delivery key")
++	reason := flags.String("reason", "", "optional owner reason")
++	limit := flags.Int("limit", 0, "inbox page size, default50 maximum100")
++	cursor := flags.String("cursor", "", "revision-bound inbox cursor")
++	if err := flags.Parse(args[2:]); err != nil {
++		return true, err
++	}
++	if flags.NArg() != 0 || *scope == "" {
++		return true, errors.New("review requires explicit --scope and no positional arguments")
++	}
++	allowed := map[string]map[string]bool{
++		"inbox":     {"scope": true, "limit": true, "cursor": true},
++		"inspect":   {"scope": true, "id": true},
++		"operation": {"scope": true, "id": true},
++		"prepare":   {"scope": true, "id": true, "revision": true, "interpretation": true, "action": true},
++		"resolve":   {"scope": true, "preview": true, "digest": true, "delivery": true, "action": true, "reason": true},
++	}
++	accepts, ok := allowed[command]
++	if !ok {
++		return true, errors.New("unknown memory-review command")
++	}
++	invalid := false
++	flags.Visit(func(f *flag.Flag) {
++		if !accepts[f.Name] {
++			invalid = true
++		}
++	})
++	if invalid {
++		return true, errors.New("flag is not allowed for this review command")
++	}
++	if (command == "inspect" || command == "operation") && *id == "" || command == "prepare" && *id == "" || command == "resolve" && (*preview == "" || *digest == "" || *delivery == "") {
++		return true, errors.New("review command is missing an exact identity")
++	}
++	if (command == "prepare" || command == "resolve") && *action != "accept" && *action != "reject" {
++		return true, errors.New("review requires explicit --action accept or reject")
++	}
++	authority, err := kernel.LocalOwnerReviewContext(ctx, *scope)
++	if err != nil {
++		return true, err
++	}
++	var result any
++	switch command {
++	case "inbox":
++		result, err = kernel.ListOwnerCandidates(ctx, authority, memory.OwnerCandidateQuery{Limit: *limit, Cursor: *cursor})
++	case "inspect":
++		result, err = kernel.InspectOwnerCandidate(ctx, authority, *id)
++	case "operation":
++		result, err = kernel.InspectOwnerReviewOperation(ctx, authority, memory.SemanticID(*id))
++	case "prepare":
++		result, err = kernel.PrepareOwnerCandidateReview(ctx, authority, memory.CandidateRef{ID: *id, ReviewRevision: *revision, InterpretationRevision: *interpretation}, *action)
++	case "resolve":
++		result, err = kernel.ResolveOwnerCandidateReview(ctx, authority, memory.ReviewDecision{DeliveryKey: *delivery, PreviewID: *preview, PreviewSHA256: *digest, Action: *action, Reason: *reason})
++	}
++	if err != nil && !errors.Is(err, eviedb.ErrReviewResolved) {
++		return true, err
++	}
++	resolutionErr := err
++	encoder := json.NewEncoder(out)
++	encoder.SetIndent("", "  ")
++	return true, errors.Join(encoder.Encode(result), resolutionErr)
++}
+diff --git a/cmd/evie/candidate_review_test.go b/cmd/evie/candidate_review_test.go
+new file mode 100644
+index 0000000..eb0dcac
+--- /dev/null
++++ b/cmd/evie/candidate_review_test.go
+@@ -0,0 +1,139 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"fmt"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type reviewCLIExtractor struct{ subject, predicate memory.SemanticID }
++
++func (reviewCLIExtractor) ServerIdentity() string { return "scripted:review-cli" }
++func (e reviewCLIExtractor) Extract(_ context.Context, _ memory.CompilerGeneration, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++	var source memory.EvidenceLocator
++	for _, s := range r.Window.Sources {
++		if s.Usage == "new_support" {
++			source = s.Locator
++			break
++		}
++	}
++	candidate := memory.ExtractorCandidate{Proposition: memory.ClaimProposition{SubjectEntityID: e.subject, PredicateID: e.predicate, Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: "coffee"}}, Polarity: memory.PolarityAffirmed}, Support: []memory.EvidenceLocator{source}, Context: []memory.EvidenceLocator{}}
++	raw, err := json.Marshal(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{candidate}})
++	return eviedb.CompilerExtraction{Raw: raw, ReleaseEvidence: "completed"}, err
++}
++func reviewCLIGeneration() memory.CompilerGeneration {
++	g := memory.CompilerGeneration{Version: "compiler-generation-v1", ModelArtifact: "scripted:test", ModelSHA256: strings.Repeat("1", 64), Quantization: "fixture", RuntimeVersion: "fixture", ProtocolVersion: "ollama-generate-v1", TokenizerSHA256: strings.Repeat("2", 64), Template: "{{.System}}\n{{.Prompt}}", Prompt: "Extract owner assertions.", Schema: json.RawMessage(`{"type":"object"}`), TokenBoundProofSHA256: strings.Repeat("3", 64), TokensPerByte: 1, TemplateTokenOverhead: 8, Decoding: memory.CompilerDecoding{ContextTokens: 131072, OutputTokens: 768, Seed: 17}}
++	g.ModelManifest = json.RawMessage(`{"layers":[{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:` + g.ModelSHA256 + `"}]}`)
++	g.ModelManifestSHA256 = memory.CompilerHash(g.ModelManifest)
++	g.TemplateSHA256 = memory.CompilerHash([]byte(g.Template))
++	g.EvidencePolicy = memory.CompilerPolicyVersion
++	g.SecretPolicy = memory.CompilerPolicyVersion
++	g.ClosurePolicy = memory.CompilerPolicyVersion
++	g.WindowPolicy = memory.CompilerPolicyVersion
++	g.PredicatePolicy = memory.CompilerPolicyVersion
++	g.EntityPolicy = memory.CompilerPolicyVersion
++	g.ValidationPolicy = memory.CompilerPolicyVersion
++	g.EquivalencePolicy = memory.CompilerPolicyVersion
++	g.EffectPolicy = memory.CompilerPolicyVersion
++	return g
++}
++
++func TestOwnerReviewCLIClosedSessionAcceptance(t *testing.T) {
++	ctx := context.Background()
++	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	store := eviedb.NewStore(db)
++	session, err := store.CreateGlobalSession(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	lease, err := store.AcquireTurnLease(ctx, session.ID, "review-cli", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	appendEvent := func(input memory.EventInput) memory.Event {
++		t.Helper()
++		e, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, input)
++		if err != nil {
++			t.Fatal(err)
++		}
++		return e
++	}
++	seed := appendEvent(memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "/remember drink tea"})
++	explicit, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: "idem:v1:91000000-0000-4000-8000-000000000140", SourceEventID: seed.ID, Predicate: "drink", PredicateLabel: "drink", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "tea"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = store.ApplyRememberLiteral(ctx, lease, explicit); err != nil {
++		t.Fatal(err)
++	}
++	root := appendEvent(memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer coffee."})
++	last := appendEvent(memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++	compiled, err := store.CompileCandidateUnit(ctx, session.ScopeContext(), memory.CompilationSelection{SessionID: session.ID, RootID: root.ID, Cutoff: last.Sequence, Destination: "global"}, reviewCLIGeneration(), reviewCLIExtractor{explicit.Subject.ID, explicit.Predicate.ID})
++	if err != nil || compiled.State != "completed_candidates" {
++		t.Fatalf("compile %+v %v", compiled, err)
++	}
++	if err = store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, session.ID); err != nil {
++		t.Fatal(err)
++	}
++	run := func(args ...string) []byte {
++		t.Helper()
++		var out bytes.Buffer
++		handled, err := runOwnerReviewManagement(ctx, append([]string{"memory-review"}, args...), &out, store)
++		if !handled || err != nil {
++			t.Fatalf("CLI %v: %v", args, err)
++		}
++		return out.Bytes()
++	}
++	var page memory.OwnerCandidatePage
++	if err = json.Unmarshal(run("inbox", "--scope", "global"), &page); err != nil || len(page.Candidates) != 1 {
++		t.Fatalf("inbox %+v %v", page, err)
++	}
++	var item memory.OwnerCandidate
++	if err = json.Unmarshal(run("inspect", "--scope", "global", "--id", page.Candidates[0].Ref.ID), &item); err != nil {
++		t.Fatal(err)
++	}
++	var preview memory.ReviewPreview
++	if err = json.Unmarshal(run("prepare", "--scope", "global", "--id", item.Ref.ID, "--revision", fmt.Sprint(item.Ref.ReviewRevision), "--interpretation", fmt.Sprint(item.Ref.InterpretationRevision), "--action", "accept"), &preview); err != nil {
++		t.Fatal(err)
++	}
++	args := []string{"resolve", "--scope", "global", "--preview", preview.ID, "--digest", preview.SHA256, "--delivery", "idem:v1:91000000-0000-4000-8000-000000000141", "--action", "accept"}
++	var result memory.ReviewResult
++	if err = json.Unmarshal(run(args...), &result); err != nil || result.Operation == nil {
++		t.Fatalf("resolve %+v %v", result, err)
++	}
++	repeated := run(args...)
++	var same memory.ReviewResult
++	if err = json.Unmarshal(repeated, &same); err != nil || same.AuditID != result.AuditID {
++		t.Fatalf("duplicate delivery %+v %v", same, err)
++	}
++	var op memory.OwnerReviewOperation
++	if err = json.Unmarshal(run("operation", "--scope", "global", "--id", string(result.Operation.OperationID)), &op); err != nil || op.Preview.Effect.Claims[0].Sources[0].Evidence != "I prefer coffee." {
++		t.Fatalf("operation %+v %v", op, err)
++	}
++	var status string
++	db.QueryRow(`SELECT status FROM sessions WHERE id=?`, session.ID).Scan(&status)
++	if status != "closed" {
++		t.Fatal("CLI resumed source session")
++	}
++	for _, bad := range [][]string{{"inbox"}, {"prepare", "--scope", "global", "--id", item.Ref.ID}, {"resolve", "--scope", "global", "--preview", preview.ID, "--digest", preview.SHA256, "--delivery", "idem:v1:91000000-0000-4000-8000-000000000142"}, {"inbox", "--scope", "global", "--action", "accept"}} {
++		var out bytes.Buffer
++		if _, err = runOwnerReviewManagement(ctx, append([]string{"memory-review"}, bad...), &out, store); err == nil || out.Len() != 0 {
++			t.Fatalf("unbound CLI action %v accepted", bad)
++		}
++	}
++}
+diff --git a/cmd/evie/docs/research/memory-stage-4-owner-review.md b/cmd/evie/docs/research/memory-stage-4-owner-review.md
+new file mode 100644
+index 0000000..c07a4ac
+--- /dev/null
++++ b/cmd/evie/docs/research/memory-stage-4-owner-review.md
+@@ -0,0 +1,114 @@
++# Stage 4 closed-session owner review
++
++Implementation of [#140](https://github.com/davidadel66/evie/issues/140), under
++the [owner-review contract](../active/memory-stage-4-review-contract.decisions.md).
++This engineering record does not qualify an extractor or replace the Stage 4
++human evaluation gates.
++
++The trusted local CLI obtains an opaque `eviedb.OwnerReviewContext` from the
++Kernel for one explicit scope. Request JSON cannot create that capability.
++Its authentication binding and authorization revision are checked against
++SQLite on every read and committing review. Source sessions remain closed;
++review never creates a source event, takes a source turn lease, or calls a
++session-bound Semantic Memory apply API.
++
++## Local demonstration
++
++Use a candidate produced by explicitly configured compilation. Inspect the
++returned `ref` and copy its exact candidate ID and both revisions:
++
++```sh
++evie memory-review inbox --scope global --limit 50
++evie memory-review inspect --scope global --id CANDIDATE_ID
++evie memory-review prepare --scope global --id CANDIDATE_ID \
++  --revision 0 --interpretation 0 --action accept
++```
++
++The preview displays original evidence and interpretation context, exact UTF-8
++byte ranges and hashes, original authority, current subject/Predicate/object
++identities, scope revisions, conflicts, unknown Valid Time bounds, and each
++create/reuse effect. Review that complete preview before the explicit resolve:
++
++```sh
++evie memory-review resolve --scope global --preview PREVIEW_ID \
++  --digest sha256:PREVIEW_HASH --delivery idem:v1:NEW_UUID_V4 --action accept
++evie memory-review operation --scope global --id ACCEPTED_OPERATION_ID
++```
++
++For rejection, prepare and resolve with `--action reject`. A rejection preview
++can disclose a safe redacted candidate identity when supporting text is no
++longer eligible. Optional `--reason` is bounded to 4 KiB and secret-scanned.
++Rejection records no Semantic Operation and advances no semantic revision.
++
++The scope must be exactly `global`, `workspace:REGISTERED_ID`,
++`project:REGISTERED_ID`, or `session:DURABLE_SESSION_ID`. Context Scope inboxes
++exclude session-scoped candidates. A session review can use its allowed Context
++Scope/global identities while preserving its selected session destination.
++A different session sharing that Context Scope cannot access this inbox.
++Closing a source session is allowed; revoking its registered scope is not.
++
++## Exact interpretation and transaction
++
++The first slice prepares one `CandidateRef` using already accepted subject,
++object and Predicate identities. Each current candidate is an independent
++review unit because it introduces no shared proposed identity. A suppressed
++recurrence has no independent executable preview, but a fresh sibling from the
++same extraction job remains reviewable. An extraction group is not implicitly
++a dependency-connected review group. New identities/Predicates, corrections,
++contracted tool observations, owner edits and compound batches remain the
++respective later ticket outcomes.
++
++The versioned canonical encodings use fixed struct field order, ordered
++references, explicit nulls, domain-separated SHA-256, and existing typed literal
++semantics. Golden bytes/hashes live in
++`internal/eviedb/testdata/candidate_review_encoding_v1.json`. Rendering whitespace
++is outside identity. New Transaction Time is assigned by the accepting commit;
++unknown real-world time remains unknown.
++
++Preparation seals source projections against the immutable request and original
++staged output. Acceptance checks the exact durable preview, current authorization,
++source policy, current eligibility, candidate revisions, complete semantic scope
++vector, identities, conflicts and equality under one immediate SQLite transaction.
++It records one schema-v6 `owner_candidate_review` operation, accepted effects,
++Source Links, state events, semantic revisions, review resolution/audit, and
++idempotent delivery result together. A failure or cancellation commits none.
++An equal active Claim is reused with explicitly reviewed new support; a retracted
++Source Link or inactive equal Claim requires an explicit later lifecycle choice.
++
++A duplicate delivery key with identical request returns the stored committed
++result even if the source policy subsequently changes. A differing request
++conflicts. A competing terminal review returns `already_resolved` and the
++recorded authorized result. A stale preview changes neither review nor graph
++state; preparing a replacement requires new explicit approval.
++
++## Accepted history and inspection
++
++The accepted envelope retains source interpretation, exact selected projection,
++original source session/authority, owner approval binding, candidate revisions,
++and preview/effect identities. Source inspection and ordinary exact accepted
++reads project selected byte ranges instead of expanding the whole event. The
++existing Stage 3 active-session read/API checks remain intact; the new owner
++operation inspection is the explicit scope-level closed-session provenance path.
++
++Current source policy can redact old source quotes and the stored operation JSON
++that would expose them. Promotion follows exact Source Link provenance back to
++the original review, including its supporting assertions and assistant context.
++Preparing or applying a Promotion rechecks that origin's current eligibility;
++redacted or empty reviewed evidence cannot authorize it. Later source inspection
++and stored Promotion payloads use the same disclosure rule.
++
++These checks do not rewrite accepted history. Replay verifies the recorded
++support and context against immutable event identity, lineage, metadata, UTF-8
++projection, exact bytes and hash. Corruption fails verification and quarantines
++the affected projection. A later source policy, authorization, registry, or
++session-status change does not invalidate the historical interpretation. Replay
++uses the recorded canonical operation and effect writer without live owner
++authentication, source-turn authority, extraction, or model calls. The schema
++migration preserves old accepted bytes, and both startup compatibility and
++shadow replay recognize only the exact v6 operation kind.
++
++Review history remains retained and can grow. Inbox pages are bounded to 100
++(default 50), revision-bound, and scoped; source/stage envelopes retain compiler
++bounds, and a full preview is capped at 256 KiB. No automatic approval, default
++model installation, production activation, or evaluation claim follows from
++these deterministic tests.
+diff --git a/cmd/evie/main.go b/cmd/evie/main.go
+index 766ab17..a62952e 100644
+--- a/cmd/evie/main.go
++++ b/cmd/evie/main.go
+@@ -61,6 +61,12 @@ func main() {
+ 		}
+ 		return
+ 	}
++	if handled, err := runOwnerReviewManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore); handled {
++		if err != nil {
++			log.Fatalf("memory review: %v", err)
++		}
++		return
++	}
+ 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
+ 		log.Fatalf("failed to import legacy Todo list: %v", err)
+ 	}
+diff --git a/internal/eviedb/candidate_review_apply.go b/internal/eviedb/candidate_review_apply.go
+new file mode 100644
+index 0000000..1a8a6e7
+--- /dev/null
++++ b/internal/eviedb/candidate_review_apply.go
+@@ -0,0 +1,438 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/hex"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"strings"
++	"time"
++	"unicode/utf8"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// This is the source-policy identity accepted by the immutable v6 envelope,
++// independent of whichever policy a future compiler uses for new extraction.
++const ownerReviewSourcePolicyV1 = "owner-assertions-v1"
++
++// reviewWriter exposes only package-private accepted-effect helpers, within an
++// already authorized serialized owner review transaction. It is not a lease.
++type reviewWriter struct{ conn *sql.Conn }
++
++func (w reviewWriter) execContext(ctx context.Context, s string, args ...any) (sql.Result, error) {
++	return w.conn.ExecContext(ctx, s, args...)
++}
++func (w reviewWriter) queryContext(ctx context.Context, s string, args ...any) (*sql.Rows, error) {
++	return w.conn.QueryContext(ctx, s, args...)
++}
++func (w reviewWriter) queryRowContext(ctx context.Context, s string, args ...any) rowScanner {
++	return w.conn.QueryRowContext(ctx, s, args...)
++}
++
++func (s *Store) ResolveOwnerCandidateReview(ctx context.Context, a OwnerReviewContext, decision memory.ReviewDecision) (memory.ReviewResult, error) {
++	var result memory.ReviewResult
++	var priorResolution memory.ReviewResult
++	if !reviewDeliveryValid(decision.DeliveryKey) || len(decision.Reason) > 4096 || !utf8.ValidString(decision.Reason) || compilerHasSecret(decision.Reason) {
++		return result, errors.New("invalid review delivery or reason")
++	}
++	requestHash, _, err := semanticHash(decision)
++	if err != nil {
++		return result, err
++	}
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := checkReviewAuthority(ctx, conn, a); err != nil {
++			return err
++		}
++		var storedHash, scope string
++		var storedResult []byte
++		err := conn.QueryRowContext(ctx, `SELECT request_hash,scope_key,result FROM memory_review_deliveries WHERE owner_id=? AND delivery_key=?`, memory.LocalOwnerID, decision.DeliveryKey).Scan(&storedHash, &scope, &storedResult)
++		if err == nil {
++			if scope != a.scope {
++				return ErrOwnerReviewUnauthorized
++			}
++			if storedHash != requestHash {
++				return ErrIdempotencyConflict
++			}
++			return json.Unmarshal(storedResult, &result)
++		}
++		if !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		var raw []byte
++		if err = conn.QueryRowContext(ctx, `SELECT envelope FROM memory_review_previews WHERE preview_id=? AND scope_key=?`, decision.PreviewID, a.scope).Scan(&raw); err != nil {
++			return ErrOwnerReviewUnauthorized
++		}
++		var p memory.ReviewPreview
++		if json.Unmarshal(raw, &p) != nil {
++			return errors.New("invalid stored preview")
++		}
++		if err = validateOwnerReviewEncoding(p); err != nil {
++			return err
++		}
++		if p.SHA256 != decision.PreviewSHA256 || p.Action != decision.Action {
++			return ErrReviewStale
++		}
++		// Current owner authority and preview integrity still apply to a
++		// terminal lookup. Source and preview freshness govern new acceptance;
++		// they cannot hide an already recorded winning resolution.
++		for _, selected := range p.Candidates {
++			var state string
++			if err := conn.QueryRowContext(ctx, `SELECT c.review_state FROM memory_compiler_candidates c JOIN memory_compiler_jobs j ON j.job_id=c.job_id WHERE c.candidate_id=? AND j.job_id=? AND j.destination=?`, selected.Ref.ID, p.JobID, a.scope).Scan(&state); err != nil {
++				return err
++			}
++			if state != "unresolved" {
++				var prior []byte
++				if err := conn.QueryRowContext(ctx, `SELECT d.result FROM memory_review_resolutions r JOIN memory_review_deliveries d ON d.owner_id=r.owner_id AND d.delivery_key=r.delivery_key WHERE r.candidate_id=? AND d.scope_key=?`, selected.Ref.ID, a.scope).Scan(&prior); err != nil {
++					return err
++				}
++				if err := json.Unmarshal(prior, &priorResolution); err != nil {
++					return err
++				}
++				return ErrReviewResolved
++			}
++		}
++		if p.AuthenticationBinding != a.binding || p.AuthorizationRevision != a.revision {
++			return ErrReviewStale
++		}
++		var policy string
++		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&policy); err != nil {
++			return err
++		}
++		if policy != p.SourcePolicy {
++			return ErrReviewStale
++		}
++		current := make([]memory.OwnerCandidate, 0, len(p.Candidates))
++		for _, selected := range p.Candidates {
++			item, err := loadReviewCandidate(ctx, conn, a, selected.Ref.ID, p.Action == "accept")
++			if err != nil {
++				return err
++			}
++			if item.Candidate.EquivalentTo != "" {
++				return ErrReviewStale
++			}
++			current = append(current, item)
++		}
++		if string(compilerJSON(current)) != string(compilerJSON(p.Candidates)) {
++			return ErrReviewStale
++		}
++		auditID, err := newSemanticID()
++		if err != nil {
++			return err
++		}
++		result = memory.ReviewResult{DeliveryKey: decision.DeliveryKey, PreviewID: p.ID, Action: p.Action, AuditID: string(auditID), Candidates: []memory.CandidateRef{}}
++		if p.Action == "accept" {
++			op := memory.OwnerReviewOperation{SchemaVersion: 6, Kind: "owner_candidate_review", OperationID: p.Effect.OperationID, IdempotencyKey: decision.DeliveryKey, Actor: memory.SemanticActorOwner, SessionID: current[0].Candidate.Support[0].SessionID, SourceEventID: current[0].Candidate.Support[0].Locator.EventID, Preview: p, AuditID: string(auditID)}
++			accepted, err := s.applyOwnerReviewOperation(ctx, conn, op, s.now())
++			if err != nil {
++				return err
++			}
++			result.Operation = &accepted
++		}
++		state := "accepted"
++		if p.Action == "reject" {
++			state = "rejected"
++		}
++		for _, item := range current {
++			updated, err := conn.ExecContext(ctx, `UPDATE memory_compiler_candidates SET review_state=?,review_revision=review_revision+1 WHERE candidate_id=? AND review_state='unresolved' AND review_revision=?`, state, item.Ref.ID, item.Ref.ReviewRevision)
++			if err != nil {
++				return err
++			}
++			count, err := updated.RowsAffected()
++			if err != nil || count != 1 {
++				return ErrReviewStale
++			}
++			ref := item.Ref
++			ref.ReviewRevision++
++			result.Candidates = append(result.Candidates, ref)
++		}
++		audit := struct {
++			Preview  memory.ReviewPreview  `json:"preview"`
++			Decision memory.ReviewDecision `json:"decision"`
++			Result   memory.ReviewResult   `json:"result"`
++		}{p, decision, result}
++		if _, err = conn.ExecContext(ctx, `INSERT INTO memory_review_audits VALUES(?,?,?,?,?)`, auditID, a.scope, p.ID, p.Action, compilerJSON(audit)); err != nil {
++			return err
++		}
++		if _, err = conn.ExecContext(ctx, `INSERT INTO memory_review_deliveries VALUES(?,?,?,?,?)`, memory.LocalOwnerID, decision.DeliveryKey, a.scope, requestHash, compilerJSON(result)); err != nil {
++			return err
++		}
++		for _, item := range current {
++			if _, err = conn.ExecContext(ctx, `INSERT INTO memory_review_resolutions VALUES(?,?,?,?)`, item.Ref.ID, memory.LocalOwnerID, decision.DeliveryKey, auditID); err != nil {
++				return err
++			}
++		}
++		return nil
++	})
++	if errors.Is(err, ErrReviewResolved) {
++		return priorResolution, err
++	}
++	if err != nil {
++		return memory.ReviewResult{}, err
++	}
++	return result, nil
++}
++
++// applyOwnerReviewOperation writes a complete recorded effect. Live callers
++// first validate the durable preview and current evidence under owner authority;
++// replay supplies the previously accepted envelope and recorded commit time.
++// Neither route uses or changes source-session turn authority.
++func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, op memory.OwnerReviewOperation, clock time.Time) (memory.OwnerReviewOperationResult, error) {
++	var result memory.OwnerReviewOperationResult
++	if err := validateOwnerReviewOperation(op); err != nil {
++		return result, err
++	}
++	writer := reviewWriter{conn}
++	effect := op.Preview.Effect
++	byKey, err := validateSemanticScopeVector(ctx, writer, effect.Scopes, effect.PriorRevisions, clock)
++	if err != nil {
++		return result, ErrReviewStale
++	}
++	if byKey[effect.Scope.Key] != effect.Scope {
++		return result, errors.New("review target scope mismatch")
++	}
++	for _, item := range effect.Claims {
++		if err = validateReviewClaimEffects(ctx, conn, effect, item); err != nil {
++			return result, err
++		}
++	}
++	now, err := nextSemanticTransactionTime(ctx, writer, clock)
++	if err != nil {
++		return result, err
++	}
++	result = memory.OwnerReviewOperationResult{OperationID: op.OperationID, ClaimIDs: []memory.SemanticID{}, SourceLinkIDs: []memory.SemanticID{}, TransactionTime: now, ResultingRevisions: []memory.ScopeRevision{}}
++	for _, scope := range effect.Scopes {
++		revision := scope.Revision
++		if scope.Key == effect.Scope.Key {
++			revision++
++		}
++		result.ResultingRevisions = append(result.ResultingRevisions, memory.ScopeRevision{ScopeKey: scope.Key, Revision: revision})
++	}
++	for _, item := range effect.Claims {
++		result.ClaimIDs = append(result.ClaimIDs, item.Claim.ID)
++		for _, source := range item.Sources {
++			result.SourceLinkIDs = append(result.SourceLinkIDs, source.ID)
++		}
++	}
++	proposalHash, proposalJSON, err := semanticHash(canonicalOwnerReviewOperation(op))
++	if err != nil {
++		return result, err
++	}
++	effectHash, _, err := ownerReviewEffectHash(effect)
++	if err != nil {
++		return result, err
++	}
++	if err = recordAcceptedSemanticOperation(ctx, writer, acceptedSemanticOperation{SchemaVersion: 6, OperationID: op.OperationID, Kind: op.Kind, IdempotencyKey: op.IdempotencyKey, Actor: op.Actor, SessionID: op.SessionID, TargetScopeID: effect.Scope.ID, SourceEventID: op.SourceEventID, ProposalHash: proposalHash, EffectHash: effectHash, ProposalJSON: proposalJSON, PreparedJSON: compilerJSON(op), ResultJSON: compilerJSON(result), TransactionTime: now, ResultRevisions: result.ResultingRevisions, ScopesByKey: byKey}); err != nil {
++		return result, err
++	}
++	for _, item := range effect.Claims {
++		if item.Create {
++			if err = insertReplacementClaim(ctx, writer, memory.CorrectClaimProposal{OperationID: op.OperationID, Scope: effect.Scope, ReplacementClaim: item.Claim}, now); err != nil {
++				return result, err
++			}
++			if err = reviewInitialState(ctx, conn, effect.Scope, item.Claim.ID, "claim", "active", op.OperationID, now); err != nil {
++				return result, err
++			}
++		}
++		for _, source := range item.Sources {
++			if !source.Create {
++				continue
++			}
++			_, err = conn.ExecContext(ctx, `INSERT INTO semantic_source_links(source_link_id,scope_id,claim_id,event_id,source_session_id,source_scope_key,event_part,locator_kind,locator_value,evidence_sha256,source_actor,source_type,authority,observed_at,eligibility,created_operation_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'eligible',?)`, source.ID, effect.Scope.ID, item.Claim.ID, source.EventID, source.SessionID, source.ScopeKey, source.EventPart, source.LocatorKind, source.LocatorValue, source.EvidenceSHA256, source.Actor, source.SourceType, source.Authority, source.ObservedAt, op.OperationID)
++			if err != nil {
++				return result, err
++			}
++			if err = reviewInitialState(ctx, conn, effect.Scope, source.ID, "source_link", "eligible", op.OperationID, now); err != nil {
++				return result, err
++			}
++		}
++	}
++	updated, err := conn.ExecContext(ctx, `UPDATE semantic_scopes SET revision=revision+1 WHERE scope_id=? AND revision=?`, effect.Scope.ID, effect.Scope.Revision)
++	if err != nil {
++		return result, err
++	}
++	count, err := updated.RowsAffected()
++	if err != nil || count != 1 {
++		return result, ErrReviewStale
++	}
++	return result, nil
++}
++
++func reviewInitialState(ctx context.Context, conn *sql.Conn, scope memory.SemanticScope, id memory.SemanticID, kind, state string, operation memory.SemanticID, at time.Time) error {
++	_, err := conn.ExecContext(ctx, `INSERT INTO semantic_state_events(scope_id,object_kind,object_id,state,operation_id,scope_revision,transaction_time) VALUES(?,?,?,?,?,?,?)`, scope.ID, kind, id, state, operation, scope.Revision+1, formatSemanticTime(at))
++	return err
++}
++
++func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memory.ReviewEffect, item memory.ReviewClaimEffect) error {
++	keys := []string{}
++	for _, scope := range effect.Scopes {
++		keys = append(keys, scope.Key)
++	}
++	entity, err := reviewEntity(ctx, q, keys, item.Subject.ID)
++	if err != nil || entity != item.Subject {
++		return ErrReviewStale
++	}
++	if item.ObjectEntity != nil {
++		entity, err = reviewEntity(ctx, q, keys, item.ObjectEntity.ID)
++		if err != nil || entity != *item.ObjectEntity {
++			return ErrReviewStale
++		}
++	}
++	var predicate memory.SemanticPredicate
++	err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, item.Predicate.ID).Scan(&predicate.ID, &predicate.Token, &predicate.Version, &predicate.Label, &predicate.ObjectConstraint, &predicate.Cardinality)
++	if err != nil || predicate != item.Predicate {
++		return ErrReviewStale
++	}
++	if !item.Create {
++		claim, err := loadSemanticClaim(ctx, q, item.Claim.ID)
++		if err != nil || string(compilerJSON(claim)) != string(compilerJSON(item.Claim)) {
++			return ErrReviewStale
++		}
++		state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, item.Claim.ID)
++		if err != nil || state.State != memory.SemanticStateActive {
++			return ErrReviewStale
++		}
++	}
++	for _, source := range item.Sources {
++		if !source.Create {
++			current, err := loadReviewRecordedSource(ctx, q, source.ID, source.Evidence)
++			if err != nil {
++				return err
++			}
++			current.Create = false
++			source.Create = false
++			if string(compilerJSON(current)) != string(compilerJSON(source)) {
++				return ErrReviewStale
++			}
++			state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectSourceLink, source.ID)
++			if err != nil || state.State != memory.SemanticStateEligible {
++				return ErrReviewStale
++			}
++		}
++	}
++	warnings, err := reviewClaimConflicts(ctx, q, effect.Scope.ID, item.Claim)
++	if err != nil {
++		return err
++	}
++	if string(compilerJSON(warnings)) != string(compilerJSON(item.Conflicts)) {
++		return ErrReviewStale
++	}
++	return nil
++}
++
++func validateOwnerReviewOperation(op memory.OwnerReviewOperation) error {
++	if op.SchemaVersion != 6 || op.Kind != "owner_candidate_review" || op.Actor != memory.SemanticActorOwner || !reviewDeliveryValid(op.IdempotencyKey) || op.Preview.Action != "accept" {
++		return errors.New("invalid owner review operation")
++	}
++	if err := validateOwnerReviewEncoding(op.Preview); err != nil {
++		return err
++	}
++	effect := op.Preview.Effect
++	if effect.OperationID != op.OperationID || effect.Scope.Key != op.Preview.ScopeKey {
++		return errors.New("owner review effect envelope mismatch")
++	}
++	for _, id := range []string{string(op.OperationID), string(op.SessionID), string(op.SourceEventID), op.AuditID, op.Preview.ID, string(effect.Scope.ID)} {
++		if err := validateSemanticUUID(id); err != nil {
++			return err
++		}
++	}
++	for i, item := range effect.Claims {
++		if item.Candidate != op.Preview.Candidates[i].Ref || item.Claim.ScopeKey != effect.Scope.Key || item.Claim.SubjectEntityID != item.Subject.ID || item.Claim.Predicate != item.Predicate || len(item.Sources) == 0 {
++			return errors.New("invalid review Claim effect")
++		}
++		if err := validateClaimObject(item.Claim.Object); err != nil {
++			return err
++		}
++		if _, err := normalizeValidTime(item.Claim.ValidTime); err != nil {
++			return err
++		}
++		if item.Claim.Polarity != memory.PolarityAffirmed && item.Claim.Polarity != memory.PolarityDenied {
++			return errors.New("invalid review Claim polarity")
++		}
++		if item.Create && item.Claim.CreatedOperationID != op.OperationID {
++			return errors.New("new Claim operation mismatch")
++		}
++		if item.Claim.Object.EntityID != "" {
++			if item.ObjectEntity == nil || item.ObjectEntity.ID != item.Claim.Object.EntityID || item.Predicate.ObjectConstraint != memory.ConstraintEntity {
++				return errors.New("object identity mismatch")
++			}
++		} else if item.ObjectEntity != nil || string(item.Predicate.ObjectConstraint) != string(item.Claim.Object.Literal.Kind) {
++			return errors.New("literal constraint mismatch")
++		}
++		for _, source := range item.Sources {
++			if source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement || source.SourceType != memory.SourceTypeUserMessage || source.EventPart != memory.EvidenceContent || source.Eligibility != memory.EligibilityEligible || source.Create && source.OperationID != op.OperationID {
++				return ErrReviewInvalidSource
++			}
++			if source.EvidenceSHA256 != "sha256:"+memory.CompilerHash([]byte(source.Evidence)) {
++				return fmt.Errorf("recorded source digest mismatch")
++			}
++		}
++	}
++	return validateReviewTypedEnvelope(op)
++}
++
++// The v6 envelope has typed IDs: compiler identities are SHA256 values while
++// accepted graph IDs are UUIDv4. Replay does not apply Stage3's generic *_id
++// rule to opaque candidate/generation hashes or the local owner principal.
++func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
++	p := op.Preview
++	effect := p.Effect
++	if p.OwnerID != memory.LocalOwnerID || p.AuthorizationRevision < 1 || p.SourcePolicy != ownerReviewSourcePolicyV1 {
++		return errors.New("invalid recorded owner authorization")
++	}
++	hashID := func(value string) bool {
++		b, err := hex.DecodeString(value)
++		return err == nil && len(b) == 32 && value == strings.ToLower(value)
++	}
++	if !hashID(p.AuthenticationBinding) || !hashID(p.JobID) || !hashID(p.GenerationID) {
++		return errors.New("invalid recorded compiler identity")
++	}
++	for i, scope := range effect.Scopes {
++		if validateSemanticUUID(string(scope.ID)) != nil || i > 0 && effect.Scopes[i-1].Key >= scope.Key {
++			return errors.New("invalid recorded scope identity")
++		}
++		_, registry, err := splitScopeKey(scope.Key)
++		if err != nil || registry != scope.RegistryID {
++			return errors.New("invalid recorded scope lineage")
++		}
++	}
++	for i, item := range effect.Claims {
++		original := p.Candidates[i]
++		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
++			return errors.New("invalid recorded candidate identity")
++		}
++		proposal := original.Candidate.Proposal
++		if proposal.Proposition.SubjectEntityID != item.Claim.SubjectEntityID || proposal.Proposition.PredicateID != item.Predicate.ID || proposal.Proposition.Polarity != item.Claim.Polarity || string(compilerJSON(proposal.Proposition.Object)) != string(compilerJSON(item.Claim.Object)) || !validTimesEqual(proposal.ValidTime, item.Claim.ValidTime) || proposal.TemporalQualification != item.TemporalQualification || string(compilerJSON(original.Candidate.Context)) != string(compilerJSON(item.Context)) {
++			return errors.New("review effect differs from reviewed meaning")
++		}
++		for _, id := range []memory.SemanticID{item.Claim.ID, item.Subject.ID, item.Predicate.ID, item.Claim.CreatedOperationID} {
++			if validateSemanticUUID(string(id)) != nil {
++				return errors.New("invalid recorded semantic identity")
++			}
++		}
++		if len(item.Sources) != len(original.Candidate.Support) || len(item.Sources) > 64 || len(item.Context) > 8 {
++			return errors.New("incomplete source interpretation")
++		}
++		for n, source := range item.Sources {
++			originalSource := original.Candidate.Support[n]
++			if validateSemanticUUID(string(source.ID)) != nil || validateSemanticUUID(string(source.OperationID)) != nil || validateSemanticUUID(string(source.EventID)) != nil || validateSemanticUUID(string(source.SessionID)) != nil {
++				return errors.New("invalid recorded source identity")
++			}
++			if source.EventID != originalSource.Locator.EventID || source.SessionID != originalSource.SessionID || source.ScopeKey != originalSource.ScopeKey || source.EventPart != originalSource.Locator.EventPart || source.LocatorKind != originalSource.Locator.LocatorKind || source.LocatorValue != originalSource.Locator.LocatorValue || source.EvidenceSHA256 != "sha256:"+originalSource.Locator.EvidenceSHA256 || source.Evidence != originalSource.Evidence || source.ObservedAt != originalSource.ObservedAt || source.Actor != originalSource.Actor || source.Authority != originalSource.Authority || source.SourceType != originalSource.SourceType {
++				return errors.New("review source differs from original authority")
++			}
++		}
++		for _, source := range item.Context {
++			if source.Authority != "none" || source.Actor != "assistant" || source.SourceType != "assistant_message" || source.Usage != "context" || source.Locator.EvidenceSHA256 != memory.CompilerHash([]byte(source.Evidence)) {
++				return errors.New("invalid recorded interpretation context")
++			}
++		}
++	}
++	first := p.Candidates[0].Candidate.Support[0]
++	if op.SessionID != first.SessionID || op.SourceEventID != first.Locator.EventID {
++		return errors.New("recorded source envelope mismatch")
++	}
++	return nil
++}
+diff --git a/internal/eviedb/candidate_review_authority.go b/internal/eviedb/candidate_review_authority.go
+new file mode 100644
+index 0000000..826fa80
+--- /dev/null
++++ b/internal/eviedb/candidate_review_authority.go
+@@ -0,0 +1,143 @@
++package eviedb
++
++import (
++	"context"
++	"crypto/hmac"
++	"crypto/sha256"
++	"database/sql"
++	"encoding/hex"
++	"errors"
++	"sort"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++var (
++	ErrOwnerReviewUnauthorized = errors.New("owner review unauthorized")
++	ErrReviewStale             = errors.New("stale_preview")
++	ErrReviewResolved          = errors.New("already_resolved")
++	ErrReviewInvalidSource     = errors.New("source_ineligible")
++)
++
++// OwnerReviewContext is an opaque capability. Only the trusted local owner
++// entry point creates one. Deserializing request JSON yields no authority.
++type OwnerReviewContext struct {
++	scope    string
++	revision int64
++	binding  string
++	seal     []byte
++}
++
++func (a OwnerReviewContext) ScopeKey() string { return a.scope }
++
++type reviewQuery interface {
++	QueryRowContext(context.Context, string, ...any) *sql.Row
++	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
++}
++
++func reviewCapabilityMAC(key []byte, scope string, revision int64) []byte {
++	mac := hmac.New(sha256.New, key)
++	mac.Write(compilerJSON(struct {
++		Domain, Scope string
++		Revision      int64
++	}{"evie-owner-review-context-v1", scope, revision}))
++	return mac.Sum(nil)
++}
++
++// LocalOwnerReviewContext is a trusted host seam, not a model-visible tool.
++// Web callers must invoke it only after their existing owner authentication.
++func (s *Store) LocalOwnerReviewContext(ctx context.Context, scope string) (OwnerReviewContext, error) {
++	var a OwnerReviewContext
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if _, err := reviewScopeKeys(ctx, conn, scope); err != nil {
++			return ErrOwnerReviewUnauthorized
++		}
++		var key []byte
++		if err := conn.QueryRowContext(ctx, `SELECT revision,authentication_key FROM memory_review_authorization WHERE singleton=1`).Scan(&a.revision, &key); err != nil {
++			return err
++		}
++		a.scope = scope
++		a.binding = memory.CompilerHash(key)
++		a.seal = reviewCapabilityMAC(key, scope, a.revision)
++		return nil
++	})
++	return a, err
++}
++
++func checkReviewAuthority(ctx context.Context, q reviewQuery, a OwnerReviewContext) error {
++	var revision int64
++	var key []byte
++	if err := q.QueryRowContext(ctx, `SELECT revision,authentication_key FROM memory_review_authorization WHERE singleton=1`).Scan(&revision, &key); err != nil {
++		return err
++	}
++	if a.scope == "" || a.revision != revision || a.binding != memory.CompilerHash(key) || !hmac.Equal(a.seal, reviewCapabilityMAC(key, a.scope, revision)) {
++		return ErrOwnerReviewUnauthorized
++	}
++	if _, err := reviewScopeKeys(ctx, q, a.scope); err != nil {
++		return ErrOwnerReviewUnauthorized
++	}
++	return nil
++}
++
++func reviewScopeKeys(ctx context.Context, q reviewQuery, key string) ([]string, error) {
++	kind, id, err := splitScopeKey(key)
++	if err != nil {
++		return nil, err
++	}
++	keys := []string{"global"}
++	switch kind {
++	case "global":
++	case "workspace":
++		var state string
++		if err := q.QueryRowContext(ctx, `SELECT lifecycle_state FROM workspaces WHERE id=?`, id).Scan(&state); err != nil || state != "active" {
++			return nil, ErrOwnerReviewUnauthorized
++		}
++		keys = append(keys, key)
++	case "project":
++		var archived int
++		if err := q.QueryRowContext(ctx, `SELECT archived FROM projects WHERE id=?`, id).Scan(&archived); err != nil || archived != 0 {
++			return nil, ErrOwnerReviewUnauthorized
++		}
++		keys = append(keys, key)
++	case "session":
++		owner, err := reviewSourceContext(ctx, q, memory.SessionID(id))
++		if err != nil {
++			return nil, err
++		}
++		contextKey := scopeKeyForContext(owner)
++		if contextKey != "global" {
++			if _, err := reviewScopeKeys(ctx, q, contextKey); err != nil {
++				return nil, err
++			}
++			keys = append(keys, contextKey)
++		}
++		keys = append(keys, key)
++	default:
++		return nil, ErrOwnerReviewUnauthorized
++	}
++	sort.Strings(keys)
++	if err := requireSemanticScopeKeysAvailable(ctx, q, keys); err != nil {
++		return nil, err
++	}
++	return keys, nil
++}
++
++func reviewSourceContext(ctx context.Context, q reviewQuery, id memory.SessionID) (memory.ScopeContext, error) {
++	owner := memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: id}
++	var workspace, project sql.NullString
++	if err := q.QueryRowContext(ctx, `SELECT workspace_id,project_id FROM sessions WHERE id=?`, id).Scan(&workspace, &project); err != nil {
++		return owner, err
++	}
++	owner.WorkspaceID = memory.WorkspaceID(workspace.String)
++	owner.ProjectID = memory.ProjectID(project.String)
++	return owner, nil
++}
++
++func reviewCursor(a OwnerReviewContext, revision int64, last string) string {
++	mac := hmac.New(sha256.New, a.seal)
++	mac.Write(compilerJSON(struct {
++		Revision int64
++		Last     string
++	}{revision, last}))
++	return hex.EncodeToString(mac.Sum(nil))
++}
+diff --git a/internal/eviedb/candidate_review_encoding.go b/internal/eviedb/candidate_review_encoding.go
+new file mode 100644
+index 0000000..ae41e56
+--- /dev/null
++++ b/internal/eviedb/candidate_review_encoding.go
+@@ -0,0 +1,69 @@
++package eviedb
++
++import (
++	"encoding/json"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// The public structs use fixed JSON field order; source/candidate collections
++// are sorted by their immutable IDs/locators before reaching this boundary.
++// Null pointers explicitly retain unknown/absent values. Golden tests freeze
++// this domain-separated encoding independently of rendered CLI text.
++func ownerReviewEffectHash(effect *memory.ReviewEffect) (string, []byte, error) {
++	return semanticHash(canonicalOwnerReviewEffect(effect))
++}
++func ownerReviewPreviewHash(preview memory.ReviewPreview) (string, []byte, error) {
++	preview.SHA256 = ""
++	return semanticHash(struct {
++		Domain  string               `json:"domain"`
++		Preview memory.ReviewPreview `json:"preview"`
++	}{"evie-owner-review-preview-v1", preview})
++}
++func canonicalOwnerReviewOperation(op memory.OwnerReviewOperation) any {
++	return struct {
++		Domain    string                      `json:"domain"`
++		Operation memory.OwnerReviewOperation `json:"operation"`
++	}{"evie-owner-review-operation-v1", op}
++}
++func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
++	if p.Version != "owner-review-preview-v1" || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
++		return errors.New("invalid review preview")
++	}
++	if p.Action == "accept" && (p.Effect == nil || p.Effect.Version != "owner-review-effect-v1" || len(p.Effect.Claims) != len(p.Candidates)) {
++		return errors.New("incomplete review effects")
++	}
++	if p.Action == "reject" && p.Effect != nil {
++		return errors.New("reject preview contains effects")
++	}
++	hash, _, err := ownerReviewEffectHash(p.Effect)
++	if err != nil {
++		return err
++	}
++	if hash != p.EffectSHA256 {
++		return errors.New("review effect digest changed")
++	}
++	hash, _, err = ownerReviewPreviewHash(p)
++	if err != nil {
++		return err
++	}
++	if hash != p.SHA256 {
++		return errors.New("review preview digest changed")
++	}
++	data, err := json.Marshal(p)
++	if err != nil {
++		return err
++	}
++	if len(data) > 256*1024 {
++		return errors.New("review_too_large")
++	}
++	return nil
++}
++
++func canonicalOwnerReviewEffect(effect *memory.ReviewEffect) any {
++	return struct {
++		Domain string               `json:"domain"`
++		Effect *memory.ReviewEffect `json:"effect"`
++	}{"evie-owner-review-effect-v1", effect}
++}
+diff --git a/internal/eviedb/candidate_review_encoding_test.go b/internal/eviedb/candidate_review_encoding_test.go
+new file mode 100644
+index 0000000..eacc979
+--- /dev/null
++++ b/internal/eviedb/candidate_review_encoding_test.go
+@@ -0,0 +1,48 @@
++package eviedb
++
++import (
++	"encoding/json"
++	"os"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestOwnerReviewEncodingGolden(t *testing.T) {
++	var fixture struct {
++		EffectHash   string               `json:"effect_sha256"`
++		EffectBytes  string               `json:"effect_canonical_utf8"`
++		PreviewHash  string               `json:"preview_sha256"`
++		PreviewBytes string               `json:"preview_canonical_utf8"`
++		Preview      memory.ReviewPreview `json:"preview"`
++	}
++	data, err := os.ReadFile("testdata/candidate_review_encoding_v1.json")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = json.Unmarshal(data, &fixture); err != nil {
++		t.Fatal(err)
++	}
++	hash, encoded, err := ownerReviewEffectHash(fixture.Preview.Effect)
++	if err != nil || hash != fixture.EffectHash || string(encoded) != fixture.EffectBytes {
++		t.Fatalf("effect encoding changed: %s\n%s\n%v", hash, encoded, err)
++	}
++	hash, encoded, err = ownerReviewPreviewHash(fixture.Preview)
++	if err != nil || hash != fixture.PreviewHash || string(encoded) != fixture.PreviewBytes {
++		t.Fatalf("preview encoding changed: %s\n%s\n%v", hash, encoded, err)
++	}
++	if err = validateOwnerReviewEncoding(fixture.Preview); err != nil {
++		t.Fatal(err)
++	}
++	// Approval identity includes source bytes and scope, independent of renderer
++	// whitespace, and never treats an unknown Valid Time as an invented date.
++	source := &fixture.Preview.Effect.Claims[0].Sources[0]
++	source.Evidence = "cafe"
++	changed, _, err := ownerReviewEffectHash(fixture.Preview.Effect)
++	if err != nil || changed == fixture.EffectHash {
++		t.Fatal("different evidence had same effect identity")
++	}
++	if fixture.Preview.Effect.Claims[0].Claim.ValidTime.From != nil || fixture.Preview.Effect.Claims[0].Claim.ValidTime.To != nil {
++		t.Fatal("unknown bounds changed")
++	}
++}
+diff --git a/internal/eviedb/candidate_review_history.go b/internal/eviedb/candidate_review_history.go
+new file mode 100644
+index 0000000..0204abc
+--- /dev/null
++++ b/internal/eviedb/candidate_review_history.go
+@@ -0,0 +1,138 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"strconv"
++	"strings"
++	"unicode/utf8"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// Historical validation checks the immutable evidence and authority recorded by
++// v6. Current disclosure policy, registry availability, and session status do
++// not change an already accepted interpretation.
++type historicalReviewQuery interface {
++	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
++}
++
++func validateOwnerReviewHistoricalSources(ctx context.Context, q historicalReviewQuery, op memory.OwnerReviewOperation) error {
++	for _, candidate := range op.Preview.Candidates {
++		for _, category := range []struct {
++			sources []memory.CompilerSource
++			context bool
++		}{{candidate.Candidate.Support, false}, {candidate.Candidate.Context, true}} {
++			for _, source := range category.sources {
++				if err := validateReviewHistoricalSource(ctx, q, op.SessionID, op.Preview.ScopeKey, source, category.context); err != nil {
++					return err
++				}
++			}
++		}
++	}
++	return nil
++}
++
++func validateReviewHistoricalSource(ctx context.Context, q historicalReviewQuery, sessionID memory.SessionID, destination string, source memory.CompilerSource, interpretationContext bool) error {
++	rows, err := q.QueryContext(ctx, `
++		SELECT e.session_id,e.sequence,e.event_type,COALESCE(e.role,''),
++		       CASE WHEN length(CAST(e.content AS BLOB))<=32768 THEN e.content ELSE '' END,
++		       length(CAST(e.content AS BLOB)),e.recorded_at,e.format_version,
++		       e.workspace_id,e.project_id,s.workspace_id,s.project_id
++		FROM events e JOIN sessions s ON s.id=e.session_id WHERE e.id=?
++	`, source.Locator.EventID)
++	if err != nil {
++		return err
++	}
++	defer rows.Close()
++	if !rows.Next() {
++		if err := rows.Err(); err != nil {
++			return err
++		}
++		return errors.New("historical review source event is missing")
++	}
++	var eventSession memory.SessionID
++	var sequence int64
++	var kind, role, content, observed string
++	var size, version int
++	var eventWorkspace, eventProject, sessionWorkspace, sessionProject sql.NullString
++	if err := rows.Scan(&eventSession, &sequence, &kind, &role, &content, &size, &observed, &version, &eventWorkspace, &eventProject, &sessionWorkspace, &sessionProject); err != nil {
++		return err
++	}
++	if err := rows.Close(); err != nil {
++		return err
++	}
++	scopeKind, registryID, err := splitScopeKey(source.ScopeKey)
++	if err != nil {
++		return err
++	}
++	var sourceWorkspace, sourceProject sql.NullString
++	switch scopeKind {
++	case "global":
++	case "workspace":
++		sourceWorkspace = sql.NullString{String: registryID, Valid: true}
++	case "project":
++		sourceProject = sql.NullString{String: registryID, Valid: true}
++	default:
++		return errors.New("invalid historical review source scope")
++	}
++	if eventSession != sessionID || eventSession != source.SessionID || eventWorkspace != sourceWorkspace || eventProject != sourceProject || sessionWorkspace != sourceWorkspace || sessionProject != sourceProject || destination != source.ScopeKey && destination != "session:"+string(sessionID) {
++		return errors.New("historical review source lineage mismatch")
++	}
++	if sequence != source.Sequence || sequence < 1 || version != 1 || version != source.FormatVersion || kind != string(source.SourceType) || observed != source.ObservedAt || size > 32768 || !utf8.ValidString(content) {
++		return errors.New("historical review source metadata mismatch")
++	}
++	if interpretationContext {
++		if source.Usage != "context" || kind != "assistant_message" || role != "assistant" || source.Actor != "assistant" || source.Authority != "none" {
++			return errors.New("historical review context authority mismatch")
++		}
++	} else if (source.Usage != "new_support" && source.Usage != "overlap") || kind != "user_message" || role != "user" || source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
++		return errors.New("historical review support authority mismatch")
++	}
++	offered := source
++	offered.Evidence = content
++	projected, err := projectHistoricalCompilerSource(offered, source.Locator)
++	if err != nil {
++		return err
++	}
++	if projected.Evidence != source.Evidence {
++		return errors.New("historical review source projection mismatch")
++	}
++	return nil
++}
++
++// projectHistoricalCompilerSource applies the v6 whole/content-range contract
++// without the live compiler's secret detector. Accepted replay must reproduce
++// the old projection even when current disclosure rules have become stricter.
++func projectHistoricalCompilerSource(offered memory.CompilerSource, locator memory.EvidenceLocator) (memory.CompilerSource, error) {
++	if locator.EventID != offered.Locator.EventID || locator.EventPart != memory.EvidenceContent || !utf8.ValidString(offered.Evidence) {
++		return memory.CompilerSource{}, errors.New("invalid historical source content")
++	}
++	text := offered.Evidence
++	switch locator.LocatorKind {
++	case memory.LocatorWhole:
++		if locator.LocatorValue != "" {
++			return memory.CompilerSource{}, errors.New("historical whole locator has range")
++		}
++	case memory.LocatorUTF8ByteRange:
++		pieces := strings.Split(locator.LocatorValue, ":")
++		if len(pieces) != 2 {
++			return memory.CompilerSource{}, errors.New("invalid historical range")
++		}
++		start, err1 := strconv.Atoi(pieces[0])
++		end, err2 := strconv.Atoi(pieces[1])
++		if err1 != nil || err2 != nil || strconv.Itoa(start) != pieces[0] || strconv.Itoa(end) != pieces[1] || start < 0 || end <= start || end > len(text) || !utf8.ValidString(text[:start]) || !utf8.ValidString(text[:end]) {
++			return memory.CompilerSource{}, errors.New("invalid historical UTF8 byte range")
++		}
++		text = text[start:end]
++	default:
++		return memory.CompilerSource{}, errors.New("unsupported historical source locator")
++	}
++	if memory.CompilerHash([]byte(text)) != locator.EvidenceSHA256 {
++		return memory.CompilerSource{}, errors.New("historical source hash mismatch")
++	}
++	offered.Locator = locator
++	offered.Evidence = text
++	return offered, nil
++}
+diff --git a/internal/eviedb/candidate_review_history_test.go b/internal/eviedb/candidate_review_history_test.go
+new file mode 100644
+index 0000000..e6bea3a
+--- /dev/null
++++ b/internal/eviedb/candidate_review_history_test.go
+@@ -0,0 +1,259 @@
++package eviedb_test
++
++import (
++	"context"
++	"errors"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestOwnerReviewReplayRejectsChangedHistoricalEvidence(t *testing.T) {
++	for _, kind := range []string{"support", "context"} {
++		t.Run(kind, func(t *testing.T) {
++			ctx := context.Background()
++			f, compiled, authority := reviewCandidateFixture(t)
++			preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000170"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			source := compiled.Candidates[0].Support[0]
++			content := "I prefer caff and tea."
++			if kind == "context" {
++				source = compiled.Candidates[0].Context[0]
++				content = "Not recorded."
++			}
++			// Only the test disables immutability to simulate damaged storage.
++			if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.db.Exec(`UPDATE events SET content=? WHERE id=?`, content, source.Locator.EventID); err != nil {
++				t.Fatal(err)
++			}
++			assertReviewHistoryQuarantined(t, f, accepted.Operation.OperationID)
++		})
++	}
++}
++
++func TestOwnerReviewReplayRejectsChangedHistoricalMetadata(t *testing.T) {
++	for _, kind := range []string{"support", "context"} {
++		for _, mutation := range []struct {
++			name, statement string
++			value           any
++		}{
++			{"role", `UPDATE events SET role=? WHERE id=?`, "tool"},
++			{"event_type", `UPDATE events SET event_type=? WHERE id=?`, "tool_result"},
++			{"format_version", `UPDATE events SET format_version=? WHERE id=?`, 2},
++			{"sequence", `UPDATE events SET sequence=? WHERE id=?`, 99},
++			{"observed_at", `UPDATE events SET recorded_at=? WHERE id=?`, "2020-01-01T00:00:00.000000000Z"},
++			{"invalid_utf8", `UPDATE events SET content=? WHERE id=?`, "I prefer café and tea.\xff"},
++		} {
++			t.Run(kind+"/"+mutation.name, func(t *testing.T) {
++				ctx := context.Background()
++				f, compiled, authority := reviewCandidateFixture(t)
++				preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++				if err != nil {
++					t.Fatal(err)
++				}
++				accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000171"))
++				if err != nil {
++					t.Fatal(err)
++				}
++				source := compiled.Candidates[0].Support[0]
++				if kind == "context" {
++					source = compiled.Candidates[0].Context[0]
++				}
++				if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(mutation.statement, mutation.value, source.Locator.EventID); err != nil {
++					t.Fatal(err)
++				}
++				assertReviewHistoryQuarantined(t, f, accepted.Operation.OperationID)
++			})
++		}
++	}
++}
++
++func TestOwnerReviewReplayRejectsChangedHistoricalLineage(t *testing.T) {
++	for _, kind := range []string{"support", "context"} {
++		t.Run(kind, func(t *testing.T) {
++			ctx := context.Background()
++			f, compiled, authority := reviewCandidateFixture(t)
++			preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000172"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			project, err := f.store.RegisterProject(ctx, "foreign history", t.TempDir())
++			if err != nil {
++				t.Fatal(err)
++			}
++			source := compiled.Candidates[0].Support[0]
++			if kind == "context" {
++				source = compiled.Candidates[0].Context[0]
++			}
++			if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.db.Exec(`UPDATE events SET project_id=? WHERE id=?`, project.ID, source.Locator.EventID); err != nil {
++				t.Fatal(err)
++			}
++			assertReviewHistoryQuarantined(t, f, accepted.Operation.OperationID)
++		})
++	}
++}
++
++func TestOwnerReviewReplayRejectsContextMovedToAnotherSession(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, authority := reviewCandidateFixture(t)
++	preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000173"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	foreign, err := f.store.CreateGlobalSession(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE events SET session_id=?,parent_id=NULL WHERE id=?`, foreign.ID, compiled.Candidates[0].Context[0].Locator.EventID); err != nil {
++		t.Fatal(err)
++	}
++	assertReviewHistoryQuarantined(t, f, accepted.Operation.OperationID)
++}
++
++func TestOwnerReviewReplayChecksHistoricalRangeBoundaries(t *testing.T) {
++	for _, content := range []string{"I prefer caf€ and tea.", "I prefer caf", strings.Repeat("x", 32769)} {
++		t.Run(content[:12], func(t *testing.T) {
++			ctx := context.Background()
++			f, compiled, authority := reviewCandidateFixture(t)
++			preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000174"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++				t.Fatal(err)
++			}
++			if _, err := f.db.Exec(`UPDATE events SET content=? WHERE id=?`, content, compiled.Candidates[0].Support[0].Locator.EventID); err != nil {
++				t.Fatal(err)
++			}
++			assertReviewHistoryQuarantined(t, f, accepted.Operation.OperationID)
++		})
++	}
++}
++
++func TestOwnerReviewReplayIgnoresCurrentAuthorityAndRegistryAvailability(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	if err := f.store.ReleaseTurnLease(ctx, f.session.ID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	workspace, err := f.store.RegisterWorkspace(ctx, "historical review")
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.session, err = f.store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, reviewTestReceipt())
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.lease, err = f.store.AcquireTurnLease(ctx, f.session.ID, "historical-review", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	selection := f.selection(t, "I prefer tea.", true)
++	selection.Destination = "workspace:" + string(workspace.ID)
++	extractor := &scriptedCompiler{run: func(_ context.Context, request memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		candidate := f.candidate(request)
++		for _, source := range request.Window.Sources {
++			if source.Usage == "context" {
++				candidate.Context = append(candidate.Context, source.Locator)
++			}
++		}
++		return compilerOutput(request, []memory.ExtractorCandidate{candidate}), nil
++	}}
++	compiled, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), selection, compilerGeneration(), extractor)
++	if err != nil || compiled.State != "completed_candidates" {
++		t.Fatalf("compile historical workspace candidate: %+v %v", compiled, err)
++	}
++	authority, err := f.store.LocalOwnerReviewContext(ctx, selection.Destination)
++	if err != nil {
++		t.Fatal(err)
++	}
++	preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000175"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	var before string
++	if err := f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, accepted.Operation.OperationID).Scan(&before); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.ReleaseTurnLease(ctx, f.session.ID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, f.session.ID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ArchiveWorkspace(ctx, workspace.ID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2',revision=revision+1,authentication_key=randomblob(32)`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.LocalOwnerReviewContext(ctx, selection.Destination); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++		t.Fatalf("archived Workspace still grants live review authority: %v", err)
++	}
++	report, err := f.store.VerifySemanticProjection(ctx)
++	if err != nil || !report.Valid {
++		t.Fatalf("current authorization or policy changed historical replay: %+v %v", report, err)
++	}
++	var after, status string
++	if err := f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, accepted.Operation.OperationID).Scan(&after); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT status FROM sessions WHERE id=?`, f.session.ID).Scan(&status); err != nil {
++		t.Fatal(err)
++	}
++	if before != after || status != "closed" {
++		t.Fatal("historical replay changed accepted authority or reopened the source session")
++	}
++}
++
++func assertReviewHistoryQuarantined(t *testing.T, f *compilerFixture, operationID memory.SemanticID) {
++	t.Helper()
++	report, err := f.store.VerifySemanticProjection(context.Background())
++	var replayErr *eviedb.SemanticReplayError
++	if report.Valid || !errors.As(err, &replayErr) || replayErr.SchemaVersion != 6 || replayErr.OperationID != operationID {
++		t.Fatalf("corrupt review history was not rejected at its accepted operation: report=%+v err=%v", report, err)
++	}
++	var quarantined int
++	if err := f.db.QueryRow(`SELECT count(*) FROM semantic_projection_quarantine q JOIN semantic_scopes s ON s.scope_id=q.scope_id WHERE s.scope_key='global' AND q.operation_id=?`, operationID).Scan(&quarantined); err != nil {
++		t.Fatal(err)
++	}
++	if quarantined != 1 {
++		t.Fatal("corrupt review history did not quarantine the affected scope")
++	}
++}
+diff --git a/internal/eviedb/candidate_review_inspection.go b/internal/eviedb/candidate_review_inspection.go
+new file mode 100644
+index 0000000..7813e89
+--- /dev/null
++++ b/internal/eviedb/candidate_review_inspection.go
+@@ -0,0 +1,218 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/base64"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"sort"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// loadReviewCandidate checks destination before decoding protected envelopes.
++func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContext, id string, requireSources bool) (memory.OwnerCandidate, error) {
++	out := memory.OwnerCandidate{}
++	var raw, requestRaw []byte
++	var state, equivalent string
++	var session memory.SessionID
++	err := q.QueryRowContext(ctx, `SELECT c.candidate_id,c.job_id,j.generation_id,j.destination,c.envelope,c.review_state,c.review_revision,COALESCE(c.equivalent_to,''),j.request,j.session_id FROM memory_compiler_candidates c JOIN memory_compiler_jobs j ON j.job_id=c.job_id WHERE c.candidate_id=? AND j.destination=?`, id, a.scope).Scan(&out.Ref.ID, &out.JobID, &out.GenerationID, &out.Destination, &raw, &state, &out.Ref.ReviewRevision, &equivalent, &requestRaw, &session)
++	if err != nil {
++		return out, ErrOwnerReviewUnauthorized
++	}
++	out.Ref.InterpretationRevision = 0
++	var request memory.CompilerRequest
++	if json.Unmarshal(raw, &out.Candidate) != nil || json.Unmarshal(requestRaw, &request) != nil {
++		return out, errors.New("invalid retained candidate")
++	}
++	out.Candidate.ReviewState = state
++	out.Candidate.ReviewRevision = out.Ref.ReviewRevision
++	out.Candidate.EquivalentTo = equivalent
++	owner, err := reviewSourceContext(ctx, q, session)
++	if err != nil {
++		return out, ErrOwnerReviewUnauthorized
++	}
++	sourceErr := compilerAuthorize(ctx, q, owner, request.Window.Selection)
++	if request.Window.Selection.Destination != a.scope || out.Candidate.ID != id {
++		sourceErr = ErrReviewInvalidSource
++	}
++	if sourceErr == nil {
++		sourceErr = validateReviewCandidateSeal(ctx, q, out, request)
++	}
++	if sourceErr == nil {
++		var policy string
++		if err = q.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&policy); err != nil {
++			return out, err
++		}
++		if policy != memory.CompilerPolicyVersion || compilerHasSecret(string(raw)) {
++			sourceErr = ErrReviewInvalidSource
++		}
++	}
++	if sourceErr == nil {
++		for _, sources := range [][]memory.CompilerSource{out.Candidate.Support, out.Candidate.Context} {
++			for _, source := range sources {
++				if _, err = resolveCompilerSource(ctx, q, owner, request.Window.Selection, source); err != nil {
++					sourceErr = ErrReviewInvalidSource
++					break
++				}
++			}
++		}
++	}
++	if sourceErr != nil {
++		if requireSources {
++			return out, ErrReviewInvalidSource
++		}
++		out.Candidate = memory.MemoryCandidate{ID: id, ReviewState: state, ReviewRevision: out.Ref.ReviewRevision, EquivalentTo: equivalent}
++		out.Redacted = true
++	}
++	canonicalizeReviewCandidate(&out)
++	return out, nil
++}
++
++func (s *Store) InspectOwnerCandidate(ctx context.Context, a OwnerReviewContext, id string) (memory.OwnerCandidate, error) {
++	var out memory.OwnerCandidate
++	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
++	if err != nil {
++		return out, err
++	}
++	defer tx.Rollback()
++	if err = checkReviewAuthority(ctx, tx, a); err != nil {
++		return out, err
++	}
++	out, err = loadReviewCandidate(ctx, tx, a, id, false)
++	if err != nil {
++		return memory.OwnerCandidate{}, err
++	}
++	return out, tx.Commit()
++}
++
++func (s *Store) ListOwnerCandidates(ctx context.Context, a OwnerReviewContext, query memory.OwnerCandidateQuery) (memory.OwnerCandidatePage, error) {
++	out := memory.OwnerCandidatePage{ScopeKey: a.scope, Candidates: []memory.OwnerCandidate{}}
++	if query.Limit == 0 {
++		query.Limit = 50
++	}
++	if query.Limit < 1 || query.Limit > 100 {
++		return out, errors.New("invalid inbox limit")
++	}
++	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
++	if err != nil {
++		return out, err
++	}
++	defer tx.Rollback()
++	if err = checkReviewAuthority(ctx, tx, a); err != nil {
++		return out, err
++	}
++	if err = tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT revision FROM memory_review_inbox_revisions WHERE scope_key=?),0)`, a.scope).Scan(&out.Revision); err != nil {
++		return out, err
++	}
++	var cursor struct {
++		Revision   int64
++		Last, Seal string
++	}
++	if query.Cursor != "" {
++		b, err := base64.RawURLEncoding.DecodeString(query.Cursor)
++		if err != nil || json.Unmarshal(b, &cursor) != nil || cursor.Seal != reviewCursor(a, cursor.Revision, cursor.Last) {
++			return out, errors.New("invalid inbox cursor")
++		}
++		if cursor.Revision != out.Revision {
++			return out, ErrReviewStale
++		}
++	}
++	rows, err := tx.QueryContext(ctx, `SELECT c.candidate_id FROM memory_compiler_candidates c JOIN memory_compiler_jobs j ON j.job_id=c.job_id WHERE j.destination=? AND c.review_state='unresolved' AND c.equivalent_to IS NULL AND c.candidate_id>? ORDER BY c.candidate_id LIMIT ?`, a.scope, cursor.Last, query.Limit+1)
++	if err != nil {
++		return out, err
++	}
++	ids := []string{}
++	for rows.Next() {
++		var id string
++		if err = rows.Scan(&id); err != nil {
++			rows.Close()
++			return out, err
++		}
++		ids = append(ids, id)
++	}
++	err = rows.Err()
++	rows.Close()
++	if err != nil {
++		return out, err
++	}
++	more := len(ids) > query.Limit
++	if more {
++		ids = ids[:query.Limit]
++	}
++	for _, id := range ids {
++		item, err := loadReviewCandidate(ctx, tx, a, id, false)
++		if err != nil {
++			return out, err
++		}
++		out.Candidates = append(out.Candidates, item)
++	}
++	if more {
++		cursor.Revision = out.Revision
++		cursor.Last = ids[len(ids)-1]
++		cursor.Seal = reviewCursor(a, cursor.Revision, cursor.Last)
++		out.NextCursor = base64.RawURLEncoding.EncodeToString(compilerJSON(cursor))
++	}
++	return out, tx.Commit()
++}
++
++func validateReviewCandidateSeal(ctx context.Context, q reviewQuery, item memory.OwnerCandidate, request memory.CompilerRequest) error {
++	requestID := request.ID
++	request.ID = ""
++	if memory.CompilerHash(compilerJSON(request)) != requestID || memory.CompilerHash(compilerJSON(request.Window)) != request.WindowSHA256 || request.GenerationID != item.GenerationID {
++		return ErrReviewInvalidSource
++	}
++	request.ID = requestID
++	var windowHash, groupHash string
++	var stage, manifest []byte
++	var ordinal int
++	err := q.QueryRowContext(ctx, `SELECT j.window_hash,g.envelope_hash,s.envelope,c.ordinal,gen.manifest FROM memory_compiler_jobs j JOIN memory_compiler_candidate_groups g ON g.job_id=j.job_id JOIN memory_compiler_stages s ON s.job_id=j.job_id JOIN memory_compiler_candidates c ON c.job_id=j.job_id JOIN memory_compiler_generations gen ON gen.generation_id=j.generation_id WHERE c.candidate_id=?`, item.Ref.ID).Scan(&windowHash, &groupHash, &stage, &ordinal, &manifest)
++	if err != nil || windowHash != request.WindowSHA256 || memory.CompilerHash(stage) != groupHash {
++		return ErrReviewInvalidSource
++	}
++	var generation memory.CompilerGeneration
++	if json.Unmarshal(manifest, &generation) != nil {
++		return ErrReviewInvalidSource
++	}
++	generationID, canonical, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil || generationID != item.GenerationID || string(canonical) != string(manifest) {
++		return ErrReviewInvalidSource
++	}
++	if item.Ref.ID != memory.CompilerHash([]byte(fmt.Sprintf("%s:%s:%d", item.JobID, groupHash, ordinal))) {
++		return ErrReviewInvalidSource
++	}
++	var original []memory.MemoryCandidate
++	if json.Unmarshal(stage, &original) != nil || ordinal < 0 || ordinal >= len(original) || len(original) > 16 {
++		return ErrReviewInvalidSource
++	}
++	stripped := item.Candidate
++	stripped.ID = ""
++	stripped.ReviewState = "unresolved"
++	stripped.ReviewRevision = 0
++	stripped.EquivalentTo = ""
++	if string(compilerJSON(stripped)) != string(compilerJSON(original[ordinal])) {
++		return ErrReviewInvalidSource
++	}
++	validated, err := validateCompilerOutput(request, compilerJSON(memory.CompilerResponse{RequestID: requestID, Candidates: []memory.ExtractorCandidate{item.Candidate.Proposal}}))
++	if err != nil || len(validated) != 1 || string(compilerJSON(validated[0])) != string(compilerJSON(stripped)) {
++		return ErrReviewInvalidSource
++	}
++	return nil
++}
++
++func canonicalizeReviewCandidate(item *memory.OwnerCandidate) {
++	sortSources := func(sources []memory.CompilerSource) {
++		sort.Slice(sources, func(i, j int) bool {
++			return string(compilerJSON(sources[i].Locator)) < string(compilerJSON(sources[j].Locator))
++		})
++	}
++	sortRefs := func(refs []memory.EvidenceLocator) {
++		sort.Slice(refs, func(i, j int) bool { return string(compilerJSON(refs[i])) < string(compilerJSON(refs[j])) })
++	}
++	sortSources(item.Candidate.Support)
++	sortSources(item.Candidate.Context)
++	sortRefs(item.Candidate.Proposal.Support)
++	sortRefs(item.Candidate.Proposal.Context)
++}
+diff --git a/internal/eviedb/candidate_review_prepare.go b/internal/eviedb/candidate_review_prepare.go
+new file mode 100644
+index 0000000..eada0ff
+--- /dev/null
++++ b/internal/eviedb/candidate_review_prepare.go
+@@ -0,0 +1,285 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"sort"
++	"strings"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewContext, ref memory.CandidateRef, action string) (memory.ReviewPreview, error) {
++	var p memory.ReviewPreview
++	if action != "accept" && action != "reject" {
++		return p, errors.New("explicit review action required")
++	}
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := checkReviewAuthority(ctx, conn, a); err != nil {
++			return err
++		}
++		candidate, err := loadReviewCandidate(ctx, conn, a, ref.ID, action == "accept")
++		if err != nil {
++			return err
++		}
++		if candidate.Candidate.ReviewState != "unresolved" {
++			return ErrReviewResolved
++		}
++		if candidate.Ref != ref {
++			return ErrReviewStale
++		}
++		if candidate.Candidate.EquivalentTo != "" {
++			return errors.New("equivalent candidate has no independent review")
++		}
++		candidates := []memory.OwnerCandidate{candidate}
++		id, err := newSemanticID()
++		if err != nil {
++			return err
++		}
++		p = memory.ReviewPreview{Version: "owner-review-preview-v1", ID: string(id), OwnerID: memory.LocalOwnerID, AuthenticationBinding: a.binding, AuthorizationRevision: a.revision, ScopeKey: a.scope, JobID: candidate.JobID, GenerationID: candidates[0].GenerationID, Action: action, Candidates: candidates}
++		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
++			return err
++		}
++		if action == "accept" {
++			p.Effect, err = prepareReviewEffects(ctx, conn, a, candidates)
++			if err != nil {
++				return err
++			}
++		}
++		p.EffectSHA256, _, err = ownerReviewEffectHash(p.Effect)
++		if err != nil {
++			return err
++		}
++		p.SHA256, _, err = ownerReviewPreviewHash(p)
++		if err != nil {
++			return err
++		}
++		if err = validateOwnerReviewEncoding(p); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `INSERT INTO memory_review_previews VALUES(?,?,?,?)`, p.ID, p.ScopeKey, p.SHA256, compilerJSON(p))
++		return err
++	})
++	if err != nil {
++		return memory.ReviewPreview{}, err
++	}
++	return p, nil
++}
++
++func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewContext, candidates []memory.OwnerCandidate) (*memory.ReviewEffect, error) {
++	id, err := newSemanticID()
++	if err != nil {
++		return nil, err
++	}
++	effect := &memory.ReviewEffect{Version: "owner-review-effect-v1", OperationID: id, Scopes: []memory.SemanticScope{}, PriorRevisions: []memory.ScopeRevision{}, Claims: []memory.ReviewClaimEffect{}}
++	keys, err := reviewScopeKeys(ctx, q, a.scope)
++	if err != nil {
++		return nil, err
++	}
++	for _, key := range keys {
++		scope, err := loadSemanticScope(ctx, q, key)
++		if err != nil {
++			return nil, err
++		}
++		effect.Scopes = append(effect.Scopes, scope.SemanticScope)
++		effect.PriorRevisions = append(effect.PriorRevisions, memory.ScopeRevision{ScopeKey: key, Revision: scope.Revision})
++		if key == a.scope {
++			effect.Scope = scope.SemanticScope
++		}
++	}
++	claimKeys := map[string]bool{}
++	for _, candidate := range candidates {
++		c := candidate.Candidate
++		if len(c.Support) == 0 {
++			return nil, ErrReviewInvalidSource
++		}
++		if err := validateClaimObject(c.Proposal.Proposition.Object); err != nil {
++			return nil, err
++		}
++		time, err := normalizeValidTime(c.Proposal.ValidTime)
++		if err != nil {
++			return nil, err
++		}
++		if !validTimesEqual(time, c.Proposal.ValidTime) {
++			return nil, errors.New("noncanonical candidate time")
++		}
++		prop := c.Proposal.Proposition
++		if prop.Polarity != memory.PolarityAffirmed && prop.Polarity != memory.PolarityDenied {
++			return nil, errors.New("invalid candidate polarity")
++		}
++		item := memory.ReviewClaimEffect{Candidate: candidate.Ref, Context: c.Context, TemporalQualification: c.Proposal.TemporalQualification, Sources: []memory.SemanticSource{}, Conflicts: []memory.ClaimConflictWarning{}}
++		item.Subject, err = reviewEntity(ctx, q, keys, prop.SubjectEntityID)
++		if err != nil {
++			return nil, err
++		}
++		if err = q.QueryRowContext(ctx, `SELECT predicate_id,token,version,label,object_constraint,cardinality FROM semantic_predicates WHERE predicate_id=?`, prop.PredicateID).Scan(&item.Predicate.ID, &item.Predicate.Token, &item.Predicate.Version, &item.Predicate.Label, &item.Predicate.ObjectConstraint, &item.Predicate.Cardinality); err != nil {
++			return nil, errors.New("needs_choice: Predicate")
++		}
++		if prop.Object.EntityID != "" {
++			entity, err := reviewEntity(ctx, q, keys, prop.Object.EntityID)
++			if err != nil {
++				return nil, err
++			}
++			item.ObjectEntity = &entity
++			if item.Predicate.ObjectConstraint != memory.ConstraintEntity {
++				return nil, errors.New("Predicate object constraint changed")
++			}
++		} else if string(item.Predicate.ObjectConstraint) != string(prop.Object.Literal.Kind) {
++			return nil, errors.New("Predicate object constraint changed")
++		}
++		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: time, CreatedOperationID: id}
++		objectKind, objectEntity, literalKind, literalValue := "literal", any(nil), any(nil), any(nil)
++		if prop.Object.EntityID != "" {
++			objectKind = "entity"
++			objectEntity = prop.Object.EntityID
++		} else {
++			literalKind = prop.Object.Literal.Kind
++			literalValue = prop.Object.Literal.Value
++		}
++		var claimID memory.SemanticID
++		err = q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND object_kind=? AND object_entity_id IS ? AND literal_kind IS ? AND literal_value IS ? AND polarity=? AND valid_from IS ? AND valid_to IS ?`, effect.Scope.ID, prop.SubjectEntityID, prop.PredicateID, objectKind, objectEntity, literalKind, literalValue, prop.Polarity, semanticTimeArgument(time.From), semanticTimeArgument(time.To)).Scan(&claimID)
++		if errors.Is(err, sql.ErrNoRows) {
++			item.Claim.ID, err = newSemanticID()
++			item.Create = true
++		} else if err == nil {
++			item.Claim, err = loadSemanticClaim(ctx, q, claimID)
++		}
++		if err != nil {
++			return nil, err
++		}
++		if !item.Create {
++			state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, item.Claim.ID)
++			if err != nil || state.State != memory.SemanticStateActive {
++				return nil, errors.New("needs_choice: equal Claim is inactive")
++			}
++		}
++		meaning := string(compilerJSON(struct {
++			P memory.ClaimProposition
++			T memory.ValidTime
++		}{prop, time}))
++		if claimKeys[meaning] {
++			return nil, errors.New("duplicate effects require a combined interpretation")
++		}
++		claimKeys[meaning] = true
++		sources := append([]memory.CompilerSource(nil), c.Support...)
++		sort.Slice(sources, func(i, j int) bool {
++			return string(compilerJSON(sources[i].Locator)) < string(compilerJSON(sources[j].Locator))
++		})
++		for _, source := range sources {
++			if source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
++				return nil, ErrReviewInvalidSource
++			}
++			src := memory.SemanticSource{EventID: source.Locator.EventID, SessionID: source.SessionID, ScopeKey: source.ScopeKey, EventPart: source.Locator.EventPart, LocatorKind: source.Locator.LocatorKind, LocatorValue: source.Locator.LocatorValue, EvidenceSHA256: "sha256:" + source.Locator.EvidenceSHA256, Actor: source.Actor, SourceType: memory.SourceTypeUserMessage, Authority: source.Authority, ObservedAt: source.ObservedAt, Evidence: source.Evidence, Eligibility: memory.EligibilityEligible, OperationID: id}
++			err = q.QueryRowContext(ctx, `SELECT source_link_id,created_operation_id FROM semantic_source_links WHERE claim_id=? AND event_id=? AND event_part=? AND locator_kind=? AND locator_value=? AND evidence_sha256=?`, item.Claim.ID, src.EventID, src.EventPart, src.LocatorKind, src.LocatorValue, src.EvidenceSHA256).Scan(&src.ID, &src.OperationID)
++			if errors.Is(err, sql.ErrNoRows) {
++				src.ID, err = newSemanticID()
++				src.Create = true
++			} else if err == nil {
++				state, stateErr := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectSourceLink, src.ID)
++				if stateErr != nil || state.State != memory.SemanticStateEligible {
++					return nil, errors.New("retracted Source Link requires explicit restoration")
++				}
++			}
++			if err != nil {
++				return nil, err
++			}
++			item.Sources = append(item.Sources, src)
++		}
++		conflicts, err := reviewClaimConflicts(ctx, q, effect.Scope.ID, item.Claim)
++		if err != nil {
++			return nil, err
++		}
++		item.Conflicts = conflicts
++		effect.Claims = append(effect.Claims, item)
++	}
++	effects := 0
++	for _, item := range effect.Claims {
++		effects += 1 + len(item.Sources)
++	}
++	if effects > 256 {
++		return nil, errors.New("review_too_large")
++	}
++	return effect, nil
++}
++
++func reviewEntity(ctx context.Context, q reviewQuery, keys []string, id memory.SemanticID) (memory.SemanticEntity, error) {
++	entity, err := loadSemanticEntityForInspection(ctx, q, id)
++	if err != nil {
++		return entity, errors.New("needs_choice: Entity")
++	}
++	allowed := false
++	for _, key := range keys {
++		if entity.ScopeKey == key {
++			allowed = true
++		}
++	}
++	if !allowed {
++		return entity, ErrOwnerReviewUnauthorized
++	}
++	var lifecycle string
++	if err = q.QueryRowContext(ctx, `SELECT lifecycle FROM semantic_entities WHERE entity_id=?`, id).Scan(&lifecycle); err != nil || lifecycle != "active" {
++		return entity, errors.New("inactive Entity")
++	}
++	state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectEntity, id)
++	if err == nil && state.State != memory.SemanticStateActive {
++		return entity, errors.New("inactive Entity")
++	}
++	if err != nil && !errors.Is(err, sql.ErrNoRows) {
++		return entity, err
++	}
++	return entity, nil
++}
++
++func reviewClaimConflicts(ctx context.Context, q reviewQuery, scope memory.SemanticID, claim memory.SemanticClaim) ([]memory.ClaimConflictWarning, error) {
++	rows, err := q.QueryContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND claim_id<>? ORDER BY claim_id LIMIT 129`, scope, claim.SubjectEntityID, claim.Predicate.ID, claim.ID)
++	if err != nil {
++		return nil, err
++	}
++	ids := []memory.SemanticID{}
++	for rows.Next() {
++		var id memory.SemanticID
++		if err = rows.Scan(&id); err != nil {
++			rows.Close()
++			return nil, err
++		}
++		ids = append(ids, id)
++	}
++	err = rows.Err()
++	rows.Close()
++	if err != nil {
++		return nil, err
++	}
++	if len(ids) > 128 {
++		return nil, errors.New("review conflict bound")
++	}
++	convert := func(c memory.SemanticClaim) claimConflictCandidate {
++		object := string(compilerJSON(c.Object))
++		return claimConflictCandidate{ID: c.ID, SubjectID: c.SubjectEntityID, PredicateID: c.Predicate.ID, PredicateToken: c.Predicate.Token, ObjectKey: object, Polarity: c.Polarity, ValidTime: c.ValidTime, Cardinality: c.Predicate.Cardinality}
++	}
++	candidates := []claimConflictCandidate{convert(claim)}
++	for _, id := range ids {
++		c, err := loadSemanticClaim(ctx, q, id)
++		if err != nil {
++			return nil, err
++		}
++		state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, id)
++		if err != nil {
++			return nil, err
++		}
++		if state.State == memory.SemanticStateActive {
++			candidates = append(candidates, convert(c))
++		}
++	}
++	result := []memory.ClaimConflictWarning{}
++	for _, warning := range classifyClaimConflicts(candidates) {
++		if containsSemanticID(warning.ClaimIDs, claim.ID) {
++			result = append(result, warning)
++		}
++	}
++	return result, nil
++}
++
++func reviewDeliveryValid(key string) bool {
++	return strings.HasPrefix(key, "idem:v1:") && validateSemanticUUID(strings.TrimPrefix(key, "idem:v1:")) == nil
++}
+diff --git a/internal/eviedb/candidate_review_promotion_test.go b/internal/eviedb/candidate_review_promotion_test.go
+new file mode 100644
+index 0000000..7047423
+--- /dev/null
++++ b/internal/eviedb/candidate_review_promotion_test.go
+@@ -0,0 +1,135 @@
++package eviedb_test
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func reviewPromotionFixture(t *testing.T) (*compilerFixture, memory.PromotionProposal) {
++	t.Helper()
++	ctx := context.Background()
++	f, original, _ := reviewCandidateFixture(t)
++	selected := original.Window.Selection
++	selected.Destination = "session:" + string(f.session.ID)
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		return compilerOutput(r, []memory.ExtractorCandidate{original.Candidates[0].Proposal}), nil
++	}}
++	compiled, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), selected, compilerGeneration(), extractor)
++	if err != nil || compiled.State != "completed_candidates" {
++		t.Fatalf("session compile %+v %v", compiled, err)
++	}
++	authority, err := f.store.LocalOwnerReviewContext(ctx, selected.Destination)
++	if err != nil {
++		t.Fatal(err)
++	}
++	preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	accepted, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000170"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	event := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Promote the reviewed café preference to global memory."})
++	proposal, err := f.store.PreparePromotion(ctx, f.session.ScopeContext(), memory.PromotionRequest{IdempotencyKey: "idem:v1:90000000-0000-4000-8000-000000000171", SourceEventID: event.ID, SourceClaimID: accepted.Operation.ClaimIDs[0], DestinationScopeKey: "global"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(proposal.Sources) != 1 || proposal.Sources[0].Evidence != "café" {
++		t.Fatalf("promotion disclosure %+v", proposal.Sources)
++	}
++	payload, err := json.Marshal(memory.ApprovalPayload{Decision: memory.ApprovalApproved, ProposalSHA256: proposal.ProposalSHA256, PreparedSHA256: proposal.PreparedSHA256})
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.append(t, memory.EventInput{ParentID: proposal.Evidence.EventID, Type: memory.EventApproval, ExecutionID: memory.ExecutionID(proposal.OperationID), Payload: payload})
++	return f, proposal
++}
++
++func TestOwnerReviewPromotionRevalidatesPolicyBeforeApply(t *testing.T) {
++	ctx := context.Background()
++	f, proposal := reviewPromotionFixture(t)
++	if _, err := f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2'`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.ApplyPromotion(ctx, f.lease, proposal); !errors.Is(err, eviedb.ErrReviewInvalidSource) {
++		t.Fatalf("changed policy accepted promotion: %v", err)
++	}
++	var operations int
++	if err := f.db.QueryRow(`SELECT count(*) FROM semantic_operations WHERE operation_id=?`, proposal.OperationID).Scan(&operations); err != nil {
++		t.Fatal(err)
++	}
++	if operations != 0 {
++		t.Fatal("failed promotion wrote accepted operation")
++	}
++	hidden, err := f.store.PreparePromotion(ctx, f.session.ScopeContext(), proposal.Request)
++	if !errors.Is(err, eviedb.ErrReviewInvalidSource) || len(hidden.Sources) != 0 {
++		t.Fatalf("redacted evidence became executable %+v %v", hidden, err)
++	}
++}
++
++func TestOwnerReviewPromotionRetainsPolicyAndContextAfterCommit(t *testing.T) {
++	ctx := context.Background()
++	f, proposal := reviewPromotionFixture(t)
++	result, err := f.store.ApplyPromotion(ctx, f.lease, proposal)
++	if err != nil {
++		t.Fatal(err)
++	}
++	source, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectSourceLink, proposal.Sources[0].ID)
++	if err != nil || source.Source.Evidence != "café" {
++		t.Fatalf("promoted exact source %+v %v", source, err)
++	}
++	if len(source.Operations) != 1 || source.Operations[0].SchemaVersion != 4 || source.Operations[0].PreparedJSON == "" {
++		t.Fatalf("promotion operation %+v", source.Operations)
++	}
++	var original string
++	if err = f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, result.OperationID).Scan(&original); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2',revision=revision+1`); err != nil {
++		t.Fatal(err)
++	}
++	source, err = f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectSourceLink, proposal.Sources[0].ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if source.Source.Evidence != "" || len(source.Operations) != 1 || source.Operations[0].PreparedJSON != "" || source.Operations[0].ProposalJSON != "" || source.Operations[0].ResultJSON != "" {
++		t.Fatalf("promotion lost origin protection %+v", source)
++	}
++	claim, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectClaim, result.DestinationClaimID)
++	if err != nil || len(claim.Sources) != 1 || claim.Sources[0].Source.Evidence != "" {
++		t.Fatalf("promoted Claim disclosure %+v %v", claim, err)
++	}
++	read, err := f.store.InspectLiteralClaims(ctx, f.session.ScopeContext())
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, claim := range read.Claims {
++		if claim.ID == result.DestinationClaimID && claim.Source.Evidence != "" {
++			t.Fatalf("exact read leaked promoted evidence %+v", claim)
++		}
++	}
++	// Reusing an accepted delivery is not a fresh approval, but inspecting its
++	// stored proposal is still subject to current source disclosure policy.
++	repeated, err := f.store.ApplyPromotion(ctx, f.lease, proposal)
++	if err != nil || repeated.OperationID != result.OperationID {
++		t.Fatalf("accepted delivery changed %+v %v", repeated, err)
++	}
++	if hidden, err := f.store.PreparePromotion(ctx, f.session.ScopeContext(), proposal.Request); !errors.Is(err, eviedb.ErrReviewInvalidSource) || len(hidden.Sources) != 0 {
++		t.Fatalf("accepted proposal bypass %+v %v", hidden, err)
++	}
++	verified, err := f.store.VerifySemanticProjection(ctx)
++	if err != nil || !verified.Valid {
++		t.Fatalf("current policy changed historical promotion replay %+v %v", verified, err)
++	}
++	var after string
++	f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, result.OperationID).Scan(&after)
++	if after != original {
++		t.Fatal("historical promotion was rewritten")
++	}
++}
+diff --git a/internal/eviedb/candidate_review_provenance.go b/internal/eviedb/candidate_review_provenance.go
+new file mode 100644
+index 0000000..7ef542f
+--- /dev/null
++++ b/internal/eviedb/candidate_review_provenance.go
+@@ -0,0 +1,209 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"strings"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// Promotion preserves the original evidence identity. Following its exact
++// source-Claim edge recovers review origin even though copied Source Links are
++// created by a v4 operation. The allowed scope path has at most two Promotions:
++// session -> Context Scope -> global. This traversal never searches by prose.
++func reviewSourceOrigin(ctx context.Context, q historicalReviewQuery, id memory.SemanticID) (memory.SemanticID, error) {
++	for depth := 0; depth < 3; depth++ {
++		rows, err := q.QueryContext(ctx, `SELECT o.operation_id,o.schema_version,o.operation_kind,parent.source_link_id
++   FROM semantic_source_links child JOIN semantic_operations o ON o.operation_id=child.created_operation_id
++   LEFT JOIN semantic_promotions p ON p.operation_id=o.operation_id AND p.destination_claim_id=child.claim_id
++   LEFT JOIN semantic_source_links parent ON parent.claim_id=p.source_claim_id
++    AND parent.event_id=child.event_id AND parent.source_session_id=child.source_session_id
++    AND parent.source_scope_key=child.source_scope_key AND parent.event_part=child.event_part
++    AND parent.locator_kind=child.locator_kind AND parent.locator_value=child.locator_value
++    AND parent.evidence_sha256=child.evidence_sha256 AND parent.source_actor=child.source_actor
++    AND parent.source_type=child.source_type AND parent.authority=child.authority AND parent.observed_at=child.observed_at
++   WHERE child.source_link_id=?`, id)
++		if err != nil {
++			return "", err
++		}
++		var op memory.SemanticID
++		var version int
++		var kind string
++		var parent sql.NullString
++		if !rows.Next() {
++			err = rows.Err()
++			rows.Close()
++			if err != nil {
++				return "", err
++			}
++			return "", ErrReviewInvalidSource
++		}
++		err = rows.Scan(&op, &version, &kind, &parent)
++		duplicate := rows.Next()
++		rowErr := rows.Err()
++		rows.Close()
++		if err != nil {
++			return "", err
++		}
++		if rowErr != nil {
++			return "", rowErr
++		}
++		if duplicate {
++			return "", ErrReviewInvalidSource
++		}
++		if version == 6 && kind == "owner_candidate_review" {
++			return op, nil
++		}
++		if version != 4 || kind != "promote_claim" {
++			return "", nil
++		}
++		if !parent.Valid {
++			return "", ErrReviewInvalidSource
++		}
++		id = memory.SemanticID(parent.String)
++	}
++	return "", errors.New("review source promotion lineage exceeds scope path")
++}
++
++type promotionReviewQuery struct{ writer turnLeaseWriteExecutor }
++
++func (q promotionReviewQuery) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
++	return q.writer.queryContext(ctx, query, args...)
++}
++
++type historicalPromotionReviewKey struct{}
++
++func withHistoricalPromotionReview(ctx context.Context) context.Context {
++	return context.WithValue(ctx, historicalPromotionReviewKey{}, true)
++}
++func isHistoricalPromotionReview(ctx context.Context) bool {
++	v, _ := ctx.Value(historicalPromotionReviewKey{}).(bool)
++	return v
++}
++
++func validateReviewOriginVisibility(ctx context.Context, q historicalReviewQuery, id memory.SemanticID) error {
++	rows, err := q.QueryContext(ctx, `SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=? AND schema_version=6 AND operation_kind='owner_candidate_review'`, id)
++	if err != nil {
++		return err
++	}
++	var raw string
++	if !rows.Next() {
++		rows.Close()
++		return ErrReviewInvalidSource
++	}
++	err = rows.Scan(&raw)
++	rows.Close()
++	if err != nil {
++		return err
++	}
++	var op memory.OwnerReviewOperation
++	if json.Unmarshal([]byte(raw), &op) != nil || validateOwnerReviewOperation(op) != nil {
++		return ErrReviewInvalidSource
++	}
++	if err = validateOwnerReviewHistoricalSources(ctx, q, op); err != nil {
++		return err
++	}
++	if isHistoricalPromotionReview(ctx) {
++		return nil
++	}
++	rows, err = q.QueryContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`)
++	if err != nil {
++		return err
++	}
++	var policy string
++	if !rows.Next() {
++		rows.Close()
++		return ErrReviewInvalidSource
++	}
++	err = rows.Scan(&policy)
++	rows.Close()
++	if err != nil {
++		return err
++	}
++	if policy != op.Preview.SourcePolicy || policy != memory.CompilerPolicyVersion {
++		return ErrReviewInvalidSource
++	}
++	for _, candidate := range op.Preview.Candidates {
++		for _, sources := range [][]memory.CompilerSource{candidate.Candidate.Support, candidate.Candidate.Context} {
++			for _, source := range sources {
++				rows, err = q.QueryContext(ctx, `SELECT e.content,COALESCE(w.lifecycle_state,'active'),COALESCE(p.archived,0),
++    EXISTS(SELECT 1 FROM semantic_projection_quarantine quarantine JOIN semantic_scopes scope ON scope.scope_id=quarantine.scope_id WHERE scope.scope_key IN (?,?))
++    FROM events e JOIN sessions s ON s.id=e.session_id LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN projects p ON p.id=s.project_id WHERE e.id=?`, source.ScopeKey, op.Preview.ScopeKey, source.Locator.EventID)
++				if err != nil {
++					return err
++				}
++				var content, state string
++				var archived, quarantined int
++				if !rows.Next() {
++					rows.Close()
++					return ErrReviewInvalidSource
++				}
++				err = rows.Scan(&content, &state, &archived, &quarantined)
++				rows.Close()
++				if err != nil {
++					return err
++				}
++				if state != "active" || archived != 0 || quarantined != 0 || compilerHasSecret(content) {
++					return ErrReviewInvalidSource
++				}
++			}
++		}
++	}
++	return nil
++}
++
++func projectSourceWithReviewOrigin(ctx context.Context, q historicalReviewQuery, source memory.SemanticSource) (memory.SemanticSource, bool, error) {
++	origin, err := reviewSourceOrigin(ctx, q, source.ID)
++	if err != nil {
++		return source, false, err
++	}
++	if origin != "" {
++		if err = validateReviewOriginVisibility(ctx, q, origin); err != nil {
++			return source, true, err
++		}
++	}
++	if isHistoricalPromotionReview(ctx) {
++		locator := memory.EvidenceLocator{EventID: source.EventID, EventPart: source.EventPart, LocatorKind: source.LocatorKind, LocatorValue: source.LocatorValue, EvidenceSHA256: strings.TrimPrefix(source.EvidenceSHA256, "sha256:")}
++		projected, err := projectHistoricalCompilerSource(memory.CompilerSource{Locator: memory.EvidenceLocator{EventID: source.EventID}, Evidence: source.Evidence}, locator)
++		if err != nil {
++			return source, origin != "", err
++		}
++		source.Evidence = projected.Evidence
++		return source, origin != "", nil
++	}
++	source = projectAcceptedSource(source, origin != "", true)
++	if origin != "" && source.Evidence == "" {
++		return source, true, ErrReviewInvalidSource
++	}
++	return source, origin != "", nil
++}
++
++func renderSourceWithReviewOrigin(ctx context.Context, q historicalReviewQuery, source memory.SemanticSource) memory.SemanticSource {
++	projected, _, err := projectSourceWithReviewOrigin(ctx, q, source)
++	if err != nil {
++		source.Evidence = ""
++		return source
++	}
++	return projected
++}
++
++func requirePromotionReviewDisclosure(ctx context.Context, q historicalReviewQuery, sources []memory.SemanticSource) error {
++	for _, source := range sources {
++		origin, err := reviewSourceOrigin(ctx, q, source.ID)
++		if err != nil {
++			return err
++		}
++		if origin != "" {
++			if source.Evidence == "" {
++				return ErrReviewInvalidSource
++			}
++			if err = validateReviewOriginVisibility(ctx, q, origin); err != nil {
++				return err
++			}
++		}
++	}
++	return nil
++}
+diff --git a/internal/eviedb/candidate_review_public_test.go b/internal/eviedb/candidate_review_public_test.go
+new file mode 100644
+index 0000000..9239c56
+--- /dev/null
++++ b/internal/eviedb/candidate_review_public_test.go
+@@ -0,0 +1,521 @@
++package eviedb_test
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"github.com/davidadel66/evie/internal/composition"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func reviewCandidateFixture(t *testing.T) (*compilerFixture, memory.Compilation, eviedb.OwnerReviewContext) {
++	t.Helper()
++	f := newCompilerFixture(t)
++	selection := f.selection(t, "I prefer café and tea.", true)
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		candidate := f.candidate(r)
++		candidate.Proposition.Object.Literal.Value = "café"
++		for _, source := range r.Window.Sources {
++			if source.Usage == "new_support" {
++				start := strings.Index(source.Evidence, "café")
++				candidate.Support = []memory.EvidenceLocator{{EventID: source.Locator.EventID, EventPart: memory.EvidenceContent, LocatorKind: memory.LocatorUTF8ByteRange, LocatorValue: fmt.Sprintf("%d:%d", start, start+len("café")), EvidenceSHA256: memory.CompilerHash([]byte("café"))}}
++			}
++			if source.Usage == "context" {
++				candidate.Context = append(candidate.Context, source.Locator)
++			}
++		}
++		return compilerOutput(r, []memory.ExtractorCandidate{candidate}), nil
++	}}
++	result, err := f.store.CompileCandidateUnit(context.Background(), f.session.ScopeContext(), selection, compilerGeneration(), extractor)
++	if err != nil || result.State != "completed_candidates" {
++		t.Fatalf("compile %+v: %v", result, err)
++	}
++	a, err := f.store.LocalOwnerReviewContext(context.Background(), "global")
++	if err != nil {
++		t.Fatal(err)
++	}
++	return f, result, a
++}
++func decisionFor(p memory.ReviewPreview, key string) memory.ReviewDecision {
++	return memory.ReviewDecision{DeliveryKey: "idem:v1:" + key, PreviewID: p.ID, PreviewSHA256: p.SHA256, Action: p.Action}
++}
++
++func TestOwnerReviewClosedSessionExactSourceAndReplay(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	if err := f.store.ReleaseTurnLease(ctx, f.session.ID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, f.session.ID); err != nil {
++		t.Fatal(err)
++	}
++	var before int
++	if err := f.db.QueryRow(`SELECT count(*) FROM events`).Scan(&before); err != nil {
++		t.Fatal(err)
++	}
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(p.Effect.Claims) != 1 || p.Effect.Claims[0].Sources[0].Evidence != "café" || p.Effect.Claims[0].Sources[0].Authority != memory.AuthorityOwnerStatement || len(p.Effect.Claims[0].Context) != 1 || p.Effect.Claims[0].Context[0].Authority != "none" {
++		t.Fatalf("preview %+v", p)
++	}
++	result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000140"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if result.Operation == nil || len(result.Operation.ClaimIDs) != 1 || result.Candidates[0].ReviewRevision != 1 {
++		t.Fatalf("result %+v", result)
++	}
++	inspectionSession, err := f.store.CreateGlobalSession(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	source, err := f.store.InspectSemanticObject(ctx, inspectionSession.ScopeContext(), memory.SemanticObjectSourceLink, result.Operation.SourceLinkIDs[0])
++	if err != nil {
++		t.Fatal(err)
++	}
++	if source.Source.Evidence != "café" || source.Source.LocatorValue != p.Effect.Claims[0].Sources[0].LocatorValue {
++		t.Fatalf("source expanded %+v", source)
++	}
++	operation, err := f.store.InspectOwnerReviewOperation(ctx, a, result.Operation.OperationID)
++	if err != nil || operation.Preview.Effect.Claims[0].Context[0].Evidence != "Recorded." {
++		t.Fatalf("accepted context %+v %v", operation, err)
++	}
++	var after int
++	var status string
++	var leases int
++	f.db.QueryRow(`SELECT count(*) FROM events`).Scan(&after)
++	f.db.QueryRow(`SELECT status FROM sessions WHERE id=?`, f.session.ID).Scan(&status)
++	f.db.QueryRow(`SELECT count(*) FROM session_turn_leases WHERE holder_id IS NOT NULL`).Scan(&leases)
++	if before != after || status != "closed" || leases != 0 {
++		t.Fatalf("source authority changed events %d/%d status %s leases %d", before, after, status, leases)
++	}
++	replay, err := f.store.VerifySemanticProjection(ctx)
++	if err != nil || !replay.Valid {
++		t.Fatalf("replay %+v %v", replay, err)
++	}
++	if err = f.db.Close(); err != nil {
++		t.Fatal(err)
++	}
++	f.db, err = eviedb.OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.store = eviedb.NewStore(f.db)
++	repeated, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000140"))
++	if err != nil || string(mustJSON(t, repeated)) != string(mustJSON(t, result)) {
++		t.Fatalf("repeated %+v %v", repeated, err)
++	}
++	replay, err = f.store.VerifySemanticProjection(ctx)
++	if err != nil || !replay.Valid {
++		t.Fatalf("reopen replay %+v %v", replay, err)
++	}
++}
++func mustJSON(t *testing.T, value any) []byte {
++	t.Helper()
++	b, err := json.Marshal(value)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return b
++}
++
++func TestOwnerReviewRejectRedactionStalenessAndIdempotency(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2'`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000141")); !errors.Is(err, eviedb.ErrReviewStale) {
++		t.Fatalf("policy changed: %v", err)
++	}
++	item, err := f.store.InspectOwnerCandidate(ctx, a, compiled.Candidates[0].ID)
++	if err != nil || !item.Redacted || strings.Contains(string(mustJSON(t, item)), "café") {
++		t.Fatalf("redacted %+v %v", item, err)
++	}
++	reject, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "reject")
++	if err != nil {
++		t.Fatal(err)
++	}
++	decision := decisionFor(reject, "90000000-0000-4000-8000-000000000142")
++	result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decision)
++	if err != nil || result.Operation != nil {
++		t.Fatalf("reject %+v %v", result, err)
++	}
++	same, err := f.store.ResolveOwnerCandidateReview(ctx, a, decision)
++	if err != nil || string(mustJSON(t, same)) != string(mustJSON(t, result)) {
++		t.Fatalf("idempotence %+v %v", same, err)
++	}
++	decision.Reason = "different"
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decision); !errors.Is(err, eviedb.ErrIdempotencyConflict) {
++		t.Fatalf("key conflict: %v", err)
++	}
++	var ops, revision int
++	f.db.QueryRow(`SELECT count(*) FROM semantic_operations`).Scan(&ops)
++	f.db.QueryRow(`SELECT revision FROM semantic_scopes WHERE scope_key='global'`).Scan(&revision)
++	if ops != 1 || revision != 1 {
++		t.Fatalf("rejection changed graph: ops %d revision %d", ops, revision)
++	}
++}
++
++func TestOwnerReviewConcurrentAcceptRejectAndForgedCapability(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	accept, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	reject, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "reject")
++	if err != nil {
++		t.Fatal(err)
++	}
++	var forged eviedb.OwnerReviewContext
++	if err = json.Unmarshal(mustJSON(t, a), &forged); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ListOwnerCandidates(ctx, forged, memory.OwnerCandidateQuery{}); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++		t.Fatalf("forged authority: %v", err)
++	}
++	second, err := eviedb.OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer second.Close()
++	other := eviedb.NewStore(second)
++	start := make(chan struct{})
++	results := make(chan error, 2)
++	var wg sync.WaitGroup
++	for i, p := range []memory.ReviewPreview{accept, reject} {
++		wg.Add(1)
++		go func(i int, p memory.ReviewPreview) {
++			defer wg.Done()
++			<-start
++			store := f.store
++			if i == 1 {
++				store = other
++			}
++			_, err := store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, fmt.Sprintf("90000000-0000-4000-8000-%012d", 143+i)))
++			results <- err
++		}(i, p)
++	}
++	close(start)
++	wg.Wait()
++	close(results)
++	wins, loses := 0, 0
++	for err := range results {
++		if err == nil {
++			wins++
++		} else if errors.Is(err, eviedb.ErrReviewResolved) {
++			loses++
++		} else {
++			t.Fatal(err)
++		}
++	}
++	if wins != 1 || loses != 1 {
++		t.Fatalf("race %d/%d", wins, loses)
++	}
++	var audits int
++	f.db.QueryRow(`SELECT count(*) FROM memory_review_audits`).Scan(&audits)
++	if audits != 1 {
++		t.Fatalf("audits %d", audits)
++	}
++}
++
++func candidateRef(compiled memory.Compilation) memory.CandidateRef {
++	return memory.CandidateRef{ID: compiled.Candidates[0].ID, ReviewRevision: compiled.Candidates[0].ReviewRevision}
++}
++
++func TestOwnerReviewMixedRecurrenceAllowsFreshIndependentCandidate(t *testing.T) {
++	ctx := context.Background()
++	f, first, a := reviewCandidateFixture(t)
++	generation := compilerGeneration()
++	generation.Prompt += " Pinned independent comparison."
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		original := first.Candidates[0].Proposal
++		fresh := f.candidate(r)
++		for _, source := range r.Window.Sources {
++			if source.Usage == "new_support" {
++				start := strings.Index(source.Evidence, "tea")
++				fresh.Support = []memory.EvidenceLocator{{EventID: source.Locator.EventID, EventPart: memory.EvidenceContent, LocatorKind: memory.LocatorUTF8ByteRange, LocatorValue: fmt.Sprintf("%d:%d", start, start+3), EvidenceSHA256: memory.CompilerHash([]byte("tea"))}}
++			}
++		}
++		return compilerOutput(r, []memory.ExtractorCandidate{original, fresh}), nil
++	}}
++	second, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), first.Window.Selection, generation, extractor)
++	if err != nil || second.State != "completed_candidates" {
++		t.Fatalf("second %+v %v", second, err)
++	}
++	if len(second.Candidates) != 2 || second.Candidates[0].EquivalentTo != first.Candidates[0].ID || second.Candidates[1].EquivalentTo != "" {
++		t.Fatalf("recurrence %+v", second.Candidates)
++	}
++	if _, err = f.store.PrepareOwnerCandidateReview(ctx, a, memory.CandidateRef{ID: second.Candidates[0].ID}, "accept"); err == nil {
++		t.Fatal("suppressed candidate became executable")
++	}
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, memory.CandidateRef{ID: second.Candidates[1].ID}, "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(p.Candidates) != 1 || p.Candidates[0].Ref.ID != second.Candidates[1].ID || p.Effect.Claims[0].Create {
++		t.Fatalf("wrong independent/equal effect %+v", p)
++	}
++	result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000145"))
++	if err != nil || result.Operation == nil {
++		t.Fatalf("accept fresh %+v %v", result, err)
++	}
++	original, err := f.store.InspectOwnerCandidate(ctx, a, first.Candidates[0].ID)
++	if err != nil || original.Candidate.ReviewState != "unresolved" {
++		t.Fatalf("unselected original changed %+v %v", original, err)
++	}
++}
++
++func TestOwnerReviewAtomicFailureAndSourceSeal(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`CREATE TRIGGER fail_review_audit BEFORE INSERT ON memory_review_audits BEGIN SELECT RAISE(ABORT,'injected audit failure'); END`); err != nil {
++		t.Fatal(err)
++	}
++	decision := decisionFor(p, "90000000-0000-4000-8000-000000000146")
++	failed, err := f.store.ResolveOwnerCandidateReview(ctx, a, decision)
++	if err == nil || failed.Operation != nil || failed.AuditID != "" {
++		t.Fatalf("failed commit leaked success %+v %v", failed, err)
++	}
++	var ops, audits, deliveries int
++	var state string
++	f.db.QueryRow(`SELECT count(*) FROM semantic_operations`).Scan(&ops)
++	f.db.QueryRow(`SELECT count(*) FROM memory_review_audits`).Scan(&audits)
++	f.db.QueryRow(`SELECT count(*) FROM memory_review_deliveries`).Scan(&deliveries)
++	f.db.QueryRow(`SELECT review_state FROM memory_compiler_candidates WHERE candidate_id=?`, compiled.Candidates[0].ID).Scan(&state)
++	if ops != 1 || audits != 0 || deliveries != 0 || state != "unresolved" {
++		t.Fatalf("partial acceptance ops %d audits %d deliveries %d state %s", ops, audits, deliveries, state)
++	}
++	if _, err = f.db.Exec(`DROP TRIGGER fail_review_audit`); err != nil {
++		t.Fatal(err)
++	}
++	cancelled, cancel := context.WithCancel(ctx)
++	cancel()
++	if _, err = f.store.ResolveOwnerCandidateReview(cancelled, a, decision); err == nil {
++		t.Fatal("cancelled approval committed")
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decision); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE memory_compiler_candidates SET envelope=json_set(envelope,'$.support[0].locator.locator_value','0:1') WHERE candidate_id=?`, compiled.Candidates[0].ID); err == nil {
++		t.Fatal("frozen source projection mutable")
++	}
++}
++
++func TestOwnerReviewStaleVectorAndRevokedAuthorization(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	event := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "/remember drink water"})
++	explicit, err := f.store.PrepareRememberLiteral(ctx, f.session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: "idem:v1:90000000-0000-4000-8000-000000000147", SourceEventID: event.ID, Predicate: "drink", PredicateLabel: "drink", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "water"}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ApplyRememberLiteral(ctx, f.lease, explicit); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000148")); !errors.Is(err, eviedb.ErrReviewStale) {
++		t.Fatalf("external semantic write: %v", err)
++	}
++	refreshed, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil || refreshed.ID == p.ID || refreshed.SHA256 == p.SHA256 {
++		t.Fatalf("refresh %+v %v", refreshed, err)
++	}
++	if _, err = f.db.Exec(`UPDATE memory_review_authorization SET revision=revision+1`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(refreshed, "90000000-0000-4000-8000-000000000149")); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++		t.Fatalf("revoked approval: %v", err)
++	}
++}
++
++func TestOwnerReviewExactScopeFamiliesAndClosedLineage(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	workspaceA, err := f.store.RegisterWorkspace(ctx, "review A")
++	if err != nil {
++		t.Fatal(err)
++	}
++	workspaceB, err := f.store.RegisterWorkspace(ctx, "review B")
++	if err != nil {
++		t.Fatal(err)
++	}
++	receipt := reviewTestReceipt()
++	wa, err := f.store.CreateWorkspaceSessionWithComposition(ctx, workspaceA.ID, workspaceA.CurrentRevisionID, receipt)
++	if err != nil {
++		t.Fatal(err)
++	}
++	wb, err := f.store.CreateWorkspaceSessionWithComposition(ctx, workspaceB.ID, workspaceB.CurrentRevisionID, receipt)
++	if err != nil {
++		t.Fatal(err)
++	}
++	projectA, err := f.store.RegisterProject(ctx, "review project A", t.TempDir())
++	if err != nil {
++		t.Fatal(err)
++	}
++	projectB, err := f.store.RegisterProject(ctx, "review project B", t.TempDir())
++	if err != nil {
++		t.Fatal(err)
++	}
++	pa, err := f.store.CreateProjectSession(ctx, projectA.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	pb, err := f.store.CreateProjectSession(ctx, projectB.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	sessionOnly, err := f.store.CreateProjectSession(ctx, projectA.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	type entry struct {
++		session  memory.Session
++		scope    string
++		compiled memory.Compilation
++	}
++	entries := []entry{{session: f.session, scope: "global"}, {session: wa, scope: "workspace:" + string(workspaceA.ID)}, {session: wb, scope: "workspace:" + string(workspaceB.ID)}, {session: pa, scope: "project:" + string(projectA.ID)}, {session: pb, scope: "project:" + string(projectB.ID)}, {session: sessionOnly, scope: "session:" + string(sessionOnly.ID)}}
++	for i := range entries {
++		f.session = entries[i].session
++		if i != 0 {
++			f.lease, err = f.store.AcquireTurnLease(ctx, f.session.ID, "review-scope", time.Minute)
++			if err != nil {
++				t.Fatal(err)
++			}
++		}
++		sel := f.selection(t, "I prefer tea.", true)
++		sel.Destination = entries[i].scope
++		extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++			return compilerOutput(r, []memory.ExtractorCandidate{f.candidate(r)}), nil
++		}}
++		compiled, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), sel, compilerGeneration(), extractor)
++		if err != nil || compiled.State != "completed_candidates" {
++			t.Fatalf("scope %s: %+v %v", entries[i].scope, compiled, err)
++		}
++		entries[i].compiled = compiled
++		if err = f.store.ReleaseTurnLease(ctx, f.session.ID, f.lease.HolderID, f.lease.FencingToken); err != nil {
++			t.Fatal(err)
++		}
++		if _, err = f.db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, f.session.ID); err != nil {
++			t.Fatal(err)
++		}
++	}
++	for i, item := range entries {
++		a, err := f.store.LocalOwnerReviewContext(ctx, item.scope)
++		if err != nil {
++			t.Fatal(err)
++		}
++		page, err := f.store.ListOwnerCandidates(ctx, a, memory.OwnerCandidateQuery{})
++		if err != nil || len(page.Candidates) != 1 || page.Candidates[0].Ref.ID != item.compiled.Candidates[0].ID {
++			t.Fatalf("scope inbox %s %+v %v", item.scope, page, err)
++		}
++		for j, foreign := range entries {
++			if i == j {
++				continue
++			}
++			leak, err := f.store.InspectOwnerCandidate(ctx, a, foreign.compiled.Candidates[0].ID)
++			if !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) || len(leak.Candidate.Support) != 0 {
++				t.Fatalf("scope %s leaked %s: %+v %v", item.scope, foreign.scope, leak, err)
++			}
++		}
++		p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(item.compiled), "accept")
++		if err != nil {
++			t.Fatalf("prepare %s: %v", item.scope, err)
++		}
++		result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, fmt.Sprintf("90000000-0000-4000-8000-%012d", 150+i)))
++		if err != nil {
++			t.Fatalf("accept %s: %v", item.scope, err)
++		}
++		if result.Operation == nil || p.Effect.Scope.Key != item.scope {
++			t.Fatalf("destination widened %+v", p)
++		}
++	}
++	replay, err := f.store.VerifySemanticProjection(ctx)
++	if err != nil || !replay.Valid {
++		t.Fatalf("scope replay %+v %v", replay, err)
++	}
++	authority, err := f.store.LocalOwnerReviewContext(ctx, "workspace:"+string(workspaceA.ID))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ArchiveWorkspace(ctx, workspaceA.ID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.store.ListOwnerCandidates(ctx, authority, memory.OwnerCandidateQuery{}); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++		t.Fatalf("archived scope access: %v", err)
++	}
++}
++
++func reviewTestReceipt() composition.Receipt {
++	hash := strings.Repeat("0", 64)
++	return composition.Receipt{FormatVersion: composition.FormatVersion, Preset: composition.PresetIdentity{ID: "standard", Version: "sha256:" + hash}, EvieVersion: "1.0.0", Providers: []composition.Provider{{ID: "fixture", ImplementationVersion: "1.0.0"}}, Capabilities: []composition.Capability{{ID: "fixture.echo", ProviderID: "fixture", ContractVersion: "1.0.0", SchemaSHA256: hash}}, ToolSchemas: []composition.ToolSchema{{Name: "fixture_echo", SHA256: hash}}, Instructions: []composition.InstructionReference{{ID: "fixture-instructions", SHA256: hash}}, Configuration: []composition.ConfigurationReference{{Kind: composition.ConfigurationConnection, ID: "da73b499-4df4-4a91-bbe8-4fd3a223e634"}}}
++}
++
++func TestOwnerReviewAcceptedSourcePolicyRedactsWithoutRewritingHistory(t *testing.T) {
++	ctx := context.Background()
++	f, compiled, a := reviewCandidateFixture(t)
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000160"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	var stored string
++	if err = f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, result.Operation.OperationID).Scan(&stored); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2'`); err != nil {
++		t.Fatal(err)
++	}
++	hidden, err := f.store.InspectOwnerReviewOperation(ctx, a, result.Operation.OperationID)
++	if !errors.Is(err, eviedb.ErrReviewInvalidSource) || hidden.OperationID != "" {
++		t.Fatalf("old preview source leaked %+v %v", hidden, err)
++	}
++	source, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectSourceLink, result.Operation.SourceLinkIDs[0])
++	if err != nil {
++		t.Fatal(err)
++	}
++	if source.Source.Evidence != "" || len(source.Operations) != 1 || source.Operations[0].PreparedJSON != "" || source.Operations[0].ProposalJSON != "" {
++		t.Fatalf("accepted source disclosure bypass %+v", source)
++	}
++	claims, err := f.store.InspectLiteralClaims(ctx, f.session.ScopeContext())
++	if err != nil || len(claims.Claims) != 2 {
++		t.Fatalf("accepted truth changed %+v %v", claims, err)
++	}
++	replay, err := f.store.VerifySemanticProjection(ctx)
++	if err != nil || !replay.Valid {
++		t.Fatalf("current policy rewrote replay %+v %v", replay, err)
++	}
++	var after string
++	f.db.QueryRow(`SELECT prepared_proposal_json FROM semantic_operations WHERE operation_id=?`, result.Operation.OperationID).Scan(&after)
++	if after != stored {
++		t.Fatal("historical authority envelope changed")
++	}
++	repeat, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000160"))
++	if err != nil || repeat.AuditID != result.AuditID {
++		t.Fatalf("duplicate treated as fresh acceptance %+v %v", repeat, err)
++	}
++}
+diff --git a/internal/eviedb/candidate_review_replay.go b/internal/eviedb/candidate_review_replay.go
+new file mode 100644
+index 0000000..9fab8c4
+--- /dev/null
++++ b/internal/eviedb/candidate_review_replay.go
+@@ -0,0 +1,45 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func ownerReviewReplayHandler(operation semanticAcceptedReplayOperation) (semanticReplayPreparedHandler, error) {
++	var op memory.OwnerReviewOperation
++	if err := strictSemanticProposal(operation.PreparedJSON, &op); err != nil {
++		return semanticReplayPreparedHandler{}, err
++	}
++	if err := validateOwnerReviewOperation(op); err != nil {
++		return semanticReplayPreparedHandler{}, err
++	}
++	effect := op.Preview.Effect
++	return semanticReplayPreparedHandler{SchemaVersion: 6, Kind: op.Kind, OperationID: op.OperationID, IdempotencyKey: op.IdempotencyKey, Actor: op.Actor, SessionID: op.SessionID, TargetScope: effect.Scope, Scopes: effect.Scopes, PriorRevisions: effect.PriorRevisions, SourceEventID: op.SourceEventID, PreparedProposal: op, CanonicalProposal: canonicalOwnerReviewOperation(op), CanonicalEffect: canonicalOwnerReviewEffect(effect), ValidateResult: func(record semanticAcceptedReplayOperation) error {
++		return validateConcreteReplayResult(record, &memory.OwnerReviewOperationResult{}, func(r memory.OwnerReviewOperationResult) (memory.SemanticID, time.Time, []memory.ScopeRevision) {
++			return r.OperationID, r.TransactionTime, r.ResultingRevisions
++		}, func(r memory.OwnerReviewOperationResult) bool {
++			claims, sources := []memory.SemanticID{}, []memory.SemanticID{}
++			for _, item := range effect.Claims {
++				claims = append(claims, item.Claim.ID)
++				for _, source := range item.Sources {
++					sources = append(sources, source.ID)
++				}
++			}
++			return string(compilerJSON(claims)) == string(compilerJSON(r.ClaimIDs)) && string(compilerJSON(sources)) == string(compilerJSON(r.SourceLinkIDs))
++		})
++	}, Replay: func(ctx context.Context, s *Store, record semanticAcceptedReplayOperation) (any, error) {
++		var result memory.OwnerReviewOperationResult
++		err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++			if err := validateOwnerReviewHistoricalSources(ctx, conn, op); err != nil {
++				return err
++			}
++			var err error
++			result, err = s.applyOwnerReviewOperation(ctx, conn, op, record.TransactionTime)
++			return err
++		})
++		return result, err
++	}}, nil
++}
+diff --git a/internal/eviedb/candidate_review_resolution_test.go b/internal/eviedb/candidate_review_resolution_test.go
+new file mode 100644
+index 0000000..9512cda
+--- /dev/null
++++ b/internal/eviedb/candidate_review_resolution_test.go
+@@ -0,0 +1,86 @@
++package eviedb_test
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestOwnerReviewTerminalResultPrecedesFreshAcceptanceChecks(t *testing.T) {
++	for _, action := range []string{"accept", "reject"} {
++		for _, change := range []string{"policy", "source", "authorization_revision"} {
++			t.Run(action+"/"+change, func(t *testing.T) {
++				ctx := context.Background()
++				f, compiled, authority := reviewCandidateFixture(t)
++				preview, err := f.store.PrepareOwnerCandidateReview(ctx, authority, candidateRef(compiled), action)
++				if err != nil {
++					t.Fatal(err)
++				}
++				winning, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decisionFor(preview, "90000000-0000-4000-8000-000000000150"))
++				if err != nil {
++					t.Fatal(err)
++				}
++				counts := func() [4]int {
++					t.Helper()
++					var got [4]int
++					if err := f.db.QueryRow(`SELECT (SELECT count(*) FROM memory_review_audits), (SELECT count(*) FROM memory_review_deliveries), (SELECT count(*) FROM semantic_operations), (SELECT review_revision FROM memory_compiler_candidates WHERE candidate_id=?)`, compiled.Candidates[0].ID).Scan(&got[0], &got[1], &got[2], &got[3]); err != nil {
++						t.Fatal(err)
++					}
++					return got
++				}
++				before := counts()
++				switch change {
++				case "policy":
++					_, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed-detector-v2'`)
++				case "source":
++					// Simulate damaged retained evidence without weakening the
++					// production append-only boundary.
++					if _, err = f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++						t.Fatal(err)
++					}
++					_, err = f.db.Exec(`UPDATE events SET content='api_key=synthetic_secret_not_a_real_key' WHERE id=?`, compiled.Candidates[0].Support[0].Locator.EventID)
++				case "authorization_revision":
++					_, err = f.db.Exec(`UPDATE memory_review_authorization SET revision=revision+1`)
++				}
++				if err != nil {
++					t.Fatal(err)
++				}
++				decision := decisionFor(preview, "90000000-0000-4000-8000-000000000151")
++				if change == "authorization_revision" {
++					if _, err = f.store.ResolveOwnerCandidateReview(ctx, authority, decision); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++						t.Fatalf("expired authority returned terminal information: %v", err)
++					}
++					authority, err = f.store.LocalOwnerReviewContext(ctx, "global")
++					if err != nil {
++						t.Fatal(err)
++					}
++				}
++				got, err := f.store.ResolveOwnerCandidateReview(ctx, authority, decision)
++				if !errors.Is(err, eviedb.ErrReviewResolved) || string(mustJSON(t, got)) != string(mustJSON(t, winning)) {
++					t.Fatalf("terminal outcome lost after %s: got %+v, error %v; want %+v", change, got, err, winning)
++				}
++				if after := counts(); after != before {
++					t.Fatalf("terminal lookup changed durable state: before %v after %v", before, after)
++				}
++				var forged eviedb.OwnerReviewContext
++				if _, err = f.store.ResolveOwnerCandidateReview(ctx, forged, decision); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++					t.Fatalf("forged authority returned terminal information: %v", err)
++				}
++				wrongScope, err := f.store.LocalOwnerReviewContext(ctx, "session:"+string(f.session.ID))
++				if err != nil {
++					t.Fatal(err)
++				}
++				if _, err = f.store.ResolveOwnerCandidateReview(ctx, wrongScope, decision); !errors.Is(err, eviedb.ErrOwnerReviewUnauthorized) {
++					t.Fatalf("another scope returned terminal information: %v", err)
++				}
++				decision.PreviewSHA256 = memory.CompilerHash([]byte("forged preview"))
++				if _, err = f.store.ResolveOwnerCandidateReview(ctx, authority, decision); !errors.Is(err, eviedb.ErrReviewStale) {
++					t.Fatalf("forged preview returned terminal information: %v", err)
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/eviedb/candidate_review_schema.go b/internal/eviedb/candidate_review_schema.go
+new file mode 100644
+index 0000000..06729bd
+--- /dev/null
++++ b/internal/eviedb/candidate_review_schema.go
+@@ -0,0 +1,109 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"fmt"
++	"strings"
++)
++
++const candidateReviewSchema = `
++CREATE INDEX IF NOT EXISTS memory_review_jobs_destination ON memory_compiler_jobs(destination,job_id);
++CREATE INDEX IF NOT EXISTS memory_review_actionable_candidates ON memory_compiler_candidates(job_id,candidate_id) WHERE review_state='unresolved' AND equivalent_to IS NULL;
++CREATE TABLE IF NOT EXISTS memory_review_authorization (
++ singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL,
++ authentication_key BLOB NOT NULL CHECK(length(authentication_key)=32), source_policy TEXT NOT NULL
++);
++INSERT OR IGNORE INTO memory_review_authorization VALUES(1,1,randomblob(32),'owner-assertions-v1');
++CREATE TABLE IF NOT EXISTS memory_review_previews (
++ preview_id TEXT PRIMARY KEY, scope_key TEXT NOT NULL, preview_sha256 TEXT NOT NULL, envelope BLOB NOT NULL CHECK(length(envelope)<=262144)
++);
++CREATE TABLE IF NOT EXISTS memory_review_deliveries (
++ owner_id TEXT NOT NULL, delivery_key TEXT NOT NULL, scope_key TEXT NOT NULL,
++ request_hash TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(owner_id,delivery_key)
++);
++CREATE TABLE IF NOT EXISTS memory_review_audits (
++ audit_id TEXT PRIMARY KEY, scope_key TEXT NOT NULL, preview_id TEXT NOT NULL REFERENCES memory_review_previews(preview_id),
++ action TEXT NOT NULL CHECK(action IN ('accept','reject')), envelope BLOB NOT NULL
++);
++CREATE TABLE IF NOT EXISTS memory_review_resolutions (
++ candidate_id TEXT PRIMARY KEY REFERENCES memory_compiler_candidates(candidate_id),
++ owner_id TEXT NOT NULL, delivery_key TEXT NOT NULL,
++ audit_id TEXT NOT NULL REFERENCES memory_review_audits(audit_id)
++);
++CREATE TABLE IF NOT EXISTS memory_review_inbox_revisions (
++ scope_key TEXT PRIMARY KEY, revision INTEGER NOT NULL
++);
++CREATE TRIGGER IF NOT EXISTS memory_review_candidate_insert AFTER INSERT ON memory_compiler_candidates BEGIN
++ INSERT INTO memory_review_inbox_revisions(scope_key,revision) SELECT destination,1 FROM memory_compiler_jobs WHERE job_id=NEW.job_id
++ ON CONFLICT(scope_key) DO UPDATE SET revision=revision+1;
++END;
++CREATE TRIGGER IF NOT EXISTS memory_review_candidate_change AFTER UPDATE OF review_revision,equivalent_to ON memory_compiler_candidates BEGIN
++ INSERT INTO memory_review_inbox_revisions(scope_key,revision) SELECT destination,1 FROM memory_compiler_jobs WHERE job_id=NEW.job_id
++ ON CONFLICT(scope_key) DO UPDATE SET revision=revision+1;
++END;
++CREATE TRIGGER IF NOT EXISTS memory_review_resolutions_no_update BEFORE UPDATE ON memory_review_resolutions BEGIN SELECT RAISE(ABORT,'review resolutions are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_resolutions_no_delete BEFORE DELETE ON memory_review_resolutions BEGIN SELECT RAISE(ABORT,'review resolutions are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_previews_no_update BEFORE UPDATE ON memory_review_previews BEGIN SELECT RAISE(ABORT,'review previews are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_previews_no_delete BEFORE DELETE ON memory_review_previews BEGIN SELECT RAISE(ABORT,'review previews are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_audits_no_update BEFORE UPDATE ON memory_review_audits BEGIN SELECT RAISE(ABORT,'review audits are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_audits_no_delete BEFORE DELETE ON memory_review_audits BEGIN SELECT RAISE(ABORT,'review audits are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_deliveries_no_update BEFORE UPDATE ON memory_review_deliveries BEGIN SELECT RAISE(ABORT,'review results are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_deliveries_no_delete BEFORE DELETE ON memory_review_deliveries BEGIN SELECT RAISE(ABORT,'review results are immutable'); END;
++`
++
++func ensureCandidateReviewSchema(ctx context.Context, db *sql.DB) error {
++	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error { _, err := conn.ExecContext(ctx, candidateReviewSchema); return err })
++}
++
++func ensureSemanticOperationSchemaV6(ctx context.Context, db *sql.DB) error {
++	var definition string
++	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='semantic_operations'`).Scan(&definition); err != nil {
++		return err
++	}
++	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") {
++		return nil
++	}
++	conn, err := db.Conn(ctx)
++	if err != nil {
++		return err
++	}
++	defer conn.Close()
++	if _, err = conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
++		return err
++	}
++	defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys=ON`)
++	if _, err = conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
++		return err
++	}
++	committed := false
++	defer func() {
++		if !committed {
++			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
++		}
++	}()
++	migration := strings.ReplaceAll(semanticOperationsV5Migration, "semantic_operations_v5", "semantic_operations_v6")
++	migration = strings.ReplaceAll(migration, "schema_version IN (1, 2, 3, 4, 5)", "schema_version IN (1, 2, 3, 4, 5, 6)")
++	if _, err = conn.ExecContext(ctx, migration); err != nil {
++		return fmt.Errorf("migrate semantic operation v6: %w", err)
++	}
++	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
++	if err != nil {
++		return err
++	}
++	invalid := rows.Next()
++	scanErr := rows.Err()
++	rows.Close()
++	if scanErr != nil {
++		return scanErr
++	}
++	if invalid {
++		return errors.New("semantic v6 migration foreign key violation")
++	}
++	if _, err = conn.ExecContext(ctx, `COMMIT`); err != nil {
++		return err
++	}
++	committed = true
++	return nil
++}
+diff --git a/internal/eviedb/candidate_review_sources.go b/internal/eviedb/candidate_review_sources.go
+new file mode 100644
+index 0000000..786c976
+--- /dev/null
++++ b/internal/eviedb/candidate_review_sources.go
+@@ -0,0 +1,107 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"strings"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// projectAcceptedSource never expands a selected byte range to the full event.
++// This is shared by review inspection and the older accepted read/promotion
++// paths that can subsequently encounter a review-created Source Link.
++func projectAcceptedSource(source memory.SemanticSource, reviewOrigin, policyCurrent bool) memory.SemanticSource {
++	if !reviewOrigin && source.LocatorKind == memory.LocatorWhole {
++		return source
++	}
++	if reviewOrigin && !policyCurrent {
++		source.Evidence = ""
++		return source
++	}
++	locator := memory.EvidenceLocator{EventID: source.EventID, EventPart: source.EventPart, LocatorKind: source.LocatorKind, LocatorValue: source.LocatorValue, EvidenceSHA256: strings.TrimPrefix(source.EvidenceSHA256, "sha256:")}
++	if reviewOrigin && compilerHasSecret(source.Evidence) {
++		source.Evidence = ""
++		return source
++	}
++	projected, err := projectCompilerSource(memory.CompilerSource{Locator: memory.EvidenceLocator{EventID: source.EventID}, Evidence: source.Evidence}, locator)
++	if err != nil {
++		source.Evidence = ""
++		return source
++	}
++	source.Evidence = projected.Evidence
++	return source
++}
++
++func reviewSourcePolicyCurrent(ctx context.Context, q interface {
++	QueryRowContext(context.Context, string, ...any) *sql.Row
++}) bool {
++	var policy string
++	return q.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&policy) == nil && policy == memory.CompilerPolicyVersion
++}
++
++func loadReviewRecordedSource(ctx context.Context, q reviewQuery, id memory.SemanticID, evidence string) (memory.SemanticSource, error) {
++	var source memory.SemanticSource
++	err := q.QueryRowContext(ctx, `SELECT source_link_id,created_operation_id,event_id,source_session_id,source_scope_key,event_part,locator_kind,locator_value,evidence_sha256,source_actor,source_type,authority,observed_at,eligibility FROM semantic_source_links WHERE source_link_id=?`, id).Scan(&source.ID, &source.OperationID, &source.EventID, &source.SessionID, &source.ScopeKey, &source.EventPart, &source.LocatorKind, &source.LocatorValue, &source.EvidenceSHA256, &source.Actor, &source.SourceType, &source.Authority, &source.ObservedAt, &source.Eligibility)
++	source.Evidence = evidence
++	return source, err
++}
++
++// InspectOwnerReviewOperation preserves the original reviewed context and
++// sources. Current policy applies to old envelopes as well as live candidates.
++func (s *Store) InspectOwnerReviewOperation(ctx context.Context, a OwnerReviewContext, id memory.SemanticID) (memory.OwnerReviewOperation, error) {
++	var op memory.OwnerReviewOperation
++	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
++	if err != nil {
++		return op, err
++	}
++	defer tx.Rollback()
++	if err = checkReviewAuthority(ctx, tx, a); err != nil {
++		return memory.OwnerReviewOperation{}, err
++	}
++	var raw string
++	err = tx.QueryRowContext(ctx, `SELECT o.prepared_proposal_json FROM semantic_operations o JOIN semantic_scopes s ON s.scope_id=o.target_scope_id WHERE o.operation_id=? AND o.schema_version=6 AND s.scope_key=?`, id, a.scope).Scan(&raw)
++	if err != nil {
++		return memory.OwnerReviewOperation{}, ErrOwnerReviewUnauthorized
++	}
++	if json.Unmarshal([]byte(raw), &op) != nil {
++		return memory.OwnerReviewOperation{}, errors.New("invalid accepted review envelope")
++	}
++	if err = reviewOperationSourcesVisible(ctx, tx, op); err != nil {
++		return memory.OwnerReviewOperation{}, ErrReviewInvalidSource
++	}
++	return op, tx.Commit()
++}
++
++func reviewOperationSourcesVisible(ctx context.Context, q reviewQuery, op memory.OwnerReviewOperation) error {
++	if !reviewSourcePolicyCurrent(ctx, q) {
++		return ErrReviewInvalidSource
++	}
++	for _, candidate := range op.Preview.Candidates {
++		var requestRaw []byte
++		var request memory.CompilerRequest
++		if err := q.QueryRowContext(ctx, `SELECT request FROM memory_compiler_jobs WHERE job_id=?`, candidate.JobID).Scan(&requestRaw); err != nil {
++			return err
++		}
++		if json.Unmarshal(requestRaw, &request) != nil {
++			return ErrReviewInvalidSource
++		}
++		owner, err := reviewSourceContext(ctx, q, request.Window.Selection.SessionID)
++		if err != nil {
++			return err
++		}
++		if err = compilerAuthorize(ctx, q, owner, request.Window.Selection); err != nil {
++			return err
++		}
++		for _, sources := range [][]memory.CompilerSource{candidate.Candidate.Support, candidate.Candidate.Context} {
++			for _, source := range sources {
++				if _, err = resolveCompilerSource(ctx, q, owner, request.Window.Selection, source); err != nil {
++					return err
++				}
++			}
++		}
++	}
++	return nil
++}
+diff --git a/internal/eviedb/db.go b/internal/eviedb/db.go
+index c88ac58..bb09e0d 100644
+--- a/internal/eviedb/db.go
++++ b/internal/eviedb/db.go
+@@ -1166,6 +1166,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
+ 		db.Close()
+ 		return nil, fmt.Errorf("create memory compiler schema: %w", err)
+ 	}
++	if err := ensureCandidateReviewSchema(ctx, db); err != nil {
++		db.Close()
++		return nil, fmt.Errorf("create candidate review schema: %w", err)
++	}
+ 	if err := checkSemanticProjectionStartup(ctx, db); err != nil {
+ 		db.Close()
+ 		return nil, fmt.Errorf("check Semantic Memory projection: %w", err)
+diff --git a/internal/eviedb/semantic.go b/internal/eviedb/semantic.go
+index 1ac57c8..2b724e4 100644
+--- a/internal/eviedb/semantic.go
++++ b/internal/eviedb/semantic.go
+@@ -288,6 +288,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
+ 	if err := ensureSemanticOperationSchemaV5(ctx, db); err != nil {
+ 		return err
+ 	}
++	if err := ensureSemanticOperationSchemaV6(ctx, db); err != nil {
++		return err
++	}
+ 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
+ 	if err != nil {
+ 		return err
+@@ -431,7 +434,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
+ 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+ 		return err
+ 	}
+-	if strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
++	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
+ 		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+ 		return nil
+ 	}
+@@ -486,7 +489,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
+ 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+ 		return err
+ 	}
+-	if strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
++	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+ 		return nil
+ 	}
+ 	conn, err := db.Conn(ctx)
+@@ -540,7 +543,7 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
+ 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+ 		return err
+ 	}
+-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
++	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+ 		return nil
+ 	}
+ 	conn, err := db.Conn(ctx)
+@@ -594,7 +597,7 @@ func ensureSemanticOperationSchemaV5(ctx context.Context, db *sql.DB) error {
+ 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+ 		return err
+ 	}
+-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
++	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+ 		return nil
+ 	}
+ 	conn, err := db.Conn(ctx)
+diff --git a/internal/eviedb/semantic_correction.go b/internal/eviedb/semantic_correction.go
+index 256f18b..979075d 100644
+--- a/internal/eviedb/semantic_correction.go
++++ b/internal/eviedb/semantic_correction.go
+@@ -1110,7 +1110,15 @@ func loadEligibleSourcesAt(ctx context.Context, queryer semanticInspectionQuerye
+ 		}
+ 		sources = append(sources, source)
+ 	}
+-	return sources, rows.Err()
++	err = rows.Err()
++	rows.Close()
++	if err != nil {
++		return nil, err
++	}
++	for i := range sources {
++		sources[i] = renderSourceWithReviewOrigin(ctx, queryer, sources[i])
++	}
++	return sources, nil
+ }
+ 
+ func loadSemanticEntityForInspection(ctx context.Context, queryer semanticInspectionQueryer, id memory.SemanticID) (memory.SemanticEntity, error) {
+diff --git a/internal/eviedb/semantic_lifecycle.go b/internal/eviedb/semantic_lifecycle.go
+index 4fd6453..6ce9cf1 100644
+--- a/internal/eviedb/semantic_lifecycle.go
++++ b/internal/eviedb/semantic_lifecycle.go
+@@ -909,7 +909,10 @@ func loadSourceForInspection(ctx context.Context, queryer semanticInspectionQuer
+ 		&source.EventPart, &source.LocatorKind, &source.LocatorValue, &source.EvidenceSHA256,
+ 		&source.Actor, &source.SourceType, &source.Authority, &source.ObservedAt,
+ 		&source.Eligibility, &source.Evidence)
+-	return source, err
++	if err != nil {
++		return source, err
++	}
++	return renderSourceWithReviewOrigin(ctx, queryer, source), nil
+ }
+ 
+ func loadAllSourceInspections(ctx context.Context, queryer semanticInspectionQueryer, claimID memory.SemanticID, at time.Time) ([]memory.SemanticSourceInspection, error) {
+@@ -974,6 +977,18 @@ func loadSemanticOperationInspection(ctx context.Context, queryer semanticInspec
+ 	if err != nil {
+ 		return operation, err
+ 	}
++	if operation.SchemaVersion == 6 {
++		var reviewed memory.OwnerReviewOperation
++		if json.Unmarshal([]byte(operation.PreparedJSON), &reviewed) != nil || reviewOperationSourcesVisible(ctx, queryer, reviewed) != nil {
++			operation.ProposalJSON, operation.PreparedJSON, operation.ResultJSON = "", "", ""
++		}
++	}
++	if operation.SchemaVersion == 4 && operation.Kind == "promote_claim" {
++		var promoted memory.PromotionProposal
++		if json.Unmarshal([]byte(operation.PreparedJSON), &promoted) != nil || requirePromotionReviewDisclosure(ctx, queryer, promoted.Sources) != nil {
++			operation.ProposalJSON, operation.PreparedJSON, operation.ResultJSON = "", "", ""
++		}
++	}
+ 	operation.TransactionTime, err = parseSemanticTime(transactionTime)
+ 	if err != nil {
+ 		return operation, err
+diff --git a/internal/eviedb/semantic_lifecycle_test.go b/internal/eviedb/semantic_lifecycle_test.go
+index 1a3b9ac..287905d 100644
+--- a/internal/eviedb/semantic_lifecycle_test.go
++++ b/internal/eviedb/semantic_lifecycle_test.go
+@@ -917,7 +917,7 @@ func TestSemanticOperationEncodingV3PreservesV1AndV2HistoryAcrossUpgrade(t *test
+ 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if !strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
++	if !strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") {
+ 		t.Fatalf("upgraded operation schema = %s", definition)
+ 	}
+ 	store = NewStore(db)
+diff --git a/internal/eviedb/semantic_promotion.go b/internal/eviedb/semantic_promotion.go
+index 2510482..195145e 100644
+--- a/internal/eviedb/semantic_promotion.go
++++ b/internal/eviedb/semantic_promotion.go
+@@ -45,6 +45,9 @@ func (s *Store) PreparePromotion(
+ 		if proposal.SessionID != scope.SessionID || !promotionRequestsEqual(proposal.Request, request) {
+ 			return memory.PromotionProposal{}, ErrIdempotencyConflict
+ 		}
++		if err := requirePromotionReviewDisclosure(ctx, s.db, proposal.Sources); err != nil {
++			return memory.PromotionProposal{}, err
++		}
+ 		proposal.ProposalSHA256 = acceptedHash
+ 		proposal.PreparedSHA256, _, err = semanticHash(proposal)
+ 		return proposal, err
+@@ -108,6 +111,10 @@ func (s *Store) PreparePromotion(
+ 		}
+ 	}
+ 
++	if err := requirePromotionReviewDisclosure(ctx, s.db, sources); err != nil {
++		return memory.PromotionProposal{}, err
++	}
++
+ 	operationID, err := newSemanticID()
+ 	if err != nil {
+ 		return memory.PromotionProposal{}, err
+@@ -579,6 +586,9 @@ func validatePromotionSources(
+ 	if err := rows.Err(); err != nil {
+ 		return err
+ 	}
++	if err := rows.Close(); err != nil {
++		return err
++	}
+ 	if len(eligible) != len(sources) {
+ 		return errors.New("Promotion source eligibility changed")
+ 	}
+@@ -590,6 +600,17 @@ func validatePromotionSources(
+ 		}
+ 		seen[key] = struct{}{}
+ 		current, ok := eligible[key]
++		if ok {
++			var protected bool
++			var err error
++			current, protected, err = projectSourceWithReviewOrigin(ctx, promotionReviewQuery{writer}, current)
++			if err != nil {
++				return err
++			}
++			if protected && proposed.Evidence == "" {
++				return ErrReviewInvalidSource
++			}
++		}
+ 		if !ok || current.ID == "" || current.EventID != proposed.EventID || current.SessionID != proposed.SessionID ||
+ 			current.ScopeKey != proposed.ScopeKey || current.EventPart != proposed.EventPart ||
+ 			current.LocatorKind != proposed.LocatorKind || current.LocatorValue != proposed.LocatorValue ||
+@@ -651,6 +672,10 @@ func validatePromotionSources(
+ 		if err != nil {
+ 			return err
+ 		}
++		destination, _, err = projectSourceWithReviewOrigin(ctx, promotionReviewQuery{writer}, destination)
++		if err != nil {
++			return err
++		}
+ 		if destination.ID != proposed.ID || destination.OperationID != proposed.OperationID ||
+ 			promotionSourceKey(destination) != promotionSourceKey(proposed) ||
+ 			destination.SessionID != proposed.SessionID || destination.ScopeKey != proposed.ScopeKey ||
+diff --git a/internal/eviedb/semantic_replay.go b/internal/eviedb/semantic_replay.go
+index 2afd8b2..5d6667e 100644
+--- a/internal/eviedb/semantic_replay.go
++++ b/internal/eviedb/semantic_replay.go
+@@ -399,6 +399,9 @@ type semanticReplayPreparedHandler struct {
+ }
+ 
+ func semanticReplayHandler(operation semanticAcceptedReplayOperation) (semanticReplayPreparedHandler, error) {
++	if operation.SchemaVersion == 6 && operation.Kind == "owner_candidate_review" {
++		return ownerReviewReplayHandler(operation)
++	}
+ 	base := func(schemaVersion int, kind string, operationID memory.SemanticID, idempotencyKey string, actor memory.SemanticActor,
+ 		sessionID memory.SessionID, targetScope memory.SemanticScope, scopes []memory.SemanticScope, priors []memory.ScopeRevision,
+ 		sourceEventID memory.EventID, prepared, canonicalProposal, canonicalEffect any,
+@@ -516,7 +519,7 @@ func semanticReplayHandler(operation semanticAcceptedReplayOperation) (semanticR
+ 				candidate := proposal
+ 				candidate.ProposalSHA256 = operation.ProposalHash
+ 				candidate.PreparedSHA256, _, _ = semanticHash(candidate)
+-				return store.ApplyPromotion(ctx, replayLease(candidate.SessionID), candidate)
++				return store.ApplyPromotion(withHistoricalPromotionReview(ctx), replayLease(candidate.SessionID), candidate)
+ 			}), nil
+ 	case operation.SchemaVersion == 5 && operation.Kind == "create_graph_link":
+ 		var proposal memory.CreateGraphLinkProposal
+@@ -595,8 +598,10 @@ func validateSemanticReplayOperationPreflight(operation semanticAcceptedReplayOp
+ 	if string(preparedJSON) != operation.PreparedJSON {
+ 		return errors.New("accepted prepared proposal JSON is not canonical")
+ 	}
+-	if err := validateSemanticIDsInJSON(operation.PreparedJSON); err != nil {
+-		return err
++	if operation.SchemaVersion != 6 {
++		if err := validateSemanticIDsInJSON(operation.PreparedJSON); err != nil {
++			return err
++		}
+ 	}
+ 	return handler.ValidateResult(operation)
+ }
+@@ -736,8 +741,10 @@ func replaySemanticOperations(ctx context.Context, db *sql.DB, operations []sema
+ 		}
+ 		operation := remaining[selected]
+ 		remaining = append(remaining[:selected], remaining[selected+1:]...)
+-		if err := ensureReplayLease(ctx, db, operation); err != nil {
+-			return &SemanticReplayError{OperationID: operation.OperationID, SchemaVersion: operation.SchemaVersion, Cause: err}
++		if operation.SchemaVersion != 6 {
++			if err := ensureReplayLease(ctx, db, operation); err != nil {
++				return &SemanticReplayError{OperationID: operation.OperationID, SchemaVersion: operation.SchemaVersion, Cause: err}
++			}
+ 		}
+ 		store.now = func() time.Time { return operation.TransactionTime }
+ 		if err := store.replaySemanticOperation(ctx, operation); err != nil {
+@@ -1441,7 +1448,8 @@ func checkSemanticProjectionStartup(ctx context.Context, db *sql.DB) error {
+ 			(operations.schema_version = 2 AND operations.operation_kind = 'correct_claim') OR
+ 			(operations.schema_version = 3 AND operations.operation_kind IN ('retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
+ 			(operations.schema_version = 4 AND operations.operation_kind = 'promote_claim') OR
+-			(operations.schema_version = 5 AND operations.operation_kind IN ('create_graph_link', 'retire_memory', 'restore_memory', 'retract_source', 'restore_source'))
++			(operations.schema_version = 5 AND operations.operation_kind IN ('create_graph_link', 'retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
++			(operations.schema_version = 6 AND operations.operation_kind = 'owner_candidate_review')
+ 		)
+ 	`)
+ 	if err != nil {
+diff --git a/internal/eviedb/testdata/candidate_review_encoding_v1.json b/internal/eviedb/testdata/candidate_review_encoding_v1.json
+new file mode 100644
+index 0000000..e14bf3b
+--- /dev/null
++++ b/internal/eviedb/testdata/candidate_review_encoding_v1.json
+@@ -0,0 +1,188 @@
++{
++  "effect_sha256": "sha256:a680ffc162aacaea00bce5199ac66f32e297bc246926b2115a8309feb2cf4006",
++  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v1\",\"effect\":{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]}}",
++  "preview_sha256": "sha256:89fab915b8ded1fd9de78f44478eeac9f05090154b04ee66c5c4a48895df66a6",
++  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v1\",\"preview\":{\"version\":\"owner-review-preview-v1\",\"preview_id\":\"92000000-0000-4000-8000-000000000009\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"action\":\"accept\",\"candidates\":[{\"ref\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"destination\":\"global\",\"candidate\":{\"review_revision\":0,\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"},\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T12:00:00Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"café\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]},\"effect_sha256\":\"sha256:a680ffc162aacaea00bce5199ac66f32e297bc246926b2115a8309feb2cf4006\",\"preview_sha256\":\"\"}}",
++  "preview": {
++    "version": "owner-review-preview-v1",
++    "preview_id": "92000000-0000-4000-8000-000000000009",
++    "owner_id": "local",
++    "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
++    "authorization_revision": 1,
++    "scope_key": "global",
++    "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++    "action": "accept",
++    "candidates": [
++      {
++        "ref": {
++          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++          "interpretation_revision": 0,
++          "review_revision": 0
++        },
++        "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++        "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++        "destination": "global",
++        "candidate": {
++          "review_revision": 0,
++          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++          "proposal": {
++            "proposition": {
++              "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++              "predicate_id": "92000000-0000-4000-8000-000000000003",
++              "object": {
++                "literal": {
++                  "kind": "text",
++                  "value": "café"
++                }
++              },
++              "polarity": "affirmed"
++            },
++            "valid_time": {
++              "from": null,
++              "to": null
++            },
++            "temporal_qualification": "",
++            "support": [
++              {
++                "event_id": "92000000-0000-4000-8000-000000000001",
++                "event_part": "content",
++                "locator_kind": "utf8_byte_range",
++                "locator_value": "9:14",
++                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
++              }
++            ],
++            "context": []
++          },
++          "support": [
++            {
++              "source_type": "user_message",
++              "locator": {
++                "event_id": "92000000-0000-4000-8000-000000000001",
++                "event_part": "content",
++                "locator_kind": "utf8_byte_range",
++                "locator_value": "9:14",
++                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
++              },
++              "session_id": "92000000-0000-4000-8000-000000000007",
++              "scope_key": "global",
++              "sequence": 2,
++              "format_version": 1,
++              "observed_at": "2026-09-05T12:00:00Z",
++              "actor": "owner",
++              "authority": "owner_statement",
++              "usage": "new_support",
++              "evidence": "café"
++            }
++          ],
++          "context": [],
++          "review_state": "unresolved"
++        },
++        "redacted": false
++      }
++    ],
++    "source_policy": "owner-assertions-v1",
++    "effect": {
++      "version": "owner-review-effect-v1",
++      "operation_id": "92000000-0000-4000-8000-000000000006",
++      "scope": {
++        "scope_id": "92000000-0000-4000-8000-000000000002",
++        "scope_key": "global",
++        "revision": 1
++      },
++      "scopes": [
++        {
++          "scope_id": "92000000-0000-4000-8000-000000000002",
++          "scope_key": "global",
++          "revision": 1
++        }
++      ],
++      "prior_revisions": [
++        {
++          "scope_key": "global",
++          "revision": 1
++        }
++      ],
++      "claims": [
++        {
++          "candidate": {
++            "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++            "interpretation_revision": 0,
++            "review_revision": 0
++          },
++          "claim": {
++            "claim_id": "92000000-0000-4000-8000-000000000008",
++            "scope_key": "global",
++            "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++            "predicate": {
++              "predicate_id": "92000000-0000-4000-8000-000000000003",
++              "token": "drink",
++              "version": 1,
++              "label": "drink",
++              "object_constraint": "text",
++              "cardinality": "many",
++              "create": false
++            },
++            "object": {
++              "literal": {
++                "kind": "text",
++                "value": "café"
++              }
++            },
++            "polarity": "affirmed",
++            "valid_time": {
++              "from": null,
++              "to": null
++            },
++            "created_operation_id": "92000000-0000-4000-8000-000000000006",
++            "transaction_time": "0001-01-01T00:00:00Z"
++          },
++          "create": true,
++          "subject": {
++            "entity_id": "92000000-0000-4000-8000-000000000004",
++            "scope_key": "global",
++            "canonical_name": "owner",
++            "entity_type": "person",
++            "anchor_kind": "owner",
++            "create": false
++          },
++          "predicate": {
++            "predicate_id": "92000000-0000-4000-8000-000000000003",
++            "token": "drink",
++            "version": 1,
++            "label": "drink",
++            "object_constraint": "text",
++            "cardinality": "many",
++            "create": false
++          },
++          "object_entity": null,
++          "sources": [
++            {
++              "source_link_id": "92000000-0000-4000-8000-000000000005",
++              "operation_id": "92000000-0000-4000-8000-000000000006",
++              "event_id": "92000000-0000-4000-8000-000000000001",
++              "session_id": "92000000-0000-4000-8000-000000000007",
++              "source_scope_key": "global",
++              "event_part": "content",
++              "locator_kind": "utf8_byte_range",
++              "locator_value": "9:14",
++              "evidence_sha256": "sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e",
++              "actor": "owner",
++              "source_type": "user_message",
++              "authority": "owner_statement",
++              "observed_at": "2026-09-05T12:00:00Z",
++              "evidence": "café",
++              "eligibility": "eligible",
++              "create": true
++            }
++          ],
++          "conflicts": [],
++          "context": [],
++          "temporal_qualification": ""
++        }
++      ]
++    },
++    "effect_sha256": "sha256:a680ffc162aacaea00bce5199ac66f32e297bc246926b2115a8309feb2cf4006",
++    "preview_sha256": "sha256:89fab915b8ded1fd9de78f44478eeac9f05090154b04ee66c5c4a48895df66a6"
++  }
++}
+diff --git a/internal/memory/candidate_review.go b/internal/memory/candidate_review.go
+new file mode 100644
+index 0000000..52da767
+--- /dev/null
++++ b/internal/memory/candidate_review.go
+@@ -0,0 +1,109 @@
++package memory
++
++import "time"
++
++// CandidateRef binds one immutable interpretation and its current resolution.
++type CandidateRef struct {
++	ID                     string `json:"candidate_id"`
++	InterpretationRevision int64  `json:"interpretation_revision"`
++	ReviewRevision         int64  `json:"review_revision"`
++}
++
++type OwnerCandidate struct {
++	Ref          CandidateRef    `json:"ref"`
++	JobID        string          `json:"job_id"`
++	GenerationID string          `json:"generation_id"`
++	Destination  string          `json:"destination"`
++	Candidate    MemoryCandidate `json:"candidate"`
++	Redacted     bool            `json:"redacted"`
++}
++
++type OwnerCandidatePage struct {
++	ScopeKey   string           `json:"scope_key"`
++	Revision   int64            `json:"revision"`
++	Candidates []OwnerCandidate `json:"candidates"`
++	NextCursor string           `json:"next_cursor"`
++}
++
++type OwnerCandidateQuery struct {
++	Limit  int    `json:"limit"`
++	Cursor string `json:"cursor"`
++}
++
++type ReviewClaimEffect struct {
++	Candidate             CandidateRef           `json:"candidate"`
++	Claim                 SemanticClaim          `json:"claim"`
++	Create                bool                   `json:"create"`
++	Subject               SemanticEntity         `json:"subject"`
++	Predicate             SemanticPredicate      `json:"predicate"`
++	ObjectEntity          *SemanticEntity        `json:"object_entity"`
++	Sources               []SemanticSource       `json:"sources"`
++	Conflicts             []ClaimConflictWarning `json:"conflicts"`
++	Context               []CompilerSource       `json:"context"`
++	TemporalQualification string                 `json:"temporal_qualification"`
++}
++
++type ReviewEffect struct {
++	Version        string              `json:"version"`
++	OperationID    SemanticID          `json:"operation_id"`
++	Scope          SemanticScope       `json:"scope"`
++	Scopes         []SemanticScope     `json:"scopes"`
++	PriorRevisions []ScopeRevision     `json:"prior_revisions"`
++	Claims         []ReviewClaimEffect `json:"claims"`
++}
++
++// ReviewPreview contains only one complete atomic group in the first review
++// slice. Later batch preparation can compose already explicit groups.
++type ReviewPreview struct {
++	Version               string           `json:"version"`
++	ID                    string           `json:"preview_id"`
++	OwnerID               OwnerID          `json:"owner_id"`
++	AuthenticationBinding string           `json:"authentication_binding"`
++	AuthorizationRevision int64            `json:"authorization_revision"`
++	ScopeKey              string           `json:"scope_key"`
++	JobID                 string           `json:"job_id"`
++	GenerationID          string           `json:"generation_id"`
++	Action                string           `json:"action"`
++	Candidates            []OwnerCandidate `json:"candidates"`
++	SourcePolicy          string           `json:"source_policy"`
++	Effect                *ReviewEffect    `json:"effect"`
++	EffectSHA256          string           `json:"effect_sha256"`
++	SHA256                string           `json:"preview_sha256"`
++}
++
++type ReviewDecision struct {
++	DeliveryKey   string `json:"delivery_key"`
++	PreviewID     string `json:"preview_id"`
++	PreviewSHA256 string `json:"preview_sha256"`
++	Action        string `json:"action"`
++	Reason        string `json:"reason"`
++}
++
++type ReviewResult struct {
++	DeliveryKey string                      `json:"delivery_key"`
++	PreviewID   string                      `json:"preview_id"`
++	Action      string                      `json:"action"`
++	AuditID     string                      `json:"audit_id"`
++	Candidates  []CandidateRef              `json:"candidates"`
++	Operation   *OwnerReviewOperationResult `json:"operation"`
++}
++
++type OwnerReviewOperation struct {
++	SchemaVersion  int           `json:"schema_version"`
++	Kind           string        `json:"kind"`
++	OperationID    SemanticID    `json:"operation_id"`
++	IdempotencyKey string        `json:"idempotency_key"`
++	Actor          SemanticActor `json:"actor"`
++	SessionID      SessionID     `json:"session_id"`
++	SourceEventID  EventID       `json:"source_event_id"`
++	Preview        ReviewPreview `json:"preview"`
++	AuditID        string        `json:"audit_id"`
++}
++
++type OwnerReviewOperationResult struct {
++	OperationID        SemanticID      `json:"operation_id"`
++	ClaimIDs           []SemanticID    `json:"claim_ids"`
++	SourceLinkIDs      []SemanticID    `json:"source_link_ids"`
++	TransactionTime    time.Time       `json:"transaction_time"`
++	ResultingRevisions []ScopeRevision `json:"resulting_revisions"`
++}

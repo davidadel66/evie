@@ -1,0 +1,6 @@
+--- FAIL: TestCandidateRecommendedBatchDestinations (0.10s)
+    --- FAIL: TestCandidateRecommendedBatchDestinations/false (0.05s)
+        memory_destination_public_test.go:317: invalid_dependencies
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	0.780s
+FAIL

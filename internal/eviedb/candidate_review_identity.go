@@ -76,6 +76,11 @@ func (s *Store) OwnerCandidateIdentityOptions(ctx context.Context, a OwnerReview
 }
 
 func reviewIdentityOptions(ctx context.Context, q reviewQuery, a OwnerReviewContext, item memory.OwnerCandidate) (memory.ReviewIdentityOptions, error) {
+	targetKey, vectorKeys, destinationErr := candidateEffectScopes(ctx, q, []memory.OwnerCandidate{item})
+	if destinationErr != nil {
+		return memory.ReviewIdentityOptions{}, destinationErr
+	}
+	a.scope = targetKey
 	out := memory.ReviewIdentityOptions{Candidate: item.Ref, ScopeKey: a.scope, ScopeRevisions: []memory.ScopeRevision{}, Subject: []memory.ReviewEntityAlternative{}, Object: []memory.ReviewEntityAlternative{}, Predicates: []memory.SemanticPredicate{}}
 	proposal := item.Candidate.Proposal.Identity
 	if proposal == nil {
@@ -85,7 +90,7 @@ func reviewIdentityOptions(ctx context.Context, q reviewQuery, a OwnerReviewCont
 	if err != nil {
 		return out, err
 	}
-	for _, key := range keys {
+	for _, key := range vectorKeys {
 		scope, err := loadSemanticScope(ctx, q, key)
 		if err != nil {
 			return out, err

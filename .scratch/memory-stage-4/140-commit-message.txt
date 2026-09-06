@@ -1,0 +1,13 @@
+feat(memory): review candidates independently of source sessions (#140)
+
+Add exact-scope owner candidate inbox, previews, accept/reject delivery,
+canonical v6 operations, source provenance, and CLI review commands.
+Keep current authority, source policy, and promotion disclosure checks
+while making terminal resolutions stable across fresh delivery retries.
+
+Preserve replay and source-lineage integrity without requiring the source
+conversation to remain active. Regression tests cover stale previews,
+terminal retries, historical corruption, promotion, and authorization.
+
+Validation: isolated ./scripts/verify-change.sh passed; focused owner
+review tests passed; independent Standards and Spec reviews passed.

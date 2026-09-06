@@ -1,0 +1,3 @@
+$ go test ./internal/eviedb ./cmd/evie -run ^TestCompiler(History|Activation|Worker|Intervals) -count=1
+ok  	github.com/davidadel66/evie/internal/eviedb	9.955s
+ok  	github.com/davidadel66/evie/cmd/evie	0.764s

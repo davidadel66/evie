@@ -1,0 +1,45 @@
+{
+  "version": "memory-stage4-release-tooling-verification-v1",
+  "checks": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release",
+        "-count=1"
+      ],
+      "started_at": "2026-09-05T13:20:02.577025+00:00",
+      "exit_code": 0,
+      "output": "ok  \tgithub.com/davidadel66/evie/internal/memoryeval\t0.436s\nok  \tgithub.com/davidadel66/evie/scripts/memory-stage4-release\t0.175s\n"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release",
+        "-count=1"
+      ],
+      "started_at": "2026-09-05T13:20:03.426617+00:00",
+      "exit_code": 0,
+      "output": "ok  \tgithub.com/davidadel66/evie/internal/memoryeval\t2.062s\nok  \tgithub.com/davidadel66/evie/scripts/memory-stage4-release\t1.189s\n"
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "./internal/memoryeval",
+        "./scripts/memory-stage4-release"
+      ],
+      "started_at": "2026-09-05T13:20:06.173808+00:00",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "full_repository_verification": "pending root isolated checkpoint",
+  "independent_reviews": "pending root two-axis review",
+  "final_holdout": "not_created_not_exposed_not_run",
+  "code_tooling_only": true
+}

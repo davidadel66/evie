@@ -1,0 +1,32 @@
+{
+  "version": "memory-stage4-independent-outcome-review-v1",
+  "base_tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+  "reviewed_at": "2026-09-05T14:08:34.612519+00:00",
+  "status": "passed",
+  "method": "Static review of exact three-file diff; no source edits or duplicate test execution.",
+  "files": [
+    {
+      "path": "scripts/memory-stage4-pilot/run.go",
+      "sha256": "25edd25e55f56b7c289150db2b79ed89389ed783b83ad15dd9f20b56dc16798b",
+      "bytes": 19352
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/main_test.go",
+      "sha256": "cd6dad5e0c14db7085b389c7e8978252e5f9fcb3582d9ba528ea93ad54b7faa6",
+      "bytes": 8186
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/README.md",
+      "sha256": "afbe23124be94b22e4fa9e7587d4771898df8b3cb158843a59e1eac767306a5b",
+      "bytes": 9107
+    }
+  ],
+  "limits": [
+    "Only pilot outcome hardening reviewed; production reconciliation fix has a separate reviewer.",
+    "Original 99-trial matrix includes 111 unexpected failures and cannot establish clean conformance.",
+    "Fresh source-bound conformance and measured rerun remain required.",
+    "Scripted infrastructure remains release-ineligible; no model, human or numeric gate acceptance."
+  ],
+  "reviewed_tree": "413601a7c6088b59fb5dcd7ced53f46193590ffe",
+  "tree_binding_verified": true
+}

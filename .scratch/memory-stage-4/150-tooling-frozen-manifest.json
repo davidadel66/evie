@@ -1,0 +1,81 @@
+{
+  "version": "memory-stage-4-owner-contribution-v1",
+  "ticket": 150,
+  "status": "review_fixes_frozen_focused_checks_pass_before_matrix",
+  "created_at": "2026-09-05T13:23:57.441527+00:00",
+  "head_at_freeze": "acf37b7a2975091ad415ff79f17a7106f5bcb105",
+  "files": [
+    {
+      "path": "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "6581b6a482c80e3418f45619510ed60b1487332e89fd6545c0184643d6fee33c",
+      "bytes": 2445,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/README.md",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "5531446875c9f9ae2db949cc065b66aa856bf9102ad8d881005a09c2ef231d26",
+      "bytes": 8637,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/fixture.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "0dd7284b830379baea2e3549db9907dae01415ec4a3a4b0972e761270d0e89c4",
+      "bytes": 9177,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/main.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "ac503426e053a7d72962190474482d81cedf8f3ac0f8ce57b99a149e7f44b87a",
+      "bytes": 3779,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/main_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "aa9291bcf345259af2cdda2fecd6195e24912b31f7cd8924e46d7014cc203982",
+      "bytes": 7487,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/measure.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "596b002f680c39c690e00e37f55bf9213dc0c5df1b9621215fa97fc26d86de8a",
+      "bytes": 15214,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/measure_test.py",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "a339a1692c6a7b0a6274076a978e77161979eaad948bedf31067f373e1fd53e8",
+      "bytes": 5421,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/review.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "844f0a9415c7ca179c2dfff4dbe2ee05352bd01393559b814fba6d011f783eb2",
+      "bytes": 6020,
+      "executable": false
+    },
+    {
+      "path": "scripts/memory-stage4-pilot/run.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "c87a6b34380ce0233664bf4e19623776ace0e2ebb330f9090b25eb49a66cf510",
+      "bytes": 16227,
+      "executable": false
+    }
+  ]
+}

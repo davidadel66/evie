@@ -3,6 +3,7 @@
 // `send`/`answer`; nothing else in the app touches the API.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readHistory } from "../api/history";
 import { answerApproval } from "../api/approve";
 import { ApiError, StreamTruncated, streamChat } from "../api/stream";
 import type { ServerEvent } from "./events";
@@ -62,9 +63,22 @@ export type Session = {
   answer: (reqId: string, approve: boolean) => void;
   dismissProblem: () => void;
   reset: () => void;
+  historyLoading: boolean;
+  historyProblem: string | null;
+  hasOlder: boolean;
+  loadOlder: () => void;
+  retryHistory: () => void;
 };
 
-export function useSession(): Session {
+export function useSession(sessionId?: string): Session {
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyProblem, setHistoryProblem] = useState<string | null>(null);
+  const [before, setBefore] = useState<string>();
+  const historyCursor = useRef<string | undefined>(undefined);
+  const historyAbort = useRef<AbortController | null>(null);
+  const historySession = useRef(sessionId);
+  const historyReady = useRef(false);
+  const epoch = useRef(0);
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [queue, setQueue] = useState<string[]>([]);
@@ -133,7 +147,7 @@ export function useSession(): Session {
   const send = useCallback(
     (text: string) => {
       const message = text.trim();
-      if (message === "") return;
+      if (message === "" || !historyReady.current || historyLoading || historyProblem || historySession.current !== sessionId) return;
       // A turn holds the session lock server-side (a second Send is a 409),
       // so mid-turn messages pool here instead. A queued message is NOT in
       // items — the transcript must never claim the server saw something it
@@ -153,13 +167,16 @@ export function useSession(): Session {
       streamChat(
         message,
         (ev) => {
+          if (ctl.signal.aborted) return;
           // error events are banner state, not transcript state.
           if (ev.type === "error") setProblem(ev.message);
           else enqueue(ev);
         },
         ctl.signal,
+        sessionId,
       )
         .then(() => {
+          if (ctl.signal.aborted) return;
           // A turn that reported an error still completed; keep the banner but
           // let David type again.
           setStatus((s) => (s === "error" ? s : "idle"));
@@ -171,23 +188,25 @@ export function useSession(): Session {
           setStatus("error");
         });
     },
-    [enqueue, flush, status],
+    [enqueue, flush, status, historyLoading, historyProblem, sessionId],
   );
 
   const answer = useCallback((reqId: string, approve: boolean) => {
+    const generation = epoch.current;
     // Optimistic: the click is the decision, the request only relays it.
     setItems((prev) =>
       setApprovalState(prev, reqId, approve ? "approved" : "declined"),
     );
     answerApproval(reqId, approve)
       .then((accepted) => {
+        if (generation !== epoch.current) return;
         // 404 means the id was already gone — the turn moved on without this
         // answer, so the card must say expired, not approved.
         if (!accepted) {
           setItems((prev) => setApprovalState(prev, reqId, "expired"));
         }
       })
-      .catch((err: unknown) => setProblem(describe(err)));
+      .catch((err: unknown) => { if (generation === epoch.current) setProblem(describe(err)); });
   }, []);
 
   const dismissProblem = useCallback(() => {
@@ -196,6 +215,8 @@ export function useSession(): Session {
   }, []);
 
   const reset = useCallback(() => {
+    epoch.current++;
+    historyReady.current = false;
     abortRef.current?.abort();
     abortRef.current = null;
     if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -207,17 +228,49 @@ export function useSession(): Session {
     setStatus("idle");
   }, []);
 
+  const loadHistory = useCallback(async (cursor?: string) => {
+    if (!sessionId) return;
+    historyAbort.current?.abort();
+    historyCursor.current = cursor;
+    const ctl = new AbortController();
+    historyAbort.current = ctl;
+    historyReady.current = false;
+    setHistoryLoading(true);
+    setHistoryProblem(null);
+    try {
+      const page = await readHistory(sessionId, cursor, ctl.signal);
+      if (ctl.signal.aborted) return;
+      setItems((current) => cursor ? [...page.items, ...current] : page.items);
+      setBefore(page.before);
+      historyReady.current = true;
+    } catch (error) {
+      if (!ctl.signal.aborted) setHistoryProblem(describe(error));
+    } finally {
+      if (!ctl.signal.aborted) setHistoryLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    historySession.current = sessionId;
+    reset();
+    setBefore(undefined);
+    setHistoryProblem(null);
+    if (sessionId) void loadHistory();
+    else setHistoryLoading(false);
+    return () => { historyAbort.current?.abort(); };
+  }, [sessionId, reset, loadHistory]);
+
   // Drain the queue: a finished turn fires the next waiting message. Only
   // "idle" drains — after an error the queue parks until David sends
   // something manually, rather than firing into a broken stream.
   useEffect(() => {
-    if (status !== "idle" || queue.length === 0) return;
+    if (status !== "idle" || queue.length === 0 || !historyReady.current || historySession.current !== sessionId) return;
     const [next, ...rest] = queue;
     setQueue(rest);
     send(next);
-  }, [status, queue, send]);
+  }, [status, queue, send, sessionId]);
 
-  return { items, status, queue, problem, send, answer, dismissProblem, reset };
+  return { items: historySession.current === sessionId ? items : [], status, queue, problem, send, answer, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

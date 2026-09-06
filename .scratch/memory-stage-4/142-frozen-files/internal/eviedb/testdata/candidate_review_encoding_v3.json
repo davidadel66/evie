@@ -1,0 +1,391 @@
+{
+  "effect_sha256": "sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e",
+  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v3\",\"effect\":{\"correction\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"old_claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"old_state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"mode\":\"error\",\"effective_time\":null,\"valid_time_effect\":{\"old_before\":{\"from\":null,\"to\":null},\"old_after\":{\"from\":null,\"to\":null},\"replacement\":{\"from\":null,\"to\":null}},\"transition\":{\"object_kind\":\"claim\",\"object_id\":\"90000000-0000-4000-8000-000000000342\",\"state\":\"superseded\"}},\"version\":\"owner-review-effect-v3\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]}}",
+  "preview_sha256": "sha256:aa220a0a87ee216d6b7f767e3c5ea818a0cae05b29312186e76b69edb59683ab",
+  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v3\",\"preview\":{\"version\":\"owner-review-preview-v3\",\"preview_id\":\"92000000-0000-4000-8000-000000000009\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"action\":\"accept\",\"candidates\":[{\"temporal\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"ref\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"proposal\":{\"temporal\":{\"meaning\":\"assertion\",\"correction\":{\"modes\":[\"error\"],\"effective_time\":null}},\"proposition\":{\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"},\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T12:00:00Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"café\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"correction\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"old_claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"old_state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"mode\":\"error\",\"effective_time\":null,\"valid_time_effect\":{\"old_before\":{\"from\":null,\"to\":null},\"old_after\":{\"from\":null,\"to\":null},\"replacement\":{\"from\":null,\"to\":null}},\"transition\":{\"object_kind\":\"claim\",\"object_id\":\"90000000-0000-4000-8000-000000000342\",\"state\":\"superseded\"}},\"version\":\"owner-review-effect-v3\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]},\"effect_sha256\":\"sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e\",\"preview_sha256\":\"\"}}",
+  "preview": {
+    "version": "owner-review-preview-v3",
+    "preview_id": "92000000-0000-4000-8000-000000000009",
+    "owner_id": "local",
+    "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "authorization_revision": 1,
+    "scope_key": "global",
+    "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "action": "accept",
+    "candidates": [
+      {
+        "temporal": {
+          "revision": 1,
+          "parent_revision": 0,
+          "review_revision": 1,
+          "audit_id": "90000000-0000-4000-8000-000000000343",
+          "owner_id": "local",
+          "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "authorization_revision": 1,
+          "options": {
+            "candidate": {
+              "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "interpretation_revision": 0,
+              "review_revision": 0
+            },
+            "scope_key": "global",
+            "scope_revisions": [
+              {
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "alternatives": [
+              {
+                "claim": {
+                  "claim_id": "90000000-0000-4000-8000-000000000342",
+                  "scope_key": "global",
+                  "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+                  "predicate": {
+                    "predicate_id": "92000000-0000-4000-8000-000000000003",
+                    "token": "drink",
+                    "version": 1,
+                    "label": "drink",
+                    "object_constraint": "text",
+                    "cardinality": "many",
+                    "create": false
+                  },
+                  "object": {
+                    "literal": {
+                      "kind": "text",
+                      "value": "tea"
+                    }
+                  },
+                  "polarity": "affirmed",
+                  "valid_time": {
+                    "from": null,
+                    "to": null
+                  },
+                  "created_operation_id": "92000000-0000-4000-8000-000000000006",
+                  "transaction_time": "0001-01-01T00:00:00Z"
+                },
+                "state": {
+                  "state": "active",
+                  "operation_id": "92000000-0000-4000-8000-000000000006",
+                  "scope_revision": 1,
+                  "transaction_time": "0001-01-01T00:00:00Z"
+                }
+              }
+            ],
+            "modes": [
+              "error"
+            ],
+            "effective_time": null,
+            "options_sha256": "e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606"
+          },
+          "choice": {
+            "old_claim_id": "90000000-0000-4000-8000-000000000342",
+            "mode": "error"
+          }
+        },
+        "ref": {
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "interpretation_revision": 1,
+          "review_revision": 1
+        },
+        "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "destination": "global",
+        "candidate": {
+          "review_revision": 1,
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "proposal": {
+            "temporal": {
+              "meaning": "assertion",
+              "correction": {
+                "modes": [
+                  "error"
+                ],
+                "effective_time": null
+              }
+            },
+            "proposition": {
+              "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+              "predicate_id": "92000000-0000-4000-8000-000000000003",
+              "object": {
+                "literal": {
+                  "kind": "text",
+                  "value": "café"
+                }
+              },
+              "polarity": "affirmed"
+            },
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "temporal_qualification": "",
+            "support": [
+              {
+                "event_id": "92000000-0000-4000-8000-000000000001",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "9:14",
+                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+              }
+            ],
+            "context": []
+          },
+          "support": [
+            {
+              "source_type": "user_message",
+              "locator": {
+                "event_id": "92000000-0000-4000-8000-000000000001",
+                "event_part": "content",
+                "locator_kind": "utf8_byte_range",
+                "locator_value": "9:14",
+                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
+              },
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "scope_key": "global",
+              "sequence": 2,
+              "format_version": 1,
+              "observed_at": "2026-09-05T12:00:00Z",
+              "actor": "owner",
+              "authority": "owner_statement",
+              "usage": "new_support",
+              "evidence": "café"
+            }
+          ],
+          "context": [],
+          "review_state": "unresolved"
+        },
+        "redacted": false
+      }
+    ],
+    "source_policy": "owner-assertions-v1",
+    "effect": {
+      "correction": {
+        "revision": {
+          "revision": 1,
+          "parent_revision": 0,
+          "review_revision": 1,
+          "audit_id": "90000000-0000-4000-8000-000000000343",
+          "owner_id": "local",
+          "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "authorization_revision": 1,
+          "options": {
+            "candidate": {
+              "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "interpretation_revision": 0,
+              "review_revision": 0
+            },
+            "scope_key": "global",
+            "scope_revisions": [
+              {
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "alternatives": [
+              {
+                "claim": {
+                  "claim_id": "90000000-0000-4000-8000-000000000342",
+                  "scope_key": "global",
+                  "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+                  "predicate": {
+                    "predicate_id": "92000000-0000-4000-8000-000000000003",
+                    "token": "drink",
+                    "version": 1,
+                    "label": "drink",
+                    "object_constraint": "text",
+                    "cardinality": "many",
+                    "create": false
+                  },
+                  "object": {
+                    "literal": {
+                      "kind": "text",
+                      "value": "tea"
+                    }
+                  },
+                  "polarity": "affirmed",
+                  "valid_time": {
+                    "from": null,
+                    "to": null
+                  },
+                  "created_operation_id": "92000000-0000-4000-8000-000000000006",
+                  "transaction_time": "0001-01-01T00:00:00Z"
+                },
+                "state": {
+                  "state": "active",
+                  "operation_id": "92000000-0000-4000-8000-000000000006",
+                  "scope_revision": 1,
+                  "transaction_time": "0001-01-01T00:00:00Z"
+                }
+              }
+            ],
+            "modes": [
+              "error"
+            ],
+            "effective_time": null,
+            "options_sha256": "e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606"
+          },
+          "choice": {
+            "old_claim_id": "90000000-0000-4000-8000-000000000342",
+            "mode": "error"
+          }
+        },
+        "old_claim": {
+          "claim_id": "90000000-0000-4000-8000-000000000342",
+          "scope_key": "global",
+          "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+          "predicate": {
+            "predicate_id": "92000000-0000-4000-8000-000000000003",
+            "token": "drink",
+            "version": 1,
+            "label": "drink",
+            "object_constraint": "text",
+            "cardinality": "many",
+            "create": false
+          },
+          "object": {
+            "literal": {
+              "kind": "text",
+              "value": "tea"
+            }
+          },
+          "polarity": "affirmed",
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "created_operation_id": "92000000-0000-4000-8000-000000000006",
+          "transaction_time": "0001-01-01T00:00:00Z"
+        },
+        "old_state": {
+          "state": "active",
+          "operation_id": "92000000-0000-4000-8000-000000000006",
+          "scope_revision": 1,
+          "transaction_time": "0001-01-01T00:00:00Z"
+        },
+        "mode": "error",
+        "effective_time": null,
+        "valid_time_effect": {
+          "old_before": {
+            "from": null,
+            "to": null
+          },
+          "old_after": {
+            "from": null,
+            "to": null
+          },
+          "replacement": {
+            "from": null,
+            "to": null
+          }
+        },
+        "transition": {
+          "object_kind": "claim",
+          "object_id": "90000000-0000-4000-8000-000000000342",
+          "state": "superseded"
+        }
+      },
+      "version": "owner-review-effect-v3",
+      "operation_id": "92000000-0000-4000-8000-000000000006",
+      "scope": {
+        "scope_id": "92000000-0000-4000-8000-000000000002",
+        "scope_key": "global",
+        "revision": 1
+      },
+      "scopes": [
+        {
+          "scope_id": "92000000-0000-4000-8000-000000000002",
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "claims": [
+        {
+          "candidate": {
+            "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "interpretation_revision": 1,
+            "review_revision": 1
+          },
+          "claim": {
+            "claim_id": "92000000-0000-4000-8000-000000000008",
+            "scope_key": "global",
+            "subject_entity_id": "92000000-0000-4000-8000-000000000004",
+            "predicate": {
+              "predicate_id": "92000000-0000-4000-8000-000000000003",
+              "token": "drink",
+              "version": 1,
+              "label": "drink",
+              "object_constraint": "text",
+              "cardinality": "many",
+              "create": false
+            },
+            "object": {
+              "literal": {
+                "kind": "text",
+                "value": "café"
+              }
+            },
+            "polarity": "affirmed",
+            "valid_time": {
+              "from": null,
+              "to": null
+            },
+            "created_operation_id": "92000000-0000-4000-8000-000000000006",
+            "transaction_time": "0001-01-01T00:00:00Z"
+          },
+          "create": true,
+          "subject": {
+            "entity_id": "92000000-0000-4000-8000-000000000004",
+            "scope_key": "global",
+            "canonical_name": "owner",
+            "entity_type": "person",
+            "anchor_kind": "owner",
+            "create": false
+          },
+          "predicate": {
+            "predicate_id": "92000000-0000-4000-8000-000000000003",
+            "token": "drink",
+            "version": 1,
+            "label": "drink",
+            "object_constraint": "text",
+            "cardinality": "many",
+            "create": false
+          },
+          "object_entity": null,
+          "sources": [
+            {
+              "source_link_id": "92000000-0000-4000-8000-000000000005",
+              "operation_id": "92000000-0000-4000-8000-000000000006",
+              "event_id": "92000000-0000-4000-8000-000000000001",
+              "session_id": "92000000-0000-4000-8000-000000000007",
+              "source_scope_key": "global",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "9:14",
+              "evidence_sha256": "sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e",
+              "actor": "owner",
+              "source_type": "user_message",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-05T12:00:00Z",
+              "evidence": "café",
+              "eligibility": "eligible",
+              "create": true
+            }
+          ],
+          "conflicts": [],
+          "context": [],
+          "temporal_qualification": ""
+        }
+      ]
+    },
+    "effect_sha256": "sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e",
+    "preview_sha256": "sha256:aa220a0a87ee216d6b7f767e3c5ea818a0cae05b29312186e76b69edb59683ab"
+  }
+}

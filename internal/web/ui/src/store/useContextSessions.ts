@@ -65,6 +65,7 @@ export function applyOpenedSession(
   opened: OpenedContextSession,
 ): ContextSessionSnapshot {
   return {
+    ownerDisplayName: snapshot?.ownerDisplayName,
     workspaces: snapshot?.workspaces ?? [],
     projects: snapshot?.projects ?? [],
     sessions: snapshot?.sessions ?? [],

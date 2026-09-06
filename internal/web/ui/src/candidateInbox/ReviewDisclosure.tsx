@@ -1,3 +1,4 @@
+import { useMemoryPresentation, applicabilityLabel } from "../memory/presentation";
 import type { CandidateSource, ReviewClaimEffect, ReviewSource, ReviewPreview, ReviewEffect, CandidateProposal, EditRevision, IdentityRevision, TemporalRevision, InterpretationRevision } from "../api/candidateReview";
 import { supportedPreview } from "./previewSupport";
 export function CandidateSources({ title, sources }: { title: string; sources: CandidateSource[] }) {
@@ -13,8 +14,10 @@ function SupportingSource({ source }: { source: ReviewSource }) { return <Eviden
 
 export function ClaimEffect({ effect }: { effect: ReviewClaimEffect }) {
   const claim = effect.claim;
+  const {names}=useMemoryPresentation();
   return <section className="border-hair mt-4 border-t pt-3">
     <p className="text-ink font-medium">{effect.subject.canonical_name} · {effect.predicate.label} · {effect.object_entity?.canonical_name ?? claim.object.literal?.value}</p>
+    <p className="text-teal mt-2 text-sm">Applies to: {applicabilityLabel(claim.scope_key,names)}</p>
     <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs"><dt>Subject identity</dt><dd>{effect.subject.create ? "Create distinct Entity" : "Reuse Entity"} · {effect.subject.entity_id}</dd>{effect.object_entity && <><dt>Object identity</dt><dd>{effect.object_entity.create ? "Create distinct Entity" : "Reuse Entity"} · {effect.object_entity.entity_id}</dd></>}<dt>Predicate definition</dt><dd>{effect.predicate.create ? "Create global Predicate definition" : "Reuse Predicate definition"}</dd><dt>Change</dt><dd>{effect.create ? "Create claim" : "Reuse existing claim"}</dd><dt>Polarity</dt><dd>{claim.polarity}</dd><dt>Scope</dt><dd className="break-all">{claim.scope_key}</dd><dt>Value type</dt><dd>{claim.object.literal?.kind ?? "Entity"}</dd><dt>Valid from</dt><dd>{claim.valid_time.from ?? "Unknown"}</dd><dt>Valid until</dt><dd>{claim.valid_time.to ?? "Unknown"}</dd><dt>Predicate</dt><dd>{effect.predicate.token} · version {effect.predicate.version} · {effect.predicate.object_constraint} · {effect.predicate.cardinality}</dd></dl>
     {effect.temporal_qualification && <p className="mt-2 text-xs">Time qualification: {effect.temporal_qualification}</p>}
     {effect.conflicts.map((conflict, i) => <p key={i} className="text-amber-ink mt-2 break-all text-xs">Conflict: {conflict.code} · claims {conflict.claim_ids.join(", ")}. This review does not choose a winner.</p>)}

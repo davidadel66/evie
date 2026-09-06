@@ -1,0 +1,135 @@
+{
+  "sampled_peak_process_tree_rss_kib": 29200,
+  "samples": [
+    {
+      "monotonic_ns": 510371599359083,
+      "processes": [
+        {
+          "cpu_percent": 0.0,
+          "pid": 724,
+          "rss_kib": 2368
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510371724966291,
+      "processes": [
+        {
+          "cpu_percent": 22.1,
+          "pid": 724,
+          "rss_kib": 24208
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510371848980583,
+      "processes": [
+        {
+          "cpu_percent": 57.4,
+          "pid": 724,
+          "rss_kib": 24496
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510371974047125,
+      "processes": [
+        {
+          "cpu_percent": 78.5,
+          "pid": 724,
+          "rss_kib": 25664
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372092875083,
+      "processes": [
+        {
+          "cpu_percent": 92.7,
+          "pid": 724,
+          "rss_kib": 25712
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372215831500,
+      "processes": [
+        {
+          "cpu_percent": 101.1,
+          "pid": 724,
+          "rss_kib": 26496
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372347273375,
+      "processes": [
+        {
+          "cpu_percent": 77.6,
+          "pid": 724,
+          "rss_kib": 26896
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372485108291,
+      "processes": [
+        {
+          "cpu_percent": 50.7,
+          "pid": 724,
+          "rss_kib": 27040
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372614138541,
+      "processes": [
+        {
+          "cpu_percent": 36.8,
+          "pid": 724,
+          "rss_kib": 28016
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372737030250,
+      "processes": [
+        {
+          "cpu_percent": 26.2,
+          "pid": 724,
+          "rss_kib": 28512
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372863549833,
+      "processes": [
+        {
+          "cpu_percent": 19.3,
+          "pid": 724,
+          "rss_kib": 29024
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510372991058541,
+      "processes": [
+        {
+          "cpu_percent": 15.3,
+          "pid": 724,
+          "rss_kib": 29200
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 510373126712791,
+      "processes": [
+        {
+          "cpu_percent": 0.0,
+          "pid": 724,
+          "rss_kib": 0
+        }
+      ]
+    }
+  ]
+}

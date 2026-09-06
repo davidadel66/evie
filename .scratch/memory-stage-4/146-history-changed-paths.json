@@ -1,0 +1,10 @@
+[
+  "internal/web/candidate_review.go",
+  "internal/web/candidate_review_advanced.go",
+  "internal/web/candidate_review_input_error_test.go",
+  "internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx",
+  "internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx",
+  "internal/web/ui/src/candidateInbox/advancedController.test.ts",
+  "internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx",
+  "internal/web/ui/src/candidateInbox/controller.ts"
+]

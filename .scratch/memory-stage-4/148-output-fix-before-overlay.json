@@ -1,0 +1,7 @@
+{
+  "Replace": {
+    "/Users/davidboktor/code/evie/internal/web/events.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-output-fix-originals/internal/web/events.go",
+    "/Users/davidboktor/code/evie/internal/web/serve.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-before-output-fix-root/live/internal/web/serve.go",
+    "/Users/davidboktor/code/evie/internal/agent/foreground_measurement.go": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/148-output-fix-originals/internal/agent/foreground_measurement.go"
+  }
+}

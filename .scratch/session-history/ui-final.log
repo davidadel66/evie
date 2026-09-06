@@ -1,0 +1,340 @@
+
+ RUN  v5.0.0 /Users/davidboktor/code/evie
+
+ ❯ experiments/tutor-poc/tests/live-whiteboard-tutor.spec.ts (0 test)
+ ❯ experiments/tutor-poc/tests/semantic-sketch-layer/live-whiteboard-tutor.spec.ts (0 test)
+ ❯ experiments/tutor-poc/server/semantic-sketch-layer.app-hardening.test.ts (47 tests | 1 failed) 244ms
+   ❯ health and session endpoints (9)
+     × creates, reads, and deletes a session through public state only 6ms
+ ❯ experiments/tutor-poc/server/semantic-sketch-layer.openrouter-hardening.test.ts (39 tests | 1 failed) 126ms
+   ❯ OpenRouter timeout and transport failures (9)
+     × rejects HTTP 199 without exposing the raw body or retrying 5ms
+ ❯ experiments/tutor-poc/tests/semantic-sketch-layer-v2/live-whiteboard-tutor.spec.ts (0 test)
+ ❯ .scratch/memory-stage-4/146-originals/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/145-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/memory/Memory.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/Database.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/artifacts/Panel.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/DataHub.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/App.test.tsx (0 test)
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/workspaces/Workspaces.test.tsx (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 24 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  experiments/tutor-poc/tests/live-whiteboard-tutor.spec.ts [ experiments/tutor-poc/tests/live-whiteboard-tutor.spec.ts ]
+Error: Playwright Test did not expect test() to be called here.
+Most common reasons include:
+- You are calling test() in a configuration file.
+- You are calling test() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.
+- You are calling test() from an async test.describe() block. Only sync ones are supported.
+ ❯ _TestTypeImpl._currentSuite experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2263:13
+ ❯ _TestTypeImpl._createTest experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2277:24
+ ❯ experiments/tutor-poc/node_modules/playwright/lib/common/index.js:1209:12
+ ❯ experiments/tutor-poc/tests/live-whiteboard-tutor.spec.ts:151:1
+    149| }
+    150|
+    151| test("boots by creating one session and exposes the desktop learning s…
+       | ^
+    152|   page,
+    153| }) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/26]⎯
+
+ FAIL  experiments/tutor-poc/tests/semantic-sketch-layer/live-whiteboard-tutor.spec.ts [ experiments/tutor-poc/tests/semantic-sketch-layer/live-whiteboard-tutor.spec.ts ]
+Error: Playwright Test did not expect test() to be called here.
+Most common reasons include:
+- You are calling test() in a configuration file.
+- You are calling test() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.
+- You are calling test() from an async test.describe() block. Only sync ones are supported.
+ ❯ _TestTypeImpl._currentSuite experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2263:13
+ ❯ _TestTypeImpl._createTest experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2277:24
+ ❯ experiments/tutor-poc/node_modules/playwright/lib/common/index.js:1209:12
+ ❯ experiments/tutor-poc/tests/semantic-sketch-layer/live-whiteboard-tutor.spec.ts:466:1
+    464| }
+    465|
+    466| test("semantic sketch layer renders a generic mixed fixture incrementa…
+       | ^
+    467|   page,
+    468| }) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/26]⎯
+
+ FAIL  experiments/tutor-poc/tests/semantic-sketch-layer-v2/live-whiteboard-tutor.spec.ts [ experiments/tutor-poc/tests/semantic-sketch-layer-v2/live-whiteboard-tutor.spec.ts ]
+Error: Playwright Test did not expect test() to be called here.
+Most common reasons include:
+- You are calling test() in a configuration file.
+- You are calling test() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.
+- You are calling test() from an async test.describe() block. Only sync ones are supported.
+ ❯ _TestTypeImpl._currentSuite experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2263:13
+ ❯ _TestTypeImpl._createTest experiments/tutor-poc/node_modules/playwright/lib/common/index.js:2277:24
+ ❯ experiments/tutor-poc/node_modules/playwright/lib/common/index.js:1209:12
+ ❯ experiments/tutor-poc/tests/semantic-sketch-layer-v2/live-whiteboard-tutor.spec.ts:272:1
+    270| }
+    271|
+    272| test("v2 presentation preflight rejects before a second turn visibly m…
+       | ^
+    273|   page,
+    274| }) => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/App.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/App.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/App.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/App.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { WorkbenchBar, type WorkbenchView } from "./App";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/26]⎯
+
+ FAIL  .scratch/memory-stage-4/145-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx [ .scratch/memory-stage-4/145-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/145-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+ ❯ .scratch/memory-stage-4/145-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CandidateInboxView } from "./CandidateInbox";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/26]⎯
+
+ FAIL  .scratch/memory-stage-4/146-originals/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx [ .scratch/memory-stage-4/146-originals/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/146-originals/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+ ❯ .scratch/memory-stage-4/146-originals/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CandidateInboxView } from "./CandidateInbox";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/26]⎯
+
+ FAIL  .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx [ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+ ❯ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CandidateInboxView } from "./CandidateInbox";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/26]⎯
+
+ FAIL  .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx [ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
+ ❯ .scratch/memory-stage-4/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { ReviewEffects, EditLineage, IdentityLineage, CorrectionLineag…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts [ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts ]
+Error: Cannot find module './candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts:1:1
+      1| import { candidateReviewAPI, CandidateReviewError, type CandidateRef }…
+       | ^
+      2|
+      3| export type DiagnosticView = "jobs" | "candidates" | "activations" | "…
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx [ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CompilerHealthView } from "./CompilerHealth";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts [ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts ]
+Error: Cannot find module '../api/candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts:1:1
+      1| import { CandidateReviewError, type CandidateScopes } from "../api/can…
+       | ^
+      2| import type { CompilerDiagnostics, CompilerDiagnosticsAPI, DiagnosticS…
+      3|
+ ❯ .scratch/memory-stage-4/148-before-output-fix-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts [ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts ]
+Error: Cannot find module './candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts:1:1
+      1| import { candidateReviewAPI, CandidateReviewError, type CandidateRef }…
+       | ^
+      2|
+      3| export type DiagnosticView = "jobs" | "candidates" | "activations" | "…
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx [ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CompilerHealthView } from "./CompilerHealth";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts [ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts ]
+Error: Cannot find module '../api/candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts:1:1
+      1| import { CandidateReviewError, type CandidateScopes } from "../api/can…
+       | ^
+      2| import type { CompilerDiagnostics, CompilerDiagnosticsAPI, DiagnosticS…
+      3|
+ ❯ .scratch/memory-stage-4/148-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts [ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts ]
+Error: Cannot find module './candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.ts:1:1
+      1| import { candidateReviewAPI, CandidateReviewError, type CandidateRef }…
+       | ^
+      2|
+      3| export type DiagnosticView = "jobs" | "candidates" | "activations" | "…
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/api/compilerDiagnostics.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx [ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CompilerHealthView } from "./CompilerHealth";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/26]⎯
+
+ FAIL  .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts [ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts ]
+Error: Cannot find module '../api/candidateReview' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.ts:1:1
+      1| import { CandidateReviewError, type CandidateScopes } from "../api/can…
+       | ^
+      2| import type { CompilerDiagnostics, CompilerDiagnosticsAPI, DiagnosticS…
+      3|
+ ❯ .scratch/memory-stage-4/148-http-ui-frozen-files/internal/web/ui/src/compilerDiagnostics/controller.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/artifacts/Panel.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/artifacts/Panel.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/artifacts/Panel.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/artifacts/Panel.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { Panel } from "./Panel";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/DataHub.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/DataHub.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/DataHub.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/DataHub.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { DataHubView } from "./DataHub";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/Database.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/Database.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/Database.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/data/Database.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import type { DatabaseRows, DatabaseSchema } from "../api/database";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/memory/Memory.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/memory/Memory.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/memory/Memory.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/memory/Memory.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import type { SemanticObjectInspection, SemanticObjectPage } from "../…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/26]⎯
+
+ FAIL  .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/workspaces/Workspaces.test.tsx [ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/workspaces/Workspaces.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/workspaces/Workspaces.test.tsx
+ ❯ .scratch/memory-stage-4/preexisting-user-bytes/internal/web/ui/src/workspaces/Workspaces.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { WorkspaceHome, Workspaces } from "./Workspaces";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/26]⎯
+
+ FAIL  .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx [ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+ ❯ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { CandidateInboxView } from "./CandidateInbox";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/26]⎯
+
+ FAIL  .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx [ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx ]
+Error: Cannot find package 'react-dom/server' imported from /Users/davidboktor/code/evie/.scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx
+ ❯ .scratch/memory-stage-4/146-before-history-fix/146-frozen-files/internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx:1:1
+      1| import { renderToStaticMarkup } from "react-dom/server";
+       | ^
+      2| import { describe, expect, it } from "vitest";
+      3| import { ReviewEffects, EditLineage } from "./ReviewDisclosure";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/26]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  experiments/tutor-poc/server/semantic-sketch-layer.app-hardening.test.ts > health and session endpoints > creates, reads, and deletes a session through public state only
+Error: socket hang up
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/26]⎯
+
+ FAIL  experiments/tutor-poc/server/semantic-sketch-layer.openrouter-hardening.test.ts > OpenRouter timeout and transport failures > rejects HTTP 199 without exposing the raw body or retrying
+RangeError: init["status"] must be in the range of 200 to 599, inclusive.
+ ❯ experiments/tutor-poc/server/semantic-sketch-layer.openrouter-hardening.test.ts:305:9
+    303|       const rawBody = `raw-upstream-body-${status}-sentinel`;
+    304|       const fetchMock = fetchMockFor(
+    305|         new Response(rawBody, { status, statusText: "private status te…
+       |         ^
+    306|       );
+    307|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/26]⎯
+
+
+ Test Files  26 failed | 89 passed (115)
+      Tests  2 failed | 1622 passed (1624)
+   Start at  15:32:56
+   Duration  18.43s (tests 81%, transform 9%, import 9%, worker 1%)
+

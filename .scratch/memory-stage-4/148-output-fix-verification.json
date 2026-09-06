@@ -1,0 +1,49 @@
+{
+  "ticket": 148,
+  "revision": "output-finalization-fix-v1",
+  "recorded_utc": "2026-09-05T12:40:58.180068+00:00",
+  "status": "focused_checks_pass_parent_final_gates_pending",
+  "checks": [
+    {
+      "command": "go test ./internal/web ./cmd/evie -run '^TestForeground(HTTP|REPL)MeasurementRequiresSuccessfulOutput$' -count=1",
+      "result": "Expected FAIL before fix; actual REPL output failures falsely finalized. Initial HTTP fixture terminal-count assertion was corrected before its independent red run.",
+      "log": "148-output-fix-red.log"
+    },
+    {
+      "command": "go test -overlay .scratch/memory-stage-4/148-output-fix-before-overlay.json ./internal/web -run '^TestForegroundHTTPMeasurementRequiresSuccessfulOutput$' -count=1",
+      "result": "Expected FAIL against saved pre-fix code: six actual HTTP write/short-write/flush/provider-failure output cases falsely finalized; successful case passes.",
+      "log": "148-output-fix-web-red.log"
+    },
+    {
+      "command": "go test ./internal/web ./cmd/evie ./internal/agent -run '^TestForeground' -count=1",
+      "result": "PASS web 0.304s, CLI 0.827s, agent 0.268s",
+      "log": "148-output-fix-final-normal.log"
+    },
+    {
+      "command": "go test -race ./internal/agent ./internal/web ./cmd/evie -run '^(TestForeground|TestSSE|TestEventWireFormat|TestChat|TestSendError|TestREPL|TestCompilerConfiguredHostDoesNotBlockREPL)' -count=1",
+      "result": "PASS agent 1.309s, web 1.615s, CLI 13.714s",
+      "log": "148-output-fix-race.log"
+    },
+    {
+      "command": "go test ./internal/agent ./internal/web ./cmd/evie -count=1",
+      "result": "Agent PASS 1.481s, web PASS 4.224s; live CLI FAIL in separate uncommitted #149 TestStage4HistoryGapEmptyAndGenerationConformance at line 99. Reported to root, no #149 file edited.",
+      "log": "148-output-fix-broad-normal.log"
+    },
+    {
+      "command": "go test -overlay .scratch/memory-stage-4/148-output-fix-cli-overlay.json ./cmd/evie -count=1",
+      "result": "PASS CLI 7.745s. Overlay excludes only the three uncommitted #149 memory_stage4_*_conformance_test.go files from this #148 check; shared production files unchanged. Root still owns isolated aggregate full verification.",
+      "log": "148-output-fix-cli-isolated-normal.log"
+    },
+    {
+      "command": "gofmt changed Go files; git diff --check; exact live/frozen SHA-256 comparison",
+      "result": "PASS 41 aggregate files; root three hooks excluded."
+    }
+  ],
+  "remaining": [
+    "Parent isolated ./scripts/verify-change.sh on final aggregate plus three root hooks",
+    "Independent review of the correction",
+    "Parent browser demonstration"
+  ],
+  "prior_snapshot": "148-before-output-fix-frozen-files with 148-engineering-checkpoint-pre-output-fix.json",
+  "root_hook": "Parent changed only serve.go call to finalizeMeasurement(ev.TurnDone()) via outputErr local; root manifest remains separate."
+}

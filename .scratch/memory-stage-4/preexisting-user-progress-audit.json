@@ -1,0 +1,9 @@
+{
+  "recorded_at": "2026-09-05T09:37:37.311768+00:00",
+  "originals_matching": 218,
+  "modified_paths": [
+    "cmd/evie/main.go",
+    "internal/web/serve.go"
+  ],
+  "note": "Changed paths are audited against task-owned deltas; exact original bytes remain preserved. No automatic restore or discard."
+}

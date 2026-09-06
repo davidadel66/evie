@@ -1,0 +1,20 @@
+[
+  {
+    "path": "internal/eviedb/db.go",
+    "before_sha256": "69980a8f13fd3af1343e609ba0146dc5b57b182e85834df8cc2ba92a2541ae22",
+    "after_sha256": "2d7f90ddb60aeed05f000e076210b60b1e585e63ec76caddd84b3089e4534164",
+    "bytes": 57258
+  },
+  {
+    "path": "cmd/evie/main.go",
+    "before_sha256": "55088e4ef42d9a15e250b3d07e01a9a997c16173c143eb929c86c46629857bf9",
+    "after_sha256": "60c693245f6a72a88713f5c955a907104a482fbbec24ca0e1c79ec93229c84ac",
+    "bytes": 9263
+  },
+  {
+    "path": "internal/web/serve.go",
+    "before_sha256": "862f4b8460285c6636531434639437fd9980c803fd46474a70d25904b51a841e",
+    "after_sha256": "1c41434ec23f14b146c5295c7ff48a4bc9ab2cdd93902c7a65cc4c05d1277367",
+    "bytes": 9652
+  }
+]

@@ -1,0 +1,17 @@
+[codex/memory-stage-4 24c1f90] feat(memory): persist bounded owner-assertion candidates (#136)
+ 18 files changed, 3370 insertions(+), 1 deletion(-)
+ create mode 100644 cmd/evie/compiler_management.go
+ create mode 100644 cmd/evie/compiler_management_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-bounded-compiler.md
+ create mode 100644 internal/eviedb/compiler_inspection.go
+ create mode 100644 internal/eviedb/compiler_public_test.go
+ create mode 100644 internal/eviedb/compiler_schema.go
+ create mode 100644 internal/eviedb/compiler_source.go
+ create mode 100644 internal/eviedb/compiler_validation.go
+ create mode 100644 internal/eviedb/compiler_work.go
+ create mode 100644 internal/eviedb/compiler_work_test.go
+ create mode 100644 internal/localextractor/ollama.go
+ create mode 100644 internal/localextractor/ollama_test.go
+ create mode 100644 internal/memory/compiler.go
+ create mode 100644 internal/memory/compiler_contract.go
+ create mode 100644 internal/tools/compiler_fence_test.go

@@ -1,0 +1,18 @@
+.....fatal: pathspec 'internal/behavior.go' did not match any files
+E
+======================================================================
+ERROR: test_untracked_changes_deletions_and_generated_results (__main__.SourceBinding.test_untracked_changes_deletions_and_generated_results)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-ciorhth3/scripts/memory_stage4_conformance_test.py", line 88, in test_untracked_changes_deletions_and_generated_results
+    subprocess.run(["git", "add", "internal/behavior.go"], cwd=root, check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.13/3.13.4/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', 'add', 'internal/behavior.go']' returned non-zero exit status 128.
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.013s
+
+FAILED (errors=1)

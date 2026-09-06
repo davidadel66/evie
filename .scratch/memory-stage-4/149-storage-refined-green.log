@@ -1,0 +1,59 @@
+=== RUN   TestStage4GenericStorageConformance
+    memory_stage4_scope_conformance_test.go:244: STAGE4_EVIDENCE {"details":{"allowed_fixture_queries":2,"blocked_query_db_opens":0,"denied_model_queries":308,"exact_policy_rejections":true,"privileged_shell_claim":"unchanged documented limitation","protected_tables_and_views":77,"unaccepted_candidate_isolated":true,"unquoted_direct_and_nested_queries":true},"scenario":"generic_storage_containment","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4GenericStorageConformance (0.06s)
+PASS
+ok  	github.com/davidadel66/evie/cmd/evie	0.557s
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/direct_memory_table
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/joined_memory_table
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/implicit_memory_join
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/nested_memory_query
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/SQLite_schema
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/qualified_memory_table
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/quoted_memory_table
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_scopes
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_operations
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_operation_scopes
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_cursor_authorization
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_predicates
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_entities
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_aliases
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_claims
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_source_links
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_graph_links
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_claim_corrections
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotions
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotion_preparations
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotion_entities
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_state_events
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_projection_quarantine
+=== RUN   TestQueryDBEvieAllowsOnlyPublicTables/semantic_maintenance_lock
+--- PASS: TestQueryDBEvieAllowsOnlyPublicTables (0.05s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/direct_memory_table (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/joined_memory_table (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/implicit_memory_join (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/nested_memory_query (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/SQLite_schema (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/qualified_memory_table (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/quoted_memory_table (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_scopes (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_operations (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_operation_scopes (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_cursor_authorization (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_predicates (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_entities (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_aliases (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_claims (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_source_links (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_graph_links (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_claim_corrections (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotions (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotion_preparations (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_promotion_entities (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_state_events (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_projection_quarantine (0.00s)
+    --- PASS: TestQueryDBEvieAllowsOnlyPublicTables/semantic_maintenance_lock (0.00s)
+=== RUN   TestQueryDBDispatchesTranscriptFTSAndFramesUntrustedData
+--- PASS: TestQueryDBDispatchesTranscriptFTSAndFramesUntrustedData (0.01s)
+PASS
+ok  	github.com/davidadel66/evie/internal/tools	0.268s

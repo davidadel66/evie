@@ -1,0 +1,9 @@
+{
+  "recorded_at": "2026-09-05T08:37:14.705880+00:00",
+  "prior_artifacts_verified": 142,
+  "v3_artifacts_verified": 90,
+  "receipt_sha256": "a798c14f2caa119eaddf205e12fdb1682c59738755ebdea62b6401e229fe32fb",
+  "human_question": "v3 proposed judgments asked via async; no judgments inferred or applied",
+  "packet_sha256": "5fe494aa631bc9475e329043d9cf2130b4638cfec889268ebb0e24d82be323d8",
+  "proposed_sha256": "917a4fad36f8e3cc94f6678fd5f854aeced22e8b16698eeca9535b7e6e945b32"
+}

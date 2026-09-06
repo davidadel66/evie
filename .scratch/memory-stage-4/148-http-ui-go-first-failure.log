@@ -1,0 +1,22 @@
+--- FAIL: TestCompilerDiagnosticsHTTPGuards (0.05s)
+    --- FAIL: TestCompilerDiagnosticsHTTPGuards/sessions (0.00s)
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/sessions/origin (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"cross-origin request rejected"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/sessions/host (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"unexpected host"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/sessions/method (0.00s)
+            compiler_diagnostics_test.go:65: 405: {"error":"management routes require POST"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/sessions/content_type (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"content type must be application/json"}
+    --- FAIL: TestCompilerDiagnosticsHTTPGuards/diagnostics (0.00s)
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/diagnostics/origin (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"cross-origin request rejected"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/diagnostics/host (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"unexpected host"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/diagnostics/method (0.00s)
+            compiler_diagnostics_test.go:65: 405: {"error":"management routes require POST"}
+        --- FAIL: TestCompilerDiagnosticsHTTPGuards/diagnostics/content_type (0.00s)
+            compiler_diagnostics_test.go:65: 403: {"error":"content type must be application/json"}
+FAIL
+FAIL	github.com/davidadel66/evie/internal/web	0.467s
+FAIL

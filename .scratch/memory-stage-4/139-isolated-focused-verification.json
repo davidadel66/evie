@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "go",
+      "test",
+      "./internal/eviedb",
+      "./cmd/evie",
+      "-run",
+      "^TestCompiler(History|Activation|Worker|Intervals)",
+      "-count=1"
+    ],
+    "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-cw_73z0u",
+    "exit_code": 0,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/139-normal-isolated.log",
+    "output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t9.955s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t0.764s\n"
+  },
+  {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "./internal/eviedb",
+      "./cmd/evie",
+      "-run",
+      "^TestCompilerHistory",
+      "-count=1"
+    ],
+    "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-cw_73z0u",
+    "exit_code": 0,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/139-race-isolated.log",
+    "output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t37.755s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t2.786s\n"
+  }
+]

@@ -1,0 +1,14 @@
+feat(memory): review temporal changes and additional support (#142)
+
+Add explicit temporal interpretations under a versioned policy. Keep plans and
+possibilities qualified, leave unknown dates absent, and bind correction mode
+to the exact prior Claim and its lifecycle before owner approval.
+
+Apply changed-versus-error corrections with Stage 3 semantics and preserve
+history. Reuse equal claims and exact sources, including equivalent timestamp
+spellings, without rewriting original evidence or older review encodings.
+
+Validation: isolated ./scripts/verify-change.sh, focused real-SQLite and CLI
+normal/race checks, v1/v2/v3 golden encodings, and independent Standards/Spec
+review. Cases cover uncertain dates, polarity, conflicts, plans, additional
+support, stale sources/choices, rollback, competing stores, closure and replay.

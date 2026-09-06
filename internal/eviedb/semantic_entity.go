@@ -44,7 +44,7 @@ func entityRequestsEqual(left, right memory.RememberEntityRequest) bool {
 		left.Predicate == right.Predicate && left.PredicateLabel == right.PredicateLabel &&
 		left.PredicateCardinality == right.PredicateCardinality && left.Polarity == right.Polarity &&
 		validTimesEqual(left.ValidTime, right.ValidTime) && left.Subject == right.Subject && left.Object == right.Object &&
-		left.UseSessionScope == right.UseSessionScope
+		left.UseSessionScope == right.UseSessionScope && left.Destination == right.Destination
 }
 
 func loadOwnerSource(row rowScanner, sessionID memory.SessionID, eventID memory.EventID, scopeKey string) (memory.SemanticSource, error) {
@@ -315,11 +315,22 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		return memory.RememberEntityProposal{}, err
 	}
 
-	targetKey := targetScopeKey(scope, request.UseSessionScope)
+	targetKey, err := memory.ResolveMemoryDestination(scope, request.Destination, request.UseSessionScope)
+	if err != nil {
+		return memory.RememberEntityProposal{}, err
+	}
 	contextKey := scopeKeyForContext(scope)
+	sourceKey := targetKey
+	if request.Destination != "" {
+		sourceKey = contextKey
+	}
+	referenceContext := contextKey
+	if targetKey == "global" {
+		referenceContext = "global"
+	}
 	source, err := loadOwnerSource(s.db.QueryRowContext(ctx, `
 		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
-	`, request.SourceEventID), scope.SessionID, request.SourceEventID, targetKey)
+	`, request.SourceEventID), scope.SessionID, request.SourceEventID, sourceKey)
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
@@ -386,11 +397,11 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		}
 		entities = appendUniqueEntity(entities, contextEntity)
 	}
-	subject, subjectAlias, err := resolveEntitySelector(ctx, s.db, targetKey, contextKey, request.Subject, request.SourceEventID)
+	subject, subjectAlias, err := resolveEntitySelector(ctx, s.db, targetKey, referenceContext, request.Subject, request.SourceEventID)
 	if err != nil {
 		return memory.RememberEntityProposal{}, fmt.Errorf("resolve subject Entity: %w", err)
 	}
-	object, objectAlias, err := resolveEntitySelector(ctx, s.db, targetKey, contextKey, request.Object, request.SourceEventID)
+	object, objectAlias, err := resolveEntitySelector(ctx, s.db, targetKey, referenceContext, request.Object, request.SourceEventID)
 	if err != nil {
 		return memory.RememberEntityProposal{}, fmt.Errorf("resolve object Entity: %w", err)
 	}
@@ -486,6 +497,9 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 }
 
 func validateEntityProposalSession(ctx context.Context, writer turnLeaseWriteExecutor, proposal memory.RememberEntityProposal) error {
+	if proposal.Request.Destination != "" {
+		return validateRecommendedDestination(ctx, writer, proposal.SessionID, proposal.Request.Destination, proposal.Request.UseSessionScope, proposal.Scope.Key, proposal.Source, proposal.Scopes)
+	}
 	expected, expectedScopes, err := authorizedSemanticScopes(ctx, writer, proposal.SessionID, proposal.Request.UseSessionScope)
 	if err != nil {
 		return err
@@ -541,7 +555,9 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 	entities := make(map[memory.SemanticID]memory.SemanticEntity, len(proposal.Entities))
 	allowedScopes := make(map[string]struct{}, len(proposal.Scopes))
 	for _, scope := range proposal.Scopes {
-		allowedScopes[scope.Key] = struct{}{}
+		if proposal.Scope.Key != "global" || scope.Key == "global" {
+			allowedScopes[scope.Key] = struct{}{}
+		}
 	}
 	for _, entity := range proposal.Entities {
 		if !utf8.ValidString(entity.CanonicalName) || !utf8.ValidString(entity.EntityType) ||
@@ -570,7 +586,7 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 		return errors.New("Entity Claim does not match its prepared scope or Predicate")
 	}
 	if proposal.Source.EventID != proposal.Request.SourceEventID || proposal.Source.SessionID != proposal.SessionID ||
-		proposal.Source.ScopeKey != proposal.Scope.Key || proposal.Source.EventPart != memory.EvidenceContent ||
+		(proposal.Request.Destination == "" && proposal.Source.ScopeKey != proposal.Scope.Key) || proposal.Source.EventPart != memory.EvidenceContent ||
 		proposal.Source.LocatorKind != memory.LocatorWhole || proposal.Source.LocatorValue != "" ||
 		proposal.Source.Actor != memory.SemanticActorOwner || proposal.Source.SourceType != memory.SourceTypeUserMessage ||
 		proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Eligibility != memory.EligibilityEligible {
@@ -693,7 +709,7 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 		}
 		source, err := loadOwnerSource(writer.queryRowContext(ctx, `
 			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
-		`, proposal.Source.EventID), proposal.SessionID, proposal.Source.EventID, proposal.Scope.Key)
+		`, proposal.Source.EventID), proposal.SessionID, proposal.Source.EventID, proposal.Source.ScopeKey)
 		if err != nil || source.EventID != proposal.Source.EventID || source.SessionID != proposal.Source.SessionID ||
 			source.ScopeKey != proposal.Source.ScopeKey || source.EventPart != proposal.Source.EventPart ||
 			source.LocatorKind != proposal.Source.LocatorKind || source.LocatorValue != proposal.Source.LocatorValue ||

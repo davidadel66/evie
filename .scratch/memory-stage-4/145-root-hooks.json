@@ -1,0 +1,21 @@
+{
+  "base": "830e0436ab6c081aa318b498089d038606acc981",
+  "files": {
+    "cmd/evie/main.go": {
+      "before_sha256": "871f8f20142bceeeec4e916917754d2bb994c129ae4980f96fa47a377c6750c5",
+      "after_sha256": "1547f36a95c3c713194f5f5a397aa27ecb86fecaaaad3682c68363fc6f7f1e7b"
+    },
+    "internal/eviedb/db.go": {
+      "before_sha256": "b11aca18447ecf5b3e5bf7014323648503adfd01652fe4694e15a20a6d5310e8",
+      "after_sha256": "ac12180709deec2a10878f09e5a1a047804b5e0a4587fb175d2e08df7e70d1cf"
+    },
+    "internal/web/serve.go": {
+      "before_sha256": "0489a3cc6e1c6e0afed1c6ed646938f8ef2a471cc8a959cabea18888bcd9f806",
+      "after_sha256": "862f4b8460285c6636531434639437fd9980c803fd46474a70d25904b51a841e"
+    },
+    "internal/web/ui/src/memory/Memory.tsx": {
+      "before_sha256": "3629ecbc8565534dc9b8c4e2187d62e397bcfca047ef0f9ba1e72fef21a25ad6",
+      "after_sha256": "c7789431b8ecd5eda28687e4e04b2f31d7341f5faeff3306dc903926c3380bb8"
+    }
+  }
+}

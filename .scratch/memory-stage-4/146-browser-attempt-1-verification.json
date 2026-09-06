@@ -1,0 +1,56 @@
+{
+  "tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "browser": "isolated headless Chrome",
+  "driver": "playwright-core 1.55.0; scratch only",
+  "synthetic": true,
+  "owner_pilot": false,
+  "steps": [],
+  "responses": [
+    {
+      "route": "scopes",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "edit",
+      "status": 200
+    },
+    {
+      "route": "edit/revision",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "browser_version": "142.0.7444.176",
+  "pass": false,
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'owner-review-effect-v5'\n- 'candidate-review-effect-v5'\n\n    at /Users/davidboktor/code/evie/.scratch/memory-stage-4/browser-driver/check-146.cjs:26:395",
+  "server_exit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixture_directory_removed": true,
+  "driver_sha256": "669326315a0fcb0eb90409060dbdca2d8e78d633cc7521a302505126de0a7243"
+}

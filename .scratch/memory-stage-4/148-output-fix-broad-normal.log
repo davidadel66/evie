@@ -1,0 +1,12 @@
+ok  	github.com/davidadel66/evie/internal/agent	1.481s
+ok  	github.com/davidadel66/evie/internal/web	4.224s
+--- FAIL: TestStage4HistoryGapEmptyAndGenerationConformance (0.07s)
+    memory_stage4_history_conformance_test.go:99: gap/completed/outside conflation {Receipt:{Request:{RequestID:stage4-explicit-history Ranges:[{SourceScope:global Destination:global SessionID:dce2e29c-7754-4c77-8eb5-af09857a93b9 FirstSequence:5 LastSequence:10 FirstEventID:0c9eebc9-8208-4d8f-9802-d451072e5c04 LastEventID:e0439132-dc8c-4592-ad66-6078b79d8de1}]} GenerationID:1a59ccdcc35e48534550851fb34df85a7c9752dcfff792d41ef1038dd2dcbf84 SelectedEvents:6 SelectionOrder:1} RequestState:{RequestID:stage4-explicit-history Revision:1 Cancelled:false} RangeIndex:0 Intervals:[{FirstSequence:5 LastSequence:7 State:failed Reason:invalid_source_or_effect JobID:72aaa878981339d0b300a5c348ccf8b2f83581a677f119330b683ff844cd030b SelectionID:dc662a5c874cc6a5cece774eca74fa0934f8522234250aab233d59ed8e984cc2 Attempts:1 RetryAt:0} {FirstSequence:8 LastSequence:10 State:completed_empty Reason: JobID:26f8e2b32bd26491dfd6e20f8e65b4e2142c0566c3cc99b2bdb8e18e2c84729b SelectionID:506b58ba307162307e69e08b169eccea728806088bb5686177ae240dc30e6707 Attempts:1 RetryAt:0}] NextSequence:0 ContiguousFrontier:4 SelectedSessionEvents:6 OutsideSelectionEvents:7 SkipSupported:false}
+< < [calling edit_file]
+
+[edit_file wants to run]
+{"path":"/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/TestRunREPLContextDiscardsLateApprovalInputAfterCancellation1888940259/001/note.txt","old_string":"world","new_string":"changed"}
+approve? [y/N] request failed: context canceled
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	9.407s
+FAIL

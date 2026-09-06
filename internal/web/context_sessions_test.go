@@ -110,7 +110,7 @@ func TestWorkspaceHTTPRegistrationExplicitSelectionChatAndResume(t *testing.T) {
 	}
 
 	chat := httptest.NewRecorder()
-	handler.ServeHTTP(chat, chatRequest(`{"message":"hello"}`))
+	handler.ServeHTTP(chat, chatRequest(`{"message":"hello","sessionId":"session-1"}`))
 	if chat.Code != http.StatusOK || !strings.Contains(chat.Body.String(), "inside Cairo") {
 		t.Fatalf("chat status=%d body=%s", chat.Code, chat.Body.String())
 	}
@@ -151,10 +151,11 @@ func TestContextSessionSelectionWaitsForTheCurrentSessionTurnBoundary(t *testing
 		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "session-1"}, webTestTurnOwner{},
 	)}
 	server := NewContextServer(controller.session, nil, nil, controller)
+	server.activeSession = memory.Session{ID: "session-1"}
 	handler := server.Handler()
 	chatDone := make(chan struct{})
 	go func() {
-		handler.ServeHTTP(httptest.NewRecorder(), chatRequest(`{"message":"hold"}`))
+		handler.ServeHTTP(httptest.NewRecorder(), chatRequest(`{"message":"hold","sessionId":"session-1"}`))
 		close(chatDone)
 	}()
 	<-entered
@@ -166,4 +167,24 @@ func TestContextSessionSelectionWaitsForTheCurrentSessionTurnBoundary(t *testing
 	}
 	close(release)
 	<-chatDone
+}
+
+func TestContextSessionHTTPUsesConfiguredOwnerDisplayName(t *testing.T) {
+	t.Setenv("EVIE_OWNER_NAME", " David ")
+	handler := NewContextServer(nil, nil, nil, &fakeContextSessionController{}).Handler()
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, managementRequest("/api/context-sessions/list", `{}`))
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"ownerDisplayName":"David"`) {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
+}
+
+func TestContextSessionHTTPDefaultsOwnerDisplayName(t *testing.T) {
+	t.Setenv("EVIE_OWNER_NAME", " ")
+	handler := NewContextServer(nil, nil, nil, &fakeContextSessionController{}).Handler()
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(listed, managementRequest("/api/context-sessions/list", `{}`))
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"ownerDisplayName":"You"`) {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
+	}
 }

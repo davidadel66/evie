@@ -1,0 +1,15 @@
+[codex/memory-stage-4 14076cd] Prove deterministic Stage 4 memory conformance (#149)
+ 15 files changed, 2799 insertions(+), 1 deletion(-)
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json
+ create mode 100644 cmd/evie/memory_stage4_browser_test.go
+ create mode 100644 cmd/evie/memory_stage4_conformance_test.go
+ create mode 100644 cmd/evie/memory_stage4_history_conformance_test.go
+ create mode 100644 cmd/evie/memory_stage4_review_conformance_test.go
+ create mode 100644 cmd/evie/memory_stage4_scope_conformance_test.go
+ create mode 100644 internal/eviedb/sqlite_startup.go
+ create mode 100644 internal/eviedb/sqlite_startup_test.go
+ create mode 100644 internal/eviedb/stage4_process_conformance_test.go
+ create mode 100644 scripts/memory-stage-4-browser.cjs
+ create mode 100755 scripts/memory-stage-4-conformance.py
+ create mode 100644 scripts/memory_stage4_conformance_test.py

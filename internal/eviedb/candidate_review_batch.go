@@ -146,6 +146,23 @@ func (s *Store) PrepareOwnerCandidateBatch(ctx context.Context, a OwnerReviewCon
 			}
 			out.Groups = append(out.Groups, memory.ReviewBatchGroup{ID: g.ID, Preview: p})
 		}
+		var effectVector []memory.ScopeRevision
+		var effectScope string
+		for _, group := range out.Groups {
+			if group.Preview.Effect == nil {
+				continue
+			}
+			e := group.Preview.Effect
+			if effectVector == nil {
+				effectVector = e.PriorRevisions
+				effectScope = e.Scope.Key
+			} else if effectScope != e.Scope.Key || string(compilerJSON(effectVector)) != string(compilerJSON(e.PriorRevisions)) {
+				return errors.New("review memories with different applicability separately")
+			}
+		}
+		if effectVector != nil {
+			out.PriorRevisions = effectVector
+		}
 		if err = validateReviewGroupIndependence(out.Groups); err != nil {
 			return err
 		}

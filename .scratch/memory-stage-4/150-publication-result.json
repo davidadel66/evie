@@ -1,0 +1,213 @@
+{
+  "artifacts": [
+    {
+      "path": "original-matrix-v1.tar.gz",
+      "sha256": "46c1c7ef8e0e9eeda3d6dfcfa02ba2616feda4fdff2eef1ad0c7924d0131fd40",
+      "bytes": 822209,
+      "files": 302
+    },
+    {
+      "path": "corrected-matrix-v3.tar.gz",
+      "sha256": "91642e94a35c8b5718490b1912619b9806592702e004fdee2a3282662476260c",
+      "bytes": 815678,
+      "files": 301
+    },
+    {
+      "path": "interrupted-matrix-v2.tar.gz",
+      "sha256": "dddddaaef984180af98be2cb1f9456745db4cc1db4f465951b1743ecc8181aeb",
+      "bytes": 191926,
+      "files": 64
+    },
+    {
+      "path": "corrected-conformance-evidence.tar.gz",
+      "sha256": "b7b360dc0ffe675ffb07152ff719fbde014373293f490b031f09352b352d8ac9",
+      "bytes": 216756,
+      "files": 41
+    }
+  ],
+  "summary": {
+    "trial_count": 99,
+    "foreground_turns": 1584,
+    "counts": {
+      "candidates_before_scripted_review": 1518,
+      "dispatches": 1584,
+      "foreground_elapsed_nanos": 89214856876,
+      "foreground_event_assistant_message": 1584,
+      "foreground_event_context_snapshot": 1584,
+      "foreground_event_user_message": 1584,
+      "foreground_persisted_events": 4752,
+      "jobs": 1584,
+      "rows_events": 10727901,
+      "rows_memory_compiler_candidates": 1518,
+      "rows_semantic_claims": 10137,
+      "attempts": 1584,
+      "completed_events": 4158,
+      "jobs_completed_candidates": 1518,
+      "observed_attempt_completed": 1551,
+      "selected_events": 4224,
+      "history_selected_events": 1056,
+      "jobs_completed_empty": 33,
+      "jobs_failed": 33,
+      "observed_attempt_failed": 33
+    },
+    "job_states": {
+      "completed_candidates": 1518,
+      "completed_empty": 33,
+      "failed": 33
+    },
+    "attempt_outcomes": {
+      "completed": 1551,
+      "failed": 33
+    },
+    "scripted_review_operations": 219,
+    "max_terminal_commit_ms": 2.32575,
+    "max_response_finalization_ms": 36.457125,
+    "scripted_resolution_median_ms": 2.813042,
+    "scripted_resolution_max_ms": 12.962375,
+    "variants": [
+      {
+        "variant": "baseline",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 55.5625,
+        "max_freshness_seconds": 1.034,
+        "max_db_after_mib": 6.0546875,
+        "max_wal_after_mib": 4.086334228515625,
+        "new_terminal_commit_median_p95_delta_ms": 0.578958,
+        "new_response_finalization_median_p95_delta_ms": 1.770209,
+        "history_terminal_commit_median_p95_delta_ms": 0.181624,
+        "history_response_finalization_median_p95_delta_ms": 3.322291
+      },
+      {
+        "variant": "retained-events-100000",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 57.6875,
+        "max_freshness_seconds": 1.049,
+        "max_db_after_mib": 42.78125,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_terminal_commit_median_p95_delta_ms": -0.18175,
+        "new_response_finalization_median_p95_delta_ms": 4.315833,
+        "history_terminal_commit_median_p95_delta_ms": -0.354666,
+        "history_response_finalization_median_p95_delta_ms": -1.077208
+      },
+      {
+        "variant": "retained-events-1000000",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 59.09375,
+        "max_freshness_seconds": 1.05,
+        "max_db_after_mib": 412.19140625,
+        "max_wal_after_mib": 4.0156097412109375,
+        "new_terminal_commit_median_p95_delta_ms": 0.09425,
+        "new_response_finalization_median_p95_delta_ms": 1.298126,
+        "history_terminal_commit_median_p95_delta_ms": 0.807876,
+        "history_response_finalization_median_p95_delta_ms": 2.572583
+      },
+      {
+        "variant": "source-bytes-4096",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 63.3125,
+        "max_freshness_seconds": 1.148,
+        "max_db_after_mib": 7.0,
+        "max_wal_after_mib": 4.043113708496094,
+        "new_terminal_commit_median_p95_delta_ms": 0.228126,
+        "new_response_finalization_median_p95_delta_ms": 3.437791,
+        "history_terminal_commit_median_p95_delta_ms": -0.024249,
+        "history_response_finalization_median_p95_delta_ms": 1.711917
+      },
+      {
+        "variant": "source-bytes-12000",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 67.734375,
+        "max_freshness_seconds": 1.163,
+        "max_db_after_mib": 7.7265625,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_terminal_commit_median_p95_delta_ms": 0.025375,
+        "new_response_finalization_median_p95_delta_ms": 7.369207,
+        "history_terminal_commit_median_p95_delta_ms": 0.546375,
+        "history_response_finalization_median_p95_delta_ms": 8.848999
+      },
+      {
+        "variant": "graph-claims-100",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 58.546875,
+        "max_freshness_seconds": 1.059,
+        "max_db_after_mib": 6.85546875,
+        "max_wal_after_mib": 4.058830261230469,
+        "new_terminal_commit_median_p95_delta_ms": -0.195292,
+        "new_response_finalization_median_p95_delta_ms": 2.584708,
+        "history_terminal_commit_median_p95_delta_ms": 0.037042,
+        "history_response_finalization_median_p95_delta_ms": 3.907499
+      },
+      {
+        "variant": "graph-claims-1000",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 56.375,
+        "max_freshness_seconds": 1.048,
+        "max_db_after_mib": 13.09375,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_terminal_commit_median_p95_delta_ms": -0.139416,
+        "new_response_finalization_median_p95_delta_ms": 2.347333,
+        "history_terminal_commit_median_p95_delta_ms": -0.188167,
+        "history_response_finalization_median_p95_delta_ms": 2.097709
+      },
+      {
+        "variant": "scopes-16",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 58.46875,
+        "max_freshness_seconds": 1.037,
+        "max_db_after_mib": 6.09375,
+        "max_wal_after_mib": 4.0470428466796875,
+        "new_terminal_commit_median_p95_delta_ms": -0.035125,
+        "new_response_finalization_median_p95_delta_ms": 2.143418,
+        "history_terminal_commit_median_p95_delta_ms": -0.078084,
+        "history_response_finalization_median_p95_delta_ms": 2.6655
+      },
+      {
+        "variant": "delay-ms-0",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 54.546875,
+        "max_freshness_seconds": 1.018,
+        "max_db_after_mib": 6.08203125,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_terminal_commit_median_p95_delta_ms": 0.732709,
+        "new_response_finalization_median_p95_delta_ms": 1.412,
+        "history_terminal_commit_median_p95_delta_ms": 0.079791,
+        "history_response_finalization_median_p95_delta_ms": 1.237833
+      },
+      {
+        "variant": "delay-ms-250",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 55.5625,
+        "max_freshness_seconds": 4.872,
+        "max_db_after_mib": 6.0859375,
+        "max_wal_after_mib": 4.1727752685546875,
+        "new_terminal_commit_median_p95_delta_ms": 0.417959,
+        "new_response_finalization_median_p95_delta_ms": 2.068083,
+        "history_terminal_commit_median_p95_delta_ms": 0.013251,
+        "history_response_finalization_median_p95_delta_ms": 2.667833
+      },
+      {
+        "variant": "processes-2",
+        "paired_repetitions": 3,
+        "foreground_turns_per_mode": 48,
+        "sampled_peak_go_process_tree_rss_mib": 82.0625,
+        "max_freshness_seconds": 1.033,
+        "max_db_after_mib": 6.046875,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_terminal_commit_median_p95_delta_ms": 0.151876,
+        "new_response_finalization_median_p95_delta_ms": 0.889333,
+        "history_terminal_commit_median_p95_delta_ms": -0.006333,
+        "history_response_finalization_median_p95_delta_ms": 0.096167
+      }
+    ]
+  }
+}

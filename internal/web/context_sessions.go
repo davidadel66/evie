@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/davidadel66/evie/internal/agent"
@@ -37,11 +38,12 @@ type ContextScopeDescriptor struct {
 }
 
 type ContextSessionSnapshot struct {
-	Workspaces    []memory.Workspace      `json:"workspaces"`
-	Projects      []memory.Project        `json:"projects"`
-	Sessions      []memory.SessionListing `json:"sessions"`
-	ActiveSession *memory.Session         `json:"activeSession,omitempty"`
-	ActiveScope   *ContextScopeDescriptor `json:"activeScope,omitempty"`
+	OwnerDisplayName string                  `json:"ownerDisplayName"`
+	Workspaces       []memory.Workspace      `json:"workspaces"`
+	Projects         []memory.Project        `json:"projects"`
+	Sessions         []memory.SessionListing `json:"sessions"`
+	ActiveSession    *memory.Session         `json:"activeSession,omitempty"`
+	ActiveScope      *ContextScopeDescriptor `json:"activeScope,omitempty"`
 }
 
 type OpenedContextSession struct {
@@ -64,6 +66,10 @@ func (s *Server) handleContextSessionList(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		managementJSONError(w, http.StatusInternalServerError, "context_sessions_unavailable", "Context Scope choices are unavailable")
 		return
+	}
+	snapshot.OwnerDisplayName = strings.TrimSpace(os.Getenv("EVIE_OWNER_NAME"))
+	if snapshot.OwnerDisplayName == "" {
+		snapshot.OwnerDisplayName = "You"
 	}
 	if snapshot.Workspaces == nil {
 		snapshot.Workspaces = []memory.Workspace{}

@@ -14,17 +14,26 @@ type Props = {
   queued: string[];
   streaming: boolean;
   onAnswer: (reqId: string, approve: boolean) => void;
+  historyLoading?: boolean;
+  historyProblem?: string | null;
+  hasOlder?: boolean;
+  onOlder?: () => void;
+  onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const prependHeight = useRef<number | null>(null);
 
   // Follow the stream only while David is already at the bottom. Scrolling up
   // to read something must not be yanked back by the next token.
   useEffect(() => {
     const el = scroller.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+    if (el && prependHeight.current !== null) {
+      el.scrollTop += el.scrollHeight - prependHeight.current;
+      prependHeight.current = null;
+    } else if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [items, queued, streaming]);
 
   return (
@@ -36,7 +45,10 @@ export function Chat({ items, queued, streaming, onAnswer }: Props) {
       }}
       className="flex flex-1 flex-col gap-4 overflow-y-auto px-7 pt-5 pb-2"
     >
-      {items.length === 0 && <Empty />}
+      {historyProblem && <div role="alert" className="text-amber-ink text-sm">{historyProblem} <button type="button" onClick={onRetry} className="underline">Retry</button></div>}
+      {historyLoading && <p className="text-muted-text text-sm">Loading conversation…</p>}
+      {hasOlder && <button type="button" disabled={historyLoading || streaming} onClick={() => { pinned.current = false; prependHeight.current = scroller.current?.scrollHeight ?? null; onOlder?.(); }} className="text-teal self-center py-2 text-sm">Earlier messages</button>}
+      {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
       {items.map((item) => {
         switch (item.kind) {
           case "user":

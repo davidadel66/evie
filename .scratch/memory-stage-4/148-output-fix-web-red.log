@@ -1,0 +1,16 @@
+--- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput (0.00s)
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_write_fails (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799191 TerminalCommittedAtUnixMS:0xfa08f5d6ae0 TerminalCommitNanos:0xfa08f5d6ae8 ResponseFinalizedAtUnixMS:0xfa08f5d6af0 ResponseFinalizationNanos:0xfa08f5d6af8 Outcome:success}
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_write_fails (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799191 TerminalCommittedAtUnixMS:0xfa08f5d6bc0 TerminalCommitNanos:0xfa08f5d6bc8 ResponseFinalizedAtUnixMS:0xfa08f5d6bd0 ResponseFinalizationNanos:0xfa08f5d6bd8 Outcome:success}
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/short_write (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799192 TerminalCommittedAtUnixMS:0xfa08f5d6780 TerminalCommitNanos:0xfa08f5d6788 ResponseFinalizedAtUnixMS:0xfa08f5d67b0 ResponseFinalizationNanos:0xfa08f5d67b8 Outcome:success}
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_flush_fails (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799193 TerminalCommittedAtUnixMS:0xfa08f5d6a90 TerminalCommitNanos:0xfa08f5d6a98 ResponseFinalizedAtUnixMS:0xfa08f5d6ab0 ResponseFinalizationNanos:0xfa08f5d6ab8 Outcome:success}
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_flush_fails (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799193 TerminalCommittedAtUnixMS:0xfa08f5d6b70 TerminalCommitNanos:0xfa08f5d6b78 ResponseFinalizedAtUnixMS:0xfa08f5d6b80 ResponseFinalizationNanos:0xfa08f5d6b88 Outcome:success}
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/provider_failure_output_fails (0.00s)
+        foreground_measurement_test.go:88: output completion=false, measurement {RootID:event-1 StartedAtUnixMS:1788611799193 TerminalCommittedAtUnixMS:0xfa08f5d6d40 TerminalCommitNanos:0xfa08f5d6d48 ResponseFinalizedAtUnixMS:0xfa08f5d6dc0 ResponseFinalizationNanos:0xfa08f5d6dc8 Outcome:failed}
+FAIL
+FAIL	github.com/davidadel66/evie/internal/web	0.312s
+FAIL

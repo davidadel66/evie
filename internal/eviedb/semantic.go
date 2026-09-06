@@ -1105,6 +1105,9 @@ func (s *Store) PrepareRememberLiteral(
 		if proposal.Source.Eligibility == "" {
 			proposal.Source.Eligibility = memory.EligibilityEligible
 		}
+		if proposal.Request.Destination != request.Destination {
+			return memory.RememberLiteralProposal{}, ErrIdempotencyConflict
+		}
 		proposal.Request = request
 		if proposal.SessionID != scope.SessionID || proposal.Source.EventID != request.SourceEventID ||
 			proposal.Predicate.Token != request.Predicate || proposal.Predicate.Label != request.PredicateLabel ||
@@ -1139,7 +1142,11 @@ func (s *Store) PrepareRememberLiteral(
 		return memory.RememberLiteralProposal{}, fmt.Errorf("parse source event time: %w", err)
 	}
 
-	targetKey := scopeKeyForContext(scope)
+	targetKey, err := memory.ResolveMemoryDestination(scope, request.Destination, false)
+	if err != nil {
+		return memory.RememberLiteralProposal{}, err
+	}
+	sourceKey := scopeKeyForContext(scope)
 	target, err := loadSemanticScope(ctx, s.db, targetKey)
 	if err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("resolve target scope: %w", err)
@@ -1262,6 +1269,18 @@ func (s *Store) PrepareRememberLiteral(
 	for i := range scopes {
 		prior[i] = memory.ScopeRevision{ScopeKey: scopes[i].Key, Revision: scopes[i].Revision}
 	}
+	if request.Destination != "" && sourceKey != "global" && sourceKey != targetKey {
+		sourceScope, loadErr := loadSemanticScope(ctx, s.db, sourceKey)
+		if loadErr != nil {
+			return memory.RememberLiteralProposal{}, loadErr
+		}
+		scopes = append(scopes, sourceScope.SemanticScope)
+		sort.Slice(scopes, func(i, j int) bool { return scopes[i].Key < scopes[j].Key })
+		prior = make([]memory.ScopeRevision, len(scopes))
+		for i := range scopes {
+			prior[i] = memory.ScopeRevision{ScopeKey: scopes[i].Key, Revision: scopes[i].Revision}
+		}
+	}
 	proposal := memory.RememberLiteralProposal{
 		SchemaVersion: 1, Kind: "remember_literal_claim", OperationID: operationID,
 		IdempotencyKey: request.IdempotencyKey, Actor: "owner", SessionID: scope.SessionID,
@@ -1269,7 +1288,7 @@ func (s *Store) PrepareRememberLiteral(
 		Predicate: predicate, Subject: subject, Evie: evie, ClaimID: claimID, ClaimCreate: claimCreate, SourceLinkID: sourceLinkID,
 		Literal: request.Literal, Polarity: request.Polarity, ValidTime: request.ValidTime,
 		Source: memory.SemanticSource{
-			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: targetKey,
+			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: sourceKey,
 			EventPart: "content", LocatorKind: "whole", LocatorValue: "",
 			EvidenceSHA256: evidenceHash, Actor: "owner", SourceType: "user_message",
 			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content,
@@ -1324,9 +1343,15 @@ func validateProposalSessionScope(
 	writer turnLeaseWriteExecutor,
 	proposal memory.RememberLiteralProposal,
 ) error {
+	if proposal.Request.Destination != "" {
+		return validateRecommendedDestination(ctx, writer, proposal.SessionID, proposal.Request.Destination, false, proposal.Scope.Key, proposal.Source, proposal.Scopes)
+	}
 	expectedTarget, expectedScopes, err := authorizedSemanticScopes(ctx, writer, proposal.SessionID, false)
 	if err != nil {
 		return err
+	}
+	if proposal.Scope.Key != expectedTarget {
+		return errors.New("unauthorized memory destination")
 	}
 	return validateAuthorizedSemanticScopes(expectedTarget, expectedScopes, proposal.SessionID, proposal.Source.SessionID,
 		proposal.Source.ScopeKey, proposal.Scopes)

@@ -1,0 +1,29 @@
+{
+  "base": "1151a945eab80163516bdbeecb07c8d77f1a1236",
+  "tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-checkpoint.index",
+  "files": {
+    "internal/web/candidate_review.go": "2fed2b3d5fbae72d6bfe164b9a9a62a55461c5bd0179d117b593a8fa93f747a5",
+    "internal/web/candidate_review_advanced.go": "aababc03ee5c843250d261a3630a577f8b83332129509fd513e2498d98b500ec",
+    "internal/web/candidate_review_advanced_test.go": "2702c53d23eda3476e6519dc9513007fe29926f50376e910307590b6f19e4288",
+    "internal/web/candidate_review_input_error_test.go": "330991e1982ba3906442350eb36e77103e8c416219b2f0f3ad4a9ffd21ee7e44",
+    "internal/web/candidate_review_json.go": "8eb0cdaad6e05b06be91da093d49d54007767eb2e9950a9d12497945c5033f4e",
+    "internal/web/ui/src/api/candidateReview.ts": "62d2af1b01e2d7a89a8b5b859c19ffa1fed573fc7b9757f1e8c052dff7fd9e01",
+    "internal/web/ui/src/candidateInbox/AdvancedReviewForms.tsx": "4bb4cca6b5ed1363a12d655d8692af8c66b8621ccbc81f2f45d7b53e6e1dd88a",
+    "internal/web/ui/src/candidateInbox/BatchReview.tsx": "dac778a368962b04c6ece1c80c9ce51d55a0f820728220d47259553520131b21",
+    "internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx": "49e40735c17bf377388b2ccb9d94485863b26fa419f5cdd22712b58ccaadf1c0",
+    "internal/web/ui/src/candidateInbox/CandidateInbox.tsx": "39e2105f118b4f7e29338a5d7645fc503c94a2497cad6818f101e795b1d34c36",
+    "internal/web/ui/src/candidateInbox/ReviewDisclosure.tsx": "ec312efc692a1b80b9963f5f179b1585b5d45113356edf2c642d4a415bf6e33e",
+    "internal/web/ui/src/candidateInbox/advanced.test-support.ts": "166cd98f628a257248c1a204e884658e725d3acee79cc067c94b5bcafda4776b",
+    "internal/web/ui/src/candidateInbox/advancedController.test.ts": "7372996b9861d609261e5693c59974cf5201a689fdac332a544e9f28ef448590",
+    "internal/web/ui/src/candidateInbox/advancedDisclosure.test.tsx": "5897194687d756b66a859d28aba2ad60c823ab41fe2f0b6db69922ed162b0c09",
+    "internal/web/ui/src/candidateInbox/controller.ts": "114441963153fa62a93fed4c19d0150f5826dc748135a986564e51910c57d650",
+    "internal/web/ui/src/candidateInbox/fixtures.test-support.ts": "174cbf7f0f658d91897afac0cb395b4440d484282a2f666e420942e26874cc54",
+    "internal/web/ui/src/candidateInbox/pendingDecision.ts": "24cd1a6d86cb7ddbc16cfd9df1bce2758414f9dee2fa5c1f6fe4bbedb5933b01",
+    "internal/web/ui/src/candidateInbox/previewSupport.ts": "772a8db9f52ba500bcdc1a0c16c659269b4faadf5b2f595ea04eb77822cee87f"
+  },
+  "note": "146 frozen web files on final144 tree; excludes147 and preexisting user changes.",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-146-checkpoint-gs6_tpfm",
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-146-isolated.log",
+  "verification_exit_code": 0
+}

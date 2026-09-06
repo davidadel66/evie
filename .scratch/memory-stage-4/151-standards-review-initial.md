@@ -1,0 +1,9 @@
+# #151 Standards review — initial findings
+
+Reviewed `git diff ebb84af94f37b5bb5278d54208dc1d9f2dba73c7 eebe81f9b39587405f9c2662ec0f94d68f9ad38d` against repository `AGENTS.md` and the complete code-review smell baseline. Static inspection only; no builds, tests, or heavy probes during the #150 measurement window. Final owner delta remains pending review.
+
+1. **P2 — Descriptor-root the artifact reads.** `scripts/memory-stage4-release/artifacts.go:66–74` checks `EvalSymlinks` and `Rel`, then `readArtifactFile` reopens the resulting pathname. Replacing an intermediate directory or the final file with an outside symlink between those operations bypasses the advertised receipt-root boundary. Use an `os.Root` rooted in the index directory for actual file opens, retaining the protected-identity and clean-relative-path checks. This violates `AGENTS.md`'s requirement to enforce data boundaries in code and deterministic checks; add a regression for containment during path replacement.
+
+2. **P2 — Sync the published directory entry.** `scripts/memory-stage4-release/main.go:171` returns success after `os.Link`, having synced only the temporary file. A crash/power loss may lose the newly linked report name after the command reported successful immutable publication. Sync the containing directory after linking and propagate failures while preserving any published report. This is a persistence-ordering gap under `AGENTS.md`'s persistence/recovery review priority, particularly because failed final evaluations must remain retained.
+
+No additional actionable smell finding. The pure evaluation package and narrow offline command are appropriately separated; byte limits, exact artifact inventories, immutable destinations, explicit external attestation boundaries, and no activation/corpus-loader path keep the engineering outcome focused. The final experimental evaluation remains unrun and #151 must remain open.

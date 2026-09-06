@@ -130,8 +130,8 @@ func validateReviewOriginVisibility(ctx context.Context, q historicalReviewQuery
 		for _, sources := range [][]memory.CompilerSource{candidate.Candidate.Support, candidate.Candidate.Context} {
 			for _, source := range sources {
 				rows, err = q.QueryContext(ctx, `SELECT e.content,COALESCE(w.lifecycle_state,'active'),COALESCE(p.archived,0),
-    EXISTS(SELECT 1 FROM semantic_projection_quarantine quarantine JOIN semantic_scopes scope ON scope.scope_id=quarantine.scope_id WHERE scope.scope_key IN (?,?))
-    FROM events e JOIN sessions s ON s.id=e.session_id LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN projects p ON p.id=s.project_id WHERE e.id=?`, source.ScopeKey, op.Preview.ScopeKey, source.Locator.EventID)
+    EXISTS(SELECT 1 FROM semantic_projection_quarantine quarantine JOIN semantic_scopes scope ON scope.scope_id=quarantine.scope_id WHERE scope.scope_key IN (?,?,?))
+    FROM events e JOIN sessions s ON s.id=e.session_id LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN projects p ON p.id=s.project_id WHERE e.id=?`, source.ScopeKey, op.Preview.ScopeKey, op.Preview.Effect.Scope.Key, source.Locator.EventID)
 				if err != nil {
 					return err
 				}

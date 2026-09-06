@@ -1,0 +1,30 @@
+[codex/memory-stage-4 acf37b7] feat(memory): expose bounded compiler health and measured progress (#148)
+ 44 files changed, 3938 insertions(+), 36 deletions(-)
+ create mode 100644 cmd/evie/compiler_diagnostics.go
+ create mode 100644 cmd/evie/compiler_diagnostics_test.go
+ create mode 100644 cmd/evie/docs/active/memory-stage-4-diagnostics.implementation.md
+ create mode 100644 cmd/evie/repl_foreground_measurement_test.go
+ create mode 100644 cmd/evie/repl_output.go
+ create mode 100644 internal/agent/foreground_measurement.go
+ create mode 100644 internal/agent/foreground_measurement_test.go
+ create mode 100644 internal/eviedb/compiler_diagnostics.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_measurement.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_navigation.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_public_test.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_schema.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_test.go
+ create mode 100644 internal/eviedb/compiler_diagnostics_views.go
+ create mode 100644 internal/eviedb/compiler_status_projection.go
+ create mode 100644 internal/eviedb/compiler_status_projection_test.go
+ create mode 100644 internal/localextractor/diagnostics_test.go
+ create mode 100644 internal/memory/compiler_diagnostics.go
+ create mode 100644 internal/web/compiler_diagnostics.go
+ create mode 100644 internal/web/compiler_diagnostics_test.go
+ create mode 100644 internal/web/foreground_measurement_test.go
+ create mode 100644 internal/web/ui/src/api/compilerDiagnostics.test.ts
+ create mode 100644 internal/web/ui/src/api/compilerDiagnostics.ts
+ create mode 100644 internal/web/ui/src/compilerDiagnostics/CompilerHealth.test.tsx
+ create mode 100644 internal/web/ui/src/compilerDiagnostics/CompilerHealth.tsx
+ create mode 100644 internal/web/ui/src/compilerDiagnostics/controller.test.ts
+ create mode 100644 internal/web/ui/src/compilerDiagnostics/controller.ts
+ create mode 100644 internal/web/ui/src/compilerDiagnostics/fixtures.test-support.ts

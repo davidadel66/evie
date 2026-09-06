@@ -1,0 +1,1447 @@
+{
+  "tree": "fae9bdd86e9e0f0f2f42bac18d0cbc063684412c",
+  "trials_per_mode": 40,
+  "processes": 2,
+  "rows": [
+    {
+      "trial": 0,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 1,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 0,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 37,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 2,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 50,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 10,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 36,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 13,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 32,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 19,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 19,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 20,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 43,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 22,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 45,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 25,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 46,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 30,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 31,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 42,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 35,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 53,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 44,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 36,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 34,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 38,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 41,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "mode": "public",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 33,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "mode": "public",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "create schema: database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 0,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 0,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 1,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 1,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 2,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 3,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 3,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 4,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 5,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 5,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 6,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 7,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 8,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 9,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 10,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 2,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 11,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 12,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 12,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 13,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 14,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 15,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 16,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 17,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 17,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 18,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 19,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 20,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 21,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 22,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 23,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 23,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 24,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 25,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 3,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 26,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 27,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 27,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 28,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 29,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 29,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 30,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 31,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 32,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 32,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 33,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 4,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 34,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 34,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 2,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 35,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 36,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 37,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 38,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 38,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 1,
+      "duration_ms": 0,
+      "error": "database is locked (5) (SQLITE_BUSY)",
+      "ok": false
+    },
+    {
+      "trial": 39,
+      "mode": "connect",
+      "process": 0,
+      "exit_code": 0,
+      "duration_ms": 0,
+      "journal_mode": "wal",
+      "ok": true
+    },
+    {
+      "trial": 39,
+      "mode": "connect",
+      "process": 1,
+      "exit_code": 0,
+      "duration_ms": 1,
+      "journal_mode": "wal",
+      "ok": true
+    }
+  ]
+}

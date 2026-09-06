@@ -1,0 +1,11 @@
+feat(memory): persist bounded owner-assertion candidates (#136)
+
+Add explicit source selection, pinned generation/request validation,
+SQLite-fenced inference and atomic staging/publication, local transport,
+and safe CLI inspection. Preserve exact sources, cancellation through
+COMMIT, set-order-independent equivalence, and candidate isolation.
+
+Validation: focused and race checks, independent Standards/Spec reviews,
+and ./scripts/verify-change.sh on the isolated ticket tree passed.
+Selected-wire integration and actual selected-generation observation remain
+pending because no adequate production extractor has been selected.

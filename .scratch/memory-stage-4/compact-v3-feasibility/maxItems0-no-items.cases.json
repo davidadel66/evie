@@ -1,0 +1,12 @@
+[
+  {
+    "name": "nonempty-array",
+    "json": "[1]",
+    "accepted": true
+  },
+  {
+    "name": "empty-array",
+    "json": "[]",
+    "accepted": true
+  }
+]

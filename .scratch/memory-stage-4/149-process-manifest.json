@@ -1,0 +1,138 @@
+{
+  "version": "memory-stage-4-process-contribution-v1",
+  "ticket": 149,
+  "status": "frozen_focused_normal_and_race_pass_root_aggregate_checks_pending",
+  "created_at": "2026-09-05T12:36:51.816844+00:00",
+  "base_head_at_freeze": "9f97fdc10adb75445c118d00cbc6442133927af4",
+  "go_version": "go version go1.26.3 darwin/arm64",
+  "files": [
+    {
+      "path": "internal/eviedb/stage4_process_conformance_test.go",
+      "before_sha256": null,
+      "before_state": "absent_new_file",
+      "after_sha256": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+      "bytes": 22687
+    }
+  ],
+  "frozen_files": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-process-files",
+  "checks": [
+    {
+      "command": "go test ./internal/eviedb -run '^TestStage4ProcessConformance' -count=1 -v",
+      "status": "PASS",
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-process-normal.log",
+      "package_result": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t0.989s"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestStage4ProcessConformance' -count=1 -v",
+      "status": "PASS",
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-process-race.log",
+      "package_result": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t33.133s"
+    },
+    {
+      "command": "git diff --no-index --check /dev/null internal/eviedb/stage4_process_conformance_test.go",
+      "status": "PASS",
+      "exit_code": 1,
+      "output": "",
+      "note": "No-index diff exit 1 denotes a new-file difference; no whitespace errors."
+    },
+    {
+      "command": "gofmt -l internal/eviedb/stage4_process_conformance_test.go",
+      "status": "PASS",
+      "exit_code": 0,
+      "output": "",
+      "note": ""
+    }
+  ],
+  "receipts": [
+    {
+      "assertions": {
+        "duplicate_dispatch_absent": true,
+        "durable_attempts": true,
+        "exact_release_verified": true,
+        "exact_source_authority": true,
+        "mismatched_ack_blocked": true,
+        "real_processes": true,
+        "single_candidate_publication": true,
+        "unaccepted_graph_unchanged": true,
+        "unknown_capacity_blocked": true
+      },
+      "scenario": "process_crash",
+      "version": "memory-stage-4-conformance-v1"
+    },
+    {
+      "assertions": {
+        "duplicate_dispatch_absent": true,
+        "durable_attempts": true,
+        "exact_release_verified": true,
+        "exact_source_authority": true,
+        "mismatched_ack_blocked": true,
+        "real_processes": true,
+        "replacement_capacity_preserved": true,
+        "single_candidate_publication": true,
+        "stale_delivery_fenced": true,
+        "unaccepted_graph_unchanged": true,
+        "unknown_capacity_blocked": true
+      },
+      "scenario": "expired_late_delivery",
+      "version": "memory-stage-4-conformance-v1"
+    },
+    {
+      "assertions": {
+        "duplicate_dispatch_absent": true,
+        "durable_attempts": true,
+        "exact_release_verified": true,
+        "exact_source_authority": true,
+        "mismatched_ack_blocked": true,
+        "real_processes": true,
+        "replacement_capacity_preserved": true,
+        "single_candidate_publication": true,
+        "stale_delivery_fenced": true,
+        "unaccepted_graph_unchanged": true,
+        "unknown_capacity_blocked": true
+      },
+      "scenario": "cancelled_late_delivery",
+      "version": "memory-stage-4-conformance-v1"
+    },
+    {
+      "assertions": {
+        "atomic_effects": true,
+        "canonical_replay_valid": true,
+        "competing_duplicate_receipts_equal": true,
+        "prior_resolution_visible": true,
+        "real_process_exit_at_review_commit": true,
+        "single_canonical_operation": true
+      },
+      "scenario": "before_commit",
+      "version": "memory-stage-4-conformance-v1"
+    },
+    {
+      "assertions": {
+        "atomic_effects": true,
+        "canonical_replay_valid": true,
+        "competing_duplicate_receipts_equal": true,
+        "prior_resolution_visible": true,
+        "real_process_exit_at_review_commit": true,
+        "single_canonical_operation": true
+      },
+      "scenario": "after_commit",
+      "version": "memory-stage-4-conformance-v1"
+    }
+  ],
+  "prior_attempt": {
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-process-initial-normal.log",
+    "status": "FAIL",
+    "reason": "Test expectation used completed instead of public completed_candidates; production was correct. Corrected fixture before final normal and race."
+  },
+  "pending_checks": [
+    {
+      "command": "./scripts/verify-change.sh",
+      "owner": "root",
+      "reason": "Root owns final isolated combined-tree full verification and independent two-axis reviews for the single-ticket aggregate."
+    }
+  ],
+  "limitations": [
+    "Deterministic scripted extraction only; no real model, model quality adjudication, resource benchmark, or owner pilot.",
+    "Lease/retry timestamps move relative to SQLite time as bounded test-clock setup; scheduling, recovery, execution and review use public Store APIs.",
+    "Crash injection uses the existing private transaction-resolution seam and os.Exit without defers at the acceptance COMMIT boundary."
+  ]
+}

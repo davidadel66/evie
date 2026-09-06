@@ -1,0 +1,49 @@
+# Ticket 144 frozen implementation handoff
+
+The Kernel now retains immutable owner interpretation edits and executes actual bounded dependent groups. A group can share one explicitly proposed Entity and Predicate across multiple sourced Claims, or contain multiple temporal corrections under one canonical operation. Independent groups use savepoints inside one outer SQLite transaction, with an immutable ordered receipt. The CLI delegates to these same Kernel methods.
+
+Authoritative owned snapshot: `144-engineering-checkpoint.json`, `144-frozen-manifest.json`, and `144-frozen-files/` (31 paths), with exact before/after SHA-256 and byte counts relative to committed #143 `d61b2e7`. This unified snapshot includes the migration, exact record-bound, and CLI agents' files. Root separately adds `144-root-frozen-manifest.json` (the R05 clarification). `144-originals/` preserves all existing originals. No staging, commit, branch/worktree changes, dependency, model configuration, or owner pilot action was performed by this implementation owner.
+
+## Behavior and entry points
+
+- `internal/memory/candidate_batch.go`: exact edit, dependency, preview, decision, receipt, and enumerated-record types. `ReviewPreview.BatchID` binds each durable v5 member to the outer approval. `ReviewBatchGroupResult.PriorResolutions` contains distinct recorded winners for terminal selected members, in selected-member order; a failed group still has no current successful `Result`.
+- `internal/eviedb/candidate_review_edit.go`: same-candidate immutable before/after interpretation, parent revision and owner audit, CAS of review/interpretation revisions, original extraction retained independently. Changed locators can only select sufficient ranges from the original frozen authorized window. Edits invalidate old identity/temporal choices; any new choice is explicit. Reasons are UTF-8, secret-scanned and at most 4096 bytes.
+- `internal/eviedb/candidate_review_batch.go`: consistent preparation, one destination, complete canonical byte limit, durable outer/member previews, ordered explicit actions, whole-batch policy/vector/immutable-byte freshness, savepoints, safe per-group failure, outer persistence/cancellation rollback, immutable receipt/retry, terminal winner metadata, and cross-API delivery-key protection.
+- `internal/eviedb/candidate_review_compound.go`: v5 preparation/validation/application, explicit matching identity bindings, exact one-time generated shared IDs, closure/independence checks, semantic record enumeration, and only enumerated own prior-group revision advances. Structural checks precede indexed traversal of untrusted retained JSON. Native v1-v4 members preserve their original semantics and encodings.
+- `internal/eviedb/candidate_review_correction_schema.go`: narrow transactional migration from operation-only to `(operation_id, old_claim_id)` correction keys, preserving Stage3 cells/rowids, UNIQUE/FK/CHECK constraints, indexes/triggers and old canonical operation bytes. Shared schema and shadow rebuild integrate through `semantic.go`.
+- `candidate_review_{inspection,authority,sources,history,replay}.go`: terminal metadata before fresh source checks for edit/choice paths, per-candidate bounded source validation, original/edit disclosure and historical source validation, infrastructure error identity and v5 replay/inspection validation. `ErrReviewInvalidRequest` identifies only known pretransaction reason/delivery failures; unknown database/commit failures remain retryable.
+- `cmd/evie/candidate_batch.go`: strict JSON/command-specific flag parsing for `memory-review edit`, `edit-revision`, `batch-prepare`, `batch-inspect`, and `batch-resolve`. No orchestration or semantic effects live in the adapter.
+
+The dependency declaration names a consuming candidate/field and a preceding provider candidate/field. Only exact matching proposed Entity or Predicate definitions can share their generated identity. Missing, unknown, forward, cyclic or cross-group dependencies fail. Group order is explicit; cross-group conflicts, shared writes, or proposed identity reuse are rejected. The code does not infer identity equality from names.
+
+## Deterministic evidence
+
+The complete real SQLite suite covers immutable extraction/edit lineage, old-preview staleness, changed interpretation and old choices, competing stores in both edit/accept winning orders, exact before/after source authority, reasons at 4096/4097 and invalid UTF-8/secrets, redacted terminal edits/choices and safe redacted rejection.
+
+Batch checks cover real shared Entity/Predicate plus two Claims, two corrections in one operation and replay after reopen, same-vector successful groups, dependent group source-validation and late semantic-write failures with independent success, per-group rollback of all definitions/Claims/sources/resolutions, immutable partial retry, fresh failed-group approval, candidate/audit/delivery failures, commit/cancellation/lost-response recovery, later-group SQLite read faults, whole-preview drift, and terminal multi-member winners with an unresolved remainder and independent G2.
+
+Every numeric ceiling is inclusive. Real SQLite fixtures prove 20/21 groups, 64/65 references, 256/257 semantic records, and exactly 262144/262145 complete canonical preview bytes. The byte fixture uses actual authorized sources and immutable edits, and verifies max+1 leaves no member previews. The static v5 golden freezes effect, member-preview, batch, and complete batch bytes/hashes; old v1-v4 goldens remain untouched. Corrupted stored member shapes/support/dependencies/versions fail closed; malformed canonical accepted operations quarantine replay rather than panic. Member previews cannot resolve through the single-review API.
+
+The actual CLI conformance test uses a closed source session and scripted extraction for edited identity/new Predicate, temporal correction, clock date projection, and rejection in one ordered batch. It checks exact preview/inspection bytes, original tool authority, unknown world bounds, commit vectors, original/edit inspection, malformed inputs, reopening and identical retries, and unchanged model/tool call counts during replay.
+
+## Verification ownership
+
+See `144-engineering-checkpoint.json` and the final logs for exact current results. The owner runs full normal tests for `internal/eviedb`, `cmd/evie`, and `internal/memory`, followed by focused race tests for all owner-review/version/schema boundaries. Root owns independent Standards/Spec review and `./scripts/verify-change.sh` on the exact isolated integrated tree, and the one ticket commit. Those root checks are deliberately not duplicated against the shared tree containing ongoing #146 and user-owned changes.
+
+An earlier broad review race passed the DB leg (191.288s) but caught #146 while its new web helper file was being created, causing a transient CLI compile failure. That diagnostic remains in `144-focused-race.log`. Subsequent stable CLI normal/race checks passed; final integrated checks are recorded separately. The CLI agent also retained an initial test-only source-order assertion failure, corrected to compare immutable Original with the stored extraction and Edit.Before with the canonical prior disclosure.
+
+Migration-specific focused normal/race checks and relational boundaries passed; details are in `144-migration-frozen-handoff.md`. The dedicated exact record-bound agent passed normal/race acceptance and replay. `144-cli-verification.json` records the CLI agent's focused normal/race and ten-run source-order regression. All contribution hashes are included in this snapshot.
+
+## Demonstration and limits
+
+Run `go test ./cmd/evie -run '^TestOwnerReviewBatchCLI' -count=1` for the deterministic public CLI demonstration. In a configured local environment, inspect a candidate with `memory-review inspect --scope <exact-scope> --id <candidate-id>`, submit its full typed edited proposal through `memory-review edit`, inspect the returned edit revision, and prepare explicit identity/temporal choices as required. Pass the complete ordered group/dependency JSON to `memory-review batch-prepare`; review the returned exact effects and failure behavior, inspect by the outer preview ID, then submit that outer ID/digest and every ordered group action through `memory-review batch-resolve`. Retain the delivery key for identical retry after uncertain transport.
+
+Validation establishes typed structure, authorization and evidence binding, not semantic entailment. Existing #142 rules remain: an unknown effective instant cannot execute a `changed` correction; it stays inspectable/unresolved pending a supported exact instant, or the owner explicitly chooses an ordinary assertion without supersession. Root's R05 clarification records this consistency fix. Pure source-session closure is allowed; current policy still governs disclosure, and historical replay retains original authority and time meanings without model/tool invocation or UTC invention.
+
+## Final exact-byte results
+
+- `go test -p 1 ./internal/eviedb ./cmd/evie ./internal/memory`: PASS; DB 37.183s, CLI 7.288s, memory cached. Log: `144-final-all-normal.log`.
+- `go test -race -p 1 ./internal/eviedb ./cmd/evie ./internal/memory -run 'OwnerReview|ReviewEncoding|ReviewCorrectionSchema' -count=1`: PASS; DB 188.145s, CLI 21.365s, memory 1.180s with no matching focused race tests (its full normal suite passed). Log: `144-final-all-race.log`.
+- New terminal/request/inspection/CLI boundary normal checks: PASS DB 0.612s, CLI 0.697s. Log: `144-final-boundary-normal.log`.
+- Exact owned-path whitespace check and `gofmt -l`: PASS/no output. All 31 final live/frozen/baseline hashes and byte counts verified.
+- Root's independent two-axis review, isolated `./scripts/verify-change.sh`, and one ticket commit remain with root; no owner check is failing or still running.

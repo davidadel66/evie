@@ -1,0 +1,33 @@
+{
+  "version": "memory-stage4-pilot-publication-audit-v1",
+  "recorded_at": "2026-09-05T15:00:48.195880+00:00",
+  "status": "passed",
+  "measured_tree": "4b29071dc69018a9fedb2464315453baab0c9025",
+  "unchanged_measured_files": 13,
+  "archive_checks": [
+    {
+      "path": "original-matrix-v1.tar.gz",
+      "files": 302,
+      "sha256": "46c1c7ef8e0e9eeda3d6dfcfa02ba2616feda4fdff2eef1ad0c7924d0131fd40"
+    },
+    {
+      "path": "corrected-matrix-v3.tar.gz",
+      "files": 301,
+      "sha256": "91642e94a35c8b5718490b1912619b9806592702e004fdee2a3282662476260c"
+    },
+    {
+      "path": "interrupted-matrix-v2.tar.gz",
+      "files": 64,
+      "sha256": "dddddaaef984180af98be2cb1f9456745db4cc1db4f465951b1743ecc8181aeb"
+    },
+    {
+      "path": "corrected-conformance-evidence.tar.gz",
+      "files": 41,
+      "sha256": "b7b360dc0ffe675ffb07152ff719fbde014373293f490b031f09352b352d8ac9"
+    }
+  ],
+  "corrected_raw_and_resource_hashes_verified": 198,
+  "readable_report_links": "passed",
+  "actual_model_and_human_gates": "pending",
+  "final_holdout": "uncreated_unexposed_unrun"
+}

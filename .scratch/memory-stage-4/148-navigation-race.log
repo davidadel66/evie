@@ -1,0 +1,5 @@
+ok  	github.com/davidadel66/evie/internal/eviedb	15.952s
+ok  	github.com/davidadel66/evie/internal/agent	1.290s
+ok  	github.com/davidadel66/evie/internal/localextractor	2.456s
+ok  	github.com/davidadel66/evie/cmd/evie	2.666s
+ok  	github.com/davidadel66/evie/internal/web	22.249s

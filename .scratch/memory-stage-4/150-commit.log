@@ -1,0 +1,21 @@
+Auto packing the repository in background for optimum performance.
+See "git help gc" for manual housekeeping.
+[codex/memory-stage-4 1e8153a] Fix reconciled memory gaps and measure the Stage 4 workload (#150)
+ 20 files changed, 3588 insertions(+), 7 deletions(-)
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-conformance-evidence.tar.gz
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/corrected-matrix-v3.tar.gz
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-audit.json
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-observations.json
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/infrastructure-results.md
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/interrupted-matrix-v2.tar.gz
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/original-matrix-v1.tar.gz
+ create mode 100644 cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json
+ create mode 100644 scripts/memory-stage4-pilot/README.md
+ create mode 100644 scripts/memory-stage4-pilot/fixture.go
+ create mode 100644 scripts/memory-stage4-pilot/main.go
+ create mode 100644 scripts/memory-stage4-pilot/main_test.go
+ create mode 100644 scripts/memory-stage4-pilot/measure.py
+ create mode 100644 scripts/memory-stage4-pilot/measure_test.py
+ create mode 100644 scripts/memory-stage4-pilot/review.go
+ create mode 100644 scripts/memory-stage4-pilot/run.go
+ create mode 100644 scripts/memory-stage4-pilot/selection_regression_test.go

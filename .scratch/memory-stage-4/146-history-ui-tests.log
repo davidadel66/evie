@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/davidboktor/code/evie/internal/web/ui
+
+
+ Test Files  27 passed (27)
+      Tests  155 passed (155)
+   Start at  07:43:18
+   Duration  781ms (transform 1.26s, setup 0ms, import 2.74s, tests 447ms, environment 2ms)
+

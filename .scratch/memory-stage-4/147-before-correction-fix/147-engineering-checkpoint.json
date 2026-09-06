@@ -1,0 +1,149 @@
+{
+  "ticket": 147,
+  "status": "engineering_ready_for_root_final_verification_and_reviews",
+  "branch": "codex/memory-stage-4",
+  "base_commit": "aab5b88357b025098c419dc9a93400ac398f20e3",
+  "base_tree": "1151a945eab80163516bdbeecb07c8d77f1a1236",
+  "files": [
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "before_sha256": "013118f2e27943750317ae6029ad92fd0e933c7119e54bf1db68b32b6386e4ea",
+      "after_sha256": "6ee8b7e5ac6d51fac3bdf4e1eafba278664213e02e5af3a38bd6d4a74cec7367",
+      "bytes": 25957
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "before_sha256": "4bf3d710f08298ddb531a3b5a94d11d0967cde3c9d81c318038e546bb8189588",
+      "after_sha256": "bcb13ab2ccdea0574ac849027e04eac34888f54361a9d72e4930826c89fb778c",
+      "bytes": 5741
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "before_sha256": "91d9bd8a06042424908bf4458a25b53742f606f0a3ed3e4d51f76ee08b649959",
+      "after_sha256": "1b6802f3da908add83f2db901e9f922a7cddca4855038623269e8402200f0f49",
+      "bytes": 7118
+    },
+    {
+      "path": "cmd/evie/candidate_review.go",
+      "before_sha256": "6667cda401df3745101677ac75123a9409694278958de0875101f698a7f39e45",
+      "after_sha256": "a2251a67cb89fe0e51ca07ccb4281a7715060542207121af409ed5836dc771b1",
+      "bytes": 9283
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_encoding.go",
+      "before_sha256": null,
+      "after_sha256": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d",
+      "bytes": 4276
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_public_test.go",
+      "before_sha256": null,
+      "after_sha256": "cceadd8ccd6d1a0200259f73a30e8d80b19fcdd510c5a4a5342141dc3d674835",
+      "bytes": 20667
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_storage_test.go",
+      "before_sha256": null,
+      "after_sha256": "2de644e79523241bd7b835c8861c1a3e86d806cae1dcf63b24d9e5e667b6e176",
+      "bytes": 6737
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_schema.go",
+      "before_sha256": null,
+      "after_sha256": "13f987b9f1cf75e6aefb6e40200bc7e3c22ed06dfa3c08a2b0b4832098b68e03",
+      "bytes": 4661
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence.go",
+      "before_sha256": null,
+      "after_sha256": "4fa729b8b26a73462aeab42d15a2c5cf79538c3ee015ba6db8aa11cc902d239a",
+      "bytes": 9189
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_budget_test.go",
+      "before_sha256": null,
+      "after_sha256": "533120f0b6abd3b911034272b20910db7ea0ada8833fa00f3699b178304cd02d",
+      "bytes": 3864
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_inspection.go",
+      "before_sha256": null,
+      "after_sha256": "3922ab29b23d5cd88cea376b7716056e70726be5574c303fa0f141bc9ca8c351",
+      "bytes": 3530
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_encoding_test.go",
+      "before_sha256": null,
+      "after_sha256": "6715cf9b42102fd9f316956e66dda253e159be8c3987cec7cd7dcea8a1d83c50",
+      "bytes": 8910
+    },
+    {
+      "path": "internal/memory/compiler_recurrence.go",
+      "before_sha256": null,
+      "after_sha256": "7c99d842e66481347dbe425d6069aca8f140782951b4240da406f64fa228d453",
+      "bytes": 1285
+    },
+    {
+      "path": "internal/eviedb/testdata/compiler-recurrence-v2.json",
+      "before_sha256": null,
+      "after_sha256": "9db554d25c704b2914a41bd26e3557da6a3a8476b87f1c7a56d2a7394fd5bc04",
+      "bytes": 1728
+    },
+    {
+      "path": "cmd/evie/candidate_recurrence_test.go",
+      "before_sha256": null,
+      "after_sha256": "f66dc451676c7dfab8e4ac51d42be770c8b1b21c2c99f77c4f91ac281cfa672b",
+      "bytes": 5248
+    },
+    {
+      "path": "cmd/evie/docs/research/memory-stage-4-generation-lineage.md",
+      "before_sha256": null,
+      "after_sha256": "f138c63ab5b7a92d70b73993363b725452b8908ce5f7d64b1f18b2ee2a3e49c0",
+      "bytes": 6360
+    }
+  ],
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-focused-1kqt02vl",
+  "checks": [
+    {
+      "command": "go test ./internal/eviedb ./internal/memory ./cmd/evie",
+      "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-focused-1kqt02vl",
+      "result": "PASS before final related-key cross-session refinement; eviedb40.233s memory0.159s cmd/evie7.827s",
+      "log": ".scratch/memory-stage-4/147-final-isolated-normal.log"
+    },
+    {
+      "command": "go test -race ./internal/eviedb ./cmd/evie -run 'TestCompilerRecurrence|TestOwnerReviewCLIGeneration' -count=1",
+      "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-focused-1kqt02vl",
+      "result": "PASS before final related-key cross-session refinement; eviedb34.898s cmd/evie3.694s",
+      "log": ".scratch/memory-stage-4/147-final-isolated-race.log"
+    },
+    {
+      "command": "go test ./internal/eviedb -run TestCompilerRecurrenceNewSessionSupportShowsPriorDecision -count=1",
+      "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-focused-1kqt02vl",
+      "result": "PASS final refinement, eviedb0.328s"
+    },
+    {
+      "command": "git diff --no-index --check BEFORE FROZEN_FILE for each owned path; /dev/null for new files",
+      "result": "PASS: all16 comparisons emitted no whitespace diagnostics. Exit1 is expected for changed contents with --no-index.",
+      "log": ".scratch/memory-stage-4/147-owned-whitespace.json"
+    },
+    {
+      "command": "go test -race ./internal/eviedb ./cmd/evie -run 'TestCompilerRecurrence|TestOwnerReviewCLIGeneration' -count=1",
+      "cwd": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-147-focused-1kqt02vl",
+      "result": "PASS final frozen implementation; eviedb37.808s cmd/evie3.699s",
+      "log": ".scratch/memory-stage-4/147-final-cross-session-race.log"
+    }
+  ],
+  "required_full_verification": "Root runs ./scripts/verify-change.sh on exact composed tree before commit",
+  "independent_reviews": "Root coordinates separate Standards and Spec axes",
+  "known_gates": "No model configuration installed or quality/human pilot/holdout gate claimed. Engineering only.",
+  "development_retries": [
+    "Initial compile typos in new tests corrected before passing checks.",
+    "Golden fixture was intentionally captured from the first failing canonical-output check; final golden passes.",
+    "History resume fixture needed reconciliation before dispatch; corrected fixture passes.",
+    "Two shared-workspace test starts could not compile while148 diagnostics files were incomplete; moved to isolated144+147 archive without modifying148 work.",
+    "First isolated CLI compile used a dist symlink, which Go embedding rejects; replaced it with copied generated UI artifacts and CLI passes."
+  ],
+  "full_check_owner": "root",
+  "race_final_pending": false,
+  "final_hash_audit": ".scratch/memory-stage-4/147-final-hash-audit.json"
+}

@@ -1,0 +1,19 @@
+--- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput (0.00s)
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/successful_output (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751401 TerminalCommittedAtUnixMS:0x27fee1036aa0 TerminalCommitNanos:0x27fee1036aa8 ResponseFinalizedAtUnixMS:0x27fee1036af0 ResponseFinalizationNanos:0x27fee1036af8 Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_write_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751401 TerminalCommittedAtUnixMS:0x27fee1036bc0 TerminalCommitNanos:0x27fee1036bc8 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_write_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751401 TerminalCommittedAtUnixMS:0x27fee1036c80 TerminalCommitNanos:0x27fee1036c88 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/short_write (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751402 TerminalCommittedAtUnixMS:0x27fee1036d50 TerminalCommitNanos:0x27fee1036d58 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/early_flush_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751402 TerminalCommittedAtUnixMS:0x27fee12a60c0 TerminalCommitNanos:0x27fee12a60c8 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/final_flush_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751403 TerminalCommittedAtUnixMS:0x27fee12a6180 TerminalCommitNanos:0x27fee12a6188 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:success}, events=3
+    --- FAIL: TestForegroundHTTPMeasurementRequiresSuccessfulOutput/provider_failure_output_fails (0.00s)
+        foreground_measurement_test.go:79: output failure changed committed turn: {RootID:event-1 StartedAtUnixMS:1788611751403 TerminalCommittedAtUnixMS:0x27fee12a6320 TerminalCommitNanos:0x27fee12a6328 ResponseFinalizedAtUnixMS:<nil> ResponseFinalizationNanos:<nil> Outcome:failed}, events=3
+FAIL
+FAIL	github.com/davidadel66/evie/internal/web	0.299s
+ok  	github.com/davidadel66/evie/cmd/evie	0.656s
+FAIL

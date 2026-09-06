@@ -1,0 +1,2433 @@
+diff --git a/cmd/evie/candidate_review.go b/cmd/evie/candidate_review.go
+index f5b0764..e02f11d 100644
+--- a/cmd/evie/candidate_review.go
++++ b/cmd/evie/candidate_review.go
+@@ -26,6 +26,12 @@ type ownerIdentityReviewKernel interface {
+ 	ChooseOwnerCandidateIdentity(context.Context, eviedb.OwnerReviewContext, memory.ReviewIdentityDecision) (memory.OwnerCandidate, error)
+ }
+ 
++type ownerTemporalReviewKernel interface {
++	OwnerCandidateTemporalOptions(context.Context, eviedb.OwnerReviewContext, memory.CandidateRef) (memory.ReviewTemporalOptions, error)
++	ChooseOwnerCandidateTemporal(context.Context, eviedb.OwnerReviewContext, memory.ReviewTemporalDecision) (memory.OwnerCandidate, error)
++	InspectOwnerCandidateTemporalRevision(context.Context, eviedb.OwnerReviewContext, string, int64) (memory.ReviewTemporalRevision, error)
++}
++
+ // Every invocation is a trusted local owner command selecting one exact scope.
+ // A resolve accepts only immutable preview identity, never replacement effects.
+ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer, kernel ownerReviewKernel) (bool, error) {
+@@ -33,7 +39,7 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
+ 		return false, nil
+ 	}
+ 	if len(args) < 2 {
+-		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|prepare|resolve|operation --scope SCOPE")
++		return true, errors.New("usage: memory-review inbox|inspect|alternatives|choose|identity-revision|temporal-options|temporal-choose|temporal-revision|prepare|resolve|operation --scope SCOPE")
+ 	}
+ 	command := args[1]
+ 	flags := flag.NewFlagSet("memory-review "+command, flag.ContinueOnError)
+@@ -58,6 +64,9 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
+ 		return true, errors.New("review requires explicit --scope and no positional arguments")
+ 	}
+ 	allowed := map[string]map[string]bool{
++		"temporal-options":  {"scope": true, "id": true, "revision": true, "interpretation": true},
++		"temporal-choose":   {"scope": true, "id": true, "revision": true, "interpretation": true, "options": true, "choices": true},
++		"temporal-revision": {"scope": true, "id": true, "interpretation": true},
+ 		"inbox":             {"scope": true, "limit": true, "cursor": true},
+ 		"inspect":           {"scope": true, "id": true},
+ 		"operation":         {"scope": true, "id": true},
+@@ -92,6 +101,29 @@ func runOwnerReviewManagement(ctx context.Context, args []string, out io.Writer,
+ 	}
+ 	var result any
+ 	switch command {
++	case "temporal-options", "temporal-choose", "temporal-revision":
++		temporalKernel, ok := kernel.(ownerTemporalReviewKernel)
++		if !ok {
++			return true, errors.New("temporal review unavailable")
++		}
++		if *id == "" {
++			return true, errors.New("temporal review requires exact --id")
++		}
++		ref := memory.CandidateRef{ID: *id, ReviewRevision: *revision, InterpretationRevision: *interpretation}
++		if command == "temporal-options" {
++			result, err = temporalKernel.OwnerCandidateTemporalOptions(ctx, authority, ref)
++		} else if command == "temporal-revision" {
++			result, err = temporalKernel.InspectOwnerCandidateTemporalRevision(ctx, authority, *id, *interpretation)
++		} else {
++			var choice memory.ReviewTemporalChoice
++			if *options == "" {
++				return true, errors.New("temporal-choose requires reviewed --options digest")
++			}
++			if err := memory.DecodeCompilerJSON([]byte(*choices), &choice); err != nil {
++				return true, err
++			}
++			result, err = temporalKernel.ChooseOwnerCandidateTemporal(ctx, authority, memory.ReviewTemporalDecision{Candidate: ref, OptionsSHA256: *options, Choice: choice})
++		}
+ 	case "alternatives", "choose", "identity-revision":
+ 		identityKernel, ok := kernel.(ownerIdentityReviewKernel)
+ 		if !ok {
+diff --git a/cmd/evie/candidate_temporal_test.go b/cmd/evie/candidate_temporal_test.go
+new file mode 100644
+index 0000000..1f7e9ef
+--- /dev/null
++++ b/cmd/evie/candidate_temporal_test.go
+@@ -0,0 +1,181 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"fmt"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type temporalCLIExtractor struct {
++	reviewCLIExtractor
++	adapt func(*memory.ExtractorCandidate)
++}
++
++func (e temporalCLIExtractor) Extract(ctx context.Context, g memory.CompilerGeneration, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++	extraction, err := e.reviewCLIExtractor.Extract(ctx, g, r)
++	if err != nil {
++		return extraction, err
++	}
++	var response memory.CompilerResponse
++	if err = json.Unmarshal(extraction.Raw, &response); err != nil {
++		return extraction, err
++	}
++	response.Candidates[0].Temporal = &memory.CandidateTemporalProposal{Meaning: "assertion"}
++	e.adapt(&response.Candidates[0])
++	extraction.Raw, err = json.Marshal(response)
++	return extraction, err
++}
++
++func TestOwnerReviewTemporalCLIClosedSession(t *testing.T) {
++	for _, scenario := range []string{"error", "changed", "negation", "unknown", "plan", "possibility", "additional-support"} {
++		t.Run(scenario, func(t *testing.T) {
++			ctx := context.Background()
++			db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer db.Close()
++			store := eviedb.NewStore(db)
++			session, err := store.CreateGlobalSession(ctx)
++			if err != nil {
++				t.Fatal(err)
++			}
++			lease, err := store.AcquireTurnLease(ctx, session.ID, "temporal-cli", time.Minute)
++			if err != nil {
++				t.Fatal(err)
++			}
++			appendEvent := func(input memory.EventInput) memory.Event {
++				t.Helper()
++				e, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, input)
++				if err != nil {
++					t.Fatal(err)
++				}
++				return e
++			}
++			seed := appendEvent(memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I drink tea."})
++			explicit, err := store.PrepareRememberLiteral(ctx, session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: "idem:v1:91000000-0000-4000-8000-000000000342", SourceEventID: seed.ID, Predicate: "drink", PredicateLabel: "drink", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "tea"}})
++			if err != nil {
++				t.Fatal(err)
++			}
++			if _, err = store.ApplyRememberLiteral(ctx, lease, explicit); err != nil {
++				t.Fatal(err)
++			}
++			content := map[string]string{"error": "I was mistaken about tea. I drink coffee.", "changed": "Since May 1 2025 I changed from tea to coffee.", "negation": "I do not drink tea.", "unknown": "I drink coffee now but do not know when I started.", "plan": "I intend to move to Paris next year.", "possibility": "I am considering moving to Paris next year.", "additional-support": "I still drink tea."}[scenario]
++			root := appendEvent(memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: content})
++			last := appendEvent(memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++			g := reviewCLIGeneration()
++			g.EntityPolicy = memory.CompilerTemporalPolicyV3
++			g.PredicatePolicy = g.EntityPolicy
++			g.ValidationPolicy = g.EntityPolicy
++			g.EquivalencePolicy = g.EntityPolicy
++			g.EffectPolicy = g.EntityPolicy
++			effective := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
++			extractor := temporalCLIExtractor{reviewCLIExtractor: reviewCLIExtractor{explicit.Subject.ID, explicit.Predicate.ID}, adapt: func(c *memory.ExtractorCandidate) {
++				switch scenario {
++				case "error", "changed":
++					c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionMode(scenario)}}
++					if scenario == "changed" {
++						c.Temporal.Correction.EffectiveTime = &effective
++						c.ValidTime.From = &effective
++					}
++				case "negation":
++					c.Proposition.Object.Literal.Value = "tea"
++					c.Proposition.Polarity = memory.PolarityDenied
++				case "additional-support":
++					c.Proposition.Object.Literal.Value = "tea"
++				case "plan", "possibility":
++					token, label := memory.PlanPredicateToken, memory.PlanPredicateLabel
++					if scenario == "possibility" {
++						token, label = memory.PossibilityPredicateToken, memory.PossibilityPredicateLabel
++					}
++					c.Temporal.Meaning = scenario
++					c.Proposition.PredicateID = ""
++					c.Proposition.Object.Literal.Value = "move to Paris next year"
++					c.Identity = &memory.CandidateIdentityProposal{Predicate: &memory.PredicateDefinition{Token: token, Label: label, ObjectConstraint: "text", Cardinality: memory.CardinalityMany}}
++				}
++			}}
++			compiled, err := store.CompileCandidateUnit(ctx, session.ScopeContext(), memory.CompilationSelection{SessionID: session.ID, RootID: root.ID, Cutoff: last.Sequence, Destination: "global"}, g, extractor)
++			if err != nil || compiled.State != "completed_candidates" {
++				t.Fatalf("compile %s: %v", compiled.State, err)
++			}
++			if err = store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
++				t.Fatal(err)
++			}
++			if _, err = db.Exec(`UPDATE sessions SET status='closed' WHERE id=?`, session.ID); err != nil {
++				t.Fatal(err)
++			}
++			run := func(target any, args ...string) {
++				t.Helper()
++				var out bytes.Buffer
++				handled, err := runOwnerReviewManagement(ctx, append([]string{"memory-review"}, args...), &out, store)
++				if !handled || err != nil {
++					t.Fatalf("CLI %v: %v", args, err)
++				}
++				if err = json.Unmarshal(out.Bytes(), target); err != nil {
++					t.Fatal(err)
++				}
++			}
++			var page memory.OwnerCandidatePage
++			run(&page, "inbox", "--scope", "global")
++			if len(page.Candidates) != 1 {
++				t.Fatal("missing candidate")
++			}
++			item := page.Candidates[0]
++			if scenario == "error" || scenario == "changed" {
++				var options memory.ReviewTemporalOptions
++				run(&options, "temporal-options", "--scope", "global", "--id", item.Ref.ID)
++				choice, _ := json.Marshal(memory.ReviewTemporalChoice{OldClaimID: explicit.ClaimID, Mode: memory.CorrectionMode(scenario)})
++				run(&item, "temporal-choose", "--scope", "global", "--id", item.Ref.ID, "--options", options.SHA256, "--choices", string(choice))
++				var historical memory.ReviewTemporalRevision
++				run(&historical, "temporal-revision", "--scope", "global", "--id", item.Ref.ID, "--interpretation", "1")
++				if historical.Choice.Mode != memory.CorrectionMode(scenario) {
++					t.Fatal("choice history lost")
++				}
++			}
++			if scenario == "plan" || scenario == "possibility" {
++				var options memory.ReviewIdentityOptions
++				run(&options, "alternatives", "--scope", "global", "--id", item.Ref.ID)
++				choice, _ := json.Marshal(memory.ReviewIdentityChoices{Predicate: &memory.ReviewPredicateChoice{Create: true}})
++				run(&item, "choose", "--scope", "global", "--id", item.Ref.ID, "--options", options.SHA256, "--choices", string(choice))
++			}
++			var preview memory.ReviewPreview
++			run(&preview, "prepare", "--scope", "global", "--id", item.Ref.ID, "--revision", fmt.Sprint(item.Ref.ReviewRevision), "--interpretation", fmt.Sprint(item.Ref.InterpretationRevision), "--action", "accept")
++			if scenario == "additional-support" && preview.Effect.Claims[0].Create {
++				t.Fatal("additional source creates duplicate Claim")
++			}
++			var result memory.ReviewResult
++			run(&result, "resolve", "--scope", "global", "--preview", preview.ID, "--digest", preview.SHA256, "--delivery", "idem:v1:91000000-0000-4000-8000-000000000343", "--action", "accept")
++			var operation memory.OwnerReviewOperation
++			run(&operation, "operation", "--scope", "global", "--id", string(result.Operation.OperationID))
++			if operation.Preview.Effect.Claims[0].Sources[0].Evidence != content {
++				t.Fatal("original evidence lost")
++			}
++			inspecting, err := store.CreateGlobalSession(ctx)
++			if err != nil {
++				t.Fatal(err)
++			}
++			claim, err := store.InspectSemanticObject(ctx, inspecting.ScopeContext(), memory.SemanticObjectClaim, result.Operation.ClaimIDs[0])
++			if err != nil {
++				t.Fatal(err)
++			}
++			if claim.Claim.Predicate != preview.Effect.Claims[0].Predicate { // Created flag belongs only to the effect.
++				expected := preview.Effect.Claims[0].Predicate
++				expected.Create = false
++				if claim.Claim.Predicate != expected {
++					t.Fatal("accepted Predicate meaning changed")
++				}
++			}
++			replay, err := store.VerifySemanticProjection(ctx)
++			if err != nil || !replay.Valid {
++				t.Fatalf("CLI replay %v %+v", err, replay)
++			}
++		})
++	}
++}
+diff --git a/cmd/evie/docs/research/memory-stage-4-temporal-review.md b/cmd/evie/docs/research/memory-stage-4-temporal-review.md
+new file mode 100644
+index 0000000..6d0874a
+--- /dev/null
++++ b/cmd/evie/docs/research/memory-stage-4-temporal-review.md
+@@ -0,0 +1,76 @@
++# Memory Stage 4: temporal review and additional support (#142)
++
++This implements the approved temporal/review contract for existing unambiguous
++Entities. `temporal-review-v3` is an explicit Compiler Generation interpretation
++policy; all five interpretation-policy fields must agree. Evidence eligibility
++remains the existing owner-assertion policy. No production generation is selected
++or activated by this change.
++
++The v3 proposal requires `temporal.meaning`: `assertion`, `plan`, or `possibility`.
++An assertion retains canonical Typed Literal kind/value, polarity, Predicate
++identity/definition and unknown Valid Time bounds. A v3 free-text temporal note
++cannot qualify an otherwise unqualified fact. Earlier pinned v1/v2 proposal and
++operation encodings remain unchanged.
++
++Plans and possibilities use ordinary Claims with explicit Predicate meaning:
++
++| Meaning | Token | Exact label | Object | Cardinality |
++| --- | --- | --- | --- | --- |
++| plan | `intends` | `Intends (uncompleted plan)` | text | many |
++| possibility | `considers` | `Considers (unrealized possibility)` | text | many |
++
++The literal describes the intended/considered action, including any target date
++or uncertainty. The Claim asserts the intention/consideration; it does not assert
++that the action happened. If the Predicate does not exist, the extractor proposes
++its exact definition and the owner uses the #141 alternatives/choose path to
++create it as an explicit dependent effect. A pre-existing token with a different
++definition cannot be redefined. Existing definitions and Claims are never
++silently migrated. Plan/possibility Claims cannot supersede an actual circumstance.
++A future Valid Time start or effective change instant in an actual assertion is
++rejected relative to its latest supporting Observed Time, rather than the review
++clock. An adopted future decision therefore keeps its modal meaning.
++
++A correction proposal enumerates `error`, `changed`, or the canonical ordered
++pair `error,changed`, plus an optional supported effective instant. Preparation
++returns `needs_choice` until the owner selects one exact active Claim and mode
++through `memory-review temporal-options` and `temporal-choose`. Alternatives are
++bounded to 32 Claims in the same destination, subject and Predicate; confidence
++never chooses a winner. Each choice creates an immutable revision with parent,
++owner authorization, audited choice, original alternatives and exact semantic
++revision vector. `temporal-revision` inspects that retained choice. Choices do
++not change accepted memory or overwrite original extraction bytes.
++
++The exact preview includes the previous Claim and active lifecycle state, mode,
++prior/next intervals, replacement Claim create/reuse, exact new support/context,
++conflicts, and the one old-Claim supersession. It uses the Stage 3 interval rules:
++error corrections retain the old historical interval; changed corrections close
++it at an explicit effective instant and begin the replacement there. Unknown
++effective time cannot produce a changed correction. Such a candidate remains
++unresolved, or a separately compiled supported assertion can retain unknown
++bounds and visible conflicting evidence without superseding history. General
++editing and dependent batches remain #144 work.
++
++Acceptance rechecks source eligibility, current exact scope/candidate revisions,
++identities, previous Claim/lifecycle and conflict disclosure in the same SQLite
++transaction that writes the operation, review outcome, Claims, Source Links and
++correction history. The source conversation may be closed. Observed Time stays
++with each original event; Transaction Time is the accepted commit time; Valid
++Time is the proposed world interval. No event time is invented from acceptance.
++An equal active Claim is reused. An exact existing Source Link is reused; a
++new supporting projection adds only its Source Link. Retracted support is never
++restored implicitly. Even a fully reused group retains its own exact reviewed
++operation under the existing idempotence/revision contract.
++
++Canonical review preview/effect domain v3 freezes the typed interpretation and
++all correction effects in schema-v6 accepted operations. Replay uses that
++recorded payload and Stage 3 correction projections without model calls or
++current owner-session leases. Old v1/v2 golden bytes are unchanged; the v3 golden
++fixture is `internal/eviedb/testdata/candidate_review_encoding_v3.json`.
++
++Verification uses real SQLite compilation-to-CLI-to-accepted-inspection fixtures,
++including changed/error historical queries, plans, possibilities, negation,
++unknown dates, duplicates, additional support, stale choices, source/policy
++changes, rollback, rejection and a two-Store choice race. Structural checks do
++not prove textual entailment: an extractor can still select a wrong supported
++interpretation, and the exact evidence plus owner review and later quality panels
++remain necessary.
+diff --git a/internal/eviedb/candidate_review_apply.go b/internal/eviedb/candidate_review_apply.go
+index 0a9563b..60aa570 100644
+--- a/internal/eviedb/candidate_review_apply.go
++++ b/internal/eviedb/candidate_review_apply.go
+@@ -198,6 +198,9 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
+ 			return result, err
+ 		}
+ 	}
++	if err = validateReviewCorrectionCurrent(ctx, conn, effect); err != nil {
++		return result, err
++	}
+ 	now, err := nextSemanticTransactionTime(ctx, writer, clock)
+ 	if err != nil {
+ 		return result, err
+@@ -252,6 +255,9 @@ func (s *Store) applyOwnerReviewOperation(ctx context.Context, conn *sql.Conn, o
+ 			}
+ 		}
+ 	}
++	if err = applyReviewCorrectionEffect(ctx, conn, effect, now); err != nil {
++		return result, err
++	}
+ 	for _, scope := range effect.Scopes {
+ 		if scope.Key != effect.Scope.Key && !(scope.Key == "global" && reviewWritesGlobal(effect)) {
+ 			continue
+@@ -326,6 +332,13 @@ func validateReviewClaimEffects(ctx context.Context, q reviewQuery, effect *memo
+ 			}
+ 			current.Create = false
+ 			source.Create = false
++			if effect.Version == "owner-review-effect-v3" {
++				observed, parseErr := time.Parse(time.RFC3339Nano, current.ObservedAt)
++				if parseErr != nil {
++					return parseErr
++				}
++				current.ObservedAt = formatSemanticTime(observed)
++			}
+ 			if string(compilerJSON(current)) != string(compilerJSON(source)) {
+ 				return ErrReviewStale
+ 			}
+@@ -423,7 +436,7 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
+ 	}
+ 	for i, item := range effect.Claims {
+ 		original := p.Candidates[i]
+-		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
++		if !hashID(original.Ref.ID) || original.Ref.InterpretationRevision < 0 || original.Identity == nil && original.Temporal == nil && original.Ref.InterpretationRevision != 0 || original.Ref.ReviewRevision < 0 || original.JobID != p.JobID || original.GenerationID != p.GenerationID || original.Destination != p.ScopeKey || original.Redacted || original.Candidate.ID != original.Ref.ID || original.Candidate.ReviewRevision != original.Ref.ReviewRevision || original.Candidate.ReviewState != "unresolved" || original.Candidate.EquivalentTo != "" {
+ 			return errors.New("invalid recorded candidate identity")
+ 		}
+ 		proposal := original.Candidate.Proposal
+@@ -447,7 +460,7 @@ func validateReviewTypedEnvelope(op memory.OwnerReviewOperation) error {
+ 			if validateSemanticUUID(string(source.ID)) != nil || validateSemanticUUID(string(source.OperationID)) != nil || validateSemanticUUID(string(source.EventID)) != nil || validateSemanticUUID(string(source.SessionID)) != nil {
+ 				return errors.New("invalid recorded source identity")
+ 			}
+-			if source.EventID != originalSource.Locator.EventID || source.SessionID != originalSource.SessionID || source.ScopeKey != originalSource.ScopeKey || source.EventPart != originalSource.Locator.EventPart || source.LocatorKind != originalSource.Locator.LocatorKind || source.LocatorValue != originalSource.Locator.LocatorValue || source.EvidenceSHA256 != "sha256:"+originalSource.Locator.EvidenceSHA256 || source.Evidence != originalSource.Evidence || source.ObservedAt != originalSource.ObservedAt || source.Actor != originalSource.Actor || source.Authority != originalSource.Authority || source.SourceType != originalSource.SourceType {
++			if source.EventID != originalSource.Locator.EventID || source.SessionID != originalSource.SessionID || source.ScopeKey != originalSource.ScopeKey || source.EventPart != originalSource.Locator.EventPart || source.LocatorKind != originalSource.Locator.LocatorKind || source.LocatorValue != originalSource.Locator.LocatorValue || source.EvidenceSHA256 != "sha256:"+originalSource.Locator.EvidenceSHA256 || source.Evidence != originalSource.Evidence || !reviewObservedTimeMatches(p.Version, source.ObservedAt, originalSource.ObservedAt) || source.Actor != originalSource.Actor || source.Authority != originalSource.Authority || source.SourceType != originalSource.SourceType {
+ 				return errors.New("review source differs from original authority")
+ 			}
+ 		}
+diff --git a/internal/eviedb/candidate_review_encoding.go b/internal/eviedb/candidate_review_encoding.go
+index a58034c..e533742 100644
+--- a/internal/eviedb/candidate_review_encoding.go
++++ b/internal/eviedb/candidate_review_encoding.go
+@@ -28,7 +28,7 @@ func canonicalOwnerReviewOperation(op memory.OwnerReviewOperation) any {
+ 	}{reviewIdentityEncodingDomain(op.Preview, "operation"), op}
+ }
+ func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
+-	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
++	if (p.Version != "owner-review-preview-v1" && p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3") || p.Action != "accept" && p.Action != "reject" || len(p.Candidates) != 1 {
+ 		return errors.New("invalid review preview")
+ 	}
+ 	if p.Action == "accept" && (p.Effect == nil || p.Effect.Version != "owner-review-effect-"+p.Version[len("owner-review-preview-"):] || len(p.Effect.Claims) != len(p.Candidates)) {
+@@ -40,6 +40,9 @@ func validateOwnerReviewEncoding(p memory.ReviewPreview) error {
+ 	if err := validateReviewIdentityEffect(p); err != nil {
+ 		return err
+ 	}
++	if err := validateReviewTemporalEncoding(p); err != nil {
++		return err
++	}
+ 	hash, _, err := ownerReviewEffectHash(p.Effect)
+ 	if err != nil {
+ 		return err
+@@ -69,6 +72,9 @@ func canonicalOwnerReviewEffect(effect *memory.ReviewEffect) any {
+ 	if effect != nil && effect.Version == "owner-review-effect-v2" {
+ 		domain = "evie-owner-review-effect-v2"
+ 	}
++	if effect != nil && effect.Version == "owner-review-effect-v3" {
++		domain = "evie-owner-review-effect-v3"
++	}
+ 	return struct {
+ 		Domain string               `json:"domain"`
+ 		Effect *memory.ReviewEffect `json:"effect"`
+diff --git a/internal/eviedb/candidate_review_identity_effect.go b/internal/eviedb/candidate_review_identity_effect.go
+index 344a0cd..8a6976c 100644
+--- a/internal/eviedb/candidate_review_identity_effect.go
++++ b/internal/eviedb/candidate_review_identity_effect.go
+@@ -112,11 +112,14 @@ func validateReviewIdentityEffect(p memory.ReviewPreview) error {
+ 		}
+ 		return nil
+ 	}
+-	if p.Version != "owner-review-preview-v2" {
++	if p.Version != "owner-review-preview-v2" && p.Version != "owner-review-preview-v3" {
+ 		return errors.New("unsupported identity preview")
+ 	}
+ 	candidate := p.Candidates[0]
+ 	if candidate.Candidate.Proposal.Identity == nil {
++		if p.Version == "owner-review-preview-v3" && candidate.Identity == nil && (effect == nil || effect.Identity == nil) {
++			return nil
++		}
+ 		return errors.New("v2 preview requires identity proposal")
+ 	}
+ 	if p.Action == "reject" {
+@@ -282,6 +285,9 @@ func reviewIdentityEncodingDomain(p memory.ReviewPreview, kind string) string {
+ 	if p.Version == "owner-review-preview-v2" {
+ 		version = "v2"
+ 	}
++	if p.Version == "owner-review-preview-v3" {
++		version = "v3"
++	}
+ 	return "evie-owner-review-" + kind + "-" + version
+ }
+ 
+diff --git a/internal/eviedb/candidate_review_inspection.go b/internal/eviedb/candidate_review_inspection.go
+index a23cc34..98444f2 100644
+--- a/internal/eviedb/candidate_review_inspection.go
++++ b/internal/eviedb/candidate_review_inspection.go
+@@ -70,6 +70,9 @@ func loadReviewCandidate(ctx context.Context, q reviewQuery, a OwnerReviewContex
+ 	if err := loadReviewIdentityRevision(ctx, q, &out); err != nil {
+ 		return out, err
+ 	}
++	if err := loadReviewTemporalRevision(ctx, q, &out); err != nil {
++		return out, err
++	}
+ 	canonicalizeReviewCandidate(&out)
+ 	return out, nil
+ }
+diff --git a/internal/eviedb/candidate_review_prepare.go b/internal/eviedb/candidate_review_prepare.go
+index 1b81f0b..e9ae3fe 100644
+--- a/internal/eviedb/candidate_review_prepare.go
++++ b/internal/eviedb/candidate_review_prepare.go
+@@ -6,6 +6,7 @@ import (
+ 	"errors"
+ 	"sort"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/davidadel66/evie/internal/memory"
+ )
+@@ -41,6 +42,9 @@ func (s *Store) PrepareOwnerCandidateReview(ctx context.Context, a OwnerReviewCo
+ 		if candidate.Candidate.Proposal.Identity != nil {
+ 			p.Version = "owner-review-preview-v2"
+ 		}
++		if candidate.Candidate.Proposal.Temporal != nil {
++			p.Version = "owner-review-preview-v3"
++		}
+ 		if err = conn.QueryRowContext(ctx, `SELECT source_policy FROM memory_review_authorization WHERE singleton=1`).Scan(&p.SourcePolicy); err != nil {
+ 			return err
+ 		}
+@@ -97,11 +101,11 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 		if len(c.Support) == 0 {
+ 			return nil, ErrReviewInvalidSource
+ 		}
+-		time, err := normalizeValidTime(c.Proposal.ValidTime)
++		validTime, err := normalizeValidTime(c.Proposal.ValidTime)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+-		if !validTimesEqual(time, c.Proposal.ValidTime) {
++		if !validTimesEqual(validTime, c.Proposal.ValidTime) {
+ 			return nil, errors.New("noncanonical candidate time")
+ 		}
+ 		prop := c.Proposal.Proposition
+@@ -141,7 +145,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 		} else if string(item.Predicate.ObjectConstraint) != string(prop.Object.Literal.Kind) {
+ 			return nil, errors.New("Predicate object constraint changed")
+ 		}
+-		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: time, CreatedOperationID: id}
++		item.Claim = memory.SemanticClaim{ScopeKey: a.scope, SubjectEntityID: prop.SubjectEntityID, Predicate: item.Predicate, Object: prop.Object, Polarity: prop.Polarity, ValidTime: validTime, CreatedOperationID: id}
+ 		objectKind, objectEntity, literalKind, literalValue := "literal", any(nil), any(nil), any(nil)
+ 		if prop.Object.EntityID != "" {
+ 			objectKind = "entity"
+@@ -151,7 +155,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 			literalValue = prop.Object.Literal.Value
+ 		}
+ 		var claimID memory.SemanticID
+-		err = q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND object_kind=? AND object_entity_id IS ? AND literal_kind IS ? AND literal_value IS ? AND polarity=? AND valid_from IS ? AND valid_to IS ?`, effect.Scope.ID, prop.SubjectEntityID, prop.PredicateID, objectKind, objectEntity, literalKind, literalValue, prop.Polarity, semanticTimeArgument(time.From), semanticTimeArgument(time.To)).Scan(&claimID)
++		err = q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_claims WHERE scope_id=? AND subject_entity_id=? AND predicate_id=? AND object_kind=? AND object_entity_id IS ? AND literal_kind IS ? AND literal_value IS ? AND polarity=? AND valid_from IS ? AND valid_to IS ?`, effect.Scope.ID, prop.SubjectEntityID, prop.PredicateID, objectKind, objectEntity, literalKind, literalValue, prop.Polarity, semanticTimeArgument(validTime.From), semanticTimeArgument(validTime.To)).Scan(&claimID)
+ 		if errors.Is(err, sql.ErrNoRows) {
+ 			item.Claim.ID, err = newSemanticID()
+ 			item.Create = true
+@@ -170,7 +174,7 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 		meaning := string(compilerJSON(struct {
+ 			P memory.ClaimProposition
+ 			T memory.ValidTime
+-		}{prop, time}))
++		}{prop, validTime}))
+ 		if claimKeys[meaning] {
+ 			return nil, errors.New("duplicate effects require a combined interpretation")
+ 		}
+@@ -184,6 +188,13 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 				return nil, ErrReviewInvalidSource
+ 			}
+ 			src := memory.SemanticSource{EventID: source.Locator.EventID, SessionID: source.SessionID, ScopeKey: source.ScopeKey, EventPart: source.Locator.EventPart, LocatorKind: source.Locator.LocatorKind, LocatorValue: source.Locator.LocatorValue, EvidenceSHA256: "sha256:" + source.Locator.EvidenceSHA256, Actor: source.Actor, SourceType: memory.SourceTypeUserMessage, Authority: source.Authority, ObservedAt: source.ObservedAt, Evidence: source.Evidence, Eligibility: memory.EligibilityEligible, OperationID: id}
++			if c.Proposal.Temporal != nil {
++				observed, parseErr := time.Parse(time.RFC3339Nano, src.ObservedAt)
++				if parseErr != nil {
++					return nil, parseErr
++				}
++				src.ObservedAt = formatSemanticTime(observed)
++			}
+ 			err = q.QueryRowContext(ctx, `SELECT source_link_id,created_operation_id FROM semantic_source_links WHERE claim_id=? AND event_id=? AND event_part=? AND locator_kind=? AND locator_value=? AND evidence_sha256=?`, item.Claim.ID, src.EventID, src.EventPart, src.LocatorKind, src.LocatorValue, src.EvidenceSHA256).Scan(&src.ID, &src.OperationID)
+ 			if errors.Is(err, sql.ErrNoRows) {
+ 				src.ID, err = newSemanticID()
+@@ -199,6 +210,9 @@ func prepareReviewEffects(ctx context.Context, q reviewQuery, a OwnerReviewConte
+ 			}
+ 			item.Sources = append(item.Sources, src)
+ 		}
++		if err := prepareReviewTemporalEffect(ctx, q, a, candidate, effect, item); err != nil {
++			return nil, err
++		}
+ 		conflicts, err := reviewClaimConflicts(ctx, q, effect.Scope.ID, item.Claim)
+ 		if err != nil {
+ 			return nil, err
+diff --git a/internal/eviedb/candidate_review_schema.go b/internal/eviedb/candidate_review_schema.go
+index 2c70d72..6924704 100644
+--- a/internal/eviedb/candidate_review_schema.go
++++ b/internal/eviedb/candidate_review_schema.go
+@@ -55,7 +55,7 @@ CREATE TRIGGER IF NOT EXISTS memory_review_deliveries_no_delete BEFORE DELETE ON
+ 
+ func ensureCandidateReviewSchema(ctx context.Context, db *sql.DB) error {
+ 	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+-		_, err := conn.ExecContext(ctx, candidateReviewSchema+reviewIdentitySchema)
++		_, err := conn.ExecContext(ctx, candidateReviewSchema+reviewIdentitySchema+reviewTemporalSchema)
+ 		return err
+ 	})
+ }
+diff --git a/internal/eviedb/candidate_review_temporal.go b/internal/eviedb/candidate_review_temporal.go
+new file mode 100644
+index 0000000..c9471d7
+--- /dev/null
++++ b/internal/eviedb/candidate_review_temporal.go
+@@ -0,0 +1,283 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++const reviewTemporalSchema = `
++CREATE TABLE IF NOT EXISTS memory_review_temporal_revisions (
++ candidate_id TEXT NOT NULL REFERENCES memory_compiler_candidates(candidate_id),
++ revision INTEGER NOT NULL CHECK(revision>0), envelope BLOB NOT NULL CHECK(length(envelope)<=131072),
++ PRIMARY KEY(candidate_id,revision)
++);
++CREATE TRIGGER IF NOT EXISTS memory_review_temporal_no_update BEFORE UPDATE ON memory_review_temporal_revisions BEGIN SELECT RAISE(ABORT,'temporal revisions are immutable'); END;
++CREATE TRIGGER IF NOT EXISTS memory_review_temporal_no_delete BEFORE DELETE ON memory_review_temporal_revisions BEGIN SELECT RAISE(ABORT,'temporal revisions are immutable'); END;
++`
++
++func loadReviewTemporalRevision(ctx context.Context, q reviewQuery, item *memory.OwnerCandidate) error {
++	var raw []byte
++	err := q.QueryRowContext(ctx, `SELECT envelope FROM memory_review_temporal_revisions WHERE candidate_id=? ORDER BY revision DESC LIMIT 1`, item.Ref.ID).Scan(&raw)
++	if errors.Is(err, sql.ErrNoRows) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	var revision memory.ReviewTemporalRevision
++	if json.Unmarshal(raw, &revision) != nil || revision.Revision < 1 || revision.ReviewRevision > item.Ref.ReviewRevision || revision.Options.Candidate.ID != item.Ref.ID || item.Identity != nil {
++		return errors.New("invalid stored temporal revision")
++	}
++	item.Ref.InterpretationRevision = revision.Revision
++	if !item.Redacted {
++		item.Temporal = &revision
++	}
++	return nil
++}
++
++func temporalOptionsHash(options memory.ReviewTemporalOptions) string {
++	options.SHA256 = ""
++	return memory.CompilerHash(compilerJSON(struct {
++		Domain  string                       `json:"domain"`
++		Options memory.ReviewTemporalOptions `json:"options"`
++	}{"owner-temporal-options-v1", options}))
++}
++
++func reviewTemporalOptions(ctx context.Context, q reviewQuery, a OwnerReviewContext, item memory.OwnerCandidate) (memory.ReviewTemporalOptions, error) {
++	out := memory.ReviewTemporalOptions{Candidate: item.Ref, ScopeKey: a.scope, ScopeRevisions: []memory.ScopeRevision{}, Alternatives: []memory.ReviewCorrectionAlternative{}}
++	temporal := item.Candidate.Proposal.Temporal
++	if temporal == nil || temporal.Correction == nil || item.Candidate.Proposal.Identity != nil {
++		return out, errors.New("candidate has no existing-identity correction choice")
++	}
++	out.Modes = temporal.Correction.Modes
++	out.EffectiveTime = temporal.Correction.EffectiveTime
++	keys, err := reviewScopeKeys(ctx, q, a.scope)
++	if err != nil {
++		return out, err
++	}
++	for _, key := range keys {
++		scope, err := loadSemanticScope(ctx, q, key)
++		if err != nil {
++			return out, err
++		}
++		out.ScopeRevisions = append(out.ScopeRevisions, memory.ScopeRevision{ScopeKey: key, Revision: scope.Revision})
++	}
++	prop := item.Candidate.Proposal.Proposition
++	rows, err := q.QueryContext(ctx, `SELECT c.claim_id FROM semantic_claims c JOIN semantic_scopes s ON s.scope_id=c.scope_id WHERE s.scope_key=? AND c.subject_entity_id=? AND c.predicate_id=? ORDER BY c.claim_id LIMIT 33`, a.scope, prop.SubjectEntityID, prop.PredicateID)
++	if err != nil {
++		return out, err
++	}
++	ids := []memory.SemanticID{}
++	for rows.Next() {
++		var id memory.SemanticID
++		if err = rows.Scan(&id); err != nil {
++			rows.Close()
++			return out, err
++		}
++		ids = append(ids, id)
++	}
++	err = rows.Err()
++	rows.Close()
++	if err != nil {
++		return out, err
++	}
++	if len(ids) > 32 {
++		return out, errors.New("correction alternatives exceed bound")
++	}
++	for _, id := range ids {
++		var size int
++		if err = q.QueryRowContext(ctx, `SELECT COALESCE(length(CAST(literal_value AS BLOB)),0) FROM semantic_claims WHERE claim_id=?`, id).Scan(&size); err != nil {
++			return out, err
++		}
++		if size > 8192 {
++			return out, errors.New("prior Claim text exceeds review bound")
++		}
++		claim, err := loadSemanticClaim(ctx, q, id)
++		if err != nil {
++			return out, err
++		}
++		state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, id)
++		if err != nil {
++			return out, err
++		}
++		if state.State != memory.SemanticStateActive {
++			continue
++		}
++		if compilerHasSecret(string(compilerJSON(claim))) {
++			return out, ErrReviewInvalidSource
++		}
++		var count int
++		if err = q.QueryRowContext(ctx, `SELECT count(*) FROM semantic_claim_corrections WHERE old_claim_id=?`, id).Scan(&count); err != nil {
++			return out, err
++		}
++		if count == 0 {
++			out.Alternatives = append(out.Alternatives, memory.ReviewCorrectionAlternative{Claim: claim, State: state})
++		}
++	}
++	out.SHA256 = temporalOptionsHash(out)
++	if len(compilerJSON(out)) > 128*1024 {
++		return memory.ReviewTemporalOptions{}, errors.New("correction alternatives exceed bound")
++	}
++	return out, nil
++}
++
++func validateTemporalChoice(proposal memory.ExtractorCandidate, options memory.ReviewTemporalOptions, choice memory.ReviewTemporalChoice) (memory.ReviewCorrectionAlternative, memory.CorrectionValidTimeEffect, error) {
++	var old memory.ReviewCorrectionAlternative
++	if proposal.Temporal == nil || proposal.Temporal.Correction == nil {
++		return old, memory.CorrectionValidTimeEffect{}, errors.New("no correction proposal")
++	}
++	found := false
++	for _, alternative := range options.Alternatives {
++		if alternative.Claim.ID == choice.OldClaimID {
++			old = alternative
++			found = true
++		}
++	}
++	if !found {
++		return old, memory.CorrectionValidTimeEffect{}, errors.New("needs_choice: select an exact eligible prior Claim")
++	}
++	modeFound := false
++	for _, mode := range proposal.Temporal.Correction.Modes {
++		if mode == choice.Mode {
++			modeFound = true
++		}
++	}
++	if !modeFound {
++		return old, memory.CorrectionValidTimeEffect{}, errors.New("correction mode was not proposed")
++	}
++	request := memory.CorrectClaimRequest{OldClaimID: choice.OldClaimID, Replacement: proposal.Proposition, Mode: choice.Mode}
++	if choice.Mode == memory.CorrectionChanged {
++		request.EffectiveTime = proposal.Temporal.Correction.EffectiveTime
++	} else {
++		request.ReplacementValidTime = &proposal.ValidTime
++	}
++	normalized, err := normalizeCorrectClaimRequest(request)
++	if err != nil {
++		return old, memory.CorrectionValidTimeEffect{}, err
++	}
++	effect, err := correctionValidTimeEffect(old.Claim.ValidTime, normalized)
++	if err != nil {
++		return old, effect, err
++	}
++	if !validTimesEqual(effect.Replacement, proposal.ValidTime) {
++		return old, effect, errors.New("needs_choice: proposed replacement interval differs from the correction's exact interval")
++	}
++	if old.Claim.SubjectEntityID != proposal.Proposition.SubjectEntityID || old.Claim.Predicate.ID != proposal.Proposition.PredicateID {
++		return old, effect, errors.New("correction changes unrelated identity")
++	}
++	if string(compilerJSON(old.Claim.Object)) == string(compilerJSON(proposal.Proposition.Object)) && old.Claim.Polarity == proposal.Proposition.Polarity && validTimesEqual(old.Claim.ValidTime, effect.Replacement) {
++		return old, effect, errors.New("duplicate proposition is additional support, not a correction")
++	}
++	return old, effect, nil
++}
++
++func (s *Store) OwnerCandidateTemporalOptions(ctx context.Context, a OwnerReviewContext, ref memory.CandidateRef) (memory.ReviewTemporalOptions, error) {
++	var out memory.ReviewTemporalOptions
++	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
++	if err != nil {
++		return out, err
++	}
++	defer tx.Rollback()
++	if err = checkReviewAuthority(ctx, tx, a); err != nil {
++		return out, err
++	}
++	item, err := loadReviewCandidate(ctx, tx, a, ref.ID, true)
++	if err != nil {
++		return out, err
++	}
++	if item.Ref != ref {
++		return out, ErrReviewStale
++	}
++	if item.Candidate.ReviewState != "unresolved" {
++		return out, ErrReviewResolved
++	}
++	out, err = reviewTemporalOptions(ctx, tx, a, item)
++	if err != nil {
++		return memory.ReviewTemporalOptions{}, err
++	}
++	return out, tx.Commit()
++}
++
++func (s *Store) ChooseOwnerCandidateTemporal(ctx context.Context, a OwnerReviewContext, decision memory.ReviewTemporalDecision) (memory.OwnerCandidate, error) {
++	var out memory.OwnerCandidate
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		if err := checkReviewAuthority(ctx, conn, a); err != nil {
++			return err
++		}
++		item, err := loadReviewCandidate(ctx, conn, a, decision.Candidate.ID, true)
++		if err != nil {
++			return err
++		}
++		if item.Candidate.ReviewState != "unresolved" {
++			return ErrReviewResolved
++		}
++		if item.Ref != decision.Candidate {
++			return ErrReviewStale
++		}
++		if item.Candidate.EquivalentTo != "" {
++			return errors.New("equivalent candidate has no independent review")
++		}
++		options, err := reviewTemporalOptions(ctx, conn, a, item)
++		if err != nil {
++			return err
++		}
++		if options.SHA256 != decision.OptionsSHA256 {
++			return ErrReviewStale
++		}
++		if _, _, err = validateTemporalChoice(item.Candidate.Proposal, options, decision.Choice); err != nil {
++			return err
++		}
++		id, err := newSemanticID()
++		if err != nil {
++			return err
++		}
++		revision := memory.ReviewTemporalRevision{Revision: item.Ref.InterpretationRevision + 1, ParentRevision: item.Ref.InterpretationRevision, ReviewRevision: item.Ref.ReviewRevision + 1, AuditID: string(id), OwnerID: memory.LocalOwnerID, AuthenticationBinding: a.binding, AuthorizationRevision: a.revision, Options: options, Choice: decision.Choice}
++		if _, err = conn.ExecContext(ctx, `INSERT INTO memory_review_temporal_revisions VALUES(?,?,?)`, item.Ref.ID, revision.Revision, compilerJSON(revision)); err != nil {
++			return err
++		}
++		update, err := conn.ExecContext(ctx, `UPDATE memory_compiler_candidates SET review_revision=review_revision+1 WHERE candidate_id=? AND review_revision=? AND review_state='unresolved'`, item.Ref.ID, item.Ref.ReviewRevision)
++		if err != nil {
++			return err
++		}
++		n, err := update.RowsAffected()
++		if err != nil || n != 1 {
++			return ErrReviewStale
++		}
++		out, err = loadReviewCandidate(ctx, conn, a, item.Ref.ID, true)
++		return err
++	})
++	if err != nil {
++		return memory.OwnerCandidate{}, err
++	}
++	return out, nil
++}
++
++func (s *Store) InspectOwnerCandidateTemporalRevision(ctx context.Context, a OwnerReviewContext, id string, revision int64) (memory.ReviewTemporalRevision, error) {
++	var out memory.ReviewTemporalRevision
++	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
++	if err != nil {
++		return out, err
++	}
++	defer tx.Rollback()
++	if err = checkReviewAuthority(ctx, tx, a); err != nil {
++		return out, err
++	}
++	if _, err = loadReviewCandidate(ctx, tx, a, id, true); err != nil {
++		return out, err
++	}
++	var raw []byte
++	if err = tx.QueryRowContext(ctx, `SELECT envelope FROM memory_review_temporal_revisions WHERE candidate_id=? AND revision=?`, id, revision).Scan(&raw); err != nil {
++		return out, err
++	}
++	if err = json.Unmarshal(raw, &out); err != nil {
++		return out, err
++	}
++	if compilerHasSecret(string(raw)) {
++		return memory.ReviewTemporalRevision{}, ErrReviewInvalidSource
++	}
++	return out, tx.Commit()
++}
+diff --git a/internal/eviedb/candidate_review_temporal_effect.go b/internal/eviedb/candidate_review_temporal_effect.go
+new file mode 100644
+index 0000000..6bf9e2e
+--- /dev/null
++++ b/internal/eviedb/candidate_review_temporal_effect.go
+@@ -0,0 +1,185 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/hex"
++	"errors"
++	"strings"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func prepareReviewTemporalEffect(ctx context.Context, q reviewQuery, a OwnerReviewContext, candidate memory.OwnerCandidate, effect *memory.ReviewEffect, item memory.ReviewClaimEffect) error {
++	proposal := candidate.Candidate.Proposal
++	if proposal.Temporal == nil {
++		return nil
++	}
++	if err := validateTemporalMeaning(proposal, item.Predicate); err != nil {
++		return err
++	}
++	effect.Version = "owner-review-effect-v3"
++	if proposal.Temporal.Correction == nil {
++		return nil
++	}
++	revision := candidate.Temporal
++	if revision == nil {
++		return errors.New("needs_choice: choose correction mode and exact prior Claim")
++	}
++	current, err := reviewTemporalOptions(ctx, q, a, candidate)
++	if err != nil {
++		return err
++	}
++	// Choice creation advances only candidate revisions, so compare the same
++	// original option reference while rechecking every semantic value/revision.
++	current.Candidate = revision.Options.Candidate
++	current.SHA256 = temporalOptionsHash(current)
++	if current.SHA256 != revision.Options.SHA256 {
++		return ErrReviewStale
++	}
++	old, valid, err := validateTemporalChoice(proposal, revision.Options, revision.Choice)
++	if err != nil {
++		return err
++	}
++	if old.Claim.ID == item.Claim.ID {
++		return errors.New("correction cannot supersede itself")
++	}
++	effective := (*time.Time)(nil)
++	if revision.Choice.Mode == memory.CorrectionChanged {
++		effective = proposal.Temporal.Correction.EffectiveTime
++	}
++	effect.Correction = &memory.ReviewCorrectionEffect{Revision: *revision, OldClaim: old.Claim, OldState: old.State, Mode: revision.Choice.Mode, EffectiveTime: effective, ValidTimeEffect: valid, Transition: memory.SemanticTransition{ObjectKind: "claim", ObjectID: old.Claim.ID, State: memory.SemanticStateSuperseded}}
++	return nil
++}
++
++func validateReviewTemporalEncoding(p memory.ReviewPreview) error {
++	candidate := p.Candidates[0]
++	proposal := candidate.Candidate.Proposal
++	if p.Version != "owner-review-preview-v3" {
++		if proposal.Temporal != nil || candidate.Temporal != nil || p.Effect != nil && p.Effect.Correction != nil {
++			return errors.New("older review version cannot carry temporal effects")
++		}
++		return nil
++	}
++	if proposal.Temporal == nil {
++		return errors.New("v3 preview requires typed temporal interpretation")
++	}
++	if p.Action == "reject" {
++		return nil
++	}
++	if err := validateTemporalObserved(candidate.Candidate); err != nil {
++		return err
++	}
++	item := p.Effect.Claims[0]
++	if err := validateTemporalMeaning(proposal, item.Predicate); err != nil {
++		return err
++	}
++	if proposal.Temporal.Correction == nil {
++		if p.Effect.Correction != nil || candidate.Temporal != nil {
++			return errors.New("unproposed correction effect")
++		}
++		return nil
++	}
++	effect := p.Effect.Correction
++	if effect == nil || candidate.Temporal == nil {
++		return errors.New("missing reviewed correction")
++	}
++	revision := effect.Revision
++	if string(compilerJSON(candidate.Temporal)) != string(compilerJSON(revision)) || revision.Revision != candidate.Ref.InterpretationRevision || revision.ParentRevision != revision.Revision-1 || revision.ReviewRevision != candidate.Ref.ReviewRevision || revision.Options.Candidate.ID != candidate.Ref.ID || revision.Options.Candidate.InterpretationRevision != revision.ParentRevision || revision.Options.Candidate.ReviewRevision != revision.ReviewRevision-1 || revision.Options.ScopeKey != p.ScopeKey || revision.Options.SHA256 != temporalOptionsHash(revision.Options) || revision.OwnerID != memory.LocalOwnerID || revision.AuthorizationRevision < 1 || validateSemanticUUID(revision.AuditID) != nil || len(revision.AuthenticationBinding) != 64 {
++		return errors.New("invalid temporal choice revision")
++	}
++	if string(compilerJSON(revision.Options.ScopeRevisions)) != string(compilerJSON(p.Effect.PriorRevisions)) || string(compilerJSON(revision.Options.Modes)) != string(compilerJSON(proposal.Temporal.Correction.Modes)) || string(compilerJSON(revision.Options.EffectiveTime)) != string(compilerJSON(proposal.Temporal.Correction.EffectiveTime)) {
++		return errors.New("temporal options differ from original proposal")
++	}
++	binding, bindingErr := hex.DecodeString(revision.AuthenticationBinding)
++	if bindingErr != nil || len(binding) != 32 || strings.ToLower(revision.AuthenticationBinding) != revision.AuthenticationBinding {
++		return errors.New("invalid temporal authorization binding")
++	}
++	if len(revision.Options.Alternatives) > 32 {
++		return errors.New("correction alternatives exceed bound")
++	}
++	for n, alternative := range revision.Options.Alternatives {
++		prior := alternative.Claim
++		if n > 0 && revision.Options.Alternatives[n-1].Claim.ID >= prior.ID || prior.ScopeKey != p.ScopeKey || prior.SubjectEntityID != item.Claim.SubjectEntityID || prior.Predicate != item.Predicate || alternative.State.State != memory.SemanticStateActive || alternative.State.ScopeRevision < 1 || alternative.State.ScopeRevision > p.Effect.Scope.Revision {
++			return errors.New("invalid scoped correction alternative")
++		}
++		for _, id := range []memory.SemanticID{prior.ID, prior.CreatedOperationID, alternative.State.OperationID} {
++			if validateSemanticUUID(string(id)) != nil {
++				return errors.New("invalid prior Claim identity")
++			}
++		}
++		if err := validateClaimObject(prior.Object); err != nil {
++			return err
++		}
++		valid, err := normalizeValidTime(prior.ValidTime)
++		if err != nil || !validTimesEqual(valid, prior.ValidTime) {
++			return errors.New("noncanonical prior Claim time")
++		}
++		if prior.Polarity != memory.PolarityAffirmed && prior.Polarity != memory.PolarityDenied {
++			return errors.New("invalid prior Claim polarity")
++		}
++	}
++	old, valid, err := validateTemporalChoice(proposal, revision.Options, revision.Choice)
++	if err != nil {
++		return err
++	}
++	expected := memory.ReviewCorrectionEffect{Revision: revision, OldClaim: old.Claim, OldState: old.State, Mode: revision.Choice.Mode, ValidTimeEffect: valid, Transition: memory.SemanticTransition{ObjectKind: "claim", ObjectID: old.Claim.ID, State: memory.SemanticStateSuperseded}}
++	if expected.Mode == memory.CorrectionChanged {
++		expected.EffectiveTime = proposal.Temporal.Correction.EffectiveTime
++	}
++	if string(compilerJSON(effect)) != string(compilerJSON(expected)) || old.Claim.ScopeKey != p.ScopeKey || old.Claim.ID == item.Claim.ID || old.State.State != memory.SemanticStateActive || old.Claim.Predicate != item.Predicate {
++		return errors.New("correction differs from exact reviewed lifecycle effect")
++	}
++	return nil
++}
++
++func validateReviewCorrectionCurrent(ctx context.Context, q reviewQuery, effect *memory.ReviewEffect) error {
++	correction := effect.Correction
++	if correction == nil {
++		return nil
++	}
++	old, err := loadSemanticClaim(ctx, q, correction.OldClaim.ID)
++	if err != nil {
++		return err
++	}
++	state, err := loadLatestState(ctx, inspectionLifecycleQueryer{q}, memory.SemanticObjectClaim, old.ID)
++	if err != nil {
++		return err
++	}
++	if string(compilerJSON(old)) != string(compilerJSON(correction.OldClaim)) || state != correction.OldState {
++		return ErrReviewStale
++	}
++	var count int
++	if err = q.QueryRowContext(ctx, `SELECT count(*) FROM semantic_claim_corrections WHERE old_claim_id=?`, old.ID).Scan(&count); err != nil {
++		return err
++	}
++	if count != 0 {
++		return ErrReviewStale
++	}
++	return nil
++}
++
++func applyReviewCorrectionEffect(ctx context.Context, conn *sql.Conn, effect *memory.ReviewEffect, at time.Time) error {
++	correction := effect.Correction
++	if correction == nil {
++		return nil
++	}
++	valid := correction.ValidTimeEffect
++	_, err := conn.ExecContext(ctx, `INSERT INTO semantic_claim_corrections(operation_id,scope_id,old_claim_id,replacement_claim_id,mode,effective_time,old_valid_from,old_valid_to,old_effective_from,old_effective_to,replacement_from,replacement_to,scope_revision,transaction_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, effect.OperationID, effect.Scope.ID, correction.OldClaim.ID, effect.Claims[0].Claim.ID, correction.Mode, semanticTimeArgument(correction.EffectiveTime), semanticTimeArgument(valid.OldBefore.From), semanticTimeArgument(valid.OldBefore.To), semanticTimeArgument(valid.OldAfter.From), semanticTimeArgument(valid.OldAfter.To), semanticTimeArgument(valid.Replacement.From), semanticTimeArgument(valid.Replacement.To), effect.Scope.Revision+1, formatSemanticTime(at))
++	if err != nil {
++		return err
++	}
++	return reviewInitialState(ctx, conn, effect.Scope, correction.OldClaim.ID, "claim", "superseded", effect.OperationID, at)
++}
++
++// Stage 3 stores fixed nanosecond UTC source instants; compiler events retain
++// their original timestamp spelling. V3 seals canonical Source Link time while
++// retaining the original event spelling in the candidate evidence manifest.
++func reviewObservedTimeMatches(version, accepted, original string) bool {
++	if version != "owner-review-preview-v3" {
++		return accepted == original
++	}
++	at, err := time.Parse(time.RFC3339Nano, original)
++	return err == nil && formatSemanticTime(at) == accepted
++}
+diff --git a/internal/eviedb/candidate_review_temporal_encoding_test.go b/internal/eviedb/candidate_review_temporal_encoding_test.go
+new file mode 100644
+index 0000000..5b1e5a8
+--- /dev/null
++++ b/internal/eviedb/candidate_review_temporal_encoding_test.go
+@@ -0,0 +1,58 @@
++package eviedb
++
++import (
++	"encoding/json"
++	"os"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestOwnerReviewTemporalEncodingGoldenAndOlderVersionBoundary(t *testing.T) {
++	var fixture struct {
++		EffectHash   string               `json:"effect_sha256"`
++		EffectBytes  string               `json:"effect_canonical_utf8"`
++		PreviewHash  string               `json:"preview_sha256"`
++		PreviewBytes string               `json:"preview_canonical_utf8"`
++		Preview      memory.ReviewPreview `json:"preview"`
++	}
++	raw, err := os.ReadFile("testdata/candidate_review_encoding_v3.json")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = json.Unmarshal(raw, &fixture); err != nil {
++		t.Fatal(err)
++	}
++	hash, encoded, err := ownerReviewEffectHash(fixture.Preview.Effect)
++	if err != nil || hash != fixture.EffectHash || string(encoded) != fixture.EffectBytes {
++		t.Fatalf("v3 effect encoding changed: %s %v", hash, err)
++	}
++	hash, encoded, err = ownerReviewPreviewHash(fixture.Preview)
++	if err != nil || hash != fixture.PreviewHash || string(encoded) != fixture.PreviewBytes {
++		t.Fatalf("v3 preview encoding changed: %s %v", hash, err)
++	}
++	if err = validateOwnerReviewEncoding(fixture.Preview); err != nil {
++		t.Fatal(err)
++	}
++	for _, version := range []string{"v1", "v2"} {
++		p := fixture.Preview
++		// A fresh decode avoids aliasing the frozen fixture's effect.
++		if err = json.Unmarshal(raw, &fixture); err != nil {
++			t.Fatal(err)
++		}
++		p = fixture.Preview
++		p.Version = "owner-review-preview-" + version
++		p.Effect.Version = "owner-review-effect-" + version
++		p.EffectSHA256, _, err = ownerReviewEffectHash(p.Effect)
++		if err != nil {
++			t.Fatal(err)
++		}
++		p.SHA256, _, err = ownerReviewPreviewHash(p)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if err = validateOwnerReviewEncoding(p); err == nil {
++			t.Fatalf("temporal meaning admitted under %s", version)
++		}
++	}
++}
+diff --git a/internal/eviedb/candidate_review_temporal_test.go b/internal/eviedb/candidate_review_temporal_test.go
+new file mode 100644
+index 0000000..21000c3
+--- /dev/null
++++ b/internal/eviedb/candidate_review_temporal_test.go
+@@ -0,0 +1,519 @@
++package eviedb_test
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func temporalGeneration() memory.CompilerGeneration {
++	g := compilerGeneration()
++	g.EntityPolicy = memory.CompilerTemporalPolicyV3
++	g.PredicatePolicy = g.EntityPolicy
++	g.ValidationPolicy = g.EntityPolicy
++	g.EquivalencePolicy = g.EntityPolicy
++	g.EffectPolicy = g.EntityPolicy
++	return g
++}
++func compileTemporal(t *testing.T, f *compilerFixture, content string, adapt func(*memory.ExtractorCandidate)) memory.Compilation {
++	t.Helper()
++	selection := f.selection(t, content, true)
++	result, err := f.store.CompileCandidateUnit(context.Background(), f.session.ScopeContext(), selection, temporalGeneration(), &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		if r.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
++			t.Fatal("unversioned temporal request")
++		}
++		c := f.candidate(r)
++		c.Temporal = &memory.CandidateTemporalProposal{Meaning: "assertion"}
++		adapt(&c)
++		return compilerOutput(r, []memory.ExtractorCandidate{c}), nil
++	}})
++	if err != nil || result.State != "completed_candidates" {
++		t.Fatalf("compile temporal state=%s reason=%s: %v", result.State, result.Reason, err)
++	}
++	return result
++}
++func temporalAuthority(t *testing.T, f *compilerFixture) eviedb.OwnerReviewContext {
++	t.Helper()
++	a, err := f.store.LocalOwnerReviewContext(context.Background(), "global")
++	if err != nil {
++		t.Fatal(err)
++	}
++	return a
++}
++func chooseTemporal(t *testing.T, f *compilerFixture, a eviedb.OwnerReviewContext, ref memory.CandidateRef, mode memory.CorrectionMode) memory.OwnerCandidate {
++	t.Helper()
++	ctx := context.Background()
++	options, err := f.store.OwnerCandidateTemporalOptions(ctx, a, ref)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(options.Alternatives) != 1 {
++		t.Fatalf("expected exact prior Claim %+v", options)
++	}
++	item, err := f.store.ChooseOwnerCandidateTemporal(ctx, a, memory.ReviewTemporalDecision{Candidate: ref, OptionsSHA256: options.SHA256, Choice: memory.ReviewTemporalChoice{OldClaimID: options.Alternatives[0].Claim.ID, Mode: mode}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return item
++}
++func assertTemporalReplay(t *testing.T, f *compilerFixture) {
++	t.Helper()
++	result, err := f.store.VerifySemanticProjection(context.Background())
++	if err != nil || !result.Valid {
++		b, _ := json.MarshalIndent(result, "", "  ")
++		t.Fatalf("temporal replay %v %s", err, b)
++	}
++}
++
++func TestOwnerReviewTemporalCorrectionChangedVersusError(t *testing.T) {
++	for _, mode := range []memory.CorrectionMode{memory.CorrectionError, memory.CorrectionChanged} {
++		t.Run(string(mode), func(t *testing.T) {
++			ctx := context.Background()
++			f := newCompilerFixture(t)
++			a := temporalAuthority(t, f)
++			effective := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
++			content := "I now drink coffee, beginning May 1 2025. Previously I drank tea."
++			if mode == memory.CorrectionError {
++				content = "I was mistaken about tea. I have always drunk coffee."
++			}
++			compiled := compileTemporal(t, f, content, func(c *memory.ExtractorCandidate) {
++				c.Proposition.Object.Literal.Value = "coffee"
++				c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{mode}}
++				if mode == memory.CorrectionChanged {
++					c.Temporal.Correction.EffectiveTime = &effective
++					c.ValidTime.From = &effective
++				}
++			})
++			if _, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept"); err == nil || !strings.Contains(err.Error(), "needs_choice") {
++				t.Fatalf("unresolved correction accepted: %v", err)
++			}
++			selected := chooseTemporal(t, f, a, candidateRef(compiled), mode)
++			p, err := f.store.PrepareOwnerCandidateReview(ctx, a, selected.Ref, "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			if p.Version != "owner-review-preview-v3" || p.Effect.Correction == nil || p.Effect.Correction.Mode != mode || p.Effect.Claims[0].Claim.Object.Literal.Value != "coffee" {
++				t.Fatalf("wrong preview %+v", p)
++			}
++			oldID := p.Effect.Correction.OldClaim.ID
++			if mode == memory.CorrectionChanged && (p.Effect.Correction.ValidTimeEffect.OldAfter.To == nil || !p.Effect.Correction.ValidTimeEffect.OldAfter.To.Equal(effective)) {
++				t.Fatal("changed interval not closed")
++			}
++			if mode == memory.CorrectionError && p.Effect.Correction.ValidTimeEffect.OldAfter.To != nil {
++				t.Fatal("error invented effective date")
++			}
++			result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000242"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			if !result.Operation.TransactionTime.After(effective) {
++				t.Fatal("transaction time used world date")
++			}
++			old, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectClaim, oldID)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if len(old.Lifecycle) != 2 || old.Lifecycle[len(old.Lifecycle)-1].State != memory.SemanticStateSuperseded || old.Claim.Object.Literal.Value != "tea" || len(old.Sources) != 1 {
++				t.Fatalf("old history lost %+v", old)
++			}
++			current, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectClaim, result.Operation.ClaimIDs[0])
++			if err != nil {
++				t.Fatal(err)
++			}
++			if current.Claim.Object.Literal.Value != "coffee" || current.Sources[0].Source.ObservedAt == "" || current.Sources[0].Source.ObservedAt == effective.Format(time.RFC3339Nano) {
++				t.Fatal("world/observed times conflated")
++			}
++			before := effective.Add(-time.Hour)
++			view, err := f.store.InspectClaims(ctx, f.session.ScopeContext(), memory.ClaimQuery{ValidAt: &before})
++			if err != nil {
++				t.Fatal(err)
++			}
++			tea := false
++			for _, c := range view.Claims {
++				if c.ID == oldID {
++					tea = true
++				}
++			}
++			if tea != (mode == memory.CorrectionChanged) {
++				t.Fatalf("changed/error history distinction lost %+v", view)
++			}
++			assertTemporalReplay(t, f)
++		})
++	}
++}
++
++func TestOwnerReviewTemporalUnknownTimeConflictNegationAndSupport(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	a := temporalAuthority(t, f)
++	// Uncertain dates remain unknown; an ordinary assertion keeps the earlier
++	// proposition active and exposes opposite polarity rather than choosing a winner.
++	compiled := compileTemporal(t, f, "I no longer drink tea; I don't know when I stopped.", func(c *memory.ExtractorCandidate) { c.Proposition.Polarity = memory.PolarityDenied })
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if p.Effect.Claims[0].Claim.ValidTime.From != nil || p.Effect.Claims[0].Claim.ValidTime.To != nil || len(p.Effect.Claims[0].Conflicts) == 0 || p.Effect.Correction != nil {
++		t.Fatalf("invented date or automatic winner %+v", p.Effect)
++	}
++	first, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000243"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	second := compileTemporal(t, f, "To repeat: I do not drink tea.", func(c *memory.ExtractorCandidate) { c.Proposition.Polarity = memory.PolarityDenied })
++	support, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(second), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if support.Effect.Claims[0].Create || support.Effect.Claims[0].Claim.ID != first.Operation.ClaimIDs[0] || !support.Effect.Claims[0].Sources[0].Create {
++		t.Fatal("additional support duplicated proposition")
++	}
++	if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(support, "90000000-0000-4000-8000-000000000244")); err != nil {
++		t.Fatal(err)
++	}
++	var claims, sources int
++	if err = f.db.QueryRow(`SELECT count(*) FROM semantic_claims`).Scan(&claims); err != nil {
++		t.Fatal(err)
++	}
++	if err = f.db.QueryRow(`SELECT count(*) FROM semantic_source_links WHERE claim_id=?`, first.Operation.ClaimIDs[0]).Scan(&sources); err != nil {
++		t.Fatal(err)
++	}
++	if claims != 2 || sources != 2 {
++		t.Fatalf("claims/sources %d/%d", claims, sources)
++	}
++	unknown := compileTemporal(t, f, "I changed to coffee, but don't know when.", func(c *memory.ExtractorCandidate) {
++		c.Proposition.Object.Literal.Value = "coffee"
++		c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionChanged}}
++	})
++	options, err := f.store.OwnerCandidateTemporalOptions(ctx, a, candidateRef(unknown))
++	if err != nil {
++		t.Fatal(err)
++	}
++	_, err = f.store.ChooseOwnerCandidateTemporal(ctx, a, memory.ReviewTemporalDecision{Candidate: candidateRef(unknown), OptionsSHA256: options.SHA256, Choice: memory.ReviewTemporalChoice{OldClaimID: options.Alternatives[0].Claim.ID, Mode: memory.CorrectionChanged}})
++	if err == nil || !strings.Contains(err.Error(), "effective time") {
++		t.Fatalf("unknown changed date invented %v", err)
++	}
++	assertTemporalReplay(t, f)
++}
++
++func TestOwnerReviewTemporalPlansRequireExactPredicateAndRemainQualified(t *testing.T) {
++	for _, meaning := range []string{"plan", "possibility"} {
++		t.Run(meaning, func(t *testing.T) {
++			ctx := context.Background()
++			f := newCompilerFixture(t)
++			a := temporalAuthority(t, f)
++			token, label := memory.PlanPredicateToken, memory.PlanPredicateLabel
++			if meaning == "possibility" {
++				token, label = memory.PossibilityPredicateToken, memory.PossibilityPredicateLabel
++			}
++			content := "I am considering moving to Paris next year."
++			if meaning == "plan" {
++				content = "I intend to move to Paris next year."
++			}
++			compiled := compileTemporal(t, f, content, func(c *memory.ExtractorCandidate) {
++				c.Temporal.Meaning = meaning
++				c.Proposition.PredicateID = ""
++				c.Proposition.Object.Literal.Value = "move to Paris next year"
++				c.Identity = &memory.CandidateIdentityProposal{Predicate: &memory.PredicateDefinition{Token: token, Label: label, ObjectConstraint: "text", Cardinality: memory.CardinalityMany}}
++			})
++			if _, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept"); err == nil {
++				t.Fatal("implicit modal Predicate creation")
++			}
++			options, err := f.store.OwnerCandidateIdentityOptions(ctx, a, candidateRef(compiled))
++			if err != nil {
++				t.Fatal(err)
++			}
++			selected, err := f.store.ChooseOwnerCandidateIdentity(ctx, a, memory.ReviewIdentityDecision{Candidate: candidateRef(compiled), OptionsSHA256: options.SHA256, Choices: memory.ReviewIdentityChoices{Predicate: &memory.ReviewPredicateChoice{Create: true}}})
++			if err != nil {
++				t.Fatal(err)
++			}
++			p, err := f.store.PrepareOwnerCandidateReview(ctx, a, selected.Ref, "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			if p.Effect.Correction != nil || p.Effect.Claims[0].Predicate.Token != token || !p.Effect.Claims[0].Predicate.Create {
++				t.Fatal("plan became completed change")
++			}
++			result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000245"))
++			if err != nil {
++				t.Fatal(err)
++			}
++			claim, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectClaim, result.Operation.ClaimIDs[0])
++			if err != nil {
++				t.Fatal(err)
++			}
++			if claim.Claim.Predicate.Label != label || claim.Claim.Object.Literal.Value != "move to Paris next year" || claim.Claim.ValidTime.From != nil {
++				t.Fatalf("qualification lost %+v", claim)
++			}
++			assertTemporalReplay(t, f)
++		})
++	}
++}
++
++func TestOwnerReviewTemporalStaleChoicePolicyAndAtomicRollback(t *testing.T) {
++	for _, failure := range []string{"choice", "scope", "policy", "source", "rollback", "reject"} {
++		t.Run(failure, func(t *testing.T) {
++			ctx := context.Background()
++			f := newCompilerFixture(t)
++			a := temporalAuthority(t, f)
++			compiled := compileTemporal(t, f, "I was mistaken about tea. I drink coffee.", func(c *memory.ExtractorCandidate) {
++				c.Proposition.Object.Literal.Value = "coffee"
++				c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionError, memory.CorrectionChanged}}
++			})
++			selected := chooseTemporal(t, f, a, candidateRef(compiled), memory.CorrectionError)
++			action := "accept"
++			if failure == "reject" {
++				action = "reject"
++			}
++			p, err := f.store.PrepareOwnerCandidateReview(ctx, a, selected.Ref, action)
++			if err != nil {
++				t.Fatal(err)
++			}
++			switch failure {
++			case "choice":
++				_ = chooseTemporal(t, f, a, selected.Ref, memory.CorrectionError)
++			case "scope":
++				if _, err = f.db.Exec(`UPDATE semantic_scopes SET revision=revision+1 WHERE scope_key='global'`); err != nil {
++					t.Fatal(err)
++				}
++			case "policy":
++				if _, err = f.db.Exec(`UPDATE memory_review_authorization SET source_policy='changed'`); err != nil {
++					t.Fatal(err)
++				}
++			case "source":
++				if _, err = f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++					t.Fatal(err)
++				}
++				if _, err = f.db.Exec(`UPDATE events SET content='changed' WHERE id=?`, compiled.Candidates[0].Support[0].Locator.EventID); err != nil {
++					t.Fatal(err)
++				}
++			case "rollback":
++				if _, err = f.db.Exec(`CREATE TRIGGER fail_temporal BEFORE INSERT ON semantic_claim_corrections BEGIN SELECT RAISE(ABORT,'temporal rollback');END`); err != nil {
++					t.Fatal(err)
++				}
++			}
++			result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, "90000000-0000-4000-8000-000000000246"))
++			if failure == "reject" {
++				if err != nil || result.Operation != nil {
++					t.Fatalf("reject %+v %v", result, err)
++				}
++			} else if err == nil {
++				t.Fatal("invalid correction committed")
++			}
++			var corrections, claims, operations int
++			for _, q := range []struct {
++				sql string
++				v   *int
++			}{{`SELECT count(*) FROM semantic_claim_corrections`, &corrections}, {`SELECT count(*) FROM semantic_claims`, &claims}, {`SELECT count(*) FROM semantic_operations WHERE schema_version=6`, &operations}} {
++				if err = f.db.QueryRow(q.sql).Scan(q.v); err != nil {
++					t.Fatal(err)
++				}
++			}
++			if corrections != 0 || claims != 1 || operations != 0 {
++				t.Fatalf("partial acceptance %d/%d/%d", corrections, claims, operations)
++			}
++		})
++	}
++}
++
++func TestOwnerReviewTemporalTwoStoreChoiceRace(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	a := temporalAuthority(t, f)
++	compiled := compileTemporal(t, f, "I was mistaken. I drink coffee.", func(c *memory.ExtractorCandidate) {
++		c.Proposition.Object.Literal.Value = "coffee"
++		c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionError}}
++	})
++	options, err := f.store.OwnerCandidateTemporalOptions(ctx, a, candidateRef(compiled))
++	if err != nil {
++		t.Fatal(err)
++	}
++	db, err := eviedb.OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	other := eviedb.NewStore(db)
++	b, err := other.LocalOwnerReviewContext(ctx, "global")
++	if err != nil {
++		t.Fatal(err)
++	}
++	decision := memory.ReviewTemporalDecision{Candidate: candidateRef(compiled), OptionsSHA256: options.SHA256, Choice: memory.ReviewTemporalChoice{OldClaimID: options.Alternatives[0].Claim.ID, Mode: memory.CorrectionError}}
++	var wg sync.WaitGroup
++	errs := make(chan error, 2)
++	for i, s := range []*eviedb.Store{f.store, other} {
++		wg.Add(1)
++		go func(i int, s *eviedb.Store) {
++			defer wg.Done()
++			auth := a
++			if i == 1 {
++				auth = b
++			}
++			_, err := s.ChooseOwnerCandidateTemporal(ctx, auth, decision)
++			errs <- err
++		}(i, s)
++	}
++	wg.Wait()
++	close(errs)
++	success, stale := 0, 0
++	for err := range errs {
++		if err == nil {
++			success++
++		} else if errors.Is(err, eviedb.ErrReviewStale) {
++			stale++
++		} else {
++			t.Fatal(err)
++		}
++	}
++	if success != 1 || stale != 1 {
++		t.Fatal(fmt.Sprintf("choice race %d/%d", success, stale))
++	}
++}
++
++func TestOwnerReviewTemporalExactDuplicateAddsNoGraphRows(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	a := temporalAuthority(t, f)
++	var root memory.EventID
++	if err := f.db.QueryRow(`SELECT id FROM events WHERE session_id=? AND sequence=1`, f.session.ID).Scan(&root); err != nil {
++		t.Fatal(err)
++	}
++	last := f.append(t, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root, Content: "Recorded."})
++	selection := memory.CompilationSelection{SessionID: f.session.ID, RootID: root, Cutoff: last.Sequence, Destination: "global"}
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		c := f.candidate(r)
++		c.Temporal = &memory.CandidateTemporalProposal{Meaning: "assertion"}
++		return compilerOutput(r, []memory.ExtractorCandidate{c}), nil
++	}}
++	compiled, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), selection, temporalGeneration(), extractor)
++	if err != nil || compiled.State != "completed_candidates" {
++		t.Fatalf("compile duplicate %s %v", compiled.State, err)
++	}
++	p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if p.Effect.Claims[0].Create || p.Effect.Claims[0].Sources[0].Create {
++		t.Fatal("exact duplicate produced graph rows")
++	}
++	decision := decisionFor(p, "90000000-0000-4000-8000-000000000347")
++	first, err := f.store.ResolveOwnerCandidateReview(ctx, a, decision)
++	if err != nil {
++		t.Fatal(err)
++	}
++	again, err := f.store.ResolveOwnerCandidateReview(ctx, a, decision)
++	if err != nil || again.AuditID != first.AuditID {
++		t.Fatal("duplicate delivery created another outcome")
++	}
++	var claims, sources, ops int
++	if err := f.db.QueryRow(`SELECT count(*) FROM semantic_claims`).Scan(&claims); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT count(*) FROM semantic_source_links`).Scan(&sources); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT count(*) FROM semantic_operations WHERE schema_version=6`).Scan(&ops); err != nil {
++		t.Fatal(err)
++	}
++	if claims != 1 || sources != 1 || ops != 1 {
++		t.Fatalf("duplicate claim/source/review counts %d/%d/%d", claims, sources, ops)
++	}
++	assertTemporalReplay(t, f)
++}
++
++func TestOwnerReviewTemporalTypedLiteralsRemainCanonical(t *testing.T) {
++	for i, tc := range []struct {
++		kind          memory.LiteralKind
++		before, after string
++	}{{memory.LiteralInteger, "1", "2"}, {memory.LiteralDecimal, "1.5", "2.5"}, {memory.LiteralBoolean, "false", "true"}, {memory.LiteralDate, "2025-01-01", "2025-01-02"}, {memory.LiteralDatetime, "2025-01-01T00:00:00.000000000Z", "2025-01-02T00:00:00.000000000Z"}} {
++		t.Run(string(tc.kind), func(t *testing.T) {
++			ctx := context.Background()
++			f := newCompilerFixture(t)
++			a := temporalAuthority(t, f)
++			source := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "My recorded value is " + tc.before})
++			explicit, err := f.store.PrepareRememberLiteral(ctx, f.session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: fmt.Sprintf("idem:v1:90000000-0000-4000-8000-%012d", 400+i), SourceEventID: source.ID, Predicate: "recorded_value", PredicateLabel: "recorded value", Literal: memory.TypedLiteral{Kind: tc.kind, Value: tc.before}})
++			if err != nil {
++				t.Fatal(err)
++			}
++			if _, err = f.store.ApplyRememberLiteral(ctx, f.lease, explicit); err != nil {
++				t.Fatal(err)
++			}
++			f.predicate = explicit.Predicate.ID
++			compiled := compileTemporal(t, f, "My recorded value is now "+tc.after, func(c *memory.ExtractorCandidate) {
++				c.Proposition.Object.Literal = &memory.TypedLiteral{Kind: tc.kind, Value: tc.after}
++			})
++			p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++			if err != nil {
++				t.Fatal(err)
++			}
++			result, err := f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, fmt.Sprintf("90000000-0000-4000-8000-%012d", 410+i)))
++			if err != nil {
++				t.Fatal(err)
++			}
++			inspected, err := f.store.InspectSemanticObject(ctx, f.session.ScopeContext(), memory.SemanticObjectClaim, result.Operation.ClaimIDs[0])
++			if err != nil {
++				t.Fatal(err)
++			}
++			if *inspected.Claim.Object.Literal != (memory.TypedLiteral{Kind: tc.kind, Value: tc.after}) || inspected.Claim.Predicate.ObjectConstraint != memory.PredicateObjectConstraint(tc.kind) {
++				t.Fatalf("typed literal changed %+v", inspected.Claim)
++			}
++			assertTemporalReplay(t, f)
++		})
++	}
++}
++
++func TestOwnerReviewTemporalReusesEarlierReviewSourceTimestampEncoding(t *testing.T) {
++	ctx := context.Background()
++	f := newCompilerFixture(t)
++	a := temporalAuthority(t, f)
++	selection := f.selection(t, "I drink coffee.", true)
++	for i, g := range []memory.CompilerGeneration{compilerGeneration(), temporalGeneration()} {
++		extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++			c := f.candidate(r)
++			c.Proposition.Object.Literal.Value = "coffee"
++			if i == 1 {
++				c.Temporal = &memory.CandidateTemporalProposal{Meaning: "assertion"}
++			}
++			return compilerOutput(r, []memory.ExtractorCandidate{c}), nil
++		}}
++		compiled, err := f.store.CompileCandidateUnit(ctx, f.session.ScopeContext(), selection, g, extractor)
++		if err != nil || compiled.State != "completed_candidates" {
++			t.Fatalf("compile %s %v", compiled.State, err)
++		}
++		p, err := f.store.PrepareOwnerCandidateReview(ctx, a, candidateRef(compiled), "accept")
++		if err != nil {
++			t.Fatal(err)
++		}
++		if i == 1 && (p.Effect.Claims[0].Create || p.Effect.Claims[0].Sources[0].Create) {
++			t.Fatal("v3 duplicated older review support")
++		}
++		if _, err = f.store.ResolveOwnerCandidateReview(ctx, a, decisionFor(p, fmt.Sprintf("90000000-0000-4000-8000-%012d", 450+i))); err != nil {
++			t.Fatal(err)
++		}
++	}
++	assertTemporalReplay(t, f)
++}
++
++func TestCompilerTemporalGenerationPolicyIsExplicit(t *testing.T) {
++	g := temporalGeneration()
++	if _, _, err := memory.CompilerGenerationIdentity(g); err != nil {
++		t.Fatal(err)
++	}
++	g.EffectPolicy = memory.CompilerIdentityPolicyV2
++	if _, _, err := memory.CompilerGenerationIdentity(g); err == nil {
++		t.Fatal("mixed temporal interpretation generation admitted")
++	}
++	g = temporalGeneration()
++	g.EvidencePolicy = memory.CompilerTemporalPolicyV3
++	if _, _, err := memory.CompilerGenerationIdentity(g); err == nil {
++		t.Fatal("temporal interpretation silently changed evidence policy")
++	}
++}
+diff --git a/internal/eviedb/compiler_identity.go b/internal/eviedb/compiler_identity.go
+index 2c5ee10..3679c7c 100644
+--- a/internal/eviedb/compiler_identity.go
++++ b/internal/eviedb/compiler_identity.go
+@@ -24,10 +24,10 @@ func compilerIdentityContext(ctx context.Context, conn *sql.Conn, request *memor
+ 	}
+ 	request.IdentityPolicy = ""
+ 	request.Aliases = nil
+-	if generation.EntityPolicy != memory.CompilerIdentityPolicyV2 {
++	if generation.EntityPolicy != memory.CompilerIdentityPolicyV2 && generation.EntityPolicy != memory.CompilerTemporalPolicyV3 {
+ 		return nil
+ 	}
+-	request.IdentityPolicy = memory.CompilerIdentityPolicyV2
++	request.IdentityPolicy = generation.EntityPolicy
+ 	inspected := 0
+ 	for _, entity := range request.Entities {
+ 		rows, err := conn.QueryContext(ctx, `SELECT alias_id,CASE WHEN length(CAST(value AS BLOB))<=1024 THEN value ELSE '' END,CASE WHEN length(CAST(normalized_value AS BLOB))<=1024 THEN normalized_value ELSE '' END,source_event_id,created_operation_id FROM semantic_aliases WHERE entity_id=? AND scope_id=(SELECT scope_id FROM semantic_scopes WHERE scope_key=?) AND lifecycle='active' ORDER BY alias_id LIMIT ?`, entity.ID, entity.ScopeKey, 33-inspected)
+@@ -120,10 +120,10 @@ func validateCandidateIdentity(proposal memory.ExtractorCandidate) error {
+ }
+ 
+ func validateCompilerProposition(request memory.CompilerRequest, proposal memory.ExtractorCandidate) error {
+-	if proposal.Identity != nil && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 {
++	if proposal.Identity != nil && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 && request.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
+ 		return fmt.Errorf("%w: identity policy does not admit proposals", ErrCompilerTerminalOutput)
+ 	}
+-	if request.IdentityPolicy != "" && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 {
++	if request.IdentityPolicy != "" && request.IdentityPolicy != memory.CompilerIdentityPolicyV2 && request.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
+ 		return errors.New("unsupported request identity policy")
+ 	}
+ 	if err := validateCandidateIdentity(proposal); err != nil {
+diff --git a/internal/eviedb/compiler_temporal.go b/internal/eviedb/compiler_temporal.go
+new file mode 100644
+index 0000000..4047ef3
+--- /dev/null
++++ b/internal/eviedb/compiler_temporal.go
+@@ -0,0 +1,113 @@
++package eviedb
++
++import (
++	"errors"
++	"strings"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func validateCompilerTemporal(request memory.CompilerRequest, proposal memory.ExtractorCandidate) error {
++	if proposal.Temporal == nil {
++		if request.IdentityPolicy == memory.CompilerTemporalPolicyV3 {
++			return errors.New("temporal generation requires typed meaning")
++		}
++		return nil
++	}
++	if request.IdentityPolicy != memory.CompilerTemporalPolicyV3 {
++		return errors.Join(ErrCompilerTerminalOutput, errors.New("generation does not admit temporal interpretations"))
++	}
++	// This slice resolves existing identities. General combined edits come later.
++	if proposal.Identity != nil && (proposal.Identity.Subject != nil || proposal.Identity.Object != nil || proposal.Temporal.Correction != nil) {
++		return errors.New("temporal interpretation requires existing unambiguous entities")
++	}
++	var predicate memory.SemanticPredicate
++	for _, p := range request.Predicates {
++		if p.ID == proposal.Proposition.PredicateID {
++			predicate = p
++		}
++	}
++	if proposal.Identity != nil && proposal.Identity.Predicate != nil {
++		p := proposal.Identity.Predicate
++		predicate = memory.SemanticPredicate{Token: p.Token, Label: p.Label, ObjectConstraint: p.ObjectConstraint, Cardinality: p.Cardinality}
++	}
++	return validateTemporalMeaning(proposal, predicate)
++}
++
++func validateTemporalMeaning(proposal memory.ExtractorCandidate, predicate memory.SemanticPredicate) error {
++	temporal := proposal.Temporal
++	if temporal == nil {
++		return nil
++	}
++	if proposal.TemporalQualification != "" {
++		return errors.New("typed temporal interpretation cannot carry an unbound qualification")
++	}
++	switch temporal.Meaning {
++	case "assertion":
++	case "plan", "possibility":
++		token, label := memory.PlanPredicateToken, memory.PlanPredicateLabel
++		if temporal.Meaning == "possibility" {
++			token, label = memory.PossibilityPredicateToken, memory.PossibilityPredicateLabel
++		}
++		if predicate.Token != token || predicate.Label != label || predicate.ObjectConstraint != "text" || predicate.Cardinality != memory.CardinalityMany || proposal.Proposition.Object.Literal == nil || proposal.Proposition.Object.Literal.Kind != memory.LiteralText || strings.TrimSpace(proposal.Proposition.Object.Literal.Value) == "" {
++			return errors.New("qualified meaning requires its exact intent/possibility Predicate contract")
++		}
++		if temporal.Correction != nil {
++			return errors.New("plan or possibility cannot supersede an actual circumstance")
++		}
++	default:
++		return errors.New("unsupported temporal meaning")
++	}
++	if correction := temporal.Correction; correction != nil {
++		if len(correction.Modes) < 1 || len(correction.Modes) > 2 {
++			return errors.New("correction needs bounded explicit mode alternatives")
++		}
++		seen := map[memory.CorrectionMode]bool{}
++		for _, mode := range correction.Modes {
++			if mode != memory.CorrectionError && mode != memory.CorrectionChanged || seen[mode] {
++				return errors.New("invalid correction alternatives")
++			}
++			seen[mode] = true
++		}
++		if len(correction.Modes) == 2 && correction.Modes[0] != memory.CorrectionError {
++			return errors.New("correction alternatives must be canonical error,changed order")
++		}
++		if correction.EffectiveTime != nil {
++			normalized, err := normalizeValidTime(memory.ValidTime{From: correction.EffectiveTime})
++			if err != nil || !validTimesEqual(normalized, memory.ValidTime{From: correction.EffectiveTime}) {
++				return errors.New("noncanonical correction effective time")
++			}
++			if !seen[memory.CorrectionChanged] {
++				return errors.New("error-only correction has no effective time")
++			}
++		}
++	}
++	return nil
++}
++
++// Observed Time bounds completed-change assertions independently of extraction
++// or review wall clocks. Future decisions retain modal Predicate meaning.
++func validateTemporalObserved(candidate memory.MemoryCandidate) error {
++	temporal := candidate.Proposal.Temporal
++	if temporal == nil || temporal.Meaning != "assertion" {
++		return nil
++	}
++	var latest time.Time
++	for _, source := range candidate.Support {
++		at, err := time.Parse(time.RFC3339Nano, source.ObservedAt)
++		if err != nil {
++			return err
++		}
++		if at.After(latest) {
++			latest = at
++		}
++	}
++	if from := candidate.Proposal.ValidTime.From; from != nil && from.After(latest) {
++		return errors.New("future assertion requires explicit plan or possibility meaning")
++	}
++	if temporal.Correction != nil && temporal.Correction.EffectiveTime != nil && temporal.Correction.EffectiveTime.After(latest) {
++		return errors.New("future possibility is not a completed correction")
++	}
++	return nil
++}
+diff --git a/internal/eviedb/compiler_temporal_test.go b/internal/eviedb/compiler_temporal_test.go
+new file mode 100644
+index 0000000..31a8919
+--- /dev/null
++++ b/internal/eviedb/compiler_temporal_test.go
+@@ -0,0 +1,83 @@
++package eviedb
++
++import (
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestCompilerTemporalAdmissionAndMeaningBoundaries(t *testing.T) {
++	subject := memory.SemanticID("90000000-0000-4000-8000-000000000342")
++	predicate := memory.SemanticPredicate{ID: "90000000-0000-4000-8000-000000000343", Token: "age", Label: "age", ObjectConstraint: "integer", Cardinality: memory.CardinalityOne}
++	request := memory.CompilerRequest{IdentityPolicy: memory.CompilerTemporalPolicyV3, Entities: []memory.SemanticEntity{{ID: subject}}, Predicates: []memory.SemanticPredicate{predicate}}
++	for _, tc := range []struct {
++		name   string
++		policy string
++		adapt  func(*memory.ExtractorCandidate)
++		valid  bool
++	}{
++		{"canonical integer", memory.CompilerTemporalPolicyV3, func(*memory.ExtractorCandidate) {}, true},
++		{"noncanonical integer", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) { c.Proposition.Object.Literal.Value = "01" }, false},
++		{"wrong literal type", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) { c.Proposition.Object.Literal.Kind = memory.LiteralText }, false},
++		{"older policy", memory.CompilerIdentityPolicyV2, func(*memory.ExtractorCandidate) {}, false},
++		{"missing typed meaning", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) { c.Temporal = nil }, false},
++		{"qualification only", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) { c.TemporalQualification = "maybe" }, false},
++		{"plan as actual Predicate", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) { c.Temporal.Meaning = "plan" }, false},
++		{"duplicate correction modes", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) {
++			c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionError, memory.CorrectionError}}
++		}, false},
++		{"noncanonical mode order", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) {
++			c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionChanged, memory.CorrectionError}}
++		}, false},
++		{"ambiguous correction", memory.CompilerTemporalPolicyV3, func(c *memory.ExtractorCandidate) {
++			c.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionError, memory.CorrectionChanged}}
++		}, true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			r := request
++			r.IdentityPolicy = tc.policy
++			c := memory.ExtractorCandidate{Temporal: &memory.CandidateTemporalProposal{Meaning: "assertion"}, Proposition: memory.ClaimProposition{SubjectEntityID: subject, PredicateID: predicate.ID, Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralInteger, Value: "1"}}, Polarity: memory.PolarityAffirmed}}
++			tc.adapt(&c)
++			err := validateCompilerTemporal(r, c)
++			if err == nil {
++				err = validateCompilerProposition(r, c)
++			}
++			if (err == nil) != tc.valid {
++				t.Fatalf("valid=%v err=%v", tc.valid, err)
++			}
++		})
++	}
++	at := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
++	future := at.Add(time.Hour)
++	c := memory.MemoryCandidate{Proposal: memory.ExtractorCandidate{Temporal: &memory.CandidateTemporalProposal{Meaning: "assertion"}, ValidTime: memory.ValidTime{From: &future}}, Support: []memory.CompilerSource{{ObservedAt: at.Format(time.RFC3339Nano)}}}
++	if err := validateTemporalObserved(c); err == nil || !strings.Contains(err.Error(), "future") {
++		t.Fatal("future actual assertion admitted")
++	}
++	c.Proposal.ValidTime = memory.ValidTime{}
++	c.Proposal.Temporal.Correction = &memory.CandidateCorrectionProposal{Modes: []memory.CorrectionMode{memory.CorrectionChanged}, EffectiveTime: &future}
++	if err := validateTemporalObserved(c); err == nil {
++		t.Fatal("future correction admitted")
++	}
++}
++
++func TestReviewTemporalObservedInstantCompatibility(t *testing.T) {
++	canonical := "2025-01-02T03:04:05.123000000Z"
++	for _, source := range []string{"2025-01-02T03:04:05.123Z", "2025-01-02T03:04:05.123000000Z", "2025-01-02T04:04:05.123+01:00"} {
++		if !reviewObservedTimeMatches("owner-review-preview-v3", canonical, source) {
++			t.Fatalf("same instant rejected: %s", source)
++		}
++	}
++	for _, source := range []string{"2025-01-02 03:04:05", "2025-01-02T03:04:05.124Z", "2025-01-02", "not a time"} {
++		if reviewObservedTimeMatches("owner-review-preview-v3", canonical, source) {
++			t.Fatalf("ambiguous or different instant accepted: %s", source)
++		}
++	}
++	if reviewObservedTimeMatches("owner-review-preview-v1", canonical, "2025-01-02T03:04:05.123Z") {
++		t.Fatal("v1 exact encoding policy changed")
++	}
++	if reviewObservedTimeMatches("owner-review-preview-v3", "2025-01-02T03:04:05.123Z", "2025-01-02T03:04:05.123Z") {
++		t.Fatal("noncanonical v3 accepted timestamp")
++	}
++}
+diff --git a/internal/eviedb/compiler_validation.go b/internal/eviedb/compiler_validation.go
+index e9f8a10..f2ecf8e 100644
+--- a/internal/eviedb/compiler_validation.go
++++ b/internal/eviedb/compiler_validation.go
+@@ -145,6 +145,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 		if _, ok := timeShape["to"]; !ok {
+ 			return nil, errors.New("missing valid time to")
+ 		}
++		if err := validateCompilerTemporal(request, proposal); err != nil {
++			return nil, err
++		}
+ 		if err := validateCompilerProposition(request, proposal); err != nil {
+ 			return nil, err
+ 		}
+@@ -199,6 +202,9 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 		if !latestNew {
+ 			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)
+ 		}
++		if err := validateTemporalObserved(candidate); err != nil {
++			return nil, errors.Join(ErrCompilerTerminalOutput, err)
++		}
+ 		if err := validateCompilerIdentitySupport(candidate); err != nil {
+ 			return nil, err
+ 		}
+diff --git a/internal/eviedb/testdata/candidate_review_encoding_v3.json b/internal/eviedb/testdata/candidate_review_encoding_v3.json
+new file mode 100644
+index 0000000..d542619
+--- /dev/null
++++ b/internal/eviedb/testdata/candidate_review_encoding_v3.json
+@@ -0,0 +1,391 @@
++{
++  "effect_sha256": "sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e",
++  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v3\",\"effect\":{\"correction\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"old_claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"old_state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"mode\":\"error\",\"effective_time\":null,\"valid_time_effect\":{\"old_before\":{\"from\":null,\"to\":null},\"old_after\":{\"from\":null,\"to\":null},\"replacement\":{\"from\":null,\"to\":null}},\"transition\":{\"object_kind\":\"claim\",\"object_id\":\"90000000-0000-4000-8000-000000000342\",\"state\":\"superseded\"}},\"version\":\"owner-review-effect-v3\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]}}",
++  "preview_sha256": "sha256:aa220a0a87ee216d6b7f767e3c5ea818a0cae05b29312186e76b69edb59683ab",
++  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v3\",\"preview\":{\"version\":\"owner-review-preview-v3\",\"preview_id\":\"92000000-0000-4000-8000-000000000009\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"action\":\"accept\",\"candidates\":[{\"temporal\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"ref\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"generation_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"proposal\":{\"temporal\":{\"meaning\":\"assertion\",\"correction\":{\"modes\":[\"error\"],\"effective_time\":null}},\"proposition\":{\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\"},\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T12:00:00Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"café\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"correction\":{\"revision\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"90000000-0000-4000-8000-000000000343\",\"owner_id\":\"local\",\"authentication_binding\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"authorization_revision\":1,\"options\":{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":0,\"review_revision\":0},\"scope_key\":\"global\",\"scope_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"alternatives\":[{\"claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"}}],\"modes\":[\"error\"],\"effective_time\":null,\"options_sha256\":\"e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606\"},\"choice\":{\"old_claim_id\":\"90000000-0000-4000-8000-000000000342\",\"mode\":\"error\"}},\"old_claim\":{\"claim_id\":\"90000000-0000-4000-8000-000000000342\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"tea\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"old_state\":{\"state\":\"active\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope_revision\":1,\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"mode\":\"error\",\"effective_time\":null,\"valid_time_effect\":{\"old_before\":{\"from\":null,\"to\":null},\"old_after\":{\"from\":null,\"to\":null},\"replacement\":{\"from\":null,\"to\":null}},\"transition\":{\"object_kind\":\"claim\",\"object_id\":\"90000000-0000-4000-8000-000000000342\",\"state\":\"superseded\"}},\"version\":\"owner-review-effect-v3\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"scope\":{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"92000000-0000-4000-8000-000000000002\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"92000000-0000-4000-8000-000000000008\",\"scope_key\":\"global\",\"subject_entity_id\":\"92000000-0000-4000-8000-000000000004\",\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"café\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"92000000-0000-4000-8000-000000000006\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"92000000-0000-4000-8000-000000000004\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"92000000-0000-4000-8000-000000000003\",\"token\":\"drink\",\"version\":1,\"label\":\"drink\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"92000000-0000-4000-8000-000000000005\",\"operation_id\":\"92000000-0000-4000-8000-000000000006\",\"event_id\":\"92000000-0000-4000-8000-000000000001\",\"session_id\":\"92000000-0000-4000-8000-000000000007\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"utf8_byte_range\",\"locator_value\":\"9:14\",\"evidence_sha256\":\"sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T12:00:00Z\",\"evidence\":\"café\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"\"}]},\"effect_sha256\":\"sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e\",\"preview_sha256\":\"\"}}",
++  "preview": {
++    "version": "owner-review-preview-v3",
++    "preview_id": "92000000-0000-4000-8000-000000000009",
++    "owner_id": "local",
++    "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
++    "authorization_revision": 1,
++    "scope_key": "global",
++    "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++    "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++    "action": "accept",
++    "candidates": [
++      {
++        "temporal": {
++          "revision": 1,
++          "parent_revision": 0,
++          "review_revision": 1,
++          "audit_id": "90000000-0000-4000-8000-000000000343",
++          "owner_id": "local",
++          "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
++          "authorization_revision": 1,
++          "options": {
++            "candidate": {
++              "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++              "interpretation_revision": 0,
++              "review_revision": 0
++            },
++            "scope_key": "global",
++            "scope_revisions": [
++              {
++                "scope_key": "global",
++                "revision": 1
++              }
++            ],
++            "alternatives": [
++              {
++                "claim": {
++                  "claim_id": "90000000-0000-4000-8000-000000000342",
++                  "scope_key": "global",
++                  "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++                  "predicate": {
++                    "predicate_id": "92000000-0000-4000-8000-000000000003",
++                    "token": "drink",
++                    "version": 1,
++                    "label": "drink",
++                    "object_constraint": "text",
++                    "cardinality": "many",
++                    "create": false
++                  },
++                  "object": {
++                    "literal": {
++                      "kind": "text",
++                      "value": "tea"
++                    }
++                  },
++                  "polarity": "affirmed",
++                  "valid_time": {
++                    "from": null,
++                    "to": null
++                  },
++                  "created_operation_id": "92000000-0000-4000-8000-000000000006",
++                  "transaction_time": "0001-01-01T00:00:00Z"
++                },
++                "state": {
++                  "state": "active",
++                  "operation_id": "92000000-0000-4000-8000-000000000006",
++                  "scope_revision": 1,
++                  "transaction_time": "0001-01-01T00:00:00Z"
++                }
++              }
++            ],
++            "modes": [
++              "error"
++            ],
++            "effective_time": null,
++            "options_sha256": "e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606"
++          },
++          "choice": {
++            "old_claim_id": "90000000-0000-4000-8000-000000000342",
++            "mode": "error"
++          }
++        },
++        "ref": {
++          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++          "interpretation_revision": 1,
++          "review_revision": 1
++        },
++        "job_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
++        "generation_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
++        "destination": "global",
++        "candidate": {
++          "review_revision": 1,
++          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++          "proposal": {
++            "temporal": {
++              "meaning": "assertion",
++              "correction": {
++                "modes": [
++                  "error"
++                ],
++                "effective_time": null
++              }
++            },
++            "proposition": {
++              "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++              "predicate_id": "92000000-0000-4000-8000-000000000003",
++              "object": {
++                "literal": {
++                  "kind": "text",
++                  "value": "café"
++                }
++              },
++              "polarity": "affirmed"
++            },
++            "valid_time": {
++              "from": null,
++              "to": null
++            },
++            "temporal_qualification": "",
++            "support": [
++              {
++                "event_id": "92000000-0000-4000-8000-000000000001",
++                "event_part": "content",
++                "locator_kind": "utf8_byte_range",
++                "locator_value": "9:14",
++                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
++              }
++            ],
++            "context": []
++          },
++          "support": [
++            {
++              "source_type": "user_message",
++              "locator": {
++                "event_id": "92000000-0000-4000-8000-000000000001",
++                "event_part": "content",
++                "locator_kind": "utf8_byte_range",
++                "locator_value": "9:14",
++                "evidence_sha256": "850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e"
++              },
++              "session_id": "92000000-0000-4000-8000-000000000007",
++              "scope_key": "global",
++              "sequence": 2,
++              "format_version": 1,
++              "observed_at": "2026-09-05T12:00:00Z",
++              "actor": "owner",
++              "authority": "owner_statement",
++              "usage": "new_support",
++              "evidence": "café"
++            }
++          ],
++          "context": [],
++          "review_state": "unresolved"
++        },
++        "redacted": false
++      }
++    ],
++    "source_policy": "owner-assertions-v1",
++    "effect": {
++      "correction": {
++        "revision": {
++          "revision": 1,
++          "parent_revision": 0,
++          "review_revision": 1,
++          "audit_id": "90000000-0000-4000-8000-000000000343",
++          "owner_id": "local",
++          "authentication_binding": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
++          "authorization_revision": 1,
++          "options": {
++            "candidate": {
++              "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++              "interpretation_revision": 0,
++              "review_revision": 0
++            },
++            "scope_key": "global",
++            "scope_revisions": [
++              {
++                "scope_key": "global",
++                "revision": 1
++              }
++            ],
++            "alternatives": [
++              {
++                "claim": {
++                  "claim_id": "90000000-0000-4000-8000-000000000342",
++                  "scope_key": "global",
++                  "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++                  "predicate": {
++                    "predicate_id": "92000000-0000-4000-8000-000000000003",
++                    "token": "drink",
++                    "version": 1,
++                    "label": "drink",
++                    "object_constraint": "text",
++                    "cardinality": "many",
++                    "create": false
++                  },
++                  "object": {
++                    "literal": {
++                      "kind": "text",
++                      "value": "tea"
++                    }
++                  },
++                  "polarity": "affirmed",
++                  "valid_time": {
++                    "from": null,
++                    "to": null
++                  },
++                  "created_operation_id": "92000000-0000-4000-8000-000000000006",
++                  "transaction_time": "0001-01-01T00:00:00Z"
++                },
++                "state": {
++                  "state": "active",
++                  "operation_id": "92000000-0000-4000-8000-000000000006",
++                  "scope_revision": 1,
++                  "transaction_time": "0001-01-01T00:00:00Z"
++                }
++              }
++            ],
++            "modes": [
++              "error"
++            ],
++            "effective_time": null,
++            "options_sha256": "e1b98464e6dd6758e441edf96c9febc9e0a691759046cd16161de4ad2750f606"
++          },
++          "choice": {
++            "old_claim_id": "90000000-0000-4000-8000-000000000342",
++            "mode": "error"
++          }
++        },
++        "old_claim": {
++          "claim_id": "90000000-0000-4000-8000-000000000342",
++          "scope_key": "global",
++          "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++          "predicate": {
++            "predicate_id": "92000000-0000-4000-8000-000000000003",
++            "token": "drink",
++            "version": 1,
++            "label": "drink",
++            "object_constraint": "text",
++            "cardinality": "many",
++            "create": false
++          },
++          "object": {
++            "literal": {
++              "kind": "text",
++              "value": "tea"
++            }
++          },
++          "polarity": "affirmed",
++          "valid_time": {
++            "from": null,
++            "to": null
++          },
++          "created_operation_id": "92000000-0000-4000-8000-000000000006",
++          "transaction_time": "0001-01-01T00:00:00Z"
++        },
++        "old_state": {
++          "state": "active",
++          "operation_id": "92000000-0000-4000-8000-000000000006",
++          "scope_revision": 1,
++          "transaction_time": "0001-01-01T00:00:00Z"
++        },
++        "mode": "error",
++        "effective_time": null,
++        "valid_time_effect": {
++          "old_before": {
++            "from": null,
++            "to": null
++          },
++          "old_after": {
++            "from": null,
++            "to": null
++          },
++          "replacement": {
++            "from": null,
++            "to": null
++          }
++        },
++        "transition": {
++          "object_kind": "claim",
++          "object_id": "90000000-0000-4000-8000-000000000342",
++          "state": "superseded"
++        }
++      },
++      "version": "owner-review-effect-v3",
++      "operation_id": "92000000-0000-4000-8000-000000000006",
++      "scope": {
++        "scope_id": "92000000-0000-4000-8000-000000000002",
++        "scope_key": "global",
++        "revision": 1
++      },
++      "scopes": [
++        {
++          "scope_id": "92000000-0000-4000-8000-000000000002",
++          "scope_key": "global",
++          "revision": 1
++        }
++      ],
++      "prior_revisions": [
++        {
++          "scope_key": "global",
++          "revision": 1
++        }
++      ],
++      "claims": [
++        {
++          "candidate": {
++            "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++            "interpretation_revision": 1,
++            "review_revision": 1
++          },
++          "claim": {
++            "claim_id": "92000000-0000-4000-8000-000000000008",
++            "scope_key": "global",
++            "subject_entity_id": "92000000-0000-4000-8000-000000000004",
++            "predicate": {
++              "predicate_id": "92000000-0000-4000-8000-000000000003",
++              "token": "drink",
++              "version": 1,
++              "label": "drink",
++              "object_constraint": "text",
++              "cardinality": "many",
++              "create": false
++            },
++            "object": {
++              "literal": {
++                "kind": "text",
++                "value": "café"
++              }
++            },
++            "polarity": "affirmed",
++            "valid_time": {
++              "from": null,
++              "to": null
++            },
++            "created_operation_id": "92000000-0000-4000-8000-000000000006",
++            "transaction_time": "0001-01-01T00:00:00Z"
++          },
++          "create": true,
++          "subject": {
++            "entity_id": "92000000-0000-4000-8000-000000000004",
++            "scope_key": "global",
++            "canonical_name": "owner",
++            "entity_type": "person",
++            "anchor_kind": "owner",
++            "create": false
++          },
++          "predicate": {
++            "predicate_id": "92000000-0000-4000-8000-000000000003",
++            "token": "drink",
++            "version": 1,
++            "label": "drink",
++            "object_constraint": "text",
++            "cardinality": "many",
++            "create": false
++          },
++          "object_entity": null,
++          "sources": [
++            {
++              "source_link_id": "92000000-0000-4000-8000-000000000005",
++              "operation_id": "92000000-0000-4000-8000-000000000006",
++              "event_id": "92000000-0000-4000-8000-000000000001",
++              "session_id": "92000000-0000-4000-8000-000000000007",
++              "source_scope_key": "global",
++              "event_part": "content",
++              "locator_kind": "utf8_byte_range",
++              "locator_value": "9:14",
++              "evidence_sha256": "sha256:850f7dc43910ff890f8879c0ed26fe697c93a067ad93a7d50f466a7028a9bf4e",
++              "actor": "owner",
++              "source_type": "user_message",
++              "authority": "owner_statement",
++              "observed_at": "2026-09-05T12:00:00Z",
++              "evidence": "café",
++              "eligibility": "eligible",
++              "create": true
++            }
++          ],
++          "conflicts": [],
++          "context": [],
++          "temporal_qualification": ""
++        }
++      ]
++    },
++    "effect_sha256": "sha256:7be874118f50b659ccdc66ab4c718ac6e2f14ddf9a4ab647f21d8e989dcd452e",
++    "preview_sha256": "sha256:aa220a0a87ee216d6b7f767e3c5ea818a0cae05b29312186e76b69edb59683ab"
++  }
++}
+diff --git a/internal/memory/candidate_review.go b/internal/memory/candidate_review.go
+index 838ab69..77e3149 100644
+--- a/internal/memory/candidate_review.go
++++ b/internal/memory/candidate_review.go
+@@ -10,6 +10,7 @@ type CandidateRef struct {
+ }
+ 
+ type OwnerCandidate struct {
++	Temporal     *ReviewTemporalRevision `json:"temporal,omitempty"`
+ 	Identity     *ReviewIdentityRevision `json:"identity,omitempty"`
+ 	Ref          CandidateRef            `json:"ref"`
+ 	JobID        string                  `json:"job_id"`
+@@ -45,13 +46,14 @@ type ReviewClaimEffect struct {
+ }
+ 
+ type ReviewEffect struct {
+-	Identity       *ReviewIdentityEffect `json:"identity,omitempty"`
+-	Version        string                `json:"version"`
+-	OperationID    SemanticID            `json:"operation_id"`
+-	Scope          SemanticScope         `json:"scope"`
+-	Scopes         []SemanticScope       `json:"scopes"`
+-	PriorRevisions []ScopeRevision       `json:"prior_revisions"`
+-	Claims         []ReviewClaimEffect   `json:"claims"`
++	Correction     *ReviewCorrectionEffect `json:"correction,omitempty"`
++	Identity       *ReviewIdentityEffect   `json:"identity,omitempty"`
++	Version        string                  `json:"version"`
++	OperationID    SemanticID              `json:"operation_id"`
++	Scope          SemanticScope           `json:"scope"`
++	Scopes         []SemanticScope         `json:"scopes"`
++	PriorRevisions []ScopeRevision         `json:"prior_revisions"`
++	Claims         []ReviewClaimEffect     `json:"claims"`
+ }
+ 
+ // ReviewPreview contains only one complete atomic group in the first review
+diff --git a/internal/memory/candidate_temporal.go b/internal/memory/candidate_temporal.go
+new file mode 100644
+index 0000000..baf08a7
+--- /dev/null
++++ b/internal/memory/candidate_temporal.go
+@@ -0,0 +1,72 @@
++package memory
++
++import "time"
++
++// CompilerTemporalPolicyV3 adds typed modality and explicit correction choices.
++// Older generation identities never admit these fields.
++const CompilerTemporalPolicyV3 = "temporal-review-v3"
++
++// Modal propositions use these exact, reviewable Predicate definitions. Their
++// text describes an intention/possibility, never an already completed event.
++const PlanPredicateToken = "intends"
++const PlanPredicateLabel = "Intends (uncompleted plan)"
++const PossibilityPredicateToken = "considers"
++const PossibilityPredicateLabel = "Considers (unrealized possibility)"
++
++type CandidateTemporalProposal struct {
++	Meaning    string                       `json:"meaning"` // assertion, plan, possibility
++	Correction *CandidateCorrectionProposal `json:"correction"`
++}
++
++type CandidateCorrectionProposal struct {
++	Modes         []CorrectionMode `json:"modes"`
++	EffectiveTime *time.Time       `json:"effective_time"`
++}
++
++type ReviewCorrectionAlternative struct {
++	Claim SemanticClaim `json:"claim"`
++	State SemanticState `json:"state"`
++}
++
++type ReviewTemporalOptions struct {
++	Candidate      CandidateRef                  `json:"candidate"`
++	ScopeKey       string                        `json:"scope_key"`
++	ScopeRevisions []ScopeRevision               `json:"scope_revisions"`
++	Alternatives   []ReviewCorrectionAlternative `json:"alternatives"`
++	Modes          []CorrectionMode              `json:"modes"`
++	EffectiveTime  *time.Time                    `json:"effective_time"`
++	SHA256         string                        `json:"options_sha256"`
++}
++
++type ReviewTemporalChoice struct {
++	OldClaimID SemanticID     `json:"old_claim_id"`
++	Mode       CorrectionMode `json:"mode"`
++}
++
++type ReviewTemporalDecision struct {
++	Candidate     CandidateRef         `json:"candidate"`
++	OptionsSHA256 string               `json:"options_sha256"`
++	Choice        ReviewTemporalChoice `json:"choice"`
++}
++
++type ReviewTemporalRevision struct {
++	Revision              int64                 `json:"revision"`
++	ParentRevision        int64                 `json:"parent_revision"`
++	ReviewRevision        int64                 `json:"review_revision"`
++	AuditID               string                `json:"audit_id"`
++	OwnerID               OwnerID               `json:"owner_id"`
++	AuthenticationBinding string                `json:"authentication_binding"`
++	AuthorizationRevision int64                 `json:"authorization_revision"`
++	Options               ReviewTemporalOptions `json:"options"`
++	Choice                ReviewTemporalChoice  `json:"choice"`
++}
++
++type ReviewCorrectionEffect struct {
++	Revision        ReviewTemporalRevision    `json:"revision"`
++	OldClaim        SemanticClaim             `json:"old_claim"`
++	OldState        SemanticState             `json:"old_state"`
++	Mode            CorrectionMode            `json:"mode"`
++	EffectiveTime   *time.Time                `json:"effective_time"`
++	ValidTimeEffect CorrectionValidTimeEffect `json:"valid_time_effect"`
++	Transition      SemanticTransition        `json:"transition"`
++}
+diff --git a/internal/memory/compiler.go b/internal/memory/compiler.go
+index 1ac5c2f..71adf93 100644
+--- a/internal/memory/compiler.go
++++ b/internal/memory/compiler.go
+@@ -98,6 +98,7 @@ type CompilerRequest struct {
+ // ExtractorCandidate is untrusted model output. Scope, authority, projected
+ // evidence and review state are deliberately absent: the Kernel binds them.
+ type ExtractorCandidate struct {
++	Temporal              *CandidateTemporalProposal `json:"temporal,omitempty"`
+ 	Identity              *CandidateIdentityProposal `json:"identity,omitempty"`
+ 	Proposition           ClaimProposition           `json:"proposition"`
+ 	ValidTime             ValidTime                  `json:"valid_time"`
+diff --git a/internal/memory/compiler_contract.go b/internal/memory/compiler_contract.go
+index 36da810..64b2849 100644
+--- a/internal/memory/compiler_contract.go
++++ b/internal/memory/compiler_contract.go
+@@ -68,7 +68,7 @@ func CompilerGenerationIdentity(g CompilerGeneration) (string, []byte, error) {
+ 		}
+ 	}
+ 	identityPolicy := g.EntityPolicy
+-	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 {
++	if identityPolicy != CompilerPolicyVersion && identityPolicy != CompilerIdentityPolicyV2 && identityPolicy != CompilerTemporalPolicyV3 {
+ 		return "", nil, errors.New("unsupported compiler identity policy")
+ 	}
+ 	for _, policy := range []string{g.PredicatePolicy, g.ValidationPolicy, g.EquivalencePolicy, g.EffectPolicy} {

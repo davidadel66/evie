@@ -1,0 +1,195 @@
+{
+  "issues": {
+    "1": {
+      "number": 132,
+      "id": 5354923163,
+      "title": "Memory Stage 4: Freeze evidence, source-window, and closure rules",
+      "url": "https://github.com/davidadel66/evie/issues/132"
+    },
+    "2": {
+      "number": 133,
+      "id": 5354923268,
+      "title": "Memory Stage 4: Freeze durable work, coverage, and generation transitions",
+      "url": "https://github.com/davidadel66/evie/issues/133"
+    },
+    "3": {
+      "number": 134,
+      "id": 5354923386,
+      "title": "Memory Stage 4: Freeze owner review after source sessions close",
+      "url": "https://github.com/davidadel66/evie/issues/134"
+    },
+    "4": {
+      "number": 135,
+      "id": 5354923516,
+      "title": "Memory Stage 4: Measure a local extractor on reviewed evaluation data",
+      "url": "https://github.com/davidadel66/evie/issues/135"
+    },
+    "5": {
+      "number": 136,
+      "id": 5354923645,
+      "title": "Memory Stage 4: Compile one selected source unit into durable candidates",
+      "url": "https://github.com/davidadel66/evie/issues/136"
+    },
+    "6": {
+      "number": 137,
+      "id": 5354923745,
+      "title": "Memory Stage 4: Recover unfinished compilation safely across processes",
+      "url": "https://github.com/davidadel66/evie/issues/137"
+    },
+    "7": {
+      "number": 138,
+      "id": 5354923834,
+      "title": "Memory Stage 4: Activate background compilation for new evidence",
+      "url": "https://github.com/davidadel66/evie/issues/138"
+    },
+    "8": {
+      "number": 139,
+      "id": 5354923922,
+      "title": "Memory Stage 4: Select historical backfill and inspect honest coverage",
+      "url": "https://github.com/davidadel66/evie/issues/139"
+    },
+    "9": {
+      "number": 140,
+      "id": 5354924011,
+      "title": "Memory Stage 4: Accept or reject a candidate after its conversation closes",
+      "url": "https://github.com/davidadel66/evie/issues/140"
+    },
+    "10": {
+      "number": 141,
+      "id": 5354924117,
+      "title": "Memory Stage 4: Review people, relationships, and new Predicate definitions",
+      "url": "https://github.com/davidadel66/evie/issues/141"
+    },
+    "11": {
+      "number": 142,
+      "id": 5354924213,
+      "title": "Memory Stage 4: Review temporal changes, corrections, and additional support",
+      "url": "https://github.com/davidadel66/evie/issues/142"
+    },
+    "12": {
+      "number": 143,
+      "id": 5354924359,
+      "title": "Memory Stage 4: Compile and review the initial contracted tool observation",
+      "url": "https://github.com/davidadel66/evie/issues/143"
+    },
+    "13": {
+      "number": 144,
+      "id": 5354924456,
+      "title": "Memory Stage 4: Edit candidates and approve bounded dependent batches",
+      "url": "https://github.com/davidadel66/evie/issues/144"
+    },
+    "14": {
+      "number": 145,
+      "id": 5354924631,
+      "title": "Memory Stage 4: Review simple candidates in the web inbox",
+      "url": "https://github.com/davidadel66/evie/issues/145"
+    },
+    "15": {
+      "number": 146,
+      "id": 5354924753,
+      "title": "Memory Stage 4: Review identities, edits, and compound effects on the web",
+      "url": "https://github.com/davidadel66/evie/issues/146"
+    },
+    "16": {
+      "number": 147,
+      "id": 5354924916,
+      "title": "Memory Stage 4: Change generations without losing review decisions",
+      "url": "https://github.com/davidadel66/evie/issues/147"
+    },
+    "17": {
+      "number": 148,
+      "id": 5354925055,
+      "title": "Memory Stage 4: Inspect compiler health, coverage, and review backlog",
+      "url": "https://github.com/davidadel66/evie/issues/148"
+    },
+    "18": {
+      "number": 149,
+      "id": 5354925177,
+      "title": "Memory Stage 4: Prove the complete Stage 4 path with deterministic acceptance",
+      "url": "https://github.com/davidadel66/evie/issues/149"
+    },
+    "19": {
+      "number": 150,
+      "id": 5354925278,
+      "title": "Memory Stage 4: Run the integrated pilot and freeze release gates",
+      "url": "https://github.com/davidadel66/evie/issues/150"
+    },
+    "20": {
+      "number": 151,
+      "id": 5354925403,
+      "title": "Memory Stage 4: Evaluate the frozen configuration and declare Stage 4 readiness",
+      "url": "https://github.com/davidadel66/evie/issues/151"
+    }
+  },
+  "dependencies": {
+    "1": [],
+    "2": [
+      132
+    ],
+    "3": [
+      132
+    ],
+    "4": [
+      132
+    ],
+    "5": [
+      133,
+      135
+    ],
+    "6": [
+      136
+    ],
+    "7": [
+      137
+    ],
+    "8": [
+      138
+    ],
+    "9": [
+      134,
+      136
+    ],
+    "10": [
+      140
+    ],
+    "11": [
+      140
+    ],
+    "12": [
+      140
+    ],
+    "13": [
+      141,
+      142,
+      143
+    ],
+    "14": [
+      140
+    ],
+    "15": [
+      144,
+      145
+    ],
+    "16": [
+      139,
+      144
+    ],
+    "17": [
+      146,
+      147
+    ],
+    "18": [
+      146,
+      147
+    ],
+    "19": [
+      148,
+      149
+    ],
+    "20": [
+      150
+    ]
+  },
+  "status": "published-and-verified",
+  "parent_unchanged": true
+}

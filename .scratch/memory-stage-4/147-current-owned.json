@@ -1,0 +1,18 @@
+[
+  "internal/eviedb/compiler_work.go",
+  "internal/eviedb/candidate_review_schema.go",
+  "internal/memory/compiler_contract.go",
+  "cmd/evie/candidate_review.go",
+  "internal/eviedb/compiler_recurrence_encoding.go",
+  "internal/eviedb/compiler_recurrence_public_test.go",
+  "internal/eviedb/compiler_recurrence_storage_test.go",
+  "internal/eviedb/compiler_recurrence_schema.go",
+  "internal/eviedb/compiler_recurrence.go",
+  "internal/eviedb/compiler_recurrence_budget_test.go",
+  "internal/eviedb/compiler_recurrence_inspection.go",
+  "internal/eviedb/compiler_recurrence_encoding_test.go",
+  "internal/memory/compiler_recurrence.go",
+  "internal/eviedb/testdata/compiler-recurrence-v2.json",
+  "cmd/evie/candidate_recurrence_test.go",
+  "cmd/evie/docs/research/memory-stage-4-generation-lineage.md"
+]

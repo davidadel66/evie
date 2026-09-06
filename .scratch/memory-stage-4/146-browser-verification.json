@@ -1,0 +1,246 @@
+{
+  "tree": "97e9768e1d9ef26f44938f4b80de413a4ffda0cb",
+  "browser": "isolated headless Chrome",
+  "driver": "playwright-core 1.55.0; scratch only",
+  "synthetic": true,
+  "owner_pilot": false,
+  "steps": [
+    {
+      "name": "Closed-session value edit, original evidence, immutable history and v5 exact acceptance",
+      "pass": true,
+      "candidate": "bba606862139cc9ad5b2893bffee44075febd20c4a2023b1109b09c1328f351e",
+      "operation": "87c20fdc-0e00-4311-b5ca-b5e2d2365ead"
+    },
+    {
+      "name": "Same-name alternatives and mixed immutable history with safe wrong-kind response",
+      "pass": true
+    },
+    {
+      "name": "Explicit shared Entity/Predicate dependency batch plus independent plan rejection and durable receipts",
+      "pass": true,
+      "groups": [
+        {
+          "id": "shared-maya",
+          "outcome": "accepted",
+          "operation": "7c1a003f-cb05-4302-a142-5e7c3b22f742"
+        },
+        {
+          "id": "defer-plan",
+          "outcome": "rejected"
+        }
+      ]
+    },
+    {
+      "name": "Error correction with immutable choice history, explicit lifecycle preview and unknown effective time",
+      "pass": true
+    },
+    {
+      "name": "Contracted clock keeps original tool authority and unzoned semantics through exact acceptance",
+      "pass": true
+    },
+    {
+      "name": "Reload preserves terminal outcomes; exact session scope remains separate with explicit rejection",
+      "pass": true
+    }
+  ],
+  "responses": [
+    {
+      "route": "scopes",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "edit",
+      "status": 200
+    },
+    {
+      "route": "edit/revision",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "identity/options",
+      "status": 200
+    },
+    {
+      "route": "identity/choose",
+      "status": 200
+    },
+    {
+      "route": "identity/revision",
+      "status": 200
+    },
+    {
+      "route": "edit",
+      "status": 200
+    },
+    {
+      "route": "edit/revision",
+      "status": 200
+    },
+    {
+      "route": "identity/revision",
+      "status": 404
+    },
+    {
+      "route": "identity/revision",
+      "status": 200
+    },
+    {
+      "route": "identity/options",
+      "status": 200
+    },
+    {
+      "route": "identity/choose",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "identity/options",
+      "status": 200
+    },
+    {
+      "route": "identity/choose",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "batch/prepare",
+      "status": 200
+    },
+    {
+      "route": "batch/resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "temporal/options",
+      "status": 200
+    },
+    {
+      "route": "temporal/choose",
+      "status": 200
+    },
+    {
+      "route": "temporal/revision",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "operation",
+      "status": 200
+    },
+    {
+      "route": "scopes",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    },
+    {
+      "route": "inspect",
+      "status": 200
+    },
+    {
+      "route": "prepare",
+      "status": 200
+    },
+    {
+      "route": "resolve",
+      "status": 200
+    },
+    {
+      "route": "list",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "browser_version": "142.0.7444.176",
+  "pass": true,
+  "completed_at": "2026-09-05T11:56:51.756Z",
+  "server_exit": {
+    "code": 0,
+    "signal": null
+  },
+  "fixture_directory_removed": true,
+  "driver_sha256": "bd7584f77f34434f909425a17755a37f277e2528a6e61f9019769a54f7f67d0f"
+}

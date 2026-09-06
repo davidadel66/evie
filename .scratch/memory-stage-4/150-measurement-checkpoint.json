@@ -1,0 +1,19 @@
+{
+  "ticket": 150,
+  "base": "ebb84af94f37b5bb5278d54208dc1d9f2dba73c7",
+  "tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-measurement-checkpoint.index",
+  "files": {
+    "cmd/evie/docs/fixtures/memory-stage4-pilot/v1/preparation.json": "6581b6a482c80e3418f45619510ed60b1487332e89fd6545c0184643d6fee33c",
+    "scripts/memory-stage4-pilot/README.md": "5531446875c9f9ae2db949cc065b66aa856bf9102ad8d881005a09c2ef231d26",
+    "scripts/memory-stage4-pilot/fixture.go": "0dd7284b830379baea2e3549db9907dae01415ec4a3a4b0972e761270d0e89c4",
+    "scripts/memory-stage4-pilot/main.go": "ac503426e053a7d72962190474482d81cedf8f3ac0f8ce57b99a149e7f44b87a",
+    "scripts/memory-stage4-pilot/main_test.go": "aa9291bcf345259af2cdda2fecd6195e24912b31f7cd8924e46d7014cc203982",
+    "scripts/memory-stage4-pilot/measure.py": "596b002f680c39c690e00e37f55bf9213dc0c5df1b9621215fa97fc26d86de8a",
+    "scripts/memory-stage4-pilot/measure_test.py": "a339a1692c6a7b0a6274076a978e77161979eaad948bedf31067f373e1fd53e8",
+    "scripts/memory-stage4-pilot/review.go": "844f0a9415c7ca179c2dfff4dbe2ee05352bd01393559b814fba6d011f783eb2",
+    "scripts/memory-stage4-pilot/run.go": "c87a6b34380ce0233664bf4e19623776ace0e2ebb330f9090b25eb49a66cf510"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-measurement-checkpoint-brqc4qx4",
+  "note": "Isolated ticket contribution; preexisting user work excluded."
+}

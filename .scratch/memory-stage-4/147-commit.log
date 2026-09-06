@@ -1,0 +1,14 @@
+[codex/memory-stage-4 9f97fdc] feat(memory): preserve review decisions across compiler generations (#147)
+ 16 files changed, 1837 insertions(+), 10 deletions(-)
+ create mode 100644 cmd/evie/candidate_recurrence_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-generation-lineage.md
+ create mode 100644 internal/eviedb/compiler_recurrence.go
+ create mode 100644 internal/eviedb/compiler_recurrence_budget_test.go
+ create mode 100644 internal/eviedb/compiler_recurrence_encoding.go
+ create mode 100644 internal/eviedb/compiler_recurrence_encoding_test.go
+ create mode 100644 internal/eviedb/compiler_recurrence_inspection.go
+ create mode 100644 internal/eviedb/compiler_recurrence_public_test.go
+ create mode 100644 internal/eviedb/compiler_recurrence_schema.go
+ create mode 100644 internal/eviedb/compiler_recurrence_storage_test.go
+ create mode 100644 internal/eviedb/testdata/compiler-recurrence-v2.json
+ create mode 100644 internal/memory/compiler_recurrence.go

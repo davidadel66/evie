@@ -1,0 +1,5 @@
+# github.com/davidadel66/evie/cmd/evie [github.com/davidadel66/evie/cmd/evie.test]
+./.scratch/memory-stage-4/149-storage-proposed-scope.go:95:12: undefined: bytes
+./.scratch/memory-stage-4/149-storage-proposed-scope.go:100:7: undefined: bytes
+FAIL	github.com/davidadel66/evie/cmd/evie [build failed]
+FAIL

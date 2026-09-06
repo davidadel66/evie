@@ -1,0 +1,13 @@
+test(memory): measure local extractor schemas and quality (#135)
+
+Add the frozen synthetic corpus, local inference/scoring harness, bounded
+transport checks, tokenizer/grammar proofs, and 110 recorded comparisons.
+Category-specific reference schemas eliminate coordinate/category failures.
+
+Human judgments of novel model outputs remain pending. No tested model has
+demonstrated adequate meaning, and no production extractor is selected.
+Preserve exact experiment bytes, including four literal machine logs.
+
+Validation: independent Standards/Spec reviews, artifact hash audits, and
+./scripts/verify-change.sh on the isolated ticket tree passed. The existing
+Vite chunk-size warning remains. This commit does not close the quality gate.

@@ -1,0 +1,11 @@
+{
+  "checked_paths": 220,
+  "unchanged": 217,
+  "authorized_hook_paths": [
+    "cmd/evie/main.go",
+    "internal/web/serve.go",
+    "internal/web/ui/src/memory/Memory.tsx"
+  ],
+  "unexpected_changes": [],
+  "saved_original_mismatches": []
+}

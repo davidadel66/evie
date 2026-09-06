@@ -1,0 +1,37 @@
+[
+  {
+    "path": "scripts/memory-stage4-pilot/README.md",
+    "before_sha256": "badcf9a888de029fad344d6b1fa66d72cf0e8c42e7a9b4087b2d77e19ff8531e",
+    "after_sha256": "5531446875c9f9ae2db949cc065b66aa856bf9102ad8d881005a09c2ef231d26"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/main.go",
+    "before_sha256": "7cca158f8f97a62abd439eebc2290adcdc3d7636034215783c72b2b2ccc2dcd5",
+    "after_sha256": "ac503426e053a7d72962190474482d81cedf8f3ac0f8ce57b99a149e7f44b87a"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/main_test.go",
+    "before_sha256": "6094531c8b8d427d6e42a86a37e45fb0cda4dd7394c529d2faa36ee7ebfcd9a8",
+    "after_sha256": "aa9291bcf345259af2cdda2fecd6195e24912b31f7cd8924e46d7014cc203982"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/measure.py",
+    "before_sha256": "ae00573d5f529700fffc5d917698be85e70c6f0f0883c36ee2290c3fe1e113c2",
+    "after_sha256": "596b002f680c39c690e00e37f55bf9213dc0c5df1b9621215fa97fc26d86de8a"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/measure_test.py",
+    "before_sha256": "dfaa89a4d3330fa6f8e8c2f37c9bb5621ced26108a62f1e3169f9f1f64f3ea03",
+    "after_sha256": "a339a1692c6a7b0a6274076a978e77161979eaad948bedf31067f373e1fd53e8"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/review.go",
+    "before_sha256": "e9667b410ac00476edb1cffe20aec247bd3c99c4a24af90b65c83c42c3ff8c42",
+    "after_sha256": "844f0a9415c7ca179c2dfff4dbe2ee05352bd01393559b814fba6d011f783eb2"
+  },
+  {
+    "path": "scripts/memory-stage4-pilot/run.go",
+    "before_sha256": "0bdbd2640cc0d09e13175d799856cf2a28b859f7ee5ab1cf2b768adbda408a4f",
+    "after_sha256": "c87a6b34380ce0233664bf4e19623776ace0e2ebb330f9090b25eb49a66cf510"
+  }
+]

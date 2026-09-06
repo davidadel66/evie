@@ -1,0 +1,22 @@
+# #148 independent guarded HTTP + isolated UI contribution
+
+Use implement skill, ticket17/work-contract/148-handoff. Root owns commit/full verification and broad hooks. #148 owner supplies Kernel implementation and CLI. Do not edit eviedb, agent, cmd/evie, db/main/serve/Memory.tsx/DataHub/App/theme/graph. Save originals for existing files, manifest/freeze all exact owned bytes.
+
+Typed contract is `internal/memory/compiler_diagnostics.go` (final field names; pointer timestamps/durations serialize null when absent). Optional interface on existing CandidateReviewKernel:
+
+```
+ListOwnerCompilerSessions(context.Context, eviedb.OwnerReviewContext, memory.CompilerDiagnosticSessionQuery) (memory.CompilerDiagnosticSessions,error)
+InspectOwnerCompilerDiagnostics(context.Context, eviedb.OwnerReviewContext, memory.CompilerDiagnosticsQuery) (memory.CompilerDiagnostics,error)
+```
+
+Use existing owner management guards and current LocalOwnerReviewContext; JSON cannot mint authority. Routes POST `/api/memory/compiler/sessions` body `{scope_key, input:<CompilerDiagnosticSessionQuery>}` and `/api/memory/compiler/diagnostics` body `{scope_key,input:<CompilerDiagnosticsQuery>}`. Strict 8KiB body/duplicate/unknown/UTF8 checks via existing decode helper. No-store. Generic safe errors; bounds return ErrReviewInvalidRequest, bad cursor ErrInvalidCursor, auth ErrOwnerReviewUnauthorized; never expose arbitrary errors. Register via optional interface, preserving legacy fake kernels. Coordinate route-registration hook with root (candidate_review.go settled #146 version).
+
+UI new isolated `compilerDiagnostics` directory plus API module, add Compiler health tab in MemoryReviewTabs (coordinate root). Use existing exact scope list API; session list returns IDs only (no raw titles), closed sessions allowed. Choose session then view jobs/candidates/activations/history/selection/foreground. Limit32 cursor pages, each response one transaction snapshot with as-of timestamp and revision. A next cursor advances a stable keyset, not a frozen multirequest snapshot; refresh resets pagination. No automatic polling required (manual refresh avoids stale races and activity illusions). Selection requires explicit generation ID chosen from activation/jobs metadata or entered exact ID.
+
+Display Counts as clearly scoped totals; Indexing means partial old-ledger projection, never claim complete totals while true. Counter keys jobs_<state>, candidates_unresolved, candidates_accepted, candidates_rejected, candidates_suppressed (counts only current unsuppressed backlog for unresolved). Counters may add attempts/retries/cancellations; render safe whitelisted labels only. CapacityState is global shared availability only, no other scope identifiers. Jobs include selected/completed NEW event counts, inclusive coordinate bounds are bounding coordinates rather than proof every intermediate event was evidence. A failed gap stays failed even when a later job succeeds; activation frontier/scanned history cursor indicates selection/discovery, never completed coverage. Activation generation ID is durable identity only; not proof a configured runtime is currently available. Reasons/recovery are Kernel safe codes/text.
+
+Candidate timestamps/edits/review states support pilot measurement; explicitly label elapsed inbox age separately from active measured review time. Approval rate is not accuracy. Source/candidate prose, model reasoning/config prompt/schema, paths, SQL, opaque continuations excluded entirely. No acceptance actions or model configuration changes here.
+
+Foreground actual measured terminal commit vs response finalization must render separately, null as unavailable/incomplete. Successful terminal is final no-tool assistant commit; failures/interruption use terminal events. Do not relabel request duration or first-token time as finalization. Attempt timings null until process observation is recorded, so crashes preserve incomplete; queue wait/inference/validation/database completion distinct.
+
+Tests: real Store through HTTP if practical, all guards/bodybounds/cursor/scope, exact safe JSON parity, stale asynchronous scope/session/view response fencing and explicit refresh/pagination behavior; UI types/Vitest/lint/build. Owner will add realistic deterministic public Store fixtures/scenario helpers if needed. Prepare browser demonstration steps for root; OS currentlylocked so no humanpilot claim.

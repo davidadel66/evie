@@ -1,0 +1,74 @@
+{
+  "workspaces": [
+    {
+      "id": "033f54d7-25f7-45fc-a4ed-6550ff8c296a",
+      "displayName": "General",
+      "state": "active",
+      "currentRevisionId": "6355b52a-5258-4378-9b11-93db59a39d08",
+      "createdAt": "2026-09-05T18:05:32.011319Z",
+      "updatedAt": "2026-09-05T18:05:32.011319Z"
+    }
+  ],
+  "projects": [],
+  "sessions": [
+    {
+      "id": "44ef5f2c-c292-4207-8007-d57de318f58d",
+      "title": "test. whats the context of this session",
+      "status": "active",
+      "createdAt": "2026-09-05T18:11:14.193126Z",
+      "updatedAt": "2026-09-05T18:11:14.193126Z",
+      "activityAt": "2026-09-05T18:11:30.148993Z"
+    },
+    {
+      "id": "315cfdc3-0167-41cd-b6b1-ae63c40f196c",
+      "workspaceId": "033f54d7-25f7-45fc-a4ed-6550ff8c296a",
+      "workspaceRevisionSnapshot": "6355b52a-5258-4378-9b11-93db59a39d08",
+      "title": "",
+      "status": "active",
+      "createdAt": "2026-09-05T18:11:08.964399Z",
+      "updatedAt": "2026-09-05T18:11:08.964399Z",
+      "activityAt": "2026-09-05T18:11:08.964399Z"
+    },
+    {
+      "id": "d982fd0c-31d2-48c7-b85d-d3c54425b945",
+      "workspaceId": "033f54d7-25f7-45fc-a4ed-6550ff8c296a",
+      "workspaceRevisionSnapshot": "6355b52a-5258-4378-9b11-93db59a39d08",
+      "title": "hows it going",
+      "status": "active",
+      "createdAt": "2026-09-05T18:05:32.013954Z",
+      "updatedAt": "2026-09-05T18:05:32.013954Z",
+      "activityAt": "2026-09-05T18:08:39.213585Z"
+    },
+    {
+      "id": "12ae02f6-cac4-4351-8cb8-5fd6858869c2",
+      "title": "hey evie",
+      "status": "active",
+      "createdAt": "2026-09-05T18:05:07.928653Z",
+      "updatedAt": "2026-09-05T18:05:07.928653Z",
+      "activityAt": "2026-09-05T18:05:13.872574Z"
+    },
+    {
+      "id": "252f4e5f-a8be-435b-a720-ef17b4c9f8af",
+      "title": "",
+      "status": "active",
+      "createdAt": "2026-09-04T19:31:58.564469Z",
+      "updatedAt": "2026-09-04T19:31:58.564469Z",
+      "activityAt": "2026-09-04T19:31:58.564469Z"
+    }
+  ],
+  "activeSession": {
+    "id": "d982fd0c-31d2-48c7-b85d-d3c54425b945",
+    "workspaceId": "033f54d7-25f7-45fc-a4ed-6550ff8c296a",
+    "workspaceRevisionSnapshot": "6355b52a-5258-4378-9b11-93db59a39d08",
+    "title": "hows it going",
+    "status": "active",
+    "createdAt": "2026-09-05T18:05:32.013954Z",
+    "updatedAt": "2026-09-05T18:05:32.013954Z"
+  },
+  "activeScope": {
+    "kind": "workspace",
+    "displayName": "General",
+    "workspaceId": "033f54d7-25f7-45fc-a4ed-6550ff8c296a",
+    "workspaceRevision": "6355b52a-5258-4378-9b11-93db59a39d08"
+  }
+}

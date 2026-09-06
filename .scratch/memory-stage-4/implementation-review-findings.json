@@ -1,0 +1,91 @@
+{
+  "recorded_at": "2026-09-05T09:33:57.730372+00:00",
+  "base": "a41aa6189191ed1ca3cdaa53e496269db489085d",
+  "136": {
+    "standards": "pass including final fixes",
+    "spec": [
+      {
+        "priority": 2,
+        "issue": "Cancellation after Extract can publish using detached cleanup context",
+        "status": "fixed and independent rereview passed"
+      },
+      {
+        "priority": 2,
+        "issue": "Reference ordering changes equivalence hash",
+        "status": "fixed and independent rereview passed"
+      }
+    ],
+    "known_acceptance_pending": [
+      "selected compact-wire integration",
+      "actual selected-generation observation"
+    ],
+    "spec_verification": "go test ./internal/eviedb -run ^TestCompiler(Cancellation|EquivalenceV1|Reordered) -count=1 -timeout=60s PASS 0.566s"
+  },
+  "140": {
+    "standards": [
+      {
+        "priority": 1,
+        "issue": "Promotion drops review-source current-policy protection",
+        "status": "fixed; final Standards pass"
+      }
+    ],
+    "spec": [
+      {
+        "priority": 1,
+        "issue": "Promotion drops review-source current-policy protection",
+        "status": "fixed; final Spec verified"
+      },
+      {
+        "priority": 2,
+        "issue": "Accepted v6 replay does not verify historical support/context against events",
+        "status": "fixed; final Spec verified"
+      },
+      {
+        "priority": 2,
+        "issue": "Different delivery after terminal resolution can report stale/source-ineligible instead of authorized already_resolved",
+        "status": "fixed; final independent Spec and Standards PASS; full isolated af2efdbaf01ca410a699796e730152c63c6d9d5e PASS"
+      }
+    ]
+  },
+  "full_verification": {
+    "combined": "pass: verify-136-140-category-schema.log",
+    "isolated136": "pass: tree b444a6e81510591b131b83ca40d8d74ee810ed92; verify-136-isolated.log",
+    "isolated140": "PASS final treeaf2efdbaf01ca410a699796e730152c63c6d9d5e; verify-140-isolated.log"
+  },
+  "note": "Passing deterministic checks do not resolve model review findings; fixes and targeted regressions required before acceptance.",
+  "137": {
+    "standards": [
+      {
+        "priority": 2,
+        "issue": "Stage adoption rereads source window twice and can exceed128-event transaction bound",
+        "status": "Fixed; independent final Standards PASS. Maximum88-source and source mutation regression verified."
+      }
+    ],
+    "spec": "Independent final Spec PASS for complete frozen137 tree fddc252c6a29da7be77b1db4e214cd827511e97c",
+    "verification": "Full isolated verify-change PASS; worker/cancellation race PASS30.160s"
+  },
+  "138": {
+    "tree": "feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63",
+    "standards": [
+      {
+        "priority": 2,
+        "issue": "Host adapter masks cleanup failure joined with context cancellation",
+        "status": "Fixed; independent final standards rereview PASS on feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63"
+      }
+    ],
+    "spec": [
+      {
+        "priority": 1,
+        "issue": "Resumed earlier selection reuses newer same-generation suffix, leaving earlier selected events unowned",
+        "status": "Fixed; independent final spec rereview PASS on feee2f53e8b9b3213f5440d6f4f5c3a18a7fca63"
+      }
+    ],
+    "verification": "Final isolated ./scripts/verify-change.sh PASS; focused normal/race regressions PASS"
+  },
+  "141": {
+    "tree": "39acbc3f8ab892b90feaeb5d3e14c0cb88fbd608",
+    "standards": "Independent PASS, zero actionable findings",
+    "spec": "Independent PASS, zero actionable findings",
+    "verification": "Isolated ./scripts/verify-change.sh PASS; focused normal/race PASS; existing Vite chunk warning only"
+  }
+}

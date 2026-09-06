@@ -1,0 +1,71 @@
+direction: right
+
+classes: {
+  evidence: {
+    style: {
+      fill: "#e8f1f8"
+      stroke: "#356b91"
+      font-color: "#17324d"
+      border-radius: 8
+    }
+  }
+  projection: {
+    style: {
+      fill: "#edf5ef"
+      stroke: "#4e8467"
+      font-color: "#204c38"
+      border-radius: 8
+    }
+  }
+  authority: {
+    style: {
+      fill: "#f7f0df"
+      stroke: "#a4843c"
+      font-color: "#624d1d"
+      border-radius: 8
+    }
+  }
+}
+
+stage1: {
+  label: "STAGE 1 - EPISODIC MEMORY"
+  class: evidence
+  sessions: "Stable scoped session identity"
+  leases: "Durable turn lease and fencing"
+  events: "Append-only provider-neutral events"
+  resume: "Restart reconstruction"
+}
+
+stage2: {
+  label: "STAGE 2 - WORKING MEMORY"
+  class: projection
+  profile: "Route-safe context profile"
+  composer: "Canonical bounded composer"
+  projection: "Tool-result projection"
+  compaction: "Validated rolling compaction"
+  snapshots: "Content-free request snapshots"
+}
+
+stage3: {
+  label: "STAGE 3 - SEMANTIC MEMORY"
+  class: authority
+  operations: "Accepted semantic operation history"
+  graph: "Temporal entity and claim projection"
+  scope: "Exact scope and explicit promotion"
+  inspect: "Current, historical, and provenance reads"
+  recovery: "Replay, quarantine, and rebuild"
+}
+
+stage1 -> stage2: "Durable evidence is selected into each model request"
+stage1 -> stage3: "Events remain the evidence cited by accepted claims"
+stage3 -> stage2: "Future retrieval may supply sourced context; Stage 3 does not inject it"
+
+truths: {
+  label: "THREE DIFFERENT AUTHORITIES"
+  class: evidence
+  episodic: "What happened\nCanonical evidence"
+  working: "What the model sees now\nDisposable projection"
+  semantic: "What Evie has accepted\nOperation history + query projection"
+  episodic -> working: "select and compact"
+  episodic -> semantic: "cite exact evidence"
+}

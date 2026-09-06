@@ -1,0 +1,190 @@
+EVIE
+Chat
+Memory
+Whiteboard
+Reports
+System
+A
+a
+Accepted memory
+Review candidates
+Review memory candidates
+
+Suggestions stay here until you review their sources and approve the exact memory change.
+
+Review scope
+Choose one memory scope…
+Global memory · global
+Tea preferences · session
+Refresh scopes
+Refresh inbox
+
+Candidate accepted. Its reviewed claim and sources are now in memory.
+
+Exact scope: global · inbox revision 8
+
+coffee
+unresolved · 1 supporting source(s)
+tea adopted on the checked local date 2026-09-04
+unresolved · 2 supporting source(s)
+Maya · works on · Orion
+unresolved · 1 supporting source(s)
+Maya · works on · Atlas
+unresolved · 1 supporting source(s)
+4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c · Intends (uncompleted plan) · move to Boston next year
+unresolved · 1 supporting source(s)
+Review dependent candidates together
+
+Add inspected candidates, assign the same group name to changes that must succeed together, and explicitly bind any shared new identity. Separate groups may succeed independently. Nothing is accepted until the complete batch preview is confirmed.
+
+Add inspected candidate to batch
+Recorded decision: accepted
+
+Accepted provenance, loaded from the recorded operation under current source permissions.
+
+Candidate df0faf6737cfda5419f44aaacbd5a8c5fb85eb28d631b8ec820e8cb9e3bcd40a · generation 8b4fa10cd5560eac6ccfdf1d573cf07caabbda5c6b2287107d71a1faef1a91ee · interpretation 1
+
+Meaning
+assertion
+Subject
+4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c
+Relationship
+48ee068f-02cb-4df3-b67c-77d34f7a549c
+Object
+cafe
+Value kind
+text
+Polarity
+affirmed
+Valid from / until
+Unknown / Unknown
+Time qualification
+None supplied
+Original supporting authority and observation contracts
+I prefer café.
+
+Authority: owner_statement · observed 2026-09-05T11:52:48.665722Z
+
+Exact source
+Original extraction and unchanged source window
+Owner interpretation 1, from revision 0
+
+Audit 9ac448e3-3b08-457f-bf93-83ac02d3241a. This edit and its reason are owner interpretation, not new factual evidence.
+
+Reason: Normalize the café spelling while keeping the same preference.
+
+Before edit
+Meaning
+assertion
+Subject
+4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c
+Relationship
+48ee068f-02cb-4df3-b67c-77d34f7a549c
+Object
+café
+Value kind
+text
+Polarity
+affirmed
+Valid from / until
+Unknown / Unknown
+Time qualification
+None supplied
+Prior supporting evidence
+I prefer café.
+
+Authority: owner_statement · observed 2026-09-05T11:52:48.665722Z
+
+Exact source
+Prior context
+Recorded.
+
+Authority: none · observed 2026-09-05T11:52:48.666145Z
+
+Exact source
+After edit
+Meaning
+assertion
+Subject
+4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c
+Relationship
+48ee068f-02cb-4df3-b67c-77d34f7a549c
+Object
+cafe
+Value kind
+text
+Polarity
+affirmed
+Valid from / until
+Unknown / Unknown
+Time qualification
+None supplied
+Edited supporting evidence
+I prefer café.
+
+Authority: owner_statement · observed 2026-09-05T11:52:48.665722Z
+
+Exact source
+Edited context
+Recorded.
+
+Authority: none · observed 2026-09-05T11:52:48.666145Z
+
+Exact source
+Complete edit revision, including prior identity and correction choices
+Atomic group: all member changes succeed together
+Explicit dependency closure
+
+No proposed identities are shared by dependency binding in this group.
+
+Member 1
+
+owner · drink · cafe
+
+Subject identity
+Reuse Entity · 4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c
+Predicate definition
+Reuse Predicate definition
+Change
+Create claim
+Polarity
+affirmed
+Scope
+global
+Value type
+text
+Valid from
+Unknown
+Valid until
+Unknown
+Predicate
+drink · version 1 · text · one
+
+Conflict: one_cardinality_overlap · claims 5920f904-a70e-4d24-827d-e80a7fdf1afb, 8c71b3e3-609f-4244-80d6-a3206083508d. This review does not choose a winner.
+
+Supporting Source Links
+
+Add source
+
+I prefer café.
+
+Authority: owner_statement · observed 2026-09-05T11:52:48.665722Z
+
+Exact source
+Interpretation context (authority none)
+Recorded.
+
+Authority: none · observed 2026-09-05T11:52:48.666145Z
+
+Exact source
+Exact effect identities
+Complete semantic record changes
+Kind and ID	Action	Lifecycle
+entity: 4e7a38cd-2b6d-4d28-9337-8ea7b75f5d1c	reuse	— → —
+predicate: 48ee068f-02cb-4df3-b67c-77d34f7a549c	reuse	— → —
+claim: 5920f904-a70e-4d24-827d-e80a7fdf1afb	create	— → —
+state_event: 5920f904-a70e-4d24-827d-e80a7fdf1afb	initialize	— → active
+source_link: e2cbf076-fb7a-439d-8ac5-1f871a82aff6	create	— → —
+state_event: e2cbf076-fb7a-439d-8ac5-1f871a82aff6	initialize	— → eligible
+Complete canonical disclosure
+Decision receipt

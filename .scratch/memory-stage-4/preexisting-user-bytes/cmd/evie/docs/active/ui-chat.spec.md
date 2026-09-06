@@ -1,0 +1,385 @@
+# ui-chat — the React frontend (feature 3 of the serve umbrella)
+
+Status: active (workbench shell amendment approved by David on 2026-09-04)
+
+The browser half of `evie serve`: the workbench shell, the chat column, tool
+cards, the approval card with a diff, the composer. Plus the two Go pieces deferred from
+serve-core — `go:embed all:ui/dist` and static serving — so `evie serve` finally
+opens a real page. After this lands, everything serve-core emits is visible and
+operable in a browser; the whiteboard and critic (feature 4) plug into the same
+store.
+
+Uses the visual foundation of the imported design `Moussa App.dc.html` (claude-design project
+"Moussa Eve desktop UI"), extracted to `/tmp/evie-design.html`. The design
+predates the rename: every "Moussa"/"Eve" string becomes **Evie**, the logo
+mark stays a single letter (`E`), and the `· eve` subtitle drops. The original
+top-tab shell and artifact rail are superseded by the workbench amendment
+below.
+
+## Workbench shell amendment (2026-09-04)
+
+David approved a Codex-like three-pane workbench adapted to Evie's domain:
+
+- The left sidebar owns `New chat`, `Data`, and `Workspaces`, then lists durable
+  Workspaces with their recent sessions nested underneath. It always shows the
+  active immutable Context Scope at the bottom.
+- The center owns a closable tab strip. Chat is a persistent tab; Data, the
+  Workspace directory, and individual Workspace homes open beside it. A
+  Workspace home is not a chat and may list or start multiple scoped sessions.
+- The right Inspector replaces the artifact-only rail. It opens contextual
+  memory records now, including provenance, lifecycle, conflicts, and operation
+  history. Files, diffs, previews, tables, and future artifacts use the same
+  surface as their contracts land. The top-right controls collapse the
+  Inspector or focus it without replacing open work.
+- `Data` is an extensible data-source hub. Its first sources are the physical
+  SQLite database and exact-scope Semantic Memory. Tests, experiment runs, and
+  other sources remain absent until they have real contracts.
+- Filesystem projects remain distinct from Workspaces. Both can create a chat
+  with one explicit immutable Context Scope; neither is inferred from message
+  text or combined with another scope.
+- On narrow screens the left sidebar and Inspector become overlays. Keyboard
+  focus remains visible, and labels and empty states describe real behavior.
+
+## Data hub amendment (2026-09-04)
+
+David approved the first complete Data workspace after the shell amendment:
+
+- `Database` renders live, read-only SQLite schema metadata as a deterministic
+  relationship map. A searchable table rail and narrow-screen selector focus
+  one table and its connected component. Selecting a table raises a lower
+  drawer with Structure and Indexes; Rows are available only for an explicit
+  server allowlist. There is no arbitrary SQL surface.
+- Schema metadata excludes raw DDL, trigger bodies, default expressions, and
+  values. Episodic `events` and semantic projection tables are topology-visible
+  but remain behind their typed views; authentication state is not browsable.
+- `Memory` is the owner-facing graph projection of current, supported Semantic
+  Memory Claims and Entities. It reads one exact scope and pinned revision at a
+  time, supports Valid Time and Transaction Time inspection, and keeps a
+  Records view as an accessible fallback. It never merges sibling scopes or
+  chooses a conflict winner.
+- Selecting a Claim or Entity opens the shared Inspector. Claim evidence names
+  its source episode ID, but raw Episodic Memory remains canonical in the
+  database instead of being copied into the semantic graph.
+- The source switcher is deliberately small: only `Database` and `Memory` ship.
+  Later sources such as Tests and experiment/run tracking can join the same hub
+  once their typed read contracts exist, without changing the shell model.
+
+## What the design specifies
+
+Dark desktop app, 13px base, IBM Plex Sans / IBM Plex Mono / Caveat (whiteboard
+handwriting). Tokens, verbatim from the design:
+
+| Role | Value |
+|---|---|
+| app bg / top bar | `#0e1113` / `#0b0e0f` |
+| borders | `#1d2326`, `#20272a`, `#242c30`, `#2a3336` |
+| text primary / body / muted / faint | `#e2e6e3` / `#c9cfcb` / `#8b9491` / `#4a5350`, `#5b6663`, `#68716e` |
+| surfaces | `#121618` (cards), `#1b2225` (user bubble), `#0b0e10` (code), `#0f1312` (panel), `#131a18` (artifact) |
+| teal accent | `#4fb8a5`, hover `#6fd0be`, deep `#2b4a42` / `#2f6b5d`, border `#26433d` |
+| amber (pending / attention) | `#d9a04a`, text `#e8c98a`, bg `#1b1810`, border `#2a2415`/`#6b5527` |
+| red (error / removed) | `#d96b6b`, text `#d9a0a0`/`#e0a3a3`, bg `#161113`/`#1c1113`, border `#4a2a2e`/`#3a2226` |
+| green (ok / added) | `#5fae7d`, text `#a8d4b5` |
+| radii | 3–12px (bubbles `10px 10px 3px 10px`, cards 7–9px) |
+
+Layout: 276px left navigation → flexible tabbed work area → optional Inspector
+(`min(460px,42vw)` in split view, flexible in focus view). The work area has a
+46px tab strip and optional connection banner. Chat keeps the existing message
+column (`flex:1`, `max-width:min(720px,100%)` per assistant message, user
+bubbles `62%` right-aligned) and composer. A 38px scope bar keeps the immutable
+session boundary visible.
+
+**Polish amendment (2026-08-09):** the top bar carries no connection/activity
+status; approval cards and the error banner own the states that require
+attention. The old badge + name is one uppercase `EVIE` wordmark. A compact
+`Aa` chat-text control (`13px` / `15px` default / `17px`, persisted in
+localStorage) sits at the right. Streamdown's
+shadcn-style theme names are bridged to the palette above, inline code uses the
+amber attention color, and fenced code uses an Evie-specific Shiki theme:
+amber language structure, teal names/functions/types, green strings, muted
+comments, and body-gray variables/punctuation.
+
+Message kinds in the design: user bubble, thinking block, tool card
+(collapsible, mono, status chip right), assistant markdown (with fenced code
+blocks carrying a filename header + `copy`), approval card (pending → approved
+/ declined), errored tool card, 3D-model attachment chip, streaming caret
+(`animation:blink`).
+
+## Scope: what ships, what doesn't
+
+**Ships:** workbench shell + tabs, Workspace directory and homes, contextual
+Inspector, Database schema/approved-record inspection, exact-scope Semantic
+Memory graph/records, connection banner, chat column (user,
+assistant markdown, tool cards incl. error state, streaming caret), approval
+card with diff and Y/N hotkeys, composer, static serving + embed + build
+workflow.
+
+**Deferred, with reasons** — the design shows these but the backend has nothing
+to feed them; building empty chrome now means building it twice:
+
+- **Thinking block.** ~~Nothing in the stream carries reasoning~~ — shipped
+  2026-08-08 by the reasoning spec (`docs/done/reasoning.spec.md`): `reasoning`
+  / `reasoning_done` events, a `reasoning` item kind, and `Reasoning.tsx`.
+- **Artifact cards** (mermaid / chart / markdown, prev/next). Nothing emits
+  artifacts until the whiteboard feature; they will open in the shared
+  Inspector rather than adding a second right-hand surface.
+- **Whiteboard, Reports, 3D viewer overlay, model attachment chip.** Their old
+  placeholder tabs are removed until the corresponding behavior exists.
+
+## Stack decisions (two amendments to serve.decisions.md, record them)
+
+1. **Hand-rolled chat components, not assistant-ui.** The Part 4 spike is
+   cancelled, not run: the design is a fully specified bespoke layout, and our
+   SSE vocabulary is custom, so `ExternalStoreRuntime` would be an adapter over
+   a store we have to write anyway, plus a component library whose every visual
+   is overridden. Streamdown stays for assistant markdown (streaming-safe
+   unterminated fences, block memoization, code highlighting) — that's the part
+   with real edge cases. If Streamdown's mermaid/katex weight or API fights us,
+   fall back to `react-markdown` + `remark-gfm` behind the same
+   `<Markdown text streaming>` wrapper, which is the only file that knows.
+2. **Tailwind v4 via `@tailwindcss/vite`, tokens in an `@theme` block.** No
+   config file. Design tokens become named utilities (`bg-surface`,
+   `text-muted`, `border-hair`) so no arbitrary hex litters JSX; layout stays
+   utility classes, matching the design's flex/gap structure line for line.
+   Font faces, the `evepulse`/`blink` keyframes and the scrollbar rules go in
+   one `theme.css` alongside the `@theme` block.
+
+Deps (frontend only; the Go side stays stdlib): `react`, `react-dom`,
+`typescript`, `vite`, `@vitejs/plugin-react`, `tailwindcss`,
+`@tailwindcss/vite`, `streamdown`, `@streamdown/code`, `vitest`. The approval
+diff uses edit_file's single-replacement invariant rather than a general diff
+dependency. Fonts load from Google Fonts as the design does — a known offline
+gap; self-hosting is a later polish item.
+
+## Files
+
+```
+internal/web/
+  static.go          //go:embed all:ui/dist + serving (replaces handleRoot)
+  static_test.go
+  ui/
+    index.html  package.json  tsconfig.json  vite.config.ts
+    src/
+      main.tsx
+      theme.css          @theme tokens, fonts, keyframes, scrollbar
+      App.tsx            workbench orchestration, open tabs, banner, tab bodies
+      api/database.ts     read-only schema + approved-record client
+      api/stream.ts      POST /api/chat + SSE line parser → callbacks
+      api/approve.ts     POST /api/approve
+      store/events.ts    SSE event types (mirrors the Go vocabulary)
+      store/reducer.ts   pure: (items, event) → items
+      store/reducer.test.ts
+      store/useSession.ts  hook: reducer + delta buffer + 50ms flush + status
+      chat/Chat.tsx  Message.tsx  ToolCard.tsx  ApprovalCard.tsx
+      chat/Diff.tsx  Composer.tsx  Markdown.tsx
+      shell/Sidebar.tsx    navigation, scoped session hierarchy, text size
+      data/DataHub.tsx     extensible source switcher
+      data/Database.tsx    schema map + bounded table drawer
+      data/schemaLayout.ts deterministic relationship layout
+      memory/Memory.tsx    exact-scope graph + record fallback
+      workspaces/Workspaces.tsx  directory and per-Workspace home
+      artifacts/Panel.tsx  contextual Inspector and memory detail
+```
+
+## The store model
+
+One flat list, appended in stream order. Approvals are **not** separate items —
+serve-core emits `tool_call` → `approval_request` → (answer) → `tool_result`,
+and the design shows the pending card resolving into a compact tool row, so the
+approval lives on the tool item it gates.
+
+```ts
+type Item =
+  | { kind: 'user'; key: string; text: string }
+  | { kind: 'assistant'; key: string; text: string; streaming: boolean;
+      discarded?: { reason: DiscardReason; message: string } }
+  | { kind: 'notice'; key: string; tone: 'warning'; text: string;
+      reason: DiscardReason }
+  | { kind: 'tool'; key: string; id: string; name: string; args: string;
+      approval?: { reqId: string; state: 'pending' | 'approved' | 'declined' | 'expired' };
+      result?: string; isErr?: boolean; startedAt: number; ms?: number }
+```
+
+`DiscardReason` is the closed server vocabulary: `provider_error`,
+`provider_response_invalid`, `caller_cancelled`, `caller_deadline_exceeded`,
+`lease_lost`, `lease_heartbeat_failed`, or `assistant_persistence_failed`.
+
+Reducer rules (each one gets a test):
+
+- `delta` → append to the trailing assistant item; create one (`streaming:true`)
+  if the trailing item isn't a streaming assistant.
+- `assistant_done` → `streaming:false`. **If the item has no text, remove it**:
+  `Events.AssistantDone` fires for every assistant message including tool-only
+  ones, and the design has no empty bubbles.
+- `tool_call` → push a tool item, `startedAt` = now.
+- `approval_request` → attach `{reqId, state:'pending'}` to the newest tool item
+  with a matching `name` and no `result`. No match (out-of-band, e.g. after a
+  reload) → attach to a synthetic tool item so the card is still actionable.
+- `tool_result` → set `result`/`isErr`, `ms = now - startedAt`. Leaves the
+  approval state alone: the client set it when the user clicked, and a still
+  `pending` state here means the server resolved it without us (expiry).
+- `response_discarded` → first flush every buffered delta, then close any open
+  reasoning item. If a partial assistant item exists for the current provider
+  response, retain its text, set `streaming:false`, and attach the exact reason
+  and message as an inline warning. If only reasoning was visible, append a
+  standalone warning item. Never remove the partial text or represent it as an
+  ordinarily completed assistant message.
+- `turn_done` → any `streaming` assistant closes; any `pending` approval becomes
+  `expired`. A discarded assistant or warning remains discarded and unchanged.
+- `error` → status becomes `error` with the message; the item list is untouched
+  (banner surface, per the design).
+
+`useSession` owns everything stateful the reducer can't: **deltas accumulate in
+a ref and flush on a single shared ~50ms timer** (never `setState` per token —
+this is the load-bearing perf pattern from serve.decisions.md), a
+`status: 'idle' | 'streaming' | 'error'` for the dot and banner, and
+`send(text)` / `answer(reqId, ok)`. Approve/decline updates the item optimistically
+and reverts to `expired` on a 404 (the id already timed out server-side).
+
+## Wire client
+
+`EventSource` can't POST, so `api/stream.ts` uses `fetch` and reads
+`res.body` as a `ReadableStream`, decoding with `TextDecoderStream` and
+splitting on `\n\n`, then `event:` / `data:` per block — ~40 lines mirroring
+`internal/openrouter/client.go:40-129`, no dependency. Contract:
+
+- Non-2xx → parse `{"error"}` and raise it (409 busy and 403 guard both land
+  here as a banner).
+- Stream ends without `turn_done` → treat as a dropped connection: banner
+  "Lost connection to the Evie server", status `error`. The design's "retrying
+  in 3s" copy is honest only with a retry, so v1 shows **Retry now** (re-sends
+  nothing; it just clears the banner and re-enables the composer) and drops the
+  countdown text. Auto-reconnect belongs with persistence, since without a
+  history endpoint there's nothing to reconnect *to*.
+- Unknown event names are ignored, not errors — feature 4 adds `board_*` and
+  `critic_note` to the same stream.
+- `response_discarded` is known and must never follow the unknown-event path. Its
+  payload and ordering are defined by `serve.spec.md`. The partial assistant
+  text remains rendered with the fixed inline warning `Response interrupted;
+  streamed text was not saved.` below it. If no assistant text exists, the same
+  warning is rendered as a standalone transcript notice. The ordinary error
+  banner may also appear after the inline warning.
+
+## The approval diff
+
+`edit_file` args are `path`, `old_string`, `new_string`
+(`internal/tools/file.go`). **Amended 2026-08-09:** edit_file's registry entry
+prepares its exact read/validate/replace operation before emitting approval. The
+optional approval payload therefore carries the complete before/after file
+contents and resolved path, and approval runs that prepared operation. It
+re-reads immediately before writing and refuses if disk bytes changed while
+David was deciding. `Diff.tsx` renders both complete files side-by-side with
+real independent line numbers and red/green replacement blocks, without
+vertical truncation. Because edit_file has one contiguous replacement, a
+linear common-prefix/suffix split replaces a potentially pathological general
+diff algorithm; each pane renders at most three content sections even at the 100KB
+file limit. Final-newline changes get an explicit marker. The full preview
+remains in the transcript after approve/decline instead of collapsing. The wire
+shape includes `isNew`; a future gated file-creation tool renders one full green
+"New file" pane rather than an empty before pane. (`edit_file` itself still
+cannot create files.)
+
+`edit_db` (the other gated tool) has no diff shape: render `statement` in a mono
+block with the `db` name in the header. Any other gated tool: pretty-printed
+JSON args. The card keeps the design's amber pending chrome, `Approve Y` /
+`Decline N` buttons, and the "Evie is paused until you decide" line. Non-file
+approvals collapse to the compact outcome row; file approvals retain the full
+preview and add the outcome to its header.
+
+Hotkeys, from the design's key handler: `y` / `n` resolve the pending approval
+when the Chat tab is focused and the event target isn't a `TEXTAREA`/`INPUT`.
+
+## Tool card details
+
+Header: wrench icon, mono tool name, one-line args preview (ellipsised), status
+chip, chevron. Body (collapsed by default) is the raw result in a `<pre>`.
+Status chip: `✓ {ms}ms` from the client's own `startedAt`/`ms` timing —
+truthful and free. The design's `412 rows` needs structured tool metadata the
+registry doesn't return; omitted. `isErr` switches the card to the red variant
+(`#161113` bg, `#4a2a2e` border, `failed` chip) and auto-expands.
+
+## Static serving (Go)
+
+`internal/web/static.go` replaces `handleRoot`:
+
+- `//go:embed all:ui/dist` (the `all:` prefix keeps Vite's dotfile-ish assets),
+  `fs.Sub` to the `ui/dist` root, `http.FileServerFS`.
+- Path exists in the embedded FS → serve it. Hashed `/assets/*` get
+  `Cache-Control: public, max-age=31536000, immutable`; `index.html` gets
+  `no-store` so a rebuilt UI is picked up on reload.
+- Path doesn't exist → serve `index.html` (SPA fallback; harmless with no
+  router and correct if one ever lands). `/api/*` never reaches here — the mux
+  routes those first.
+- Non-GET/HEAD on a static path → 405.
+
+`static_test.go`: index served at `/`, an asset served with immutable caching,
+an unknown path falls back to index, `/api/chat` still routed (guard first).
+Tests read the real embedded dist, so **the test needs a prior npm build** —
+same constraint as `go build`, documented in CLAUDE.md.
+
+Dev mode: `vite dev` on 5173 with `server.proxy['/api'] → http://127.0.0.1:6687`.
+The guard already accepts a `localhost:5173` Origin (covered by a serve-core
+test), so `evie serve` + `vite dev` side by side works with hot reload.
+
+## Stages
+
+1. **Scaffold + embed.** Vite react-ts app, Tailwind v4 + `theme.css` tokens,
+   dev proxy, `.gitignore` for `internal/web/ui/dist/` and `node_modules/`;
+   `static.go` + `static_test.go`. Demo: `npm run build && go build ./cmd/evie
+   && evie serve` serves a token-styled placeholder page at the printed URL,
+   and `vite dev` shows the same page with HMR.
+2. **Wire client + store.** `api/stream.ts`, `api/approve.ts`,
+   `store/events.ts`, `reducer.ts`, `useSession.ts`, `reducer.test.ts`
+   (vitest). Demo: a temporary debug view dumping items as JSON while a real
+   turn streams from the live server — proves the protocol before any pixels.
+3. **Shell + chat.** `App.tsx` (top bar, tabs, text size, deferred-tab
+   notices), `Chat.tsx`, `Message.tsx`, `Markdown.tsx`, `ToolCard.tsx`,
+   `Composer.tsx`, artifacts rail + empty state. Demo: a real conversation with
+   a tool call, rendered to the design.
+4. **Approvals + banner.** `ApprovalCard.tsx`, `Diff.tsx`, Y/N hotkeys,
+   connection banner + Retry. Demo: a live gated `edit_file` approved (file
+   changes on disk) and declined (untouched).
+5. **Close-out.** CLAUDE.md build/deploy lines, umbrella checkboxes, decisions
+   recorded, spec moved to `docs/done/`.
+
+## Out of scope (beyond the umbrella's existing fences)
+
+- Session history / reload recovery. A reload still shows an empty UI over the
+  live conversation — the umbrella's known gap, unchanged here.
+- Auto-reconnect, message editing/retry, copy-conversation, scroll-to-bottom
+  button, virtualization (the perf groundwork is delta coalescing; virtualization
+  arrives with the agent grid).
+- Self-hosted fonts, light theme, mobile layout, accessibility audit.
+
+## Codebase context (read before writing code)
+
+- The wire source of truth: `internal/web/events.go` (exact event names and
+  payload fields), `internal/web/serve.go` (routes, guard, 409/403/400 bodies),
+  `internal/web/approvals.go` (approval id lifecycle, expiry semantics).
+- Event ordering within a turn: `internal/agent/agent.go` `Send`.
+- Gated tool arg shapes: `internal/tools/file.go:293` (`edit_file`),
+  `internal/tools/db.go:112` (`edit_db`).
+- SSE parser to mirror: `internal/openrouter/client.go:40-129`.
+- Design source: `/tmp/evie-design.html` — chat tab at line 45, tool card 67,
+  approval states 96/118/128, errored tool 140, composer 177, artifacts panel
+  185, key handler 546.
+- Conventions: CLAUDE.md (build/deploy, feature doc naming); frontends own all
+  user-facing output, the domain layer stays silent.
+
+## End-to-end verification (must actually run)
+
+1. `npm --prefix internal/web/ui run build && go build -o ~/go/bin/evie ./cmd/evie`
+2. `evie serve` → open the printed URL: shell renders with the `EVIE` wordmark,
+   no top-bar status, and the `Aa` control defaults to 15px.
+3. Ask a plain question → text streams token by token with the blink caret,
+   caret clears on completion.
+4. "What time is it?" → a `get_time` tool card with a `✓ {ms}ms` chip that
+   expands to the raw result.
+5. "In <scratch file>, change X to Y with edit_file" → approval card shows the
+   complete before/after files side-by-side with real line numbers → `Y` → file
+   changed on disk (`cat`) and the full preview remains with an Approved header.
+   Repeat with `N` → file untouched and the proposed full preview remains marked
+   Declined.
+6. Send a second message while the first turn streams → composer is disabled;
+   force it via curl → 409 surfaces as a banner, not a console error.
+7. Kill the server mid-stream → "Lost connection" banner, Retry clears it.
+8. `evie` (no args) still runs the REPL unchanged.

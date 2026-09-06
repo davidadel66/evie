@@ -41,6 +41,6 @@ describe("compiler health disclosure", () => {
   expect(roots).toContain("deferred_live"); expect(roots).toContain("pending extension is a separate obligation");
  });
  it("preserves accepted memory as the default and makes health separately available", () => {
-  const html = renderToStaticMarkup(<MemoryReviewTabs><p>Existing graph</p></MemoryReviewTabs>); expect(html).toContain("Existing graph"); expect(html).toContain("Compiler health"); expect(html).not.toContain("Scoped operational counts");
+  const html = renderToStaticMarkup(<MemoryReviewTabs><p>Existing graph</p></MemoryReviewTabs>); expect(html).toContain("Existing graph"); expect(html).toContain("Background activity"); expect(html).not.toContain("Scoped operational counts");
  });
 });

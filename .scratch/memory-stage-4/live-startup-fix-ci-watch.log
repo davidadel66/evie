@@ -1,0 +1,191 @@
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request less than a minute ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 1 minute ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 1 minute ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 1 minute ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 1 minute ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 2 minutes ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 2 minutes ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 2 minutes ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 2 minutes ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  * Run deterministic verification
+  * Check pull request diff
+  * Post Set up Node.js
+  * Post Set up Go
+  * Post Check out repository
+Refreshing run status every 15 seconds. Press Ctrl+C to quit.
+
+* codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 3 minutes ago
+
+JOBS
+* Verify (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  ✓ Run deterministic verification
+  ✓ Check pull request diff
+  ✓ Post Set up Node.js
+  ✓ Post Set up Go
+  * Post Check out repository
+✓ codex/memory-stage-4 Verify davidadel66/evie#153 · 33982073628
+Triggered via pull_request about 3 minutes ago
+
+JOBS
+✓ Verify in 3m11s (ID 101348959967)
+  ✓ Set up job
+  ✓ Check out repository
+  ✓ Set up Go
+  ✓ Set up Node.js
+  ✓ Install UI dependencies
+  ✓ Run deterministic verification
+  ✓ Check pull request diff
+  ✓ Post Set up Node.js
+  ✓ Post Set up Go
+  ✓ Post Check out repository
+  ✓ Complete job
+
+ANNOTATIONS
+! src/ui/Icon.tsx:16:19: Fast refresh only works when a file only exports components. Move your component(s) to a separate file.
+Verify: src/ui/Icon.tsx#16
+

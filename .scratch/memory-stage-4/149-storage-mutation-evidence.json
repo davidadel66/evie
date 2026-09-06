@@ -1,0 +1,27 @@
+{
+  "version": "memory-stage-4-storage-mutation-v1",
+  "defect": "Old quoted/qualified-only assertions accept unrelated tool failures and miss unquoted allowlist regressions.",
+  "mutation": "Allow unquoted MEMORY_COMPILER_, MEMORY_REVIEW_, SEMANTIC_ identifiers while leaving quoted and main-qualified syntax guards intact.",
+  "live_policy_changed": false,
+  "original_test_with_mutation": {
+    "expected": "PASS demonstrating missing coverage",
+    "observed": "PASS",
+    "command": "go test -overlay .scratch/memory-stage-4/149-storage-mutant-overlay.json ./cmd/evie -run ^TestStage4GenericStorageConformance$ -count=1 -v",
+    "log": "149-storage-original-mutant.log"
+  },
+  "enhanced_test_with_mutation": {
+    "expected": "FAIL",
+    "observed": "FAIL",
+    "command": "go test -overlay .scratch/memory-stage-4/149-storage-refined-mutant-overlay.json ./cmd/evie -run ^TestStage4GenericStorageConformance$ -count=1 -v",
+    "log": "149-storage-refined-red.log",
+    "failure": "SELECT * FROM memory_compiler_activation_claims returned real temporary-database output instead of exact containment error"
+  },
+  "enhanced_test_real_policy": {
+    "observed": "PASS",
+    "log": "149-storage-refined-green.log",
+    "allowed_fixture_queries": 2,
+    "protected_tables_and_views": 77,
+    "blocked_queries": 308,
+    "blocked_db_opens": 0
+  }
+}

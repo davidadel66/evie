@@ -45,11 +45,8 @@ export function Sidebar({
       className={`${mobileOpen ? "flex" : "hidden"} border-hair bg-sidebar absolute inset-y-0 left-0 z-40 w-[276px] flex-none flex-col border-r md:relative md:z-auto md:flex`}
     >
       <div className="flex h-[54px] flex-none items-center px-4">
-        <div className="flex items-center gap-[9px]">
-          <span className="bg-teal text-primary-foreground flex h-7 w-7 items-center justify-center rounded-[8px] font-sans text-[14px] font-bold">
-            E
-          </span>
-          <span className="text-ink font-sans text-[15px] font-semibold tracking-[0.08em]">EVIE</span>
+        <div aria-label="evie." className="text-ink font-sans text-[21px] font-medium tracking-[-0.04em]">
+          evie<span className="text-teal">.</span>
         </div>
         <div className="flex-1" />
         <button

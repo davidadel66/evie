@@ -1,0 +1,1053 @@
+{
+  "artifacts": [
+    {
+      "bytes": 822209,
+      "files": 302,
+      "path": "original-matrix-v1.tar.gz",
+      "sha256": "46c1c7ef8e0e9eeda3d6dfcfa02ba2616feda4fdff2eef1ad0c7924d0131fd40"
+    },
+    {
+      "bytes": 815678,
+      "files": 301,
+      "path": "corrected-matrix-v3.tar.gz",
+      "sha256": "91642e94a35c8b5718490b1912619b9806592702e004fdee2a3282662476260c"
+    },
+    {
+      "bytes": 191926,
+      "files": 64,
+      "path": "interrupted-matrix-v2.tar.gz",
+      "sha256": "dddddaaef984180af98be2cb1f9456745db4cc1db4f465951b1743ecc8181aeb"
+    },
+    {
+      "bytes": 216756,
+      "files": 41,
+      "path": "corrected-conformance-evidence.tar.gz",
+      "sha256": "b7b360dc0ffe675ffb07152ff719fbde014373293f490b031f09352b352d8ac9"
+    }
+  ],
+  "chosen_model_configuration": null,
+  "corrected_binary_sha256": "bd190f98c3648c9f0a2e7faa1098389428fc4258344a6a1b74e4532eeed55e43",
+  "corrected_conformance_report_sha256": "4d1698e9af5c73cbfb518055156629c4b74429cd2b67f142b91021db1f78d8de",
+  "corrected_matrix_report_sha256": "5a7513e7129cf72a5a33d933ce47f9bd781aa842c0367c03d63a94bee6ff6a7b",
+  "corrected_source_sha256": "9287c9175d38658d959d72439e24897c0f67c90a73c8967c7079bdf61e9a5a38",
+  "corrected_summary": {
+    "attempt_outcomes": {
+      "completed": 1551,
+      "failed": 33
+    },
+    "counts": {
+      "attempts": 1584,
+      "candidates_before_scripted_review": 1518,
+      "completed_events": 4158,
+      "dispatches": 1584,
+      "foreground_elapsed_nanos": 89214856876,
+      "foreground_event_assistant_message": 1584,
+      "foreground_event_context_snapshot": 1584,
+      "foreground_event_user_message": 1584,
+      "foreground_persisted_events": 4752,
+      "history_selected_events": 1056,
+      "jobs": 1584,
+      "jobs_completed_candidates": 1518,
+      "jobs_completed_empty": 33,
+      "jobs_failed": 33,
+      "observed_attempt_completed": 1551,
+      "observed_attempt_failed": 33,
+      "rows_events": 10727901,
+      "rows_memory_compiler_candidates": 1518,
+      "rows_semantic_claims": 10137,
+      "selected_events": 4224
+    },
+    "foreground_turns": 1584,
+    "job_states": {
+      "completed_candidates": 1518,
+      "completed_empty": 33,
+      "failed": 33
+    },
+    "max_response_finalization_ms": 36.457125,
+    "max_terminal_commit_ms": 2.32575,
+    "ps_cpu_samples": {
+      "interpretation": "Sum of ps reported CPU percentages for the Go process tree at each nonempty100ms sample, including setup. ps percentages are interval/lifetime estimates, not instantaneous utilization or model-server capacity.",
+      "max_sum_reported_cpu_percent": 121.8,
+      "median_sum_reported_cpu_percent": 113.7,
+      "n": 7158
+    },
+    "rates_by_mode": [
+      {
+        "mode": "disabled",
+        "observed_candidate_arrivals_per_second": {
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 33
+        },
+        "observed_completed_events_per_second": {
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 33
+        },
+        "offered_foreground_events_per_second": {
+          "max": 55.51462906585587,
+          "median": 53.510234184005995,
+          "min": 51.791621465034495,
+          "n": 33
+        },
+        "trials": 33
+      },
+      {
+        "mode": "new",
+        "observed_candidate_arrivals_per_second": {
+          "max": 12.004938534590902,
+          "median": 8.637662475780804,
+          "min": 2.8950623580599557,
+          "n": 33
+        },
+        "observed_completed_events_per_second": {
+          "max": 36.0148156037727,
+          "median": 25.912987427342415,
+          "min": 8.685187074179867,
+          "n": 33
+        },
+        "offered_foreground_events_per_second": {
+          "max": 55.41200703155281,
+          "median": 53.3361235830074,
+          "min": 50.88471601990539,
+          "n": 33
+        },
+        "trials": 33
+      },
+      {
+        "mode": "history",
+        "observed_candidate_arrivals_per_second": {
+          "max": 18.209211556854136,
+          "median": 11.226700210230664,
+          "min": 2.996272624271062,
+          "n": 33
+        },
+        "observed_completed_events_per_second": {
+          "max": 47.343950047820755,
+          "median": 29.189420546599724,
+          "min": 7.790308823104761,
+          "n": 33
+        },
+        "offered_foreground_events_per_second": {
+          "max": 55.34771336111097,
+          "median": 53.3929505374169,
+          "min": 49.54156634176946,
+          "n": 33
+        },
+        "trials": 33
+      }
+    ],
+    "scripted_resolution_max_ms": 12.962375,
+    "scripted_resolution_median_ms": 2.813042,
+    "scripted_review_operations": 219,
+    "trial_count": 99,
+    "variants": [
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 3.322291,
+        "history_terminal_commit_median_p95_delta_ms": 0.181624,
+        "max_db_after_mib": 6.0546875,
+        "max_freshness_seconds": 1.034,
+        "max_wal_after_mib": 4.086334228515625,
+        "new_response_finalization_median_p95_delta_ms": 1.770209,
+        "new_terminal_commit_median_p95_delta_ms": 0.578958,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 55.5625,
+        "variant": "baseline"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": -1.077208,
+        "history_terminal_commit_median_p95_delta_ms": -0.354666,
+        "max_db_after_mib": 42.78125,
+        "max_freshness_seconds": 1.049,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_response_finalization_median_p95_delta_ms": 4.315833,
+        "new_terminal_commit_median_p95_delta_ms": -0.18175,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 57.6875,
+        "variant": "retained-events-100000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 2.572583,
+        "history_terminal_commit_median_p95_delta_ms": 0.807876,
+        "max_db_after_mib": 412.19140625,
+        "max_freshness_seconds": 1.05,
+        "max_wal_after_mib": 4.0156097412109375,
+        "new_response_finalization_median_p95_delta_ms": 1.298126,
+        "new_terminal_commit_median_p95_delta_ms": 0.09425,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 59.09375,
+        "variant": "retained-events-1000000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 1.711917,
+        "history_terminal_commit_median_p95_delta_ms": -0.024249,
+        "max_db_after_mib": 7.0,
+        "max_freshness_seconds": 1.148,
+        "max_wal_after_mib": 4.043113708496094,
+        "new_response_finalization_median_p95_delta_ms": 3.437791,
+        "new_terminal_commit_median_p95_delta_ms": 0.228126,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 63.3125,
+        "variant": "source-bytes-4096"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 8.848999,
+        "history_terminal_commit_median_p95_delta_ms": 0.546375,
+        "max_db_after_mib": 7.7265625,
+        "max_freshness_seconds": 1.163,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_response_finalization_median_p95_delta_ms": 7.369207,
+        "new_terminal_commit_median_p95_delta_ms": 0.025375,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 67.734375,
+        "variant": "source-bytes-12000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 3.907499,
+        "history_terminal_commit_median_p95_delta_ms": 0.037042,
+        "max_db_after_mib": 6.85546875,
+        "max_freshness_seconds": 1.059,
+        "max_wal_after_mib": 4.058830261230469,
+        "new_response_finalization_median_p95_delta_ms": 2.584708,
+        "new_terminal_commit_median_p95_delta_ms": -0.195292,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 58.546875,
+        "variant": "graph-claims-100"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 2.097709,
+        "history_terminal_commit_median_p95_delta_ms": -0.188167,
+        "max_db_after_mib": 13.09375,
+        "max_freshness_seconds": 1.048,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_response_finalization_median_p95_delta_ms": 2.347333,
+        "new_terminal_commit_median_p95_delta_ms": -0.139416,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 56.375,
+        "variant": "graph-claims-1000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 2.6655,
+        "history_terminal_commit_median_p95_delta_ms": -0.078084,
+        "max_db_after_mib": 6.09375,
+        "max_freshness_seconds": 1.037,
+        "max_wal_after_mib": 4.0470428466796875,
+        "new_response_finalization_median_p95_delta_ms": 2.143418,
+        "new_terminal_commit_median_p95_delta_ms": -0.035125,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 58.46875,
+        "variant": "scopes-16"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 1.237833,
+        "history_terminal_commit_median_p95_delta_ms": 0.079791,
+        "max_db_after_mib": 6.08203125,
+        "max_freshness_seconds": 1.018,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_response_finalization_median_p95_delta_ms": 1.412,
+        "new_terminal_commit_median_p95_delta_ms": 0.732709,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 54.546875,
+        "variant": "delay-ms-0"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 2.667833,
+        "history_terminal_commit_median_p95_delta_ms": 0.013251,
+        "max_db_after_mib": 6.0859375,
+        "max_freshness_seconds": 4.872,
+        "max_wal_after_mib": 4.1727752685546875,
+        "new_response_finalization_median_p95_delta_ms": 2.068083,
+        "new_terminal_commit_median_p95_delta_ms": 0.417959,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 55.5625,
+        "variant": "delay-ms-250"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 0.096167,
+        "history_terminal_commit_median_p95_delta_ms": -0.006333,
+        "max_db_after_mib": 6.046875,
+        "max_freshness_seconds": 1.033,
+        "max_wal_after_mib": 4.035255432128906,
+        "new_response_finalization_median_p95_delta_ms": 0.889333,
+        "new_terminal_commit_median_p95_delta_ms": 0.151876,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 82.0625,
+        "variant": "processes-2"
+      }
+    ]
+  },
+  "environment_after": {
+    "commands": [
+      {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string",
+          "hw.memsize",
+          "hw.ncpu"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Apple M3 Pro\n19327352832\n11\n"
+      },
+      {
+        "command": [
+          "sw_vers"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t15.7.8\nBuildVersion:\t\t24G809\n"
+      },
+      {
+        "command": [
+          "pmset",
+          "-g",
+          "batt"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22085731)\t99%; finishing charge; 0:04 remaining present: true\n"
+      }
+    ],
+    "phase": "after_final_matrix",
+    "recorded_at": "2026-09-05T14:56:43.193351+00:00",
+    "version": "memory-stage4-pilot-host-observation-v1"
+  },
+  "environment_before": {
+    "commands": [
+      {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string",
+          "hw.memsize",
+          "hw.ncpu"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Apple M3 Pro\n19327352832\n11\n"
+      },
+      {
+        "command": [
+          "sw_vers"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t15.7.8\nBuildVersion:\t\t24G809\n"
+      },
+      {
+        "command": [
+          "pmset",
+          "-g",
+          "batt"
+        ],
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22085731)\t95%; charging; 0:21 remaining present: true\n"
+      }
+    ],
+    "phase": "before_final_matrix",
+    "recorded_at": "2026-09-05T14:40:05.323058+00:00",
+    "version": "memory-stage4-pilot-host-observation-v1"
+  },
+  "final_holdout": {
+    "created": false,
+    "exposed": false,
+    "run": false
+  },
+  "generation": {
+    "closure_policy": "owner-assertions-v1",
+    "decoding": {
+      "context_tokens": 131072,
+      "output_tokens": 768,
+      "seed": 17,
+      "temperature": 0
+    },
+    "effect_policy": "owner-assertions-v1",
+    "entity_policy": "owner-assertions-v1",
+    "equivalence_policy": "full-effect-equivalence-v2",
+    "evidence_policy": "owner-assertions-v1",
+    "model_artifact": "scripted:stage4-infrastructure-pilot-v1",
+    "model_manifest": "eyJsYXllcnMiOlt7Im1lZGlhVHlwZSI6ImFwcGxpY2F0aW9uL3ZuZC5vbGxhbWEuaW1hZ2UubW9kZWwiLCJkaWdlc3QiOiJzaGEyNTY6MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMSJ9XX0=",
+    "model_manifest_sha256": "f4ff3f52ee1006d4c0461f266186abcf2954537a4c52bba8d3e74e87fc3a07fc",
+    "model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "predicate_policy": "owner-assertions-v1",
+    "prompt": "Infrastructure fixture only; no quality conclusions.",
+    "protocol_version": "ollama-generate-v1",
+    "quantization": "scripted-not-a-model",
+    "runtime_version": "scripted-v1",
+    "schema": {
+      "type": "object"
+    },
+    "secret_policy": "owner-assertions-v1",
+    "template": "{{.System}}\n{{.Prompt}}",
+    "template_sha256": "8a640bdc0e5ac8aafc2fbbfa5741e5e60fbb43dbf150049529e0a8f6fef013aa",
+    "template_token_overhead": 8,
+    "token_bound_proof_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "tokenizer_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "tokens_per_byte": 1,
+    "validation_policy": "owner-assertions-v1",
+    "version": "compiler-generation-v1",
+    "window_policy": "owner-assertions-v1"
+  },
+  "generation_id": "799b5a9af4ee29541c5b9cf80d29535552ab15054588c81ab3049eeacd58292e",
+  "historical_gap_finding": {
+    "case": "A1..2 sealed, B3..4 foreign root, explicit historical A5..6 owned before live discovery revisits A. Ordinal gap3..4 contained no A members but manufactured an empty failed A job.",
+    "correction": "Both automatic reconcilers (AwaitClosure) record a proved empty root interval as excluded/no_root_members with zero members, no job and no coverage. Both history-first and live-first ordering survive reopening and preserve later real-root progress. Direct explicit QueueCandidateUnit errors remain unchanged.",
+    "final_holdout": {
+      "created": false,
+      "exposed": false,
+      "run": false
+    },
+    "history_first_red_log_sha256": "385d61d67e4a29c88c49b5b5b5fbde62291ea3e18b71d3f28ceae4ab55d79811",
+    "interrupted_matrix_observations": 20,
+    "matrix_complete": false,
+    "partial_matrix": "150-matrix-v2",
+    "red_log_sha256": "cb2080f6e582d2e6dc4e61ab7ed22af7657a0bcb54026c494a6c5ff7a5af1a18",
+    "regression": "TestPilotReviewedHistoricalSuffixDoesNotManufactureForeignRootGap",
+    "source_tree": "413601a7c6088b59fb5dcd7ced53f46193590ffe",
+    "status": "confirmed_contract_failure",
+    "version": "memory-stage4-pilot-finding-v1"
+  },
+  "human_review": {
+    "active_seconds": null,
+    "capacity": null,
+    "status": "pending_actual_David_sessions"
+  },
+  "independent_root_audit": {
+    "bytes": 810,
+    "path": "infrastructure-audit.json",
+    "sha256": "05151580dbd461292085454904da0c22766eac62ccb4c1dbc89803accbac8fba"
+  },
+  "infrastructure_status": "passed_after_correcting_confirmed_contract_failure",
+  "limitations": [
+    "Scripted infrastructure measurements cannot establish model quality or runtime fitness.",
+    "Modes rotate across repetitions; each run has a new database and identical declared fixtures, with fresh OS-cache state uncontrolled.",
+    "Each variant changes one factor from baseline; factors are not combined into capacity promises.",
+    "ps samples whole pilot process trees at 100ms including setup; RSS is sampled, not an exact peak. CPU percentages are ps interval estimates.",
+    "Archived rows vary retained database size, not the size of an active foreground conversation.",
+    "Source and candidate throughput are observed workload rates, not sustained compilation or human review capacity.",
+    "No quality thresholds are frozen without selected-model and actual-human pilot observations.",
+    "Three repetitions do not establish a stable p95 or sustained capacity; foreground p95 uses sixteen samples per trial.",
+    "Power source and charge state are recorded per experiment and differ between runs. Cache, thermal conditions and unrelated OS work were not controlled.",
+    "Original and corrected matrices use different catch-up validation; their total observed intervals are not a paired before/after performance experiment.",
+    "The corrected matrix includes exactly the injected invalid-output failure in each history trial. Passed infrastructure does not mean no failed historical work.",
+    "Cancellation and stale/retry recovery are separate deterministic conformance evidence; this workload does not provoke them."
+  ],
+  "measured_tree": "4b29071dc69018a9fedb2464315453baab0c9025",
+  "measurement_vs_delivery": "The frozen code tree was measured before these report artifacts were published. Delivery adds report files and has a different whole-tree fingerprint. All thirteen measured ticket tooling/production files are retained unchanged; this report does not claim the final delivery commit was measured.",
+  "model_server_resources": null,
+  "numerical_release_gates": null,
+  "original_finding": {
+    "actual_human_review_observations": null,
+    "affected_trial_count": 54,
+    "affected_trials": [
+      {
+        "id": "baseline-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "baseline-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "baseline-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "baseline-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "baseline-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "baseline-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-100000-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 3
+      },
+      {
+        "id": "retained-events-1000000-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-1000000-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-1000000-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-1000000-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-1000000-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "retained-events-1000000-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 3
+      },
+      {
+        "id": "source-bytes-4096-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-4096-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-4096-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-4096-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 3
+      },
+      {
+        "id": "source-bytes-4096-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-4096-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "source-bytes-12000-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-100-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "graph-claims-1000-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-0-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r1-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r1-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r2-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r2-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r3-history",
+        "unexpected_zero_attempt_failed_jobs": 2
+      },
+      {
+        "id": "delay-ms-250-r3-new",
+        "unexpected_zero_attempt_failed_jobs": 2
+      }
+    ],
+    "clean_conformance_or_release_evidence": false,
+    "command_level_trials_passed": 99,
+    "diagnosis": "A root could be sealed before discovery reached its final member. Later-root coordinates then extended the old root's desired interval during reconsideration, creating a failed empty suffix with no new members. Sparse coordinates, roots predating activation and interleaved late members require explicit immutable-selection reuse and root-member bounds.",
+    "expected_scripted_failed_jobs": 33,
+    "final_holdout": {
+      "created": false,
+      "exposed": false,
+      "run": false
+    },
+    "matrix_report": "150-matrix-v1/report.json",
+    "matrix_report_sha256": "8489c12284e7e1b7c717a83c9341480e17413547fa01da96da30258cd4c4b9d9",
+    "original_report_preserved": true,
+    "quality_observations": null,
+    "required_followup": "Fix and independently review reconciliation; strengthen exact fixture outcome checks; obtain fresh source-bound browser/full conformance; rerun the unchanged declared matrix with a newly hashed binary.",
+    "runner_gap": "Finite catch-up originally accepted total jobs >= the expected successful work and all-terminal state. It did not reject extra failed jobs or wait for root discovery to settle.",
+    "status": "confirmed_contract_failure",
+    "tooling_tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+    "unexpected_zero_attempt_empty_failed_jobs": 111,
+    "version": "memory-stage4-pilot-finding-v1"
+  },
+  "original_summary": {
+    "attempt_outcomes": {
+      "completed": 1551,
+      "failed": 33
+    },
+    "counts": {
+      "attempts": 1584,
+      "candidates_before_scripted_review": 1518,
+      "completed_events": 4158,
+      "foreground_elapsed_nanos": 88681407628,
+      "foreground_event_assistant_message": 1584,
+      "foreground_event_context_snapshot": 1584,
+      "foreground_event_user_message": 1584,
+      "foreground_persisted_events": 4752,
+      "jobs_completed_candidates": 1518,
+      "jobs_completed_empty": 33,
+      "jobs_failed": 144,
+      "observed_attempt_completed": 1551,
+      "observed_attempt_failed": 33,
+      "rows_events": 10727901,
+      "rows_memory_compiler_candidates": 1518,
+      "rows_semantic_claims": 10137,
+      "selected_events": 4224
+    },
+    "foreground_turns": 1584,
+    "job_states": {
+      "completed_candidates": 1518,
+      "completed_empty": 33,
+      "failed": 144
+    },
+    "max_response_finalization_ms": 21.768875,
+    "max_terminal_commit_ms": 4.794583,
+    "scripted_resolution_max_ms": 12.586084,
+    "scripted_resolution_median_ms": 2.6025,
+    "scripted_review_operations": 219,
+    "trial_count": 99,
+    "variants": [
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 4.270792,
+        "history_terminal_commit_median_p95_delta_ms": 0.013166,
+        "max_db_after_mib": 6.06640625,
+        "max_freshness_seconds": 1.048,
+        "max_wal_after_mib": 4.00775146484375,
+        "new_response_finalization_median_p95_delta_ms": 1.769792,
+        "new_terminal_commit_median_p95_delta_ms": 0.00125,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 54.421875,
+        "variant": "baseline"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": -0.957918,
+        "history_terminal_commit_median_p95_delta_ms": -0.269,
+        "max_db_after_mib": 42.77734375,
+        "max_freshness_seconds": 1.044,
+        "max_wal_after_mib": 4.10205078125,
+        "new_response_finalization_median_p95_delta_ms": 5.637916,
+        "new_terminal_commit_median_p95_delta_ms": -0.202584,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 56.421875,
+        "variant": "retained-events-100000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 0.183709,
+        "history_terminal_commit_median_p95_delta_ms": -0.154833,
+        "max_db_after_mib": 412.17578125,
+        "max_freshness_seconds": 1.056,
+        "max_wal_after_mib": 4.00775146484375,
+        "new_response_finalization_median_p95_delta_ms": 0.222957,
+        "new_terminal_commit_median_p95_delta_ms": 3.277042,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 56.78125,
+        "variant": "retained-events-1000000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 4.447083,
+        "history_terminal_commit_median_p95_delta_ms": 0.055251,
+        "max_db_after_mib": 7.06640625,
+        "max_freshness_seconds": 1.19,
+        "max_wal_after_mib": 4.0470428466796875,
+        "new_response_finalization_median_p95_delta_ms": 1.757792,
+        "new_terminal_commit_median_p95_delta_ms": 0.213834,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 62.703125,
+        "variant": "source-bytes-4096"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 0.604084,
+        "history_terminal_commit_median_p95_delta_ms": 0.077708,
+        "max_db_after_mib": 7.703125,
+        "max_freshness_seconds": 1.194,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_response_finalization_median_p95_delta_ms": 0.138417,
+        "new_terminal_commit_median_p95_delta_ms": 0.438917,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 67.296875,
+        "variant": "source-bytes-12000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 2.726416,
+        "history_terminal_commit_median_p95_delta_ms": 0.572708,
+        "max_db_after_mib": 6.83984375,
+        "max_freshness_seconds": 1.038,
+        "max_wal_after_mib": 4.180633544921875,
+        "new_response_finalization_median_p95_delta_ms": 1.203625,
+        "new_terminal_commit_median_p95_delta_ms": 0.073208,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 56.65625,
+        "variant": "graph-claims-100"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 3.157624,
+        "history_terminal_commit_median_p95_delta_ms": 0.293125,
+        "max_db_after_mib": 13.09765625,
+        "max_freshness_seconds": 1.039,
+        "max_wal_after_mib": 4.07061767578125,
+        "new_response_finalization_median_p95_delta_ms": 2.45775,
+        "new_terminal_commit_median_p95_delta_ms": 0.616167,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 55.78125,
+        "variant": "graph-claims-1000"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 0.61275,
+        "history_terminal_commit_median_p95_delta_ms": -0.292125,
+        "max_db_after_mib": 6.09375,
+        "max_freshness_seconds": 1.039,
+        "max_wal_after_mib": 4.023468017578125,
+        "new_response_finalization_median_p95_delta_ms": -0.091416,
+        "new_terminal_commit_median_p95_delta_ms": 0.03325,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 53.90625,
+        "variant": "scopes-16"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 1.131876,
+        "history_terminal_commit_median_p95_delta_ms": -0.03475,
+        "max_db_after_mib": 6.0703125,
+        "max_freshness_seconds": 1.018,
+        "max_wal_after_mib": 4.0470428466796875,
+        "new_response_finalization_median_p95_delta_ms": 1.37575,
+        "new_terminal_commit_median_p95_delta_ms": -0.095125,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 55.28125,
+        "variant": "delay-ms-0"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": -0.369708,
+        "history_terminal_commit_median_p95_delta_ms": 0.050917,
+        "max_db_after_mib": 6.06640625,
+        "max_freshness_seconds": 4.976,
+        "max_wal_after_mib": 4.019538879394531,
+        "new_response_finalization_median_p95_delta_ms": 2.834791,
+        "new_terminal_commit_median_p95_delta_ms": 0.323958,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 55.28125,
+        "variant": "delay-ms-250"
+      },
+      {
+        "foreground_turns_per_mode": 48,
+        "history_response_finalization_median_p95_delta_ms": 8.048459,
+        "history_terminal_commit_median_p95_delta_ms": -0.095292,
+        "max_db_after_mib": 6.08203125,
+        "max_freshness_seconds": 1.017,
+        "max_wal_after_mib": 4.054901123046875,
+        "new_response_finalization_median_p95_delta_ms": 2.89125,
+        "new_terminal_commit_median_p95_delta_ms": -0.123666,
+        "paired_repetitions": 3,
+        "sampled_peak_go_process_tree_rss_mib": 82.90625,
+        "variant": "processes-2"
+      }
+    ]
+  },
+  "partial_matrix": {
+    "active_trial_cleanup_confirmed": true,
+    "active_trial_command": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-matrix-v2/memory-stage4-pilot",
+    "active_trial_pid": 77149,
+    "active_trial_report_sha256": "4c580ca4ce92f91043440fabcaebc052eb01066f0ee904477174af9f7cfdcdfc",
+    "all_trials_cleanup_confirmed": true,
+    "at": "2026-09-05T14:18:49.316688+00:00",
+    "completed_raw_trial_receipts": [
+      {
+        "path": "baseline-r1-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "1e44038a647dc90d124c7ad2de74818f0054a72774bfe2ec7535c13a7bcaca4f"
+      },
+      {
+        "path": "baseline-r1-history.json",
+        "resource_receipt_available": true,
+        "sha256": "ec15461061fd67a674a724615918dbb0f809dacf4383d3c0ef5c1e5156ad9696"
+      },
+      {
+        "path": "baseline-r1-new.json",
+        "resource_receipt_available": true,
+        "sha256": "1404e13b48c03bfdc2cdcb1251df5e26a2df7858770548bb038c414193f917fb"
+      },
+      {
+        "path": "baseline-r2-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "bebe3fc96b5fafdedb3af6f9ea178f6821b0878a0a4127ccfe447d8402003423"
+      },
+      {
+        "path": "baseline-r2-history.json",
+        "resource_receipt_available": true,
+        "sha256": "bdaaf2e1913d7cc7ed35c777e0cfe2cda11acbc1e36b5681851545d698cc402a"
+      },
+      {
+        "path": "baseline-r2-new.json",
+        "resource_receipt_available": true,
+        "sha256": "1377230cfafec4b3949e8c6c0d423b3bdc2817ef0b825bf2b34711ec982791a7"
+      },
+      {
+        "path": "baseline-r3-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "275bab50cd59c451530f967deb81c360dc15939a247fffd7d7239683897e1f61"
+      },
+      {
+        "path": "baseline-r3-history.json",
+        "resource_receipt_available": true,
+        "sha256": "3b7a8c6f1148774ee4df337ae6e38aa64aef31aa9f3eb0b7c41fbd99124926e5"
+      },
+      {
+        "path": "baseline-r3-new.json",
+        "resource_receipt_available": true,
+        "sha256": "d9ab642a4555a316778fa6825c4c8da4e07c9ad9ad178484f073f447fdc2ca8d"
+      },
+      {
+        "path": "retained-events-100000-r1-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "f1927686273f3d177e6c5ddcfa58dc70b1543f7063b549fdfdb2db79328634a1"
+      },
+      {
+        "path": "retained-events-100000-r1-history.json",
+        "resource_receipt_available": true,
+        "sha256": "ca3ecc6790a6e06b305467fe1e71b995b30202122b2fd8cc6d5578fae48aa959"
+      },
+      {
+        "path": "retained-events-100000-r1-new.json",
+        "resource_receipt_available": true,
+        "sha256": "e26d85c14d787242432ea5f356a991eeda2dbf3972127121ba1e304a45897bd2"
+      },
+      {
+        "path": "retained-events-100000-r2-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "d891d7bf8e81c2789e235cd95f3a3843b0476b06812c8c6a3de876def86eeebe"
+      },
+      {
+        "path": "retained-events-100000-r2-history.json",
+        "resource_receipt_available": true,
+        "sha256": "b01e2c91d6a11e39c921d117ddbef468af1ee9bfb5b0de858f1aa892d0bc5fdf"
+      },
+      {
+        "path": "retained-events-100000-r2-new.json",
+        "resource_receipt_available": true,
+        "sha256": "e63c0dcd4279a544af1137c12af5f134a1539da7aed63aab8a9fbc3b655a5902"
+      },
+      {
+        "path": "retained-events-100000-r3-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "ee708c685c15d48d560c2b6ca610e2f5e161a5bd5c34cecb58883a2dffddd676"
+      },
+      {
+        "path": "retained-events-100000-r3-history.json",
+        "resource_receipt_available": true,
+        "sha256": "f685ff6153806c963576e172a25dcd18db6ffb5c5a181be086c8d3b2b45cd3b4"
+      },
+      {
+        "path": "retained-events-100000-r3-new.json",
+        "resource_receipt_available": true,
+        "sha256": "1f9dc385734b15a058adcd15fe03ef4b2e21b14a8b8e360e9d7caa63c319d6c1"
+      },
+      {
+        "path": "retained-events-1000000-r1-disabled.json",
+        "resource_receipt_available": true,
+        "sha256": "57bbcb460ba46f9e0b45946a5bcff03d17ef72921e20dcb45dc3ed279bfcb446"
+      },
+      {
+        "path": "retained-events-1000000-r1-new.json",
+        "resource_receipt_available": false,
+        "sha256": "4c580ca4ce92f91043440fabcaebc052eb01066f0ee904477174af9f7cfdcdfc"
+      }
+    ],
+    "finished_at": "2026-09-05T14:20:30.105575+00:00",
+    "last_completed_files": [
+      "retained-events-100000-r2-disabled.resources.json",
+      "baseline-r3-disabled.json",
+      "retained-events-100000-r1-new.resources.json",
+      "baseline-r3-disabled.resources.json",
+      "baseline-r2-new.resources.json",
+      "retained-events-100000-r2-disabled.json",
+      "retained-events-100000-r3-history.json",
+      "retained-events-100000-r1-disabled.json",
+      "plan.json",
+      "baseline-r1-new.resources.json",
+      "retained-events-100000-r2-new.json",
+      "retained-events-100000-r3-new.json",
+      "retained-events-100000-r2-new.resources.json",
+      "retained-events-100000-r2-history.json",
+      "retained-events-1000000-r1-disabled.resources.json",
+      "baseline-r2-history.json",
+      "baseline-r2-new.json",
+      "baseline-r3-new.json",
+      "baseline-r3-history.json",
+      "retained-events-100000-r1-disabled.resources.json",
+      "baseline-r3-history.resources.json",
+      "baseline-r1-history.json",
+      "retained-events-100000-r3-history.resources.json",
+      "retained-events-100000-r1-new.json",
+      "baseline-r2-disabled.resources.json",
+      "retained-events-100000-r3-disabled.resources.json",
+      "baseline-r1-history.resources.json",
+      "retained-events-1000000-r1-new.json",
+      "retained-events-100000-r1-history.resources.json",
+      "baseline-r1-disabled.json",
+      "retained-events-100000-r3-new.resources.json",
+      "baseline-r1-disabled.resources.json",
+      "retained-events-1000000-r1-disabled.json",
+      "retained-events-100000-r2-history.resources.json",
+      "baseline-r2-disabled.json",
+      "baseline-r2-history.resources.json",
+      "baseline-r1-new.json",
+      "retained-events-100000-r3-disabled.json",
+      "retained-events-100000-r1-history.json",
+      "baseline-r3-new.resources.json"
+    ],
+    "partial_matrix_status": "interrupted_for_confirmed_contract_failure",
+    "reason": "Independent Spec review found a plausible explicit-history/foreign-root empty interval; public regression pending.",
+    "release_eligible": false,
+    "resource_sampling_interrupted": true,
+    "scheduler_pid": 75089,
+    "status": "terminated_after_active_trial_cleanup",
+    "version": "memory-stage4-pilot-interruption-v1"
+  },
+  "pilot_status": "incomplete",
+  "published_at": "2026-09-05T14:56:43.754321+00:00",
+  "quality": {
+    "raw_proposals_graded": null,
+    "required_memory_recall": null,
+    "retained_proposals_graded": null,
+    "status": "pending_human_output_adjudication_and_selected_model",
+    "supported_useful_precision": null
+  },
+  "release_eligible": false,
+  "spike_contract": {
+    "development.gold.json": "78590a0e3a06f8a2510762d96957e441f7ab4b9c9d4bf964bfa0dc5cc9c81b94",
+    "development.json": "1955b92a0207950274fad5ce52ff80dba0b38e12ba615df6e93db7a0a17803d0",
+    "holdout-custody.md": "042f70e73ea716c494f21e3e4b9fa22c86b4f1a661dabe8b7cecc5d75c392b78"
+  },
+  "version": "memory-stage4-pilot-published-observations-v1"
+}

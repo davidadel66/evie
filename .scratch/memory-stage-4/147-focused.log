@@ -1,0 +1,5 @@
+--- FAIL: TestCompilerRecurrenceUpgradeHistoryCoverageAndCancellation (0.04s)
+    compiler_recurrence_public_test.go:337: resumed selected generation false <nil>
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	1.177s
+FAIL

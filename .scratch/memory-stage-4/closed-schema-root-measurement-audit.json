@@ -1,0 +1,11 @@
+{
+  "requests": 10,
+  "raw": 16,
+  "retained": 3,
+  "latency_ms_p50_p95_max": [
+    8489.417,
+    19346.418,
+    20529.76
+  ],
+  "all_frozen_plans_match": true
+}

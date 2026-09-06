@@ -1,0 +1,4 @@
+{
+  "cmd/evie/main.go": "2a526bb062c0fdc0ce2b61e7d34f9cc813e58525cb994b82c51e2fcff8f8b8cd",
+  "internal/eviedb/db.go": "ac12180709deec2a10878f09e5a1a047804b5e0a4587fb175d2e08df7e70d1cf"
+}

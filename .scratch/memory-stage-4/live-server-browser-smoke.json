@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:6687/",
+  "sourceCommit": "f4bcc21cf38653b1ddacbef8d3d3e370af5ec237",
+  "realDatabase": true,
+  "syntheticResponses": false,
+  "reviewStatus": 200,
+  "candidateCount": 0,
+  "errors": [],
+  "compilerHealthVisible": true,
+  "completedAt": "2026-09-05T17:51:03.659Z"
+}

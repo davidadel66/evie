@@ -1,0 +1,11 @@
+[codex/memory-stage-4 d61b2e7] feat(memory): review contracted local clock observations (#143)
+ 24 files changed, 1932 insertions(+), 58 deletions(-)
+ create mode 100644 cmd/evie/candidate_clock_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-clock-observation.md
+ create mode 100644 internal/eviedb/candidate_review_clock_encoding_test.go
+ create mode 100644 internal/eviedb/compiler_tool_observation.go
+ create mode 100644 internal/eviedb/compiler_tool_observation_bound_test.go
+ create mode 100644 internal/eviedb/compiler_tool_observation_error_test.go
+ create mode 100644 internal/eviedb/compiler_tool_observation_test.go
+ create mode 100644 internal/eviedb/testdata/candidate_review_encoding_v4.json
+ create mode 100644 internal/memory/compiler_observation.go

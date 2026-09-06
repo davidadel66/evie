@@ -1,0 +1,17 @@
+[
+  {
+    "path": "internal/eviedb/compiler_recurrence_encoding.go",
+    "before_sha256": "546e3b735c787a7639fc3236b888427d0a9c3efd4320ce7efec16316f024e04d",
+    "after_sha256": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d"
+  },
+  {
+    "path": "internal/eviedb/compiler_recurrence_public_test.go",
+    "before_sha256": "6baedbe8ca68bb797db6a11340b28adfa65f7af3d5d724cdfbde82ab1baecafc",
+    "after_sha256": "cceadd8ccd6d1a0200259f73a30e8d80b19fcdd510c5a4a5342141dc3d674835"
+  },
+  {
+    "path": "cmd/evie/docs/research/memory-stage-4-generation-lineage.md",
+    "before_sha256": "84568f49db0b900c108f32dcedd7e0dcccde5aef6449bd7a1b34364741914745",
+    "after_sha256": "f138c63ab5b7a92d70b73993363b725452b8908ce5f7d64b1f18b2ee2a3e49c0"
+  }
+]

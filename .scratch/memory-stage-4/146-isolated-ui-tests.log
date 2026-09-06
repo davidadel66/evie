@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /private/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-146-checkpoint-gs6_tpfm/internal/web/ui
+
+
+ Test Files  20 passed (20)
+      Tests  137 passed (137)
+   Start at  07:50:30
+   Duration  559ms (transform 908ms, setup 0ms, import 1.85s, tests 290ms, environment 1ms)
+

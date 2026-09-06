@@ -1,0 +1,16 @@
+[codex/memory-stage-4 a435d2e] feat(memory): select bounded historical backfill and inspect coverage (#139)
+ 20 files changed, 2376 insertions(+), 18 deletions(-)
+ create mode 100644 cmd/evie/compiler_history.go
+ create mode 100644 cmd/evie/compiler_history_test.go
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-bounded-history.md
+ create mode 100644 internal/eviedb/compiler_ancestry.go
+ create mode 100644 internal/eviedb/compiler_history.go
+ create mode 100644 internal/eviedb/compiler_history_bound_test.go
+ create mode 100644 internal/eviedb/compiler_history_inspection.go
+ create mode 100644 internal/eviedb/compiler_history_public_test.go
+ create mode 100644 internal/eviedb/compiler_history_reconciliation.go
+ create mode 100644 internal/eviedb/compiler_history_resume.go
+ create mode 100644 internal/eviedb/compiler_history_schema.go
+ create mode 100644 internal/eviedb/compiler_history_test.go
+ create mode 100644 internal/eviedb/compiler_history_unavailable_test.go
+ create mode 100644 internal/memory/compiler_history.go

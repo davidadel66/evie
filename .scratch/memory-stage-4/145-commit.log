@@ -1,0 +1,17 @@
+[codex/memory-stage-4 cc6c6cd] feat(memory): review simple candidates in the web inbox (#145)
+ 19 files changed, 1684 insertions(+), 2 deletions(-)
+ create mode 100644 cmd/evie/docs/research/memory-stage-4-web-review.md
+ create mode 100644 internal/eviedb/candidate_review_scopes.go
+ create mode 100644 internal/memory/candidate_review_scopes.go
+ create mode 100644 internal/web/candidate_review.go
+ create mode 100644 internal/web/candidate_review_navigation_test.go
+ create mode 100644 internal/web/candidate_review_recovery_test.go
+ create mode 100644 internal/web/candidate_review_test.go
+ create mode 100644 internal/web/ui/src/api/candidateReview.ts
+ create mode 100644 internal/web/ui/src/candidateInbox/CandidateInbox.test.tsx
+ create mode 100644 internal/web/ui/src/candidateInbox/CandidateInbox.tsx
+ create mode 100644 internal/web/ui/src/candidateInbox/MemoryReviewTabs.tsx
+ create mode 100644 internal/web/ui/src/candidateInbox/controller.test.ts
+ create mode 100644 internal/web/ui/src/candidateInbox/controller.ts
+ create mode 100644 internal/web/ui/src/candidateInbox/fixtures.test-support.ts
+ create mode 100644 internal/web/ui/src/candidateInbox/pendingDecision.ts

@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-09-05T08:55:19.691837+00:00",
+  "tree": "56df347799a5e64fe2321da376ad06342bdaf046",
+  "command": "./scripts/verify-change.sh",
+  "result": 0,
+  "log": ".scratch/memory-stage-4/verify-135-isolated.log",
+  "previous_failure": {
+    "log": ".scratch/memory-stage-4/verify-135-isolated-raw-log-whitespace-failure.log",
+    "cause": "Six original end-of-line spaces across four frozen machine logs; Go, vet and UI checks passed before whitespace check."
+  },
+  "literal_artifact_policy": {
+    "file": "cmd/evie/docs/fixtures/memory-stage-4-spike/.gitattributes",
+    "scope": "Four exact v2/v3 ollama-server.log and verification.log paths only",
+    "attributes": "-text whitespace=-blank-at-eol",
+    "reason": "Preserve original hash-bound experimental bytes; do not normalize frozen evidence. All other whitespace checks remain active, source/docs attributes unchanged."
+  },
+  "human_output_labels": "still pending; no labels inferred",
+  "warning": "Existing Vite chunk size warning",
+  "skipped_required_checks": []
+}

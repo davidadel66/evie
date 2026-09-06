@@ -1,0 +1,8 @@
+# github.com/davidadel66/evie/internal/eviedb_test [github.com/davidadel66/evie/internal/eviedb.test]
+internal/eviedb/compiler_tool_observation_test.go:65:52: source.EventID undefined (type "github.com/davidadel66/evie/internal/memory".SemanticSourceInspection has no field or method EventID)
+internal/eviedb/compiler_tool_observation_test.go:65:94: source.Evidence undefined (type "github.com/davidadel66/evie/internal/memory".SemanticSourceInspection has no field or method Evidence)
+internal/eviedb/compiler_tool_observation_test.go:65:127: source.Authority undefined (type "github.com/davidadel66/evie/internal/memory".SemanticSourceInspection has no field or method Authority)
+internal/eviedb/compiler_tool_observation_test.go:67:19: f.store.RebuildSemanticProjection undefined (type *eviedb.Store has no field or method RebuildSemanticProjection)
+FAIL	github.com/davidadel66/evie/internal/eviedb [build failed]
+ok  	github.com/davidadel66/evie/cmd/evie	13.013s
+FAIL

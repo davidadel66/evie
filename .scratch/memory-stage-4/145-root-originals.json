@@ -1,0 +1,6 @@
+{
+  "cmd/evie/main.go": "41b10da781c639358af2d2fdf21b74f294f2fe2bf49aabaaf0d29fc364b0b307",
+  "internal/web/serve.go": "1b134df7905571615ab2476d0b9935a0aa03e235b8f7d45afe01340dd1bc36cb",
+  "internal/web/ui/src/memory/Memory.tsx": "9d1b5c66e75a4c469d18ab5556301670ac69321531e99f4f7ac53d66c7646640",
+  "internal/eviedb/db.go": "b11aca18447ecf5b3e5bf7014323648503adfd01652fe4694e15a20a6d5310e8"
+}

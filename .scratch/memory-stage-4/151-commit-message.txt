@@ -1,0 +1,3 @@
+Add evidence-bound Stage 4 release assessment tooling (#151)
+
+Validate frozen plans, independent history families, complete paired observations and immutable artifact receipts. Keep absent model, human-pilot, threshold and holdout evidence pending; no experiment or ongoing compilation is enabled.

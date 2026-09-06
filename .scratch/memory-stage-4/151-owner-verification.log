@@ -1,0 +1,10 @@
+$ go test ./internal/memoryeval ./scripts/memory-stage4-release -count=1
+ok  	github.com/davidadel66/evie/internal/memoryeval	0.436s
+ok  	github.com/davidadel66/evie/scripts/memory-stage4-release	0.175s
+
+$ go test -race ./internal/memoryeval ./scripts/memory-stage4-release -count=1
+ok  	github.com/davidadel66/evie/internal/memoryeval	2.062s
+ok  	github.com/davidadel66/evie/scripts/memory-stage4-release	1.189s
+
+$ go vet ./internal/memoryeval ./scripts/memory-stage4-release
+

@@ -1,0 +1,65 @@
+{
+  "ticket": 148,
+  "recorded_utc": "2026-09-05T12:40:58.180068+00:00",
+  "status": "output_fix_focused_checks_pass_parent_final_gates_pending",
+  "checks": [
+    {
+      "command": "go test ./internal/eviedb ./internal/agent ./internal/localextractor ./cmd/evie ./internal/memory ./internal/web -count=1",
+      "result": "PASS: eviedb 43.886s; agent 1.374s; localextractor 0.641s; cmd/evie 8.836s; memory 0.427s; web 3.886s",
+      "log": "148-final-all-normal.log"
+    },
+    {
+      "command": "go test -race ./internal/eviedb ./internal/agent ./internal/localextractor ./cmd/evie ./internal/web -run '^(TestCompilerDiagnostics|TestForegroundMeasurement|TestEndpointUnavailable|TestCompilerRecurrenceSixteenCandidatePublicationMutationBound|TestCandidateReview.*Navigation|TestCandidate.*Scope)' -count=1",
+      "result": "PASS: eviedb 15.952s; agent 1.290s; localextractor 2.456s; cmd/evie 2.666s; web 22.249s",
+      "log": "148-navigation-race.log"
+    },
+    {
+      "command": "go test ./internal/eviedb -run '^TestCompilerDiagnosticsBackwardClockWaitIsUnavailable$' -count=1",
+      "result": "PASS 0.280s",
+      "log": "148-clock-order-normal.log"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestCompilerDiagnosticsBackwardClockWaitIsUnavailable$' -count=1",
+      "result": "PASS 2.269s",
+      "log": "148-clock-order-race.log"
+    },
+    {
+      "command": "go test -race ./internal/eviedb -run '^TestCompiler(StatusProjection|Activation|History|Intervals)' -count=1",
+      "result": "PASS 115.592s",
+      "log": "148-legacy-stable-key-race.log"
+    },
+    {
+      "command": "gofmt on all changed owner Go files; git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "SHA-256 comparison of all 37 live files against aggregate frozen copy and manifest",
+      "result": "PASS"
+    }
+  ],
+  "contribution_verification": [
+    "148-http-ui-verification.json",
+    "148-legacy-verification.json"
+  ],
+  "required_pending": [
+    {
+      "check": "./scripts/verify-change.sh",
+      "reason": "Parent owns full isolated verification on aggregate #148 snapshot after #147 commit."
+    },
+    {
+      "check": "Independent Standards and Spec reviews",
+      "reason": "Parent owns fresh review assignment against ticket-isolated frozen tree."
+    },
+    {
+      "check": "Manual browser demonstration",
+      "reason": "Parent owns browser integration; previous CUA access was prevented by locked macOS session. HTTP/UI deterministic tests pass; no manual demonstration or human pilot claimed."
+    }
+  ],
+  "warnings": [
+    "UI contributor reports pre-existing user Icon.tsx lint warning and existing chunk-size build warning."
+  ],
+  "real_model_or_human_evaluation": "Not performed; operational instrumentation is not extraction quality or David review-time evidence.",
+  "revision": "output-finalization-fix-v1",
+  "output_fix_verification": "148-output-fix-verification.json",
+  "post_review_note": "Prior broad passes describe the pre-output-fix snapshot. Final output-fix focused normal/race pass; final broad agent/web and #148-isolated CLI pass. Live mixed CLI includes a separately reported #149 conformance failure."
+}

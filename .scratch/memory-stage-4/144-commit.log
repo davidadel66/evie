@@ -1,0 +1,18 @@
+[codex/memory-stage-4 aab5b88] feat(memory): edit interpretations and approve dependent batches (#144)
+ 32 files changed, 5389 insertions(+), 75 deletions(-)
+ create mode 100644 cmd/evie/candidate_batch.go
+ create mode 100644 cmd/evie/candidate_batch_test.go
+ create mode 100644 internal/eviedb/candidate_review_batch.go
+ create mode 100644 internal/eviedb/candidate_review_batch_boundary_test.go
+ create mode 100644 internal/eviedb/candidate_review_batch_corruption_test.go
+ create mode 100644 internal/eviedb/candidate_review_batch_read_error_test.go
+ create mode 100644 internal/eviedb/candidate_review_batch_record_bound_test.go
+ create mode 100644 internal/eviedb/candidate_review_batch_test.go
+ create mode 100644 internal/eviedb/candidate_review_compound.go
+ create mode 100644 internal/eviedb/candidate_review_correction_schema.go
+ create mode 100644 internal/eviedb/candidate_review_correction_schema_test.go
+ create mode 100644 internal/eviedb/candidate_review_edit.go
+ create mode 100644 internal/eviedb/candidate_review_edit_lineage_test.go
+ create mode 100644 internal/eviedb/candidate_review_edit_race_test.go
+ create mode 100644 internal/eviedb/testdata/candidate_review_encoding_v5.json
+ create mode 100644 internal/memory/candidate_batch.go

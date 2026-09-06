@@ -1,0 +1,534 @@
+{
+  "effect_sha256": "sha256:e552f84734281683e4ae2e02ce7fd97316f1518949db65caf4c1311f6b2f23a1",
+  "effect_canonical_utf8": "{\"domain\":\"evie-owner-review-effect-v5\",\"effect\":{\"records\":[{\"kind\":\"entity\",\"id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"predicate\",\"id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"claim\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"active\"},{\"kind\":\"source_link\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"eligible\"}],\"members\":[{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]}],\"version\":\"owner-review-effect-v5\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]}}",
+  "preview_sha256": "sha256:f5000c5f5271c8fd2ceb801dc4f24fec2bda6754ec786ccef691f8ea69817b2a",
+  "preview_canonical_utf8": "{\"domain\":\"evie-owner-review-preview-v5\",\"preview\":{\"batch_preview_id\":\"8a357919-0878-4f6d-9557-cf7d36778ca3\",\"version\":\"owner-review-preview-v5\",\"preview_id\":\"5a6b088e-e449-4e06-a7f2-343e560ad2ae\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"action\":\"accept\",\"candidates\":[{\"edit\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"dcdc0330-2028-4ac1-87e9-17c9943c5832\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"before\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"after\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"reason\":\"Preserve the unknown date.\"},\"original\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"ref\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"records\":[{\"kind\":\"entity\",\"id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"predicate\",\"id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"claim\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"active\"},{\"kind\":\"source_link\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"eligible\"}],\"members\":[{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]}],\"version\":\"owner-review-effect-v5\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]},\"effect_sha256\":\"sha256:e552f84734281683e4ae2e02ce7fd97316f1518949db65caf4c1311f6b2f23a1\",\"preview_sha256\":\"\"}}",
+  "batch_sha256": "sha256:499cc863e0fbe6ae02102b9f8f2a7b09a878f3ae3e12434a021db540610549da",
+  "batch_canonical_utf8": "{\"domain\":\"evie-owner-review-batch-v1\",\"preview\":{\"version\":\"owner-review-batch-v1\",\"preview_id\":\"8a357919-0878-4f6d-9557-cf7d36778ca3\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"scope_key\":\"global\",\"source_policy\":\"owner-assertions-v1\",\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"failure_behavior\":\"atomic_groups_independent_failures; committed_failures_are_not_retried\",\"groups\":[{\"group_id\":\"group0\",\"preview\":{\"batch_preview_id\":\"8a357919-0878-4f6d-9557-cf7d36778ca3\",\"version\":\"owner-review-preview-v5\",\"preview_id\":\"5a6b088e-e449-4e06-a7f2-343e560ad2ae\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"action\":\"accept\",\"candidates\":[{\"edit\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"dcdc0330-2028-4ac1-87e9-17c9943c5832\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"before\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"after\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"reason\":\"Preserve the unknown date.\"},\"original\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"ref\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"records\":[{\"kind\":\"entity\",\"id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"predicate\",\"id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"claim\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"active\"},{\"kind\":\"source_link\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"eligible\"}],\"members\":[{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]}],\"version\":\"owner-review-effect-v5\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]},\"effect_sha256\":\"sha256:e552f84734281683e4ae2e02ce7fd97316f1518949db65caf4c1311f6b2f23a1\",\"preview_sha256\":\"sha256:f5000c5f5271c8fd2ceb801dc4f24fec2bda6754ec786ccef691f8ea69817b2a\"}}],\"preview_sha256\":\"\"}}",
+  "complete_batch_canonical_utf8": "{\"domain\":\"evie-owner-review-batch-v1\",\"preview\":{\"version\":\"owner-review-batch-v1\",\"preview_id\":\"8a357919-0878-4f6d-9557-cf7d36778ca3\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"scope_key\":\"global\",\"source_policy\":\"owner-assertions-v1\",\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"failure_behavior\":\"atomic_groups_independent_failures; committed_failures_are_not_retried\",\"groups\":[{\"group_id\":\"group0\",\"preview\":{\"batch_preview_id\":\"8a357919-0878-4f6d-9557-cf7d36778ca3\",\"version\":\"owner-review-preview-v5\",\"preview_id\":\"5a6b088e-e449-4e06-a7f2-343e560ad2ae\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"scope_key\":\"global\",\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"action\":\"accept\",\"candidates\":[{\"edit\":{\"revision\":1,\"parent_revision\":0,\"review_revision\":1,\"audit_id\":\"dcdc0330-2028-4ac1-87e9-17c9943c5832\",\"owner_id\":\"local\",\"authentication_binding\":\"30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415\",\"authorization_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"before\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"after\":{\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"identity\":null,\"temporal\":null},\"reason\":\"Preserve the unknown date.\"},\"original\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"ref\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"job_id\":\"62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18\",\"generation_id\":\"8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa\",\"destination\":\"global\",\"candidate\":{\"review_revision\":1,\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"proposal\":{\"proposition\":{\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\"},\"valid_time\":{\"from\":null,\"to\":null},\"temporal_qualification\":\"The exact world date is unknown.\",\"support\":[{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"}],\"context\":[]},\"support\":[{\"source_type\":\"user_message\",\"locator\":{\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\"},\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"scope_key\":\"global\",\"sequence\":2,\"format_version\":1,\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"actor\":\"owner\",\"authority\":\"owner_statement\",\"usage\":\"new_support\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\"}],\"context\":[],\"review_state\":\"unresolved\"},\"redacted\":false}],\"source_policy\":\"owner-assertions-v1\",\"effect\":{\"records\":[{\"kind\":\"entity\",\"id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"predicate\",\"id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"action\":\"reuse\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"claim\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"active\"},{\"kind\":\"source_link\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"create\",\"before_state\":\"\",\"after_state\":\"\"},{\"kind\":\"state_event\",\"id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"action\":\"initialize\",\"before_state\":\"\",\"after_state\":\"eligible\"}],\"members\":[{\"version\":\"owner-review-effect-v1\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]}],\"version\":\"owner-review-effect-v5\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"scope\":{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1},\"scopes\":[{\"scope_id\":\"66a4e051-3ce9-4ea9-a230-d6c79d68ab3d\",\"scope_key\":\"global\",\"revision\":1}],\"prior_revisions\":[{\"scope_key\":\"global\",\"revision\":1}],\"claims\":[{\"candidate\":{\"candidate_id\":\"8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807\",\"interpretation_revision\":1,\"review_revision\":1},\"claim\":{\"claim_id\":\"4578d663-785a-458e-83b3-69dd1cbaaad0\",\"scope_key\":\"global\",\"subject_entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object\":{\"literal\":{\"kind\":\"text\",\"value\":\"variety0\"}},\"polarity\":\"affirmed\",\"valid_time\":{\"from\":null,\"to\":null},\"created_operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"transaction_time\":\"0001-01-01T00:00:00Z\"},\"create\":true,\"subject\":{\"entity_id\":\"bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c\",\"scope_key\":\"global\",\"canonical_name\":\"owner\",\"entity_type\":\"person\",\"anchor_kind\":\"owner\",\"create\":false},\"predicate\":{\"predicate_id\":\"462bf0f9-2b90-4d5f-8504-0df96c4675b5\",\"token\":\"drinks\",\"version\":1,\"label\":\"drinks\",\"object_constraint\":\"text\",\"cardinality\":\"many\",\"create\":false},\"object_entity\":null,\"sources\":[{\"source_link_id\":\"6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf\",\"operation_id\":\"d75f695f-74bf-41a3-b1c7-bd42e9251997\",\"event_id\":\"ea8b1125-b401-4d8c-b375-22fbfdcc5be1\",\"session_id\":\"6b8c96bc-71e3-4206-b67c-f5480289fb25\",\"source_scope_key\":\"global\",\"event_part\":\"content\",\"locator_kind\":\"whole\",\"locator_value\":\"\",\"evidence_sha256\":\"sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088\",\"actor\":\"owner\",\"source_type\":\"user_message\",\"authority\":\"owner_statement\",\"observed_at\":\"2026-09-05T10:53:17.744025Z\",\"evidence\":\"I drink the reviewed varieties 0 through 1.\",\"eligibility\":\"eligible\",\"create\":true}],\"conflicts\":[],\"context\":[],\"temporal_qualification\":\"The exact world date is unknown.\"}]},\"effect_sha256\":\"sha256:e552f84734281683e4ae2e02ce7fd97316f1518949db65caf4c1311f6b2f23a1\",\"preview_sha256\":\"sha256:f5000c5f5271c8fd2ceb801dc4f24fec2bda6754ec786ccef691f8ea69817b2a\"}}],\"preview_sha256\":\"sha256:499cc863e0fbe6ae02102b9f8f2a7b09a878f3ae3e12434a021db540610549da\"}}",
+  "batch": {
+    "version": "owner-review-batch-v1",
+    "preview_id": "8a357919-0878-4f6d-9557-cf7d36778ca3",
+    "owner_id": "local",
+    "authentication_binding": "30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415",
+    "authorization_revision": 1,
+    "scope_key": "global",
+    "source_policy": "owner-assertions-v1",
+    "prior_revisions": [
+      {
+        "scope_key": "global",
+        "revision": 1
+      }
+    ],
+    "failure_behavior": "atomic_groups_independent_failures; committed_failures_are_not_retried",
+    "groups": [
+      {
+        "group_id": "group0",
+        "preview": {
+          "batch_preview_id": "8a357919-0878-4f6d-9557-cf7d36778ca3",
+          "version": "owner-review-preview-v5",
+          "preview_id": "5a6b088e-e449-4e06-a7f2-343e560ad2ae",
+          "owner_id": "local",
+          "authentication_binding": "30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415",
+          "authorization_revision": 1,
+          "scope_key": "global",
+          "job_id": "62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18",
+          "generation_id": "8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa",
+          "action": "accept",
+          "candidates": [
+            {
+              "edit": {
+                "revision": 1,
+                "parent_revision": 0,
+                "review_revision": 1,
+                "audit_id": "dcdc0330-2028-4ac1-87e9-17c9943c5832",
+                "owner_id": "local",
+                "authentication_binding": "30e2a645888779884fff52c298b4a93a53db83250fe61551f9cd4339cd394415",
+                "authorization_revision": 1,
+                "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                "before": {
+                  "proposal": {
+                    "proposition": {
+                      "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                      "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                      "object": {
+                        "literal": {
+                          "kind": "text",
+                          "value": "variety0"
+                        }
+                      },
+                      "polarity": "affirmed"
+                    },
+                    "valid_time": {
+                      "from": null,
+                      "to": null
+                    },
+                    "temporal_qualification": "",
+                    "support": [
+                      {
+                        "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                        "event_part": "content",
+                        "locator_kind": "whole",
+                        "locator_value": "",
+                        "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                      }
+                    ],
+                    "context": []
+                  },
+                  "support": [
+                    {
+                      "source_type": "user_message",
+                      "locator": {
+                        "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                        "event_part": "content",
+                        "locator_kind": "whole",
+                        "locator_value": "",
+                        "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                      },
+                      "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                      "scope_key": "global",
+                      "sequence": 2,
+                      "format_version": 1,
+                      "observed_at": "2026-09-05T10:53:17.744025Z",
+                      "actor": "owner",
+                      "authority": "owner_statement",
+                      "usage": "new_support",
+                      "evidence": "I drink the reviewed varieties 0 through 1."
+                    }
+                  ],
+                  "context": [],
+                  "identity": null,
+                  "temporal": null
+                },
+                "after": {
+                  "proposal": {
+                    "proposition": {
+                      "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                      "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                      "object": {
+                        "literal": {
+                          "kind": "text",
+                          "value": "variety0"
+                        }
+                      },
+                      "polarity": "affirmed"
+                    },
+                    "valid_time": {
+                      "from": null,
+                      "to": null
+                    },
+                    "temporal_qualification": "The exact world date is unknown.",
+                    "support": [
+                      {
+                        "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                        "event_part": "content",
+                        "locator_kind": "whole",
+                        "locator_value": "",
+                        "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                      }
+                    ],
+                    "context": []
+                  },
+                  "support": [
+                    {
+                      "source_type": "user_message",
+                      "locator": {
+                        "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                        "event_part": "content",
+                        "locator_kind": "whole",
+                        "locator_value": "",
+                        "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                      },
+                      "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                      "scope_key": "global",
+                      "sequence": 2,
+                      "format_version": 1,
+                      "observed_at": "2026-09-05T10:53:17.744025Z",
+                      "actor": "owner",
+                      "authority": "owner_statement",
+                      "usage": "new_support",
+                      "evidence": "I drink the reviewed varieties 0 through 1."
+                    }
+                  ],
+                  "context": [],
+                  "identity": null,
+                  "temporal": null
+                },
+                "reason": "Preserve the unknown date."
+              },
+              "original": {
+                "review_revision": 1,
+                "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                "proposal": {
+                  "proposition": {
+                    "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                    "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                    "object": {
+                      "literal": {
+                        "kind": "text",
+                        "value": "variety0"
+                      }
+                    },
+                    "polarity": "affirmed"
+                  },
+                  "valid_time": {
+                    "from": null,
+                    "to": null
+                  },
+                  "temporal_qualification": "",
+                  "support": [
+                    {
+                      "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                      "event_part": "content",
+                      "locator_kind": "whole",
+                      "locator_value": "",
+                      "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                    }
+                  ],
+                  "context": []
+                },
+                "support": [
+                  {
+                    "source_type": "user_message",
+                    "locator": {
+                      "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                      "event_part": "content",
+                      "locator_kind": "whole",
+                      "locator_value": "",
+                      "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                    },
+                    "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                    "scope_key": "global",
+                    "sequence": 2,
+                    "format_version": 1,
+                    "observed_at": "2026-09-05T10:53:17.744025Z",
+                    "actor": "owner",
+                    "authority": "owner_statement",
+                    "usage": "new_support",
+                    "evidence": "I drink the reviewed varieties 0 through 1."
+                  }
+                ],
+                "context": [],
+                "review_state": "unresolved"
+              },
+              "ref": {
+                "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                "interpretation_revision": 1,
+                "review_revision": 1
+              },
+              "job_id": "62f5e2cd2c7097a5625968d0a07f444794374dd68e60a0af0c346a2f74176e18",
+              "generation_id": "8aa3469f694a331acc751f4bd7d79cc79b561415982441551f92833ee47720aa",
+              "destination": "global",
+              "candidate": {
+                "review_revision": 1,
+                "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                "proposal": {
+                  "proposition": {
+                    "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                    "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                    "object": {
+                      "literal": {
+                        "kind": "text",
+                        "value": "variety0"
+                      }
+                    },
+                    "polarity": "affirmed"
+                  },
+                  "valid_time": {
+                    "from": null,
+                    "to": null
+                  },
+                  "temporal_qualification": "The exact world date is unknown.",
+                  "support": [
+                    {
+                      "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                      "event_part": "content",
+                      "locator_kind": "whole",
+                      "locator_value": "",
+                      "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                    }
+                  ],
+                  "context": []
+                },
+                "support": [
+                  {
+                    "source_type": "user_message",
+                    "locator": {
+                      "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                      "event_part": "content",
+                      "locator_kind": "whole",
+                      "locator_value": "",
+                      "evidence_sha256": "0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088"
+                    },
+                    "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                    "scope_key": "global",
+                    "sequence": 2,
+                    "format_version": 1,
+                    "observed_at": "2026-09-05T10:53:17.744025Z",
+                    "actor": "owner",
+                    "authority": "owner_statement",
+                    "usage": "new_support",
+                    "evidence": "I drink the reviewed varieties 0 through 1."
+                  }
+                ],
+                "context": [],
+                "review_state": "unresolved"
+              },
+              "redacted": false
+            }
+          ],
+          "source_policy": "owner-assertions-v1",
+          "effect": {
+            "records": [
+              {
+                "kind": "entity",
+                "id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                "action": "reuse",
+                "before_state": "",
+                "after_state": ""
+              },
+              {
+                "kind": "predicate",
+                "id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                "action": "reuse",
+                "before_state": "",
+                "after_state": ""
+              },
+              {
+                "kind": "claim",
+                "id": "4578d663-785a-458e-83b3-69dd1cbaaad0",
+                "action": "create",
+                "before_state": "",
+                "after_state": ""
+              },
+              {
+                "kind": "state_event",
+                "id": "4578d663-785a-458e-83b3-69dd1cbaaad0",
+                "action": "initialize",
+                "before_state": "",
+                "after_state": "active"
+              },
+              {
+                "kind": "source_link",
+                "id": "6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf",
+                "action": "create",
+                "before_state": "",
+                "after_state": ""
+              },
+              {
+                "kind": "state_event",
+                "id": "6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf",
+                "action": "initialize",
+                "before_state": "",
+                "after_state": "eligible"
+              }
+            ],
+            "members": [
+              {
+                "version": "owner-review-effect-v1",
+                "operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+                "scope": {
+                  "scope_id": "66a4e051-3ce9-4ea9-a230-d6c79d68ab3d",
+                  "scope_key": "global",
+                  "revision": 1
+                },
+                "scopes": [
+                  {
+                    "scope_id": "66a4e051-3ce9-4ea9-a230-d6c79d68ab3d",
+                    "scope_key": "global",
+                    "revision": 1
+                  }
+                ],
+                "prior_revisions": [
+                  {
+                    "scope_key": "global",
+                    "revision": 1
+                  }
+                ],
+                "claims": [
+                  {
+                    "candidate": {
+                      "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                      "interpretation_revision": 1,
+                      "review_revision": 1
+                    },
+                    "claim": {
+                      "claim_id": "4578d663-785a-458e-83b3-69dd1cbaaad0",
+                      "scope_key": "global",
+                      "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                      "predicate": {
+                        "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                        "token": "drinks",
+                        "version": 1,
+                        "label": "drinks",
+                        "object_constraint": "text",
+                        "cardinality": "many",
+                        "create": false
+                      },
+                      "object": {
+                        "literal": {
+                          "kind": "text",
+                          "value": "variety0"
+                        }
+                      },
+                      "polarity": "affirmed",
+                      "valid_time": {
+                        "from": null,
+                        "to": null
+                      },
+                      "created_operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+                      "transaction_time": "0001-01-01T00:00:00Z"
+                    },
+                    "create": true,
+                    "subject": {
+                      "entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                      "scope_key": "global",
+                      "canonical_name": "owner",
+                      "entity_type": "person",
+                      "anchor_kind": "owner",
+                      "create": false
+                    },
+                    "predicate": {
+                      "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                      "token": "drinks",
+                      "version": 1,
+                      "label": "drinks",
+                      "object_constraint": "text",
+                      "cardinality": "many",
+                      "create": false
+                    },
+                    "object_entity": null,
+                    "sources": [
+                      {
+                        "source_link_id": "6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf",
+                        "operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+                        "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                        "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                        "source_scope_key": "global",
+                        "event_part": "content",
+                        "locator_kind": "whole",
+                        "locator_value": "",
+                        "evidence_sha256": "sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088",
+                        "actor": "owner",
+                        "source_type": "user_message",
+                        "authority": "owner_statement",
+                        "observed_at": "2026-09-05T10:53:17.744025Z",
+                        "evidence": "I drink the reviewed varieties 0 through 1.",
+                        "eligibility": "eligible",
+                        "create": true
+                      }
+                    ],
+                    "conflicts": [],
+                    "context": [],
+                    "temporal_qualification": "The exact world date is unknown."
+                  }
+                ]
+              }
+            ],
+            "version": "owner-review-effect-v5",
+            "operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+            "scope": {
+              "scope_id": "66a4e051-3ce9-4ea9-a230-d6c79d68ab3d",
+              "scope_key": "global",
+              "revision": 1
+            },
+            "scopes": [
+              {
+                "scope_id": "66a4e051-3ce9-4ea9-a230-d6c79d68ab3d",
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "prior_revisions": [
+              {
+                "scope_key": "global",
+                "revision": 1
+              }
+            ],
+            "claims": [
+              {
+                "candidate": {
+                  "candidate_id": "8ac6d59e97128ac5d71b53e27d8e3879301ea0af19e4e92e04000a75a3a8e807",
+                  "interpretation_revision": 1,
+                  "review_revision": 1
+                },
+                "claim": {
+                  "claim_id": "4578d663-785a-458e-83b3-69dd1cbaaad0",
+                  "scope_key": "global",
+                  "subject_entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                  "predicate": {
+                    "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                    "token": "drinks",
+                    "version": 1,
+                    "label": "drinks",
+                    "object_constraint": "text",
+                    "cardinality": "many",
+                    "create": false
+                  },
+                  "object": {
+                    "literal": {
+                      "kind": "text",
+                      "value": "variety0"
+                    }
+                  },
+                  "polarity": "affirmed",
+                  "valid_time": {
+                    "from": null,
+                    "to": null
+                  },
+                  "created_operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+                  "transaction_time": "0001-01-01T00:00:00Z"
+                },
+                "create": true,
+                "subject": {
+                  "entity_id": "bd8ed5bb-22e9-44d1-822c-3f8cf043ce9c",
+                  "scope_key": "global",
+                  "canonical_name": "owner",
+                  "entity_type": "person",
+                  "anchor_kind": "owner",
+                  "create": false
+                },
+                "predicate": {
+                  "predicate_id": "462bf0f9-2b90-4d5f-8504-0df96c4675b5",
+                  "token": "drinks",
+                  "version": 1,
+                  "label": "drinks",
+                  "object_constraint": "text",
+                  "cardinality": "many",
+                  "create": false
+                },
+                "object_entity": null,
+                "sources": [
+                  {
+                    "source_link_id": "6d0f8842-d5bd-46ae-ab35-dd5d1154b5cf",
+                    "operation_id": "d75f695f-74bf-41a3-b1c7-bd42e9251997",
+                    "event_id": "ea8b1125-b401-4d8c-b375-22fbfdcc5be1",
+                    "session_id": "6b8c96bc-71e3-4206-b67c-f5480289fb25",
+                    "source_scope_key": "global",
+                    "event_part": "content",
+                    "locator_kind": "whole",
+                    "locator_value": "",
+                    "evidence_sha256": "sha256:0eb1bcc3f054fd858f545f8424afd947143c2656fd75ea6e1c9b8296a1623088",
+                    "actor": "owner",
+                    "source_type": "user_message",
+                    "authority": "owner_statement",
+                    "observed_at": "2026-09-05T10:53:17.744025Z",
+                    "evidence": "I drink the reviewed varieties 0 through 1.",
+                    "eligibility": "eligible",
+                    "create": true
+                  }
+                ],
+                "conflicts": [],
+                "context": [],
+                "temporal_qualification": "The exact world date is unknown."
+              }
+            ]
+          },
+          "effect_sha256": "sha256:e552f84734281683e4ae2e02ce7fd97316f1518949db65caf4c1311f6b2f23a1",
+          "preview_sha256": "sha256:f5000c5f5271c8fd2ceb801dc4f24fec2bda6754ec786ccef691f8ea69817b2a"
+        }
+      }
+    ],
+    "preview_sha256": "sha256:499cc863e0fbe6ae02102b9f8f2a7b09a878f3ae3e12434a021db540610549da"
+  }
+}

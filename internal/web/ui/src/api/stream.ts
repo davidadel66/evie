@@ -33,13 +33,14 @@ export async function streamChat(
   message: string,
   onEvent: (ev: ServerEvent) => void,
   signal?: AbortSignal,
+  sessionId?: string,
 ): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
     // Exactly this content type: the Go guard requires it, because an HTML
     // form can't produce it and bash is ungated.
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, sessionId }),
     signal,
   });
 

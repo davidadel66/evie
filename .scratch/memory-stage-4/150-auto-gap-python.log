@@ -1,0 +1,11 @@
+..baseline-r1-disabled: failed
+baseline-r1-new: failed
+baseline-r1-history: failed
+baseline-r2-new: failed
+baseline-r2-history: failed
+baseline-r2-disabled: failed
+....
+----------------------------------------------------------------------
+Ran 6 tests in 0.007s
+
+OK

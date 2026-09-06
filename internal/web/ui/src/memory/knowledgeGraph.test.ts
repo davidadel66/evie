@@ -39,6 +39,7 @@ describe("Knowledge Graph", () => {
     expect(graph.edges.map((edge) => [edge.label, edge.from, edge.to])).toEqual([
       ["lives in", "owner-1", "city-1"], ["time zone", "owner-1", "literal:claim-2"],
     ]);
+    expect(graph.nodes.find((node) => node.id === "literal:claim-2")?.summary).toBe(claims[1]);
     const layout = layoutKnowledgeGraph(graph);
     expect(layout.nodes.find((node) => node.id === "owner-1")).toMatchObject({ x: 470, y: 278 });
     expect(graph.nodes.find((node) => node.id === "owner-1")?.summary).toMatchObject({ object_kind: "entity", object_id: "owner-1" });

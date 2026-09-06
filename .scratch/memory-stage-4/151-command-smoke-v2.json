@@ -1,0 +1,14 @@
+{
+  "version": "memory-stage4-release-command-smoke-v1",
+  "build_exit_code": 0,
+  "command_exit_code": 2,
+  "existing_report_retry_exit_code": 1,
+  "repeat_bytes_identical": true,
+  "report_sha256": "8a91b00cf9473c4c94c7c23eabba169237e319a47bca09df02a8c8beb3e73801",
+  "binary_sha256": "5a51890c4f66c2d7f1b06b90f3aab85e4d509a2095998af29f23246c6d4272bb",
+  "stdout": "pending: ready=false; holdout_run_authorized=false; report=/Users/davidboktor/code/evie/cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report-v2.json\n",
+  "unchanged_existing_report": true,
+  "local_links": "passed",
+  "original_pending_report_preserved": true,
+  "final_holdout_touched": false
+}

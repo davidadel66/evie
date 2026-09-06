@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "path": "internal/web/candidate_review_advanced_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "2702c53d23eda3476e6519dc9513007fe29926f50376e910307590b6f19e4288",
+      "bytes": 25595
+    }
+  ],
+  "focused": {
+    "command": "go test ./internal/web -run '^TestCandidateAdvancedHTTP' -count=1",
+    "exit_code": 0,
+    "result": "ok github.com/davidadel66/evie/internal/web 0.939s",
+    "log": ".scratch/memory-stage-4/146-http-focused.log"
+  },
+  "race": {
+    "command": "go test -race ./internal/web -run '^TestCandidateAdvancedHTTP' -count=1",
+    "exit_code": 0,
+    "result": "ok github.com/davidadel66/evie/internal/web 14.745s",
+    "log": ".scratch/memory-stage-4/146-http-race.log"
+  },
+  "format": "gofmt -w internal/web/candidate_review_advanced_test.go; final bytes checked for trailing whitespace and newline",
+  "full_verification": "Root runs ./scripts/verify-change.sh on isolated complete #146 checkpoint; not run independently for this test-only contribution",
+  "independent_reviews": "Delegated to root; this contribution is not a self-review"
+}

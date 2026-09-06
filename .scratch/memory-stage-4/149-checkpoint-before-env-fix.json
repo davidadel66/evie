@@ -1,0 +1,27 @@
+{
+  "base": "9d697bf57c7835d7522da391c44163e15f416189",
+  "tree": "ce6ead508ffd65691258abae858ca34d839100e9",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-checkpoint.index",
+  "files": {
+    "cmd/evie/memory_stage4_conformance_test.go": "d15d08c24c0d5c661086ac83b3ca5f0a589da76f24e9cb61b117a3f9bb200dcb",
+    "cmd/evie/memory_stage4_scope_conformance_test.go": "dedaf902d92acf352f89b2aaf5ecf79778d0b7025874b6435b2ef2c91d0596c9",
+    "cmd/evie/memory_stage4_history_conformance_test.go": "26eb6d48641915d3eff671b5479af2c4f150d486557364f1b4fb0a4849b97ed7",
+    "cmd/evie/memory_stage4_review_conformance_test.go": "6ed458421e4259d656237e16bd62d7f45c1a0f815193371ff79d2f3ae66e124d",
+    "internal/eviedb/sqlite_startup.go": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+    "internal/eviedb/sqlite_startup_test.go": "620a0da46e352356be2abb50e6b64851ad6c10de568e6d8f09a78faf96c884cc",
+    "internal/eviedb/stage4_process_conformance_test.go": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+    "scripts/memory-stage-4-conformance.py": "3f0fd1b3e29cd826421dcf4f16dd3970e7476b9a8ff2d0b187ecaf36aadf5659",
+    "scripts/memory_stage4_conformance_test.py": "cc70e9cbc77d27d38c1eed9d23fce257646fe9437ae7c9ccf1eeb89b59f151af",
+    "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/contract.json": "df05cba523bfc807549dec3d9800115ca78fae3e9ce882669b27668a043c071f",
+    "cmd/evie/docs/fixtures/memory-stage-4-conformance/v1/README.md": "454e43bf6241a625911e5fddae084920948763769f3752230debbeb0387f06d5",
+    "internal/tools/db.go": "4ae0054fbe042d2aeb7a6514c36bde6ea3f95c863a431971331c715ef90a9a87",
+    "internal/eviedb/db.go": "3d0bed9a9f0575ef8da4b7d54acf141ac603196cc993ddd0b9b972f1b8140ead",
+    "cmd/evie/memory_stage4_browser_test.go": "c813ce50f70e780a2bf24b2008a4bb55f37143aafbb15e53ba44a84102e58ad1",
+    "scripts/memory-stage-4-browser.cjs": "fe13384d59d461dfecc2e5c14f0fc94eec9488341ff8c6c1009f784bfd54a389"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-149-checkpoint-ciorhth3",
+  "note": "149 conformance and physical connection startup retry on frozen148; excludes150/151 and preexisting user work.",
+  "verification_exit_code": 1,
+  "conformance_report": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-conformance-final/report.json",
+  "browser_receipt": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/149-browser-final/browser.json"
+}

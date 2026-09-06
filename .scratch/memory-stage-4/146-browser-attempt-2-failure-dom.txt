@@ -1,0 +1,109 @@
+EVIE
+Chat
+Memory
+Whiteboard
+Reports
+System
+A
+a
+Accepted memory
+Review candidates
+Review memory candidates
+
+Suggestions stay here until you review their sources and approve the exact memory change.
+
+Review scope
+Choose one memory scope…
+Global memory · global
+Tea preferences · session
+Refresh scopes
+Refresh inbox
+
+Exact scope: global · inbox revision 8
+
+e5f5dc3a-d595-4cf1-be42-54bbf980871d · Intends (uncompleted plan) · move to Boston next year
+unresolved · 1 supporting source(s)
+Maya · works on · Orion
+unresolved · 1 supporting source(s)
+coffee
+unresolved · 1 supporting source(s)
+Maya · works on · Atlas
+unresolved · 1 supporting source(s)
+tea adopted on the checked local date 2026-09-04
+unresolved · 2 supporting source(s)
+Maya · works on · Atlas
+
+State: unresolved · interpretation 0 · review 0
+
+Supporting evidence
+Maya works on Atlas and Orion. These are two projects for the same Maya.
+
+Authority: owner_statement · observed 2026-09-05T11:53:15.19391Z
+
+Exact source
+Interpretation context (not supporting evidence)
+Recorded.
+
+Authority: none · observed 2026-09-05T11:53:15.193601Z
+
+Exact source
+Recorded.
+
+Authority: none · observed 2026-09-05T11:53:15.192062Z
+
+Exact source
+Recorded for owner review.
+
+Authority: none · observed 2026-09-05T11:53:15.194207Z
+
+Exact source
+Candidate origin
+Meaning
+assertion
+Subject
+Maya
+Relationship
+works on
+Object
+Atlas
+Value kind
+text
+Polarity
+affirmed
+Valid from / until
+Unknown / Unknown
+Time qualification
+None supplied
+Identity uncertainty
+Choose the person explicitly. The two suggestions refer to the same proposed Maya only if you bind them in one group.
+Extractor confidence (not authority)
+Unknown
+
+Additional identity review: explicitly choose an existing identity or create a distinct definition.
+
+Inspect identity alternatives
+Subject: Maya (person)
+ Reuse Maya · person · global · 2079dfc1-1ba1-4da4-a334-565dfca42dc0
+Aliases: None
+Known context: works with · affirmed · 2079dfc1-1ba1-4da4-a334-565dfca42dc0 · claim 000ad52c-cf3a-4a2f-bff3-3519c627f328 · Unknown / Unknown
+ Reuse Maya · person · global · 653d8a5d-006f-4eb7-9316-9d89dd291356
+Aliases: None
+Known context: works with · affirmed · 653d8a5d-006f-4eb7-9316-9d89dd291356 · claim 7ba12efe-e6e2-4f0d-8deb-40c7f35f2905 · Unknown / Unknown
+ Create distinct Entity “Maya” in global
+Relationship definition (global)
+
+Proposed: works on · token works_on · object text · cardinality many
+
+ Create the displayed new global Predicate definition
+
+This records interpretation only. Preview the generated identities, Aliases and claims before accepting.
+
+Record these identity choices
+Edit interpretation
+Preview acceptance
+Preview rejection
+Review dependent candidates together
+
+Add inspected candidates, assign the same group name to changes that must succeed together, and explicitly bind any shared new identity. Separate groups may succeed independently. Nothing is accepted until the complete batch preview is confirmed.
+
+Add inspected candidate to batch

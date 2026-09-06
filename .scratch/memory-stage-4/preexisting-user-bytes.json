@@ -1,0 +1,7 @@
+{
+  "recorded_at": "2026-09-05T08:38:52.045426+00:00",
+  "copied": 218,
+  "bytes": 57406819,
+  "mismatch": [],
+  "note": "Exact original user-owned bytes preserved, original main.go from existing saved baseline; absent paths remain absent. No working files overwritten."
+}

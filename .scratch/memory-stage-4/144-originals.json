@@ -1,0 +1,72 @@
+[
+  {
+    "path": "internal/memory/candidate_review.go",
+    "before_sha256": "3664e3d60d2fd06726cccdc8685bd0835f86f22afacdb04a40a06bdbc3de1d07",
+    "bytes": 4852
+  },
+  {
+    "path": "internal/eviedb/candidate_review_schema.go",
+    "before_sha256": "4cc3669d294a9b1ec3b6e16f7b19fea790471725e02c2dbf9fb6df9937dd867a",
+    "bytes": 5612
+  },
+  {
+    "path": "internal/eviedb/candidate_review_inspection.go",
+    "before_sha256": "e84711086d889c78eee75a84f46a875d39066c35349552aed364f62b800288dd",
+    "bytes": 9097
+  },
+  {
+    "path": "internal/eviedb/candidate_review_identity.go",
+    "before_sha256": "d49f82b9463f8866bd012dd75365e8a63333ecc3c4b627c25d920fab35d8c276",
+    "bytes": 15206
+  },
+  {
+    "path": "internal/eviedb/candidate_review_temporal.go",
+    "before_sha256": "efaaf6760874d997a9c48b53276d095d07150f10ec650fa79230bf6740b930a7",
+    "bytes": 10822
+  },
+  {
+    "path": "internal/eviedb/candidate_review_prepare.go",
+    "before_sha256": "b4b1ba62d7351feca484dd538697beabda6fc96bace43bc6743b61ed78567d98",
+    "bytes": 12760
+  },
+  {
+    "path": "internal/eviedb/candidate_review_encoding.go",
+    "before_sha256": "f33cd87ca57ed93822e4685fcd67f4edf3b4bb7bce1c76e6955e9dea57eb7df5",
+    "bytes": 3065
+  },
+  {
+    "path": "internal/eviedb/candidate_review_apply.go",
+    "before_sha256": "e8c2978675fe2007c440faa247c664601d4de05d3292654b53f9dda8508908b8",
+    "bytes": 22189
+  },
+  {
+    "path": "internal/eviedb/candidate_review_identity_effect.go",
+    "before_sha256": "b75dac66492ed99fc047fcb770c8e955ba9f3ef658550232d513a29940e5adea",
+    "bytes": 12741
+  },
+  {
+    "path": "internal/eviedb/candidate_review_replay.go",
+    "before_sha256": "2b54bada10cb3e8dc9dc66bc83d8d38e6c77c6d8a4f2a11a59d3680ed03c2cb1",
+    "bytes": 2192
+  },
+  {
+    "path": "internal/eviedb/candidate_review_history.go",
+    "before_sha256": "998237dc3d36076041ba98b72dd2b323fd5033aa113130509f7caf57399ffb70",
+    "bytes": 6250
+  },
+  {
+    "path": "cmd/evie/candidate_review.go",
+    "before_sha256": "809a022600ac64623bef5ef2b0f39c9059fb48eac73c236186a4594ad1278f42",
+    "bytes": 8755
+  },
+  {
+    "path": "internal/eviedb/candidate_review_sources.go",
+    "before_sha256": "60658be061ac80711a871c5e823e19849ccd0052e1e3210e1793e060659d3ed4",
+    "bytes": 4577
+  },
+  {
+    "path": "internal/eviedb/candidate_review_authority.go",
+    "before_sha256": "c745aa4b8404b049a1076e259b122902c2c681763d3285fdff4f31a72049fea0",
+    "bytes": 4613
+  }
+]

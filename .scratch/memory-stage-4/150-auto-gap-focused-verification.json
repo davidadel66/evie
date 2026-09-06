@@ -1,0 +1,57 @@
+{
+  "tree": "4b29071dc69018a9fedb2464315453baab0c9025",
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-150-auto-gap-checkpoint-skk5hi0c",
+  "checks": [
+    {
+      "name": "normal",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./scripts/memory-stage4-pilot"
+      ],
+      "exit_code": 0,
+      "seconds": 4.221609791973606,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-auto-gap-normal.log",
+      "sha256": "99877751b2f09fb3bb737614d91bc17e58393a124850e6dd428de7b5bea79d5d"
+    },
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./scripts/memory-stage4-pilot"
+      ],
+      "exit_code": 0,
+      "seconds": 26.23935641697608,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-auto-gap-race.log",
+      "sha256": "2f027de49a8ff05d84c24e52783693e0f11e51889108ea8d3b8a843893f59688"
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./scripts/memory-stage4-pilot"
+      ],
+      "exit_code": 0,
+      "seconds": 0.38335074996575713,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-auto-gap-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "python",
+      "command": [
+        "python3",
+        "scripts/memory-stage4-pilot/measure_test.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.08961054094834253,
+      "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/150-auto-gap-python.log",
+      "sha256": "508a755c3628c2712636ca3af45a5767228ff63fc1e5e6f04b4181f95e89f4ee"
+    }
+  ],
+  "recorded_at": "2026-09-05T14:35:38.775163+00:00"
+}

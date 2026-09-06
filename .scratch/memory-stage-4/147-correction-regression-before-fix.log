@@ -1,0 +1,8 @@
+--- FAIL: TestCompilerRecurrenceChangedCorrectionUsesPersistedProjection (0.12s)
+    --- FAIL: TestCompilerRecurrenceChangedCorrectionUsesPersistedProjection/native (0.06s)
+        compiler_recurrence_public_test.go:538: accepted changed correction reopened: cd7c8957657c4d7c8dfb743270530964d8e107fa17f5bfd1cb8799c2deffa34b -> 
+    --- FAIL: TestCompilerRecurrenceChangedCorrectionUsesPersistedProjection/compound (0.06s)
+        compiler_recurrence_public_test.go:538: accepted changed correction reopened: 2f7e996310a14295ba3933f15b6db289effe1c6cc3ab4526af1fa86257d26846 -> 
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	0.382s
+FAIL

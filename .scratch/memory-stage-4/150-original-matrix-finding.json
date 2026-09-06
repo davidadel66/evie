@@ -1,0 +1,241 @@
+{
+  "version": "memory-stage4-pilot-finding-v1",
+  "status": "confirmed_contract_failure",
+  "matrix_report": "150-matrix-v1/report.json",
+  "matrix_report_sha256": "8489c12284e7e1b7c717a83c9341480e17413547fa01da96da30258cd4c4b9d9",
+  "tooling_tree": "d12470f707ba5cc4ae3f4f45df4b3f2fc4361871",
+  "command_level_trials_passed": 99,
+  "expected_scripted_failed_jobs": 33,
+  "unexpected_zero_attempt_empty_failed_jobs": 111,
+  "original_report_preserved": true,
+  "clean_conformance_or_release_evidence": false,
+  "diagnosis": "A root could be sealed before discovery reached its final member. Later-root coordinates then extended the old root's desired interval during reconsideration, creating a failed empty suffix with no new members. Sparse coordinates, roots predating activation and interleaved late members require explicit immutable-selection reuse and root-member bounds.",
+  "runner_gap": "Finite catch-up originally accepted total jobs >= the expected successful work and all-terminal state. It did not reject extra failed jobs or wait for root discovery to settle.",
+  "required_followup": "Fix and independently review reconciliation; strengthen exact fixture outcome checks; obtain fresh source-bound browser/full conformance; rerun the unchanged declared matrix with a newly hashed binary.",
+  "quality_observations": null,
+  "actual_human_review_observations": null,
+  "final_holdout": {
+    "created": false,
+    "exposed": false,
+    "run": false
+  },
+  "affected_trials": [
+    {
+      "id": "baseline-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "baseline-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "baseline-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "baseline-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "baseline-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "baseline-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-100000-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 3
+    },
+    {
+      "id": "retained-events-1000000-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-1000000-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-1000000-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-1000000-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-1000000-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "retained-events-1000000-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 3
+    },
+    {
+      "id": "source-bytes-4096-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-4096-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-4096-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-4096-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 3
+    },
+    {
+      "id": "source-bytes-4096-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-4096-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "source-bytes-12000-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-100-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "graph-claims-1000-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-0-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r1-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r1-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r2-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r2-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r3-history",
+      "unexpected_zero_attempt_failed_jobs": 2
+    },
+    {
+      "id": "delay-ms-250-r3-new",
+      "unexpected_zero_attempt_failed_jobs": 2
+    }
+  ],
+  "affected_trial_count": 54
+}

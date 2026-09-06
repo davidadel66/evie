@@ -1,0 +1,14 @@
+feat(memory): review sourced identities and Predicate definitions (#141)
+
+Admit identity proposals only under a distinct pinned policy. Preserve
+same-name and Alias alternatives for explicit owner choice, with immutable
+interpretation revisions and revision-checked previews.
+
+Apply dependent Entity, Alias, Predicate, Claim, and source effects atomically.
+Keep scope and Promotion rules, forbid Predicate redefinition, and preserve
+old canonical encodings while extending exact CLI review and replay.
+
+Validation: isolated ./scripts/verify-change.sh, focused normal/race
+regressions, and independent Standards and Spec reviews passed. Cases
+cover stale choices, rollback, two stores, closed sessions, source policy,
+project decisions, both encoding versions, and historical replay.

@@ -1,0 +1,50 @@
+direction: down
+grid-columns: 1
+
+classes: {
+  evidence: { style: { fill: "#e8f1f8"; stroke: "#356b91"; font-color: "#17324d"; border-radius: 8 } }
+  runtime: { style: { fill: "#edf5ef"; stroke: "#4e8467"; font-color: "#204c38"; border-radius: 8 } }
+  boundary: { style: { fill: "#f7f0df"; stroke: "#a4843c"; font-color: "#624d1d"; border-radius: 8 } }
+  terminal: { style: { fill: "#f3f4f5"; stroke: "#747d86"; font-color: "#303740"; border-radius: 8 } }
+}
+
+start: {
+  label: "A. ESTABLISH ONE OWNED TURN"
+  grid-columns: 3
+  input: "1  Owner input\nExplicit immutable Context Scope" { class: boundary }
+  lease: "2  Acquire durable turn lease\nFencing token + heartbeat" { class: runtime }
+  event: "3  Append user_message\nBefore provider or tool work" { class: evidence }
+  input -> lease -> event
+}
+
+compose: {
+  label: "B. BUILD EACH PROVIDER REQUEST FROM DURABLE STATE"
+  grid-columns: 5
+  history: "4  Load accepted events\nReconstruct complete root turns" { class: evidence }
+  project: "5  Project history\nBound old tool results; omit incomplete groups" { class: runtime }
+  pressure: "6  Measure canonical request\nOne pressure decision per iteration" { class: runtime }
+  compact: "7  Optional compaction\nAppend only a validated rolling generation" { class: boundary }
+  snapshot: "8  Append context_snapshot\nCounts, frontiers, hashes - never content" { class: evidence }
+  history -> project -> pressure -> compact -> snapshot
+}
+
+execute: {
+  label: "C. CROSS AN EXTERNAL OR EFFECT BOUNDARY"
+  grid-columns: 5
+  authorize: "9  Revalidate lease\nImmediately before every start" { class: boundary }
+  provider: "10  OpenRouter call\nApproved bounded request" { class: runtime }
+  assistant: "11  Append assistant_message\nAccepted response or tool intent" { class: evidence }
+  tool: "12  Tool lifecycle\nPrepare -> approve -> execute -> terminal result" { class: boundary }
+  next: "13  Recompose\nOnly from newly accepted events" { class: runtime }
+  authorize -> provider -> assistant -> tool -> next
+}
+
+finish: {
+  label: "D. TERMINAL EVIDENCE AND RECOVERY"
+  grid-columns: 2
+  success: "Success\nFinal assistant event is durable evidence" { class: evidence }
+  failure: "Failure or interruption\nAppend a safe classified terminal event when fenced" { class: terminal }
+  release: "Release ownership\nLease expiry is the crash-recovery path" { class: runtime }
+  success -> release
+  failure -> release
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "path": "internal/eviedb/semantic.go",
+    "before_sha256": "001b567d0a45218fa7ffabd0c8783131a94872c77f2eaaccceb61af3e45e99b4",
+    "after_sha256": "30799abdd3ddc59ba085863c9e1496cc26b2f8d11925809033387f451f48f27f",
+    "bytes": 84996
+  },
+  {
+    "path": "internal/eviedb/candidate_review_correction_schema.go",
+    "before_sha256": null,
+    "after_sha256": "fa8b1792e966252d13af8fce06fe77f4f6ac804b679ef06cfd6e71ea35961b05",
+    "bytes": 7366
+  },
+  {
+    "path": "internal/eviedb/candidate_review_correction_schema_test.go",
+    "before_sha256": null,
+    "after_sha256": "6a2d2998a3e9d5067f35a803abda797dabca79de2419642674f0f8d9a7584fe3",
+    "bytes": 22180
+  }
+]

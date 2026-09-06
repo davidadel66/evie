@@ -1,0 +1,27 @@
+{
+  "reason": "ENOSPC during concurrent139/143 full verification",
+  "regenerable_cache_command": "go clean -cache",
+  "removed_task_archives": [
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-135-checkpoint-8747cxzq",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-135-checkpoint-hxo3u5ix",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-136-checkpoint-4poj77hg",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-136-checkpoint-g9rzzee7",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-136-checkpoint-vd6gqaw7",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-137-checkpoint-gc53jcn2",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-137-checkpoint-x0_dnom6",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-138-checkpoint-fb6r233w",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-138-checkpoint-y3joi2eg",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-checkpoint-jxb6sqe6",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-cw_73z0u",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-glo4n_5r",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-139-focused-m7pgn_dq",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-140-checkpoint-7pkwcgeo",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-140-checkpoint-o5z8stpu",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-141-checkpoint-kaa91lsc",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-142-checkpoint-1aztwqgz",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-142-focused-8yt01zo1",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-145-checkpoint-5_zl4ckw",
+    "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-145-checkpoint-jdvznndw"
+  ],
+  "preserved": "All Git trees/checkpoint indexes/frozen files/original user files/logs and current139/143 review snapshots"
+}

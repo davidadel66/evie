@@ -1,0 +1,18 @@
+{
+  "version": "memory-stage4-pilot-finding-v1",
+  "status": "confirmed_contract_failure",
+  "source_tree": "413601a7c6088b59fb5dcd7ced53f46193590ffe",
+  "partial_matrix": "150-matrix-v2",
+  "regression": "TestPilotReviewedHistoricalSuffixDoesNotManufactureForeignRootGap",
+  "red_log_sha256": "cb2080f6e582d2e6dc4e61ab7ed22af7657a0bcb54026c494a6c5ff7a5af1a18",
+  "case": "A1..2 sealed, B3..4 foreign root, explicit historical A5..6 owned before live discovery revisits A. Ordinal gap3..4 contained no A members but manufactured an empty failed A job.",
+  "correction": "Both automatic reconcilers (AwaitClosure) record a proved empty root interval as excluded/no_root_members with zero members, no job and no coverage. Both history-first and live-first ordering survive reopening and preserve later real-root progress. Direct explicit QueueCandidateUnit errors remain unchanged.",
+  "interrupted_matrix_observations": 20,
+  "matrix_complete": false,
+  "final_holdout": {
+    "created": false,
+    "exposed": false,
+    "run": false
+  },
+  "history_first_red_log_sha256": "385d61d67e4a29c88c49b5b5b5fbde62291ea3e18b71d3f28ceae4ab55d79811"
+}

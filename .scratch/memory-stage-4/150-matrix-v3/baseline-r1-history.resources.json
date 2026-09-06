@@ -1,0 +1,370 @@
+{
+  "sampled_peak_process_tree_rss_kib": 56704,
+  "samples": [
+    {
+      "monotonic_ns": 509578121741583,
+      "processes": [
+        {
+          "cpu_percent": 0.0,
+          "pid": 89627,
+          "rss_kib": 1632
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578239477166,
+      "processes": [
+        {
+          "cpu_percent": 24.9,
+          "pid": 89627,
+          "rss_kib": 24272
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578360529625,
+      "processes": [
+        {
+          "cpu_percent": 61.1,
+          "pid": 89627,
+          "rss_kib": 25104
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578488931041,
+      "processes": [
+        {
+          "cpu_percent": 80.5,
+          "pid": 89627,
+          "rss_kib": 25648
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578614334958,
+      "processes": [
+        {
+          "cpu_percent": 95.4,
+          "pid": 89627,
+          "rss_kib": 25840
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578732891375,
+      "processes": [
+        {
+          "cpu_percent": 101.7,
+          "pid": 89627,
+          "rss_kib": 23120
+        },
+        {
+          "cpu_percent": 0.0,
+          "pid": 89633,
+          "rss_kib": 22848
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578859900250,
+      "processes": [
+        {
+          "cpu_percent": 71.3,
+          "pid": 89627,
+          "rss_kib": 23648
+        },
+        {
+          "cpu_percent": 8.5,
+          "pid": 89633,
+          "rss_kib": 20832
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509578980625125,
+      "processes": [
+        {
+          "cpu_percent": 47.6,
+          "pid": 89627,
+          "rss_kib": 24048
+        },
+        {
+          "cpu_percent": 8.8,
+          "pid": 89633,
+          "rss_kib": 20960
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579099957208,
+      "processes": [
+        {
+          "cpu_percent": 32.8,
+          "pid": 89627,
+          "rss_kib": 24944
+        },
+        {
+          "cpu_percent": 9.1,
+          "pid": 89633,
+          "rss_kib": 20960
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579222129791,
+      "processes": [
+        {
+          "cpu_percent": 22.5,
+          "pid": 89627,
+          "rss_kib": 25440
+        },
+        {
+          "cpu_percent": 8.6,
+          "pid": 89633,
+          "rss_kib": 21472
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579344318833,
+      "processes": [
+        {
+          "cpu_percent": 16.8,
+          "pid": 89627,
+          "rss_kib": 25792
+        },
+        {
+          "cpu_percent": 9.2,
+          "pid": 89633,
+          "rss_kib": 21520
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579470239250,
+      "processes": [
+        {
+          "cpu_percent": 13.4,
+          "pid": 89627,
+          "rss_kib": 25920
+        },
+        {
+          "cpu_percent": 9.3,
+          "pid": 89633,
+          "rss_kib": 22160
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579590825875,
+      "processes": [
+        {
+          "cpu_percent": 13.7,
+          "pid": 89627,
+          "rss_kib": 26272
+        },
+        {
+          "cpu_percent": 9.9,
+          "pid": 89633,
+          "rss_kib": 22816
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579708394333,
+      "processes": [
+        {
+          "cpu_percent": 8.2,
+          "pid": 89627,
+          "rss_kib": 25984
+        },
+        {
+          "cpu_percent": 10.6,
+          "pid": 89633,
+          "rss_kib": 22992
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579833962958,
+      "processes": [
+        {
+          "cpu_percent": 5.3,
+          "pid": 89627,
+          "rss_kib": 26000
+        },
+        {
+          "cpu_percent": 20.0,
+          "pid": 89633,
+          "rss_kib": 27312
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509579953391875,
+      "processes": [
+        {
+          "cpu_percent": 3.1,
+          "pid": 89627,
+          "rss_kib": 26048
+        },
+        {
+          "cpu_percent": 25.7,
+          "pid": 89633,
+          "rss_kib": 28368
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580083822000,
+      "processes": [
+        {
+          "cpu_percent": 1.6,
+          "pid": 89627,
+          "rss_kib": 26064
+        },
+        {
+          "cpu_percent": 25.3,
+          "pid": 89633,
+          "rss_kib": 28224
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580215760375,
+      "processes": [
+        {
+          "cpu_percent": 1.0,
+          "pid": 89627,
+          "rss_kib": 26080
+        },
+        {
+          "cpu_percent": 25.8,
+          "pid": 89633,
+          "rss_kib": 28224
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580338180375,
+      "processes": [
+        {
+          "cpu_percent": 0.5,
+          "pid": 89627,
+          "rss_kib": 26080
+        },
+        {
+          "cpu_percent": 27.5,
+          "pid": 89633,
+          "rss_kib": 29184
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580457526375,
+      "processes": [
+        {
+          "cpu_percent": 0.4,
+          "pid": 89627,
+          "rss_kib": 26080
+        },
+        {
+          "cpu_percent": 25.8,
+          "pid": 89633,
+          "rss_kib": 29344
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580578910166,
+      "processes": [
+        {
+          "cpu_percent": 0.1,
+          "pid": 89627,
+          "rss_kib": 26080
+        },
+        {
+          "cpu_percent": 23.2,
+          "pid": 89633,
+          "rss_kib": 29696
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580707866541,
+      "processes": [
+        {
+          "cpu_percent": 0.1,
+          "pid": 89627,
+          "rss_kib": 26096
+        },
+        {
+          "cpu_percent": 23.0,
+          "pid": 89633,
+          "rss_kib": 30192
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580834631583,
+      "processes": [
+        {
+          "cpu_percent": 0.1,
+          "pid": 89627,
+          "rss_kib": 26112
+        },
+        {
+          "cpu_percent": 21.9,
+          "pid": 89633,
+          "rss_kib": 30288
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509580956889750,
+      "processes": [
+        {
+          "cpu_percent": 0.2,
+          "pid": 89627,
+          "rss_kib": 26112
+        },
+        {
+          "cpu_percent": 21.7,
+          "pid": 89633,
+          "rss_kib": 30400
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509581079396000,
+      "processes": [
+        {
+          "cpu_percent": 0.0,
+          "pid": 89627,
+          "rss_kib": 26112
+        },
+        {
+          "cpu_percent": 21.6,
+          "pid": 89633,
+          "rss_kib": 30528
+        }
+      ]
+    },
+    {
+      "monotonic_ns": 509581206136250,
+      "processes": [
+        {
+          "cpu_percent": 0.1,
+          "pid": 89627,
+          "rss_kib": 26112
+        },
+        {
+          "cpu_percent": 19.6,
+          "pid": 89633,
+          "rss_kib": 30592
+        }
+      ]
+    }
+  ]
+}

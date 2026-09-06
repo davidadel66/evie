@@ -1,0 +1,3 @@
+Fix reconciled memory gaps and measure the Stage 4 workload (#150)
+
+Preserve exact root membership and immutable live/historical ownership without fabricating empty failed jobs. Run and retain a corrected 99-trial infrastructure study with exact outcomes, source-bound conformance and explicit human/model readiness limits.

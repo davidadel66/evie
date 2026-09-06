@@ -1,0 +1,5 @@
+=== RUN   TestStage4GenericStorageConformance
+    memory_stage4_scope_conformance_test.go:191: STAGE4_EVIDENCE {"details":{"denied_model_queries":154,"privileged_shell_claim":"unchanged documented limitation","protected_tables_and_views":77,"unaccepted_candidate_isolated":true},"scenario":"generic_storage_containment","version":"memory-stage-4-conformance-v1"}
+--- PASS: TestStage4GenericStorageConformance (0.07s)
+PASS
+ok  	github.com/davidadel66/evie/cmd/evie	0.393s

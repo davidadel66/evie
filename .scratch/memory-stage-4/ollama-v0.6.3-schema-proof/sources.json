@@ -1,0 +1,156 @@
+{
+  "repository": "https://github.com/ollama/ollama",
+  "tag": "v0.6.3",
+  "commit": "e5d84fb90b21d71f8eb816656ca0b34191425216",
+  "tag_ref_url": "https://api.github.com/repos/ollama/ollama/git/ref/tags/v0.6.3",
+  "tested_schema_sha256": "ad6ce8c0ea12f11345a3d421d710f718d9535ba24616858d78c2f207d4288c6e",
+  "sources": [
+    {
+      "local_name": "CMakeLists.txt",
+      "repository_path": "CMakeLists.txt",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/CMakeLists.txt",
+      "sha256": "dedec14df74eb888181f34abc8fe3e127eab8b8af492c115f95d87a82020df3b",
+      "bytes": 4951
+    },
+    {
+      "local_name": "common.cpp",
+      "repository_path": "llama/llama.cpp/common/common.cpp",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/common.cpp",
+      "sha256": "a7deef08b9390d45e801aadfe265e3c3c97d06774d42c8ac3af04d0cd52d2b05",
+      "bytes": 70295
+    },
+    {
+      "local_name": "common.h",
+      "repository_path": "llama/llama.cpp/common/common.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/common.h",
+      "sha256": "5e161b2e077134c3bbbede48e0d582c6f9aad10e191e59695add2c67582b259a",
+      "bytes": 29397
+    },
+    {
+      "local_name": "ggml-alloc.h",
+      "repository_path": "ml/backend/ggml/ggml/include/ggml-alloc.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/ml/backend/ggml/ggml/include/ggml-alloc.h",
+      "sha256": "67d215acf3d2bbaff24762c61293484d2739d19df6fec025fd9d30c9e567c9c7",
+      "bytes": 3011
+    },
+    {
+      "local_name": "ggml-backend.h",
+      "repository_path": "ml/backend/ggml/ggml/include/ggml-backend.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/ml/backend/ggml/ggml/include/ggml-backend.h",
+      "sha256": "773d8760c6e7964dab1e45813f98fb5d33ca903a190c445a31a2378e0d1bf7bd",
+      "bytes": 19905
+    },
+    {
+      "local_name": "ggml-cpu.h",
+      "repository_path": "ml/backend/ggml/ggml/include/ggml-cpu.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/ml/backend/ggml/ggml/include/ggml-cpu.h",
+      "sha256": "3ab8a62bfdf2863d49eb051aa15a1a8a1a58783b8245b6b0d6ed221f5c45e4b9",
+      "bytes": 6851
+    },
+    {
+      "local_name": "ggml.h",
+      "repository_path": "ml/backend/ggml/ggml/include/ggml.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/ml/backend/ggml/ggml/include/ggml.h",
+      "sha256": "91b0c024abcf2537ab04902b55b030c254d2a561b8ca12a713a7817ed1d4346c",
+      "bytes": 83142
+    },
+    {
+      "local_name": "json-schema-to-grammar.cpp",
+      "repository_path": "llama/llama.cpp/common/json-schema-to-grammar.cpp",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/json-schema-to-grammar.cpp",
+      "sha256": "82d8c5aa1a56b806e5119c422472c0fd802ab23f5f7046bbba570ea9286de014",
+      "bytes": 43433
+    },
+    {
+      "local_name": "json-schema-to-grammar.h",
+      "repository_path": "llama/llama.cpp/common/json-schema-to-grammar.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/json-schema-to-grammar.h",
+      "sha256": "5762e6c5411d1da75cbd00c0c6ed1214fb1cb8f3948c546f064d10793455f545",
+      "bytes": 782
+    },
+    {
+      "local_name": "json.hpp",
+      "repository_path": "llama/llama.cpp/common/json.hpp",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/json.hpp",
+      "sha256": "5b4b37308d67f9820b5926486374246054fdd06baae85309b820a8315f23caca",
+      "bytes": 920255
+    },
+    {
+      "local_name": "llama-cpp.h",
+      "repository_path": "llama/llama.cpp/include/llama-cpp.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/include/llama-cpp.h",
+      "sha256": "c48fd31095d2403a3bf7cbe98333ba0e61a398ee6e83b56f9d8b7237143b9877",
+      "bytes": 900
+    },
+    {
+      "local_name": "llama-grammar.cpp",
+      "repository_path": "llama/llama.cpp/src/llama-grammar.cpp",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/src/llama-grammar.cpp",
+      "sha256": "250385da4137be2361b9e213900f2b289f82d051b8ef462f2a377653d7ca8630",
+      "bytes": 44318
+    },
+    {
+      "local_name": "llama-grammar.h",
+      "repository_path": "llama/llama.cpp/src/llama-grammar.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/src/llama-grammar.h",
+      "sha256": "e33c11c33e3f59a5ee659b22ea083fff7e58366c5af32b0cc4499ffdb6ddc860",
+      "bytes": 5722
+    },
+    {
+      "local_name": "llama-impl.h",
+      "repository_path": "llama/llama.cpp/src/llama-impl.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/src/llama-impl.h",
+      "sha256": "25c4b7f4ffee9035645898a8fee0e55b3eac8e339d70c7258d5b5f8a6d83a44f",
+      "bytes": 1809
+    },
+    {
+      "local_name": "llama-sampling.h",
+      "repository_path": "llama/llama.cpp/src/llama-sampling.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/src/llama-sampling.h",
+      "sha256": "d3cbc9af3b2731733a6a210e5f6acb08b6a786d2d259a5363349c3e7d60fd42d",
+      "bytes": 754
+    },
+    {
+      "local_name": "llama-vocab.h",
+      "repository_path": "llama/llama.cpp/src/llama-vocab.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/src/llama-vocab.h",
+      "sha256": "4be15bf6b22650c8c304e058a4fb06fce25d8e7eae822e7e6ada8581b4310cac",
+      "bytes": 3864
+    },
+    {
+      "local_name": "llama.h",
+      "repository_path": "llama/llama.cpp/include/llama.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/include/llama.h",
+      "sha256": "ac87750d3821603309f5b65295a2eab39eaddba04f8ffa81018599ba1323df28",
+      "bytes": 68040
+    },
+    {
+      "local_name": "llama__common.go",
+      "repository_path": "llama/llama.cpp/common/common.go",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.cpp/common/common.go",
+      "sha256": "07349bc246d4034221b9c82691689ab43c31448db67ce1776a3063d84717ab51",
+      "bytes": 165
+    },
+    {
+      "local_name": "llama__llama.go",
+      "repository_path": "llama/llama.go",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/llama.go",
+      "sha256": "ca4587225bb7cafef4ca7f1260f378d6b9f5c1837e7e2c64cb88add7c4dda73e",
+      "bytes": 19432
+    },
+    {
+      "local_name": "llama__sampling_ext.cpp",
+      "repository_path": "llama/sampling_ext.cpp",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/sampling_ext.cpp",
+      "sha256": "5cef33db69b2aab053f312fa3d5bf5e6e0f035a61da950904cfe3e925e2fddb2",
+      "bytes": 2906
+    },
+    {
+      "local_name": "llama__sampling_ext.h",
+      "repository_path": "llama/sampling_ext.h",
+      "url": "https://raw.githubusercontent.com/ollama/ollama/e5d84fb90b21d71f8eb816656ca0b34191425216/llama/sampling_ext.h",
+      "sha256": "a4b277389cee789f8f764233b36276f243582a033fb202ab4f3da3cbc84ef748",
+      "bytes": 1404
+    }
+  ]
+}

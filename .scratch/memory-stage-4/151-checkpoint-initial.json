@@ -1,0 +1,24 @@
+{
+  "ticket": 151,
+  "base": "ebb84af94f37b5bb5278d54208dc1d9f2dba73c7",
+  "tree": "eebe81f9b39587405f9c2662ec0f94d68f9ad38d",
+  "index": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/151-checkpoint.index",
+  "files": {
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/README.md": "99c3ab0c4d17aecd87fb4f2432643466e6e9b2221b4d0816e0d1b871ae22f2d2",
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-report.json": "6c530ef619bb5485be8e57872ca0a9a82ee712b150d409e6c3f41c292279cfa0",
+    "cmd/evie/docs/fixtures/memory-stage4-release/v1/pending-submission.json": "627c20e399df4d0ae7d400f4af2b332538511e429141e844e77c1a7bb771383f",
+    "internal/memoryeval/stage4_release.go": "854cd8fe7149a100dfee24db37be13ceb3acbbb97189168a7a33b5ab1d583f44",
+    "internal/memoryeval/stage4_release_evidence.go": "561fe5c117ea5c0916f85f53821d3ec4809d988c1cb88d22691b80791c17b04f",
+    "internal/memoryeval/stage4_release_gates.go": "4fe2d36d203f8cd800ea5263ed11f5361c1af37fbe719285b41bcc058fe87d5d",
+    "internal/memoryeval/stage4_release_quality.go": "ce3d8c4fffcf165184b3bbbc41fe0211cf7b45e3682c6f725cdd4f922f04ba11",
+    "internal/memoryeval/stage4_release_test.go": "aee24582fb5a333febb942035b27a100a9912f2a3180df5eff035164e808da20",
+    "scripts/memory-stage4-release/README.md": "416e85b7209f2098532d2f2c8b21af9a96faa8b8aa45dd9516c37c243dd00061",
+    "scripts/memory-stage4-release/artifacts.go": "d7a2f335549ea4e79b6045bc539a8154f2a4f1daaf7fc89b3bb18e4e8c687455",
+    "scripts/memory-stage4-release/main.go": "449309939b7fe089a197d1238d8bec9303b419b63f68d74a062b2e4450193f61",
+    "scripts/memory-stage4-release/main_test.go": "c832356edc6f041579bd211b93da6932d9d34c12e29972f9255cf32323960459"
+  },
+  "snapshot": "/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/evie-151-checkpoint-in7ttcav",
+  "note": "Isolated ticket contribution; preexisting user work excluded.",
+  "verification_exit_code": 0,
+  "verification_log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/verify-151.log"
+}

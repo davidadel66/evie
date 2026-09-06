@@ -17,3 +17,20 @@ describe("Semantic Memory API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/memory/inspect", expect.objectContaining({ body: JSON.stringify({ scopeKey: "workspace:one", kind: "claim", id: "claim-1", history: true, asKnownAt: "2026-09-02T00:00:00Z" }) }));
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());
+it("opens Go inspection responses with null optional collections", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ object_kind: "entity", object_id: "owner", sources: null, lifecycle: [], operations: null, conflicts: null }))));
+  const detail = await inspectMemoryObject("global", "entity", "owner", {});
+  expect(detail.sources).toEqual([]);
+  expect(detail.conflicts).toEqual([]);
+  expect(detail.operations).toEqual([]);
+  expect(detail.object_id).toBe("owner");
+});
+
+it("normalizes empty scope and object pages from Go", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ objects: null, scopes: null }))));
+  expect((await listMemoryObjects({scopeKey: "global", kinds: ["claim"]})).objects).toEqual([]);
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ scopes: null }))));
+  expect((await listMemoryScopes()).scopes).toEqual([]);
+});

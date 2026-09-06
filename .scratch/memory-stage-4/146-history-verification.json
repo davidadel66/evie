@@ -1,0 +1,81 @@
+[
+  {
+    "name": "web-focused",
+    "command": [
+      "go",
+      "test",
+      "./internal/web",
+      "-run",
+      "CandidateReview|CandidateAdvancedHTTP",
+      "-count=1"
+    ],
+    "cwd": "/Users/davidboktor/code/evie",
+    "exit_code": 0,
+    "elapsed_seconds": 4.553,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-web-focused.log"
+  },
+  {
+    "name": "web-race",
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "./internal/web",
+      "-run",
+      "CandidateReview|CandidateAdvancedHTTP",
+      "-count=1"
+    ],
+    "cwd": "/Users/davidboktor/code/evie",
+    "exit_code": 0,
+    "elapsed_seconds": 46.01,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-web-race.log"
+  },
+  {
+    "name": "ui-typecheck",
+    "command": [
+      "npx",
+      "tsc",
+      "-b"
+    ],
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 2.069,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-typecheck.log"
+  },
+  {
+    "name": "ui-tests",
+    "command": [
+      "npx",
+      "vitest",
+      "run"
+    ],
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 1.264,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-tests.log"
+  },
+  {
+    "name": "ui-lint",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 0.169,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-lint.log"
+  },
+  {
+    "name": "ui-build",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "cwd": "/Users/davidboktor/code/evie/internal/web/ui",
+    "exit_code": 0,
+    "elapsed_seconds": 2.21,
+    "log": "/Users/davidboktor/code/evie/.scratch/memory-stage-4/146-history-ui-build.log"
+  }
+]

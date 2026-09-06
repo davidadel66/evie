@@ -1,0 +1,6 @@
+[
+  "internal/eviedb/compiler_work.go",
+  "internal/eviedb/candidate_review_schema.go",
+  "internal/memory/compiler_contract.go",
+  "cmd/evie/candidate_review.go"
+]

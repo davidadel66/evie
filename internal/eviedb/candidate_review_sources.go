@@ -62,12 +62,15 @@ func (s *Store) InspectOwnerReviewOperation(ctx context.Context, a OwnerReviewCo
 		return memory.OwnerReviewOperation{}, err
 	}
 	var raw string
-	err = tx.QueryRowContext(ctx, `SELECT o.prepared_proposal_json FROM semantic_operations o JOIN semantic_scopes s ON s.scope_id=o.target_scope_id WHERE o.operation_id=? AND o.schema_version=6 AND s.scope_key=?`, id, a.scope).Scan(&raw)
+	err = tx.QueryRowContext(ctx, `SELECT o.prepared_proposal_json FROM semantic_operations o WHERE o.operation_id=? AND o.schema_version=6`, id).Scan(&raw)
 	if err != nil {
 		return memory.OwnerReviewOperation{}, ErrOwnerReviewUnauthorized
 	}
 	if json.Unmarshal([]byte(raw), &op) != nil {
 		return memory.OwnerReviewOperation{}, errors.New("invalid accepted review envelope")
+	}
+	if op.Preview.ScopeKey != a.scope {
+		return memory.OwnerReviewOperation{}, ErrOwnerReviewUnauthorized
 	}
 	if op.Preview.Version == "owner-review-preview-v5" {
 		if err = validateOwnerReviewOperation(op); err != nil {

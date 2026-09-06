@@ -20,3 +20,10 @@ describe("DataHubView", () => {
     expect(html).not.toContain("Experiments");
   });
 });
+
+it("selects Usage without mounting other Data sources", () => {
+  const html = renderToStaticMarkup(<DataHubView source="usage" onSource={() => undefined} database={<div>schema-only</div>} memory={<div>memory-only</div>} usage={<div>token-measurements</div>} />);
+  expect(html).toContain("token-measurements");
+  expect(html).not.toContain("schema-only");
+  expect(html).not.toContain("memory-only");
+});

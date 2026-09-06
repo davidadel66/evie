@@ -1,0 +1,12 @@
+{
+  "checked_paths": 220,
+  "unchanged": 217,
+  "authorized_hook_paths": [
+    "cmd/evie/main.go",
+    "internal/web/serve.go",
+    "internal/web/ui/src/memory/Memory.tsx"
+  ],
+  "unexpected_changes": [],
+  "saved_original_mismatches": [],
+  "generated_test_artifact_restored": "node_modules/.vite/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709/results.json"
+}

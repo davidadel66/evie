@@ -1,0 +1,2901 @@
+diff --git a/cmd/evie/compiler_management.go b/cmd/evie/compiler_management.go
+index 321f645..7155425 100644
+--- a/cmd/evie/compiler_management.go
++++ b/cmd/evie/compiler_management.go
+@@ -18,6 +18,9 @@ type compilerManagementKernel interface {
+ 	GetSession(context.Context, memory.SessionID) (memory.Session, error)
+ 	CompileCandidateUnit(context.Context, memory.ScopeContext, memory.CompilationSelection, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.Compilation, error)
+ 	InspectCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
++	InspectCompilerStatus(context.Context, memory.ScopeContext, string, int) (memory.CompilerStatus, error)
++	CancelCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
++	ResumeCompilation(context.Context, memory.ScopeContext, string) (memory.Compilation, error)
+ }
+ 
+ // The short owner command runs before conversational provider construction.
+@@ -28,16 +31,20 @@ func runCompilerManagement(ctx context.Context, args []string, out io.Writer, ke
+ 	}
+ 	command := args[0]
+ 	args = args[1:]
++	action := "compile"
+ 	if command == "memory-candidates" {
+-		if len(args) == 0 || args[0] != "inspect" {
+-			return true, errors.New("usage: memory-candidates inspect --session ID --id SELECTION_OR_JOB")
++		if len(args) == 0 || (args[0] != "inspect" && args[0] != "status" && args[0] != "cancel" && args[0] != "resume") {
++			return true, errors.New("usage: memory-candidates inspect|cancel|resume --session ID --id SELECTION_OR_JOB; status --session ID [--after JOB_ID] [--limit 32]")
+ 		}
++		action = args[0]
+ 		args = args[1:]
+ 	}
+ 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+ 	flags.SetOutput(io.Discard)
+ 	sessionID := flags.String("session", "", "source session ID")
+ 	id := flags.String("id", "", "selection or job ID")
++	after := flags.String("after", "", "status job cursor")
++	limit := flags.Int("limit", 32, "bounded status page size")
+ 	root := flags.String("root", "", "root event ID")
+ 	cutoff := flags.Int64("cutoff", 0, "inclusive captured sequence")
+ 	configPath := flags.String("config", "", "pinned local compiler configuration")
+@@ -53,13 +60,33 @@ func runCompilerManagement(ctx context.Context, args []string, out io.Writer, ke
+ 		return true, err
+ 	}
+ 	owner := session.ScopeContext()
+-	var result memory.Compilation
++	var result any
+ 	if command == "memory-candidates" {
+-		if *id == "" || *root != "" || *cutoff != 0 || *configPath != "" || *sessionScope {
+-			return true, errors.New("inspection accepts only --session and --id")
++		if *root != "" || *cutoff != 0 || *configPath != "" || *sessionScope {
++			return true, errors.New("candidate management does not accept compile flags")
++		}
++		if action == "status" {
++			if *id != "" {
++				return true, errors.New("status accepts --after rather than --id")
++			}
++			result, err = kernel.InspectCompilerStatus(ctx, owner, *after, *limit)
++		} else {
++			if *id == "" || *after != "" || *limit != 32 {
++				return true, errors.New("inspection/cancel/resume requires --id and no pagination")
++			}
++			switch action {
++			case "inspect":
++				result, err = kernel.InspectCompilation(ctx, owner, *id)
++			case "cancel":
++				result, err = kernel.CancelCompilation(ctx, owner, *id)
++			case "resume":
++				result, err = kernel.ResumeCompilation(ctx, owner, *id)
++			}
+ 		}
+-		result, err = kernel.InspectCompilation(ctx, owner, *id)
+ 	} else {
++		if *after != "" || *limit != 32 {
++			return true, errors.New("compile does not accept status pagination")
++		}
+ 		if *configPath == "" {
+ 			return true, eviedb.ErrCompilerNotConfigured
+ 		}
+diff --git a/cmd/evie/compiler_management_test.go b/cmd/evie/compiler_management_test.go
+index fd8f1ae..b00749c 100644
+--- a/cmd/evie/compiler_management_test.go
++++ b/cmd/evie/compiler_management_test.go
+@@ -111,4 +111,44 @@ func TestCompilerCLIUsesSQLiteAndLocalTransportWithoutConversationalClient(t *te
+ 	if !handled || err != nil || !strings.Contains(out.String(), "owner_statement") || !strings.Contains(out.String(), "I prefer tea.") || calls.Load() != 1 {
+ 		t.Fatalf("inspection %v %v %s", handled, err, out.String())
+ 	}
++
++	out.Reset()
++	handled, err = runCompilerManagement(ctx, []string{"memory-candidates", "status", "--session", string(session.ID)}, &out, store)
++	if !handled || err != nil || !strings.Contains(out.String(), "completed_empty") || strings.Contains(out.String(), "I prefer tea.") || strings.Contains(out.String(), "Extract.") {
++		t.Fatalf("unsafe worker status %v %v %s", handled, err, out.String())
++	}
++	next, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer coffee."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	end, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: next.ID, Content: "Recorded."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	queuedExtractor, err := localextractor.New(localextractor.Config{Endpoint: server.URL, Generation: g})
++	if err != nil {
++		t.Fatal(err)
++	}
++	queued, err := store.QueueCandidateUnit(ctx, session.ScopeContext(), memory.CompilationSelection{SessionID: session.ID, RootID: next.ID, Cutoff: end.Sequence, Destination: "global"}, g, queuedExtractor)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, action := range []string{"cancel", "resume"} {
++		out.Reset()
++		handled, err = runCompilerManagement(ctx, []string{"memory-candidates", action, "--session", string(session.ID), "--id", queued.JobID}, &out, store)
++		if !handled || err != nil {
++			t.Fatalf("%s %v %v", action, handled, err)
++		}
++		var got memory.Compilation
++		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
++			t.Fatal(err)
++		}
++		want := "cancelled"
++		if action == "resume" {
++			want = "queued"
++		}
++		if got.State != want || got.Attempts != 0 || calls.Load() != 1 {
++			t.Fatalf("%s mutated attempts %+v", action, got)
++		}
++	}
+ }
+diff --git a/cmd/evie/docs/research/memory-stage-4-worker-recovery.md b/cmd/evie/docs/research/memory-stage-4-worker-recovery.md
+new file mode 100644
+index 0000000..c3d7840
+--- /dev/null
++++ b/cmd/evie/docs/research/memory-stage-4-worker-recovery.md
+@@ -0,0 +1,67 @@
++# Stage 4 worker recovery engineering checkpoint
++
++Ticket: #137, recover unfinished compilation safely across processes. Binding
++behavior is in `../active/memory-stage-4-work-contract.decisions.md`, especially
++W08–W13 of the adjacent worked fixtures. This record covers deterministic
++engineering. No adequate selected model/runtime has been configured or evaluated
++by this change; scripted HTTP release semantics are not Ollama acceptance.
++
++The SQLite-backed worker exposes queue-only selected compilation, a one-step
++worker, and a bounded long-lived supervisor. Queueing requires an explicitly
++configured extractor but does not invoke it. Source windows are sealed on
++selection; accepted-state context is sealed with the first atomic claim. Retries
++reuse that complete request. Each claim records a separate durable attempt ID,
++increments the five-attempt counter and fence, and reserves the database-wide
++request slot plus staging/inbox capacity. Leases use SQLite time with a 30-second
++expiry and 10-second renewal. A 100ms authority check interrupts a locally
++running client after another process cancels its job.
++
++The automatic retry delays are 5, 10, 20 and 40 seconds. Configuration, source
++binding and forbidden effects fail closed; malformed/schema-invalid output is
++retryable. Missing output never becomes successful empty extraction. Expired
++workers and supervisor shutdown retain interrupted attempts and coverage gaps.
++Complete durable stages can be adopted with a new fence and revalidated without
++inference. Owner cancellation requires explicit resume, including an intact
++stage saved by attempt five. Neither reselection nor resume grants request six.
++
++Unknown server release retains `release_pending`. Lease expiry, process death,
++connection close, and client cancellation never free that reservation. A trusted
++runtime adapter can provide an authenticated acknowledgement for the exact
++request/holder/fence/server reservation, or prove a controlled restart covering
++that reservation. The production Ollama adapter has no such recovery mechanism;
++endpoint/version/model identity is not a server boot identity. There is no CLI
++force-release or unverified restart bypass. Completed durable stages can publish
++while another job's capacity remains blocked.
++
++The resource reservations enforce 128 groups/16MiB staging and 2,048 unresolved
++candidate positions, with 16 positions reserved per extraction. The 1,024-job
++queue preserves selection records when full. Recovery changes at most 16 jobs
++per transaction (at most 64 ledger/resource mutations). A worker step performs
++at most one inference/publication. The scheduler preserves job lane/order and a
++shared fairness counter; activation and backfill install those fields in the
++same transaction that creates a job. Their selection/host integration is owned
++by #138/#139.
++
++Owner commands:
++
++```sh
++evie memory-candidates status --session SESSION_ID --limit 32
++evie memory-candidates cancel --session SESSION_ID --id JOB_ID
++evie memory-candidates resume --session SESSION_ID --id JOB_ID
++```
++
++Status pages expose only bounded work metadata, retry due time, capacity state,
++reservations and recovery advice. Existing exact candidate inspection remains
++available separately. Cancellation and failed earlier intervals remain gaps in
++the exact coverage ledger while independent later candidates are reviewable.
++Activation/backfill surfaces own the corresponding selection segment vectors.
++
++Deterministic tests cover real SQLite reopen, independent Stores, abrupt
++subprocess exits before/after claim, after response, after staging and after
++publication, attempt ceilings and due times, fifth-stage resume, stale outputs
++and release acknowledgements, full capacity, safe status, accepted snapshot
++pinning, later visible candidates, scheduler fairness, and prompt HTTP client
++cancellation while the scripted server remains active. The implementation owner
++runs focused/race checks; the root integrator runs `./scripts/verify-change.sh`
++on the isolated ticket tree and shared integration tree, and coordinates the
++independent Standards/Spec reviews before committing this ticket.
+diff --git a/internal/eviedb/compiler_adoption_bound_test.go b/internal/eviedb/compiler_adoption_bound_test.go
+new file mode 100644
+index 0000000..3a957a5
+--- /dev/null
++++ b/internal/eviedb/compiler_adoption_bound_test.go
+@@ -0,0 +1,108 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"strings"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerCountingStageTransaction struct {
++	*sql.Conn
++	eventReads int
++}
++
++func (q *compilerCountingStageTransaction) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
++	if strings.Contains(query, "FROM events WHERE id=?") {
++		q.eventReads++
++	}
++	return q.Conn.QueryRowContext(ctx, query, args...)
++}
++
++func TestCompilerWorkerAdoptionReadsMaximumWindowOnce(t *testing.T) {
++	f := newWorkerFixture(t)
++	ctx := context.Background()
++	appendSource := func(kind memory.EventType, role memory.EventRole, parent memory.EventID) memory.Event {
++		event, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: kind, Role: role, ParentID: parent, Content: "A concise fact."})
++		if err != nil {
++			t.Fatal(err)
++		}
++		return event
++	}
++	overlapRoot := appendSource(memory.EventUserMessage, memory.RoleUser, "")
++	for i := 1; i < 16; i++ {
++		appendSource(memory.EventUserMessage, memory.RoleUser, overlapRoot.ID)
++	}
++	root := appendSource(memory.EventUserMessage, memory.RoleUser, "")
++	for i := 1; i < 64; i++ {
++		appendSource(memory.EventUserMessage, memory.RoleUser, root.ID)
++	}
++	var end memory.Event
++	for i := 0; i < 8; i++ {
++		end = appendSource(memory.EventAssistantMessage, memory.RoleAssistant, root.ID)
++	}
++	selection := memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: end.Sequence, Destination: "global"}
++	queued, err := f.store.QueueCandidateUnit(ctx, f.owner, selection, f.generation, &workerScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	counts := map[string]int{}
++	for _, source := range queued.Window.Sources {
++		counts[source.Usage]++
++	}
++	if counts["new_support"] != 64 || counts["overlap"] != 16 || counts["context"] != 8 {
++		t.Fatalf("not a maximum window: %v", counts)
++	}
++	claim, err := f.store.claimCompilerJob(ctx, f.owner, queued.JobID, &workerScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.stageCompilerResult(ctx, f.owner, claim.JobID, claim.Holder, claim.Fence, claim.Request, []memory.MemoryCandidate{}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')-1 WHERE job_id=?`, claim.JobID); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.RecoverCompilerWork(ctx); err != nil {
++		t.Fatal(err)
++	}
++	var adopted compilerClaim
++	err = f.store.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		counted := &compilerCountingStageTransaction{Conn: conn}
++		var err error
++		adopted, err = adoptCompilerStageInTransaction(ctx, counted, f.owner, queued.JobID)
++		if err != nil {
++			return err
++		}
++		if counted.eventReads != 88 || counted.eventReads > 128 {
++			t.Errorf("adoption inspected %d event rows; maximum window must be checked once (88), bounded by128", counted.eventReads)
++		}
++		return nil
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	// Eligibility can change between the adoption and publication transactions.
++	// A completed group still requires a fresh pass over all currently stored
++	// source metadata; saved validation cannot authorize changed source bytes.
++	// Inject corruption below the append-only API to exercise fresh validation.
++	if _, err := f.db.Exec(`DROP TRIGGER events_append_only_update`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE events SET content='Changed after adoption.' WHERE id=?`, root.ID); err != nil {
++		t.Fatal(err)
++	}
++	err = f.store.publishCompilerResult(ctx, f.owner, adopted.JobID, adopted.Holder, adopted.Fence, adopted.Request)
++	if err == nil || errors.Is(err, ErrCompilerFence) {
++		t.Fatalf("publication did not revalidate changed source: %v", err)
++	}
++	for _, table := range []string{"memory_compiler_candidate_groups", "memory_compiler_coverage"} {
++		var count int
++		if err := f.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil || count != 0 {
++			t.Fatalf("changed source published %s rows=%d err=%v", table, count, err)
++		}
++	}
++}
+diff --git a/internal/eviedb/compiler_generation_race_test.go b/internal/eviedb/compiler_generation_race_test.go
+new file mode 100644
+index 0000000..409bcf6
+--- /dev/null
++++ b/internal/eviedb/compiler_generation_race_test.go
+@@ -0,0 +1,73 @@
++package eviedb
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"sync"
++	"testing"
++)
++
++func TestCompilerWorkerGenerationSchemaRemainsCallerOwned(t *testing.T) {
++	for _, method := range []string{"queue", "compile"} {
++		t.Run(method, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			job := f.queue(t, "I prefer tea.")
++			generation := f.generation
++			generation.Schema = json.RawMessage(` { "type" : "object" } `)
++			original := string(generation.Schema)
++			var err error
++			if method == "queue" {
++				_, err = f.store.QueueCandidateUnit(context.Background(), f.owner, job.Window.Selection, generation, &workerScript{})
++			} else {
++				_, err = f.store.CompileCandidateUnit(context.Background(), f.owner, job.Window.Selection, generation, &workerScript{})
++			}
++			if err != nil {
++				t.Fatal(err)
++			}
++			if string(generation.Schema) != original {
++				t.Fatalf("%s rewrote caller Schema buffer: got %q want %q", method, generation.Schema, original)
++			}
++		})
++	}
++}
++
++func TestCompilerWorkerConcurrentGenerationSchemaIsDetached(t *testing.T) {
++	for _, method := range []string{"queue", "compile"} {
++		t.Run(method, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			job := f.queue(t, "I prefer tea.")
++			generation := f.generation
++			generation.Schema = json.RawMessage(` { "type" : "object" } `)
++			original := string(generation.Schema)
++			start := make(chan struct{})
++			failures := make(chan error, 8)
++			var wg sync.WaitGroup
++			for i := 0; i < 8; i++ {
++				wg.Add(1)
++				go func() {
++					defer wg.Done()
++					<-start
++					var err error
++					if method == "queue" {
++						_, err = f.store.QueueCandidateUnit(context.Background(), f.owner, job.Window.Selection, generation, &workerScript{})
++					} else {
++						_, err = f.store.CompileCandidateUnit(context.Background(), f.owner, job.Window.Selection, generation, &workerScript{})
++					}
++					if err != nil && !errors.Is(err, ErrCompilerFence) && !errors.Is(err, ErrCompilerCapacityBlocked) {
++						failures <- err
++					}
++				}()
++			}
++			close(start)
++			wg.Wait()
++			close(failures)
++			for err := range failures {
++				t.Error(err)
++			}
++			if string(generation.Schema) != original {
++				t.Error("concurrent calls changed caller Schema")
++			}
++		})
++	}
++}
+diff --git a/internal/eviedb/compiler_public_test.go b/internal/eviedb/compiler_public_test.go
+index 39b6d3d..5ae932b 100644
+--- a/internal/eviedb/compiler_public_test.go
++++ b/internal/eviedb/compiler_public_test.go
+@@ -260,7 +260,11 @@ func TestCompilerRejectsUntrustedSourceIdentityAndShape(t *testing.T) {
+ 				return compilerOutput(r, []memory.ExtractorCandidate{candidate}), nil
+ 			}}
+ 			result, err := f.store.CompileCandidateUnit(context.Background(), f.session.ScopeContext(), sel, compilerGeneration(), extractor)
+-			if err == nil || result.State != "retry_wait" || len(result.Candidates) != 0 {
++			wantState := "failed"
++			if test.name == "polarity" {
++				wantState = "retry_wait"
++			}
++			if err == nil || result.State != wantState || len(result.Candidates) != 0 {
+ 				t.Fatalf("accepted invalid: %+v %v", result, err)
+ 			}
+ 		})
+diff --git a/internal/eviedb/compiler_schema.go b/internal/eviedb/compiler_schema.go
+index 53b7c6e..b76fead 100644
+--- a/internal/eviedb/compiler_schema.go
++++ b/internal/eviedb/compiler_schema.go
+@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS memory_compiler_coverage (
+ 
+ func ensureCompilerSchema(ctx context.Context, db *sql.DB) error {
+ 	return withImmediateTransactionResolver(ctx, db, executeImmediateTransactionStatement, transactionResolutionContext, func(conn *sql.Conn) error {
+-		_, err := conn.ExecContext(ctx, compilerSchema)
++		if _, err := conn.ExecContext(ctx, compilerSchema); err != nil {
++			return err
++		}
++		_, err := conn.ExecContext(ctx, compilerWorkerSchema)
+ 		return err
+ 	})
+ }
+diff --git a/internal/eviedb/compiler_validation.go b/internal/eviedb/compiler_validation.go
+index a55580a..9f7c297 100644
+--- a/internal/eviedb/compiler_validation.go
++++ b/internal/eviedb/compiler_validation.go
+@@ -102,12 +102,17 @@ func resolveCompilerSource(ctx context.Context, q interface {
+ 	return projected, nil
+ }
+ 
++var ErrCompilerTerminalOutput = errors.New("invalid compiler source or forbidden effect")
++
+ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memory.MemoryCandidate, error) {
+ 	var response memory.CompilerResponse
+ 	if err := memory.DecodeCompilerJSON(raw, &response); err != nil {
+ 		return nil, err
+ 	}
+-	if response.RequestID != request.ID || response.Candidates == nil || len(response.Candidates) > 16 {
++	if response.RequestID != "" && response.RequestID != request.ID {
++		return nil, fmt.Errorf("%w: request binding mismatch", ErrCompilerTerminalOutput)
++	}
++	if response.RequestID == "" || response.Candidates == nil || len(response.Candidates) > 16 {
+ 		return nil, errors.New("invalid response binding or candidate array")
+ 	}
+ 	// Required zero-valued members must be present rather than inferred by Go's
+@@ -149,11 +154,11 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 			return nil, errors.New("missing valid time to")
+ 		}
+ 		if !entities[proposal.Proposition.SubjectEntityID] {
+-			return nil, errors.New("unknown subject identity")
++			return nil, fmt.Errorf("%w: unknown subject identity", ErrCompilerTerminalOutput)
+ 		}
+ 		predicate, ok := predicates[proposal.Proposition.PredicateID]
+ 		if !ok {
+-			return nil, errors.New("unreviewed Predicate")
++			return nil, fmt.Errorf("%w: unreviewed Predicate", ErrCompilerTerminalOutput)
+ 		}
+ 		object := proposal.Proposition.Object
+ 		if (object.EntityID == "") == (object.Literal == nil) {
+@@ -161,17 +166,17 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 		}
+ 		if object.EntityID != "" {
+ 			if !entities[object.EntityID] || predicate.ObjectConstraint != memory.ConstraintEntity {
+-				return nil, errors.New("invalid object identity or Predicate constraint")
++				return nil, fmt.Errorf("%w: invalid object identity or Predicate constraint", ErrCompilerTerminalOutput)
+ 			}
+ 		} else {
+ 			if err := validateLiteral(*object.Literal); err != nil {
+ 				return nil, err
+ 			}
+ 			if string(predicate.ObjectConstraint) != string(object.Literal.Kind) {
+-				return nil, errors.New("Predicate literal constraint mismatch")
++				return nil, fmt.Errorf("%w: Predicate literal constraint mismatch", ErrCompilerTerminalOutput)
+ 			}
+ 			if len(object.Literal.Value) > 8192 || compilerHasSecret(object.Literal.Value) {
+-				return nil, errors.New("invalid candidate text")
++				return nil, fmt.Errorf("%w: invalid candidate text", ErrCompilerTerminalOutput)
+ 			}
+ 		}
+ 		if proposal.Proposition.Polarity != memory.PolarityAffirmed && proposal.Proposition.Polarity != memory.PolarityDenied {
+@@ -197,10 +202,10 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 			for _, ref := range entry.refs {
+ 				source, ok := offered[ref.EventID]
+ 				if !ok {
+-					return nil, errors.New("unoffered source")
++					return nil, fmt.Errorf("%w: unoffered source", ErrCompilerTerminalOutput)
+ 				}
+ 				if (source.Usage == "context") != entry.context {
+-					return nil, errors.New("support/context category mismatch")
++					return nil, fmt.Errorf("%w: support/context category mismatch", ErrCompilerTerminalOutput)
+ 				}
+ 				identity := string(compilerJSON(ref))
+ 				if seen[identity] {
+@@ -209,7 +214,7 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 				seen[identity] = true
+ 				projected, err := projectCompilerSource(source, ref)
+ 				if err != nil {
+-					return nil, err
++					return nil, errors.Join(ErrCompilerTerminalOutput, err)
+ 				}
+ 				if entry.context {
+ 					candidate.Context = append(candidate.Context, projected)
+@@ -223,7 +228,7 @@ func validateCompilerOutput(request memory.CompilerRequest, raw []byte) ([]memor
+ 			}
+ 		}
+ 		if !latestNew {
+-			return nil, errors.New("latest required support is not newly owned")
++			return nil, fmt.Errorf("%w: latest required support is not newly owned", ErrCompilerTerminalOutput)
+ 		}
+ 		candidates = append(candidates, candidate)
+ 	}
+diff --git a/internal/eviedb/compiler_work.go b/internal/eviedb/compiler_work.go
+index 86e3535..59b3335 100644
+--- a/internal/eviedb/compiler_work.go
++++ b/internal/eviedb/compiler_work.go
+@@ -41,6 +41,7 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 		return memory.Compilation{}, err
+ 	}
+ 	// Detach caller-owned RawMessage storage before sealing or dispatch.
++	generation = memory.CompilerGeneration{}
+ 	if err := json.Unmarshal(manifest, &generation); err != nil {
+ 		return memory.Compilation{}, err
+ 	}
+@@ -55,46 +56,24 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 	if inspection.State != "queued" {
+ 		return inspection, nil
+ 	}
+-	holder, err := newSemanticID()
++	claim, err := s.claimCompilerJob(ctx, owner, jobID, extractor)
+ 	if err != nil {
+-		return inspection, err
++		result, readErr := s.InspectCompilation(ctx, owner, selectionID)
++		return result, errors.Join(err, readErr)
+ 	}
+-	var request memory.CompilerRequest
+-	var fence int64
+-	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+-		var state string
+-		var raw []byte
+-		if err := conn.QueryRowContext(ctx, `SELECT state,request FROM memory_compiler_jobs WHERE job_id=?`, jobID).Scan(&state, &raw); err != nil {
+-			return err
+-		}
+-		if state != "queued" {
+-			return ErrCompilerFence
+-		}
+-		if err := json.Unmarshal(raw, &request); err != nil {
+-			return err
+-		}
+-		var capacity, stages, presentation int
+-		var stageBytes int64
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_capacity`).Scan(&capacity); err != nil {
+-			return err
+-		}
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(length(envelope)),0) FROM memory_compiler_stages WHERE consumed=0`).Scan(&stages, &stageBytes); err != nil {
+-			return err
+-		}
+-		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_candidates WHERE review_state='unresolved' AND equivalent_to IS NULL`).Scan(&presentation); err != nil {
+-			return err
+-		}
+-		if capacity != 0 || stages >= 128 || stageBytes+memory.CompilerMaxBytes > 16*1024*1024 || presentation+16*(stages+1) > 2048 {
+-			return ErrCompilerCapacityBlocked
+-		}
+-		if err := conn.QueryRowContext(ctx, `UPDATE memory_compiler_jobs SET state='running',attempts=attempts+1,fence=fence+1,holder=?,lease_until=unixepoch('now')+30,reason='' WHERE job_id=? AND state='queued' AND attempts<5 RETURNING fence`, holder, jobID).Scan(&fence); err != nil {
+-			return err
+-		}
+-		_, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_capacity VALUES(1,?,?,?,?,?,'reserved')`, request.ID, jobID, fence, holder, extractor.ServerIdentity())
+-		return err
+-	})
+-	if err != nil {
+-		return inspection, err
++	return s.runCompilerClaim(ctx, owner, selectionID, claim, extractor)
++}
++
++func (s *Store) runCompilerClaim(ctx context.Context, owner memory.ScopeContext, selectionID string, claim compilerClaim, extractor CompilerExtractor) (memory.Compilation, error) {
++	jobID, holder, fence := claim.JobID, claim.Holder, claim.Fence
++	request, generation := claim.Request, claim.Generation
++	var err error
++	if err := ctx.Err(); err != nil {
++		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
++		defer cleanupCancel()
++		stopErr := s.stopCompilerClaim(cleanupCtx, claim, true)
++		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
++		return result, errors.Join(err, stopErr, readErr)
+ 	}
+ 	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 120*time.Second)
+ 	callerWatchStop := make(chan struct{})
+@@ -112,7 +91,7 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 		// Fence before cancelling the local client. If SQLite is unavailable,
+ 		// cleanup remains bounded and the durable reservation still blocks it.
+ 		fenceCtx, fenceCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+-		callerFenceErr = s.cancelCompilerAttempt(fenceCtx, jobID, string(holder), fence, false)
++		callerFenceErr = s.stopCompilerClaim(fenceCtx, claim, false)
+ 		fenceCancel()
+ 		cancel()
+ 	}()
+@@ -120,7 +99,8 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 	heartbeatDone := make(chan struct{})
+ 	go func() {
+ 		defer close(heartbeatDone)
+-		ticker := time.NewTicker(10 * time.Second)
++		ticker := time.NewTicker(100 * time.Millisecond)
++		lastRenewal := time.Now()
+ 		defer ticker.Stop()
+ 		for {
+ 			select {
+@@ -129,10 +109,17 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 			case <-callCtx.Done():
+ 				return
+ 			case <-ticker.C:
+-				err := s.withImmediateTransaction(callCtx, func(conn *sql.Conn) error {
+-					result, err := conn.ExecContext(callCtx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running'`, jobID, holder, fence)
+-					return compilerChanged(result, err)
+-				})
++				checkCtx, checkCancel := context.WithTimeout(callCtx, 500*time.Millisecond)
++				var current int
++				err := s.db.QueryRowContext(checkCtx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state='running'`, jobID, holder, fence).Scan(&current)
++				if err == nil && current != 1 {
++					err = ErrCompilerFence
++				}
++				if err == nil && time.Since(lastRenewal) >= 10*time.Second {
++					err = s.renewCompilerClaim(checkCtx, claim)
++					lastRenewal = time.Now()
++				}
++				checkCancel()
+ 				if err != nil {
+ 					cancel()
+ 					return
+@@ -140,15 +127,20 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 			}
+ 		}
+ 	}()
+-	dispatched := request
+-	dispatched.Window.Sources = append([]memory.CompilerSource(nil), request.Window.Sources...)
+-	dispatched.Window.NewEventIDs = append([]memory.EventID(nil), request.Window.NewEventIDs...)
+-	dispatched.Window.Omissions = append([]memory.CompilerOmission(nil), request.Window.Omissions...)
+-	dispatched.Entities = append([]memory.SemanticEntity(nil), request.Entities...)
+-	dispatched.Predicates = append([]memory.SemanticPredicate(nil), request.Predicates...)
+-	dispatched.ScopeRevisions = append([]memory.ScopeRevision(nil), request.ScopeRevisions...)
++	var dispatched memory.CompilerRequest
++	if err := json.Unmarshal(compilerJSON(request), &dispatched); err != nil {
++		return memory.Compilation{}, err
++	}
++	dispatched.AttemptID = claim.AttemptID
+ 
+-	extracted, extractErr := extractor.Extract(callCtx, generation, dispatched)
++	var extracted CompilerExtraction
++	var extractErr error
++	if callCtx.Err() != nil {
++		extractErr = callCtx.Err()
++		extracted.ReleaseEvidence = "not_dispatched"
++	} else {
++		extracted, extractErr = extractor.Extract(callCtx, generation, dispatched)
++	}
+ 	close(callerWatchStop)
+ 	<-callerWatchDone
+ 	close(heartbeats)
+@@ -157,7 +149,7 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 	cancelledResult := func(cause error) (memory.Compilation, error) {
+ 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+ 		defer cleanupCancel()
+-		fenceErr := s.cancelCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence))
++		fenceErr := s.stopCompilerClaim(cleanupCtx, claim, compilerReleaseKnown(extracted.ReleaseEvidence))
+ 		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
+ 		return result, errors.Join(ctx.Err(), cause, callerFenceErr, fenceErr, readErr)
+ 	}
+@@ -179,7 +171,14 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 	if extractErr != nil {
+ 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+ 		defer cleanupCancel()
+-		err = s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence), "invalid_or_missing_output", errors.Is(extractErr, ErrCompilerConfiguration))
++		reason := "invalid_or_missing_output"
++		if errors.Is(extractErr, ErrCompilerConfiguration) {
++			reason = "invalid_configuration"
++		}
++		if errors.Is(extractErr, ErrCompilerTerminalOutput) {
++			reason = "invalid_source_or_effect"
++		}
++		err = s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, compilerReleaseKnown(extracted.ReleaseEvidence), reason, errors.Is(extractErr, ErrCompilerConfiguration) || errors.Is(extractErr, ErrCompilerTerminalOutput))
+ 		result, readErr := s.InspectCompilation(cleanupCtx, owner, selectionID)
+ 		return result, errors.Join(extractErr, err, readErr)
+ 	}
+@@ -189,7 +188,12 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ 		}
+ 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+ 		defer cleanupCancel()
+-		failedErr := s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, true, "staging_failed", false)
++		reason := "staging_failed"
++		terminal := compilerDataFailure(err) && !errors.Is(err, ErrCompilerFence) && !errors.Is(err, ErrCompilerCapacityBlocked)
++		if terminal {
++			reason = "invalid_source"
++		}
++		failedErr := s.failCompilerAttempt(cleanupCtx, jobID, string(holder), fence, true, reason, terminal)
+ 		return memory.Compilation{}, errors.Join(err, failedErr)
+ 	}
+ 	if err = s.publishCompilerResult(publicationCtx, owner, jobID, string(holder), fence, request); err != nil {
+@@ -202,10 +206,22 @@ func (s *Store) CompileCandidateUnit(ctx context.Context, owner memory.ScopeCont
+ }
+ 
+ func (s *Store) selectCompilerUnit(ctx context.Context, owner memory.ScopeContext, selection memory.CompilationSelection, generationID string, manifest []byte, generation memory.CompilerGeneration) (selectionID, jobID string, err error) {
++	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var selectErr error
++		selectionID, jobID, selectErr = selectCompilerUnitInTransaction(ctx, conn, owner, selection, generationID, manifest, generation, compilerScheduling{Lane: "historical"})
++		return selectErr
++	})
++	return
++}
++
++func selectCompilerUnitInTransaction(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, selection memory.CompilationSelection, generationID string, manifest []byte, generation memory.CompilerGeneration, scheduling compilerScheduling) (selectionID, jobID string, err error) {
+ 	if selection.Cutoff <= 0 || selection.RootID == "" {
+ 		return "", "", errors.New("invalid finite source selection")
+ 	}
+-	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++	if scheduling.Lane != "new" && scheduling.Lane != "historical" {
++		return "", "", errors.New("invalid scheduling lane")
++	}
++	err = func() error {
+ 		if err := compilerAuthorize(ctx, conn, owner, selection); err != nil {
+ 			return err
+ 		}
+@@ -231,6 +247,9 @@ func (s *Store) selectCompilerUnit(ctx context.Context, owner memory.ScopeContex
+ 			if last.Valid {
+ 				first = last.Int64 + 1
+ 			}
++			if scheduling.FirstSequence > first {
++				first = scheduling.FirstSequence
++			}
+ 			selectionID = memory.CompilerHash(compilerJSON(struct {
+ 				Generation string
+ 				Selection  memory.CompilationSelection
+@@ -268,12 +287,6 @@ func (s *Store) selectCompilerUnit(ctx context.Context, owner memory.ScopeContex
+ 			return err
+ 		}
+ 		request := memory.CompilerRequest{GenerationID: generationID, WindowSHA256: memory.CompilerHash(compilerJSON(window)), Window: window, Entities: []memory.SemanticEntity{}, Predicates: []memory.SemanticPredicate{}, ScopeRevisions: []memory.ScopeRevision{}}
+-		if state == "queued" {
+-			if err := compilerAcceptedContext(ctx, conn, owner, &request); err != nil {
+-				state = "failed"
+-				reason = err.Error()
+-			}
+-		}
+ 		jobID = memory.CompilerHash(compilerJSON(struct{ Generation, Window string }{generationID, request.WindowSHA256}))
+ 		request.ID = memory.CompilerHash(compilerJSON(request))
+ 		if state == "queued" {
+@@ -285,6 +298,9 @@ func (s *Store) selectCompilerUnit(ctx context.Context, owner memory.ScopeContex
+ 		if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, jobID, generationID, selection.Destination, selection.SessionID, selection.RootID, first, selection.Cutoff, request.WindowSHA256, compilerJSON(request), state, reason); err != nil {
+ 			return err
+ 		}
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_job_schedule SET lane=?,position=?,historical_order=? WHERE job_id=?`, scheduling.Lane, scheduling.Position, scheduling.HistoricalOrder, jobID); err != nil {
++			return err
++		}
+ 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_selections SET job_id=?,state=?,reason=? WHERE selection_id=?`, jobID, state, reason, selectionID); err != nil {
+ 			return err
+ 		}
+@@ -293,7 +309,7 @@ func (s *Store) selectCompilerUnit(ctx context.Context, owner memory.ScopeContex
+ 			return err
+ 		}
+ 		return nil
+-	})
++	}()
+ 	return
+ }
+ 
+@@ -353,6 +369,9 @@ func (s *Store) cancelCompilerAttempt(ctx context.Context, job, holder string, f
+ 				return err
+ 			}
+ 		}
++		if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=? AND fence=?`, job, fence); err != nil {
++			return err
++		}
+ 		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state='cancelled',reason='caller_cancelled',fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, job)
+ 		return err
+ 	})
+@@ -366,7 +385,10 @@ func (s *Store) failCompilerAttempt(ctx context.Context, job, holder string, fen
+ 		if err := compilerRelease(ctx, conn, job, holder, fence, known); err != nil {
+ 			return err
+ 		}
+-		_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=CASE WHEN attempts=5 OR ? THEN 'failed' ELSE 'retry_wait' END,reason=?,retry_at=unixepoch('now')+(5 << (attempts-1)),holder=NULL,lease_until=NULL WHERE job_id=?`, terminal, reason, job)
++		if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=? AND fence=?`, job, fence); err != nil {
++			return err
++		}
++		_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=CASE WHEN attempts=5 OR ? THEN 'failed' ELSE 'retry_wait' END,reason=CASE WHEN attempts=5 THEN 'attempts_exhausted' ELSE ? END,retry_at=CASE WHEN attempts<5 AND NOT ? THEN unixepoch('now')+(5 << (attempts-1)) END,holder=NULL,lease_until=NULL WHERE job_id=?`, terminal, reason, terminal, job)
+ 		return err
+ 	})
+ }
+@@ -446,8 +468,15 @@ func (s *Store) publishCompilerResult(ctx context.Context, owner memory.ScopeCon
+ 		if memory.CompilerHash(envelope) != hash {
+ 			return errors.New("staging seal mismatch")
+ 		}
+-		var candidates []memory.MemoryCandidate
+-		if err := json.Unmarshal(envelope, &candidates); err != nil {
++		// Adoption validated sources in its earlier transaction. Publication
++		// independently rechecks current eligibility before committing coverage.
++		for _, source := range request.Window.Sources {
++			if _, err := resolveCompilerSource(ctx, conn, owner, request.Window.Selection, source); err != nil {
++				return err
++			}
++		}
++		candidates, err := validateCompilerStage(request, envelope, hash)
++		if err != nil {
+ 			return err
+ 		}
+ 		if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_candidate_groups VALUES(?,?)`, job, hash); err != nil {
+@@ -476,7 +505,10 @@ func (s *Store) publishCompilerResult(ctx context.Context, owner memory.ScopeCon
+ 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_stages SET consumed=1 WHERE job_id=?`, job); err != nil {
+ 			return err
+ 		}
+-		_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=?,holder=NULL,lease_until=NULL WHERE job_id=?`, state, job)
++		if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=? AND fence=?`, job, fence); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=?,reason='',holder=NULL,lease_until=NULL WHERE job_id=?`, state, job)
+ 		return err
+ 	})
+ }
+diff --git a/internal/eviedb/compiler_worker.go b/internal/eviedb/compiler_worker.go
+new file mode 100644
+index 0000000..07be6be
+--- /dev/null
++++ b/internal/eviedb/compiler_worker.go
+@@ -0,0 +1,684 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"database/sql/driver"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"sort"
++	"strings"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// Scheduling metadata is installed in the same transaction that creates the
++// sealed job. Activation and backfill supply it through the internal selector.
++// Neither retries nor a different supervisor can rewrite its original lane.
++type compilerScheduling struct {
++	FirstSequence   int64
++	Lane            string
++	Position        int64
++	HistoricalOrder int64
++}
++
++const compilerWorkerSchema = `
++-- Queueing seals the evidence; attempt one seals the accepted-state snapshot.
++DROP TRIGGER IF EXISTS memory_compiler_request_immutable;
++CREATE TRIGGER memory_compiler_request_immutable BEFORE UPDATE OF generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash ON memory_compiler_jobs BEGIN SELECT RAISE(ABORT,'immutable compiler request'); END;
++DROP TRIGGER IF EXISTS memory_compiler_request_snapshot_immutable;
++CREATE TRIGGER memory_compiler_request_snapshot_immutable BEFORE UPDATE OF request ON memory_compiler_jobs
++ WHEN NEW.request!=OLD.request AND NOT COALESCE((OLD.attempts=0 AND NEW.attempts=1 AND OLD.state='queued' AND NEW.state='running' AND json_extract(NEW.request,'$.window')=json_extract(OLD.request,'$.window') AND json_extract(NEW.request,'$.window_sha256')=json_extract(OLD.request,'$.window_sha256') AND json_extract(NEW.request,'$.generation_id')=json_extract(OLD.request,'$.generation_id')),0)
++ BEGIN SELECT RAISE(ABORT,'immutable compiler accepted snapshot'); END;
++CREATE TABLE IF NOT EXISTS memory_compiler_job_schedule (
++ job_id TEXT PRIMARY KEY REFERENCES memory_compiler_jobs(job_id),
++ lane TEXT NOT NULL DEFAULT 'historical' CHECK(lane IN ('new','historical')),
++ position INTEGER NOT NULL DEFAULT 0, historical_order INTEGER NOT NULL DEFAULT 0,
++ pause_reason TEXT NOT NULL DEFAULT ''
++);
++CREATE TRIGGER IF NOT EXISTS memory_compiler_job_scheduling AFTER INSERT ON memory_compiler_jobs BEGIN
++ INSERT INTO memory_compiler_job_schedule(job_id) VALUES(NEW.job_id);
++END;
++INSERT OR IGNORE INTO memory_compiler_job_schedule(job_id) SELECT job_id FROM memory_compiler_jobs;
++CREATE TABLE IF NOT EXISTS memory_compiler_scheduler (
++ singleton INTEGER PRIMARY KEY CHECK(singleton=1), new_attempts INTEGER NOT NULL DEFAULT 0 CHECK(new_attempts BETWEEN 0 AND 8)
++);
++INSERT OR IGNORE INTO memory_compiler_scheduler VALUES(1,0);
++CREATE TABLE IF NOT EXISTS memory_compiler_resources (
++ job_id TEXT PRIMARY KEY REFERENCES memory_compiler_jobs(job_id), fence INTEGER NOT NULL,
++ stage_bytes INTEGER NOT NULL CHECK(stage_bytes=131072), candidate_positions INTEGER NOT NULL CHECK(candidate_positions=16)
++);
++CREATE TABLE IF NOT EXISTS memory_compiler_worker_installation (singleton INTEGER PRIMARY KEY CHECK(singleton=1));
++INSERT OR IGNORE INTO memory_compiler_resources
++ SELECT job_id,fence,131072,16 FROM memory_compiler_jobs WHERE state IN ('running','staged') AND NOT EXISTS (SELECT 1 FROM memory_compiler_worker_installation);
++INSERT OR IGNORE INTO memory_compiler_worker_installation VALUES(1);
++CREATE TABLE IF NOT EXISTS memory_compiler_release_receipts (
++ request_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, fence INTEGER NOT NULL, holder TEXT NOT NULL,
++ server_identity TEXT NOT NULL, kind TEXT NOT NULL, recorded_at INTEGER NOT NULL
++);
++`
++
++// QueueCandidateUnit records selection without waiting for extraction. The
++// supervisor only dispatches generations supplied in its explicit configuration.
++func (s *Store) QueueCandidateUnit(ctx context.Context, owner memory.ScopeContext, selection memory.CompilationSelection, generation memory.CompilerGeneration, extractor CompilerExtractor) (memory.Compilation, error) {
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return memory.Compilation{}, ErrCompilerNotConfigured
++	}
++	id, manifest, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		return memory.Compilation{}, err
++	}
++	generation = memory.CompilerGeneration{}
++	if err := json.Unmarshal(manifest, &generation); err != nil {
++		return memory.Compilation{}, err
++	}
++	selectionID, _, err := s.selectCompilerUnit(ctx, owner, selection, id, manifest, generation)
++	if err != nil {
++		return memory.Compilation{}, err
++	}
++	return s.InspectCompilation(ctx, owner, selectionID)
++}
++
++var errCompilerInvalidSource = errors.New("invalid sealed compiler source")
++
++type compilerClaim struct {
++	Supervised               bool
++	JobID, Holder, AttemptID string
++	Fence                    int64
++	Request                  memory.CompilerRequest
++	Generation               memory.CompilerGeneration
++}
++
++func (s *Store) claimCompilerJob(ctx context.Context, owner memory.ScopeContext, jobID string, extractor CompilerExtractor) (compilerClaim, error) {
++	var claim compilerClaim
++	var rejected error
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var err error
++		claim, err = claimCompilerJob(ctx, conn, owner, jobID, extractor)
++		if errors.Is(err, errCompilerInvalidSource) || errors.Is(err, ErrCompilerConfiguration) {
++			rejected = err
++			return rejectCompilerClaim(ctx, conn, jobID, err)
++		}
++		return err
++	})
++	return claim, errors.Join(err, rejected)
++}
++
++func claimCompilerJob(ctx context.Context, conn *sql.Conn, owner memory.ScopeContext, jobID string, extractor CompilerExtractor) (compilerClaim, error) {
++	var c compilerClaim
++	if extractor == nil || extractor.ServerIdentity() == "" {
++		return c, ErrCompilerNotConfigured
++	}
++	inspected, err := loadCompilerInspection(ctx, conn, owner, jobID)
++	if err != nil {
++		if compilerDataFailure(err) {
++			return c, errors.Join(errCompilerInvalidSource, err)
++		}
++		return c, err
++	}
++	var ready int
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND q.pause_reason='' AND j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now')))`, jobID).Scan(&ready); err != nil {
++		return c, err
++	}
++	if ready != 1 {
++		return c, ErrCompilerFence
++	}
++	var capacity int
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_capacity`).Scan(&capacity); err != nil {
++		return c, err
++	}
++	if capacity != 0 {
++		return c, ErrCompilerCapacityBlocked
++	}
++	holder, err := newSemanticID()
++	if err != nil {
++		return c, err
++	}
++	attemptID, err := newSemanticID()
++	if err != nil {
++		return c, err
++	}
++	c.JobID, c.Holder, c.AttemptID, c.Generation = jobID, string(holder), string(attemptID), inspected.Generation
++	var request []byte
++	if err := conn.QueryRowContext(ctx, `SELECT request FROM memory_compiler_jobs WHERE job_id=?`, jobID).Scan(&request); err != nil {
++		return c, err
++	}
++	if err := json.Unmarshal(request, &c.Request); err != nil {
++		return c, err
++	}
++	if inspected.Attempts == 0 {
++		c.Request.AcceptedContextOmitted = false
++		if err := compilerAcceptedContext(ctx, conn, owner, &c.Request); err != nil {
++			if compilerDataFailure(err) {
++				return c, errors.Join(errCompilerInvalidSource, err)
++			}
++			return c, err
++		}
++		c.Request.ID = ""
++		c.Request.ID = memory.CompilerHash(compilerJSON(c.Request))
++	}
++	if err := memory.CompilerInputBudget(c.Generation, c.Request); err != nil {
++		return c, fmt.Errorf("%w: input budget", ErrCompilerConfiguration)
++	}
++	if err := conn.QueryRowContext(ctx, `UPDATE memory_compiler_jobs SET state='running',attempts=attempts+1,fence=fence+1,holder=?,lease_until=unixepoch('now')+30,retry_at=NULL,reason='',request=? WHERE job_id=? RETURNING fence`, c.Holder, compilerJSON(c.Request), jobID).Scan(&c.Fence); err != nil {
++		return c, err
++	}
++	if err := reserveCompilerResources(ctx, conn, jobID, c.Fence); err != nil {
++		return c, err
++	}
++	if _, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_capacity VALUES(1,?,?,?,?,?,'reserved')`, c.AttemptID, jobID, c.Fence, c.Holder, extractor.ServerIdentity()); err != nil {
++		return c, err
++	}
++	// This counter changes with the reservation, never with a process-local poll.
++	_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_scheduler SET new_attempts=CASE WHEN (SELECT lane FROM memory_compiler_job_schedule WHERE job_id=?)='new' THEN MIN(8,new_attempts+1) ELSE 0 END WHERE singleton=1`, jobID)
++	return c, err
++}
++
++func reserveCompilerResources(ctx context.Context, conn compilerStageTransaction, jobID string, fence int64) error {
++	var groups, bytes, presentation int64
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(stage_bytes),0) FROM memory_compiler_resources WHERE job_id<>?`, jobID).Scan(&groups, &bytes); err != nil {
++		return err
++	}
++	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_candidates WHERE review_state='unresolved' AND equivalent_to IS NULL`).Scan(&presentation); err != nil {
++		return err
++	}
++	if groups+1 > 128 || bytes+memory.CompilerMaxBytes > 16*1024*1024 || presentation+16*(groups+1) > 2048 {
++		return ErrCompilerCapacityBlocked
++	}
++	_, err := conn.ExecContext(ctx, `INSERT INTO memory_compiler_resources VALUES(?,?,131072,16) ON CONFLICT(job_id) DO UPDATE SET fence=excluded.fence`, jobID, fence)
++	return err
++}
++
++func (s *Store) renewCompilerClaim(ctx context.Context, claim compilerClaim) error {
++	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		result, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')+30 WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now') AND state IN ('running','staged')`, claim.JobID, claim.Holder, claim.Fence)
++		return compilerChanged(result, err)
++	})
++}
++
++// RecoverCompilerWork fences a bounded batch of expired attempts. It never
++// guesses whether the server stopped. Valid stages remain adoptable; a missing
++// stage is a consumed failed attempt with its original retry budget.
++func (s *Store) RecoverCompilerWork(ctx context.Context) error {
++	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		rows, err := conn.QueryContext(ctx, `SELECT job_id,fence,holder,state FROM memory_compiler_jobs WHERE state IN ('running','staged') AND lease_until<=unixepoch('now') ORDER BY job_id LIMIT 16`)
++		if err != nil {
++			return err
++		}
++		type expired struct {
++			job, holder, state string
++			fence              int64
++		}
++		var jobs []expired
++		for rows.Next() {
++			var j expired
++			if err := rows.Scan(&j.job, &j.fence, &j.holder, &j.state); err != nil {
++				rows.Close()
++				return err
++			}
++			jobs = append(jobs, j)
++		}
++		err = rows.Err()
++		rows.Close()
++		if err != nil {
++			return err
++		}
++		for _, j := range jobs {
++			if j.state == "running" {
++				// One request plus its reservations and job: <=64 mutations per batch.
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_capacity SET state='release_pending' WHERE job_id=? AND fence=? AND holder=?`, j.job, j.fence, j.holder); err != nil {
++					return err
++				}
++				if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=? AND fence=?`, j.job, j.fence); err != nil {
++					return err
++				}
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=CASE WHEN attempts=5 THEN 'failed' ELSE 'retry_wait' END,reason=CASE WHEN attempts=5 THEN 'attempts_exhausted' ELSE 'worker_interrupted' END,retry_at=CASE WHEN attempts<5 THEN unixepoch('now')+(5 << (attempts-1)) END,fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, j.job); err != nil {
++					return err
++				}
++			} else {
++				if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, j.job); err != nil {
++					return err
++				}
++			}
++		}
++		return nil
++	})
++}
++
++// CompilerCapacityReservation identifies one dispatch, not a mutable model
++// alias or an assumed server boot. It contains no source or candidate content.
++type CompilerCapacityReservation struct {
++	RequestID      string `json:"request_id"`
++	JobID          string `json:"job_id"`
++	Fence          int64  `json:"fence"`
++	Holder         string `json:"holder"`
++	ServerIdentity string `json:"server_identity"`
++}
++
++type CompilerReleaseAcknowledgement struct {
++	Reservation CompilerCapacityReservation
++	Kind        string // request_completed, request_cancelled, or verified_server_restart
++}
++
++// CompilerReleaseVerifier is a trusted runtime adapter. Implementations must
++// authenticate a request-specific completion/idle acknowledgement or controlled
++// restart that covers this exact reservation. Ollama deliberately does not
++// implement this interface: endpoint/version/model do not prove a server boot.
++type CompilerReleaseVerifier interface {
++	VerifyCompilerRelease(context.Context, CompilerCapacityReservation) (CompilerReleaseAcknowledgement, error)
++}
++
++// ReconcileCompilerCapacity only contacts a contracted verifier and bounds the
++// contact to five seconds. No verifier, timeout, or stale acknowledgement can
++// free a slot. There is intentionally no owner-supplied force-release flag.
++func (s *Store) ReconcileCompilerCapacity(ctx context.Context, verifier CompilerReleaseVerifier) error {
++	var r CompilerCapacityReservation
++	err := s.db.QueryRowContext(ctx, `SELECT request_id,job_id,fence,holder,server_identity FROM memory_compiler_capacity WHERE state='release_pending'`).Scan(&r.RequestID, &r.JobID, &r.Fence, &r.Holder, &r.ServerIdentity)
++	if errors.Is(err, sql.ErrNoRows) {
++		return nil
++	}
++	if err != nil {
++		return err
++	}
++	if verifier == nil {
++		return ErrCompilerCapacityBlocked
++	}
++	verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	ack, err := verifier.VerifyCompilerRelease(verifyCtx, r)
++	if err != nil {
++		return errors.Join(ErrCompilerCapacityBlocked, err)
++	}
++	if verifyCtx.Err() != nil {
++		return errors.Join(ErrCompilerCapacityBlocked, verifyCtx.Err())
++	}
++	if ack.Reservation != r || (ack.Kind != "request_completed" && ack.Kind != "request_cancelled" && ack.Kind != "verified_server_restart") {
++		return ErrCompilerCapacityBlocked
++	}
++	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		result, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_capacity WHERE request_id=? AND job_id=? AND fence=? AND holder=? AND server_identity=? AND state='release_pending'`, r.RequestID, r.JobID, r.Fence, r.Holder, r.ServerIdentity)
++		if err := compilerChanged(result, err); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `INSERT INTO memory_compiler_release_receipts VALUES(?,?,?,?,?,?,unixepoch('now'))`, r.RequestID, r.JobID, r.Fence, r.Holder, r.ServerIdentity, ack.Kind)
++		return err
++	})
++}
++
++func validateCompilerStage(request memory.CompilerRequest, envelope []byte, hash string) ([]memory.MemoryCandidate, error) {
++	if len(envelope) > memory.CompilerMaxBytes || memory.CompilerHash(envelope) != hash {
++		return nil, errors.New("stage seal mismatch")
++	}
++	var candidates []memory.MemoryCandidate
++	if err := memory.DecodeCompilerJSON(envelope, &candidates); err != nil {
++		return nil, err
++	}
++	if candidates == nil || len(candidates) > 16 {
++		return nil, errors.New("invalid saved stage")
++	}
++	response := memory.CompilerResponse{RequestID: request.ID, Candidates: make([]memory.ExtractorCandidate, 0, len(candidates))}
++	for _, c := range candidates {
++		response.Candidates = append(response.Candidates, c.Proposal)
++	}
++	validated, err := validateCompilerOutput(request, compilerJSON(response))
++	if err != nil {
++		return nil, err
++	}
++	if string(compilerJSON(validated)) != string(envelope) {
++		return nil, errors.New("stage projection mismatch")
++	}
++	return validated, nil
++}
++
++// compilerStageTransaction keeps the complete adoption decision in one SQLite
++// transaction and makes its source-inspection budget directly verifiable.
++type compilerStageTransaction interface {
++	compilerQueryer
++	ExecContext(context.Context, string, ...any) (sql.Result, error)
++}
++
++func (s *Store) adoptCompilerStage(ctx context.Context, owner memory.ScopeContext, jobID string) (compilerClaim, error) {
++	var c compilerClaim
++	err := s.withCompilerPublicationTransaction(ctx, func(conn *sql.Conn) error {
++		var err error
++		c, err = adoptCompilerStageInTransaction(ctx, conn, owner, jobID)
++		return err
++	})
++	return c, err
++}
++
++func adoptCompilerStageInTransaction(ctx context.Context, conn compilerStageTransaction, owner memory.ScopeContext, jobID string) (compilerClaim, error) {
++	var c compilerClaim
++	err := func() error {
++		inspected, err := loadCompilerInspection(ctx, conn, owner, jobID)
++		if err != nil {
++			return err
++		}
++		var eligible int
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.job_id=? AND j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now')) AND q.pause_reason=''`, jobID).Scan(&eligible); err != nil {
++			return err
++		}
++		if eligible != 1 {
++			return ErrCompilerFence
++		}
++		var raw, envelope []byte
++		var hash string
++		if err := conn.QueryRowContext(ctx, `SELECT j.request,s.envelope,s.envelope_hash FROM memory_compiler_jobs j JOIN memory_compiler_stages s ON s.job_id=j.job_id WHERE j.job_id=? AND s.consumed=0`, jobID).Scan(&raw, &envelope, &hash); err != nil {
++			return err
++		}
++		if err := json.Unmarshal(raw, &c.Request); err != nil {
++			return err
++		}
++		// loadCompilerInspection already resolved this same sealed window in
++		// this transaction. Validate the envelope without rereading its sources.
++		if _, err := validateCompilerStage(c.Request, envelope, hash); err != nil {
++			return err
++		}
++		holder, err := newSemanticID()
++		if err != nil {
++			return err
++		}
++		c.JobID, c.Holder, c.Generation = jobID, string(holder), inspected.Generation
++		if err := conn.QueryRowContext(ctx, `UPDATE memory_compiler_jobs SET fence=fence+1,holder=?,lease_until=unixepoch('now')+30,reason='' WHERE job_id=? RETURNING fence`, c.Holder, jobID).Scan(&c.Fence); err != nil {
++			return err
++		}
++		if err := reserveCompilerResources(ctx, conn, jobID, c.Fence); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_stages SET fence=? WHERE job_id=?`, c.Fence, jobID)
++		return err
++	}()
++	return c, err
++}
++
++// CancelCompilation records owner cancellation before running clients observe
++// the new fence. An intact stage is retained as audit and needs explicit resume.
++func (s *Store) CancelCompilation(ctx context.Context, owner memory.ScopeContext, id string) (memory.Compilation, error) {
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		inspection, err := loadCompilerInspection(ctx, conn, owner, id)
++		if err != nil {
++			return err
++		}
++		if inspection.JobID == "" {
++			return errors.New("selection has no materialized job")
++		}
++		switch inspection.State {
++		case "completed_candidates", "completed_empty", "excluded", "failed":
++			return errors.New("terminal compilation cannot be cancelled")
++		case "cancelled":
++			return nil
++		}
++		// Owner cancellation revokes an expired worker too; worker operations still
++		// require the unexpired holder/fence. The old request remains quarantined.
++		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_capacity SET state='release_pending' WHERE job_id=?`, inspection.JobID); err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=?`, inspection.JobID); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state='cancelled',reason='owner_cancelled',fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, inspection.JobID)
++		return err
++	})
++	if err != nil {
++		return memory.Compilation{}, err
++	}
++	return s.InspectCompilation(ctx, owner, id)
++}
++
++// ResumeCompilation preserves attempts, due time and sealed input. A fifth
++// attempt's intact saved stage can be adopted; a sixth inference cannot occur.
++func (s *Store) ResumeCompilation(ctx context.Context, owner memory.ScopeContext, id string) (memory.Compilation, error) {
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		inspection, err := loadCompilerInspection(ctx, conn, owner, id)
++		if err != nil {
++			return err
++		}
++		if inspection.JobID == "" {
++			return errors.New("selection has no materialized job")
++		}
++		switch inspection.State {
++		case "completed_candidates", "completed_empty", "excluded", "failed":
++			return errors.New("terminal compilation cannot be resumed")
++		}
++		if inspection.State == "cancelled" {
++			var unfinished int
++			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_jobs WHERE state IN ('queued','running','retry_wait','staged')`).Scan(&unfinished); err != nil {
++				return err
++			}
++			if unfinished >= 1024 {
++				return ErrCompilerCapacityBlocked
++			}
++			var stage int
++			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_compiler_stages WHERE job_id=? AND consumed=0`, inspection.JobID).Scan(&stage); err != nil {
++				return err
++			}
++			state := "queued"
++			if stage == 1 {
++				state = "staged"
++				var fence int64
++				if err := conn.QueryRowContext(ctx, `SELECT fence FROM memory_compiler_jobs WHERE job_id=?`, inspection.JobID).Scan(&fence); err != nil {
++					return err
++				}
++				if err := reserveCompilerResources(ctx, conn, inspection.JobID, fence); err != nil {
++					return err
++				}
++			} else if inspection.Attempts >= 5 {
++				return errors.New("attempts exhausted")
++			} else if inspection.Attempts > 0 {
++				state = "retry_wait"
++			}
++			if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=?,reason='',retry_at=CASE WHEN ?='retry_wait' THEN COALESCE(retry_at,unixepoch('now')+(5 << (attempts-1))) ELSE retry_at END WHERE job_id=?`, state, state, inspection.JobID); err != nil {
++				return err
++			}
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_job_schedule SET pause_reason='' WHERE job_id=?`, inspection.JobID)
++		return err
++	})
++	if err != nil {
++		return memory.Compilation{}, err
++	}
++	return s.InspectCompilation(ctx, owner, id)
++}
++
++// CompilerSupervisorConfig supplies already validated generation-specific
++// dependencies. Copying the map prevents a caller from changing it mid-run.
++// Long-lived host lifecycle integration belongs to the activation adapter.
++type CompilerSupervisorConfig struct {
++	Extractors      map[string]CompilerExtractor
++	ReleaseVerifier CompilerReleaseVerifier
++}
++
++// RunCompilerSupervisor returns on host shutdown. It polls durable work, keeps
++// only one active local client, and never drains work on a short command's exit.
++func (s *Store) RunCompilerSupervisor(ctx context.Context, config CompilerSupervisorConfig) error {
++	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
++		return ErrCompilerNotConfigured
++	}
++	pinned := make(map[string]CompilerExtractor, len(config.Extractors))
++	for id, e := range config.Extractors {
++		if e == nil || e.ServerIdentity() == "" {
++			return ErrCompilerNotConfigured
++		}
++		pinned[id] = e
++	}
++	config.Extractors = pinned
++	for {
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
++		worked, err := s.RunCompilerStep(ctx, config)
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
++		// Per-job errors are durably visible and must not starve independent work.
++		delay := time.Second
++		if worked {
++			delay = 10 * time.Millisecond
++		}
++		if err != nil && !worked {
++			delay = time.Second
++		}
++		timer := time.NewTimer(delay)
++		select {
++		case <-ctx.Done():
++			timer.Stop()
++			return ctx.Err()
++		case <-timer.C:
++		}
++	}
++}
++
++// RunCompilerStep performs at most one inference/publication and a bounded
++// recovery batch. It is useful for deterministic hosts/tests as well as the
++// supervisor; selection and source authority still come from SQLite.
++func (s *Store) RunCompilerStep(ctx context.Context, config CompilerSupervisorConfig) (bool, error) {
++	if len(config.Extractors) == 0 || len(config.Extractors) > 32 {
++		return false, ErrCompilerNotConfigured
++	}
++	if err := s.RecoverCompilerWork(ctx); err != nil {
++		return false, err
++	}
++	capacityErr := s.ReconcileCompilerCapacity(ctx, config.ReleaseVerifier)
++	// Publication can proceed even while an unrelated server request is blocked.
++	keys := make([]string, 0, len(config.Extractors))
++	for key, e := range config.Extractors {
++		if e != nil && e.ServerIdentity() != "" {
++			keys = append(keys, key)
++		}
++	}
++	sort.Strings(keys)
++	if len(keys) == 0 {
++		return false, ErrCompilerNotConfigured
++	}
++	var claim compilerClaim
++	var owner memory.ScopeContext
++	var jobID string
++	var staged bool
++	var rejected error
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		args := make([]any, 0, len(keys))
++		for _, key := range keys {
++			args = append(args, key)
++		}
++		marks := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
++		// The fairness predicate includes due/configured/unpaused work only.
++		query := `SELECT j.job_id,j.session_id,j.state FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.generation_id IN (` + marks + `) AND q.pause_reason='' AND ((j.state='staged' AND (j.holder IS NULL OR j.lease_until<=unixepoch('now'))) OR (j.attempts<5 AND (j.state='queued' OR (j.state='retry_wait' AND j.retry_at<=unixepoch('now'))))) ORDER BY CASE WHEN j.state='staged' THEN 0 WHEN q.lane='historical' AND (SELECT new_attempts FROM memory_compiler_scheduler WHERE singleton=1)>=8 THEN 1 WHEN q.lane='new' THEN 2 ELSE 3 END,CASE WHEN q.lane='new' THEN q.position ELSE q.historical_order END,j.session_id,j.first_sequence,j.job_id LIMIT 1`
++		var session memory.SessionID
++		var state string
++		if err := conn.QueryRowContext(ctx, query, args...).Scan(&jobID, &session, &state); err != nil {
++			return err
++		}
++		owner = memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: session}
++		var workspace, project sql.NullString
++		if err := conn.QueryRowContext(ctx, `SELECT workspace_id,project_id FROM sessions WHERE id=?`, session).Scan(&workspace, &project); err != nil {
++			return err
++		}
++		owner.WorkspaceID, owner.ProjectID = memory.WorkspaceID(workspace.String), memory.ProjectID(project.String)
++		if state == "staged" {
++			staged = true
++			return nil
++		}
++		if capacityErr != nil {
++			return capacityErr
++		}
++		var generationID string
++		if err := conn.QueryRowContext(ctx, `SELECT generation_id FROM memory_compiler_jobs WHERE job_id=?`, jobID).Scan(&generationID); err != nil {
++			return err
++		}
++		var err error
++		claim, err = claimCompilerJob(ctx, conn, owner, jobID, config.Extractors[generationID])
++		if errors.Is(err, errCompilerInvalidSource) || errors.Is(err, ErrCompilerConfiguration) {
++			rejected = err
++			err = rejectCompilerClaim(ctx, conn, jobID, err)
++		}
++		return err
++	})
++	if errors.Is(err, sql.ErrNoRows) {
++		return false, capacityErr
++	}
++	if err != nil {
++		return false, err
++	}
++	if rejected != nil {
++		return true, rejected
++	}
++	if staged {
++		claim, err = s.adoptCompilerStage(ctx, owner, jobID)
++		if err != nil {
++			if compilerDataFailure(err) && !errors.Is(err, ErrCompilerFence) && !errors.Is(err, ErrCompilerCapacityBlocked) {
++				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
++				defer cancel()
++				failedErr := s.withImmediateTransaction(cleanupCtx, func(conn *sql.Conn) error {
++					result, e := conn.ExecContext(cleanupCtx, `UPDATE memory_compiler_jobs SET state='failed',reason='invalid_stage',fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=? AND state='staged' AND (holder IS NULL OR lease_until<=unixepoch('now'))`, jobID)
++					if e = compilerChanged(result, e); e != nil {
++						return e
++					}
++					_, e = conn.ExecContext(cleanupCtx, `DELETE FROM memory_compiler_resources WHERE job_id=?`, jobID)
++					return e
++				})
++				return true, errors.Join(err, failedErr)
++			}
++			return false, err
++		}
++		err = s.publishCompilerResult(ctx, owner, jobID, claim.Holder, claim.Fence, claim.Request)
++		if ctx.Err() != nil {
++			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
++			defer cancel()
++			claim.Supervised = true
++			err = errors.Join(err, s.stopCompilerClaim(cleanupCtx, claim, true))
++		}
++		return true, err
++	}
++	claim.Supervised = true
++	_, err = s.runCompilerClaim(ctx, owner, jobID, claim, config.Extractors[claim.Request.GenerationID])
++	return true, err
++}
++
++func (s *Store) stopCompilerClaim(ctx context.Context, c compilerClaim, known bool) error {
++	if !c.Supervised {
++		return s.cancelCompilerAttempt(ctx, c.JobID, c.Holder, c.Fence, known)
++	}
++	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		var state string
++		err := conn.QueryRowContext(ctx, `SELECT state FROM memory_compiler_jobs WHERE job_id=? AND holder=? AND fence=? AND lease_until>unixepoch('now')`, c.JobID, c.Holder, c.Fence).Scan(&state)
++		if errors.Is(err, sql.ErrNoRows) {
++			return nil
++		}
++		if err != nil {
++			return err
++		}
++		if state == "staged" {
++			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, c.JobID)
++			return err
++		}
++		if state != "running" {
++			return ErrCompilerFence
++		}
++		if err := compilerRelease(ctx, conn, c.JobID, c.Holder, c.Fence, known); err != nil {
++			return err
++		}
++		if _, err := conn.ExecContext(ctx, `DELETE FROM memory_compiler_resources WHERE job_id=? AND fence=?`, c.JobID, c.Fence); err != nil {
++			return err
++		}
++		_, err = conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state=CASE WHEN attempts=5 THEN 'failed' ELSE 'retry_wait' END,reason=CASE WHEN attempts=5 THEN 'attempts_exhausted' ELSE 'worker_shutdown' END,retry_at=CASE WHEN attempts<5 THEN unixepoch('now')+(5 << (attempts-1)) END,fence=fence+1,holder=NULL,lease_until=NULL WHERE job_id=?`, c.JobID)
++		return err
++	})
++}
++
++// SQLite transport/lock errors and cancelled operations cannot prove bad source
++// data. Only completed deterministic validation is a terminal source failure.
++func compilerDataFailure(err error) bool {
++	var coded interface{ Code() int }
++	return err != nil && !errors.As(err, &coded) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, sql.ErrConnDone) && !errors.Is(err, driver.ErrBadConn)
++}
++
++func rejectCompilerClaim(ctx context.Context, conn *sql.Conn, jobID string, cause error) error {
++	reason := "invalid_source"
++	if errors.Is(cause, ErrCompilerConfiguration) {
++		reason = "invalid_configuration"
++	}
++	_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_jobs SET state='failed',reason=?,holder=NULL,lease_until=NULL WHERE job_id=? AND state IN ('queued','retry_wait')`, reason, jobID)
++	return err
++}
+diff --git a/internal/eviedb/compiler_worker_crash_test.go b/internal/eviedb/compiler_worker_crash_test.go
+new file mode 100644
+index 0000000..bbc8561
+--- /dev/null
++++ b/internal/eviedb/compiler_worker_crash_test.go
+@@ -0,0 +1,358 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type compilerCrashExtractor struct{ calls int }
++
++func (*compilerCrashExtractor) ServerIdentity() string { return "scripted:worker-crash" }
++func (e *compilerCrashExtractor) Extract(_ context.Context, _ memory.CompilerGeneration, request memory.CompilerRequest) (CompilerExtraction, error) {
++	e.calls++
++	return CompilerExtraction{Raw: compilerJSON(memory.CompilerResponse{RequestID: request.ID, Candidates: []memory.ExtractorCandidate{}}), ReleaseEvidence: "completed"}, nil
++}
++
++type compilerCrashFixture struct {
++	path        string
++	db          *sql.DB
++	store       *Store
++	owner       memory.ScopeContext
++	selection   memory.CompilationSelection
++	compilation memory.Compilation
++}
++
++func newCompilerCrashFixture(t *testing.T) *compilerCrashFixture {
++	t.Helper()
++	f := &compilerCrashFixture{path: filepath.Join(t.TempDir(), "worker.db")}
++	f.reopen(t)
++	t.Cleanup(func() { f.db.Close() })
++	ctx := context.Background()
++	session, err := f.store.CreateGlobalSession(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.owner = session.ScopeContext()
++	lease, err := f.store.AcquireTurnLease(ctx, session.ID, "compiler-crash-source", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	root, err := f.store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer tea."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	last, err := f.store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.ReleaseTurnLease(ctx, session.ID, lease.HolderID, lease.FencingToken); err != nil {
++		t.Fatal(err)
++	}
++	f.selection = memory.CompilationSelection{SessionID: session.ID, RootID: root.ID, Cutoff: last.Sequence, Destination: "global"}
++	f.compilation, err = f.store.QueueCandidateUnit(ctx, f.owner, f.selection, compilerCommitGeneration(), &compilerCrashExtractor{})
++	if err != nil || f.compilation.State != "queued" {
++		t.Fatalf("queue state=%s err=%v", f.compilation.State, err)
++	}
++	return f
++}
++
++func (f *compilerCrashFixture) reopen(t *testing.T) {
++	t.Helper()
++	if f.db != nil {
++		if err := f.db.Close(); err != nil {
++			t.Fatal(err)
++		}
++	}
++	var err error
++	f.db, err = OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.store = NewStore(f.db)
++}
++
++func (f *compilerCrashFixture) expire(t *testing.T) {
++	t.Helper()
++	// Move the durable lease relative to SQLite's clock, without sleeping or
++	// changing a process-local clock that another Store would not observe.
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')-1 WHERE job_id=?`, f.compilation.JobID); err != nil {
++		t.Fatal(err)
++	}
++}
++
++type compilerCrashState struct {
++	state                                         string
++	attempts                                      int
++	capacity                                      string
++	stages, consumed, groups, coverage, resources int
++}
++
++func (f *compilerCrashFixture) assertState(t *testing.T, want compilerCrashState) {
++	t.Helper()
++	inspection, err := f.store.InspectCompilation(context.Background(), f.owner, f.compilation.SelectionID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	got := compilerCrashState{state: inspection.State, attempts: inspection.Attempts, capacity: inspection.CapacityState}
++	if err := f.db.QueryRow(`SELECT COUNT(*),COALESCE(SUM(consumed),0) FROM memory_compiler_stages`).Scan(&got.stages, &got.consumed); err != nil {
++		t.Fatal(err)
++	}
++	for table, target := range map[string]*int{
++		"memory_compiler_candidate_groups": &got.groups,
++		"memory_compiler_coverage":         &got.coverage,
++		"memory_compiler_resources":        &got.resources,
++	} {
++		if err := f.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(target); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if got != want {
++		t.Fatalf("durable state=%+v want=%+v", got, want)
++	}
++	var candidates, events int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_candidates`).Scan(&candidates); err != nil {
++		t.Fatal(err)
++	}
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM events WHERE session_id=?`, f.owner.SessionID).Scan(&events); err != nil {
++		t.Fatal(err)
++	}
++	if candidates != 0 || len(inspection.Candidates) != 0 || events != 2 {
++		t.Fatalf("candidates=%d reviewable=%d retained events=%d", candidates, len(inspection.Candidates), events)
++	}
++	if got.coverage != 0 {
++		var outcome string
++		var eventIDs []byte
++		if err := f.db.QueryRow(`SELECT outcome,event_ids FROM memory_compiler_coverage WHERE job_id=?`, f.compilation.JobID).Scan(&outcome, &eventIDs); err != nil {
++			t.Fatal(err)
++		}
++		if outcome != "completed_empty" || string(eventIDs) != string(compilerJSON(f.compilation.Window.NewEventIDs)) {
++			t.Fatalf("coverage outcome=%s events=%s", outcome, eventIDs)
++		}
++	}
++}
++
++// Each subprocess exits without running defer or database cleanup. The parent
++// opens the same SQLite file, so in-memory mocks cannot manufacture durability.
++func TestCompilerWorkerCrashRecovery(t *testing.T) {
++	for _, phase := range []string{"before_claim_commit", "after_claim", "after_response", "after_stage", "after_publish"} {
++		t.Run(phase, func(t *testing.T) {
++			f := newCompilerCrashFixture(t)
++			if err := f.db.Close(); err != nil {
++				t.Fatal(err)
++			}
++			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
++			defer cancel()
++			child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCompilerWorkerCrashChild$")
++			child.Env = append(os.Environ(), "EVIE_COMPILER_CRASH_PHASE="+phase, "EVIE_COMPILER_CRASH_DB="+f.path, "EVIE_COMPILER_CRASH_JOB="+f.compilation.JobID, "EVIE_COMPILER_CRASH_SESSION="+string(f.owner.SessionID))
++			output, err := child.CombinedOutput()
++			var exit *exec.ExitError
++			if !errors.As(err, &exit) || exit.ExitCode() != 86 {
++				t.Fatalf("child phase=%s err=%v output=%s", phase, err, output)
++			}
++			f.reopen(t)
++			extractor := &compilerCrashExtractor{}
++			config := CompilerSupervisorConfig{Extractors: map[string]CompilerExtractor{f.compilation.GenerationID: extractor}}
++			switch phase {
++			case "before_claim_commit":
++				f.assertState(t, compilerCrashState{state: "queued"})
++				if err := f.store.RecoverCompilerWork(ctx); err != nil {
++					t.Fatal(err)
++				}
++				f.assertState(t, compilerCrashState{state: "queued"})
++				return
++			case "after_claim", "after_response":
++				f.assertState(t, compilerCrashState{state: "running", attempts: 1, capacity: "reserved", resources: 1})
++				f.expire(t)
++				if err := f.store.RecoverCompilerWork(ctx); err != nil {
++					t.Fatal(err)
++				}
++				want := compilerCrashState{state: "retry_wait", attempts: 1, capacity: "release_pending"}
++				f.assertState(t, want)
++				// Even a due retry after another restart cannot infer release from
++				// the dead client's absence or from the expired lease.
++				if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now')-1 WHERE job_id=?`, f.compilation.JobID); err != nil {
++					t.Fatal(err)
++				}
++				f.reopen(t)
++				worked, err := f.store.RunCompilerStep(ctx, config)
++				if worked || !errors.Is(err, ErrCompilerCapacityBlocked) || extractor.calls != 0 {
++					t.Fatalf("uncertain retry worked=%v calls=%d err=%v", worked, extractor.calls, err)
++				}
++				f.assertState(t, want)
++				return
++			case "after_stage":
++				f.assertState(t, compilerCrashState{state: "staged", attempts: 1, stages: 1, resources: 1})
++				f.expire(t)
++				if err := f.store.RecoverCompilerWork(ctx); err != nil {
++					t.Fatal(err)
++				}
++				worked, err := f.store.RunCompilerStep(ctx, config)
++				if !worked || err != nil || extractor.calls != 0 {
++					t.Fatalf("stage adoption worked=%v calls=%d err=%v", worked, extractor.calls, err)
++				}
++			}
++			want := compilerCrashState{state: "completed_empty", attempts: 1, stages: 1, consumed: 1, groups: 1, coverage: 1}
++			f.assertState(t, want)
++			worked, err := f.store.RunCompilerStep(ctx, config)
++			if worked || err != nil || extractor.calls != 0 {
++				t.Fatalf("completed step worked=%v calls=%d err=%v", worked, extractor.calls, err)
++			}
++			receipt, err := f.store.CompileCandidateUnit(ctx, f.owner, f.selection, compilerCommitGeneration(), extractor)
++			if err != nil || receipt.JobID != f.compilation.JobID || receipt.SelectionID != f.compilation.SelectionID || receipt.Attempts != 1 || receipt.State != "completed_empty" || extractor.calls != 0 {
++				t.Fatalf("repeated receipt=%+v calls=%d err=%v", receipt, extractor.calls, err)
++			}
++			f.assertState(t, want)
++		})
++	}
++}
++
++func TestCompilerWorkerCrashChild(t *testing.T) {
++	phase := os.Getenv("EVIE_COMPILER_CRASH_PHASE")
++	if phase == "" {
++		return
++	}
++	ctx := context.Background()
++	db, err := OpenDBAt(os.Getenv("EVIE_COMPILER_CRASH_DB"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	store := NewStore(db)
++	owner := memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: memory.SessionID(os.Getenv("EVIE_COMPILER_CRASH_SESSION"))}
++	if phase == "before_claim_commit" {
++		store.resolveImmediateTransaction = func(ctx context.Context, conn *sql.Conn, statement string) (sql.Result, error) {
++			if statement == "COMMIT" {
++				os.Exit(86)
++			}
++			return executeImmediateTransactionStatement(ctx, conn, statement)
++		}
++	}
++	extractor := &compilerCrashExtractor{}
++	claim, err := store.claimCompilerJob(ctx, owner, os.Getenv("EVIE_COMPILER_CRASH_JOB"), extractor)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if phase == "after_claim" {
++		os.Exit(86)
++	}
++	response, err := extractor.Extract(ctx, claim.Generation, claim.Request)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if phase == "after_response" {
++		os.Exit(86)
++	}
++	candidates, err := validateCompilerOutput(claim.Request, response.Raw)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := store.stageCompilerResult(ctx, owner, claim.JobID, claim.Holder, claim.Fence, claim.Request, candidates); err != nil {
++		t.Fatal(err)
++	}
++	if phase == "after_stage" {
++		os.Exit(86)
++	}
++	if phase != "after_publish" {
++		t.Fatalf("unknown crash phase %q", phase)
++	}
++	if err := store.publishCompilerResult(ctx, owner, claim.JobID, claim.Holder, claim.Fence, claim.Request); err != nil {
++		t.Fatal(err)
++	}
++	os.Exit(86)
++}
++
++type compilerCrashReleaseVerifier func(CompilerCapacityReservation) CompilerReleaseAcknowledgement
++
++func (v compilerCrashReleaseVerifier) VerifyCompilerRelease(_ context.Context, reservation CompilerCapacityReservation) (CompilerReleaseAcknowledgement, error) {
++	return v(reservation), nil
++}
++
++func TestCompilerWorkerStaleStoreCannotPublishOrRelease(t *testing.T) {
++	f := newCompilerCrashFixture(t)
++	ctx := context.Background()
++	otherDB, err := OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer otherDB.Close()
++	other := NewStore(otherDB)
++	extractor := &compilerCrashExtractor{}
++	claim, err := f.store.claimCompilerJob(ctx, f.owner, f.compilation.JobID, extractor)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.expire(t)
++	if err := other.RecoverCompilerWork(ctx); err != nil {
++		t.Fatal(err)
++	}
++	for name, operation := range map[string]func() error{
++		"renew": func() error { return f.store.renewCompilerClaim(ctx, claim) },
++		"stage": func() error {
++			return f.store.stageCompilerResult(ctx, f.owner, claim.JobID, claim.Holder, claim.Fence, claim.Request, []memory.MemoryCandidate{})
++		},
++		"publish": func() error {
++			return f.store.publishCompilerResult(ctx, f.owner, claim.JobID, claim.Holder, claim.Fence, claim.Request)
++		},
++		"release_after_failure": func() error {
++			return f.store.failCompilerAttempt(ctx, claim.JobID, claim.Holder, claim.Fence, true, "late_response", false)
++		},
++	} {
++		if err := operation(); !errors.Is(err, ErrCompilerFence) {
++			t.Fatalf("stale %s err=%v", name, err)
++		}
++	}
++	want := compilerCrashState{state: "retry_wait", attempts: 1, capacity: "release_pending"}
++	f.assertState(t, want)
++	for _, kind := range []string{"no_verifier", "healthy_socket", "wrong_fence", "wrong_holder", "wrong_server", "wrong_request"} {
++		t.Run(kind, func(t *testing.T) {
++			var verifier CompilerReleaseVerifier
++			if kind != "no_verifier" {
++				verifier = compilerCrashReleaseVerifier(func(r CompilerCapacityReservation) CompilerReleaseAcknowledgement {
++					ack := CompilerReleaseAcknowledgement{Reservation: r, Kind: "request_completed"}
++					switch kind {
++					case "healthy_socket":
++						ack.Kind = "healthy_socket"
++					case "wrong_fence":
++						ack.Reservation.Fence++
++					case "wrong_holder":
++						ack.Reservation.Holder = "another-holder"
++					case "wrong_server":
++						ack.Reservation.ServerIdentity = "another-server"
++					case "wrong_request":
++						ack.Reservation.RequestID = "another-request"
++					}
++					return ack
++				})
++			}
++			if err := other.ReconcileCompilerCapacity(ctx, verifier); !errors.Is(err, ErrCompilerCapacityBlocked) {
++				t.Fatalf("uncertain release err=%v", err)
++			}
++			f.assertState(t, want)
++		})
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now')-1 WHERE job_id=?`, claim.JobID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := other.claimCompilerJob(ctx, f.owner, claim.JobID, extractor); !errors.Is(err, ErrCompilerCapacityBlocked) {
++		t.Fatalf("replacement with uncertain release err=%v", err)
++	}
++	verifier := compilerCrashReleaseVerifier(func(r CompilerCapacityReservation) CompilerReleaseAcknowledgement {
++		return CompilerReleaseAcknowledgement{Reservation: r, Kind: "request_completed"}
++	})
++	worked, err := other.RunCompilerStep(ctx, CompilerSupervisorConfig{Extractors: map[string]CompilerExtractor{f.compilation.GenerationID: extractor}, ReleaseVerifier: verifier})
++	if !worked || err != nil || extractor.calls != 1 {
++		t.Fatalf("verified retry worked=%v calls=%d err=%v", worked, extractor.calls, err)
++	}
++	f.assertState(t, compilerCrashState{state: "completed_empty", attempts: 2, stages: 1, consumed: 1, groups: 1, coverage: 1})
++	var receipts int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_release_receipts WHERE request_id=? AND job_id=? AND fence=? AND holder=? AND server_identity=? AND kind='request_completed'`, claim.AttemptID, claim.JobID, claim.Fence, claim.Holder, extractor.ServerIdentity()).Scan(&receipts); err != nil || receipts != 1 {
++		t.Fatalf("request-specific release receipts=%d err=%v", receipts, err)
++	}
++}
+diff --git a/internal/eviedb/compiler_worker_http_test.go b/internal/eviedb/compiler_worker_http_test.go
+new file mode 100644
+index 0000000..fd611ad
+--- /dev/null
++++ b/internal/eviedb/compiler_worker_http_test.go
+@@ -0,0 +1,196 @@
++package eviedb
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// This scripted runtime has authenticated request-specific status semantics.
++// It deliberately continues computing after its HTTP client disconnects.
++// It is not a claim about Ollama's supported API or its release behaviour.
++type workerHTTPRuntime struct {
++	server              *httptest.Server
++	token               string
++	started             chan string
++	release             chan struct{}
++	mu                  sync.Mutex
++	active, peak, calls int
++	finished            map[string]bool
++}
++
++func newWorkerHTTPRuntime(t *testing.T) *workerHTTPRuntime {
++	t.Helper()
++	r := &workerHTTPRuntime{token: "fixture-request-status-secret", started: make(chan string, 8), release: make(chan struct{}), finished: map[string]bool{}}
++	r.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		id := req.Header.Get("X-Attempt-ID")
++		if req.URL.Path == "/status" {
++			if req.Header.Get("Authorization") != "Bearer "+r.token {
++				http.Error(w, "unauthorized", http.StatusUnauthorized)
++				return
++			}
++			r.mu.Lock()
++			done := r.finished[id]
++			r.mu.Unlock()
++			json.NewEncoder(w).Encode(map[string]any{"attempt_id": id, "completed": done})
++			return
++		}
++		var request memory.CompilerRequest
++		if err := json.NewDecoder(req.Body).Decode(&request); err != nil {
++			http.Error(w, "bad request", 400)
++			return
++		}
++		r.mu.Lock()
++		r.active++
++		r.calls++
++		if r.active > r.peak {
++			r.peak = r.active
++		}
++		r.mu.Unlock()
++		r.started <- id
++		<-r.release
++		r.mu.Lock()
++		r.active--
++		r.finished[id] = true
++		r.mu.Unlock()
++		json.NewEncoder(w).Encode(memory.CompilerResponse{RequestID: request.ID, Candidates: []memory.ExtractorCandidate{}})
++	}))
++	t.Cleanup(r.server.Close)
++	return r
++}
++func (r *workerHTTPRuntime) ServerIdentity() string { return r.server.URL }
++func (r *workerHTTPRuntime) Extract(ctx context.Context, _ memory.CompilerGeneration, request memory.CompilerRequest) (CompilerExtraction, error) {
++	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.server.URL+"/extract", strings.NewReader(string(compilerJSON(request))))
++	if err != nil {
++		return CompilerExtraction{}, err
++	}
++	req.Header.Set("X-Attempt-ID", request.AttemptID)
++	response, err := r.server.Client().Do(req)
++	if err != nil {
++		return CompilerExtraction{}, err
++	}
++	defer response.Body.Close()
++	var raw json.RawMessage
++	if err := json.NewDecoder(response.Body).Decode(&raw); err != nil {
++		return CompilerExtraction{}, err
++	}
++	return CompilerExtraction{Raw: raw, ReleaseEvidence: "completed"}, nil
++}
++func (r *workerHTTPRuntime) VerifyCompilerRelease(ctx context.Context, reservation CompilerCapacityReservation) (CompilerReleaseAcknowledgement, error) {
++	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.server.URL+"/status", nil)
++	if err != nil {
++		return CompilerReleaseAcknowledgement{}, err
++	}
++	req.Header.Set("X-Attempt-ID", reservation.RequestID)
++	req.Header.Set("Authorization", "Bearer "+r.token)
++	response, err := r.server.Client().Do(req)
++	if err != nil {
++		return CompilerReleaseAcknowledgement{}, err
++	}
++	defer response.Body.Close()
++	if response.StatusCode != 200 {
++		return CompilerReleaseAcknowledgement{}, fmt.Errorf("status denied")
++	}
++	var status struct {
++		AttemptID string `json:"attempt_id"`
++		Completed bool   `json:"completed"`
++	}
++	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
++		return CompilerReleaseAcknowledgement{}, err
++	}
++	if !status.Completed || status.AttemptID != reservation.RequestID || reservation.ServerIdentity != r.ServerIdentity() {
++		return CompilerReleaseAcknowledgement{}, errors.New("request still active")
++	}
++	return CompilerReleaseAcknowledgement{Reservation: reservation, Kind: "request_completed"}, nil
++}
++
++func TestCompilerWorkerHTTPUnknownReleaseBlocksOtherStore(t *testing.T) {
++	f := newWorkerFixture(t)
++	first := f.queue(t, "I prefer tea.")
++	second := f.queue(t, "I prefer coffee.")
++	runtime := newWorkerHTTPRuntime(t)
++	other := f.second(t)
++	ctx := context.Background()
++	finished := make(chan error, 1)
++	var releaseOnce sync.Once
++	t.Cleanup(func() { releaseOnce.Do(func() { close(runtime.release) }) })
++	go func() { _, err := f.store.RunCompilerStep(ctx, f.config(runtime)); finished <- err }()
++	var attemptID string
++	select {
++	case attemptID = <-runtime.started:
++	case <-time.After(time.Second):
++		t.Fatal("no server request")
++	}
++	start := time.Now()
++	if _, err := other.CancelCompilation(ctx, f.owner, first.JobID); err != nil {
++		t.Fatal(err)
++	}
++	select {
++	case err := <-finished:
++		if err == nil {
++			t.Fatal("cancelled worker succeeded")
++		}
++	case <-time.After(time.Second):
++		t.Fatal("client did not cancel promptly")
++	}
++	if time.Since(start) >= time.Second {
++		t.Fatal("client cancellation missed deadline")
++	}
++	config := f.config(runtime)
++	config.ReleaseVerifier = runtime
++	if worked, err := other.RunCompilerStep(ctx, config); worked || !errors.Is(err, ErrCompilerCapacityBlocked) {
++		t.Fatalf("second request while server still active %v %v", worked, err)
++	}
++	if err := other.ReconcileCompilerCapacity(ctx, nil); !errors.Is(err, ErrCompilerCapacityBlocked) {
++		t.Fatalf("missing verifier released capacity %v", err)
++	}
++	status, err := other.InspectCompilerStatus(ctx, f.owner, "", 64)
++	if err != nil || status.CapacityState != "capacity_blocked" {
++		t.Fatalf("blocked status %+v %v", status, err)
++	}
++	runtime.mu.Lock()
++	active, calls, peak := runtime.active, runtime.calls, runtime.peak
++	runtime.mu.Unlock()
++	if active != 1 || calls != 1 || peak != 1 || attemptID == "" {
++		t.Fatalf("request overlap active=%d calls=%d peak=%d", active, calls, peak)
++	}
++	releaseOnce.Do(func() { close(runtime.release) })
++	deadline := time.Now().Add(time.Second)
++	for {
++		runtime.mu.Lock()
++		done := runtime.finished[attemptID]
++		runtime.mu.Unlock()
++		if done {
++			break
++		}
++		if time.Now().After(deadline) {
++			t.Fatal("server failed to finish")
++		}
++		time.Sleep(time.Millisecond)
++	}
++	if worked, err := other.RunCompilerStep(ctx, config); !worked || err != nil {
++		t.Fatalf("verified release did not advance later work %v %v", worked, err)
++	}
++	got, err := other.InspectCompilation(ctx, f.owner, second.JobID)
++	if err != nil || got.State != "completed_empty" {
++		t.Fatalf("later %+v %v", got, err)
++	}
++	firstGot, err := other.InspectCompilation(ctx, f.owner, first.JobID)
++	if err != nil || firstGot.State != "cancelled" || len(firstGot.Candidates) != 0 {
++		t.Fatalf("stale bytes changed cancelled job %+v %v", firstGot, err)
++	}
++	runtime.mu.Lock()
++	defer runtime.mu.Unlock()
++	if runtime.peak != 1 || runtime.calls != 2 {
++		t.Fatalf("observed request counts peak=%d calls=%d", runtime.peak, runtime.calls)
++	}
++}
+diff --git a/internal/eviedb/compiler_worker_inspection.go b/internal/eviedb/compiler_worker_inspection.go
+new file mode 100644
+index 0000000..aab250a
+--- /dev/null
++++ b/internal/eviedb/compiler_worker_inspection.go
+@@ -0,0 +1,87 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"errors"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++// InspectCompilerStatus returns one exact source session's metadata without
++// rendering protected evidence, generation prompts, or raw extractor errors.
++// The job cursor is stable and each request visits at most 64 ledger rows.
++func (s *Store) InspectCompilerStatus(ctx context.Context, owner memory.ScopeContext, afterJobID string, limit int) (memory.CompilerStatus, error) {
++	result := memory.CompilerStatus{Jobs: []memory.CompilerWorkStatus{}, CapacityState: "available"}
++	if limit < 1 || limit > 64 {
++		return result, errors.New("compiler status limit must be 1 through 64")
++	}
++	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
++		selection := memory.CompilationSelection{SessionID: owner.SessionID, Destination: scopeKeyForContext(owner)}
++		if err := compilerAuthorize(ctx, conn, owner, selection); err != nil {
++			return err
++		}
++		var capacity string
++		err := conn.QueryRowContext(ctx, `SELECT state FROM memory_compiler_capacity WHERE singleton=1`).Scan(&capacity)
++		if err != nil && !errors.Is(err, sql.ErrNoRows) {
++			return err
++		}
++		if capacity == "reserved" {
++			result.CapacityState = "busy"
++		}
++		if capacity == "release_pending" {
++			result.CapacityState = "capacity_blocked"
++			result.CapacityRecovery = "await authenticated request release; this runtime may require a verified controlled server restart"
++		}
++		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(stage_bytes),0),COALESCE(SUM(candidate_positions),0) FROM memory_compiler_resources`).Scan(&result.ReservedStages, &result.ReservedStageBytes, &result.ReservedCandidates); err != nil {
++			return err
++		}
++		rows, err := conn.QueryContext(ctx, `SELECT j.job_id,j.generation_id,j.session_id,j.first_sequence,j.last_sequence,j.state,j.reason,j.attempts,COALESCE(j.retry_at,0),q.pause_reason,q.lane FROM memory_compiler_jobs j JOIN memory_compiler_job_schedule q ON q.job_id=j.job_id WHERE j.session_id=? AND j.job_id>? ORDER BY j.job_id LIMIT ?`, owner.SessionID, afterJobID, limit)
++		if err != nil {
++			return err
++		}
++		for rows.Next() {
++			var job memory.CompilerWorkStatus
++			if err := rows.Scan(&job.JobID, &job.GenerationID, &job.SessionID, &job.FirstSequence, &job.LastSequence, &job.State, &job.Reason, &job.Attempts, &job.RetryAt, &job.PauseReason, &job.Lane); err != nil {
++				rows.Close()
++				return err
++			}
++			// Durable reasons are code-controlled; unexpected storage bytes are never
++			// promoted into diagnostics when raw source integrity is already suspect.
++			job.Reason = safeCompilerReason(job.Reason)
++			job.PauseReason = safeCompilerReason(job.PauseReason)
++			switch job.State {
++			case "queued":
++				job.Recovery = "waiting for configured generation and capacity"
++			case "retry_wait":
++				job.Recovery = "automatic retry when due and capacity is available"
++			case "staged":
++				job.Recovery = "publish saved stage without inference"
++			case "cancelled":
++				job.Recovery = "explicit resume required; attempt budget is retained"
++			case "failed":
++				job.Recovery = "retained coverage gap; same-generation retry cannot reset attempts"
++			}
++			if job.PauseReason != "" {
++				job.Recovery = "restore pinned configuration or resolve the pause, then explicitly resume"
++			}
++			result.Jobs = append(result.Jobs, job)
++		}
++		err = rows.Err()
++		rows.Close()
++		if len(result.Jobs) == limit {
++			result.NextJobID = result.Jobs[len(result.Jobs)-1].JobID
++		}
++		return err
++	})
++	return result, err
++}
++
++func safeCompilerReason(reason string) string {
++	switch reason {
++	case "", "worker_interrupted", "worker_shutdown", "caller_cancelled", "owner_cancelled", "attempts_exhausted", "invalid_source", "invalid_source_or_effect", "invalid_configuration", "invalid_or_missing_output", "staging_failed", "invalid_stage", "oversized_input", "configuration_unavailable", "activation_disabled", "resource_capacity":
++		return reason
++	default:
++		return "unavailable_detail"
++	}
++}
+diff --git a/internal/eviedb/compiler_worker_public_test.go b/internal/eviedb/compiler_worker_public_test.go
+new file mode 100644
+index 0000000..1d10183
+--- /dev/null
++++ b/internal/eviedb/compiler_worker_public_test.go
+@@ -0,0 +1,130 @@
++package eviedb_test
++
++import (
++	"context"
++	"encoding/json"
++	"testing"
++
++	"github.com/davidadel66/evie/internal/eviedb"
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++func TestCompilerWorkerLaterCandidatesVisibleAcrossEarlierGap(t *testing.T) {
++	f := newCompilerFixture(t)
++	ctx := context.Background()
++	generation := compilerGeneration()
++	generationID, _, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	firstSelection := f.selection(t, "I prefer tea.", true)
++	secondSelection := f.selection(t, "I prefer coffee.", true)
++	first, err := f.store.QueueCandidateUnit(ctx, f.session.ScopeContext(), firstSelection, generation, &scriptedCompiler{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	second, err := f.store.QueueCandidateUnit(ctx, f.session.ScopeContext(), secondSelection, generation, &scriptedCompiler{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		if r.Window.Selection.RootID == firstSelection.RootID {
++			return eviedb.CompilerExtraction{Raw: []byte("null"), ReleaseEvidence: "completed"}, nil
++		}
++		return compilerOutput(r, []memory.ExtractorCandidate{f.candidate(r)}), nil
++	}}
++	config := eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{generationID: extractor}}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err == nil {
++		t.Fatalf("missing output treated as success: %v %v", worked, err)
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err != nil {
++		t.Fatalf("later work stalled: %v %v", worked, err)
++	}
++	visible, err := f.store.InspectCompilation(ctx, f.session.ScopeContext(), second.JobID)
++	if err != nil || visible.State != "completed_candidates" || len(visible.Candidates) != 1 {
++		t.Fatalf("later candidates %+v %v", visible, err)
++	}
++	earlier, err := f.store.InspectCompilation(ctx, f.session.ScopeContext(), first.JobID)
++	if err != nil || earlier.State != "retry_wait" || len(earlier.Candidates) != 0 {
++		t.Fatalf("gap disappeared %+v %v", earlier, err)
++	}
++	var firstCount int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_coverage WHERE job_id=?`, first.JobID).Scan(&firstCount); err != nil || firstCount != 0 {
++		t.Fatalf("false coverage %d %v", firstCount, err)
++	}
++	var raw []byte
++	if err := f.db.QueryRow(`SELECT event_ids FROM memory_compiler_coverage WHERE job_id=?`, second.JobID).Scan(&raw); err != nil {
++		t.Fatal(err)
++	}
++	var covered []memory.EventID
++	if err := json.Unmarshal(raw, &covered); err != nil {
++		t.Fatal(err)
++	}
++	if len(covered) != len(second.Window.NewEventIDs) {
++		t.Fatalf("wrong exact interval %v", covered)
++	}
++	for i, id := range covered {
++		if id != second.Window.NewEventIDs[i] {
++			t.Fatalf("coverage changed selected source %v", covered)
++		}
++	}
++	accepted, err := f.store.InspectLiteralClaims(ctx, f.session.ScopeContext())
++	if err != nil || len(accepted.Claims) != 1 || accepted.ScopeRevision != 1 {
++		t.Fatalf("worker changed accepted state %+v %v", accepted, err)
++	}
++}
++
++func TestCompilerWorkerSealsAcceptedContextOnFirstAttempt(t *testing.T) {
++	f := newCompilerFixture(t)
++	ctx := context.Background()
++	generation := compilerGeneration()
++	id, _, err := memory.CompilerGenerationIdentity(generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	selected := f.selection(t, "I prefer tea.", true)
++	job, err := f.store.QueueCandidateUnit(ctx, f.session.ScopeContext(), selected, generation, &scriptedCompiler{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	addAccepted := func(key, value string) {
++		source := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "/remember " + value})
++		proposal, err := f.store.PrepareRememberLiteral(ctx, f.session.ScopeContext(), memory.RememberLiteralRequest{IdempotencyKey: key, SourceEventID: source.ID, Predicate: "drink", PredicateLabel: "drink", Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: value}})
++		if err != nil {
++			t.Fatal(err)
++		}
++		if _, err := f.store.ApplyRememberLiteral(ctx, f.lease, proposal); err != nil {
++			t.Fatal(err)
++		}
++	}
++	addAccepted("idem:v1:90000000-0000-4000-8000-000000000002", "coffee")
++	var firstRequest []byte
++	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
++		if len(r.ScopeRevisions) != 1 || r.ScopeRevisions[0].Revision != 2 {
++			t.Errorf("snapshot was not taken on attempt one: %+v", r.ScopeRevisions)
++		}
++		sealed, _ := json.Marshal(r)
++		if firstRequest == nil {
++			firstRequest = sealed
++			return eviedb.CompilerExtraction{Raw: []byte("null"), ReleaseEvidence: "completed"}, nil
++		}
++		if string(sealed) != string(firstRequest) {
++			t.Error("retry refreshed accepted context")
++		}
++		return compilerOutput(r, []memory.ExtractorCandidate{}), nil
++	}}
++	config := eviedb.CompilerSupervisorConfig{Extractors: map[string]eviedb.CompilerExtractor{id: extractor}}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err == nil {
++		t.Fatalf("first attempt %v %v", worked, err)
++	}
++	addAccepted("idem:v1:90000000-0000-4000-8000-000000000003", "water")
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now') WHERE job_id=?`, job.JobID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET request='{}' WHERE job_id=?`, job.JobID); err == nil {
++		t.Fatal("database allowed rewriting sealed request")
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, config); !worked || err != nil {
++		t.Fatalf("retry %v %v", worked, err)
++	}
++}
+diff --git a/internal/eviedb/compiler_worker_test.go b/internal/eviedb/compiler_worker_test.go
+new file mode 100644
+index 0000000..22ea496
+--- /dev/null
++++ b/internal/eviedb/compiler_worker_test.go
+@@ -0,0 +1,549 @@
++package eviedb
++
++import (
++	"context"
++	"database/sql"
++	"encoding/json"
++	"errors"
++	"path/filepath"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/davidadel66/evie/internal/memory"
++)
++
++type workerFixture struct {
++	db           *sql.DB
++	store        *Store
++	path         string
++	owner        memory.ScopeContext
++	lease        memory.TurnLease
++	generation   memory.CompilerGeneration
++	generationID string
++}
++
++func newWorkerFixture(t *testing.T) *workerFixture {
++	t.Helper()
++	f := &workerFixture{path: filepath.Join(t.TempDir(), "worker.db"), generation: compilerCommitGeneration()}
++	var err error
++	f.db, err = OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { f.db.Close() })
++	f.store = NewStore(f.db)
++	session, err := f.store.CreateGlobalSession(context.Background())
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.owner = session.ScopeContext()
++	f.lease, err = f.store.AcquireTurnLease(context.Background(), session.ID, "worker-test", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	f.generationID, _, err = memory.CompilerGenerationIdentity(f.generation)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return f
++}
++func (f *workerFixture) queue(t *testing.T, text string) memory.Compilation {
++	t.Helper()
++	ctx := context.Background()
++	root, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: text})
++	if err != nil {
++		t.Fatal(err)
++	}
++	end, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	job, err := f.store.QueueCandidateUnit(ctx, f.owner, memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: end.Sequence, Destination: "global"}, f.generation, &workerScript{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if job.State != "queued" {
++		t.Fatalf("queue state %s", job.State)
++	}
++	return job
++}
++func (f *workerFixture) second(t *testing.T) *Store {
++	t.Helper()
++	db, err := OpenDBAt(f.path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { db.Close() })
++	return NewStore(db)
++}
++func (f *workerFixture) config(extractor CompilerExtractor) CompilerSupervisorConfig {
++	return CompilerSupervisorConfig{Extractors: map[string]CompilerExtractor{f.generationID: extractor}}
++}
++
++type workerScript struct {
++	calls atomic.Int32
++	run   func(context.Context, memory.CompilerRequest) (CompilerExtraction, error)
++}
++
++func (*workerScript) ServerIdentity() string { return "scripted:137" }
++func (w *workerScript) Extract(ctx context.Context, _ memory.CompilerGeneration, r memory.CompilerRequest) (CompilerExtraction, error) {
++	w.calls.Add(1)
++	if w.run != nil {
++		return w.run(ctx, r)
++	}
++	return CompilerExtraction{Raw: compilerJSON(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{}}), ReleaseEvidence: "completed"}, nil
++}
++
++func TestCompilerWorkerRetryBudgetSurvivesStores(t *testing.T) {
++	f := newWorkerFixture(t)
++	job := f.queue(t, "I prefer tea.")
++	seen := map[string]bool{}
++	var sealed string
++	extractor := &workerScript{run: func(_ context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++		if r.AttemptID == "" || seen[r.AttemptID] {
++			t.Error("attempt did not get unique durable identity")
++		}
++		seen[r.AttemptID] = true
++		if sealed == "" {
++			sealed = string(compilerJSON(r))
++		} else if sealed != string(compilerJSON(r)) {
++			t.Error("retry changed sealed request")
++		}
++		return CompilerExtraction{Raw: []byte(`{"request_id":`), ReleaseEvidence: "completed"}, nil
++	}}
++	ctx := context.Background()
++	for n := 1; n <= 5; n++ {
++		store := f.second(t)
++		worked, err := store.RunCompilerStep(ctx, f.config(extractor))
++		if !worked || err == nil {
++			t.Fatalf("attempt %d worked=%v err=%v", n, worked, err)
++		}
++		got, err := store.InspectCompilation(ctx, f.owner, job.JobID)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if got.Attempts != n {
++			t.Fatalf("attempts %d want %d", got.Attempts, n)
++		}
++		if n < 5 {
++			var delay int
++			if err := f.db.QueryRow(`SELECT retry_at-unixepoch('now') FROM memory_compiler_jobs WHERE job_id=?`, job.JobID).Scan(&delay); err != nil {
++				t.Fatal(err)
++			}
++			want := 5 << (n - 1)
++			if delay < want-1 || delay > want || got.State != "retry_wait" {
++				t.Fatalf("attempt %d state %s delay %d", n, got.State, delay)
++			}
++			worked, err = store.RunCompilerStep(ctx, f.config(extractor))
++			if worked || err != nil {
++				t.Fatalf("not-due attempt dispatched: %v %v", worked, err)
++			}
++			if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now') WHERE job_id=?`, job.JobID); err != nil {
++				t.Fatal(err)
++			}
++		} else if got.State != "failed" || got.Reason != "attempts_exhausted" {
++			t.Fatalf("exhaustion %+v", got)
++		}
++	}
++	if worked, err := f.store.RunCompilerStep(ctx, f.config(extractor)); worked || err != nil {
++		t.Fatalf("sixth attempt %v %v", worked, err)
++	}
++	repeated, err := f.store.QueueCandidateUnit(ctx, f.owner, job.Window.Selection, f.generation, &workerScript{})
++	if err != nil || repeated.JobID != job.JobID || repeated.Attempts != 5 {
++		t.Fatalf("reselection reset budget %+v %v", repeated, err)
++	}
++	if _, err := f.store.ResumeCompilation(ctx, f.owner, job.JobID); err == nil {
++		t.Fatal("resume bypassed exhaustion")
++	}
++	if extractor.calls.Load() != 5 {
++		t.Fatalf("calls %d", extractor.calls.Load())
++	}
++}
++
++func TestCompilerWorkerCancelledFifthStageExplicitResume(t *testing.T) {
++	f := newWorkerFixture(t)
++	job := f.queue(t, "I prefer tea.")
++	ctx := context.Background()
++	e := &workerScript{}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET attempts=4 WHERE job_id=?`, job.JobID); err != nil {
++		t.Fatal(err)
++	}
++	c, err := f.store.claimCompilerJob(ctx, f.owner, job.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.stageCompilerResult(ctx, f.owner, c.JobID, c.Holder, c.Fence, c.Request, []memory.MemoryCandidate{}); err != nil {
++		t.Fatal(err)
++	}
++	second := f.second(t)
++	cancelled, err := second.CancelCompilation(ctx, f.owner, job.JobID)
++	if err != nil || cancelled.State != "cancelled" {
++		t.Fatalf("cancel %+v %v", cancelled, err)
++	}
++	if err := f.store.publishCompilerResult(ctx, f.owner, c.JobID, c.Holder, c.Fence, c.Request); !errors.Is(err, ErrCompilerFence) {
++		t.Fatalf("stale publish %v", err)
++	}
++	if worked, err := second.RunCompilerStep(ctx, f.config(e)); worked || err != nil {
++		t.Fatalf("automatic cancelled adoption %v %v", worked, err)
++	}
++	resumed, err := second.ResumeCompilation(ctx, f.owner, job.JobID)
++	if err != nil || resumed.State != "staged" || resumed.Attempts != 5 {
++		t.Fatalf("resume %+v %v", resumed, err)
++	}
++	if worked, err := second.RunCompilerStep(ctx, f.config(e)); !worked || err != nil {
++		t.Fatalf("adoption %v %v", worked, err)
++	}
++	got, err := second.InspectCompilation(ctx, f.owner, job.JobID)
++	if err != nil || got.State != "completed_empty" || got.Attempts != 5 || e.calls.Load() != 0 {
++		t.Fatalf("adopted stage %+v calls %d err %v", got, e.calls.Load(), err)
++	}
++	var groups, coverage, resources int
++	f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_candidate_groups`).Scan(&groups)
++	f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_coverage`).Scan(&coverage)
++	f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_resources`).Scan(&resources)
++	if groups != 1 || coverage != 1 || resources != 0 {
++		t.Fatalf("durable counts %d %d %d", groups, coverage, resources)
++	}
++}
++
++func TestCompilerWorkerInvalidFirstUnitDoesNotStarveLater(t *testing.T) {
++	for _, kind := range []string{"source", "stage"} {
++		t.Run(kind, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			first := f.queue(t, "I prefer tea.")
++			later := f.queue(t, "I prefer coffee.")
++			e := &workerScript{}
++			ctx := context.Background()
++			if kind == "source" {
++				// Corrupt only the first source projection, not the later window's overlap.
++				if _, err := f.db.Exec(`DROP TRIGGER memory_compiler_request_snapshot_immutable`); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET request='{}' WHERE job_id=?`, first.JobID); err != nil {
++					t.Fatal(err)
++				}
++			} else {
++				c, err := f.store.claimCompilerJob(ctx, f.owner, first.JobID, e)
++				if err != nil {
++					t.Fatal(err)
++				}
++				if err := f.store.stageCompilerResult(ctx, f.owner, c.JobID, c.Holder, c.Fence, c.Request, []memory.MemoryCandidate{}); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`DROP TRIGGER memory_compiler_stage_immutable`); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`UPDATE memory_compiler_stages SET envelope_hash='corrupt' WHERE job_id=?`, first.JobID); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')-1 WHERE job_id=?`, first.JobID); err != nil {
++					t.Fatal(err)
++				}
++			}
++			worked, err := f.store.RunCompilerStep(ctx, f.config(e))
++			if !worked || err == nil {
++				t.Fatalf("invalid first unit %v %v", worked, err)
++			}
++			worked, err = f.store.RunCompilerStep(ctx, f.config(e))
++			if !worked || err != nil {
++				t.Fatalf("later unit stalled %v %v", worked, err)
++			}
++			got, err := f.store.InspectCompilation(ctx, f.owner, later.JobID)
++			if err != nil || got.State != "completed_empty" {
++				t.Fatalf("later %+v %v", got, err)
++			}
++			status, err := f.store.InspectCompilerStatus(ctx, f.owner, "", 64)
++			if err != nil {
++				t.Fatal(err)
++			}
++			for _, j := range status.Jobs {
++				if j.JobID == first.JobID && (j.State != "failed" || (kind == "source" && j.Attempts != 0)) {
++					t.Fatalf("bad first status %+v", j)
++				}
++			}
++			raw, _ := json.Marshal(status)
++			if string(raw) == "" {
++				t.Fatal("missing safe status")
++			}
++			if e.calls.Load() != 1 {
++				t.Fatalf("calls %d", e.calls.Load())
++			}
++		})
++	}
++}
++
++func TestCompilerWorkerSupervisorShutdownIsRecoverable(t *testing.T) {
++	f := newWorkerFixture(t)
++	job := f.queue(t, "I prefer tea.")
++	entered := make(chan struct{})
++	e := &workerScript{run: func(ctx context.Context, _ memory.CompilerRequest) (CompilerExtraction, error) {
++		close(entered)
++		<-ctx.Done()
++		return CompilerExtraction{}, ctx.Err()
++	}}
++	ctx, cancel := context.WithCancel(context.Background())
++	done := make(chan error, 1)
++	go func() { done <- f.store.RunCompilerSupervisor(ctx, f.config(e)) }()
++	select {
++	case <-entered:
++	case <-time.After(time.Second):
++		t.Fatal("no dispatch")
++	}
++	start := time.Now()
++	cancel()
++	select {
++	case err := <-done:
++		if !errors.Is(err, context.Canceled) {
++			t.Fatalf("shutdown %v", err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("local cancellation exceeded one second")
++	}
++	if time.Since(start) >= time.Second {
++		t.Fatal("slow local shutdown")
++	}
++	got, err := f.second(t).InspectCompilation(context.Background(), f.owner, job.JobID)
++	if err != nil || got.State != "retry_wait" || got.Reason != "worker_shutdown" || got.CapacityState != "release_pending" {
++		t.Fatalf("shutdown state %+v %v", got, err)
++	}
++}
++
++func TestCompilerWorkerResourceWaitConsumesNoAttempt(t *testing.T) {
++	for _, kind := range []string{"stages", "inbox"} {
++		t.Run(kind, func(t *testing.T) {
++			f := newWorkerFixture(t)
++			job := f.queue(t, "I prefer tea.")
++			e := &workerScript{}
++			// Deliberately seed capacity through SQLite to test the exact boundary without
++			// thousands of model invocations. Reserved records own real sealed jobs.
++			if _, err := f.db.Exec(`INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'capacity-audit',generation_id,destination,session_id,root_id,first_sequence,last_sequence+10000,window_hash,request,'failed' FROM memory_compiler_jobs WHERE job_id=?`, job.JobID); err != nil {
++				t.Fatal(err)
++			}
++			if kind == "stages" {
++				if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<128) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'reserved-'||x,j.generation_id,j.destination,j.session_id,j.root_id,j.first_sequence,j.last_sequence+x,j.window_hash,j.request,'staged' FROM n CROSS JOIN memory_compiler_jobs j WHERE j.job_id=?`, job.JobID); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`INSERT INTO memory_compiler_resources SELECT job_id,0,131072,16 FROM memory_compiler_jobs WHERE job_id LIKE 'reserved-%'`); err != nil {
++					t.Fatal(err)
++				}
++			} else {
++				if _, err := f.db.Exec(`INSERT INTO memory_compiler_candidate_groups VALUES('capacity-audit','fixture')`); err != nil {
++					t.Fatal(err)
++				}
++				if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<2033) INSERT INTO memory_compiler_candidates(candidate_id,job_id,ordinal,envelope,equivalence_hash) SELECT 'inbox-'||x,'capacity-audit',x,'{}','fixture-'||x FROM n`); err != nil {
++					t.Fatal(err)
++				}
++			}
++			if _, err := f.store.claimCompilerJob(context.Background(), f.owner, job.JobID, e); !errors.Is(err, ErrCompilerCapacityBlocked) {
++				t.Fatalf("full %s admitted: %v", kind, err)
++			}
++			got, err := f.store.InspectCompilation(context.Background(), f.owner, job.JobID)
++			if err != nil || got.Attempts != 0 || got.State != "queued" {
++				t.Fatalf("resource wait spent attempt %+v %v", got, err)
++			}
++			var capacity int
++			if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_capacity`).Scan(&capacity); err != nil || capacity != 0 {
++				t.Fatalf("orphan reservation %d %v", capacity, err)
++			}
++		})
++	}
++}
++
++func TestCompilerWorkerDurableFairnessCounter(t *testing.T) {
++	f := newWorkerFixture(t)
++	lanes := map[memory.EventID]string{}
++	for i := 0; i < 18; i++ {
++		job := f.queue(t, "I prefer tea.")
++		lane := "new"
++		if i >= 16 {
++			lane = "historical"
++		}
++		lanes[job.Window.Selection.RootID] = lane
++		if _, err := f.db.Exec(`UPDATE memory_compiler_job_schedule SET lane=?,position=?,historical_order=? WHERE job_id=?`, lane, i, i, job.JobID); err != nil {
++			t.Fatal(err)
++		}
++	}
++	dispatched := []string{}
++	e := &workerScript{run: func(_ context.Context, r memory.CompilerRequest) (CompilerExtraction, error) {
++		dispatched = append(dispatched, lanes[r.Window.Selection.RootID])
++		return CompilerExtraction{Raw: compilerJSON(memory.CompilerResponse{RequestID: r.ID, Candidates: []memory.ExtractorCandidate{}}), ReleaseEvidence: "completed"}, nil
++	}}
++	for n := 1; n <= 18; n++ {
++		if worked, err := f.second(t).RunCompilerStep(context.Background(), f.config(e)); !worked || err != nil {
++			t.Fatalf("dispatch %d %v %v", n, worked, err)
++		}
++		want := "new"
++		if n == 9 || n == 18 {
++			want = "historical"
++		}
++		if dispatched[n-1] != want {
++			t.Fatalf("dispatch %d lane %s want %s", n, dispatched[n-1], want)
++		}
++	}
++}
++
++func TestCompilerWorkerOldAcknowledgementCannotReleaseReplacement(t *testing.T) {
++	f := newWorkerFixture(t)
++	job := f.queue(t, "I prefer tea.")
++	ctx := context.Background()
++	e := &workerScript{}
++	other := f.second(t)
++	first, err := f.store.claimCompilerJob(ctx, f.owner, job.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.failCompilerAttempt(ctx, first.JobID, first.Holder, first.Fence, false, "invalid_or_missing_output", false); err != nil {
++		t.Fatal(err)
++	}
++	entered := make(chan struct{})
++	release := make(chan struct{})
++	done := make(chan error, 1)
++	stale := compilerCrashReleaseVerifier(func(r CompilerCapacityReservation) CompilerReleaseAcknowledgement {
++		close(entered)
++		<-release
++		return CompilerReleaseAcknowledgement{Reservation: r, Kind: "request_completed"}
++	})
++	go func() { done <- f.store.ReconcileCompilerCapacity(ctx, stale) }()
++	select {
++	case <-entered:
++	case <-time.After(time.Second):
++		t.Fatal("verifier not called")
++	}
++	verifier := compilerCrashReleaseVerifier(func(r CompilerCapacityReservation) CompilerReleaseAcknowledgement {
++		return CompilerReleaseAcknowledgement{Reservation: r, Kind: "request_completed"}
++	})
++	if err := other.ReconcileCompilerCapacity(ctx, verifier); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET retry_at=unixepoch('now') WHERE job_id=?`, job.JobID); err != nil {
++		t.Fatal(err)
++	}
++	replacement, err := other.claimCompilerJob(ctx, f.owner, job.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := other.failCompilerAttempt(ctx, replacement.JobID, replacement.Holder, replacement.Fence, false, "invalid_or_missing_output", false); err != nil {
++		t.Fatal(err)
++	}
++	close(release)
++	select {
++	case err := <-done:
++		if !errors.Is(err, ErrCompilerFence) {
++			t.Fatalf("stale acknowledgement %v", err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("verifier did not finish")
++	}
++	var requestID string
++	var fence int64
++	if err := f.db.QueryRow(`SELECT request_id,fence FROM memory_compiler_capacity`).Scan(&requestID, &fence); err != nil || requestID != replacement.AttemptID || fence != replacement.Fence {
++		t.Fatalf("replacement capacity lost %s %d %v", requestID, fence, err)
++	}
++}
++
++func TestCompilerWorkerStagePublicationDoesNotNeedModelCapacity(t *testing.T) {
++	f := newWorkerFixture(t)
++	first := f.queue(t, "I prefer tea.")
++	later := f.queue(t, "I prefer coffee.")
++	ctx := context.Background()
++	e := &workerScript{}
++	c, err := f.store.claimCompilerJob(ctx, f.owner, first.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.stageCompilerResult(ctx, f.owner, c.JobID, c.Holder, c.Fence, c.Request, []memory.MemoryCandidate{}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET lease_until=unixepoch('now')-1 WHERE job_id=?`, first.JobID); err != nil {
++		t.Fatal(err)
++	}
++	blocked, err := f.store.claimCompilerJob(ctx, f.owner, later.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.failCompilerAttempt(ctx, blocked.JobID, blocked.Holder, blocked.Fence, false, "invalid_or_missing_output", false); err != nil {
++		t.Fatal(err)
++	}
++	if worked, err := f.second(t).RunCompilerStep(ctx, f.config(e)); !worked || err != nil {
++		t.Fatalf("capacity blocked saved stage %v %v", worked, err)
++	}
++	got, err := f.store.InspectCompilation(ctx, f.owner, first.JobID)
++	if err != nil || got.State != "completed_empty" || got.Attempts != 1 || e.calls.Load() != 0 {
++		t.Fatalf("saved stage %+v %v", got, err)
++	}
++	status, err := f.store.InspectCompilerStatus(ctx, f.owner, "", 64)
++	if err != nil || status.CapacityState != "capacity_blocked" {
++		t.Fatalf("publication released another job capacity %+v %v", status, err)
++	}
++}
++
++func TestCompilerWorkerUnconfiguredSelectionIsNotMaterialized(t *testing.T) {
++	f := newWorkerFixture(t)
++	if _, err := f.store.QueueCandidateUnit(context.Background(), f.owner, memory.CompilationSelection{SessionID: f.owner.SessionID}, f.generation, nil); !errors.Is(err, ErrCompilerNotConfigured) {
++		t.Fatalf("unconfigured queue %v", err)
++	}
++	var jobs int
++	if err := f.db.QueryRow(`SELECT COUNT(*) FROM memory_compiler_jobs`).Scan(&jobs); err != nil || jobs != 0 {
++		t.Fatalf("unconfigured jobs %d %v", jobs, err)
++	}
++}
++
++func TestCompilerWorkerFullQueueRetainsSelectionForRediscovery(t *testing.T) {
++	f := newWorkerFixture(t)
++	first := f.queue(t, "I prefer tea.")
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<1023) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'queued-'||x,j.generation_id,j.destination,j.session_id,j.root_id,j.first_sequence,j.last_sequence+x,j.window_hash,j.request,'queued' FROM n CROSS JOIN memory_compiler_jobs j WHERE j.job_id=?`, first.JobID); err != nil {
++		t.Fatal(err)
++	}
++	ctx := context.Background()
++	root, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "I prefer coffee."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	end, err := f.store.AppendEventWithLease(ctx, f.owner.SessionID, f.lease.HolderID, f.lease.FencingToken, memory.EventInput{Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, ParentID: root.ID, Content: "Recorded."})
++	if err != nil {
++		t.Fatal(err)
++	}
++	selection := memory.CompilationSelection{SessionID: f.owner.SessionID, RootID: root.ID, Cutoff: end.Sequence, Destination: "global"}
++	pending, err := f.store.QueueCandidateUnit(ctx, f.owner, selection, f.generation, &workerScript{})
++	if err != nil || pending.State != "selected_unmaterialized" || pending.JobID != "" {
++		t.Fatalf("full queue %+v %v", pending, err)
++	}
++	if _, err := f.db.Exec(`UPDATE memory_compiler_jobs SET state='failed' WHERE job_id='queued-1'`); err != nil {
++		t.Fatal(err)
++	}
++	rediscovered, err := f.second(t).QueueCandidateUnit(ctx, f.owner, selection, f.generation, &workerScript{})
++	if err != nil || rediscovered.SelectionID != pending.SelectionID || rediscovered.State != "queued" || rediscovered.Attempts != 0 {
++		t.Fatalf("selection lost across full queue %+v %v", rediscovered, err)
++	}
++}
++
++func TestCompilerWorkerCancelledStageResumeRequiresCapacity(t *testing.T) {
++	f := newWorkerFixture(t)
++	job := f.queue(t, "I prefer tea.")
++	ctx := context.Background()
++	e := &workerScript{}
++	claim, err := f.store.claimCompilerJob(ctx, f.owner, job.JobID, e)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := f.store.stageCompilerResult(ctx, f.owner, claim.JobID, claim.Holder, claim.Fence, claim.Request, []memory.MemoryCandidate{}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.store.CancelCompilation(ctx, f.owner, job.JobID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<128) INSERT INTO memory_compiler_jobs(job_id,generation_id,destination,session_id,root_id,first_sequence,last_sequence,window_hash,request,state) SELECT 'reserved-'||x,j.generation_id,j.destination,j.session_id,j.root_id,j.first_sequence,j.last_sequence+x,j.window_hash,j.request,'staged' FROM n CROSS JOIN memory_compiler_jobs j WHERE j.job_id=?`, job.JobID); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.db.Exec(`INSERT INTO memory_compiler_resources SELECT job_id,0,131072,16 FROM memory_compiler_jobs WHERE job_id LIKE 'reserved-%'`); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := f.second(t).ResumeCompilation(ctx, f.owner, job.JobID); !errors.Is(err, ErrCompilerCapacityBlocked) {
++		t.Fatalf("resume overfilled stages %v", err)
++	}
++	got, err := f.store.InspectCompilation(ctx, f.owner, job.JobID)
++	if err != nil || got.State != "cancelled" || got.Attempts != 1 {
++		t.Fatalf("failed admission changed cancellation %+v %v", got, err)
++	}
++}
+diff --git a/internal/memory/compiler.go b/internal/memory/compiler.go
+index 61e494a..d6f7897 100644
+--- a/internal/memory/compiler.go
++++ b/internal/memory/compiler.go
+@@ -81,6 +81,8 @@ type CompilerWindow struct {
+ }
+ 
+ type CompilerRequest struct {
++	// AttemptID identifies one dispatch; it is excluded from the sealed request.
++	AttemptID              string              `json:"-"`
+ 	AcceptedContextOmitted bool                `json:"accepted_context_omitted"`
+ 	ID                     string              `json:"request_id"`
+ 	GenerationID           string              `json:"generation_id"`
+diff --git a/internal/memory/compiler_status.go b/internal/memory/compiler_status.go
+new file mode 100644
+index 0000000..67d63dc
+--- /dev/null
++++ b/internal/memory/compiler_status.go
+@@ -0,0 +1,28 @@
++package memory
++
++// CompilerWorkStatus is a content-free bounded recovery view. It remains usable
++// when raw evidence is corrupt or current source rendering is forbidden.
++type CompilerWorkStatus struct {
++	JobID         string    `json:"job_id"`
++	GenerationID  string    `json:"generation_id"`
++	SessionID     SessionID `json:"session_id"`
++	FirstSequence int64     `json:"first_sequence"`
++	LastSequence  int64     `json:"last_sequence"`
++	State         string    `json:"state"`
++	Reason        string    `json:"reason,omitempty"`
++	Attempts      int       `json:"attempts"`
++	RetryAt       int64     `json:"retry_at,omitempty"`
++	PauseReason   string    `json:"pause_reason,omitempty"`
++	Lane          string    `json:"lane"`
++	Recovery      string    `json:"recovery,omitempty"`
++}
++
++type CompilerStatus struct {
++	Jobs               []CompilerWorkStatus `json:"jobs"`
++	NextJobID          string               `json:"next_job_id,omitempty"`
++	CapacityState      string               `json:"capacity_state"`
++	CapacityRecovery   string               `json:"capacity_recovery,omitempty"`
++	ReservedStages     int64                `json:"reserved_stages"`
++	ReservedStageBytes int64                `json:"reserved_stage_bytes"`
++	ReservedCandidates int64                `json:"reserved_candidates"`
++}

@@ -1,0 +1,89 @@
+EVIE
+Chat
+Memory
+Whiteboard
+Reports
+System
+A
+a
+Accepted memory
+Review candidates
+Compiler health
+Compiler health
+
+Inspect background progress and review workload for one exact scope and session, including closed conversations.
+
+Memory scope
+Choose a scope…
+Global memory · global
+Refresh scopes
+Session
+Choose a session…
+3b83d8cb-a010-43e5-9bdc-70788df03493
+f3a5096d-6691-4f46-98c0-1a61f68493c7
+Refresh sessions
+Diagnostic view
+Jobs and coverage
+Selected units
+Live selection obligations
+Review backlog
+Activations
+Historical selection
+Event selection
+Foreground timings
+Refresh diagnostics
+
+Each page is a fresh snapshot. Next advances the current listing; refresh starts at the first page.
+
+Exact scope: global · session: 3b83d8cb-a010-43e5-9bdc-70788df03493
+
+Snapshot: 2026-09-05T12:27:43.579Z · revision 12
+
+Shared compiler capacity: Available
+
+Counts for this scope and session
+
+Counts cover the indexed records in this scope and session, across generations. Page rows are a bounded portion. Unresolved counts exclude suppressed repeats.
+
+Queued jobs
+1
+Running jobs
+0
+Jobs waiting to retry
+1
+Staged jobs
+0
+Jobs completed with candidates
+1
+Jobs completed empty
+0
+Excluded jobs
+0
+Failed jobs
+1
+Cancelled jobs
+0
+Unresolved inbox candidates
+1
+Accepted candidates
+0
+Rejected candidates
+0
+Suppressed repeat candidates
+0
+Inference attempts
+3
+Cancellations
+0
+
+Live selection obligations include deferred and unmaterialized work. A pending extension is a separate obligation even when an earlier prefix completed.
+
+Root: 9cbb0da0-5ff9-494c-8f63-221b2d0157f2
+
+State: queued
+
+Sequence bounds: 41–41
+
+Activation: aeb064b8cf5d9f6a6e29bea671462779ce12d05a7605f53b3a666be6d5ff18b7
+
+Selection: 0725179de5e37adc8e6f16f2327c1155c0902d0aa6c07433d61916592d788d20

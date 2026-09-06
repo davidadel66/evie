@@ -1,0 +1,7 @@
+locator.waitFor: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for getByText('okay yeah lets test it out. I like concise answers and not a lot of data dump. when you answer me, I want you to think about readibility and style.', { exact: true }) to be visible[22m
+
+    at /Users/davidboktor/code/evie/.scratch/session-history/live-browser.cjs:7:43 {
+  name: 'TimeoutError'
+}

@@ -3,12 +3,27 @@
 // edit_db. Anything else gets pretty-printed JSON — correct, if plain.
 
 export type ApprovalView =
+  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; json: string }
   | { shape: "diff"; subject: string; oldText: string; newText: string }
   | { shape: "statement"; subject: string; statement: string }
   | { shape: "json"; subject: string; json: string };
 
-export function readApprovalArgs(name: string, args: string): ApprovalView {
+export function readApprovalArgs(name: string, args: string, ownerName = "You"): ApprovalView {
   const parsed = parseObject(args);
+
+  if ((name === "memory_remember_literal" || name === "memory_remember_entity") && parsed) {
+    const scope = object(parsed.scope);
+    const source = object(parsed.source);
+    const literal = object(parsed.literal);
+    const claim = object(parsed.claim);
+    const predicate = object(parsed.predicate);
+    const polarity = str(parsed.polarity) || str(claim?.polarity);
+    const value = str(literal?.value);
+    const entities = Array.isArray(parsed.entities) ? parsed.entities.map(object) : [];
+    const label = (entity: Record<string, unknown> | null | undefined) => entity?.anchor_kind === "owner" && entity?.canonical_name === "owner" ? ownerName : str(entity?.canonical_name);
+    const subject = [label(object(parsed.subject)) || label(entities.find(e => e?.entity_id === claim?.subject_entity_id)), predicate?.label, value || label(entities.find(e => e?.entity_id === claim?.object_entity_id))].filter(Boolean).join(" · ");
+    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: str(source?.evidence), json: pretty(args) };
+  }
 
   if (name === "edit_file" && parsed) {
     const path = str(parsed.path);
@@ -59,3 +74,5 @@ function pretty(args: string): string {
     return args;
   }
 }
+
+function object(v: unknown): Record<string, unknown> | null { return typeof v === "object" && v !== null ? v as Record<string, unknown> : null; }

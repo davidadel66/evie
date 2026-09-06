@@ -48,7 +48,7 @@ func (o *Ollama) ServerIdentity() string { return o.identity }
 func (o *Ollama) Extract(ctx context.Context, g memory.CompilerGeneration, request memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
 	noDispatch := eviedb.CompilerExtraction{ReleaseEvidence: "not_dispatched"}
 	id, _, err := memory.CompilerGenerationIdentity(g)
-	if err != nil || id != o.generationID || request.GenerationID != id {
+	if err != nil || id != o.generationID || request.GenerationID != id || request.ScopePolicy != g.ScopePolicy {
 		return noDispatch, fmt.Errorf("%w: compiler generation identity mismatch", eviedb.ErrCompilerConfiguration)
 	}
 	if err := memory.CompilerInputBudget(g, request); err != nil {
@@ -156,7 +156,7 @@ func render(g memory.CompilerGeneration, r memory.CompilerRequest) (string, erro
 	if err != nil {
 		return "", err
 	}
-	data := map[string]any{"System": g.Prompt, "Prompt": prompt, "Response": "", "Messages": []map[string]any{{"Role": "system", "Content": g.Prompt}, {"Role": "user", "Content": prompt}}, "Tools": nil, "Thinking": false}
+	data := map[string]any{"System": memory.CompilerSystemPrompt(g), "Prompt": prompt, "Response": "", "Messages": []map[string]any{{"Role": "system", "Content": memory.CompilerSystemPrompt(g)}, {"Role": "user", "Content": prompt}}, "Tools": nil, "Thinking": false}
 	var output boundedWriter
 	if err := parsed.Execute(&output, data); err != nil {
 		return "", err

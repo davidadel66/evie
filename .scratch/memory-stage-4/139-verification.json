@@ -1,0 +1,31 @@
+[
+  {
+    "command": [
+      "go",
+      "test",
+      "./internal/eviedb",
+      "./cmd/evie",
+      "-run",
+      "^TestCompiler(History|Activation|Worker|Intervals)",
+      "-count=1"
+    ],
+    "exit_code": 0,
+    "log": ".scratch/memory-stage-4/139-focused-final.log",
+    "output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t7.932s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t0.591s\n"
+  },
+  {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "./internal/eviedb",
+      "./cmd/evie",
+      "-run",
+      "^TestCompilerHistory",
+      "-count=1"
+    ],
+    "exit_code": 0,
+    "log": ".scratch/memory-stage-4/139-race-final.log",
+    "output": "ok  \tgithub.com/davidadel66/evie/internal/eviedb\t24.153s\nok  \tgithub.com/davidadel66/evie/cmd/evie\t2.734s\n"
+  }
+]

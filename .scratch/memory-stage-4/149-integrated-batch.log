@@ -1,0 +1,6 @@
+=== RUN   TestStage4AtomicBatchPolicyConformance
+    memory_stage4_review_conformance_test.go:33: HTTP batch/prepare got 409 want 200: {"code":"review_dependencies","error":"review the complete dependency groups and prepare a new exact batch"}
+--- FAIL: TestStage4AtomicBatchPolicyConformance (0.07s)
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.394s
+FAIL

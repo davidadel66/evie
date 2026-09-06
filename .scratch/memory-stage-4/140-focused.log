@@ -1,0 +1,11 @@
+ok  	github.com/davidadel66/evie/internal/eviedb	23.136s
+< < [calling edit_file]
+
+[edit_file wants to run]
+{"path":"/var/folders/nv/59bkjyks06gdx0l5k1v5pqk40000gn/T/TestRunREPLContextDiscardsLateApprovalInputAfterCancellation3401248039/001/note.txt","old_string":"world","new_string":"changed"}
+approve? [y/N] request failed: context canceled
+--- FAIL: TestSemanticMemoryStage3CrossSurfaceAcceptance (0.31s)
+    semantic_memory_stage3_acceptance_test.go:735: Stage 3 created later-stage schema objects: count=6 error=<nil>
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	6.125s
+FAIL

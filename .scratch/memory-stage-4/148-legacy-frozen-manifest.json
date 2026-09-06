@@ -1,0 +1,32 @@
+{
+  "ticket": 148,
+  "contribution": "bounded legacy status projections",
+  "base_head": "da24aeecdcc7995cd34fb5800d74f01c3300287f",
+  "files": [
+    {
+      "path": "internal/eviedb/compiler_activation.go",
+      "before_sha256": "ef97faaa06372204b0bc50c3d5571216a47e73b0791cb113957a259a487914dc",
+      "after_sha256": "4189769f57e2b3bad8107d21509f5c0ccf8e46f7609556ba2df79e6b6caac15c",
+      "bytes": 14255
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "before_sha256": "350c31d55960e21400628d152e98a1ac6fc078ea21fdd92d8fa8cbd2814406c3",
+      "after_sha256": "ab5ecc2593c45a94fcfe72278ddefed9b2cc7a9b3183f097b86581cf4db9c79f",
+      "bytes": 5663
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection.go",
+      "before_sha256": "absent",
+      "after_sha256": "8f37753b5faa25a1ca7bf096a3ab7c9b9f254c3745aabfe1fc26c43f22f94857",
+      "bytes": 11989
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection_test.go",
+      "before_sha256": "absent",
+      "after_sha256": "a6aade7e167c822cb4f78b27dd88f543bad432bec32d9a513c6f3c636c0d4c66",
+      "bytes": 17621
+    }
+  ],
+  "focused_race": "pass: 148-legacy-stable-key-race.log"
+}
