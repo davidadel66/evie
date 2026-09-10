@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	ContextComposerVersion           = "context-composer-v1"
-	CanonicalRequestEstimatorVersion = "canonical-json-bytes-v1"
+	ContextComposerVersion           = "context-composer-v2"
+	CanonicalRequestEstimatorVersion = "canonical-provider-json-bytes-v2"
 )
 
 var ErrContextOverflow = errors.New("agent: request exceeds configured model context")
@@ -54,7 +54,7 @@ type CanonicalRequestEstimator struct{}
 func (CanonicalRequestEstimator) Version() string { return CanonicalRequestEstimatorVersion }
 
 func (CanonicalRequestEstimator) Estimate(request openrouter.ChatRequest) (RequestEstimate, error) {
-	encoded, err := json.Marshal(request)
+	encoded, err := openrouter.RequestBytes(request)
 	if err != nil {
 		return RequestEstimate{}, fmt.Errorf("serialize provider request: %w", err)
 	}
@@ -77,6 +77,7 @@ type ContextComposeInput struct {
 	Tools          []openrouter.Tool
 	Reasoning      *openrouter.ReasoningConfig
 	WorkingContext string
+	Continuation   map[memory.EventID][]json.RawMessage
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -194,7 +195,7 @@ func (c *ContextComposer) projectAtStart(
 		return contextProjection{}, fmt.Errorf("bound durable tool-result groups: %w", err)
 	}
 	composeProjected := func(projected []memory.Event) error {
-		projection.conversation, err = messagesFromEvents(projected)
+		projection.conversation, err = messagesFromEventsWithContinuation(projected, input.Continuation)
 		if err != nil {
 			return fmt.Errorf("project durable history: %w", err)
 		}
@@ -214,6 +215,10 @@ func (c *ContextComposer) projectAtStart(
 			Stream:    true,
 			Reasoning: cloneReasoning(input.Reasoning),
 			MaxTokens: profile.OutputReserveTokens,
+		}
+		projection.request, err = openrouter.PrepareRequest(projection.request)
+		if err != nil {
+			return err
 		}
 		projection.estimate, err = c.estimator.Estimate(projection.request)
 		return err
@@ -332,6 +337,9 @@ func percentageFloor(value int64, percent int64) int64 {
 // InspectContext performs a point-in-time durable read and a hypothetical
 // empty-root composition. It takes no turn lease and writes no session state.
 func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error) {
+	if s.configurationErr != nil {
+		return ContextDiagnostics{}, s.configurationErr
+	}
 	events, err := s.history.Events(ctx)
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("load durable history: %w", err)
@@ -513,6 +521,22 @@ func contextByteBreakdown(
 	hasWorkingContext bool,
 	hasSummary bool,
 ) (int64, int64, int64, int64, int64, error) {
+	if openrouter.UsesResponses(request.Model) {
+		parts, err := openrouter.ResponseRequestPartSizes(request)
+		if err != nil {
+			return 0, 0, 0, 0, 0, err
+		}
+		summaryBytes, historyBytes := int64(0), int64(0)
+		start := 1
+		if hasSummary {
+			summaryBytes = parts.Messages[1]
+			start++
+		}
+		for _, size := range parts.Messages[start:] {
+			historyBytes += size
+		}
+		return parts.Messages[0], summaryBytes, historyBytes, parts.Tools, parts.Settings, nil
+	}
 	system, err := json.Marshal(request.Messages[0])
 	if err != nil {
 		return 0, 0, 0, 0, 0, err

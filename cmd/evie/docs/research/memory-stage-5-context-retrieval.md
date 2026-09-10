@@ -117,3 +117,53 @@ stale-fact errors, cross-scope leakage, p50/p95 latency, and total build/query
 cost. Preserve a held-out test set, audit a sample of model-judged answers, and
 include Evie-specific scope and approval cases. Those safety checks cannot be
 inferred from a public benchmark score.
+
+## Episodic reads versus semantic-only memory (2026-09-10)
+
+**MemGPT explicitly lets the model retrieve earlier conversations.** Prior
+episodes are not restricted to being inputs for extracting durable facts.
+
+- **Original MemGPT:** sections 2.2–2.3 describe model-generated retrieval calls
+  that return stored messages to context. In the multi-session experiment,
+  section 3.1.1 gives the model paginated search over earlier conversations;
+  appendix 6.1.1 names `conversation_search`.
+  [Paper v2, February 12, 2024](https://arxiv.org/html/2310.08560v2).
+  Historical code confirms `conversation_search(query, page)` and
+  `conversation_search_date(...)` return timestamps, roles, and message text
+  from recall storage. `archival_memory_search` separately searches stored
+  archival text by embedding similarity. These are model-callable tools, not
+  an extraction-only pipeline.
+  [Original code, pinned revision](https://github.com/letta-ai/letta/blob/dd2f4fc87383917a836a8bb6f54b8ea12f609ab8/memgpt/functions/function_sets/base.py#L78).
+
+- **LongMemEval (ICLR 2025):** a benchmark with reference pipelines, not one
+  required agent architecture. Its baseline retrieval script selects historical
+  turns or sessions; a separate reader receives the retrieved history. That is
+  automatic retrieval before answering rather than a reader choosing search
+  tool calls. The full-history baseline supplies conversation history directly.
+  Neither makes extracted semantic facts the only permissible evidence.
+  [Official retrieval and generation instructions](https://github.com/xiaowu0162/LongMemEval#memory-retrieval).
+
+- **Current Letta, checked September 10:** its agent prompt explicitly directs
+  the model to invoke a recall subagent when historical context is missing.
+  That subagent searches past messages and can expand around a result using
+  message IDs, returning relevant findings and timestamps. This is
+  model-directed historical retrieval through a helper agent, separate from
+  editable memory files. These are current source instructions, not a claim
+  about every deployment's actual tool use or permissions.
+  [Agent prompt](https://github.com/letta-ai/letta-code/blob/60331178660de3d860c0903b6b7858aa3d5adcee/src/agent/prompts/letta.md#L5),
+  [Recall subagent](https://github.com/letta-ai/letta-code/blob/60331178660de3d860c0903b6b7858aa3d5adcee/src/agent/prompts/recall_subagent.md#L1).
+
+The useful distinction for Evie is between **what gets retrieved** (a current
+accepted fact or an attributed historical statement) and **who requests it**
+(automatic context assembly or the conversational model). Those are independent
+design choices. Embedding-based search also does not imply semantic-fact-only
+storage: it can search original messages. Research supports episodic retrieval
+as a valid mechanism; it does not settle Evie's cross-session scope or promotion
+rules. An old statement can establish what was said without becoming an accepted
+fact about what is true now.
+
+Evie's September 10 retrieval-interview Q8 decision permits attributed answers
+from an already eligible excerpt while preserving uncertainty. It does not
+authorize broader cross-session searches; scope and retrieval access remain
+separate, and Q5 remains open.
+[Current decision record](../active/memory.decisions.md#L3).

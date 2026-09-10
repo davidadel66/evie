@@ -21,7 +21,7 @@ import (
 	"github.com/davidadel66/evie/internal/tools"
 )
 
-const DefaultModel = openrouter.BuiltinModel
+const DefaultModel = openrouter.AstraModel
 
 var ErrBusy = errors.New("agent: a turn is already in progress")
 
@@ -47,6 +47,7 @@ type Session struct {
 	legacyToolSignatures []legacyToolSignature
 	profile              openrouter.ContextProfile
 	reasoning            *openrouter.ReasoningConfig
+	configurationErr     error
 	history              History
 	scope                memory.ScopeContext
 	owner                TurnOwnership
@@ -72,12 +73,20 @@ type Client interface {
 }
 type Events interface {
 	Delta(text string)                         // streaming assistant text
-	Reasoning(text string)                     // streaming thinking text
+	Reasoning(text string)                     // public thinking text; empty starts activity
 	ReasoningDone()                            // thinking ended for this assistant message
 	AssistantDone(content string)              // authoritative committed content for every assistant message, even empty (tool-only)
-	ToolCall(id, name, args string)            // emitted immediately before executing
+	ToolCall(id, name, args string)            // durable intent, before preparation and approval
 	ToolResult(id, content string, isErr bool) // tool finished (includes declines)
 	ResponseDiscarded(reason DiscardReason, message string)
+}
+
+// ActivityEvents optionally enriches the public transcript at durable commit
+// boundaries. AssistantCommitted replaces AssistantDone, never duplicates it.
+// Provider callbacks are joined before either assistant notification.
+type ActivityEvents interface {
+	TurnStarted(id memory.EventID, at time.Time)
+	AssistantCommitted(event memory.Event)
 }
 
 func (s *Session) Send(
@@ -87,6 +96,9 @@ func (s *Session) Send(
 	approve tools.Approver,
 	extra ...tools.Tool,
 ) (retErr error) {
+	if s.configurationErr != nil {
+		return s.configurationErr
+	}
 	observation := beginForegroundObservation(ctx, s.history)
 	defer observation.finish()
 	if !s.mu.TryLock() {
@@ -161,6 +173,9 @@ func (s *Session) Send(
 	if observation != nil {
 		observation.record.RootID = rootEvent.ID
 	}
+	if activity, ok := ev.(ActivityEvents); ok {
+		activity.TurnStarted(rootEvent.ID, rootEvent.RecordedAt)
+	}
 	progress := &turnProgress{rootTurnID: rootEvent.ID, requestParentID: rootEvent.ID, foreground: observation}
 	turnErr := s.runOwnedTurn(coordinator, lease, ev, approve, progress)
 	if turnErr != nil && coordinator.result().kind == causeNone {
@@ -193,11 +208,11 @@ func (s *Session) Send(
 		}
 	}
 	wasRendered, reasoningOpen, assistantCommitted := progress.rendered.discardState()
+	if reasoningOpen {
+		ev.ReasoningDone()
+	}
 	if wasRendered && !assistantCommitted {
 		if reason := cause.discardReason(); reason != "" {
-			if reasoningOpen {
-				ev.ReasoningDone()
-			}
 			ev.ResponseDiscarded(reason, DiscardedResponseMessage)
 		}
 	}
@@ -230,6 +245,27 @@ func resolveReasoning(v string) *openrouter.ReasoningConfig {
 	default:
 		return &openrouter.ReasoningConfig{Enabled: true}
 	}
+}
+
+func resolveModelReasoning(model, value string) (*openrouter.ReasoningConfig, error) {
+	if !openrouter.UsesResponses(model) {
+		return resolveReasoning(value), nil
+	}
+	switch value {
+	case "", "on":
+		return &openrouter.ReasoningConfig{Effort: "low", Summary: "concise"}, nil
+	case "low", "medium", "high", "xhigh", "max":
+		return &openrouter.ReasoningConfig{Effort: value, Summary: "concise"}, nil
+	default:
+		return nil, errors.New("Astra requires EVIE_REASONING=on, low, medium, high, xhigh, or max; reasoning cannot be disabled")
+	}
+}
+
+// ValidateModelConfiguration is shared by CLI/server startup before creating
+// durable sessions. Constructors also retain the error for embedded callers.
+func ValidateModelConfiguration(model string) error {
+	_, err := resolveModelReasoning(model, os.Getenv("EVIE_REASONING"))
+	return err
 }
 
 func New(
@@ -285,19 +321,19 @@ func NewWithCompactorAndToolset(
 	owner TurnOwnership,
 	toolset tools.Toolset,
 ) *Session {
+	reasoning, configurationErr := resolveModelReasoning(profile.Model(), os.Getenv("EVIE_REASONING"))
 	return &Session{
-		client:    client,
-		compactor: compactor,
-		toolset:   toolset,
-		profile:   profile,
-		reasoning: resolveReasoning(
-			os.Getenv("EVIE_REASONING"),
-		),
-		scope:    scope,
-		history:  history,
-		owner:    owner,
-		composer: NewContextComposer(CanonicalRequestEstimator{}),
-		timing:   defaultTurnTiming,
+		client:           client,
+		compactor:        compactor,
+		toolset:          toolset,
+		profile:          profile,
+		reasoning:        reasoning,
+		configurationErr: configurationErr,
+		scope:            scope,
+		history:          history,
+		owner:            owner,
+		composer:         NewContextComposer(CanonicalRequestEstimator{}),
+		timing:           defaultTurnTiming,
 	}
 }
 
@@ -312,6 +348,9 @@ func assistantEventInput(msg openrouter.Message, usage *openrouter.TokenUsage) (
 		ToolCalls: make([]memory.ToolCall, len(msg.ToolCalls)),
 		Usage:     memoryUsage(usage),
 	}
+	for _, part := range msg.TextParts {
+		payload.TextParts = append(payload.TextParts, memory.AssistantTextPart{Text: part.Text, Phase: part.Phase, AfterToolCalls: part.AfterToolCalls})
+	}
 
 	for i, call := range msg.ToolCalls {
 		payload.ToolCalls[i] = memory.ToolCall{
@@ -321,6 +360,9 @@ func assistantEventInput(msg openrouter.Message, usage *openrouter.TokenUsage) (
 		}
 	}
 
+	if err := payload.ValidateTextParts(msg.Content); err != nil {
+		return memory.EventInput{}, err
+	}
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return memory.EventInput{}, fmt.Errorf("encode assistant payload: %w", err)

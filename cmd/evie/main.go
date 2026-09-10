@@ -139,6 +139,9 @@ func main() {
 		if model == "" {
 			model = agent.DefaultModel
 		}
+		if err := agent.ValidateModelConfiguration(model); err != nil {
+			log.Fatalf("invalid model configuration: %v", err)
+		}
 		profile, err := client.ResolveContextProfile(ctx, model)
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
@@ -239,6 +242,9 @@ func main() {
 		model := os.Getenv("EVIE_MODEL")
 		if model == "" {
 			model = agent.DefaultModel
+		}
+		if err := agent.ValidateModelConfiguration(model); err != nil {
+			log.Fatalf("invalid model configuration: %v", err)
 		}
 		profile, err := client.ResolveContextProfile(runtimeCtx, model)
 		if err != nil {

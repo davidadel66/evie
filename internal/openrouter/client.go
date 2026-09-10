@@ -1,10 +1,6 @@
-// Package openrouter is a minimal client for OpenRouter's OpenAI-compatible
-// chat-completions API. It owns the wire format: every type in schema.go
-// mirrors the JSON OpenRouter sends or expects, field for field. Nothing in
-// here knows about the agent harness — the harness imports this package,
-// never the reverse. If a second provider is ever added, this package is
-// the template: a sibling package translating the same ideas to different
-// wire types.
+// Package openrouter is a minimal client for OpenRouter's Chat Completions and
+// Responses APIs. It owns protocol encoding, streaming, and normalization into
+// the shared conversation types. It does not depend on the agent harness.
 package openrouter
 
 import (
@@ -60,22 +56,26 @@ func NewClient(key string) (*Client, error) {
 	}, nil
 }
 
-// ChatStream sends one chat-completions request with streaming enabled,
-// invoking onDelta with each content fragment as it arrives (print it
-// for live output), and returns the fully assembled ChatResponse — the
-// same shape Chat returns, so callers' downstream logic (history
-// append, tool-call dispatch) is identical for both methods. Tool-call
-// fragments are reassembled by index; OpenRouter's ": ..." keepalive
-// comment lines are skipped per the SSE spec; the stream ends at the
-// "[DONE]" sentinel.
 // StreamHandlers carries the live callbacks ChatStream invokes as fragments
 // arrive. A zero StreamHandlers streams nothing and assembles normally.
 type StreamHandlers struct {
-	OnContent   func(string)
+	OnContent func(string)
+	// An empty fragment starts the visible wait before any public summary.
+	// Private reasoning and encrypted continuation never enter this callback.
 	OnReasoning func(string)
 }
 
+// ChatStream selects the model's protocol and returns a complete normalized
+// response. Astra requires a successful Responses completion event; legacy
+// Chat streams finish at their [DONE] sentinel.
 func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers) (ChatResponse, error) {
+	if UsesResponses(r.Model) {
+		if r.prepared != nil && !r.prepared.stream {
+			return ChatResponse{}, streamError(StreamProviderError, errors.New("prepared request is not streaming"))
+		}
+		r.Stream = true
+		return c.responses(ctx, r, h)
+	}
 	r.Stream = true
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
@@ -249,6 +249,13 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 // into a single error return, so callers may rely on Choices[0] existing
 // whenever err is nil.
 func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
+	if UsesResponses(r.Model) {
+		if r.prepared != nil && r.prepared.stream {
+			return ChatResponse{}, errors.New("prepared request is streaming")
+		}
+		r.Stream = false
+		return c.responses(context.Background(), r, StreamHandlers{})
+	}
 	jsonBody, err := json.Marshal(r)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)

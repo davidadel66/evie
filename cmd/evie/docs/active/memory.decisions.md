@@ -1,5 +1,181 @@
 # memory - decisions
 
+- **2026-09-10 — Retirement also excludes corresponding conversation evidence from ordinary recall.**
+  David accepted retrieval interview Q19: retiring a saved memory prevents its
+  corresponding conversation evidence from bringing it back through automatic
+  recall or ordinary memory search. Explicit historical questions may retrieve
+  that evidence with its retired status clearly marked. Unrelated information
+  in the same conversation remains eligible. This extends reversible retirement
+  to retrieval of the corresponding evidence; it does not erase history or
+  introduce private conversations. Evidence association and filtering must be
+  made explicit and deterministically verified in the Stage 5 implementation
+  contract.
+
+- **2026-09-10 — Automatic Recall may include relevant Conversation Excerpts.**
+  David accepted retrieval interview Q17: the initial automatic lookup may
+  include a small, relevant selection of attributed conversation evidence even
+  when it never became an accepted Claim. The model need not first request a
+  separate conversation search to discover that evidence. Existing scope,
+  eligibility, provenance, budget, and remote-egress rules apply equally to
+  automatic and model-directed retrieval; recall does not accept memory.
+
+- **2026-09-10 — Newer conversation evidence may expose stale accepted memory.**
+  David accepted retrieval interview Q18: when relevant newer conversation
+  evidence contradicts accepted memory, account for it and surface the
+  discrepancy rather than silently choosing the saved Claim. For example,
+  "You last told me she moved to Chicago; the saved memory still says Boston."
+  Preserve source attribution and uncertainty; recency alone does not establish
+  truth, and answering does not update, accept, or supersede stored memory.
+
+- **2026-09-10 — Stage 5 does not introduce private conversations.**
+  David rejected the proposed transcript-privacy setting in retrieval interview
+  Q14. No private-conversation or Exclude from recall feature is required. This
+  supersedes Q11's provisional transcript-privacy caveat, while preserving
+  Workspace/project isolation, other sessions' session-scoped Claim exclusions,
+  and existing source eligibility, secret-handling, and remote-egress rules.
+
+- **2026-09-10 — Global history is available to Global conversations only.**
+  David accepted retrieval interview Q15: Global conversations may search
+  earlier Global conversations. Workspace and project conversations continue
+  receiving eligible accepted Global memories without thereby gaining access
+  to raw Global conversation history. A named General Workspace is still a
+  Workspace, not Global. See
+  [ADR 0066](../../../../docs/adr/0066-allow-conversation-recall-within-one-context-scope.md).
+
+- **2026-09-10 — Conversation search returns short excerpts with bounded expansion.**
+  David accepted retrieval interview Q16: return short excerpts first, then let
+  the model request neighboring messages when needed to understand the source.
+  Expansion uses the same access and source eligibility rules and stays within
+  enforced retrieval budgets. Exact window sizes remain an implementation and
+  evaluation choice; searching does not load whole conversations by default.
+
+- **2026-09-10 — Stage 5 may search earlier conversations in the same Context Scope.**
+  David accepted retrieval interview Q11: earlier conversations in the same
+  Workspace or project are eligible for scoped conversation search, while
+  unrelated areas and explicitly private/session-only material remain excluded.
+  This narrowly amends the umbrella's blanket other-session exclusion for
+  conversation evidence; it does not expose another session's session-scoped
+  Claims or change write/promotion authority. See
+  [ADR 0066](../../../../docs/adr/0066-allow-conversation-recall-within-one-context-scope.md).
+  The representation and default policy for transcript privacy, and eligibility
+  of earlier Global conversations, remain open. A semantic memory destination
+  is not by itself a transcript-privacy setting.
+
+- **2026-09-10 — Retrieval failure is distinct from an empty successful search.**
+  David accepted retrieval interview Q12: when memory search fails, Evie may
+  continue if the current conversation provides sufficient information, with
+  a small Memory unavailable indicator. When the answer depends on unavailable
+  memory, explain the limitation instead of guessing. Never represent a failed
+  search as evidence that David did not say or remember something.
+
+- **2026-09-10 — Answers retain references to their original retrieval evidence.**
+  David accepted retrieval interview Q13: preserve references to the exact
+  evidence supplied for an answer so a later explanation can distinguish the
+  original basis from corrected current state. Source inspection reapplies
+  current access rules; revoked access produces an unavailable-source state,
+  not a bypass. Exact receipt fields and representation remain open.
+
+- **2026-09-10 — Stage 5 investigation uses model judgment within enforced resource limits.**
+  David accepted revised retrieval interview Q5 after the episodic-retrieval
+  research clarification. The model judges whether the evidence is sufficient
+  and whether another targeted search would help. Code enforces scope and
+  resource limits rather than prescribing a rigid search sequence or a fixed
+  number of unsuccessful searches. When a budget is exhausted, report supported
+  findings and remaining gaps; do not treat missing evidence as an established
+  answer. Exact budget values and accounting remain open.
+
+- **2026-09-10 — Stage 5 exposes a scoped read-only conversation-search tool.**
+  David accepted retrieval interview Q9: the model may request original wording
+  or missing context through a read-only conversation-search tool within
+  explicitly permitted scopes. This complements accepted-memory retrieval;
+  it does not require a fixed semantic-first search sequence. The exact
+  eligibility of earlier sessions and any amendment to existing session-scope
+  exclusions remain open. Tool availability alone does not widen access.
+
+- **2026-09-10 — The retrieval UI distinguishes accepted memory from conversation evidence.**
+  David accepted retrieval interview Q10: the compact memory card labels
+  results "Accepted memory" or "Conversation excerpt," each with inspectable
+  sources. These labels distinguish accepted knowledge from attributed things
+  that were said; a Conversation Excerpt is not automatically an accepted Claim.
+
+- **2026-09-10 — Conversation evidence may support an attributed answer without becoming an accepted Claim.**
+  David accepted retrieval interview Q8: when an eligible conversation excerpt
+  supports an answer, Evie may report what was said even if it never became an
+  accepted Claim. "We are considering September" supports "you mentioned
+  considering September," not a confirmed September trip. Preserve attribution
+  and uncertainty; answering does not silently create or promote memory.
+  This settles evidence use, not the mechanism or access policy for searching
+  past sessions. David requested a MemGPT/research comparison before settling
+  that retrieval boundary; Q5 remains open.
+
+- **2026-09-10 — Stage 5 automatic recall starts on a new user message and reuses valid evidence.**
+  David accepted retrieval interview Q4: automatic recall begins when a new
+  user message arrives. Subsequent model calls within that turn may reuse the
+  retrieved evidence while it remains valid. New information that changes what
+  is needed triggers refresh, and targeted searches may fill specific gaps.
+  Request recomposition does not by itself require rerunning recall. Exact
+  validity checks and refresh triggers remain dependent design work.
+
+- **2026-09-10 — Stage 5 selects focused evidence rather than filling the context budget.**
+  David accepted retrieval interview Q6: discovery may search broadly enough to
+  find useful evidence, but the answering model receives a focused selection.
+  Available context space is not a reason to include weakly related material.
+  Include uncertain evidence when it matters and label its uncertainty. Exact
+  ranking and selection thresholds remain subject to evaluation.
+
+- **2026-09-10 — Stage 5 memory use should have inspectable, unobtrusive sources.**
+  David accepted retrieval interview Q7's source-visibility direction: routine
+  preferences are used naturally, while answers about past facts or decisions
+  provide inspectable supporting references. He prefers a compact presentation
+  similar to tool-call UI. Exact activity-card content, grouping, and display
+  behavior remain open. Q5 search-stopping and budget-exhaustion behavior is
+  not yet settled.
+
+- **2026-09-10 — Stage 5 combines small automatic recall with bounded deeper searches.**
+  David accepted retrieval interview Q3: begin with a small automatic retrieval
+  and let the model request additional targeted read-only searches when evidence
+  is missing. These searches do not require permission for each invocation;
+  David accepts additional investigation time for difficult questions. Both
+  paths retain the same scope, eligibility, provenance, and remote-egress rules.
+  Search effort must be bounded, with exact budgets, exhaustion behavior, and
+  initial-retrieval cadence still to be decided. This grants no new memory-write
+  or external-action authority.
+
+- **2026-09-10 — Stage 5 resolves references across topic changes and clarifies material ambiguity.**
+  David accepted revised retrieval interview Q2: recall may use relevant earlier
+  conversation, summaries, and eligible memory to understand the current
+  request. It is not restricted to the latest message, and an intervening topic
+  change does not make an earlier subject ineligible. Evie should first try to
+  resolve a reference from available evidence, then ask a focused clarification
+  when multiple plausible interpretations would produce materially different
+  answers. For example, returning to "what present would she like?" after
+  debugging may refer to the earlier discussion of David's mother; if both his
+  mother and sister remain plausible, Evie asks which person he means. A model's
+  proposed interpretation is not established fact and cannot widen scope.
+  Exact input selection, search effort, refresh rules, and evaluation thresholds
+  remain open.
+
+- **2026-09-10 — Stage 5 recall supports ordinary requests automatically.**
+  David accepted retrieval interview Q1: relevant accepted memories should
+  inform ordinary requests without an explicit request to remember or recall.
+  For example, a saved vegetarian preference should inform dinner suggestions
+  in a new conversation without David repeating it. This Automatic Recall
+  remains subject to the existing scope, eligibility, and remote-egress rules.
+  Retrieval cadence, query inputs, refresh behavior, and selection-quality
+  contracts remain open; this decision records intended behavior, not approval
+  to implement the remaining Stage 5 design.
+
+- **2026-09-10 — Astra Responses amends compaction settings and public replay.**
+  The approved [Astra migration decisions](gpt-6-astra.decisions.md) select low
+  reasoning without temperature for Astra compaction, retaining all other manual
+  and automatic compaction boundaries. This supersedes the August 30
+  no-reasoning/zero-temperature requirements only for Astra. Optional public
+  assistant text parts preserve phases and ordering across restart; opaque
+  continuation remains ephemeral under the August 23 persistence decision.
+  Context receipts measure immutable protocol-specific request bytes with new
+  composer/estimator identifiers. Nullable usage, tool authority, memory scope,
+  and historical event/summary validity remain unchanged.
+
 - **2026-09-06 — owner Usage analytics is authorized separately.**
   See [usage.decisions.md](usage.decisions.md) and [usage.spec.md](usage.spec.md).
   This narrowly extends the 2026-08-25 aggregation/frontend exclusion for

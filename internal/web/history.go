@@ -13,6 +13,8 @@ type historyApproval struct {
 	RequestID string `json:"reqId"`
 }
 type historyItem struct {
+	Turn      *activityTurn    `json:"turn,omitempty"`
+	Phase     string           `json:"phase,omitempty"`
 	Kind      string           `json:"kind"`
 	Key       string           `json:"key"`
 	Text      string           `json:"text,omitempty"`
@@ -89,13 +91,32 @@ func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Requ
 func projectHistory(events []memory.Event) ([]historyItem, error) {
 	items := make([]historyItem, 0)
 	tools := map[memory.ExecutionID]int{}
+	roots := map[memory.EventID]*activityTurn{}
+	var current *activityTurn
 	for _, e := range events {
+		if e.Type == memory.EventUserMessage {
+			current = &activityTurn{ID: string(e.ID), StartedAt: activityTimestamp(e.RecordedAt), Status: "incomplete"}
+		}
+		turn := roots[e.ParentID]
+		if turn == nil {
+			turn = current
+		} // Legacy records without parent links.
+		roots[e.ID] = turn
+		first := len(items)
 		switch e.Type {
 		case memory.EventUserMessage:
 			items = append(items, historyItem{Kind: "user", Key: string(e.ID), Text: e.Content})
 		case memory.EventAssistantMessage:
-			if e.Content != "" {
-				items = append(items, historyItem{Kind: "assistant", Key: string(e.ID), Text: e.Content})
+			parts, terminal, err := assistantActivity(e)
+			if err != nil {
+				return nil, err
+			}
+			for i, part := range parts {
+				items = append(items, historyItem{Kind: "assistant", Key: string(e.ID) + "-part-" + strconv.Itoa(i), Text: part.Text, Phase: part.Phase})
+			}
+			if terminal && turn != nil {
+				turn.Status = "complete"
+				turn.FinishedAt = activityTimestamp(e.RecordedAt)
 			}
 		case memory.EventToolIntent:
 			var p memory.ToolIntentPayload
@@ -103,7 +124,7 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 				return nil, err
 			}
 			tools[e.ExecutionID] = len(items)
-			items = append(items, historyItem{Kind: "tool", Key: string(e.ID), ID: p.Call.ID, Name: p.Call.Name, Args: p.Call.Arguments})
+			items = append(items, historyItem{Kind: "tool", Key: string(e.ID), ID: p.Call.ID, Name: p.Call.Name, Args: p.Call.Arguments, StartedAt: activityTimestamp(e.RecordedAt)})
 		case memory.EventToolSucceeded, memory.EventToolFailed, memory.EventToolCancelled:
 			if i, ok := tools[e.ExecutionID]; ok {
 				result := e.Content
@@ -123,7 +144,14 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 				items[i].Approval = &historyApproval{State: state}
 			}
 		case memory.EventTurnFailed, memory.EventTurnInterrupted:
+			if turn != nil {
+				turn.Status = "incomplete"
+				turn.FinishedAt = activityTimestamp(e.RecordedAt)
+			}
 			items = append(items, historyItem{Kind: "notice", Key: string(e.ID), Text: "This turn did not complete.", Tone: "warning"})
+		}
+		for i := first; i < len(items); i++ {
+			items[i].Turn = turn
 		}
 	}
 	for i := range items {

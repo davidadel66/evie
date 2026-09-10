@@ -147,6 +147,9 @@ func (s *Session) runOwnedTurn(
 	}
 	rendered := &progress.rendered
 	iteration := 0
+	// Opaque transport state belongs only to this live turn. Durable events
+	// remain sufficient to start a new turn after restart or cancellation.
+	continuation := make(map[memory.EventID][]json.RawMessage)
 	for {
 		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
@@ -180,6 +183,7 @@ func (s *Session) runOwnedTurn(
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+			Continuation: continuation,
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
 		if err != nil {
@@ -285,7 +289,7 @@ func (s *Session) runOwnedTurn(
 							rendered.mu.Unlock()
 							return
 						}
-						rendered.reasoning = true
+						rendered.reasoning = rendered.reasoning || text != ""
 						rendered.reasoningOpen = true
 						rendered.mu.Unlock()
 						ev.Reasoning(text)
@@ -370,6 +374,9 @@ func (s *Session) runOwnedTurn(
 			coordinator.finishSuccessBoundary()
 			progress.foreground.terminal(assistantCommitStarted, "success")
 		} else {
+			if openrouter.UsesResponses(req.Model) {
+				continuation[assistantEvent.ID] = msg.ResponseItems
+			}
 			coordinator.finishCommitBoundary(memory.StageToolPrepare)
 		}
 		rendered.mu.Lock()
@@ -377,7 +384,7 @@ func (s *Session) runOwnedTurn(
 		rendered.mu.Unlock()
 
 		if len(msg.ToolCalls) == 0 {
-			s.emitCommittedAssistant(ev, rendered, msg.Content)
+			s.emitCommittedAssistant(ev, rendered, assistantEvent)
 			return nil
 		}
 
@@ -386,7 +393,7 @@ func (s *Session) runOwnedTurn(
 		// when a terminal cause was reserved at the commit boundary. The call is
 		// synchronous after provider callback lifetime closure, so it completes
 		// before Send returns and before any frontend error/turn_done wrapper.
-		s.emitCommittedAssistant(ev, rendered, msg.Content)
+		s.emitCommittedAssistant(ev, rendered, assistantEvent)
 		if err := s.observeTurnContext(coordinator); err != nil {
 			return err
 		}
@@ -567,7 +574,7 @@ func admitApproval(
 func (s *Session) emitCommittedAssistant(
 	ev Events,
 	rendered *renderedOutput,
-	content string,
+	event memory.Event,
 ) {
 	rendered.mu.Lock()
 	closeReasoning := rendered.reasoningOpen
@@ -576,7 +583,11 @@ func (s *Session) emitCommittedAssistant(
 	if closeReasoning {
 		ev.ReasoningDone()
 	}
-	ev.AssistantDone(content)
+	if activity, ok := ev.(ActivityEvents); ok {
+		activity.AssistantCommitted(event)
+	} else {
+		ev.AssistantDone(event.Content)
+	}
 }
 
 func (s *Session) observeTurnContext(coordinator *turnCoordinator) error {

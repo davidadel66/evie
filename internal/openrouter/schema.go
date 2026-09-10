@@ -17,6 +17,16 @@ type Message struct {
 	Content          string          `json:"content,omitempty"`
 	ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
 	ToolCallID       string          `json:"tool_call_id,omitempty"`
+	// TextParts retain public message boundaries/phases. ResponseItems are
+	// ephemeral transport continuation, never serialized as Chat or evidence.
+	TextParts     []TextPart        `json:"-"`
+	ResponseItems []json.RawMessage `json:"-"`
+}
+
+type TextPart struct {
+	Text           string `json:"text"`
+	Phase          string `json:"phase,omitempty"`
+	AfterToolCalls int    `json:"after_tool_calls,omitempty"`
 }
 
 // Choice is one candidate completion in a response; we only ever use the
@@ -107,9 +117,11 @@ type TokenUsage struct {
 
 // ReasoningConfig opts a request into reasoning. Effort ("low", "medium",
 // "high") implies enabled; Enabled alone asks for the provider's default.
+// Summary requests public reasoning summaries for Responses conversations.
 type ReasoningConfig struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Effort  string `json:"effort,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 // ChatRequest is the body of one chat-completions call: the full
@@ -125,6 +137,7 @@ type ChatRequest struct {
 	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 	Temperature *float64         `json:"temperature,omitempty"`
 	MaxTokens   int64            `json:"max_tokens,omitempty"`
+	prepared    *responseEncoding
 }
 
 // streamChunk is one SSE "data:" event in a streaming response. Deltas

@@ -1,10 +1,6 @@
-// The thinking block. While reasoning streams it's a card that stays out of
-// the way of nothing; once done it sheds the chrome and becomes a bare
-// one-liner — "Thought for 4s" — that unfolds the raw text on click. The
-// body is never markdown: thinking is a scratchpad, and half-finished lists
-// would jump around through a renderer. Provider whitespace is collapsed at
-// render time: some reasoning streams separate token fragments with newlines,
-// which pre-wrap turns into a one-word-per-line column.
+// Provider reasoning activity can arrive without public text. Keep its timer
+// visible, and offer expansion only when text is available (Astra supplies a
+// public summary). Plain text avoids layout jumps from partial markdown.
 
 import { useState } from "react";
 import { ChevronDown } from "../ui/Icon";
@@ -16,22 +12,38 @@ export function Reasoning({ item }: Props) {
   // null means David hasn't touched it: follow the stream (open live, closed
   // when done). An explicit click sticks and is never overridden.
   const [manual, setManual] = useState<boolean | null>(null);
-  const open = manual ?? item.streaming;
+  const summary = item.text.replace(/\s+/g, " ").trim();
+  const hasText = summary.length > 0;
+  const open = hasText && (manual ?? item.streaming);
+  const label = item.streaming ? "Thinking…" : `Thought for ${formatDuration(item.ms)}`;
+  const durationHint = "Elapsed wait for response text, measured in this browser. Includes provider and network time.";
 
-  const header = (
-    <div
+  const header = hasText ? (
+    <button
+      type="button"
+      aria-expanded={open}
+      title={durationHint}
       onClick={() => setManual(!open)}
-      className="flex cursor-pointer items-center gap-2 px-[10px] py-[5px]"
+      className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-[10px] py-[5px] text-left"
     >
       <span
-        className="text-ghost transition-transform duration-150"
+        className="text-ghost shrink-0 transition-transform duration-150"
         style={{ transform: open ? "rotate(180deg)" : undefined }}
       >
         <ChevronDown size={12} />
       </span>
-      <span className="text-muted-text font-sans text-[11.5px]">
-        {item.streaming ? "Thinking…" : `Thought for ${formatDuration(item.ms)}`}
+      <span className="text-muted-text min-w-0 truncate font-sans text-[11.5px]">
+        {item.streaming ? label : summary}
       </span>
+      {!item.streaming && (
+        <span className="text-muted-text shrink-0 font-sans text-[11.5px]">
+          {`- ${formatDuration(item.ms)}`}
+        </span>
+      )}
+    </button>
+  ) : (
+    <div title={durationHint} className="text-muted-text px-[10px] py-[5px] font-sans text-[11.5px]">
+      {label}
     </div>
   );
 

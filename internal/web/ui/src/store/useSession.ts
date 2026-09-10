@@ -168,9 +168,9 @@ export function useSession(sessionId?: string): Session {
         message,
         (ev) => {
           if (ctl.signal.aborted) return;
-          // error events are banner state, not transcript state.
+          // Keep the banner and stop activity if the server reports an error.
           if (ev.type === "error") setProblem(ev.message);
-          else enqueue(ev);
+          enqueue(ev);
         },
         ctl.signal,
         sessionId,
@@ -184,6 +184,7 @@ export function useSession(sessionId?: string): Session {
         .catch((err: unknown) => {
           if (ctl.signal.aborted) return;
           flush(false);
+          setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
           setProblem(describe(err));
           setStatus("error");
         });

@@ -99,6 +99,7 @@ func compactionAcceptanceProfile(t *testing.T, model string, working int64) open
 }
 
 func TestDurableCompactionChainSurvivesSQLiteRestart(t *testing.T) {
+	t.Setenv("EVIE_REASONING", "low")
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "evie.db")
 	db, err := eviedb.OpenDBAt(path)
@@ -246,7 +247,7 @@ func TestDurableCompactionChainSurvivesSQLiteRestart(t *testing.T) {
 		t.Fatal("second compaction did not append a replacement generation")
 	}
 
-	restartProfile := compactionAcceptanceProfile(t, "resume/model", 240000)
+	restartProfile := compactionAcceptanceProfile(t, openrouter.AstraModel, 240000)
 	beforeRestart := agent.NewWithCompactor(
 		&compactionAcceptanceClient{}, &compactionAcceptanceClient{}, restartProfile, history,
 		sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
@@ -327,7 +328,7 @@ func TestDurableCompactionChainSurvivesSQLiteRestart(t *testing.T) {
 	if err := restartedAgent.Send(ctx, "Execute the next action.", nilAgentEvents{}, nil); err != nil {
 		t.Fatalf("send after restart: %v", err)
 	}
-	requestJSON, err := json.Marshal(conversation.requests[0])
+	requestJSON, err := openrouter.RequestBytes(conversation.requests[0])
 	if err != nil {
 		t.Fatal(err)
 	}

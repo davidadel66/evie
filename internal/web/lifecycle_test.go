@@ -61,7 +61,10 @@ func TestServeListenerContextKeepsTurnAliveAfterBrowserDisconnect(t *testing.T) 
 	go func() {
 		resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(request)
 		if resp != nil {
-			_ = resp.Body.Close()
+			// Turn admission now flushes headers before the provider starts.
+			// Keep reading the stream until the simulated browser disconnects.
+			_, readErr := io.Copy(io.Discard, resp.Body)
+			err = errors.Join(err, readErr, resp.Body.Close())
 		}
 		response <- err
 	}()

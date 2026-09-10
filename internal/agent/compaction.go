@@ -56,6 +56,9 @@ func (e *CompactionError) Unwrap() error { return e.Err }
 
 // Compact creates or advances the manually requested accepted rolling summary.
 func (s *Session) Compact(ctx context.Context) (result CompactionResult, retErr error) {
+	if s.configurationErr != nil {
+		return CompactionResult{}, s.configurationErr
+	}
 	if !s.mu.TryLock() {
 		return CompactionResult{}, ErrBusy
 	}
@@ -351,11 +354,17 @@ func selectManualCompaction(
 
 func compactionUsableInputBytes(profile openrouter.ContextProfileDiagnostics) (int64, error) {
 	ceiling := min(profile.HardWindowTokens, profile.WorkingTokens)
+	reserve := CompactionOutputReserveTokens
+	if openrouter.UsesResponses(profile.ConfiguredModel) {
+		// Astra's route-safe ceiling may encode a prompt cap plus the
+		// conversation reserve. A smaller compactor reserve must not expand it.
+		reserve = max(reserve, profile.OutputReserveTokens)
+	}
 	if ceiling <= 0 || profile.EstimationMarginTokens <= 0 ||
-		CompactionOutputReserveTokens+profile.EstimationMarginTokens >= ceiling {
+		reserve >= ceiling-profile.EstimationMarginTokens {
 		return 0, errors.New("context profile has no usable compactor input budget")
 	}
-	return ceiling - CompactionOutputReserveTokens - profile.EstimationMarginTokens, nil
+	return ceiling - reserve - profile.EstimationMarginTokens, nil
 }
 
 func compactionRootTurns(events []memory.Event) ([]compactionRootTurn, error) {
@@ -462,14 +471,19 @@ func renderCompactionRequest(
 	}
 	profileDiagnostics := profile.Diagnostics()
 	temperature := 0.0
-	return openrouter.ChatRequest{
+	request := openrouter.ChatRequest{
 		Model: profileDiagnostics.ConfiguredModel,
 		Messages: []openrouter.Message{
 			{Role: "system", Content: compactionSystemPrompt},
 			{Role: "user", Content: CompactionTranscriptOpen + "\n" + string(encoded) + "\n" + CompactionTranscriptClose},
 		},
 		Stream: true, Temperature: &temperature, MaxTokens: CompactionOutputReserveTokens,
-	}, nil
+	}
+	if openrouter.UsesResponses(request.Model) {
+		request.Temperature = nil
+		request.Reasoning = &openrouter.ReasoningConfig{Effort: "low"}
+	}
+	return openrouter.PrepareRequest(request)
 }
 
 func reconstructCompactionChain(events []memory.Event) (*ContextSummary, []acceptedCompaction, error) {

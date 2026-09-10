@@ -30,6 +30,23 @@ func validContextSnapshotPayload(first, last memory.Event) memory.ContextSnapsho
 	}
 }
 
+func TestAssistantAppendRejectsTextPartsThatDifferFromContent(t *testing.T) {
+	db := newTestDB(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	session, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.appendEventForTest(ctx, session.ID, memory.EventInput{
+		Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "public answer",
+		Payload: json.RawMessage(`{"text_parts":[{"text":"different","phase":"final_answer"}]}`),
+	})
+	if err == nil {
+		t.Fatal("inconsistent public text was persisted")
+	}
+}
+
 func validContextCompactionSummary() string {
 	var summary strings.Builder
 	for _, heading := range memory.ContextCompactionSectionHeadings() {

@@ -5,6 +5,11 @@ Stage 4 first-round design choices accepted on 2026-09-04; dependent contracts,
 model selection, and implementation remain open. See [decisions](memory.decisions.md)
 and the [design interview](../research/memory-stage-4-design-questions.md).
 
+Stage 5 retrieval interview Q1–Q19 was accepted on 2026-09-10. The dedicated
+[retrieval specification](memory-stage-5-retrieval.spec.md) consolidates those
+decisions, the proposed acceptance seams, and engineering deliverables that
+must be resolved before their dependent implementation.
+
 ## Purpose
 
 Give Evie durable, continuously updated, local memory while keeping its model
@@ -281,15 +286,27 @@ Claims use one of these scopes:
 - `session:<id>`: temporary semantic state that should not survive task closure
   without promotion.
 
-Allowed retrieval scopes are exact:
+Allowed Semantic Memory retrieval scopes are exact:
 
 - a global session: `session:<id>` plus `global`;
 - a Workspace session: `session:<id>` plus its one `workspace:<id>` plus
   `global`;
 - a project session: `session:<id>` plus its one `project:<id>` plus `global`.
 
-Other sessions, Workspaces, and projects are always excluded by the storage
-query, not by a model instruction. A global claim may reference only global
+Other sessions' session-scoped Claims and other Workspaces/projects are excluded
+by the storage query, not by a model instruction. Stage 5 conversation search
+may additionally retrieve eligible excerpts from earlier conversations in the
+same Workspace or project. Global conversations may search earlier Global
+conversations. Access to accepted Global memories does not give Workspace or
+project conversations access to raw Global conversation history. A named
+General Workspace is still a Workspace, not Global. Stage 5 does not introduce
+a private-conversation or Exclude from recall setting. Existing source
+eligibility, secret-handling, and remote-egress rules still apply. This exception
+does not promote Claims, widen write authority, or permit cross-area history
+search. See
+[ADR 0066](../../../../docs/adr/0066-allow-conversation-recall-within-one-context-scope.md).
+
+A global claim may reference only global
 entities. A Workspace or project claim may additionally reference entities in
 that same Context Scope, and a session claim may additionally reference entities
 in that session and its selected Context Scope. Promotion creates any required
@@ -503,6 +520,11 @@ active -> retired -> active
 - Model-detected corrections and contradictions remain candidates. Automatic
   admission is disabled until an evaluation-backed allowlist is approved.
 - `retired` means hidden from normal retrieval but reversible.
+  Stage 5 also excludes the corresponding conversation evidence from automatic
+  recall and ordinary memory search so the original statement cannot bypass
+  retirement. Explicit historical questions may retrieve that evidence with
+  its retired status clearly marked; unrelated information in the same
+  conversation remains eligible. This is not deletion of episodic history.
 - Restore uses compare-and-set against the latest `retired` state and fails if an
   intervening supersession exists.
 - Expiry is computed from the requested valid time; it is not a lifecycle write.
@@ -763,8 +785,10 @@ injection into a remote request is disabled unless David explicitly enables
 an egress-safe projection that excludes opaque payloads/reasoning/raw structured
 event data, applies the existing file/database source fences, scans supplemental
 memory and source excerpts for secrets, and records only IDs/hashes in
-diagnostics. While opt-in is off, all model-facing semantic/procedural reads,
-including memory tools and procedural context, are withheld or rejected; direct
+diagnostics. While opt-in is off, all model-facing semantic/procedural reads and
+retrieved conversation evidence, including memory tools, automatic excerpts,
+conversation search, neighboring-message expansion, and procedural context,
+are withheld or rejected; direct
 local CLI inspection remains available. Supporting a local conversational model
 requires a future provider-neutral client boundary and is out of scope here.
 
@@ -832,6 +856,50 @@ superseded or out-of-scope claim.
 
 Retrieval follows LongMemEval's index -> retrieve -> read separation.
 
+Automatic Recall brings relevant accepted memories and attributed Conversation
+Excerpts into ordinary requests without requiring David to explicitly ask Evie
+to remember or recall them. The initial lookup may include a small, relevant
+selection of conversation evidence even when it never became an accepted Claim;
+discovery does not require the model to first request a separate history search.
+For example, an eligible saved vegetarian preference should inform dinner
+suggestions in a new conversation without being repeated. Existing scope,
+eligibility, and remote-egress requirements still apply. Exact query-input
+selection, refresh checks, and selection-quality contracts remain open.
+
+Begin with a small automatic retrieval. When evidence is missing, the model may
+request additional targeted read-only memory searches without asking David for
+permission on each invocation. Deeper investigation may take additional time;
+both retrieval paths enforce the same scope, eligibility, provenance, and
+remote-egress rules. Search effort is bounded. The model judges whether it has
+sufficient evidence and whether another targeted search would help. Code
+enforces resource and access limits rather than prescribing a rigid search
+sequence or a fixed number of unsuccessful searches. On budget exhaustion,
+report supported findings and remaining gaps without inventing missing
+evidence. Exact budget values and accounting remain open.
+
+The model also has a read-only conversation-search tool to request original
+wording or missing context from explicitly permitted scopes. It complements
+accepted-memory retrieval without requiring a fixed semantic-first sequence.
+Earlier conversations in the same Workspace or project, and earlier Global
+conversations for a Global session, may supply eligible excerpts under the scope
+rules above. Tool availability does not widen access. Search returns short
+excerpts first. The model may request neighboring messages when additional
+context is needed, within enforced retrieval budgets and the same access and
+source eligibility rules. Exact window sizes are subject to evaluation;
+search does not load whole conversations by default.
+
+Automatic recall starts when a new user message arrives. Subsequent model calls
+within that turn may reuse retrieved evidence while it remains valid. Refresh
+when new information changes what evidence is needed; targeted searches can
+fill specific gaps. Rebuilding the request does not itself require rerunning
+recall. Exact validity checks and refresh triggers remain open.
+
+A failed memory search is distinct from a successful search with no matches.
+If current conversation evidence is sufficient, Evie may continue with a small
+Memory unavailable indicator. If the answer depends on unavailable memory,
+explain that limitation instead of guessing. A search failure does not establish
+that David never supplied the information.
+
 ### Query planning
 
 A `QueryPlan` contains:
@@ -849,6 +917,17 @@ Deterministic parsing handles explicit IDs, known projects, and RFC3339/calendar
 dates. A local model may propose ambiguous entity or temporal interpretations,
 but cannot widen scope.
 
+Recall may use relevant earlier conversation, compaction summaries, and eligible
+memory to interpret the current request. It is not restricted to the latest
+message: returning to a person or subject after an intervening topic change
+must remain possible. Evie first tries to resolve references from available
+evidence. If multiple plausible interpretations remain and would produce
+materially different answers, it asks a focused clarification rather than
+treating a model's first interpretation as established fact. For example,
+"what present would she like?" after a debugging discussion can refer back to
+David's mother; if both his mother and sister remain plausible, Evie asks which
+person he means. Exact input selection and bounded search effort remain open.
+
 ### Candidate generation
 
 Run independent generators concurrently with a shared context deadline:
@@ -865,6 +944,14 @@ the signal that retrieved it.
 
 ### Fusion and reranking
 
+Conversation evidence follows the retirement rules above, including during
+neighboring-message expansion. Define the association between a retired Claim
+and its corresponding evidence in the implementation contract and enforce the
+exclusion before rendering. Verify that ordinary recall cannot bypass retirement
+through excerpt search or expansion, that explicit historical retrieval labels
+retired evidence, and that unrelated evidence in the same conversation remains
+eligible.
+
 Apply hard scope, lifecycle, authority, and temporal filters first. Then combine
 candidate rankings using Reciprocal Rank Fusion initially. Rerank by:
 
@@ -877,10 +964,30 @@ candidate rankings using Reciprocal Rank Fusion initially. Rerank by:
 - recency only when the query asks for current/recent state;
 - evidence diversity under the context budget.
 
+Candidate discovery may search broadly enough to find useful evidence, while
+the answering model receives a focused selection. Do not fill the context budget
+with weakly related material merely because space is available. Include
+uncertain evidence when it matters and clearly label its uncertainty. Exact
+selection thresholds remain subject to evaluation.
+
 Do not collapse contradictory active claims into one answer. Render both with
 their sources or ask David to resolve them.
 
+When relevant newer conversation evidence contradicts an accepted Claim,
+account for that evidence and surface the discrepancy. For example, accepted
+memory says David's mother lives in Boston, but he later said she moved to
+Chicago: "You last told me she moved to Chicago; the saved memory still says
+Boston." Preserve attribution and uncertainty; recency alone does not establish
+truth. Answering does not update, accept, or supersede stored memory.
+
 ### Reading context
+
+An eligible conversation excerpt may support an attributed answer even when it
+has not become an accepted Claim. Preserve what the source actually establishes:
+"we are considering September" supports "you mentioned considering September,"
+not a confirmed trip date. Such use does not silently accept or promote memory.
+Past-session retrieval follows the scope rules above. This evidence-use rule
+does not independently widen access.
 
 The model receives a bounded JSON block containing:
 
@@ -899,6 +1006,20 @@ as quoted evidence, assess sufficiency, and abstain when unsupported. JSON
 escaping and role placement reduce accidental instruction interpretation but do
 not make prompt injection impossible; scope, write authority, and tool approval
 remain mechanically enforced outside the model.
+
+Routine preference use should not require narration of every lookup. Answers
+about past facts or decisions provide unobtrusive, inspectable source
+references. The preferred retrieval-activity presentation is compact and
+similar to tool-call UI. Label results "Accepted memory" or "Conversation
+excerpt," each with inspectable sources, so attributed statements are
+distinguished from accepted knowledge. Other card content, grouping, and display
+behavior remain open.
+
+Retain references to the exact evidence supplied for each answer so later
+inspection can explain its original basis without replacing it with current
+search results. Distinguish original evidence from subsequently corrected
+state. Reapply current source-access rules on inspection; revoked sources are
+shown as unavailable. Exact receipt fields and representation remain open.
 
 ## Vector Retrieval
 

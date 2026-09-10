@@ -1,0 +1,228 @@
+{
+  "status": "published",
+  "parent": {
+    "number": 155,
+    "url": "https://github.com/davidadel66/evie/issues/155",
+    "title": "Subagents: Preset-composed foreground research with Kernel supervision"
+  },
+  "workspace_followup": "https://github.com/davidadel66/evie/issues/71",
+  "tickets": [
+    {
+      "id": 1,
+      "slug": "restricted-research-composition",
+      "title": "Compose and reopen the restricted research Agent Preset",
+      "blocked_by": [],
+      "stories": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        47,
+        50
+      ],
+      "summary": "A research session receives exactly the Web capabilities selected by its preset, and reopening its receipt preserves those restrictions.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/01-restricted-research-composition.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/01-restricted-research-composition.md",
+      "published_title": "Subagents: Compose and reopen the restricted research Agent Preset",
+      "issue_number": 169,
+      "issue_url": "https://github.com/davidadel66/evie/issues/169",
+      "issue_database_id": 5416404912,
+      "verified_blocking_issue_numbers": [],
+      "published_body_sha256": "b2702299c12ae1ecd552c8c7d759e1733d646103e5cff2dd647471b41dd01497"
+    },
+    {
+      "id": 2,
+      "slug": "isolated-assignment-context",
+      "title": "Run delegated sessions with isolated assignment context",
+      "blocked_by": [],
+      "stories": [
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        25,
+        47,
+        48
+      ],
+      "summary": "A child receives its worker role, selected assignment context, and its own history, with no automatic parent history, memory recall, or Task projection.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/02-isolated-assignment-context.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/02-isolated-assignment-context.md",
+      "published_title": "Subagents: Run delegated sessions with isolated assignment context",
+      "issue_number": 170,
+      "issue_url": "https://github.com/davidadel66/evie/issues/170",
+      "issue_database_id": 5416405197,
+      "verified_blocking_issue_numbers": [],
+      "published_body_sha256": "e358ea3dda1d3fe3bcf209e11768ac195427a292a5249c545663cf481e21f372"
+    },
+    {
+      "id": 3,
+      "slug": "delegated-memory-provenance",
+      "title": "Exclude delegated assignments from owner-memory compilation",
+      "blocked_by": [],
+      "stories": [
+        24,
+        25,
+        49
+      ],
+      "summary": "Memory processing cannot mistake agent-authored assignments or child findings for owner assertions.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/03-delegated-memory-provenance.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/03-delegated-memory-provenance.md",
+      "published_title": "Subagents: Exclude delegated assignments from owner-memory compilation",
+      "issue_number": 171,
+      "issue_url": "https://github.com/davidadel66/evie/issues/171",
+      "issue_database_id": 5416405438,
+      "verified_blocking_issue_numbers": [],
+      "published_body_sha256": "1ae9e3caebb66937140fbbccc3e13cce258ac980da7a52a35b7ccf097c42176c"
+    },
+    {
+      "id": 4,
+      "slug": "bounded-foreground-assignment",
+      "title": "Complete one bounded durable foreground research assignment",
+      "blocked_by": [
+        1,
+        2,
+        3
+      ],
+      "stories": [
+        1,
+        2,
+        14,
+        15,
+        16,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        37,
+        38,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49
+      ],
+      "summary": "A parent delegates through the real composed runtime, one child researches, and persisted findings return to the parent without duplicate execution.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/04-bounded-foreground-assignment.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/04-bounded-foreground-assignment.md",
+      "published_title": "Subagents: Complete one bounded durable foreground research assignment",
+      "issue_number": 172,
+      "issue_url": "https://github.com/davidadel66/evie/issues/172",
+      "issue_database_id": 5416405691,
+      "verified_blocking_issue_numbers": [
+        169,
+        170,
+        171
+      ],
+      "published_body_sha256": "f2cec6d7acc498dad62ce9dce671c5f5b080dc39904eb85fb39d9409a447c674"
+    },
+    {
+      "id": 5,
+      "slug": "parent-authority-lifecycle",
+      "title": "End child execution when parent authority ends",
+      "blocked_by": [
+        4
+      ],
+      "stories": [
+        17,
+        35,
+        36,
+        37,
+        38,
+        42,
+        43,
+        49
+      ],
+      "summary": "Cancellation, lost ownership, revocation, and shutdown stop child activity while preserving whichever terminal outcome was durably accepted.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/05-parent-authority-lifecycle.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/05-parent-authority-lifecycle.md",
+      "published_title": "Subagents: End child execution when parent authority ends",
+      "issue_number": 173,
+      "issue_url": "https://github.com/davidadel66/evie/issues/173",
+      "issue_database_id": 5416406079,
+      "verified_blocking_issue_numbers": [
+        172
+      ],
+      "published_body_sha256": "5e3a8c54c928949a8061736c493c702fa898d6b3d3b307279bc8dc25f6d20ab2"
+    },
+    {
+      "id": 6,
+      "slug": "recover-retained-findings",
+      "title": "Recover interrupted assignments and replay retained findings",
+      "blocked_by": [
+        4
+      ],
+      "stories": [
+        30,
+        37,
+        38,
+        39,
+        40,
+        41,
+        49
+      ],
+      "summary": "Restart preserves completed findings, marks abandoned unfinished attempts interrupted, and never silently reruns a child.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/06-recover-retained-findings.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/06-recover-retained-findings.md",
+      "published_title": "Subagents: Recover interrupted assignments and replay retained findings",
+      "issue_number": 174,
+      "issue_url": "https://github.com/davidadel66/evie/issues/174",
+      "issue_database_id": 5416406308,
+      "verified_blocking_issue_numbers": [
+        172
+      ],
+      "published_body_sha256": "f8d8e691cde3442d8d0841bc8fcd1d8a4d716acd76e98120aa108f421f37a47b"
+    },
+    {
+      "id": 7,
+      "slug": "production-plugin-rollout",
+      "title": "Enable foreground research through the Subagents Plugin",
+      "blocked_by": [
+        5,
+        6
+      ],
+      "stories": [
+        12,
+        13,
+        14,
+        16,
+        17,
+        42,
+        43,
+        46,
+        48,
+        49,
+        50
+      ],
+      "summary": "New eligible CLI/web conversations can delegate through the compiled Plugin; existing receipts stay unchanged and disable/shutdown reaches active workers.",
+      "draft_path": "/Users/davidboktor/code/evie/.scratch/subagents/issues/07-production-plugin-rollout.md",
+      "published_body_path": "/Users/davidboktor/code/evie/.scratch/subagents/published-bodies/07-production-plugin-rollout.md",
+      "published_title": "Subagents: Enable foreground research through the Subagents Plugin",
+      "issue_number": 175,
+      "issue_url": "https://github.com/davidadel66/evie/issues/175",
+      "issue_database_id": 5416406502,
+      "verified_blocking_issue_numbers": [
+        173,
+        174
+      ],
+      "published_body_sha256": "5d7bf05d359747eb753c4c30e1fa320cd021e09de19ac6ab8fd57490c8ea9a27"
+    }
+  ],
+  "frontier_issue_numbers": [
+    169,
+    170,
+    171
+  ]
+}

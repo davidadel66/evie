@@ -9,6 +9,14 @@ import (
 	"github.com/davidadel66/evie/internal/openrouter"
 )
 
+func TestHistoryRejectsInvalidAssistantPhaseOrdering(t *testing.T) {
+	_, err := messagesFromEvents([]memory.Event{{ID: "assistant", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: "a",
+		Payload: json.RawMessage(`{"text_parts":[{"text":"a","after_tool_calls":1}]}`)}})
+	if err == nil {
+		t.Fatal("invalid historical phase ordering was replayed")
+	}
+}
+
 func historyPayload(t *testing.T, value any) json.RawMessage {
 	t.Helper()
 	payload, err := json.Marshal(value)

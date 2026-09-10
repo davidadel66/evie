@@ -282,3 +282,8 @@ textarea {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Native activity disclosures retain keyboard behavior without raw card chrome. */
+.activity-summary { list-style: none; }
+.activity-summary::-webkit-details-marker { display: none; }
+.activity-summary:focus-visible { outline: 2px solid var(--color-teal); outline-offset: 4px; border-radius: 2px; }

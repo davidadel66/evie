@@ -5,7 +5,7 @@
 // card resolving into the compact tool row — so the approval lives on the tool
 // item it gates.
 
-import type { DiscardReason, FilePreview, ServerEvent } from "./events";
+import type { ActivityTurn, DiscardReason, FilePreview, PublicPart, ServerEvent } from "./events";
 
 export type ApprovalState = "pending" | "approved" | "declined" | "expired";
 
@@ -17,13 +17,14 @@ export type Approval = {
   preview?: FilePreview;
 };
 
-export type Item =
+export type Item = { turn?: ActivityTurn } & (
   | { kind: "user"; key: string; text: string }
   | {
       kind: "assistant";
       key: string;
       text: string;
       streaming: boolean;
+      phase?: PublicPart["phase"];
       discarded?: { reason: DiscardReason; message: string };
     }
   | {
@@ -55,7 +56,7 @@ export type Item =
       /** Client-side clock, used for the card's duration chip. */
       startedAt: number;
       ms?: number;
-    };
+    });
 
 /** now is injectable so tests get deterministic durations. */
 export type Clock = () => number;
@@ -81,6 +82,27 @@ export function reduce(
   ev: ServerEvent,
   now: Clock = Date.now,
 ): Item[] {
+  if (ev.type === "turn_started") {
+    const idx = items.findLastIndex((item) => item.kind === "user");
+    if (idx < 0) return items;
+    return replaceAt(items, idx, { ...items[idx], turn: { id: ev.id, startedAt: ev.startedAt, status: "working" } });
+  }
+  // New items inherit the accepted user root; old pages keep their own IDs.
+  const current = items.findLast((item) => item.kind === "user")?.turn;
+  let turn = current;
+  if (current && ev.type === "assistant_done" && ev.terminal) {
+    turn = { ...current, status: "complete", finishedAt: ev.finishedAt };
+  } else if (current && (ev.type === "error" || ev.type === "turn_done") && current.status === "working") {
+    turn = { ...current, status: "incomplete" };
+  }
+  const existing = new Set(items.map((item) => item.key));
+  return reduceEvent(items, ev, now).map((item) => {
+    if (turn && (item.turn?.id === turn.id || !existing.has(item.key))) return { ...item, turn };
+    return item;
+  });
+}
+
+function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" }>, now: Clock): Item[] {
   switch (ev.type) {
     case "delta": {
       const last = items[items.length - 1];
@@ -129,6 +151,13 @@ export function reduce(
 
     case "assistant_done": {
       const last = items[items.length - 1];
+      if (ev.parts !== undefined) {
+        const base = last?.kind === "assistant" && last.streaming ? items.slice(0, -1) : items;
+        return [...base, ...ev.parts.filter((part) => part.text !== "").map((part, i): Item => ({
+          kind: "assistant", key: i === 0 && last?.kind === "assistant" && last.streaming ? last.key : nextKey("a"),
+          text: part.text, phase: part.phase, streaming: false, turn: last?.turn,
+        }))];
+      }
       // AssistantDone fires for every assistant message, including the
       // tool-only ones that carry no text. The design has no empty bubbles,
       // so drop it rather than render a blank.
@@ -207,13 +236,13 @@ export function reduce(
       if (idx === -1) return items;
       const tool = items[idx];
       if (tool.kind !== "tool") return items;
-      // The approval state is left alone: the click already set it, and a
-      // still-pending state here means the server resolved it without us
-      // (expiry), which turn_done settles.
+      // A durable outcome means the approval can no longer accept an answer.
+      // If no local click resolved it, the server expired it.
       return replaceAt(items, idx, {
         ...tool,
         result: ev.content,
         isErr: ev.isError,
+        approval: tool.approval?.state === "pending" ? { ...tool.approval, state: "expired" } : tool.approval,
         ms: now() - tool.startedAt,
       });
     }
@@ -260,9 +289,12 @@ export function reduce(
       });
 
     case "error":
-      // Errors are banner state, not transcript state (the design puts them
-      // in a top banner). useSession picks this up; the list is untouched.
-      return items;
+      return items.map((item) => {
+        if (item.kind === "assistant") return { ...item, streaming: false, phase: item.phase ?? "commentary" };
+        if (item.kind === "reasoning") return { ...item, streaming: false };
+        if (item.kind === "tool" && item.approval?.state === "pending") return { ...item, approval: { ...item.approval, state: "expired" } };
+        return item;
+      });
   }
 }
 

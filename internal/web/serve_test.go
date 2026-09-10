@@ -169,7 +169,7 @@ func TestChatStreamsATurn(t *testing.T) {
 	for _, want := range []string{
 		"event: delta\ndata: {\"text\":\"Hel\"}",
 		"event: delta\ndata: {\"text\":\"lo\"}",
-		"event: assistant_done\ndata: {\"content\":\"Hello\"}",
+		"event: assistant_done\ndata: {\"content\":\"Hello\",",
 		"event: turn_done\ndata: {}",
 	} {
 		if !strings.Contains(body, want) {
@@ -219,10 +219,10 @@ func TestWebUsesSessionToolsetForEveryProviderIteration(t *testing.T) {
 		}
 	}
 	assertSSEOrder(t, recorder.Body.String(),
-		"event: assistant_done\ndata: {\"content\":\"\"}",
+		"event: assistant_done\ndata: {\"content\":\"\",",
 		"event: tool_call\ndata: {\"id\":\"call-1\",\"name\":\"web_only\",\"args\":\"{}\"}",
 		"event: tool_result\ndata: {\"id\":\"call-1\",\"content\":\"web result\",\"isError\":false}",
-		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\",",
 		"event: turn_done\ndata: {}",
 	)
 }
@@ -301,7 +301,7 @@ func TestChatWaitsForAdmittedProviderCallbackBeforeAssistantAndTurnDone(t *testi
 	}
 	assertSSEOrder(t, w.Body.String(),
 		"event: delta\ndata: {\"text\":\"async\"}",
-		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\",",
 		"event: turn_done\ndata: {}",
 	)
 }
@@ -396,7 +396,7 @@ func TestChatSerializesConcurrentProviderCallbacksBeforeTurnDone(t *testing.T) {
 		"event: reasoning\ndata: {\"text\":\"thinking\"}",
 		"event: reasoning_done\ndata: {}",
 		"event: delta\ndata: {\"text\":\"answer\"}",
-		"event: assistant_done\ndata: {\"content\":\"complete\"}",
+		"event: assistant_done\ndata: {\"content\":\"complete\",",
 		"event: turn_done\ndata: {}",
 	)
 }
@@ -463,7 +463,7 @@ func TestChatSuppressesReasoningThatArrivesAfterContent(t *testing.T) {
 	}
 	assertSSEOrder(t, body,
 		"event: delta\ndata: {\"text\":\"answer\"}",
-		"event: assistant_done\ndata: {\"content\":\"answer\"}",
+		"event: assistant_done\ndata: {\"content\":\"answer\",",
 		"event: turn_done\ndata: {}",
 	)
 }
@@ -523,7 +523,7 @@ func TestCommittedToolCallingAssistantPrecedesTerminalSSEAndSuppressesTools(t *t
 					t.Fatalf("terminal SSE contract violated:\n%s", body)
 				}
 				assertSSEOrder(t, body,
-					"event: assistant_done\ndata: {\"content\":\"committed\"}",
+					"event: assistant_done\ndata: {\"content\":\"committed\",",
 					"event: error",
 					"event: turn_done",
 				)

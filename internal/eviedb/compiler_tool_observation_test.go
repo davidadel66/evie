@@ -16,7 +16,10 @@ func clockGeneration() memory.CompilerGeneration {
 	return g
 }
 
-type clockFixtureOptions struct{ args, approval string }
+type clockFixtureOptions struct {
+	args, approval string
+	phases         bool
+}
 
 func (f *compilerFixture) clockSelection(t *testing.T, content string, options ...clockFixtureOptions) (memory.CompilationSelection, memory.Event) {
 	t.Helper()
@@ -26,10 +29,16 @@ func (f *compilerFixture) clockSelection(t *testing.T, content string, options .
 		approval = options[0].approval
 	}
 	call := memory.ToolCall{ID: "clock-call", Name: "get_time", Arguments: args}
-	assistantPayload, _ := json.Marshal(memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{call}})
+	payload := memory.AssistantMessagePayload{ToolCalls: []memory.ToolCall{call}}
+	assistantContent := ""
+	if len(options) > 0 && options[0].phases {
+		assistantContent = "Checking the date."
+		payload.TextParts = []memory.AssistantTextPart{{Text: assistantContent, Phase: "commentary", AfterToolCalls: 1}}
+	}
+	assistantPayload, _ := json.Marshal(payload)
 	intentPayload, _ := json.Marshal(memory.ToolIntentPayload{Call: call})
 	root := f.append(t, memory.EventInput{Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "Using the checked local date, today I adopted tea as my standing drink."})
-	assistant := f.append(t, memory.EventInput{ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Payload: assistantPayload})
+	assistant := f.append(t, memory.EventInput{ParentID: root.ID, Type: memory.EventAssistantMessage, Role: memory.RoleAssistant, Content: assistantContent, Payload: assistantPayload})
 	intent := f.append(t, memory.EventInput{ParentID: assistant.ID, Type: memory.EventToolIntent, ExecutionID: "clock-execution", Payload: intentPayload})
 	parent := intent.ID
 	if approval != "" {
@@ -51,6 +60,22 @@ func (f *compilerFixture) clockCandidate(r memory.CompilerRequest) memory.Extrac
 		}
 	}
 	return c
+}
+
+func TestCompilerClockObservationAllowsPublicAssistantPhases(t *testing.T) {
+	f := newCompilerFixture(t)
+	sel, _ := f.clockSelection(t, "2026-09-04 11:42:00", clockFixtureOptions{args: "{}", phases: true})
+	extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
+		c := f.clockCandidate(r)
+		if len(c.Support) != 2 {
+			t.Fatal("public assistant phases broke clock evidence ancestry")
+		}
+		return compilerOutput(r, []memory.ExtractorCandidate{c}), nil
+	}}
+	result, err := f.store.CompileCandidateUnit(context.Background(), f.session.ScopeContext(), sel, clockGeneration(), extractor)
+	if err != nil || result.State != "completed_candidates" {
+		t.Fatalf("state=%s err=%v", result.State, err)
+	}
 }
 
 func TestCompilerClockObservationAcceptedAuthorityAndReplay(t *testing.T) {
@@ -336,7 +361,7 @@ func TestCompilerClockObservationEmptyObjectArgumentsAndApproval(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCompilerFixture(t)
-			sel, _ := f.clockSelection(t, "2026-09-04 11:42:00", clockFixtureOptions{tc.args, tc.approval})
+			sel, _ := f.clockSelection(t, "2026-09-04 11:42:00", clockFixtureOptions{args: tc.args, approval: tc.approval})
 			extractor := &scriptedCompiler{run: func(_ context.Context, r memory.CompilerRequest) (eviedb.CompilerExtraction, error) {
 				return compilerOutput(r, []memory.ExtractorCandidate{f.clockCandidate(r)}), nil
 			}}

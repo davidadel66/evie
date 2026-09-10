@@ -71,6 +71,10 @@ func completeToolResultGroups(events []memory.Event) ([]completeToolResultGroup,
 }
 
 func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
+	return messagesFromEventsWithContinuation(events, nil)
+}
+
+func messagesFromEventsWithContinuation(events []memory.Event, continuation map[memory.EventID][]json.RawMessage) ([]openrouter.Message, error) {
 	var messages []openrouter.Message
 	omit, err := incompleteToolGroupEvents(events)
 	if err != nil {
@@ -99,6 +103,13 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 			if err := decodeEventPayload(event, &payload); err != nil {
 				return nil, err
 			}
+			if err := payload.ValidateTextParts(event.Content); err != nil {
+				return nil, err
+			}
+			var textParts []openrouter.TextPart
+			for _, part := range payload.TextParts {
+				textParts = append(textParts, openrouter.TextPart{Text: part.Text, Phase: part.Phase, AfterToolCalls: part.AfterToolCalls})
+			}
 
 			var toolCalls []openrouter.ToolCall
 			for _, call := range payload.ToolCalls {
@@ -116,9 +127,11 @@ func messagesFromEvents(events []memory.Event) ([]openrouter.Message, error) {
 			}
 
 			messages = append(messages, openrouter.Message{
-				Role:      "assistant",
-				Content:   event.Content,
-				ToolCalls: toolCalls,
+				Role:          "assistant",
+				Content:       event.Content,
+				ToolCalls:     toolCalls,
+				TextParts:     textParts,
+				ResponseItems: continuation[event.ID],
 			})
 
 		case memory.EventToolSucceeded,

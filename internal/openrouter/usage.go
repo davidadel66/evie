@@ -17,6 +17,14 @@ type jsonMember struct {
 // contains a non-null usage occurrence. The latter lets stream assembly replace
 // earlier usage with a later empty or invalid occurrence while ignoring null.
 func parseProviderUsage(data []byte) (*TokenUsage, bool, error) {
+	return parseUsage(data, false)
+}
+
+func parseResponsesUsage(data []byte) (*TokenUsage, bool, error) {
+	return parseUsage(data, true)
+}
+
+func parseUsage(data []byte, responses bool) (*TokenUsage, bool, error) {
 	members, object, err := parseJSONObject(data)
 	if err != nil {
 		return nil, false, err
@@ -41,11 +49,15 @@ func parseProviderUsage(data []byte) (*TokenUsage, bool, error) {
 		return nil, false, nil
 	}
 
-	usage, err := normalizeUsage(occurrences[0])
+	usage, err := normalizeUsageFields(occurrences[0], responses)
 	return usage, true, err
 }
 
 func normalizeUsage(data json.RawMessage) (*TokenUsage, error) {
+	return normalizeUsageFields(data, false)
+}
+
+func normalizeUsageFields(data json.RawMessage, responses bool) (*TokenUsage, error) {
 	members, object, err := parseJSONObject(data)
 	if err != nil {
 		return nil, err
@@ -56,6 +68,20 @@ func normalizeUsage(data json.RawMessage) (*TokenUsage, error) {
 
 	values := make(map[string][]json.RawMessage)
 	for _, member := range members {
+		if responses {
+			switch member.name {
+			case "input_tokens":
+				member.name = "prompt_tokens"
+			case "output_tokens":
+				member.name = "completion_tokens"
+			case "input_tokens_details":
+				member.name = "prompt_tokens_details"
+			case "output_tokens_details":
+				member.name = "completion_tokens_details"
+			case "prompt_tokens", "completion_tokens", "prompt_tokens_details", "completion_tokens_details":
+				continue
+			}
+		}
 		switch member.name {
 		case "prompt_tokens", "completion_tokens", "total_tokens":
 			values[member.name] = append(values[member.name], member.value)

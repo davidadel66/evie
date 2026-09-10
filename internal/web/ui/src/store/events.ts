@@ -17,11 +17,21 @@ export type DiscardReason =
   | "lease_heartbeat_failed"
   | "assistant_persistence_failed";
 
+export type ActivityTurn = {
+  id: string;
+  startedAt?: number;
+  finishedAt?: number;
+  status: "working" | "complete" | "incomplete";
+};
+
+export type PublicPart = { text: string; phase: "commentary" | "final_answer" };
+
 export type ServerEvent =
+  | ({ type: "turn_started" } & ActivityTurn)
   | { type: "delta"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "reasoning_done" }
-  | { type: "assistant_done"; content: string }
+  | { type: "assistant_done"; content: string; parts?: PublicPart[]; terminal?: boolean; finishedAt?: number }
   | { type: "tool_call"; id: string; name: string; args: string }
   | { type: "tool_result"; id: string; content: string; isError: boolean }
   | {
@@ -39,6 +49,7 @@ export type ServerEvent =
  *  the whiteboard feature adds board_start/delta/end and critic_note to this
  *  same stream, and an older UI must not choke on them. */
 const KNOWN = new Set([
+  "turn_started",
   "delta",
   "reasoning",
   "reasoning_done",

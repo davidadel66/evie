@@ -238,7 +238,7 @@ func TestTodoCLISharesScopeClaimsAndStoreWithPlugin(t *testing.T) {
 			ID: "cli-cross-surface", Type: "function", Function: openrouter.FunctionCall{Name: name, Arguments: arguments},
 		}, nil, nil, nil, nil)
 		if err != nil || isError {
-			t.Fatalf("execute %s = %q, error=%v, dispatch=%v", name, message, isError, err)
+			t.Fatalf("execute %s = %+v, error=%v, dispatch=%v", name, message, isError, err)
 		}
 		return message.Content
 	}

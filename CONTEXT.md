@@ -107,10 +107,21 @@ The immutable chronological evidence of sessions, turns, tool activity, and
 their recorded outcomes.
 _Avoid_: Working memory, semantic memory
 
+**Conversation Excerpt**:
+An attributed portion of Episodic Memory that establishes what was recorded,
+without by itself establishing an accepted current Claim.
+_Avoid_: Accepted memory, confirmed fact
+
 **Semantic Memory**:
 Accepted source-linked entities, temporal claims, and relationships that
 represent what Evie knows without replacing their Episodic Memory evidence.
 _Avoid_: Event history, procedural memory, objective truth
+
+**Automatic Recall**:
+The selection of relevant accepted memories and attributed Conversation Excerpts
+for Evie's current request without requiring the owner to explicitly ask for
+recall.
+_Avoid_: Automatic memory acceptance, memory compilation
 
 **Entity**:
 A stable scope-aware identity for a person, organization, place, object, or
@@ -203,8 +214,9 @@ The time at which Evie accepted a Claim or one of its lifecycle transitions.
 _Avoid_: Valid time, event time
 
 **Retirement**:
-A reversible lifecycle transition that excludes eligible knowledge from normal
-current retrieval while preserving its evidence and history.
+A reversible lifecycle transition that excludes knowledge and its corresponding
+conversation evidence from ordinary recall while preserving them for explicit
+historical inspection.
 _Avoid_: Hard erasure, supersession
 
 **Hard Erasure**:

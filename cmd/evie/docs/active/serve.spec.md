@@ -81,7 +81,8 @@ func New(client Client, model string) *Session
 func (s *Session) Send(input string, ev Events, approve func(name, args string) bool, extra ...tools.Tool) error
 ```
 
-Model string: default lives in `internal/agent` (`moonshotai/kimi-k3` today),
+Model string: default lives in `internal/agent` (`openai/gpt-6-astra` as of the
+[2026-09-10 migration](gpt-6-astra.spec.md)),
 overridable via `EVIE_MODEL`. main.go stops hardcoding it.
 
 Event order within a turn is deterministic and sequential. `AssistantDone`

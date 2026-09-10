@@ -316,10 +316,10 @@ describe("reduce", () => {
     ]);
   });
 
-  it("leaves the transcript untouched on error", () => {
+  it("closes provisional streaming text on error", () => {
     const before = fold([{ type: "delta", text: "hi" }]);
     const after = reduce(before, { type: "error", message: "provider down" });
-    expect(after).toEqual(before);
+    expect(after).toEqual(before.map((item) => ({...item, streaming: false, phase: "commentary"})));
   });
 
   it("does not mutate its input", () => {

@@ -1,0 +1,110 @@
+[
+  {
+    "n": 1,
+    "slug": "search-accepted-memory",
+    "title": "Memory Stage 5: Search accepted memory with inspectable sources",
+    "blockers": []
+  },
+  {
+    "n": 2,
+    "slug": "search-conversation-evidence",
+    "title": "Memory Stage 5: Search prior conversations without reviving retired memory",
+    "blockers": [
+      1
+    ]
+  },
+  {
+    "n": 3,
+    "slug": "expand-conversation-excerpts",
+    "title": "Memory Stage 5: Expand a conversation excerpt without loading the whole chat",
+    "blockers": [
+      2
+    ]
+  },
+  {
+    "n": 4,
+    "slug": "answer-history-and-conflicts",
+    "title": "Memory Stage 5: Answer historical questions and expose conflicting evidence",
+    "blockers": [
+      2
+    ]
+  },
+  {
+    "n": 5,
+    "slug": "automatic-recall",
+    "title": "Memory Stage 5: Recall relevant evidence when a new message arrives",
+    "blockers": [
+      2
+    ]
+  },
+  {
+    "n": 6,
+    "slug": "resolve-cross-topic-references",
+    "title": "Memory Stage 5: Resolve references across topic changes and clarify ambiguity",
+    "blockers": [
+      5
+    ]
+  },
+  {
+    "n": 7,
+    "slug": "bounded-investigation-and-reuse",
+    "title": "Memory Stage 5: Investigate further and reuse valid evidence within a turn",
+    "blockers": [
+      3,
+      5
+    ]
+  },
+  {
+    "n": 8,
+    "slug": "inspect-original-answer-evidence",
+    "title": "Memory Stage 5: Inspect an answer's original evidence after memory changes",
+    "blockers": [
+      2
+    ]
+  },
+  {
+    "n": 9,
+    "slug": "retrieve-through-relationships",
+    "title": "Memory Stage 5: Find evidence through one- and two-hop relationships",
+    "blockers": [
+      1
+    ]
+  },
+  {
+    "n": 10,
+    "slug": "measure-local-semantic-retrieval",
+    "title": "Memory Stage 5: Measure a local semantic-retrieval configuration",
+    "blockers": [
+      2
+    ]
+  },
+  {
+    "n": 11,
+    "slug": "ship-hybrid-semantic-search",
+    "title": "Memory Stage 5: Find paraphrased evidence through hybrid semantic search",
+    "blockers": [
+      9,
+      10
+    ]
+  },
+  {
+    "n": 12,
+    "slug": "freeze-stage-5-release-gates",
+    "title": "Memory Stage 5: Run an integrated pilot and freeze retrieval release gates",
+    "blockers": [
+      4,
+      6,
+      7,
+      8,
+      11
+    ]
+  },
+  {
+    "n": 13,
+    "slug": "verify-stage-5-readiness",
+    "title": "Memory Stage 5: Evaluate the frozen configuration and declare retrieval readiness",
+    "blockers": [
+      12
+    ]
+  }
+]

@@ -33,6 +33,15 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 	if !json.Valid(input.Payload) {
 		return memory.EventInput{}, errors.New("event payload must be valid JSON")
 	}
+	if input.Type == memory.EventAssistantMessage {
+		var payload memory.AssistantMessagePayload
+		if err := json.Unmarshal(input.Payload, &payload); err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode assistant payload: %w", err)
+		}
+		if err := payload.ValidateTextParts(input.Content); err != nil {
+			return memory.EventInput{}, err
+		}
+	}
 
 	if input.Type == memory.EventTurnFailed || input.Type == memory.EventTurnInterrupted {
 		terminal, canonical, err := decodeCanonicalTerminalPayload(input.Payload)

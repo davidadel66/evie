@@ -122,6 +122,7 @@ type endpointMetadataResponse struct {
 		Endpoints []struct {
 			ContextLength       *int64   `json:"context_length"`
 			MaxCompletionTokens *int64   `json:"max_completion_tokens"`
+			MaxPromptTokens     *int64   `json:"max_prompt_tokens"`
 			Status              *int     `json:"status"`
 			SupportedParameters []string `json:"supported_parameters"`
 		} `json:"endpoints"`
@@ -200,14 +201,15 @@ func (c *Client) discoverContextProfile(
 	); err != nil {
 		return ContextProfile{}, fmt.Errorf("look up model endpoints: %w", err)
 	}
-	if endpointsResponse.Data.ID != modelData.CanonicalSlug {
+	if endpointsResponse.Data.ID != modelData.CanonicalSlug &&
+		!(UsesResponses(model) && endpointsResponse.Data.ID == modelData.ID) {
 		return ContextProfile{}, fmt.Errorf(
 			"endpoint model identity %q does not match canonical model %q",
 			endpointsResponse.Data.ID,
 			modelData.CanonicalSlug,
 		)
 	}
-	hardWindow, err := routeSafeWindow(endpointsResponse, config.output)
+	hardWindow, err := routeSafeWindow(endpointsResponse, config.output, UsesResponses(model))
 	if err != nil {
 		return ContextProfile{}, err
 	}
@@ -224,13 +226,20 @@ func (c *Client) discoverContextProfile(
 	})
 }
 
-func routeSafeWindow(response endpointMetadataResponse, outputReserve int64) (int64, error) {
+func routeSafeWindow(response endpointMetadataResponse, outputReserve int64, responses bool) (int64, error) {
 	var hardWindow int64
 	for i, endpoint := range response.Data.Endpoints {
 		if endpoint.Status == nil {
 			return 0, fmt.Errorf("endpoint %d is missing status", i)
 		}
-		if *endpoint.Status != 0 || !containsParameter(endpoint.SupportedParameters, "max_tokens") {
+		outputSupported := containsParameter(endpoint.SupportedParameters, "max_tokens")
+		if responses {
+			outputSupported = outputSupported || containsParameter(endpoint.SupportedParameters, "max_completion_tokens") || containsParameter(endpoint.SupportedParameters, "max_output_tokens")
+			if !containsParameter(endpoint.SupportedParameters, "tools") || !containsParameter(endpoint.SupportedParameters, "tool_choice") || !containsParameter(endpoint.SupportedParameters, "reasoning") {
+				continue
+			}
+		}
+		if *endpoint.Status != 0 || !outputSupported {
 			continue
 		}
 		if endpoint.ContextLength == nil || *endpoint.ContextLength <= 0 ||
@@ -240,8 +249,15 @@ func routeSafeWindow(response endpointMetadataResponse, outputReserve int64) (in
 		if *endpoint.MaxCompletionTokens < outputReserve {
 			continue
 		}
-		if hardWindow == 0 || *endpoint.ContextLength < hardWindow {
-			hardWindow = *endpoint.ContextLength
+		window := *endpoint.ContextLength
+		if responses && endpoint.MaxPromptTokens != nil {
+			if *endpoint.MaxPromptTokens <= 0 || *endpoint.MaxPromptTokens > math.MaxInt64-outputReserve {
+				return 0, errors.New("endpoint has invalid prompt token limit")
+			}
+			window = min(window, *endpoint.MaxPromptTokens+outputReserve)
+		}
+		if hardWindow == 0 || window < hardWindow {
+			hardWindow = window
 		}
 	}
 	if hardWindow == 0 {

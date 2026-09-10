@@ -8,6 +8,29 @@ import (
 	"testing"
 )
 
+func TestAssistantTextPartsValidatePublicOrdering(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		parts []AssistantTextPart
+		valid bool
+	}{
+		{"legacy", nil, true},
+		{"ordered", []AssistantTextPart{{Text: "a", Phase: "commentary"}, {Text: "b", Phase: "final_answer", AfterToolCalls: 1}}, true},
+		{"out of order", []AssistantTextPart{{Text: "a", AfterToolCalls: 1}, {Text: "b"}}, false},
+		{"negative offset", []AssistantTextPart{{Text: "ab", AfterToolCalls: -1}}, false},
+		{"past calls", []AssistantTextPart{{Text: "ab", AfterToolCalls: 2}}, false},
+		{"unknown phase", []AssistantTextPart{{Text: "ab", Phase: "reasoning"}}, false},
+		{"content mismatch", []AssistantTextPart{{Text: "a"}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := AssistantMessagePayload{TextParts: test.parts, ToolCalls: []ToolCall{{ID: "call-1", Name: "echo", Arguments: `{}`}}}
+			if err := payload.ValidateTextParts("ab"); (err == nil) != test.valid {
+				t.Fatalf("validation=%v expected valid=%v", err, test.valid)
+			}
+		})
+	}
+}
+
 func TestAssistantMessagePayloadUsageJSONPreservesPartialZeroAndAbsence(t *testing.T) {
 	zero, total := int64(0), int64(12)
 	payload := AssistantMessagePayload{Usage: &TokenUsage{

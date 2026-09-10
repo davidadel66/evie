@@ -2,6 +2,7 @@ package openrouter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,29 @@ import (
 )
 
 const testBuiltinModel = "moonshotai/kimi-k3"
+
+func TestAstraContextDiscoveryAcceptsVerifiedAliasAndResponsesRoutes(t *testing.T) {
+	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
+	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "")
+	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "")
+	client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/model/openai/gpt-6-astra":
+			_, _ = w.Write([]byte(`{"data":{"id":"openai/gpt-6-astra","canonical_slug":"openai/gpt-6-astra-20260903","context_length":1050000}}`))
+		case "/api/v1/models/openai/gpt-6-astra-20260903/endpoints":
+			_, _ = w.Write([]byte(`{"data":{"id":"openai/gpt-6-astra","endpoints":[{"context_length":1050000,"max_completion_tokens":128000,"status":0,"supported_parameters":["max_tokens","tools","tool_choice","reasoning"]},{"context_length":500000,"max_completion_tokens":128000,"status":0,"supported_parameters":["max_completion_tokens","tools","tool_choice","reasoning"]}]}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	profile, err := client.ResolveContextProfile(context.Background(), AstraModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Diagnostics().HardWindowTokens != 500000 {
+		t.Fatalf("ignored an eligible Responses route: %+v", profile.Diagnostics())
+	}
+}
 
 func contextProfileClient(t *testing.T, handler http.Handler) (*Client, *httptest.Server) {
 	t.Helper()
@@ -120,9 +144,40 @@ func TestResolveContextProfileUnknownModelFailsWithoutOverride(t *testing.T) {
 	client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "missing", http.StatusNotFound)
 	}))
-	_, err := client.ResolveContextProfile(context.Background(), "custom/model")
-	if err == nil || !strings.Contains(err.Error(), "custom/model") {
-		t.Fatalf("error=%v", err)
+	for _, model := range []string{"custom/model", AstraModel} {
+		_, err := client.ResolveContextProfile(context.Background(), model)
+		if err == nil || !strings.Contains(err.Error(), model) {
+			t.Fatalf("model=%s error=%v", model, err)
+		}
+	}
+}
+
+func TestAstraRoutesRespectPromptAndRequiredParameterLimits(t *testing.T) {
+	for _, test := range []struct {
+		name, parameters string
+		want             int64
+	}{
+		{"prompt cap", `["max_output_tokens","tools","tool_choice","reasoning"]`, 60000},
+		{"missing tools", `["max_tokens","tool_choice","reasoning"]`, 0},
+		{"missing reasoning", `["max_tokens","tools","tool_choice"]`, 0},
+		{"missing output cap", `["tools","tool_choice","reasoning"]`, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var response endpointMetadataResponse
+			if err := json.Unmarshal([]byte(`{"data":{"endpoints":[{"status":0,"context_length":1050000,"max_prompt_tokens":50000,"max_completion_tokens":128000,"supported_parameters":`+test.parameters+`}]}}`), &response); err != nil {
+				t.Fatal(err)
+			}
+			window, err := routeSafeWindow(response, 10000, true)
+			if test.want == 0 {
+				if err == nil {
+					t.Fatal("ineligible route accepted")
+				}
+				return
+			}
+			if err != nil || window != test.want {
+				t.Fatalf("window=%d err=%v", window, err)
+			}
+		})
 	}
 }
 

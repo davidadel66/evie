@@ -140,3 +140,57 @@ provider supports deferred definitions: Anthropic documents placing discovered
 tool references in conversation history. Ordinary changes to upfront tool
 definitions invalidate the corresponding prefix
 ([tool caching](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching)).
+
+## Follow-up: three iteration principles (2026-09-06)
+
+This is a targeted update from primary lab sources, not an exhaustive survey.
+The principles below are design inferences for future evaluation after Evie's
+approved memory work, not additional implementation scope.
+
+Local clarification: a fresh Evie session has no summary. A successful manual
+`/compact` requires at least three completed remaining turns and preserves the
+newest two ([manual compaction](../../../../internal/agent/compaction.go#L264));
+automatic compaction uses the pressure thresholds described above. Accepted
+summaries are persisted and reconstructed for subsequent calls; raw conversation
+history is not rewritten. Individual tool results are capped at 100KiB and a
+tool group at 128KiB
+([tool result bounds](../../../../internal/agent/tool_results.go#L13)). Context
+projection can shorten older results under pressure while protecting the latest
+three groups after the group cap
+([context projection](../../../../internal/agent/context.go#L228)).
+
+Initial assessment: keep the focused-task snapshot for correctness and recovery;
+measure its size and change frequency before changing its placement or replacing
+it with incremental updates. This is a design judgment, not a finding that the
+current placement minimizes cache costs.
+
+1. **Retrieve narrowly and filter before information enters context.** The
+   on-demand reads described above remain compatible with append-only history.
+   Keep a small orientation block, then fetch evidence needed for the question.
+   OpenAI's August 13, 2026 builder guide specifically recommends processing,
+   filtering, and aggregating tool results in code outside the model's context
+   ([guide](https://openai.com/index/builders-guide-to-gpt-5-6/)). For Evie, the
+   inference is to test bounded evidence with source references and a way to
+   expand it; avoid making the model inspect a large raw result just to discard
+   most of it. This principle does not require adopting a new execution runtime.
+
+2. **Treat output clearing and summarization as different controls.** Anthropic's
+   current documentation distinguishes removing selected older tool results from
+   replacing history with a generated summary. It offers controls to retain
+   recent results, exclude important tools, and clear enough at once to justify
+   breaking the prompt cache
+   ([context editing, accessed September 6, 2026](https://platform.claude.com/docs/en/build-with-claude/context-editing)).
+   For Evie, the inference is to preserve compact conclusions and source handles
+   while allowing bulky, reproducible results to leave the working context.
+   Summaries still need to retain unresolved work and relevant decisions.
+
+3. **Choose policies using a small repeatable evaluation.** Anthropic's
+   January 9, 2026 evaluation guide recommends starting with 20–50 cases from
+   real failures or manual checks, inspecting actual outcomes, and tracking
+   cost and latency alongside quality
+   ([guide](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)).
+   For Evie, test missing evidence, irrelevant memories, corrected facts, and
+   continuation after compaction. Compare one policy change at a time using
+   answer correctness, supporting evidence found, and provider-reported token
+   usage. A smaller prompt or higher cache-hit rate is useful only if the agent
+   still answers and acts correctly.

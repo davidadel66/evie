@@ -412,8 +412,39 @@ type ToolCall struct {
 }
 
 type AssistantMessagePayload struct {
-	ToolCalls []ToolCall  `json:"tool_calls,omitempty"`
-	Usage     *TokenUsage `json:"usage,omitempty"`
+	ToolCalls []ToolCall          `json:"tool_calls,omitempty"`
+	Usage     *TokenUsage         `json:"usage,omitempty"`
+	TextParts []AssistantTextPart `json:"text_parts,omitempty"`
+}
+
+// AssistantTextPart preserves public output phases and their order relative
+// to tool calls. It contains no provider IDs or private continuation state.
+type AssistantTextPart struct {
+	Text           string `json:"text"`
+	Phase          string `json:"phase,omitempty"`
+	AfterToolCalls int    `json:"after_tool_calls,omitempty"`
+}
+
+func (p AssistantMessagePayload) ValidateTextParts(content string) error {
+	if len(p.TextParts) == 0 {
+		return nil
+	}
+	var joined strings.Builder
+	previous := 0
+	for _, part := range p.TextParts {
+		if !utf8.ValidString(part.Text) || (part.Phase != "" && part.Phase != "commentary" && part.Phase != "final_answer") {
+			return errors.New("invalid assistant text part")
+		}
+		if part.AfterToolCalls < previous || part.AfterToolCalls > len(p.ToolCalls) {
+			return errors.New("invalid assistant text/tool ordering")
+		}
+		previous = part.AfterToolCalls
+		joined.WriteString(part.Text)
+	}
+	if joined.String() != content {
+		return errors.New("assistant text parts differ from event content")
+	}
+	return nil
 }
 
 type TokenUsage struct {
