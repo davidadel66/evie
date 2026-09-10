@@ -38,15 +38,46 @@ func (p *Memory) retrievalTool(name, description, kind string) tools.Tool {
 		if err != nil {
 			return "", err
 		}
-		// Durable tool replay contains no source identifiers or copied evidence.
-		// The next request receives only revalidated evidence and records its
-		// references in the context snapshot. Revoking egress after this tool
-		// succeeds therefore cannot disclose sources through old tool outcomes.
-		return renderMemoryRead(struct {
-			Status    string                   `json:"status"`
-			Matches   int                      `json:"matches"`
-			Coverage  memory.RetrievalCoverage `json:"coverage"`
-			Truncated bool                     `json:"truncated"`
-		}{result.Status, len(result.Evidence), result.Coverage, result.Truncated})
+		return renderRetrievalOutcome(result)
+	}}
+}
+
+func renderRetrievalOutcome(result memory.RetrievalResult) (string, error) {
+	// Persist counts/status only. Source text and references reach the provider
+	// only after revalidation in the next synthetic request projection.
+	return renderMemoryRead(struct {
+		Status    string                   `json:"status"`
+		Matches   int                      `json:"matches"`
+		Coverage  memory.RetrievalCoverage `json:"coverage"`
+		Truncated bool                     `json:"truncated"`
+	}{result.Status, len(result.Evidence), result.Coverage, result.Truncated})
+}
+
+func (p *Memory) expandConversationTool() tools.Tool {
+	return tools.Tool{Schema: toolSchema("memory_expand_conversation", "Read bounded original context around an eligible Conversation excerpt already supplied this turn. Use its exact evidence_id. Request at most two public messages before and after; repeated ranges add no new evidence. This is attributed history, not accepted truth.", map[string]openrouter.Property{
+		"evidence_id": stringProperty("Exact ID of a Conversation excerpt already supplied this turn."),
+		"before":      {Type: "integer", Description: "Previous public messages, 0 through 2."},
+		"after":       {Type: "integer", Description: "Following public messages, 0 through 2."},
+	}, "evidence_id", "before", "after"), Execute: func(ctx context.Context, raw string) (string, error) {
+		var args struct {
+			EvidenceID string `json:"evidence_id"`
+			Before     int    `json:"before"`
+			After      int    `json:"after"`
+		}
+		if err := decodeMemoryArgs(raw, &args); err != nil {
+			return "", err
+		}
+		invocation, err := modelReadInvocation(ctx)
+		if err != nil {
+			return "", err
+		}
+		if invocation.SearchMemory == nil {
+			return "", errors.New("memory expansion requires an active turn")
+		}
+		result, err := invocation.SearchMemory(ctx, memory.RetrievalQuery{Kind: memory.RetrievalConversationExpansion, AnchorID: args.EvidenceID, Before: args.Before, After: args.After})
+		if err != nil {
+			return "", err
+		}
+		return renderRetrievalOutcome(result)
 	}}
 }

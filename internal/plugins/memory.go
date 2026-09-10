@@ -25,6 +25,7 @@ const (
 const (
 	MemorySearchCapabilityID              CapabilityID = "memory.search"
 	MemorySearchConversationsCapabilityID CapabilityID = "memory.search_conversations"
+	MemoryExpandConversationCapabilityID  CapabilityID = "memory.expand_conversation"
 	MemoryListScopesCapabilityID          CapabilityID = "memory.list_scopes"
 	MemoryListObjectsCapabilityID         CapabilityID = "memory.list_objects"
 	MemoryInspectObjectCapabilityID       CapabilityID = "memory.inspect_object"
@@ -51,6 +52,7 @@ type memoryCapabilityDescriptor struct {
 var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
 	{id: MemorySearchCapabilityID, read: true, build: (*Memory).searchTool},
 	{id: MemorySearchConversationsCapabilityID, read: true, build: (*Memory).searchConversationsTool},
+	{id: MemoryExpandConversationCapabilityID, read: true, build: (*Memory).expandConversationTool},
 	{id: MemoryListScopesCapabilityID, read: true, build: (*Memory).listScopesTool},
 	{id: MemoryListObjectsCapabilityID, read: true, build: (*Memory).listObjectsTool},
 	{id: MemoryInspectObjectCapabilityID, read: true, build: (*Memory).inspectObjectTool},
@@ -162,7 +164,7 @@ func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
 	}
 	var capabilities []ToolCapability
 	for _, capability := range p.ToolCapabilities() {
-		if capability.ID != MemorySearchCapabilityID && capability.ID != MemorySearchConversationsCapabilityID {
+		if capability.ID != MemorySearchCapabilityID && capability.ID != MemorySearchConversationsCapabilityID && capability.ID != MemoryExpandConversationCapabilityID {
 			capabilities = append(capabilities, capability)
 		}
 	}

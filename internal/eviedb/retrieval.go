@@ -48,6 +48,11 @@ func normalizeRetrievalQuery(q memory.RetrievalQuery) (memory.RetrievalQuery, st
 	for i, term := range terms {
 		terms[i] = `"` + term + `"`
 	}
+	q, err := normalizeRetrievalBounds(q)
+	return q, strings.Join(terms, " OR "), err
+}
+
+func normalizeRetrievalBounds(q memory.RetrievalQuery) (memory.RetrievalQuery, error) {
 	if q.Limit == 0 {
 		q.Limit = retrievalResultLimit
 	}
@@ -55,14 +60,17 @@ func normalizeRetrievalQuery(q memory.RetrievalQuery) (memory.RetrievalQuery, st
 		q.MaxBytes = retrievalContextLimit
 	}
 	if q.Limit < 1 || q.Limit > retrievalResultLimit || q.MaxBytes < 512 || q.MaxBytes > retrievalContextLimit {
-		return q, "", ErrInvalidRetrievalQuery
+		return q, ErrInvalidRetrievalQuery
 	}
-	return q, strings.Join(terms, " OR "), nil
+	return q, nil
 }
 
 // SearchMemory treats FTS and exact/alias matches as suggestions. Every returned
 // Claim is re-read from accepted SQLite state in the same read transaction.
 func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, query memory.RetrievalQuery) (memory.RetrievalResult, error) {
+	if query.Kind == memory.RetrievalConversationExpansion {
+		return s.expandConversation(ctx, scope, query)
+	}
 	result := memory.RetrievalResult{Status: memory.RetrievalFailed, Evidence: []memory.RetrievalEvidence{}}
 	query, fts, err := normalizeRetrievalQuery(query)
 	if err != nil {

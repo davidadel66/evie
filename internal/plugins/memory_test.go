@@ -57,14 +57,14 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 		}
 	}
 	wantIDs := []string{
-		"memory.search", "memory.search_conversations",
+		"memory.search", "memory.search_conversations", "memory.expand_conversation",
 		"memory.list_scopes", "memory.list_objects", "memory.inspect_object", "memory.query_claims",
 		"memory.lookup_alias", "memory.traverse", "memory.remember_literal", "memory.remember_entity",
 		"memory.correct_claim", "memory.create_graph_link", "memory.promote_claim", "memory.retire",
 		"memory.restore", "memory.retract_source", "memory.restore_source",
 	}
 	wantSchemas := []string{
-		"memory_search", "memory_search_conversations",
+		"memory_search", "memory_search_conversations", "memory_expand_conversation",
 		"memory_list_scopes", "memory_list_objects", "memory_inspect_object", "memory_query_claims",
 		"memory_lookup_alias", "memory_traverse", "memory_remember_literal", "memory_remember_entity",
 		"memory_correct_claim", "memory_create_graph_link", "memory_promote_claim", "memory_retire",
@@ -152,7 +152,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, schema := range resolved.Toolset.Schemas() {
-		if schema.Function.Name == "memory_search" || schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
+		if schema.Function.Name == "memory_search" || schema.Function.Name == "memory_search_conversations" || schema.Function.Name == "memory_expand_conversation" || schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
 			schema.Function.Name == "memory_inspect_object" || schema.Function.Name == "memory_query_claims" ||
 			schema.Function.Name == "memory_lookup_alias" || schema.Function.Name == "memory_traverse" {
 			t.Fatalf("remote-memory opt-out exposed read schema %q", schema.Function.Name)
@@ -160,7 +160,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	}
 	for _, capability := range resolved.Receipt.Capabilities {
 		switch CapabilityID(capability.ID) {
-		case MemorySearchCapabilityID, MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
+		case MemorySearchCapabilityID, MemorySearchConversationsCapabilityID, MemoryExpandConversationCapabilityID, MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
 			MemoryQueryClaimsCapabilityID, MemoryLookupAliasCapabilityID, MemoryTraverseCapabilityID:
 			t.Fatalf("remote-memory opt-out pinned read Capability %q", capability.ID)
 		}
@@ -168,7 +168,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "memory_remember_literal") {
 		t.Fatal("remote-memory opt-out removed non-egress mutation capabilities")
 	}
-	if len(resolved.Warnings) != 8 {
+	if len(resolved.Warnings) != 9 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }

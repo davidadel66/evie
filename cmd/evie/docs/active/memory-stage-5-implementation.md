@@ -215,3 +215,82 @@ Demonstration: record an unaccepted, tentative statement in one conversation,
 then ask for it from a second conversation in the same area. Open Conversation
 excerpt to inspect its speaker, original session, and byte range. A conversation
 in another Workspace or project must not receive that raw history.
+
+## #158: bounded conversation expansion
+
+The model requests `memory_expand_conversation` using an exact evidence ID
+already supplied in the current turn and counts before/after. The turn resolves
+that ID to its trusted reference; arbitrary event IDs, other-area references,
+accepted Claim IDs, and same-area sources never retrieved this turn grant no
+expansion authority. Trusted references and covered ranges are not model
+arguments. The Store revalidates the anchor in the same bounded transaction as
+neighbor reads, including the original scope, speaker, byte range and hash.
+
+A request permits zero through two public messages on each side within 64
+original event positions, in the anchor's source session only. Current-session
+expansion excludes the live user root and later events. The Store selects the
+bounded candidate window before filtering; an excluded neighbor does not cause
+an unbounded search for replacement text. Every passage passes source, secret,
+retirement, and UTF-8 checks. The Kernel subtracts previously supplied ranges
+before emitting new exact slices of at most 800 bytes, retaining source order.
+Repeated requests add no duplicate evidence. Omitted inaccessible intervals,
+clipped passages and a bounded sequence gap report truncation explicitly.
+
+Expansion shares the existing eight-call, eight-evidence, 12 KiB result, 36 KiB
+cumulative context, and three-second work limits with search. The turn passes its
+remaining evidence capacity to the Store; results cannot claim undisclosed
+matches after the turn is full. Invalid bounds fail, untrusted anchors are
+unavailable, a fully covered window has no new matches, and exhaustion preserves
+supported findings without claiming that missing evidence does not exist.
+
+A complete-turn regression exposed source identifiers replayed in the original
+expansion tool arguments after remote-memory opt-out. Provider history now
+projects a source-reference placeholder for this tool while preserving the
+original durable event. Native Responses continuation items for that event are
+replaced by the canonical projected tool call, so opaque transport data cannot
+bypass the same boundary. Exact source references remain in revalidated memory
+and immutable request receipts. Chat and native Responses tests check actual
+serialized wire requests, not only the visible memory block.
+
+The development window experiment runs ten real SQLite turns for each window
+size with a scripted provider. Zero/one/two messages per side supplied 1/3/5
+excerpts; the two-message setting used at most 10,770 serialized memory bytes and
+31,723 complete request bytes, with whole-turn p95 11.837 ms in the retained run.
+This supports the provisional bounded window for development; it does not
+measure model interpretation quality or establish release gates. The runnable
+`TestConversationExpansionWindowMeasurements`, source hash, hardware,
+configuration and thirty raw samples are retained in
+`../fixtures/memory-stage5-retrieval/v1/expansion-window-report.json`.
+
+The pronoun example receives “She hasn't booked it yet” first, then reads the
+original preceding statement that Maya is considering Kyoto. Both remain
+attributed conversation excerpts, without fabricated Claims or semantic writes.
+Separate request receipts preserve the exact additions and resolve the same
+source positions after database restart. The model's scripted response is not
+claimed as an answer-quality evaluation.
+
+Additional full-turn checks cover forged and out-of-scope anchors, disjoint UTF-8
+ranges, duplicate/overlapping expansions, retired neighboring ranges with an
+unrelated surviving passage, secret exclusion, cancellation without a late
+receipt, mixed-call exhaustion and oversized windows. The existing Conversation
+excerpt activity and source inspector render expansion references directly.
+
+### #158 verification
+
+- `go test ./internal/agent ./internal/plugins ./internal/web ./cmd/evie` — pass
+  (agent 4.749 s; plugins 1.728 s; web 4.088 s; command 10.573 s).
+- `go test -race ./internal/agent -run '^TestConversationExpansion' -count=1` —
+  pass, 32.207 s.
+- `go test ./internal/web -run '^TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart$' -count=1` — pass,
+  0.407 s. The later receipt supplies three sources and the earlier receipt
+  retains one after restart; SSE and HTTP preserve exact source positions.
+- `go vet ./internal/agent ./internal/eviedb ./internal/plugins ./internal/web ./cmd/evie` — pass.
+- `go test ./internal/agent -run '^TestConversationExpansionWindowMeasurements$' -count=1 -v` — pass; retained thirty-sample report above.
+- `git diff --check` — pass. No UI production files changed in this ticket;
+  its existing eight focused component/API tests passed in #157. The final
+  full UI checks and repository verification remain pending integration.
+
+Demonstration: record an antecedent in one message and an ambiguous tentative
+statement in a later message. In a fresh same-area chat, request its context.
+Open Conversation excerpt after deeper recall to inspect the additional original
+messages. Reopening the earlier request receipt must not add the later sources.

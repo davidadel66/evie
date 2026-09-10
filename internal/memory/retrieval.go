@@ -3,26 +3,32 @@ package memory
 import "time"
 
 const (
-	RetrievalAcceptedMemory      = "accepted_memory"
-	RetrievalConversationExcerpt = "conversation_excerpt"
-	RetrievalSuccess             = "success"
-	RetrievalEmpty               = "empty"
-	RetrievalUnavailable         = "unavailable"
-	RetrievalPartial             = "partial"
-	RetrievalFailed              = "failed"
-	RetrievalCancelled           = "cancelled"
-	RetrievalExhausted           = "exhausted"
+	RetrievalAcceptedMemory        = "accepted_memory"
+	RetrievalConversationExcerpt   = "conversation_excerpt"
+	RetrievalConversationExpansion = "conversation_expansion"
+	RetrievalSuccess               = "success"
+	RetrievalEmpty                 = "empty"
+	RetrievalUnavailable           = "unavailable"
+	RetrievalPartial               = "partial"
+	RetrievalFailed                = "failed"
+	RetrievalCancelled             = "cancelled"
+	RetrievalExhausted             = "exhausted"
 )
 
 // RetrievalQuery contains caller requests, never authority. The Kernel resolves
 // effective scopes from the durable session before looking at any index hit.
 type RetrievalQuery struct {
-	Kind      string     `json:"kind,omitempty"`
-	Text      string     `json:"text"`
-	Limit     int        `json:"limit,omitempty"`
-	MaxBytes  int        `json:"max_bytes,omitempty"`
-	ValidAt   *time.Time `json:"valid_at,omitempty"`
-	AsKnownAt *time.Time `json:"as_known_at,omitempty"`
+	Kind      string               `json:"kind,omitempty"`
+	AnchorID  string               `json:"evidence_id,omitempty"`
+	Anchor    *RetrievalReference  `json:"-"`
+	Covered   []RetrievalReference `json:"-"`
+	Before    int                  `json:"before,omitempty"`
+	After     int                  `json:"after,omitempty"`
+	Text      string               `json:"text"`
+	Limit     int                  `json:"limit,omitempty"`
+	MaxBytes  int                  `json:"max_bytes,omitempty"`
+	ValidAt   *time.Time           `json:"valid_at,omitempty"`
+	AsKnownAt *time.Time           `json:"as_known_at,omitempty"`
 }
 
 type RetrievalCoverage struct {

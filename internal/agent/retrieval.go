@@ -50,9 +50,26 @@ func (s *Session) newRetrievalTurn() *retrievalTurn {
 func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery) (memory.RetrievalResult, error) {
 	r.searches++
 	result := memory.RetrievalResult{Status: "unavailable"}
+	// Only the turn can resolve model-visible IDs into previously held evidence.
+	// Caller-supplied references and covered ranges never establish authority.
+	query.Anchor, query.Covered = nil, nil
+	if query.Kind == memory.RetrievalConversationExpansion {
+		for _, evidence := range r.evidence {
+			if evidence.Kind == memory.RetrievalConversationExcerpt {
+				ref := evidence.Reference()
+				query.Covered = append(query.Covered, ref)
+				if evidence.ID == query.AnchorID {
+					query.Anchor = &ref
+				}
+			}
+		}
+	}
+	validAnchor := query.Kind != memory.RetrievalConversationExpansion || query.Anchor != nil
 	if ctx.Err() != nil {
 		result.Status = "cancelled"
-	} else if r.searches > retrievalSearchLimit || r.work >= retrievalTurnWork || r.delivered >= retrievalTurnBytes {
+	} else if !validAnchor {
+		result.Status = memory.RetrievalUnavailable
+	} else if r.searches > retrievalSearchLimit || r.work >= retrievalTurnWork || r.delivered >= retrievalTurnBytes || len(r.evidence) >= retrievalResultLimit {
 		result.Status = "exhausted"
 	} else if r.kernel != nil && os.Getenv("EVIE_REMOTE_MEMORY") == "on" {
 		if query.Limit <= 0 || query.Limit > retrievalResultLimit {
@@ -61,6 +78,7 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 		if query.MaxBytes <= 0 || query.MaxBytes > retrievalResultBytes {
 			query.MaxBytes = retrievalResultBytes
 		}
+		query.Limit = min(query.Limit, retrievalResultLimit-len(r.evidence))
 		query.MaxBytes = min(query.MaxBytes, retrievalTurnBytes-r.delivered)
 		searchCtx, cancel := context.WithTimeout(ctx, min(retrievalSearchDeadline, retrievalTurnWork-r.work))
 		started := time.Now()
