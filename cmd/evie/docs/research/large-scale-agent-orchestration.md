@@ -124,6 +124,38 @@ accepted temporary correctness regressions, so its throughput is not evidence
 that Evie should weaken verification or that 10,000 agents ran simultaneously.
 ([Self-driving codebases](https://cursor.com/blog/self-driving-codebases))
 
+### Controlled research: more agents do not guarantee better answers
+
+The April 2026 revision of *Towards a Science of Scaling Agent Systems*
+evaluates 260 configurations across six benchmarks while standardizing prompts,
+capabilities, and compute. Results depend on task structure and coordination:
+decomposable work can benefit, while sequential planning can suffer. This is
+evidence for measuring quality alongside throughput, not a 10,000-agent
+benchmark or a universal agent-count threshold.
+([Paper, version 3](https://arxiv.org/abs/2512.08296v3))
+
+### Temporal: durable coordination with Go workers
+
+Temporal offers Go workers that poll task queues, with backlog metrics,
+execution slots, and rate controls. Its child-workflow documentation recommends
+no more than 1,000 children under one parent because child lifecycle events
+consume parent history; larger workloads can be partitioned across workflows.
+These mechanisms separate logical work from the workers executing it.
+([Task queues](https://docs.temporal.io/develop/worker-performance/task-queues),
+[Child workflows](https://docs.temporal.io/child-workflows))
+
+Temporal requires deterministic workflow code; external model calls belong in
+Activities whose accepted results are recorded for replay. That does not make
+an external call execute exactly once when an Activity is retried (an inference
+about retry semantics, not a capacity claim).
+([AI workflow guidance](https://go.temporal.io/platform-hub/faqs))
+
+**Recommendation:** Evaluate Temporal if durable, multi-host execution becomes
+an actual Evie requirement. It would be an infrastructure integration, with
+operational and persistence costs, rather than a replacement for Evie's Plugin,
+Preset, or authorization model. No framework adoption is proposed for the
+currently approved foreground subagent work.
+
 ## Inferred architecture for a large Evie run
 
 The following is a design recommendation derived from the evidence, not a
@@ -141,8 +173,9 @@ description of implemented Evie behavior or an amendment to its approved work.
    under leases. Pending-work limits, fair admission, and provider/capability
    quotas are separate controls. Ten thousand assignments may be processed by
    a much smaller number of concurrent workers.
-4. **Execute within Kernel authority.** Workers consume their selected
-   capabilities and resource grants. Delegation does not grant broader
+4. **Execute within Kernel authority.** Workers receive their selected Preset's
+   Plugins, capabilities, and resource grants. More workers do not imply memory
+   access or broader inheritance. Delegation does not grant broader
    credentials or allow the model to bypass admission policy. A remote worker
    must have its authority rechecked when work or results are accepted.
 5. **Store evidence outside the parent's prompt.** Results include bounded
@@ -155,9 +188,11 @@ description of implemented Evie behavior or an amendment to its approved work.
    reductions so compression does not erase contradictory evidence.
 7. **Recover and terminate explicitly.** Per-assignment retry policies,
    idempotency, cancellation propagation, durable accepted results, and
-   ownership-aware recovery prevent duplicate execution or a stale worker
-   overwriting a newer outcome. Inspect progress through aggregate state and
-   exceptions rather than an unbounded stream of every child event.
+   ownership-aware recovery prevent duplicate accepted outcomes and stale
+   workers overwriting newer outcomes. External operations need their own
+   idempotency or reconciliation; duplicate billable attempts remain possible.
+   Inspect progress through aggregate state and exceptions rather than an
+   unbounded stream of every child event.
 
 One possible shape is a coordinator over partition supervisors and leased
 workers, followed by several bounded result-reduction stages. The partition
@@ -185,6 +220,65 @@ test would establish infrastructure behavior, not the quality of a
 
 ## Evie assessment and quantitative sizing
 
-The accompanying codebase assessment and capacity calculations belong here;
-the online sources above alone cannot establish Evie's implemented capacity.
-No 10,000-worker Evie benchmark or runtime capability is asserted by this note.
+**Evie does not currently have a general execution framework for this scale.**
+It has reusable isolation, history, ownership, and recovery mechanisms. The
+approved Subagents work builds a first execution primitive, not a distributed
+worker fleet. The following findings come from code inspection on the research
+date; capacity implications are inferences, not measurements.
+
+| Area | Current or approved behavior | Missing scale contract |
+| --- | --- | --- |
+| Worker creation | The current [child-session helper](../../../../internal/eviedb/sessions_delegated.go) explicitly does not spawn a worker; tests construct concurrent children manually. | General assignment admission and scheduling. |
+| Approved Subagents feature | The [specification](../active/subagents.spec.md) limits delegation to one active child per parent turn, depth one, and foreground execution tied to parent authority. | Parallel/background runs with durable coordinator ownership and explicit cancellation/recovery semantics. |
+| Runtime and history | [Session turns](../../../../internal/agent/agent.go) are serialized per session; [each provider iteration](../../../../internal/agent/turn.go) reloads session events and reconstructs context. Compaction does not remove full-history database reads. | Measured memory, history, persistence, and connection capacity under concurrency. |
+| Existing scheduling precedent | The [memory compiler](../../../../internal/eviedb/compiler_worker.go) has persisted jobs, leases, retries, and recovery, but admits one active local inference request across cooperating processes. | A general agent queue, fair admission, and independent worker execution. |
+| Provider and budget control | The [OpenRouter client](../../../../internal/openrouter/client.go) dispatches directly without a shared request/token limiter or general retry scheduler. [Usage aggregation](../../../../internal/eviedb/usage.go) observes responses rather than reserving run budgets. | Shared provider/capability capacity, attempt-aware cost accounting, and budget admission. |
+| Deployment | The [web server](../../../../internal/web/serve.go) is loopback-only without network authentication and keeps approvals in process-local channels. | Authenticated remote workers, distributed authority, durable communication, and appropriate storage access. |
+
+The [default turn timing](../../../../internal/agent/ownership.go) renews leases
+every ten seconds. Each [heartbeat](../../../../internal/eviedb/turn_leases.go)
+uses an immediate write transaction; provider and capability authorization also
+use durable write fences. **Illustrative arithmetic:** 10,000 simultaneously
+active turns would generate approximately **1,000 heartbeat write transactions
+per second**, before events, authorization, or result writes. This is not a
+benchmark. Heartbeat failures cancel local turns, so storage contention can
+affect lifecycle correctness as well as throughput.
+
+Evie's [database setup](../../../../internal/eviedb/db.go) uses SQLite WAL with
+a five-second busy timeout. WAL permits concurrent readers but only one writer
+at a time, and direct access to the same WAL database requires processes on the
+same host. Neither fact proves SQLite cannot manage 10,000 queued assignments.
+Measure the actual write workload; remote workers would need a supported
+service boundary or a different storage arrangement, not a shared WAL file
+mounted across machines.
+([SQLite WAL constraints](https://www.sqlite.org/wal.html))
+
+Provider capacity must be established separately. OpenRouter documents no
+platform request cap for paid model variants, but upstream providers can still
+return capacity/rate-limit errors. Its guidance covers exponential backoff and
+honoring `Retry-After`. Search and other selected Plugins also consume external
+service capacity. No account-specific limits were queried during this research.
+([OpenRouter limits](https://openrouter.ai/docs/api_reference/limits))
+
+**Recommended sequence:** finish the approved foreground primitive, then define
+a separate durable parallel-run feature. Target many queued assignments with
+bounded active workers first; measure and increase concurrency against a fixed
+quality target. Preserve selected Plugins and access grants at every stage.
+Introduce hierarchy when planning or result aggregation requires it, and
+evaluate distributed infrastructure when a measured requirement justifies it.
+The evidence does not call for a language rewrite or an immediate database
+replacement.
+
+No runtime, load, live-provider, or cost benchmark was run for this research.
+The audit identifies missing mechanisms and pressure points, not an established
+numeric ceiling for Evie.
+
+## Local verification
+
+- `git diff --check`: passed with no diagnostics.
+- `git diff --no-index --check /dev/null cmd/evie/docs/research/large-scale-agent-orchestration.md`:
+  no whitespace diagnostics; exit 1 reflects the new file differing from
+  `/dev/null`.
+- A Python `pathlib` check resolved every local Markdown link successfully.
+- `./scripts/verify-change.sh` and load tests were not run: this change contains
+  research documentation only and makes no runtime performance claim.
