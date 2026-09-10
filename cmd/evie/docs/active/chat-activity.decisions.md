@@ -18,3 +18,16 @@
 - Durations use accepted-user to terminal timestamps. Failed live turns show
   an incomplete label; successful durations replay from persisted timestamps.
   Public commentary is model output, so its frequency cannot be guaranteed.
+
+- File inspection uses the content recorded for the selected tool action.
+  It does not read current disk bytes or execute source code. Full edit
+  previews exist in live approval state; historical replacements remain
+  explicitly partial instead of being reconstructed from unrelated reads.
+- Selection stores the session ID and tool item key, deriving the current
+  preview on each render. This pins the selected action while preserving live
+  approval/outcome updates and prevents a different session reusing its key.
+- File action rows open the inspector instead of inline disclosures. The
+  inspector owns code, side-by-side before/after changes, and exact tool
+  details. Pending file approvals retain their controls in chat; their
+  full previews open only in the inspector. This reflects David’s follow-up
+  request to remove the duplicate inline diffs.

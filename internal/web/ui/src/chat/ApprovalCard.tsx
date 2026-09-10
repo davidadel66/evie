@@ -14,17 +14,18 @@ type Tool = Extract<Item, { kind: "tool" }>;
 type Props = {
   tool: Tool;
   onAnswer: (reqId: string, approve: boolean) => void;
+  compact?: boolean;
 };
 
-export function ApprovalCard({ tool, onAnswer }: Props) {
+export function ApprovalCard({ tool, onAnswer, compact }: Props) {
   const approval = tool.approval!;
   if (approval.state === "pending") {
-    return <Pending tool={tool} onAnswer={onAnswer} />;
+    return <Pending tool={tool} onAnswer={onAnswer} compact={compact} />;
   }
   return <Resolved tool={tool} />;
 }
 
-function Pending({ tool, onAnswer }: Props) {
+function Pending({ tool, onAnswer, compact }: Props) {
   const { ownerName } = useMemoryPresentation();
   const view = readApprovalArgs(tool.name, tool.args, ownerName);
   const preview = tool.approval!.preview;
@@ -48,18 +49,18 @@ function Pending({ tool, onAnswer }: Props) {
         </span>
       </div>
 
-      {view.shape === "memory" && <MemoryApproval view={view} />}
-      {preview ? (
+      {!compact && view.shape === "memory" && <MemoryApproval view={view} />}
+      {!compact && (preview ? (
         <Diff oldText={preview.oldText} newText={preview.newText} isNew={preview.isNew} />
       ) : view.shape === "diff" ? (
         <Diff oldText={view.oldText} newText={view.newText} />
-      ) : null}
-      {!preview && view.shape === "statement" && (
+      ) : null)}
+      {!compact && !preview && view.shape === "statement" && (
         <pre className="text-body m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.statement}
         </pre>
       )}
-      {!preview && view.shape === "json" && (
+      {!compact && !preview && view.shape === "json" && (
         <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.json}
         </pre>

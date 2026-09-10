@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContextScope,
   ContextSessionSelection,
@@ -7,6 +7,7 @@ import type {
 } from "./api/contextSessions";
 import { MemoryPresentationProvider } from "./memory/presentation";
 import { Panel, type InspectorTarget } from "./artifacts/Panel";
+import { inspectToolFile, selectedFileInspection, type FileSelection } from "./artifacts/fileInspection";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
@@ -43,28 +44,41 @@ export default function App() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorFocused, setInspectorFocused] = useState(false);
   const [inspectorOverride, setInspectorOverride] = useState<InspectorTarget>();
+  const [selectedFile, setSelectedFile] = useState<FileSelection>();
+  const fileTrigger = useRef<HTMLButtonElement | null>(null);
+  const activityTrigger = useRef<HTMLButtonElement | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("memory");
 
   const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
+  const selectedInspection = selectedFileInspection(selectedFile, contextSessions.snapshot?.activeSession?.id, items);
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
-  const inspectorTarget = inspectorOverride ?? defaultInspectorTarget(
-    activeView,
-    activeWorkspace,
-    contextSessions.snapshot?.activeScope,
-    latestFileDiff?.kind === "tool" && latestFileDiff.approval?.preview
-      ? {
-          kind: "file-diff",
-          path: latestFileDiff.approval.preview.path,
-          oldText: latestFileDiff.approval.preview.oldText,
-          newText: latestFileDiff.approval.preview.newText,
-          isNew: latestFileDiff.approval.preview.isNew,
-          state: latestFileDiff.approval.state,
-        }
-      : undefined,
-  );
+  const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
+  const inspectorTarget: InspectorTarget = selectedInspection
+    ? {kind: "file", file: selectedInspection}
+    : inspectorOverride ?? defaultInspectorTarget(activeView, activeWorkspace, contextSessions.snapshot?.activeScope, latestFile ? {kind: "file", file: latestFile} : undefined);
+
+  const closeInspector = () => {
+    setInspectorOpen(false);
+    setInspectorFocused(false);
+    requestAnimationFrame(() => {
+      restoreFileFocus(fileTrigger.current, activityTrigger.current);
+    });
+  };
+  useEffect(() => {
+    if (!inspectorOpen || !selectedFile) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setInspectorOpen(false);
+      setInspectorFocused(false);
+      requestAnimationFrame(() => restoreFileFocus(fileTrigger.current, activityTrigger.current));
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [inspectorOpen, selectedFile]);
 
   const pending = items.find((item) => item.kind === "tool" && item.approval?.state === "pending");
   const pendingId = pending?.kind === "tool" ? pending.approval?.reqId : undefined;
@@ -73,7 +87,7 @@ export default function App() {
     if (!pendingId || activeView.kind !== "chat") return;
     const onKey = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement | null;
-      if (element?.tagName === "TEXTAREA" || element?.tagName === "INPUT") return;
+      if (element?.tagName === "TEXTAREA" || element?.tagName === "INPUT" || element?.closest('[aria-label="Inspector"]')) return;
       const key = event.key.toLowerCase();
       if (key === "y") answer(pendingId, true);
       else if (key === "n") answer(pendingId, false);
@@ -94,6 +108,7 @@ export default function App() {
     setViews((current) => current.some((open) => open.id === view.id) ? current : [...current, view]);
     setActiveViewId(view.id);
     setInspectorOverride(undefined);
+    setSelectedFile(undefined);
     setMobileNavOpen(false);
   };
 
@@ -104,6 +119,7 @@ export default function App() {
   const activateView = (view: WorkbenchView) => {
     setActiveViewId(view.id);
     setInspectorOverride(undefined);
+    setSelectedFile(undefined);
   };
 
   const closeView = (view: WorkbenchView) => {
@@ -113,6 +129,7 @@ export default function App() {
     setViews(next);
     if (view.id === activeViewId) setActiveViewId(next[Math.max(0, index - 1)]?.id ?? "chat");
     setInspectorOverride(undefined);
+    setSelectedFile(undefined);
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {
@@ -121,6 +138,7 @@ export default function App() {
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
+      setSelectedFile(undefined);
       setMobileNavOpen(false);
     } catch {
       // useContextSessions owns the actionable error message.
@@ -151,6 +169,7 @@ export default function App() {
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
+      setSelectedFile(undefined);
     } catch {
       // useContextSessions owns the actionable error message.
     }
@@ -211,7 +230,15 @@ export default function App() {
                 contextSessions.snapshot?.activeScope ? (
                   <>
                     <ScopeBar scope={contextSessions.snapshot.activeScope} onOpenWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })} />
-                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
+                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={(key, trigger) => {
+                      const sessionId = contextSessions.snapshot?.activeSession?.id;
+                      if (!sessionId) return;
+                      fileTrigger.current = trigger;
+                      activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
+                      setSelectedFile({sessionId, key});
+                      setInspectorOpen(true);
+                      setInspectorFocused(false);
+                    }} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
                     <Composer
                       value={draft}
                       onChange={setDraft}
@@ -240,6 +267,7 @@ export default function App() {
                   onSource={(source) => {
                     setDataSource(source);
                     setInspectorOverride(undefined);
+                    setSelectedFile(undefined);
                   }}
                   snapshot={contextSessions.snapshot}
                 />
@@ -276,10 +304,7 @@ export default function App() {
             <Panel
               target={inspectorTarget}
               focused={inspectorFocused}
-              onClose={() => {
-                setInspectorOpen(false);
-                setInspectorFocused(false);
-              }}
+              onClose={closeInspector}
             />
           )}
         </div>
@@ -424,4 +449,12 @@ function loadChatTextSize(): ChatTextSize {
   } catch {
     return defaultChatTextSize;
   }
+}
+
+function restoreFileFocus(file: HTMLButtonElement | null, activity: HTMLButtonElement | null) {
+  // Completion can collapse/unmount the original action while inspection is
+  // open. Keep keyboard navigation in chat even if that origin is now hidden.
+  const target = [file, activity, document.querySelector<HTMLButtonElement>('button[aria-label="Toggle inspector"]')]
+    .find((element) => element?.isConnected && element.getClientRects().length > 0);
+  target?.focus();
 }
