@@ -32,3 +32,14 @@ it("distinguishes unavailable memory from a successful empty search", () => {
   expect(empty).toContain("No matches");
   expect(empty).not.toContain("Memory unavailable");
 });
+
+it("labels conversation excerpts separately and counts all supplied evidence", () => {
+  const conversation = renderToStaticMarkup(<MemoryActivity activity={{ snapshotId: "conversation-request", status: "success", acceptedCount: 0, excerptCount: 2 }} onOpen={() => undefined} />);
+  expect(conversation).toContain("Conversation excerpt");
+  expect(conversation).toContain("2 supplied");
+  expect(conversation).not.toContain("Accepted memory");
+  const mixed = renderToStaticMarkup(<MemoryActivity activity={{ snapshotId: "mixed-request", status: "success", acceptedCount: 1, excerptCount: 2 }} onOpen={() => undefined} />);
+  expect(mixed).toContain("Accepted memory");
+  expect(mixed).toContain("Conversation excerpt");
+  expect(mixed).toContain("3 supplied");
+});

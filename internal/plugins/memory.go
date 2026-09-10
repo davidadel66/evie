@@ -23,22 +23,23 @@ const (
 )
 
 const (
-	MemorySearchCapabilityID          CapabilityID = "memory.search"
-	MemoryListScopesCapabilityID      CapabilityID = "memory.list_scopes"
-	MemoryListObjectsCapabilityID     CapabilityID = "memory.list_objects"
-	MemoryInspectObjectCapabilityID   CapabilityID = "memory.inspect_object"
-	MemoryQueryClaimsCapabilityID     CapabilityID = "memory.query_claims"
-	MemoryLookupAliasCapabilityID     CapabilityID = "memory.lookup_alias"
-	MemoryTraverseCapabilityID        CapabilityID = "memory.traverse"
-	MemoryRememberLiteralCapabilityID CapabilityID = "memory.remember_literal"
-	MemoryRememberEntityCapabilityID  CapabilityID = "memory.remember_entity"
-	MemoryCorrectClaimCapabilityID    CapabilityID = "memory.correct_claim"
-	MemoryCreateGraphLinkCapabilityID CapabilityID = "memory.create_graph_link"
-	MemoryPromoteClaimCapabilityID    CapabilityID = "memory.promote_claim"
-	MemoryRetireCapabilityID          CapabilityID = "memory.retire"
-	MemoryRestoreCapabilityID         CapabilityID = "memory.restore"
-	MemoryRetractSourceCapabilityID   CapabilityID = "memory.retract_source"
-	MemoryRestoreSourceCapabilityID   CapabilityID = "memory.restore_source"
+	MemorySearchCapabilityID              CapabilityID = "memory.search"
+	MemorySearchConversationsCapabilityID CapabilityID = "memory.search_conversations"
+	MemoryListScopesCapabilityID          CapabilityID = "memory.list_scopes"
+	MemoryListObjectsCapabilityID         CapabilityID = "memory.list_objects"
+	MemoryInspectObjectCapabilityID       CapabilityID = "memory.inspect_object"
+	MemoryQueryClaimsCapabilityID         CapabilityID = "memory.query_claims"
+	MemoryLookupAliasCapabilityID         CapabilityID = "memory.lookup_alias"
+	MemoryTraverseCapabilityID            CapabilityID = "memory.traverse"
+	MemoryRememberLiteralCapabilityID     CapabilityID = "memory.remember_literal"
+	MemoryRememberEntityCapabilityID      CapabilityID = "memory.remember_entity"
+	MemoryCorrectClaimCapabilityID        CapabilityID = "memory.correct_claim"
+	MemoryCreateGraphLinkCapabilityID     CapabilityID = "memory.create_graph_link"
+	MemoryPromoteClaimCapabilityID        CapabilityID = "memory.promote_claim"
+	MemoryRetireCapabilityID              CapabilityID = "memory.retire"
+	MemoryRestoreCapabilityID             CapabilityID = "memory.restore"
+	MemoryRetractSourceCapabilityID       CapabilityID = "memory.retract_source"
+	MemoryRestoreSourceCapabilityID       CapabilityID = "memory.restore_source"
 )
 
 type memoryCapabilityDescriptor struct {
@@ -49,6 +50,7 @@ type memoryCapabilityDescriptor struct {
 
 var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
 	{id: MemorySearchCapabilityID, read: true, build: (*Memory).searchTool},
+	{id: MemorySearchConversationsCapabilityID, read: true, build: (*Memory).searchConversationsTool},
 	{id: MemoryListScopesCapabilityID, read: true, build: (*Memory).listScopesTool},
 	{id: MemoryListObjectsCapabilityID, read: true, build: (*Memory).listObjectsTool},
 	{id: MemoryInspectObjectCapabilityID, read: true, build: (*Memory).inspectObjectTool},
@@ -160,7 +162,7 @@ func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
 	}
 	var capabilities []ToolCapability
 	for _, capability := range p.ToolCapabilities() {
-		if capability.ID != MemorySearchCapabilityID {
+		if capability.ID != MemorySearchCapabilityID && capability.ID != MemorySearchConversationsCapabilityID {
 			capabilities = append(capabilities, capability)
 		}
 	}

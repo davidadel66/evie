@@ -17,6 +17,7 @@ const (
 // RetrievalQuery contains caller requests, never authority. The Kernel resolves
 // effective scopes from the durable session before looking at any index hit.
 type RetrievalQuery struct {
+	Kind      string     `json:"kind,omitempty"`
 	Text      string     `json:"text"`
 	Limit     int        `json:"limit,omitempty"`
 	MaxBytes  int        `json:"max_bytes,omitempty"`

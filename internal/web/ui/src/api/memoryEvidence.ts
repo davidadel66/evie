@@ -48,6 +48,7 @@ export type MemoryEvidenceReceipt = {
         session_id: string;
         source_scope_key: string;
         authority: string;
+        actor?: string;
         observed_at: string;
         evidence: string;
         locator_kind: string;

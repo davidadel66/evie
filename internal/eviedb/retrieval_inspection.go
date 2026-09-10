@@ -26,6 +26,19 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 	result := make([]memory.RetrievalInspection, 0, len(refs))
 	for _, ref := range refs {
 		item := memory.RetrievalInspection{Reference: ref}
+		if ref.Kind == memory.RetrievalConversationExcerpt {
+			evidence, eligible, err := s.resolveConversationReference(ctx, tx, scope, ref)
+			if err != nil {
+				return nil, err
+			}
+			if eligible {
+				item.Evidence = &evidence
+				item.Available = true
+				item.CurrentStatus = memory.SemanticStatusActive
+			}
+			result = append(result, item)
+			continue
+		}
 		if ref.Kind != memory.RetrievalAcceptedMemory || ref.ClaimID == "" || ref.ClaimOperationID == "" || ref.AsKnownAt.IsZero() || ref.ValidAt.IsZero() {
 			result = append(result, item)
 			continue

@@ -133,3 +133,85 @@ background index to finish, and request a focused lookup from another eligible
 conversation. Open Accepted memory in the activity card, then reopen the
 conversation after process restart. Source inspection must retain the original
 reference and show an unavailable state after source access is revoked.
+
+## #157: scoped conversation evidence and retirement association
+
+Conversation search reads allowlisted public user/assistant content from the
+same durable Context Scope: one Workspace, one project, or Global-to-Global.
+Accepted Global-memory access is not raw Global-conversation access. General
+remains a Workspace. The source session may be old; retrieval does not resume it,
+read its session-scoped Claims, or widen current mutation authority.
+
+The durable association is the existing immutable Source Link tuple
+`(claim_id,event_id,event_part,locator_kind,locator_value,evidence_sha256)`.
+For ordinary excerpts, the Kernel subtracts the union of corresponding ranges
+for every retired Claim or ineligible Source Link before selecting any passage.
+A whole-content locator denotes the entire cited message; a canonical UTF-8
+range denotes exactly that half-open byte interval. Multiple supporting Claims
+share a passage: one retired association suppresses its interval even if another
+Claim remains active. Restoration removes only that Claim's exclusion, so an
+independent retired association still applies. Repeating a suppressed interval
+inside a larger excerpt cannot evade filtering. Unrelated eligible messages and
+non-overlapping precise passages remain available.
+
+The implementation does not infer smaller fact-level ranges from whole-content
+citations. Such provenance cannot prove that a sub-passage is independently
+unrelated. Whole-content suppression is therefore visible as the cited-message
+boundary, not silently widened to the whole session. If a later acceptance case
+requires recovering unrelated facts inside the same whole-content source, that
+requires a new approved provenance association; it is not manufactured here.
+
+The event index has its own immutable generation and durable retained-row
+checkpoint. Initial backfill runs in bounded maintenance batches; eligible
+appends update the allowlisted projection inside the event transaction. Only
+that generation's complete coverage allows conversation queries. The active
+accepted-Claim generation remains independently queryable while event coverage
+is building. Every hit is rechecked for scope, current source access, secret
+fences, retirement intervals and exact UTF-8 locator/hash before rendering.
+Source text remains in the synthetic request projection; durable outcomes carry
+counts/status, and receipts retain exact original references.
+
+First red: `go test ./internal/agent -run
+'^TestConversationSearchFindsUncompiledOriginalStatement$' -count=1` failed
+because the complete turn had no conversation-search evidence message.
+
+A second red exposed a stale-index bug: retiring a precise range removed its
+entire event from candidates, hiding a disjoint passage. Search now treats stale
+event hits only as suggestions and applies the current exclusion union to the
+original bytes. Pending refresh is reported as partial coverage. Seven complete
+reader turns cover shared ranges, overlapping ranges, independent restoration,
+and a disjoint surviving passage without writing semantic state during reads.
+
+The scope matrix verifies exact source IDs in both provider requests and durable
+receipts for Global, General, another Workspace, and two projects, including
+earlier current-session roots and same-area sibling sessions. Secret-bearing
+content is excluded as a whole field. Long UTF-8 excerpts are centered on the
+match, capped at 800 bytes, and preserve original byte positions through restart.
+Assistant content remains attributed to the assistant with authority `none`.
+Only public message content is indexed; tool payloads are not conversation data.
+Retirement follows recorded Source Links; an unlinked assistant paraphrase is
+still separately attributed conversation evidence, not an inferred association.
+
+### #157 verification
+
+- `go test ./internal/agent ./internal/plugins ./internal/web ./cmd/evie` — pass
+  (agent 2.586 s; plugins/web cached; command 10.221 s).
+- `go test -race ./internal/agent -run '^TestConversationSearch' -count=1` — pass,
+  6.732 s (before the separately verified scope-matrix addition).
+- `go test ./internal/agent -run '^TestConversationSearchTurnScopeMatrixAndEarlierRoots$' -count=1` — pass, 0.354 s.
+- `go vet ./internal/agent ./internal/eviedb ./internal/plugins ./internal/web ./cmd/evie` — pass.
+- From `internal/web/ui`, `npx vitest run src/chat/MemoryActivity.test.tsx src/artifacts/MemoryEvidence.test.tsx src/api/memoryEvidence.test.ts` — 3 files, 8 tests passed;
+  `npx tsc -b` — pass.
+- `git diff --check` — pass. Final repository verification remains pending all
+  thirteen tickets.
+
+The original Stage 3 schema check now allows only the additional event FTS
+projection and its SQLite-managed shadow tables. The accepted-slice measurement
+reads accepted-generator coverage separately from combined host maintenance;
+its retained #156 measurements are unchanged. Existing published preset hashes
+and tool schemas remain fixed; the unreleased current preset adds scoped search.
+
+Demonstration: record an unaccepted, tentative statement in one conversation,
+then ask for it from a second conversation in the same area. Open Conversation
+excerpt to inspect its speaker, original session, and byte range. A conversation
+in another Workspace or project must not receive that raw history.

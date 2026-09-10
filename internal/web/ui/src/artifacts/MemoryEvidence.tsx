@@ -25,15 +25,16 @@ export function MemoryEvidenceView({ receipt }: { receipt: MemoryEvidenceReceipt
     <p className="text-muted-text mt-2 text-xs leading-5">Evidence included in this request. An explicit answer citation is recorded separately when present.</p>
     {receipt.evidence.length === 0 && <p className="text-muted-text mt-4 text-xs">{receipt.status === "empty" ? "The search returned no matches." : "No evidence was supplied by this search."}</p>}
     {receipt.evidence.map((item) => <section key={item.reference.id} className="border-hair mt-5 border-t pt-4">
-      <h3 className="text-teal text-xs">Accepted memory</h3>
+      <h3 className="text-teal text-xs">{item.reference.kind === "conversation_excerpt" ? "Conversation excerpt" : "Accepted memory"}</h3>
       {!item.available || !item.evidence ? <p className="text-muted-text mt-2 text-xs">Source unavailable under current access.</p> : <>
         <p className="text-body mt-2 text-sm leading-6 whitespace-pre-wrap">{item.evidence.text}</p>
+        {item.reference.kind === "conversation_excerpt" && <p className="text-muted-text mt-2 text-xs">Attributed conversation evidence; preserves what was said and its uncertainty.</p>}
         <p className="text-muted-text mt-2 text-xs">Original state: {item.reference.status}{item.current_status !== item.reference.status && <> · Current state: {item.current_status}</>}</p>
         {item.evidence.sources.map((source) => <div key={`${source.event_id}:${source.locator_value}`} className="border-hair mt-4 border-l pl-3">
           <blockquote className="text-body text-xs leading-5 whitespace-pre-wrap">{source.evidence || "Source text unavailable."}</blockquote>
-          <p className="text-muted-text mt-2 text-xs">{source.authority} · {source.observed_at}</p>
+          <p className="text-muted-text mt-2 text-xs">{source.actor && <>Speaker: {source.actor} · </>}Authority: {source.authority} · {source.observed_at}</p>
           <details className="text-muted-text mt-2 break-all text-[11px]"><summary className="cursor-pointer">Source reference</summary>
-            <p>{source.event_id}<br />{source.source_scope_key}<br />{source.locator_kind}{source.locator_value && ` ${source.locator_value}`}<br />{source.evidence_sha256}</p>
+            <p>{source.event_id}<br />{source.session_id}<br />{source.source_scope_key}<br />{source.locator_kind}{source.locator_value && ` ${source.locator_value}`}<br />{source.evidence_sha256}</p>
           </details>
         </div>)}
       </>}

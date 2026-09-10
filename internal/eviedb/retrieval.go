@@ -26,6 +26,12 @@ const (
 var ErrInvalidRetrievalQuery = errors.New("invalid bounded memory query")
 
 func normalizeRetrievalQuery(q memory.RetrievalQuery) (memory.RetrievalQuery, string, error) {
+	if q.Kind == "" {
+		q.Kind = memory.RetrievalAcceptedMemory
+	}
+	if q.Kind != memory.RetrievalAcceptedMemory && q.Kind != memory.RetrievalConversationExcerpt {
+		return q, "", ErrInvalidRetrievalQuery
+	}
 	q.Text = strings.TrimSpace(q.Text)
 	if q.Text == "" || len(q.Text) > retrievalQueryLimit || !utf8.ValidString(q.Text) {
 		return q, "", ErrInvalidRetrievalQuery
@@ -61,6 +67,9 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	query, fts, err := normalizeRetrievalQuery(query)
 	if err != nil {
 		return result, err
+	}
+	if query.Kind == memory.RetrievalConversationExcerpt {
+		return s.searchConversations(ctx, scope, query, fts)
 	}
 	ctx, cancel := context.WithTimeout(ctx, retrievalDeadline)
 	defer cancel()
@@ -370,6 +379,16 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 	}
 	var valid []memory.RetrievalEvidence
 	for _, prior := range evidence {
+		if prior.Kind == memory.RetrievalConversationExcerpt {
+			current, eligible, err := s.resolveConversationReference(ctx, tx, scope, prior.Reference())
+			if err != nil {
+				return nil, err
+			}
+			if eligible {
+				valid = append(valid, current)
+			}
+			continue
+		}
 		if prior.Kind != memory.RetrievalAcceptedMemory {
 			continue
 		}

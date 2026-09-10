@@ -20,7 +20,7 @@ import (
 const (
 	EvieVersion                                = "1.0.0"
 	StandardPresetID                  PresetID = "standard"
-	StandardPresetVersion                      = "sha256:b87347c6c77598a5b264e5460f08a5690afbaedf4317bcc43e499365889a6cc1"
+	StandardPresetVersion                      = "sha256:06db695e6f174356ecbec863fa0a7a0c83f274ae3c45ca46a681028ad0d1c27a"
 	preRetrievalStandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
 
 	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"

@@ -71,7 +71,8 @@ func TestMemoryRetrievalSliceMeasurements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	coverageBefore, err := f.store.MemoryIndexCoverage(ctx)
+	initialSearch, err := f.store.SearchMemory(ctx, owner.ScopeContext(), memory.RetrievalQuery{Text: fixture.Query})
+	coverageBefore := initialSearch.Coverage
 	if err != nil {
 		t.Fatal(err)
 	}

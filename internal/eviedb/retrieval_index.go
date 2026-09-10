@@ -58,7 +58,7 @@ END;
 `
 
 func ensureRetrievalSchema(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, retrievalSchema)
+	_, err := db.ExecContext(ctx, retrievalSchema+conversationRetrievalSchema)
 	return err
 }
 
@@ -73,16 +73,16 @@ func memoryIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memo
 }
 
 func (s *Store) MemoryIndexCoverage(ctx context.Context) (memory.RetrievalCoverage, error) {
-	return memoryIndexCoverage(ctx, s.db)
+	return combinedRetrievalCoverage(ctx, s.db)
 }
 
 // RefreshMemoryIndex is maintenance, deliberately absent from SearchMemory.
 // Repeated bounded batches resume the same durable generation after restart.
-func (s *Store) RefreshMemoryIndex(ctx context.Context, limit int) (memory.RetrievalCoverage, error) {
+func (s *Store) refreshAcceptedMemoryIndex(ctx context.Context, limit int) (memory.RetrievalCoverage, error) {
 	if limit < 1 || limit > 256 {
 		return memory.RetrievalCoverage{}, errors.New("retrieval refresh batch must be between 1 and 256")
 	}
-	coverage, err := s.MemoryIndexCoverage(ctx)
+	coverage, err := memoryIndexCoverage(ctx, s.db)
 	if err != nil || (coverage.State == "active" && coverage.Pending == 0) {
 		return coverage, err
 	}
