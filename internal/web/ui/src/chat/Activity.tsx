@@ -4,12 +4,13 @@ import type { Item } from "../store/reducer";
 import { ChevronDown, Database, FileIcon, Wrench } from "../ui/Icon";
 import { ApprovalCard } from "./ApprovalCard";
 import { AssistantMessage, DiscardWarning } from "./Message";
+import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { elapsedLabel, needsAttention, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
-type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener };
+type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenMemory?: MemoryOpener };
 
-export function Activity({ group, onAnswer, onOpenFile }: Props) {
+export function Activity({ group, onAnswer, onOpenFile, onOpenMemory }: Props) {
   const [manual, setManual] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const bodyID = useId();
@@ -34,16 +35,16 @@ export function Activity({ group, onAnswer, onOpenFile }: Props) {
         <span className={open ? "rotate-180" : ""}><ChevronDown size={13} /></span>
       </button>
       <div id={bodyID} hidden={!open} className="border-hair mt-3 space-y-4 border-t pt-4">
-        {open && <ActivityItems items={group.activity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} />}
+        {open && <ActivityItems items={group.activity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenMemory={onOpenMemory} />}
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
-      {!open && <div className="space-y-3"><ActivityItems items={group.activity.filter(needsAttention)} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} /></div>}
+      {!open && <div className="space-y-3"><ActivityItems items={group.activity.filter(needsAttention)} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenMemory={onOpenMemory} /></div>}
       {!group.active && !complete && <p className="text-amber-ink mt-2 text-xs">Completion wasn’t recorded here. Reload to check the saved conversation.</p>}
     </section>
   );
 }
 
-function ActivityItems({items, active, onAnswer, onOpenFile}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener}) {
+function ActivityItems({items, active, onAnswer, onOpenFile, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenMemory?: MemoryOpener}) {
   const rows: (Item | ToolItem[])[] = [];
   for (const item of items) {
     if (item.kind === "tool" && !needsAttention(item)) {
@@ -57,6 +58,7 @@ function ActivityItems({items, active, onAnswer, onOpenFile}: {items: Item[]; ac
       return <ToolBatch key={row[0].key} tools={row} active={active} onAnswer={onAnswer} onOpenFile={onOpenFile} />;
     }
     switch (row.kind) {
+      case "memory": return <MemoryActivity key={row.key} activity={row.memory} onOpen={onOpenMemory} />;
       case "assistant": return <AssistantMessage key={row.key} text={row.text} streaming={active && row.streaming} discarded={row.discarded} />;
       case "notice": return <DiscardWarning key={row.key} message={row.text} />;
       case "reasoning": return <details key={row.key} className="text-muted-text text-[13px]">

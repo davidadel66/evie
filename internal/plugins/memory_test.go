@@ -31,7 +31,7 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	plugin := NewMemory(&stubSemanticKernel{})
 	manifest := plugin.Manifest()
-	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.1.0" {
+	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.2.0" {
 		t.Fatalf("manifest identity = %s@%s", manifest.ID, manifest.ImplementationVersion)
 	}
 	if err := plugin.Start(context.Background()); err != nil {
@@ -57,12 +57,14 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 		}
 	}
 	wantIDs := []string{
+		"memory.search",
 		"memory.list_scopes", "memory.list_objects", "memory.inspect_object", "memory.query_claims",
 		"memory.lookup_alias", "memory.traverse", "memory.remember_literal", "memory.remember_entity",
 		"memory.correct_claim", "memory.create_graph_link", "memory.promote_claim", "memory.retire",
 		"memory.restore", "memory.retract_source", "memory.restore_source",
 	}
 	wantSchemas := []string{
+		"memory_search",
 		"memory_list_scopes", "memory_list_objects", "memory_inspect_object", "memory_query_claims",
 		"memory_lookup_alias", "memory_traverse", "memory_remember_literal", "memory_remember_entity",
 		"memory_correct_claim", "memory_create_graph_link", "memory_promote_claim", "memory_retire",
@@ -150,7 +152,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, schema := range resolved.Toolset.Schemas() {
-		if schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
+		if schema.Function.Name == "memory_search" || schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
 			schema.Function.Name == "memory_inspect_object" || schema.Function.Name == "memory_query_claims" ||
 			schema.Function.Name == "memory_lookup_alias" || schema.Function.Name == "memory_traverse" {
 			t.Fatalf("remote-memory opt-out exposed read schema %q", schema.Function.Name)
@@ -158,7 +160,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	}
 	for _, capability := range resolved.Receipt.Capabilities {
 		switch CapabilityID(capability.ID) {
-		case MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
+		case MemorySearchCapabilityID, MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
 			MemoryQueryClaimsCapabilityID, MemoryLookupAliasCapabilityID, MemoryTraverseCapabilityID:
 			t.Fatalf("remote-memory opt-out pinned read Capability %q", capability.ID)
 		}
@@ -166,7 +168,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "memory_remember_literal") {
 		t.Fatal("remote-memory opt-out removed non-egress mutation capabilities")
 	}
-	if len(resolved.Warnings) != 6 {
+	if len(resolved.Warnings) != 7 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }
@@ -637,6 +639,10 @@ func (p originalMemoryPlugin) Manifest() Manifest {
 	m := p.Memory.Manifest()
 	m.ImplementationVersion = "1.0.0"
 	m.ResumableFrom = nil
+	m.Capabilities = nil
+	for _, capability := range p.ToolCapabilities() {
+		m.Capabilities = append(m.Capabilities, CapabilityContract{ID: capability.ID, Version: capability.ContractVersion})
+	}
 	return m
 }
 func (p originalMemoryPlugin) ToolCapabilities() []ToolCapability {
@@ -665,7 +671,7 @@ func TestOriginalMemoryReceiptsResumeWithFrozenTools(t *testing.T) {
 		}
 	}
 
-	old, err := makeManager(originalMemoryPlugin{p}).ResolvePreset(StandardPresetID)
+	old, err := makeManager(originalMemoryPlugin{p}).resolvePreset(preRetrievalStandardPreset())
 	if err != nil {
 		t.Fatal(err)
 	}

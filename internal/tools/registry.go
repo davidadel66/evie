@@ -150,6 +150,7 @@ type PreparedTool struct {
 // It is deliberately absent from model arguments: a Capability can use the
 // current scope, source event, and live turn fence but cannot choose them.
 type InvocationContext struct {
+	SearchMemory  func(context.Context, memory.RetrievalQuery) (memory.RetrievalResult, error)
 	Scope         memory.ScopeContext
 	Lease         memory.TurnLease
 	SourceEventID memory.EventID

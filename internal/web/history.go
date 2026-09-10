@@ -27,6 +27,7 @@ type historyItem struct {
 	Streaming bool             `json:"streaming"`
 	StartedAt int64            `json:"startedAt"`
 	Tone      string           `json:"tone,omitempty"`
+	Memory    *memoryActivity  `json:"memory,omitempty"`
 }
 
 func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +105,14 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 		roots[e.ID] = turn
 		first := len(items)
 		switch e.Type {
+		case memory.EventContextSnapshot:
+			activity, err := projectMemoryActivity(e)
+			if err != nil {
+				return nil, err
+			}
+			if activity != nil {
+				items = append(items, historyItem{Kind: "memory", Key: string(e.ID), Memory: activity})
+			}
 		case memory.EventUserMessage:
 			items = append(items, historyItem{Kind: "user", Key: string(e.ID), Text: e.Content})
 		case memory.EventAssistantMessage:

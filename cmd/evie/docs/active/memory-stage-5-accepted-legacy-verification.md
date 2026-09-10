@@ -1,0 +1,7 @@
+# Accepted retrieval: legacy migration fixture compatibility (#156)
+
+The Issue 104 downgrade fixture starts with the current database and deliberately reconstructs an older Claims/Predicate schema. The #156 derived alias-invalidation trigger cannot exist in that older database: it refers to the current Claims table while the fixture drops and recreates that table. Leaving the trigger behind made both literal-to-Entity upgrade and concurrent legacy-open regressions fail before migration could run.
+
+The fixture now removes only `memory_retrieval_*` derived triggers/tables before reconstructing the prior schema. A shared test helper checks every canonical memory/operation/event cell's storage class and bytes before and after removal and asserts that no later retrieval objects remain. The actual production startup migration and all original scope, replay, source, concurrency and integrity assertions remain unchanged. No production migration failure is suppressed.
+
+The two original tests failed on untouched `97c630c` alongside three separate conversation-fixture failures (combined five-test run 0.727s). After this fixture correction, `go test ./internal/eviedb -run '^(TestSemanticSchemaUpgradesLiteralClaimsFromIssue104AndAcceptsEntityClaims|TestSemanticObjectScopeMigrationSupportsConcurrentLegacyOpens)$' -count=1 -v` passes in 0.515s. `go vet ./internal/eviedb` passes. The implementation owner folds this regression fix into the owning #156 commit; no additional commit is required.

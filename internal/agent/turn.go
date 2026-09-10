@@ -147,6 +147,7 @@ func (s *Session) runOwnedTurn(
 	}
 	rendered := &progress.rendered
 	iteration := 0
+	recall := s.newRetrievalTurn()
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -179,7 +180,9 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
 			}
 		}
+		memoryData, memoryReceipt := recall.projection(coordinator.ctx)
 		composeInput := ContextComposeInput{
+			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
@@ -263,12 +266,17 @@ func (s *Session) runOwnedTurn(
 		if !coordinator.beginCommitBoundary() {
 			return s.observeTurnContext(coordinator)
 		}
-		_, err = s.history.Append(coordinator.ctx, lease, memory.EventInput{
+		snapshotEvent, err := s.history.Append(coordinator.ctx, lease, memory.EventInput{
 			ParentID: requestParentID, Type: memory.EventContextSnapshot, Payload: snapshotPayload,
 		})
 		if err != nil {
 			coordinator.abortCommitBoundary()
 			return s.classifyLocalError(coordinator, fmt.Errorf("persist context snapshot: %w", err))
+		}
+		if memoryReceipt != nil {
+			if activity, ok := ev.(MemoryActivityEvents); ok {
+				activity.MemoryRetrieved(snapshotEvent)
+			}
 		}
 		coordinator.finishCommitBoundary(memory.StageProvider)
 		req := composed.Request
@@ -493,7 +501,7 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
-				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
+				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, SearchMemory: recall.search,
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),

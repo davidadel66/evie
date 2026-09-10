@@ -724,12 +724,13 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		t.Fatalf("verify/rebuild changed Episodic Memory: before=%d after=%d error=%v", len(eventsBeforeRestart), len(eventsAfterRebuild), err)
 	}
 	var laterStageObjects int
-	// Stage 4 owns candidate storage, while the explicit-memory path still
-	// exposes no extraction capabilities or other deferred memory machinery.
+	// Stage 4 owns candidate storage and Stage 5 owns retrieval projections.
+	// The original explicit-memory capability contract remains unchanged.
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM sqlite_schema
 		WHERE name NOT LIKE 'sqlite_%'
+		  AND name NOT GLOB 'memory_retrieval_fts*'
 		  AND ((lower(name) LIKE '%candidate%' AND
 		        name NOT GLOB 'memory_compiler_*' AND name NOT GLOB 'memory_review_*') OR lower(name) LIKE '%fts%' OR
 		       lower(name) LIKE '%vector%' OR lower(name) LIKE '%ranking%' OR
@@ -737,7 +738,7 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 	`).Scan(&laterStageObjects); err != nil || laterStageObjects != 0 {
 		t.Fatalf("Stage 3 created later-stage schema objects: count=%d error=%v", laterStageObjects, err)
 	}
-	for _, capability := range restartedPlugin.ToolCapabilities() {
+	for _, capability := range restartedPlugin.ResumableToolCapabilities("1.1.0") {
 		name := capability.Tool.Schema.Function.Name
 		for _, forbidden := range []string{"extract", "candidate", "search", "rank", "context", "cache", "forget", "erase", "verify", "rebuild", "visual"} {
 			if strings.Contains(name, forbidden) {

@@ -6,6 +6,7 @@
 // item it gates.
 
 import type { ActivityTurn, DiscardReason, FilePreview, PublicPart, ServerEvent } from "./events";
+import type { MemoryActivityData } from "../api/memoryEvidence";
 
 export type ApprovalState = "pending" | "approved" | "declined" | "expired";
 
@@ -18,6 +19,7 @@ export type Approval = {
 };
 
 export type Item = { turn?: ActivityTurn } & (
+  | { kind: "memory"; key: string; memory: MemoryActivityData }
   | { kind: "user"; key: string; text: string }
   | {
       kind: "assistant";
@@ -104,6 +106,8 @@ export function reduce(
 
 function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" }>, now: Clock): Item[] {
   switch (ev.type) {
+    case "memory_activity":
+      return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount } }];
     case "delta": {
       const last = items[items.length - 1];
       if (last?.kind === "assistant" && last.streaming) {

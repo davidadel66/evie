@@ -638,6 +638,7 @@ func TestSemanticObjectScopeMigrationSupportsConcurrentLegacyOpens(t *testing.T)
 
 func downgradeSemanticClaimsToIssue104(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
+	removeRetrievalSchemaFromLegacyFixture(t, ctx, db)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatal(err)
