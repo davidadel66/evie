@@ -15,6 +15,7 @@ type Props = {
   destination: SidebarDestination;
   busy: boolean;
   mobileOpen: boolean;
+  collapsed?: boolean;
   textSize: ChatTextSize;
   onTextSize: (value: ChatTextSize) => void;
   onCloseMobile: () => void;
@@ -22,6 +23,7 @@ type Props = {
   onData: () => void;
   onWorkspaces: () => void;
   onWorkspace: (workspace: Workspace) => void;
+  onNewWorkspaceChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
 };
 
@@ -30,6 +32,7 @@ export function Sidebar({
   destination,
   busy,
   mobileOpen,
+  collapsed = false,
   textSize,
   onTextSize,
   onCloseMobile,
@@ -37,12 +40,14 @@ export function Sidebar({
   onData,
   onWorkspaces,
   onWorkspace,
+  onNewWorkspaceChat,
   onSession,
 }: Props) {
   return (
     <aside
+      id="evie-navigation"
       aria-label="Evie navigation"
-      className={`${mobileOpen ? "flex" : "hidden"} border-hair bg-sidebar absolute inset-y-0 left-0 z-40 w-[276px] flex-none flex-col border-r md:relative md:z-auto md:flex`}
+      className={`${mobileOpen ? "flex" : "hidden"} ${collapsed ? "md:hidden" : "md:flex"} border-hair bg-sidebar absolute inset-y-0 left-0 z-40 w-[276px] flex-none flex-col border-r md:relative md:z-auto`}
     >
       <div className="flex h-[54px] flex-none items-center px-4">
         <div aria-label="evie." className="text-ink font-sans text-[21px] font-medium tracking-[-0.04em]">
@@ -53,7 +58,8 @@ export function Sidebar({
           type="button"
           aria-label="Close navigation"
           onClick={onCloseMobile}
-          className="text-faint hover:text-body focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none md:hidden"
+          title="Collapse sidebar"
+          className="text-faint hover:text-body focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none"
         >
           <SidebarIcon size={16} />
         </button>
@@ -113,6 +119,7 @@ export function Sidebar({
             activeSessionId={snapshot.activeSession?.id}
             busy={busy}
             onWorkspace={onWorkspace}
+            onNewChat={onNewWorkspaceChat}
             onSession={onSession}
           />
         ))}
@@ -143,6 +150,7 @@ function WorkspaceNav({
   activeSessionId,
   busy,
   onWorkspace,
+  onNewChat,
   onSession,
 }: {
   workspace: Workspace;
@@ -151,20 +159,26 @@ function WorkspaceNav({
   activeSessionId?: string;
   busy: boolean;
   onWorkspace: (workspace: Workspace) => void;
+  onNewChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
 }) {
   return (
     <div className="mb-1">
+      <div className="flex min-w-0 items-center gap-1">
       <button
         type="button"
         onClick={() => onWorkspace(workspace)}
         aria-current={active ? "page" : undefined}
-        className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} flex w-full items-center gap-2 rounded-[7px] px-2 py-[7px] text-left`}
+        className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} flex min-w-0 flex-1 items-center gap-2 rounded-[7px] px-2 py-[7px] text-left`}
       >
         <Folder size={14} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{workspace.displayName}</span>
         {workspace.state === "archived" && <span className="text-ghost text-[10px]">Archived</span>}
       </button>
+      <button type="button" aria-label={`New session in ${workspace.displayName}`} title={`New session in ${workspace.displayName}`} disabled={busy || workspace.state === "archived" || !workspace.currentRevisionId} onClick={() => onNewChat(workspace)} className="text-faint hover:text-body hover:bg-hover focus-visible:ring-teal mr-1 flex-none cursor-pointer rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none disabled:cursor-default disabled:opacity-30">
+        <Plus size={14} />
+      </button>
+      </div>
       {sessions.slice(0, 5).map((session) => (
         <button
           type="button"

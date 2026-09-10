@@ -40,6 +40,44 @@ David approved a Codex-like three-pane workbench adapted to Evie's domain:
 - On narrow screens the left sidebar and Inspector become overlays. Keyboard
   focus remains visible, and labels and empty states describe real behavior.
 
+## Sidebar shortcuts amendment (2026-09-10)
+
+David requested a collapsible left sidebar and a plus button beside each
+Workspace to create a session there directly. Desktop navigation can be hidden
+with its sidebar icon and restored from the top bar; the preference persists
+in localStorage. Hiding or restoring navigation preserves the current view,
+session, composer draft, and inspector. Mobile keeps its existing overlay.
+
+Each Workspace row has a separate, keyboard-accessible `New session in NAME`
+plus button. It calls the existing Workspace session selection flow with that
+Workspace's ID and current revision, then opens Chat with its new session.
+The button is disabled while selecting/streaming and for archived Workspaces;
+selection errors stay actionable through the existing banner. Workspace-home
+navigation and the top-level Create workspace button keep their meanings.
+No new endpoints, scope rules, model requests, or dependencies are introduced.
+
+Verify desktop collapse/reopen and reload, preserved draft/inspector, mobile
+navigation, direct creation under a non-active Workspace, busy/archive states,
+and session-selection failure. Run the UI suite and required project checks.
+
+David's follow-up removes the repeated Workspace / Change context bar above
+chat. Scope remains visible in navigation and inspectable through the existing
+Inspector. The top strip uses compact rounded tabs with an icon, ellipsized
+label, clear selected surface, and accessible close controls. It scrolls
+horizontally when space is limited. This replaces the earlier full-height
+rectangular tabs and the requirement for a separate 38px scope bar.
+
+Verification: `./internal/web/ui/node_modules/.bin/vitest run --root internal/web/ui`
+passed 230 tests in 40 files. `./scripts/verify-change.sh` passed Go tests/vet,
+UI lint/build and whitespace checks. The existing five Fast Refresh export
+warnings and Vite chunk-size warnings remain. Browser checks used only mocked
+session APIs: correct Workspace/revision selection, busy and archive controls,
+stale-revision error preserving chat/draft, persistent desktop collapse,
+mobile navigation, read-file colors and breadcrumbs, removed scope bar,
+restyled tabs, and focus wrapping/scrolling in both edit views at 390px.
+Parallel standards/spec review findings were resolved. No required checks
+were skipped; race checks were not repeated for these frontend-only changes.
+
 ## Data hub amendment (2026-09-04)
 
 David approved the first complete Data workspace after the shell amendment:

@@ -16,7 +16,7 @@ import { selectionForScope } from "./shell/scopeSelection";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
-import { Cross, Expand, Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
+import { Cross, Database, Expand, Folder, MessageSquare, PanelRight, Sidebar as SidebarIcon } from "./ui/Icon";
 import {
   defaultChatTextSize,
   resolveChatTextSize,
@@ -31,6 +31,7 @@ export type WorkbenchView =
   | { id: `workspace:${string}`; kind: "workspace"; workspaceId: string; label: string };
 
 const textSizeStorageKey = "evie.chatTextSize";
+const sidebarStorageKey = "evie.sidebarCollapsed";
 const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 
 export default function App() {
@@ -41,6 +42,9 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem(sidebarStorageKey) === "true"; } catch { return false; }
+  });
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorFocused, setInspectorFocused] = useState(false);
   const [inspectorOverride, setInspectorOverride] = useState<InspectorTarget>();
@@ -103,6 +107,16 @@ export default function App() {
       // The in-memory setting still works in locked-down browser contexts.
     }
   }, [textSize]);
+
+  useEffect(() => {
+    try { localStorage.setItem(sidebarStorageKey, String(sidebarCollapsed)); } catch { /* In-memory preference still works. */ }
+  }, [sidebarCollapsed]);
+
+  const closeNavigation = () => {
+    setMobileNavOpen(false);
+    if (window.matchMedia("(min-width: 768px)").matches) setSidebarCollapsed(true);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Open navigation"]')?.focus());
+  };
 
   const openView = (view: WorkbenchView) => {
     setViews((current) => current.some((open) => open.id === view.id) ? current : [...current, view]);
@@ -184,19 +198,21 @@ export default function App() {
 
   return (
     <MemoryPresentationProvider snapshot={contextSessions.snapshot}><div data-chat-size={textSize} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
-      {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={() => setMobileNavOpen(false)} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
+      {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={closeNavigation} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
       <Sidebar
         snapshot={contextSessions.snapshot}
         destination={sidebarDestination(activeView)}
         busy={contextSessions.busy || status === "streaming"}
         mobileOpen={mobileNavOpen}
+        collapsed={sidebarCollapsed}
         textSize={textSize}
         onTextSize={setTextSize}
-        onCloseMobile={() => setMobileNavOpen(false)}
+        onCloseMobile={closeNavigation}
         onNewChat={startNewChat}
         onData={() => openView({ id: "data", kind: "data" })}
         onWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })}
         onWorkspace={openWorkspace}
+        onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
         onSession={(session) => void selectSession({ sessionId: session.id })}
       />
 
@@ -207,7 +223,12 @@ export default function App() {
           chatLabel={contextSessions.snapshot?.activeSession?.title.trim() || "Chat"}
           inspectorOpen={inspectorOpen}
           inspectorFocused={inspectorFocused}
-          onOpenNavigation={() => setMobileNavOpen(true)}
+          navigationCollapsed={sidebarCollapsed}
+          onOpenNavigation={() => {
+            if (window.matchMedia("(min-width: 768px)").matches) setSidebarCollapsed(false);
+            else setMobileNavOpen(true);
+            requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Close navigation"]')?.focus());
+          }}
           onActivate={activateView}
           onClose={closeView}
           onToggleInspector={() => {
@@ -229,7 +250,6 @@ export default function App() {
               {activeView.kind === "chat" && (
                 contextSessions.snapshot?.activeScope ? (
                   <>
-                    <ScopeBar scope={contextSessions.snapshot.activeScope} onOpenWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })} />
                     <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={(key, trigger) => {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
                       if (!sessionId) return;
@@ -319,6 +339,7 @@ export function WorkbenchBar({
   chatLabel,
   inspectorOpen,
   inspectorFocused,
+  navigationCollapsed = false,
   onOpenNavigation,
   onActivate,
   onClose,
@@ -330,6 +351,7 @@ export function WorkbenchBar({
   chatLabel: string;
   inspectorOpen: boolean;
   inspectorFocused: boolean;
+  navigationCollapsed?: boolean;
   onOpenNavigation: () => void;
   onActivate: (view: WorkbenchView) => void;
   onClose: (view: WorkbenchView) => void;
@@ -337,24 +359,26 @@ export function WorkbenchBar({
   onToggleInspectorFocus: () => void;
 }) {
   return (
-    <header className="border-hair bg-topbar flex h-[46px] flex-none items-stretch border-b">
-      <button type="button" aria-label="Open navigation" onClick={onOpenNavigation} className="text-faint hover:text-body px-4 md:hidden"><SidebarIcon size={16} /></button>
-      <div role="tablist" aria-label="Open work" className="flex min-w-0 flex-1 overflow-x-auto">
+    <header className="border-hair bg-topbar flex h-[52px] flex-none items-center gap-2 border-b px-2">
+      <button type="button" aria-label="Open navigation" aria-controls="evie-navigation" onClick={onOpenNavigation} className={`text-muted-text hover:bg-hover hover:text-body focus-visible:ring-teal flex-none rounded-lg p-2.5 focus-visible:ring-1 focus-visible:outline-none ${navigationCollapsed ? "" : "md:hidden"}`}><SidebarIcon size={16} /></button>
+      <div role="tablist" aria-label="Open work" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1">
         {views.map((view) => {
           const active = view.id === activeViewId;
           return (
-            <div key={view.id} className={`${active ? "bg-app text-body" : "text-faint hover:text-muted-text"} border-hair group flex max-w-[220px] min-w-[120px] items-center border-r`}>
+            <div key={view.id} className={`${active ? "bg-selected text-ink" : "text-muted-text hover:bg-hover hover:text-body"} group flex h-9 min-w-[96px] max-w-[260px] flex-none items-center rounded-lg`}>
               <button
                 type="button"
                 role="tab"
                 aria-selected={active}
+                title={view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}
                 onClick={() => onActivate(view)}
-                className="min-w-0 flex-1 truncate px-3 text-left text-[11.5px]"
+                className="focus-visible:ring-teal flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left text-[12.5px] focus-visible:ring-1 focus-visible:outline-none"
               >
-                {view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}
+                <span className={active ? "text-teal" : "text-faint"}>{view.kind === "chat" ? <MessageSquare size={14} /> : view.kind === "data" ? <Database size={14} /> : <Folder size={14} />}</span>
+                <span className="truncate">{view.kind === "chat" ? chatLabel : view.kind === "data" ? "Data" : view.kind === "workspaces" ? "Workspaces" : view.label}</span>
               </button>
               {view.kind !== "chat" && (
-                <button type="button" aria-label={`Close ${view.kind === "workspace" ? view.label : view.kind} tab`} onClick={() => onClose(view)} className="hover:text-body mr-2 rounded p-1 opacity-0 focus:opacity-100 group-hover:opacity-100"><Cross size={11} /></button>
+                <button type="button" aria-label={`Close ${view.kind === "workspace" ? view.label : view.kind} tab`} onClick={() => onClose(view)} className={`text-faint hover:bg-app hover:text-body focus-visible:ring-teal mr-1.5 rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none ${active ? "" : "opacity-0 focus:opacity-100 group-hover:opacity-100 max-md:opacity-100"}`}><Cross size={11} /></button>
               )}
             </div>
           );
@@ -365,19 +389,6 @@ export function WorkbenchBar({
         <button type="button" title="Focus inspector" aria-label="Focus inspector" aria-pressed={inspectorFocused} onClick={onToggleInspectorFocus} className={`${inspectorFocused ? "text-teal" : "text-faint hover:text-body"} focus-visible:ring-teal rounded p-2 focus-visible:ring-1 focus-visible:outline-none`}><Expand size={14} /></button>
       </div>
     </header>
-  );
-}
-
-function ScopeBar({ scope, onOpenWorkspaces }: { scope: ContextScope; onOpenWorkspaces: () => void }) {
-  return (
-    <div className="border-hair flex h-[38px] flex-none items-center gap-2 border-b px-5">
-      <span className="text-teal"><Folder size={13} /></span>
-      <span className="text-body text-[11.5px] font-medium">{scope.displayName}</span>
-      <span className="text-fainter text-[10.5px]">{scope.kind === "workspace" ? "Workspace" : scope.kind === "project" ? "Project" : "Unscoped"}</span>
-      {scope.workspaceRevision && <span className="text-ghost hidden font-mono text-[9.5px] sm:inline">revision {shortId(scope.workspaceRevision)}</span>}
-      <div className="flex-1" />
-      <button type="button" onClick={onOpenWorkspaces} className="text-faint hover:text-body text-[10.5px]">Change context</button>
-    </div>
   );
 }
 
@@ -439,9 +450,7 @@ function defaultInspectorTarget(view: WorkbenchView, workspace?: Workspace, scop
   return { kind: "empty" };
 }
 
-function shortId(value: string) {
-  return value.length > 12 ? value.slice(0, 12) : value;
-}
+
 
 function loadChatTextSize(): ChatTextSize {
   try {

@@ -3,7 +3,7 @@ import type { ContextScope, Workspace } from "../api/contextSessions";
 import type { SemanticObjectInspection } from "../api/memory";
 import { Cross, Database, FileIcon, Folder, Layers } from "../ui/Icon";
 import { Diff } from "../chat/Diff";
-import { FileViewer } from "./FileViewer";
+import { FilePath, FileViewer } from "./FileViewer";
 import type { FileInspection as InspectedFile } from "./fileInspection";
 
 export type InspectorTarget =
@@ -32,16 +32,18 @@ export function Panel({ target, focused, onClose }: Props) {
       aria-label="Inspector"
       onKeyDown={(event) => {
         if (target.kind !== "file" || event.key !== "Tab" || !window.matchMedia("(max-width: 639px)").matches) return;
-        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], [tabindex="0"]')].filter((node) => node.getClientRects().length > 0);
+        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], [tabindex="0"]')].filter((node) => node.tabIndex >= 0 && !node.matches(":disabled") && node.getClientRects().length > 0);
         const destination = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1) : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : undefined;
         if (destination) { event.preventDefault(); destination.focus(); }
       }}
-      className={`${focused ? "min-w-0 flex-1" : target.kind === "file" ? "w-[min(720px,48vw)] max-sm:absolute max-sm:inset-0 max-sm:z-30 max-sm:w-full" : "w-[min(460px,42vw)] max-md:absolute max-md:inset-0 max-md:z-30 max-md:w-full"} border-hair bg-inspector flex min-h-0 flex-none flex-col border-l`}
+      className={`${focused ? "min-w-0 flex-1" : target.kind === "file" ? "w-[min(720px,48vw)] max-sm:absolute max-sm:inset-0 max-sm:z-30 max-sm:w-full" : "w-[min(460px,42vw)] max-md:absolute max-md:inset-0 max-md:z-30 max-md:w-full"} ${target.kind === "file" ? "bg-editor border-editor-hair" : "bg-inspector border-hair"} flex min-h-0 flex-none flex-col border-l`}
     >
       <header className="border-hair flex h-[44px] flex-none items-center gap-2 border-b px-3">
-        <span className="text-faint"><TargetIcon target={target} /></span>
-        <span className="text-body min-w-0 flex-1 truncate text-xs font-medium">{targetTitle(target)}</span>
-        <span className="text-ghost border-hair-strong rounded border px-2 py-0.5 font-mono text-[9.5px]">Inspector</span>
+        {target.kind === "file" ? <FilePath file={target.file} /> : <>
+          <span className="text-faint"><TargetIcon target={target} /></span>
+          <span className="text-body min-w-0 flex-1 truncate text-xs font-medium">{targetTitle(target)}</span>
+          <span className="text-ghost border-hair-strong rounded border px-2 py-0.5 font-mono text-[9.5px]">Inspector</span>
+        </>}
         <button ref={closeButton} type="button" onClick={onClose} aria-label="Close inspector" className="text-faint hover:text-body focus-visible:ring-teal rounded p-1.5 focus-visible:ring-1 focus-visible:outline-none">
           <Cross size={13} />
         </button>

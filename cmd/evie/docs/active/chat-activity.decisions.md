@@ -31,3 +31,7 @@
   details. Pending file approvals retain their controls in chat; their
   full previews open only in the inspector. This reflects David’s follow-up
   request to remove the duplicate inline diffs.
+- David's later file-view refinement removes the Details tab and routine status
+  block. Read files show only breadcrumb path and highlighted source. Edit
+  comparisons remain available; partial/proposed/error qualifiers stay concise,
+  and recorded approval state is accessible in the path tooltip.

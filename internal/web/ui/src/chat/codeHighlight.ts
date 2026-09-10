@@ -47,6 +47,23 @@ export const evieCodeTheme: ThemeInput = {
 
 export const code = createCodePlugin({ themes: [evieCodeTheme, evieCodeTheme] });
 
+// File inspection follows the editor palette in David's reference. Keep it
+// separate from fenced code in assistant messages.
+export const fileCodeTheme: ThemeInput = {
+  name: "evie-file-dark",
+  type: "dark",
+  colors: { "editor.background": "#181818", "editor.foreground": "#d4d4d4" },
+  tokenColors: [
+    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#8b8b8b" } },
+    { scope: ["keyword", "storage.type", "storage.modifier"], settings: { foreground: "#f47076" } },
+    { scope: ["string", "string.regexp", "entity.name.import", "punctuation.definition.string"], settings: { foreground: "#85d77a" } },
+    { scope: ["entity.name", "support.type", "support.class", "support.function", "storage.type.numeric", "storage.type.string", "storage.type.boolean", "storage.type.error", "storage.type.rune"], settings: { foreground: "#c586ff" } },
+    { scope: ["variable", "variable.parameter"], settings: { foreground: "#ee994d" } },
+    { scope: ["constant.numeric", "constant.language", "keyword.operator"], settings: { foreground: "#79c9ee" } },
+    { scope: ["punctuation"], settings: { foreground: "#a0a0a0" } },
+  ],
+};
+
 // The dependency's cache samples source text. Equal-length interior edits can
 // collide, so file evidence must validate token contents before displaying it.
 export function exactHighlightTokens(result: HighlightResult | undefined, source: string) {

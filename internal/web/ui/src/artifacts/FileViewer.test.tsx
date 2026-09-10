@@ -14,17 +14,25 @@ describe("file side panel", () => {
 
   it("shows the selected file, source code and changes control in the inspector", () => {
     const html = renderToStaticMarkup(<Panel target={{kind: "file", file}} focused={false} onClose={() => {}} />);
-    for (const text of ["main.go", "/src/main.go", "Edited", "Recorded contents after this edit", "Changes", "new", 'aria-label="Inspector"', 'aria-label="Close inspector"']) expect(html).toContain(text);
+    for (const text of ["main.go", "/src/main.go", "Changes", "new", 'aria-label="Inspector"', 'aria-label="Close inspector"']) expect(html).toContain(text);
     expect(html).toContain("Complete file change");
+  });
+
+  it("shows only breadcrumb path and code for a complete read", () => {
+    const read: FileInspection = {key: "r", path: "/src/plugins/registry.go", status: "Read", tool: {name: "read_file", args: "raw arguments", result: "raw result"}, content: {kind: "code", text: "package plugins\n", coverage: "full"}};
+    const html = renderToStaticMarkup(<Panel target={{kind: "file", file: read}} focused={false} onClose={() => {}} />);
+    expect(html).toContain('aria-label="File path: /src/plugins/registry.go"');
+    expect(html).toContain("package plugins");
+    for (const unwanted of [">Read<", "Recorded file contents", ">Details<", "raw arguments", 'role="tablist"']) expect(html).not.toContain(unwanted);
   });
 
   it("marks proposed and historical content honestly", () => {
     const proposed = renderToStaticMarkup(<FileViewer file={{...file, status: "Declined"}} />);
     expect(proposed).toContain("Declined");
-    expect(proposed).toContain("Proposed file");
+    expect(proposed).toContain("proposed change");
     expect(proposed).not.toContain("Recorded contents after this edit");
     const partial = renderToStaticMarkup(<FileViewer file={{...file, content: {kind: "change", before: "old", after: "new", coverage: "replacement", isNew: false}}} />);
-    expect(partial).toContain("Recorded replacement only");
+    expect(partial).toContain("Replacement only");
     expect(partial).toContain("Replacement");
     expect(partial).not.toContain("Removed lines"); // No invented source line numbers.
   });
@@ -40,9 +48,9 @@ describe("file side panel", () => {
     for (const isErr of [false, true]) {
       const inspected = inspectToolFile({kind: "tool", key: "t", id: "c", name: "edit_file", args: '{"path":"/src/main.go","old_string":"old","new_string":"new"}', result: isErr ? "write failed" : "OK", isErr, startedAt: 0, approval: {reqId: "p", state: "approved"}});
       expect(inspected).not.toBeNull();
-      const html = renderToStaticMarkup(<FileViewer file={inspected!} />);
+      const html = renderToStaticMarkup(<Panel target={{kind: "file", file: inspected!}} focused={false} onClose={() => {}} />);
       expect(html).toContain("Approval: Approved");
-      expect(html).toContain(isErr ? "Failed" : "Edited");
+      if (isErr) expect(html).toContain("Failed");
     }
   });
 

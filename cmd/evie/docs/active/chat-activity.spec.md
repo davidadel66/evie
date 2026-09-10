@@ -144,3 +144,24 @@ provide the recorded content and exact tool data. Chat keeps only the compact
 row and any pending approval controls. Review starts in
 `internal/web/ui/src/artifacts/fileInspection.ts`, `artifacts/FileViewer.tsx`,
 and `chat/Activity.tsx`.
+
+### File presentation refinement — September 10, 2026
+
+David's follow-up screenshot supersedes the metadata-heavy file header and
+Details tab. A read file now shows one breadcrumb path header and source code,
+without Read, Recorded file contents, duplicate filename headers, or tool-data
+tabs. Edit previews keep File/Changes controls and side-by-side comparison.
+Incomplete snapshots and unsuccessful proposals retain only a short qualifier
+so they cannot be mistaken for a complete saved file. Approval decisions remain
+available in the path tooltip, without a separate metadata block.
+
+The file pane uses a neutral #181818 editor background, #d4d4d4 source text,
+#8b8b8b comments/gutters, #c586ff names/types, #f47076 keywords, #85d77a
+strings, and #ee994d variables. IBM Plex Mono remains the source face, with
+13px code and 1.8 line height. Paths use IBM Plex Sans, muted directory segments
+and a brighter filename. Source aligns left with a fixed line-number gutter.
+The rest of Evie's palette remains unchanged. This follows the supplied editor
+reference directly; no extra toolbar, cards, or explanatory labels are added.
+
+Verification covers the absent read metadata/tabs, inert and exact highlighted
+source, edit comparison and partial/error qualifiers, plus browser screenshots.
