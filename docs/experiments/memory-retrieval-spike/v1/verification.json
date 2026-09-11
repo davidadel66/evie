@@ -1,0 +1,53 @@
+{
+  "version": "memory-retrieval-spike-verification-v1",
+  "checks": [
+    {
+      "command": "go build -o /tmp/evie-memory-retrieval-spike-v1/broker ./scripts/memory-retrieval-spike",
+      "result": "passed"
+    },
+    {
+      "command": "go test ./scripts/memory-retrieval-spike",
+      "result": "passed compilation; no Go test files in disposable experiment command"
+    },
+    {
+      "command": "go vet ./scripts/memory-retrieval-spike",
+      "result": "passed"
+    },
+    {
+      "command": "python3 -m py_compile scripts/memory-retrieval-spike/*.py",
+      "result": "passed"
+    },
+    {
+      "command": "/tmp/evie-memory-retrieval-spike-v1/venv/bin/python scripts/memory-retrieval-spike/check_endpoint.py docs/experiments/memory-retrieval-spike/v1/endpoint-checks.json",
+      "result": "19 probes passed"
+    },
+    {
+      "command": "measure.py run --partition development --freeze freeze-v3.json",
+      "result": "completed; 32 cases, three repetitions, five conditions, 480 observations"
+    },
+    {
+      "command": "measure.py run --partition heldout --freeze freeze-v3.json",
+      "result": "completed; 32 cases, three repetitions, five conditions, 480 observations"
+    },
+    {
+      "command": "SHA256 recheck of every frozen Python source and fixture after heldout",
+      "result": "all unchanged"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "python3 scripts/memory-retrieval-spike/check_sqlite_rebuild.py /tmp/evie-memory-retrieval-spike-v1/development-v3/vectors.sqlite /tmp/evie-memory-retrieval-spike-v1/heldout-v3/vectors.sqlite docs/experiments/memory-retrieval-spike/v1/sqlite-rebuild-check.json",
+      "result": "passed; all 917 independently regenerated vectors and rebuilt/reopened rows byte-identical; one supplemental operational sample"
+    }
+  ],
+  "runtime_shutdown": {
+    "owned_server_pid": 92310,
+    "endpoint": "http://127.0.0.1:11565",
+    "action": "SIGTERM after both measurements and metadata capture",
+    "server_exit_code": 0,
+    "listener_absent_after_stop": true
+  },
+  "scope": "Focused experiment verification; root task runs the repository verify-change.sh gate before handoff. No production dependency or production code changed."
+}

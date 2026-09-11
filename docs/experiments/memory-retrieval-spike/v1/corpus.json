@@ -1,0 +1,2336 @@
+[
+  {
+    "ID": "development-00",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "I eat only plants and avoid all animal products."
+  },
+  {
+    "ID": "development-00-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I eat only plants and avoid all animal products."
+  },
+  {
+    "ID": "development-01",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "I ride a bicycle to the office every morning."
+  },
+  {
+    "ID": "development-01-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I ride a bicycle to the office every morning."
+  },
+  {
+    "ID": "development-02",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "My grandmother cannot hear quiet voices clearly."
+  },
+  {
+    "ID": "development-02-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "My grandmother cannot hear quiet voices clearly."
+  },
+  {
+    "ID": "development-03",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The apartment keys are inside the blue ceramic bowl."
+  },
+  {
+    "ID": "development-03-forbidden",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The apartment keys are inside the blue ceramic bowl."
+  },
+  {
+    "ID": "development-04",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "I turn off phone alerts during the hours I am asleep."
+  },
+  {
+    "ID": "development-04-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I turn off phone alerts during the hours I am asleep."
+  },
+  {
+    "ID": "development-05",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The server keeps a spare copy of every file on another disk."
+  },
+  {
+    "ID": "development-05-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The server keeps a spare copy of every file on another disk."
+  },
+  {
+    "ID": "development-06",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "I cannot digest dairy sugar and choose milk alternatives."
+  },
+  {
+    "ID": "development-06-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I cannot digest dairy sugar and choose milk alternatives."
+  },
+  {
+    "ID": "development-07",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "We planned to gather rainwater in barrels for watering plants."
+  },
+  {
+    "ID": "development-07-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "We planned to gather rainwater in barrels for watering plants."
+  },
+  {
+    "ID": "development-08",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "My nephew becomes sick when riding in the back of a car."
+  },
+  {
+    "ID": "development-08-forbidden",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "My nephew becomes sick when riding in the back of a car."
+  },
+  {
+    "ID": "development-09",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "I prefer to pay the entire card balance before interest accrues."
+  },
+  {
+    "ID": "development-09-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I prefer to pay the entire card balance before interest accrues."
+  },
+  {
+    "ID": "development-10",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The dog hides under furniture when fireworks explode."
+  },
+  {
+    "ID": "development-10-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The dog hides under furniture when fireworks explode."
+  },
+  {
+    "ID": "development-11",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The museum opens late on Thursday evenings."
+  },
+  {
+    "ID": "development-11-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The museum opens late on Thursday evenings."
+  },
+  {
+    "ID": "development-12",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "I store flour in sealed containers to keep insects away."
+  },
+  {
+    "ID": "development-12-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I store flour in sealed containers to keep insects away."
+  },
+  {
+    "ID": "development-13",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "Our deployment waits for a human to authorize the release."
+  },
+  {
+    "ID": "development-13-forbidden",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "Our deployment waits for a human to authorize the release."
+  },
+  {
+    "ID": "development-14",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "I requested a room without stairs because my ankle is injured."
+  },
+  {
+    "ID": "development-14-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I requested a room without stairs because my ankle is injured."
+  },
+  {
+    "ID": "development-15",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "I switch the display to amber after sunset."
+  },
+  {
+    "ID": "development-15-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I switch the display to amber after sunset."
+  },
+  {
+    "ID": "heldout-00",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "I bring earplugs because the train wheels squeal painfully."
+  },
+  {
+    "ID": "heldout-00-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I bring earplugs because the train wheels squeal painfully."
+  },
+  {
+    "ID": "heldout-01",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "My sister keeps a written list of ingredients that cause allergic reactions."
+  },
+  {
+    "ID": "heldout-01-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "My sister keeps a written list of ingredients that cause allergic reactions."
+  },
+  {
+    "ID": "heldout-02",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The roof panels convert sunlight into electricity for our house."
+  },
+  {
+    "ID": "heldout-02-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The roof panels convert sunlight into electricity for our house."
+  },
+  {
+    "ID": "heldout-03",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I saved the receipt so the defective kettle can be returned."
+  },
+  {
+    "ID": "heldout-03-forbidden",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "I saved the receipt so the defective kettle can be returned."
+  },
+  {
+    "ID": "heldout-04",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "We postponed the picnic after the forecast predicted heavy showers."
+  },
+  {
+    "ID": "heldout-04-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "We postponed the picnic after the forecast predicted heavy showers."
+  },
+  {
+    "ID": "heldout-05",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "I water the orchid only after its potting mix becomes dry."
+  },
+  {
+    "ID": "heldout-05-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I water the orchid only after its potting mix becomes dry."
+  },
+  {
+    "ID": "heldout-06",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "My father uses a magnifying lens to read small print."
+  },
+  {
+    "ID": "heldout-06-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "My father uses a magnifying lens to read small print."
+  },
+  {
+    "ID": "heldout-07",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The team copies the production database before changing its schema."
+  },
+  {
+    "ID": "heldout-07-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The team copies the production database before changing its schema."
+  },
+  {
+    "ID": "heldout-08",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I chose a seat next to the aisle to stretch my legs."
+  },
+  {
+    "ID": "heldout-08-forbidden",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "I chose a seat next to the aisle to stretch my legs."
+  },
+  {
+    "ID": "heldout-09",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The grocery delivery must arrive before the frozen food thaws."
+  },
+  {
+    "ID": "heldout-09-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The grocery delivery must arrive before the frozen food thaws."
+  },
+  {
+    "ID": "heldout-10",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "I practice slow breathing when presentations make me nervous."
+  },
+  {
+    "ID": "heldout-10-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "I practice slow breathing when presentations make me nervous."
+  },
+  {
+    "ID": "heldout-11",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "We replace the smoke alarm battery when the warning chirp begins."
+  },
+  {
+    "ID": "heldout-11-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "We replace the smoke alarm battery when the warning chirp begins."
+  },
+  {
+    "ID": "heldout-12",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "My winter boots have deep rubber grooves to avoid sliding on ice."
+  },
+  {
+    "ID": "heldout-12-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "My winter boots have deep rubber grooves to avoid sliding on ice."
+  },
+  {
+    "ID": "heldout-13",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I marked the document confidential because it includes employee salaries."
+  },
+  {
+    "ID": "heldout-13-forbidden",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "I marked the document confidential because it includes employee salaries."
+  },
+  {
+    "ID": "heldout-14",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The child borrows books from the neighborhood library every Saturday."
+  },
+  {
+    "ID": "heldout-14-forbidden",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The child borrows books from the neighborhood library every Saturday."
+  },
+  {
+    "ID": "heldout-15",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "I keep the emergency flashlight in the drawer beside the bed."
+  },
+  {
+    "ID": "heldout-15-forbidden",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "I keep the emergency flashlight in the drawer beside the bed."
+  },
+  {
+    "ID": "distractor-000",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The red calendar in storage bin 0 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-001",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The red notebook in storage bin 1 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-002",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The red stapler in storage bin 2 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-003",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The red camera in storage bin 3 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-004",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The red backpack in storage bin 4 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-005",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The red lamp in storage bin 5 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-006",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The red pencil in storage bin 6 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-007",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The red envelope in storage bin 7 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-008",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The red folder in storage bin 8 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-009",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The red clock in storage bin 9 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-010",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The red cable in storage bin 10 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-011",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The red basket in storage bin 11 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-012",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The red table in storage bin 12 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-013",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The red vase in storage bin 13 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-014",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The red towel in storage bin 14 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-015",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The red curtain in storage bin 15 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-016",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The orange calendar in storage bin 16 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-017",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The orange notebook in storage bin 17 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-018",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The orange stapler in storage bin 18 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-019",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The orange camera in storage bin 19 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-020",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The orange backpack in storage bin 20 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-021",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The orange lamp in storage bin 21 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-022",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The orange pencil in storage bin 22 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-023",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The orange envelope in storage bin 23 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-024",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The orange folder in storage bin 24 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-025",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The orange clock in storage bin 25 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-026",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The orange cable in storage bin 26 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-027",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The orange basket in storage bin 27 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-028",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The orange table in storage bin 28 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-029",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The orange vase in storage bin 29 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-030",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The orange towel in storage bin 30 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-031",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The orange curtain in storage bin 31 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-032",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The yellow calendar in storage bin 32 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-033",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The yellow notebook in storage bin 33 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-034",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The yellow stapler in storage bin 34 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-035",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The yellow camera in storage bin 35 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-036",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The yellow backpack in storage bin 36 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-037",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The yellow lamp in storage bin 37 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-038",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The yellow pencil in storage bin 38 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-039",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The yellow envelope in storage bin 39 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-040",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The yellow folder in storage bin 40 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-041",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The yellow clock in storage bin 41 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-042",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The yellow cable in storage bin 42 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-043",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The yellow basket in storage bin 43 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-044",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The yellow table in storage bin 44 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-045",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The yellow vase in storage bin 45 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-046",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The yellow towel in storage bin 46 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-047",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The yellow curtain in storage bin 47 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-048",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The green calendar in storage bin 48 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-049",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The green notebook in storage bin 49 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-050",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The green stapler in storage bin 50 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-051",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The green camera in storage bin 51 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-052",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The green backpack in storage bin 52 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-053",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The green lamp in storage bin 53 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-054",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The green pencil in storage bin 54 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-055",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The green envelope in storage bin 55 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-056",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The green folder in storage bin 56 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-057",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The green clock in storage bin 57 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-058",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The green cable in storage bin 58 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-059",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The green basket in storage bin 59 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-060",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The green table in storage bin 60 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-061",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The green vase in storage bin 61 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-062",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The green towel in storage bin 62 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-063",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The green curtain in storage bin 63 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-064",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The blue calendar in storage bin 64 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-065",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The blue notebook in storage bin 65 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-066",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The blue stapler in storage bin 66 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-067",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The blue camera in storage bin 67 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-068",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The blue backpack in storage bin 68 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-069",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The blue lamp in storage bin 69 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-070",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The blue pencil in storage bin 70 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-071",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The blue envelope in storage bin 71 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-072",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The blue folder in storage bin 72 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-073",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The blue clock in storage bin 73 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-074",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The blue cable in storage bin 74 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-075",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The blue basket in storage bin 75 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-076",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The blue table in storage bin 76 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-077",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The blue vase in storage bin 77 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-078",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The blue towel in storage bin 78 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-079",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The blue curtain in storage bin 79 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-080",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The violet calendar in storage bin 80 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-081",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The violet notebook in storage bin 81 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-082",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The violet stapler in storage bin 82 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-083",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The violet camera in storage bin 83 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-084",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The violet backpack in storage bin 84 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-085",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The violet lamp in storage bin 85 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-086",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The violet pencil in storage bin 86 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-087",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The violet envelope in storage bin 87 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-088",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The violet folder in storage bin 88 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-089",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The violet clock in storage bin 89 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-090",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The violet cable in storage bin 90 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-091",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The violet basket in storage bin 91 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-092",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The violet table in storage bin 92 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-093",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The violet vase in storage bin 93 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-094",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The violet towel in storage bin 94 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-095",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The violet curtain in storage bin 95 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-096",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The silver calendar in storage bin 96 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-097",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The silver notebook in storage bin 97 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-098",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The silver stapler in storage bin 98 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-099",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The silver camera in storage bin 99 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-100",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The silver backpack in storage bin 100 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-101",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The silver lamp in storage bin 101 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-102",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The silver pencil in storage bin 102 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-103",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The silver envelope in storage bin 103 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-104",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The silver folder in storage bin 104 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-105",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The silver clock in storage bin 105 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-106",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The silver cable in storage bin 106 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-107",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The silver basket in storage bin 107 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-108",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The silver table in storage bin 108 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-109",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The silver vase in storage bin 109 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-110",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The silver towel in storage bin 110 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-111",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The silver curtain in storage bin 111 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-112",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The brown calendar in storage bin 112 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-113",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The brown notebook in storage bin 113 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-114",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The brown stapler in storage bin 114 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-115",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The brown camera in storage bin 115 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-116",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The brown backpack in storage bin 116 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-117",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The brown lamp in storage bin 117 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-118",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The brown pencil in storage bin 118 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-119",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The brown envelope in storage bin 119 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-120",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The brown folder in storage bin 120 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-121",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The brown clock in storage bin 121 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-122",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The brown cable in storage bin 122 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-123",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The brown basket in storage bin 123 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-124",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The brown table in storage bin 124 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-125",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The brown vase in storage bin 125 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-126",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The brown towel in storage bin 126 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-127",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The brown curtain in storage bin 127 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-128",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The black calendar in storage bin 128 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-129",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The black notebook in storage bin 129 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-130",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The black stapler in storage bin 130 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-131",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The black camera in storage bin 131 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-132",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The black backpack in storage bin 132 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-133",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The black lamp in storage bin 133 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-134",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The black pencil in storage bin 134 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-135",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The black envelope in storage bin 135 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-136",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The black folder in storage bin 136 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-137",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The black clock in storage bin 137 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-138",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The black cable in storage bin 138 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-139",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The black basket in storage bin 139 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-140",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The black table in storage bin 140 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-141",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The black vase in storage bin 141 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-142",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The black towel in storage bin 142 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-143",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The black curtain in storage bin 143 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-144",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The white calendar in storage bin 144 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-145",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The white notebook in storage bin 145 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-146",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The white stapler in storage bin 146 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-147",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The white camera in storage bin 147 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-148",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The white backpack in storage bin 148 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-149",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The white lamp in storage bin 149 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-150",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The white pencil in storage bin 150 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-151",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The white envelope in storage bin 151 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-152",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The white folder in storage bin 152 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-153",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The white clock in storage bin 153 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-154",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The white cable in storage bin 154 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-155",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The white basket in storage bin 155 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-156",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The white table in storage bin 156 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-157",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The white vase in storage bin 157 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-158",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The white towel in storage bin 158 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-159",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The white curtain in storage bin 159 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-160",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The red calendar in storage bin 160 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-161",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The red notebook in storage bin 161 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-162",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The red stapler in storage bin 162 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-163",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The red camera in storage bin 163 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-164",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The red backpack in storage bin 164 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-165",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The red lamp in storage bin 165 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-166",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The red pencil in storage bin 166 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-167",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The red envelope in storage bin 167 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-168",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The red folder in storage bin 168 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-169",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The red clock in storage bin 169 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-170",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The red cable in storage bin 170 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-171",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The red basket in storage bin 171 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-172",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The red table in storage bin 172 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-173",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The red vase in storage bin 173 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-174",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The red towel in storage bin 174 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-175",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The red curtain in storage bin 175 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-176",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The orange calendar in storage bin 176 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-177",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The orange notebook in storage bin 177 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-178",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The orange stapler in storage bin 178 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-179",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The orange camera in storage bin 179 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-180",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The orange backpack in storage bin 180 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-181",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The orange lamp in storage bin 181 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-182",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The orange pencil in storage bin 182 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-183",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The orange envelope in storage bin 183 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-184",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The orange folder in storage bin 184 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-185",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The orange clock in storage bin 185 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-186",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The orange cable in storage bin 186 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-187",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The orange basket in storage bin 187 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-188",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The orange table in storage bin 188 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-189",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The orange vase in storage bin 189 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-190",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The orange towel in storage bin 190 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-191",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The orange curtain in storage bin 191 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-192",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The yellow calendar in storage bin 192 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-193",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The yellow notebook in storage bin 193 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-194",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The yellow stapler in storage bin 194 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-195",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The yellow camera in storage bin 195 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-196",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The yellow backpack in storage bin 196 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-197",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The yellow lamp in storage bin 197 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-198",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The yellow pencil in storage bin 198 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-199",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The yellow envelope in storage bin 199 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-200",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The yellow folder in storage bin 200 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-201",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The yellow clock in storage bin 201 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-202",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The yellow cable in storage bin 202 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-203",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The yellow basket in storage bin 203 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-204",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The yellow table in storage bin 204 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-205",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The yellow vase in storage bin 205 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-206",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The yellow towel in storage bin 206 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-207",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The yellow curtain in storage bin 207 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-208",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The green calendar in storage bin 208 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-209",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The green notebook in storage bin 209 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-210",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The green stapler in storage bin 210 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-211",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The green camera in storage bin 211 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-212",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The green backpack in storage bin 212 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-213",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The green lamp in storage bin 213 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-214",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The green pencil in storage bin 214 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-215",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The green envelope in storage bin 215 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-216",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The green folder in storage bin 216 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-217",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The green clock in storage bin 217 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-218",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The green cable in storage bin 218 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-219",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The green basket in storage bin 219 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-220",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The green table in storage bin 220 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-221",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The green vase in storage bin 221 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-222",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The green towel in storage bin 222 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-223",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The green curtain in storage bin 223 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-224",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The blue calendar in storage bin 224 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-225",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The blue notebook in storage bin 225 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-226",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The blue stapler in storage bin 226 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-227",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The blue camera in storage bin 227 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-228",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The blue backpack in storage bin 228 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-229",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The blue lamp in storage bin 229 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-230",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The blue pencil in storage bin 230 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-231",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The blue envelope in storage bin 231 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-232",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The blue folder in storage bin 232 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-233",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The blue clock in storage bin 233 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-234",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The blue cable in storage bin 234 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-235",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The blue basket in storage bin 235 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-236",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The blue table in storage bin 236 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-237",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The blue vase in storage bin 237 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-238",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The blue towel in storage bin 238 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-239",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The blue curtain in storage bin 239 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-240",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The violet calendar in storage bin 240 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-241",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The violet notebook in storage bin 241 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-242",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The violet stapler in storage bin 242 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-243",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The violet camera in storage bin 243 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-244",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The violet backpack in storage bin 244 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-245",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The violet lamp in storage bin 245 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-246",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The violet pencil in storage bin 246 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-247",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The violet envelope in storage bin 247 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-248",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The violet folder in storage bin 248 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-249",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The violet clock in storage bin 249 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-250",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The violet cable in storage bin 250 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-251",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The violet basket in storage bin 251 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-252",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The violet table in storage bin 252 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-253",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The violet vase in storage bin 253 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-254",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The violet towel in storage bin 254 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-255",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The violet curtain in storage bin 255 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-256",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The silver calendar in storage bin 256 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-257",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The silver notebook in storage bin 257 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-258",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The silver stapler in storage bin 258 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-259",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The silver camera in storage bin 259 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-260",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The silver backpack in storage bin 260 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-261",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The silver lamp in storage bin 261 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-262",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The silver pencil in storage bin 262 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-263",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The silver envelope in storage bin 263 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-264",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The silver folder in storage bin 264 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-265",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The silver clock in storage bin 265 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-266",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The silver cable in storage bin 266 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-267",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The silver basket in storage bin 267 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-268",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The silver table in storage bin 268 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-269",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The silver vase in storage bin 269 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-270",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The silver towel in storage bin 270 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-271",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The silver curtain in storage bin 271 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-272",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The brown calendar in storage bin 272 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-273",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The brown notebook in storage bin 273 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-274",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The brown stapler in storage bin 274 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-275",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The brown camera in storage bin 275 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-276",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The brown backpack in storage bin 276 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-277",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The brown lamp in storage bin 277 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-278",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The brown pencil in storage bin 278 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-279",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The brown envelope in storage bin 279 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-280",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The brown folder in storage bin 280 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-281",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The brown clock in storage bin 281 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-282",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The brown cable in storage bin 282 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-283",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The brown basket in storage bin 283 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-284",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The brown table in storage bin 284 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-285",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The brown vase in storage bin 285 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-286",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The brown towel in storage bin 286 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-287",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The brown curtain in storage bin 287 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-288",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The black calendar in storage bin 288 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-289",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The black notebook in storage bin 289 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-290",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The black stapler in storage bin 290 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-291",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The black camera in storage bin 291 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-292",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The black backpack in storage bin 292 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-293",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The black lamp in storage bin 293 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-294",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The black pencil in storage bin 294 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-295",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The black envelope in storage bin 295 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-296",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The black folder in storage bin 296 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-297",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The black clock in storage bin 297 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-298",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The black cable in storage bin 298 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-299",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The black basket in storage bin 299 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-300",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The black table in storage bin 300 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-301",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The black vase in storage bin 301 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-302",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The black towel in storage bin 302 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-303",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The black curtain in storage bin 303 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-304",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The white calendar in storage bin 304 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-305",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The white notebook in storage bin 305 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-306",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The white stapler in storage bin 306 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-307",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The white camera in storage bin 307 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-308",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The white backpack in storage bin 308 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-309",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The white lamp in storage bin 309 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-310",
+    "Scope": "global",
+    "Kind": "claim",
+    "Text": "The white pencil in storage bin 310 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-311",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The white envelope in storage bin 311 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-312",
+    "Scope": "workspace",
+    "Kind": "claim",
+    "Text": "The white folder in storage bin 312 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-313",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The white clock in storage bin 313 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-314",
+    "Scope": "project_b",
+    "Kind": "claim",
+    "Text": "The white cable in storage bin 314 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-315",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The white basket in storage bin 315 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-316",
+    "Scope": "general",
+    "Kind": "claim",
+    "Text": "The white table in storage bin 316 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-317",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The white vase in storage bin 317 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-318",
+    "Scope": "project_a",
+    "Kind": "claim",
+    "Text": "The white towel in storage bin 318 was catalogued during the inventory."
+  },
+  {
+    "ID": "distractor-319",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The white curtain in storage bin 319 was catalogued during the inventory."
+  },
+  {
+    "ID": "secret-global",
+    "Scope": "global",
+    "Kind": "conversation",
+    "Text": "The synthetic inventory credential is password=DO-NOT-EMBED-THIS-SYNTHETIC-SECRET."
+  },
+  {
+    "ID": "secret-general",
+    "Scope": "general",
+    "Kind": "conversation",
+    "Text": "The synthetic inventory credential is password=DO-NOT-EMBED-THIS-SYNTHETIC-SECRET."
+  },
+  {
+    "ID": "secret-workspace",
+    "Scope": "workspace",
+    "Kind": "conversation",
+    "Text": "The synthetic inventory credential is password=DO-NOT-EMBED-THIS-SYNTHETIC-SECRET."
+  },
+  {
+    "ID": "secret-project_a",
+    "Scope": "project_a",
+    "Kind": "conversation",
+    "Text": "The synthetic inventory credential is password=DO-NOT-EMBED-THIS-SYNTHETIC-SECRET."
+  },
+  {
+    "ID": "secret-project_b",
+    "Scope": "project_b",
+    "Kind": "conversation",
+    "Text": "The synthetic inventory credential is password=DO-NOT-EMBED-THIS-SYNTHETIC-SECRET."
+  }
+]

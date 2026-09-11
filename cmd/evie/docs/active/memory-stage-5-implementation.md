@@ -294,3 +294,48 @@ Demonstration: record an antecedent in one message and an ambiguous tentative
 statement in a later message. In a fresh same-area chat, request its context.
 Open Conversation excerpt after deeper recall to inspect the additional original
 messages. Reopening the earlier request receipt must not add the later sources.
+
+## #165: measured local semantic retrieval selection
+
+This independent ticket follows its verified #157 prerequisite and is committed
+before later retrieval integration. The frozen production baseline is #158 at
+`f9706f8`; the reproduction procedure builds the broker against that revision.
+
+The actual local comparison selected Ollama 0.6.3 with pinned `all-minilm:22m`,
+384-dimensional normalized float32 vectors and existing SQLite persistence with
+bounded brute-force cosine scoring. On the separate #165 held-out partition,
+SQLite dense retrieval found 15/16 paraphrase targets versus 7/16 for lexical
+search, with full query-to-evidence p95 26.392 ms. HNSW failed both its frozen
+98% delivered-set overlap gate and the required 20% end-to-end speed advantage.
+One held-out paraphrase remained missed by both dense configurations. No gate
+or model parameter was changed after held-out results.
+
+The decision, immutable freezes, 960 raw condition observations, process-resource
+samples, model digests and limitations live in
+`docs/experiments/memory-retrieval-spike/`. Runnable scripts and pinned disposable
+Python dependencies live in `scripts/memory-retrieval-spike/`. No production
+dependency was added. The selected configuration gates #166; these measurements
+do not claim a complete provider-request budget or Stage 5 release quality.
+
+A supplemental operational check measured SQLite rebuilding from persisted
+vectors and confirmed exact vector bytes across both independent corpus builds
+and the rebuilt/reopened database. It did not read questions or change the
+frozen comparison. Nineteen endpoint probes exercise direct loopback/Unix
+connections, denied redirects/remote destinations, cancellation, malformed
+outputs and absence of fallback. The disposable server was stopped after use.
+
+### #165 verification
+
+- Actual development and unchanged held-out experiment — completed, 32 cases,
+  three repetitions and five conditions per partition; selected SQLite passes
+  its frozen gates. HNSW's failed gates are retained explicitly.
+- `go test ./scripts/memory-retrieval-spike` — compilation passed; the command
+  has no Go test files. `go vet ./scripts/memory-retrieval-spike` — passed.
+- `python3 -m py_compile scripts/memory-retrieval-spike/*.py` — passed.
+- `python3 scripts/memory-retrieval-spike/check_endpoint.py /tmp/evie-memory-stage5/165-endpoint-root-checks.json` — all 19 probes passed independently again.
+- `check_sqlite_rebuild.py` — 917 independently regenerated vectors and all
+  rebuilt/reopened rows byte-identical; retained sample and exact command in
+  the verification artifact.
+- Independent SHA256 recheck of every frozen script and fixture and both
+  result-to-freeze references — passed; `git diff --check` — passed.
+- Final repository verification remains pending all feature integration.
