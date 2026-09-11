@@ -1,0 +1,112 @@
+: 
+
+: 
+
+: 
+
+data: {"type":"response.created","response":{"id":"gen-1789089844-TikPK6SuE7vPRMm4Vx5E","object":"response","created_at":1789089844,"model":"openai/gpt-6-astra","status":"in_progress","completed_at":null,"output":[],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}},{"type":"function","name":"memory_expand_conversation","description":"Read bounded original context around an eligible Conversation excerpt already supplied this turn. Use its exact evidence_id. Request at most two public messages before and after; repeated ranges add no new evidence. This is attributed history, not accepted truth.","strict":false,"parameters":{"type":"object","properties":{"after":{"type":"integer","description":"Following public messages, 0 through 2."},"before":{"type":"integer","description":"Previous public messages, 0 through 2."},"evidence_id":{"type":"string","description":"Exact ID of a Conversation excerpt already supplied this turn."}},"required":["evidence_id","before","after"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"auto","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":null},"sequence_number":0}
+
+data: {"type":"response.in_progress","response":{"id":"gen-1789089844-TikPK6SuE7vPRMm4Vx5E","object":"response","created_at":1789089844,"model":"openai/gpt-6-astra","status":"in_progress","completed_at":null,"output":[],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}},{"type":"function","name":"memory_expand_conversation","description":"Read bounded original context around an eligible Conversation excerpt already supplied this turn. Use its exact evidence_id. Request at most two public messages before and after; repeated ranges add no new evidence. This is attributed history, not accepted truth.","strict":false,"parameters":{"type":"object","properties":{"after":{"type":"integer","description":"Following public messages, 0 through 2."},"before":{"type":"integer","description":"Previous public messages, 0 through 2."},"evidence_id":{"type":"string","description":"Exact ID of a Conversation excerpt already supplied this turn."}},"required":["evidence_id","before","after"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"auto","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":null},"sequence_number":1}
+
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_tmp_k4oebfupss","type":"message","status":"in_progress","role":"assistant","content":[],"phase":"final_answer"},"sequence_number":2}
+
+data: {"type":"response.content_part.added","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"part":{"type":"output_text","text":"","annotations":[],"logprobs":[]},"sequence_number":3}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"M","logprobs":[],"sequence_number":4}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"aya","logprobs":[],"sequence_number":5}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" would","logprobs":[],"sequence_number":6}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" likely","logprobs":[],"sequence_number":7}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" enjoy","logprobs":[],"sequence_number":8}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" a","logprobs":[],"sequence_number":9}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" good","logprobs":[],"sequence_number":10}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"-quality","logprobs":[],"sequence_number":11}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" jasmine","logprobs":[],"sequence_number":12}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" tea","logprobs":[],"sequence_number":13}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" gift","logprobs":[],"sequence_number":14}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" set","logprobs":[],"sequence_number":15}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"—","logprobs":[],"sequence_number":16}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"perhaps","logprobs":[],"sequence_number":17}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" jasmine","logprobs":[],"sequence_number":18}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" pearls","logprobs":[],"sequence_number":19}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" with","logprobs":[],"sequence_number":20}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" a","logprobs":[],"sequence_number":21}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" simple","logprobs":[],"sequence_number":22}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" inf","logprobs":[],"sequence_number":23}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"user","logprobs":[],"sequence_number":24}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" or","logprobs":[],"sequence_number":25}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" te","logprobs":[],"sequence_number":26}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"ac","logprobs":[],"sequence_number":27}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"up","logprobs":[],"sequence_number":28}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":".","logprobs":[],"sequence_number":29}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" You","logprobs":[],"sequence_number":30}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" mentioned","logprobs":[],"sequence_number":31}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" she","logprobs":[],"sequence_number":32}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"’s","logprobs":[],"sequence_number":33}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" fond","logprobs":[],"sequence_number":34}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" of","logprobs":[],"sequence_number":35}
+
+: 
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" jasmine","logprobs":[],"sequence_number":36}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" tea","logprobs":[],"sequence_number":37}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":",","logprobs":[],"sequence_number":38}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" so","logprobs":[],"sequence_number":39}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" that","logprobs":[],"sequence_number":40}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"’s","logprobs":[],"sequence_number":41}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" a","logprobs":[],"sequence_number":42}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" well","logprobs":[],"sequence_number":43}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":"-supported","logprobs":[],"sequence_number":44}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":" choice","logprobs":[],"sequence_number":45}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"delta":".","logprobs":[],"sequence_number":46}
+
+data: {"type":"response.output_text.done","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"text":"Maya would likely enjoy a good-quality jasmine tea gift set—perhaps jasmine pearls with a simple infuser or teacup. You mentioned she’s fond of jasmine tea, so that’s a well-supported choice.","logprobs":[],"sequence_number":47}
+
+data: {"type":"response.content_part.done","output_index":0,"item_id":"msg_tmp_k4oebfupss","content_index":0,"part":{"type":"output_text","text":"Maya would likely enjoy a good-quality jasmine tea gift set—perhaps jasmine pearls with a simple infuser or teacup. You mentioned she’s fond of jasmine tea, so that’s a well-supported choice.","annotations":[],"logprobs":[]},"sequence_number":48}
+
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_tmp_k4oebfupss","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Maya would likely enjoy a good-quality jasmine tea gift set—perhaps jasmine pearls with a simple infuser or teacup. You mentioned she’s fond of jasmine tea, so that’s a well-supported choice.","annotations":[],"logprobs":[]}],"phase":"final_answer"},"sequence_number":49}
+
+data: {"type":"response.completed","response":{"id":"gen-1789089844-TikPK6SuE7vPRMm4Vx5E","object":"response","created_at":1789089844,"model":"openai/gpt-6-astra","status":"completed","completed_at":1789089849,"output":[{"id":"msg_tmp_k4oebfupss","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Maya would likely enjoy a good-quality jasmine tea gift set—perhaps jasmine pearls with a simple infuser or teacup. You mentioned she’s fond of jasmine tea, so that’s a well-supported choice.","annotations":[],"logprobs":[]}],"phase":"final_answer"}],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}},{"type":"function","name":"memory_expand_conversation","description":"Read bounded original context around an eligible Conversation excerpt already supplied this turn. Use its exact evidence_id. Request at most two public messages before and after; repeated ranges add no new evidence. This is attributed history, not accepted truth.","strict":false,"parameters":{"type":"object","properties":{"after":{"type":"integer","description":"Following public messages, 0 through 2."},"before":{"type":"integer","description":"Previous public messages, 0 through 2."},"evidence_id":{"type":"string","description":"Exact ID of a Conversation excerpt already supplied this turn."}},"required":["evidence_id","before","after"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"default","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise","context":"all_turns","mode":"standard"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":{"input_tokens":2355,"input_tokens_details":{"cached_tokens":1594,"cache_write_tokens":758},"output_tokens":47,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2402,"cost":0.013449,"is_byok":false,"cost_details":{"upstream_inference_cost":0.013449,"upstream_inference_input_cost":0.011099,"upstream_inference_output_cost":0.00235}}},"sequence_number":50}
+
+data: [DONE]
+

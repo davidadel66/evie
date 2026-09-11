@@ -1,0 +1,34 @@
+{
+  "version": "memory-stage5-reader-manual-assessment-v1",
+  "rubric": "README.md frozen before model generation",
+  "assessor": "implementation agent, direct inspection of complete raw responses and source evidence; no model judge",
+  "overall_pass": false,
+  "cases": {
+    "historical_retired": {
+      "pass": false,
+      "old_preference_named": true,
+      "correct_original_source_event_cited": true,
+      "past_acceptance_distinguished_from_current_retirement": false,
+      "refrains_from_asserting_current_preference": false,
+      "no_invented_replacement_or_precise_original_date": true,
+      "finding": "Answer says the retired preference can still be treated as current and claims no subsequent changes, despite supplied current_status:retired."
+    },
+    "saved_boston_newer_chicago": {
+      "pass": true,
+      "both_places_exposed": true,
+      "accepted_record_and_later_statement_distinguished": true,
+      "discrepancy_expressed": true,
+      "both_sources_correctly_cited": true,
+      "does_not_claim_memory_was_corrected": true
+    },
+    "tentative_quote_and_inference": {
+      "pass": false,
+      "owner_uncertainty_preserved": true,
+      "definite_plan_attributed_to_colleague": true,
+      "quote_cited_to_original_owner_source": false,
+      "assistant_inference_distinguished_from_owner_quotation": false,
+      "no_invented_booking_itinerary_or_precise_date": true,
+      "finding": "Answer attaches the colleague quotation to the assistant event and calls that quote assistant inference; original quote was in the owner event."
+    }
+  }
+}

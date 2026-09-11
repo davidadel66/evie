@@ -68,6 +68,8 @@ func (CanonicalRequestEstimator) Estimate(request openrouter.ChatRequest) (Reque
 }
 
 type ContextComposeInput struct {
+	MemoryData     string
+	MemoryReceipt  *memory.RetrievalReceipt
 	Profile        openrouter.ContextProfile
 	Summary        *ContextSummary
 	Events         []memory.Event
@@ -199,6 +201,26 @@ func (c *ContextComposer) projectAtStart(
 		if err != nil {
 			return fmt.Errorf("project durable history: %w", err)
 		}
+		if input.MemoryData != "" {
+			rootIndex := -1
+			for i, event := range projected {
+				if event.ID == input.ActiveRootID {
+					rootIndex = i
+					break
+				}
+			}
+			if rootIndex < 0 {
+				return errors.New("memory projection requires the current root user event")
+			}
+			tail, tailErr := messagesFromEventsWithContinuation(projected[rootIndex:], input.Continuation)
+			if tailErr != nil {
+				return tailErr
+			}
+			position := len(projection.conversation) - len(tail)
+			withMemory := append([]openrouter.Message(nil), projection.conversation[:position]...)
+			withMemory = append(withMemory, openrouter.Message{Role: "user", Content: input.MemoryData})
+			projection.conversation = append(withMemory, projection.conversation[position:]...)
+		}
 		messages := make([]openrouter.Message, 0, len(projection.conversation)+2)
 		messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
 		if input.Summary != nil {
@@ -291,6 +313,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		return ComposedContext{}, err
 	}
 	snapshot := memory.ContextSnapshotPayload{
+		Memory:                 input.MemoryReceipt,
 		SchemaVersion:          memory.ContextSnapshotSchemaVersion,
 		ComposerVersion:        ContextComposerVersion,
 		EstimatorVersion:       c.estimator.Version(),
@@ -402,7 +425,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	composed, err := s.composer.Compose(ContextComposeInput{
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
-		Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+		Tools: s.modelToolset().Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 	})
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)

@@ -1,0 +1,7 @@
+{
+  "change": "Only citation denominator explanatory text corrected to existing v2 grader/schema behavior; all numeric gates, source workload, conditions, roles, budgets, ranking and semantic rubric unchanged. V1 adopted file and all frozen v1/v2 inputs preserved.",
+  "old_sha256": "06aaf6f4bff1486a78cef71e88dffeec54ae529f23c322fd8ec5d1bc04c928fd",
+  "new_sha256": "bf730615b47e3acb2f9fc12fe57a1dad88d19169ce46967716ec6fde144b1ea9",
+  "changed_json_pointer": "/denominators/original_event_citation_accuracy",
+  "numerical_gate_adoption_unchanged": "2026-09-11T02:59:51.461441+00:00"
+}

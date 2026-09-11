@@ -1,0 +1,12 @@
+[
+  "python3",
+  "-B",
+  "/private/tmp/evie-memory-stage5/integrated-development-v2/run.py",
+  "run",
+  "--freeze",
+  "/private/tmp/evie-memory-stage5/integrated-development-v2/freeze.json",
+  "--mode",
+  "reader",
+  "--output",
+  "/tmp/evie-memory-stage5/integrated-development-v2-reader"
+]

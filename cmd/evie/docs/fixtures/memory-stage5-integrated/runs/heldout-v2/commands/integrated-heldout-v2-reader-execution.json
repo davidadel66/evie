@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py",
+    "run",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/freeze.json",
+    "--mode",
+    "reader",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-heldout-v2-reader"
+  ],
+  "execution_exception": null,
+  "exit_code": 1,
+  "finished_at_utc": "2026-09-11T07:00:37.903929+00:00",
+  "started_at_utc": "2026-09-11T06:52:12.007995+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

@@ -1,0 +1,4 @@
+=== RUN   TestMemoryStage5DenseExperiment
+    retrieval_dense_experiment_test.go:455: frozen integration gate failed: paraphrase_recall_at_least_85_percent
+--- FAIL: TestMemoryStage5DenseExperiment (14.05s)
+FAIL

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Your Kyoto trip was **not confirmed in your original statement**: you said, “I might visit Kyoto next spring. Nothing is booked.” The definite plan—“I'll definitely travel to Kyoto”—was **your colleague’s**, not yours.\n\n- **Original owner statement:** event `338a985a-e5c8-49be-8f13-bbf82423d98c`.\n- **Assistant inference:** “I infer that the Kyoto trip could be confirmed.” Event `d37d642d-5121-4aff-8c8b-71c78dbc36ec`, actor: assistant. That was speculation, not confirmation from you, and does not establish that your trip is confirmed."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2360,
+    "output_tokens": 148,
+    "total_tokens": 2508,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1490,
+    "cache_write_input_tokens": 867
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "directory": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1",
+  "source_archives": [
+    {
+      "label": "automatic-v2",
+      "source_files_verified": 215,
+      "declared_inventory_entries_matched_to_original_freeze": 1008,
+      "archive_sha256": "44236942413dba609de63ecff7744338aaf664bfcf78833cf48c89520e21d38b",
+      "archive_bytes": 590836,
+      "complete": true
+    },
+    {
+      "label": "automatic-v3",
+      "source_files_verified": 214,
+      "declared_inventory_entries_matched_to_original_freeze": 4323,
+      "archive_sha256": "5ed5bee230ea9e81dbb7203568cf0bbece3d89f06662ea50540de11cf266b569",
+      "archive_bytes": 587145,
+      "complete": true
+    }
+  ],
+  "verified": true,
+  "no_build_or_model_calls": true
+}

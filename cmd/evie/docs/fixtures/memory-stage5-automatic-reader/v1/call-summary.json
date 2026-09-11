@@ -1,0 +1,56 @@
+[
+  {
+    "call": "compacted_greenhouse-01",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 2338,
+    "output_tokens": 74,
+    "cost": 0.0329175,
+    "wire_request_bytes": 12121
+  },
+  {
+    "call": "unavailable_greenhouse-01",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 1548,
+    "output_tokens": 27,
+    "cost": 0.0035575,
+    "wire_request_bytes": 8840
+  },
+  {
+    "call": "unavailable_greenhouse-02",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 1603,
+    "output_tokens": 29,
+    "cost": 0.0037125,
+    "wire_request_bytes": 9238
+  },
+  {
+    "call": "unavailable_greenhouse-03",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 1662,
+    "output_tokens": 61,
+    "cost": 0.0054175,
+    "wire_request_bytes": 9650
+  },
+  {
+    "call": "uncompiled_greenhouse-01",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 1942,
+    "output_tokens": 90,
+    "cost": 0.0116325,
+    "wire_request_bytes": 10238
+  },
+  {
+    "call": "vegetarian_dinner-01",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider": "OpenAI",
+    "input_tokens": 2217,
+    "output_tokens": 72,
+    "cost": 0.031305,
+    "wire_request_bytes": 10966
+  }
+]

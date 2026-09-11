@@ -1,0 +1,14 @@
+{
+  "answers": [
+    "Who are you buying for, David?"
+  ],
+  "error": "\u003cnil\u003e",
+  "forbidden_source_ids": null,
+  "model_calls": 1,
+  "name": "no_evidence",
+  "original_preferences": null,
+  "question": "What present would she like?",
+  "scripted_initial_searches": false,
+  "setup": {},
+  "whole_turn_elapsed_ns": 2961265084
+}

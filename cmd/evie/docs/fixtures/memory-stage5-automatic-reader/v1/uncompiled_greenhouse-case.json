@@ -1,0 +1,19 @@
+{
+  "allowed_source_ids": [
+    "c084dc7e-cd3f-40dd-b7f4-76d367b5ae55"
+  ],
+  "answers": [
+    "You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`."
+  ],
+  "error": "\u003cnil\u003e",
+  "model_calls": 1,
+  "name": "uncompiled_greenhouse",
+  "question": "What did I plant in the greenhouse, and how settled was the plan? Include the original source event ID.",
+  "required_source_ids": [
+    "c084dc7e-cd3f-40dd-b7f4-76d367b5ae55"
+  ],
+  "scripted_initial_searches": false,
+  "setup": null,
+  "whole_turn_elapsed_ns": 2831111666,
+  "withheld_source_ids": null
+}

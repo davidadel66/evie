@@ -1,0 +1,2075 @@
+{
+  "version": 1,
+  "partition": "development",
+  "purpose": "Required operating and boundary verification map; not an execution report.",
+  "execution_status": "not_run_in_this_mapping_task",
+  "rows": [
+    {
+      "id": "op01_automatic_original_support",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "success"
+      ],
+      "required_assertions": [
+        "Eligible original preference reaches first ordinary provider request without mutation.",
+        "Uncompiled evidence retains event, actor and source metadata."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_conversation_acceptance_test.go",
+          "name": "TestConversationSearchFindsUncompiledOriginalStatement",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationSearchFindsUncompiledOriginalStatement$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_automatic_evidence_test.go",
+          "name": "TestAutomaticMemoryEvidenceHTTPInspectsFirstOrdinaryRequest",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestAutomaticMemoryEvidenceHTTPInspectsFirstOrdinaryRequest$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op02_empty_unavailable_malformed",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "success",
+        "empty",
+        "unavailable",
+        "failed"
+      ],
+      "required_assertions": [
+        "An active index with no match is empty.",
+        "Disabled access or an incomplete index is unavailable, not absence.",
+        "Malformed *** search is failed."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_acceptance_test.go",
+          "name": "TestMemorySearchOutcomesDistinguishIncompleteEmptyAndMalformed",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchOutcomesDistinguishIncompleteEmptyAndMalformed$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op03_real_sqlite_failure",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "failed"
+      ],
+      "required_assertions": [
+        "Closed independent SQLite read connection reports failed without source text or database details.",
+        "Durable turn storage remains live."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallFailedSQLiteLookupDoesNotBecomeEmpty",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallFailedSQLiteLookupDoesNotBecomeEmpty$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op04_partial_survives_later_empty",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "success",
+        "failed",
+        "empty",
+        "partial"
+      ],
+      "required_assertions": [
+        "Successful accepted evidence survives a failed conversation generator and a later empty search.",
+        "Each tool outcome remains distinct in actual provider replay.",
+        "Live compact activity is success/partial/partial; persisted history retains completed request association.",
+        "Exact request hashes, bytes, source refs and cumulative serialized memory-message accounting match."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_acceptance_test.go",
+          "name": "TestMemoryInvestigationKeepsFailedSearchDistinctAfterLaterEmptySearch",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationKeepsFailedSearchDistinctAfterLaterEmptySearch$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_investigation_test.go",
+          "name": "TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op05_dense_timeout_keeps_lexical",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial"
+      ],
+      "required_assertions": [
+        "Stalled local embedding query respects the deadline.",
+        "Already eligible lexical support remains available and failure cannot become exhaustive empty."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_dense_lifecycle_test.go",
+          "name": "TestDenseEndpointDeadlinePreservesEligibleLexicalEvidenceAsPartial",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseEndpointDeadlinePreservesEligibleLexicalEvidenceAsPartial$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op06_lexical_rebuild_and_all_generators_unavailable",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial",
+        "unavailable"
+      ],
+      "required_assertions": [
+        "Active dense support remains usable during independent lexical rebuild.",
+        "When dense also becomes unavailable, the result is unavailable, not empty."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_dense_upgrade_test.go",
+          "name": "TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op07_mixed_search_budget",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "exhausted"
+      ],
+      "required_assertions": [
+        "Accepted searches, conversation searches and expansion share the same finite budget.",
+        "A refused post-budget attempt does not reset or authorize more Kernel work."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_acceptance_test.go",
+          "name": "TestMemorySearchRepeatedCallsShareTurnBudget",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchRepeatedCallsShareTurnBudget$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_limits_test.go",
+          "name": "TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows$",
+              "-count=1"
+            ]
+          }
+        }
+      ],
+      "limitation": "Existing tests assert exhausted behavior. The integrated measurement must additionally count actual Kernel calls separately from SearchAttempts, which includes refusals."
+    },
+    {
+      "id": "op08_cumulative_delivery_budget",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "exhausted"
+      ],
+      "required_assertions": [
+        "Repeated synthetic evidence and tool-result replay are charged on every actual request.",
+        "Supported findings and an explicit exhausted warning reach the reader before bounded termination.",
+        "A provider that continues after exhaustion cannot dispatch beyond 36864 cumulative memory bytes; unadmitted requests create no extra receipt."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_acceptance_test.go",
+          "name": "TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_hard_limit_test.go",
+          "name": "TestMemoryInvestigationCannotDispatchPastBudgetWhenProviderContinues",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationCannotDispatchPastBudgetWhenProviderContinues$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op09_cancel_and_lease_loss",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Cancellation returns context.Canceled; lease loss terminates the stale turn.",
+        "No late provider dispatch, approval, mutation or extra evidence receipt occurs.",
+        "The replacement owner lease survives stale cleanup; original receipt remains immutable."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_continuation_test.go",
+          "name": "TestMemoryInvestigationCancellationAndLeaseLossHaveNoLateEffects",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationCancellationAndLeaseLossHaveNoLateEffects$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_limits_test.go",
+          "name": "TestConversationExpansionCancellationHasNoLateEvidenceReceipt",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionCancellationHasNoLateEvidenceReceipt$",
+              "-count=1"
+            ]
+          }
+        }
+      ],
+      "expected_terminal": "interrupted or rejected continuation; no fabricated final cancelled provider dispatch",
+      "limitation": "A cancelled turn must not send another provider request merely to expose a cancelled label; UI labels are checked separately."
+    },
+    {
+      "id": "op10_forged_expansion_anchor",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "unavailable"
+      ],
+      "required_assertions": [
+        "Forged, same-area-but-never-retrieved and other-area anchors cannot authorize expansion.",
+        "The existing eligible anchor remains available without exposing forbidden source."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_boundary_test.go",
+          "name": "TestConversationExpansionTurnRejectsForgedAndOutOfScopeAnchors",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionTurnRejectsForgedAndOutOfScopeAnchors$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op11_expansion_window_rejection",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial",
+        "failed",
+        "exhausted"
+      ],
+      "required_assertions": [
+        "before/after greater than two is a failed individual expansion.",
+        "Previously supplied evidence survives with partial aggregate status.",
+        "Mixed repeated expansion calls exhaust the shared budget."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_limits_test.go",
+          "name": "TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op12_expansion_overlap_and_utf8",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Duplicate expansion and overlapping ranges do not multiply source bytes.",
+        "Exact UTF-8 locators reconstruct authorized original text.",
+        "Retired ranges are subtracted while independent eligible text survives."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_boundary_test.go",
+          "name": "TestConversationExpansionTurnSubtractsOverlappingUTF8EvidenceAndDuplicateRequests",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionTurnSubtractsOverlappingUTF8EvidenceAndDuplicateRequests$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_boundary_test.go",
+          "name": "TestConversationExpansionTurnOmitsRetiredNeighborRangeButKeepsUnrelatedUTF8Passage",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionTurnOmitsRetiredNeighborRangeButKeepsUnrelatedUTF8Passage$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_retirement_acceptance_test.go",
+          "name": "TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op13_expansion_incomplete_window",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Omitted secret neighbor, omitted retired interval and bounded durable-event gap each report truncated:true.",
+        "Gap case reports matches:0 without claiming a complete window.",
+        "Eligible unrelated text is preserved."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_coverage_test.go",
+          "name": "TestConversationExpansionReportsOmittedSecretNeighbor",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionReportsOmittedSecretNeighbor$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_coverage_test.go",
+          "name": "TestConversationExpansionReportsBoundedSequenceGap",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionReportsBoundedSequenceGap$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_coverage_test.go",
+          "name": "TestConversationExpansionReportsRetiredNeighborInterval",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionReportsRetiredNeighborInterval$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op14_current_root_cutoff",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Earlier messages in the selected session may be retrieved.",
+        "The live current user root and later/current-session positions cannot become earlier evidence.",
+        "Dense discovery obeys the same cutoff."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_boundary_test.go",
+          "name": "TestConversationExpansionTurnExcludesCurrentRootFromEarlierCurrentSessionAnchor",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionTurnExcludesCurrentRootFromEarlierCurrentSessionAnchor$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_conversation_scope_acceptance_test.go",
+          "name": "TestConversationSearchTurnScopeMatrixAndEarlierRoots",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationSearchTurnScopeMatrixAndEarlierRoots$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_scope_acceptance_test.go",
+          "name": "TestDenseConversationTurnKeepsExactContextAndExcludesIndexedLiveRoot",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseConversationTurnKeepsExactContextAndExcludesIndexedLiveRoot$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op15_optout_complete_provider_wire",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "unavailable"
+      ],
+      "required_assertions": [
+        "After opt-out, original supplemental text, source/session IDs and opaque canary are absent from complete RequestBytes.",
+        "Cover both Chat Completions messages and native Responses input/opaque items.",
+        "Original durable assistant tool-call arguments remain intact locally."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_expansion_boundary_test.go",
+          "name": "TestConversationExpansionTurnOptOutWithholdsSourceReferencesFromCompleteRequest",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionTurnOptOutWithholdsSourceReferencesFromCompleteRequest$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_acceptance_test.go",
+          "name": "TestMemorySearchOptOutBeforeDispatchWithholdsSupplementalSources",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchOptOutBeforeDispatchWithholdsSupplementalSources$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op16_scope_authority_matrix",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Global accepted memory does not authorize raw Global conversation from a project/workspace.",
+        "Other projects/workspaces and sibling session-only memories stay excluded.",
+        "Promoted source evidence retains its original source boundary.",
+        "Dense/graph candidate discovery cannot widen current source authorization."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_scope_acceptance_test.go",
+          "name": "TestMemorySearchTurnKeepsPromotedSourceBoundaries",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnKeepsPromotedSourceBoundaries$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_scope_acceptance_test.go",
+          "name": "TestMemorySearchTurnScopeMatrix",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnScopeMatrix$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_scope_acceptance_test.go",
+          "name": "TestDenseMemoryTurnKeepsContextAndCurrentSessionScopeMatrix",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseMemoryTurnKeepsContextAndCurrentSessionScopeMatrix$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_graph_acceptance_test.go",
+          "name": "TestMemorySearchTurnGraphScopeMatrixKeepsGlobalAnchorInsideReaderBoundary",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnGraphScopeMatrixKeepsGlobalAnchorInsideReaderBoundary$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_conversation_evidence_test.go",
+          "name": "TestConversationEvidenceHTTPKeepsWorkspaceAttributionWithoutGlobalHistory",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestConversationEvidenceHTTPKeepsWorkspaceAttributionWithoutGlobalHistory$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op17_secret_egress",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Secret-bearing accepted or neighboring source text is withheld.",
+        "Retrieval and expansion do not promote a secret-bearing hit into eligible evidence."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_acceptance_test.go",
+          "name": "TestMemorySearchWithholdsSecretBearingEvidence",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchWithholdsSecretBearingEvidence$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_expansion_coverage_test.go",
+          "name": "TestConversationExpansionReportsOmittedSecretNeighbor",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestConversationExpansionReportsOmittedSecretNeighbor$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op18_temporal_views",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Historical valid time is half-open and separate from exact knowledge pins.",
+        "Unknown validity stays unknown.",
+        "Expansion inherits the original anchor intent/knowledge pin.",
+        "Current lifecycle metadata never silently repins historical evidence."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_temporal_acceptance_test.go",
+          "name": "TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_temporal_acceptance_test.go",
+          "name": "TestHistoricalMemorySearchPreservesUnknownValidity",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestHistoricalMemorySearchPreservesUnknownValidity$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_historical_expansion_test.go",
+          "name": "TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_historical_expansion_test.go",
+          "name": "TestMemoryCorrectionBeforeDispatchPreservesOriginalReadPinAndFreshLifecycle",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryCorrectionBeforeDispatchPreservesOriginalReadPinAndFreshLifecycle$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op19_retirement_and_current_source_access",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "unavailable"
+      ],
+      "required_assertions": [
+        "Current retirement withdraws evidence before continuation while preserving original receipt.",
+        "Explicit historical read can inspect marked retired evidence, but cannot restore revoked source access.",
+        "Dense stale hits recheck retired UTF-8 ranges and source retraction."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallDropsRetiredEvidenceBeforeContinuation",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallDropsRetiredEvidenceBeforeContinuation$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_historical_acceptance_test.go",
+          "name": "TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_scope_acceptance_test.go",
+          "name": "TestDenseConversationTurnRechecksRetiredUTF8RangeAndRevokedSource",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseConversationTurnRechecksRetiredUTF8RangeAndRevokedSource$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_historical_expansion_test.go",
+          "name": "TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op20_same_turn_correction_and_query_refresh",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Approved correction refreshes the current query before the next provider dispatch.",
+        "A full held-evidence set can admit a useful follow-up within bounds.",
+        "Refreshing lost evidence must not undo another explicit temporal view."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_acceptance_test.go",
+          "name": "TestMemoryInvestigationRefreshesCurrentQueryAfterSameTurnCorrection",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationRefreshesCurrentQueryAfterSameTurnCorrection$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_acceptance_test.go",
+          "name": "TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_refresh_view_test.go",
+          "name": "TestMemoryInvestigationRefreshesLostClaimWithoutUndoingAnotherExplicitView",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationRefreshesLostClaimWithoutUndoingAnotherExplicitView$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op21_new_or_restored_information_and_pins",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "New accepted conflict, restored conflict and newer owner statement refresh an unpinned current investigation.",
+        "Explicit knowledge pins remain unchanged and do not acquire later facts.",
+        "Original request receipts are not rewritten."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_new_conflict_test.go",
+          "name": "TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_restored_information_test.go",
+          "name": "TestMemoryInvestigationRefreshesRestoredConflictsWithoutAdvancingPinnedViews",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationRefreshesRestoredConflictsWithoutAdvancingPinnedViews$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_restored_information_test.go",
+          "name": "TestMemoryInvestigationRefreshesNewOwnerStatementWithoutAdvancingPinnedViews",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationRefreshesNewOwnerStatementWithoutAdvancingPinnedViews$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op22_identity_lifecycle",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "unavailable"
+      ],
+      "required_assertions": [
+        "Accepted exact alias evidence includes only currently eligible identity mapping.",
+        "Alias retirement or original alias source restriction cannot be bypassed by query refresh.",
+        "Independently eligible Claim evidence remains inspectable without a revoked alias."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_reference_alias_test.go",
+          "name": "TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_reference_alias_test.go",
+          "name": "TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_identity_test.go",
+          "name": "TestMemoryInvestigationDoesNotRefreshThroughRetiredAlias",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationDoesNotRefreshThroughRetiredAlias$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op23_unchanged_continuations",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Unchanged continuations reuse exact immutable references without redoing searches.",
+        "Search/refresh/reuse counters and serialized replay bytes are measured accurately."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_investigation_continuation_test.go",
+          "name": "TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op24_selected_graph_and_conflict_support",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "A graph conclusion carries its ordered accepted support Claims.",
+        "Revoked bridge or mismatched temporal view cannot remain a valid path.",
+        "Budget trimming removes orphaned path/conflict metadata.",
+        "A newer owner episode remains an attributed possible discrepancy, not an approved correction."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_graph_acceptance_test.go",
+          "name": "TestMemorySearchTurnFindsSourceBearingTwoHopRelationship",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnFindsSourceBearingTwoHopRelationship$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_graph_acceptance_test.go",
+          "name": "TestMemorySearchTurnGraphSupportRevalidatesBeforeDispatch",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnGraphSupportRevalidatesBeforeDispatch$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_graph_acceptance_test.go",
+          "name": "TestMemorySearchTurnGraphDoesNotReuseSupportFromDifferentTemporalRead",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnGraphDoesNotReuseSupportFromDifferentTemporalRead$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_investigation_relations_test.go",
+          "name": "TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_conflict_acceptance_test.go",
+          "name": "TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op25_receipt_persistence_and_interruption",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Each context snapshot is committed before the actual provider request and matches exact RequestBytes hash/size and evidence refs.",
+        "Completed/interrupted event order survives reopening SQLite.",
+        "HTTP keeps prepared, completed and interrupted request states distinct; no answer ID is fabricated for an interrupted request."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_receipt_acceptance_test.go",
+          "name": "TestMemoryReceiptIsDurableBeforeEachProviderRequestIncludingInterruption",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryReceiptIsDurableBeforeEachProviderRequestIncludingInterruption$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_receipt_evidence_test.go",
+          "name": "TestMemoryReceiptHTTPDistinguishesPreparedAndInterruptedRequests",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryReceiptHTTPDistinguishesPreparedAndInterruptedRequests$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_receipt_evidence_test.go",
+          "name": "TestMemoryReceiptHTTPAssociatesExactRequestsWithOriginalAnswerAfterRestart",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryReceiptHTTPAssociatesExactRequestsWithOriginalAnswerAfterRestart$",
+              "-count=1"
+            ]
+          }
+        }
+      ],
+      "expected_request_statuses": [
+        "prepared",
+        "completed",
+        "interrupted"
+      ]
+    },
+    {
+      "id": "op26_provenance_tamper",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Changed source hash, locator, event, authority or observation timestamp returns unavailable inspection without text.",
+        "The genuine original reference remains available and unmodified."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_receipt_acceptance_test.go",
+          "name": "TestMemoryReceiptInspectionRejectsChangedOriginalProvenance",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestMemoryReceiptInspectionRejectsChangedOriginalProvenance$",
+              "-count=1"
+            ]
+          }
+        }
+      ],
+      "expected_inspection_available": false
+    },
+    {
+      "id": "op27_http_original_source_lifecycle_and_relations",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Original answer-associated source positions and Claim versions survive restart/correction/retirement.",
+        "Source restriction withholds current text without rewriting original references.",
+        "Conflict/newer relation inspection is reconstructed only from currently available selected support.",
+        "A different selected conversation is rejected."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/memory_receipt_evidence_test.go",
+          "name": "TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_expansion_evidence_test.go",
+          "name": "TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_historical_evidence_test.go",
+          "name": "TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_historical_evidence_test.go",
+          "name": "TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/web/memory_evidence_test.go",
+          "name": "TestMemoryEvidenceHTTPRejectsAnotherSelectedConversation",
+          "seam": "http_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/web",
+              "-run",
+              "^TestMemoryEvidenceHTTPRejectsAnotherSelectedConversation$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op28_dense_rebuild_and_concurrent_source_changes",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial"
+      ],
+      "required_assertions": [
+        "Replacement generation is building and cannot serve unreconciled paraphrase hits.",
+        "Restart resumes bounded backfill and recovers original source under the new generation.",
+        "In-flight embedding cannot revive retired evidence or skip a concurrent accepted append.",
+        "Disabled-period changes reconcile before re-enable."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_dense_lifecycle_test.go",
+          "name": "TestDenseGenerationRebuildReconcilesBeforeServingAndSurvivesRestart",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseGenerationRebuildReconcilesBeforeServingAndSurvivesRestart$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_lifecycle_test.go",
+          "name": "TestDenseBackfillRechecksConcurrentRetirementAndAcceptedAppend",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseBackfillRechecksConcurrentRetirementAndAcceptedAppend$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_lifecycle_test.go",
+          "name": "TestDenseDisabledGenerationReconcilesAcceptedChangesBeforeReenable",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseDisabledGenerationReconcilesAcceptedChangesBeforeReenable$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_acceptance_test.go",
+          "name": "TestDenseSingleRowBackfillEventuallyServesCompleteTurn",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseSingleRowBackfillEventuallyServesCompleteTurn$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op29_derived_index_upgrade",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Obsolete lexical statistics and generation metadata cannot become authoritative evidence.",
+        "An obsolete active dense configuration does not trigger query embedding or return old-generation evidence.",
+        "Bounded reconciliation restores the exact retained original source."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_dense_upgrade_test.go",
+          "name": "TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSources",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSources$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_dense_upgrade_test.go",
+          "name": "TestDenseConfigurationUpgradeNeverServesAnObsoleteActiveGeneration",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseConfigurationUpgradeNeverServesAnObsoleteActiveGeneration$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op30_embedding_manifest_and_vector_contract",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial"
+      ],
+      "required_assertions": [
+        "Wrong/absent/malformed manifest sends zero input-bearing requests.",
+        "Model replacement during inference is rejected.",
+        "Malformed/wrong-dimension/nonfinite/oversized vectors return no partial vector batch.",
+        "Wrong model name and manifest digest both preserve exactly eligible lexical support with partial tool/projection/receipt status.",
+        "After metadata rejection, no input-bearing embedding request or body bytes are sent; actual request SHA256/size and immutable source receipt agree."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_dense_manifest_acceptance_test.go",
+          "name": "TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedRejectsUnselectedManifestBeforeSendingInput",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedRejectsUnselectedManifestBeforeSendingInput$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/generation_test.go",
+          "name": "TestEmbedRejectsModelReplacementDuringInference",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedRejectsModelReplacementDuringInference$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedRejectsMalformedVectorsWithoutReturningPartialBatch",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedRejectsMalformedVectorsWithoutReturningPartialBatch$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op31_local_endpoint_egress_and_cancel",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Only literal loopback HTTP or Unix socket endpoints are accepted.",
+        "Redirect destinations and configured proxies receive no input.",
+        "Opt-out before/during manifest verification sends no embedding input.",
+        "Cancellation and response-body deadline preserve their cause without a vector or late dispatch."
+      ],
+      "tests": [
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestNewRejectsRemoteNamedCredentialedAndNonRootEndpoints",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestNewRejectsRemoteNamedCredentialedAndNonRootEndpoints$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedRejectsRedirectWithoutContactingItsDestination",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedRejectsRedirectWithoutContactingItsDestination$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedUsesUnixSocketAndDoesNotContactConfiguredProxy",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedUsesUnixSocketAndDoesNotContactConfiguredProxy$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedOptOutMakesNoRequestAndStopsAfterManifestVerification",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedOptOutMakesNoRequestAndStopsAfterManifestVerification$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedPreservesCancellationAndAvoidsDispatchForCanceledCaller",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedPreservesCancellationAndAvoidsDispatchForCanceledCaller$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/localembedding/client_test.go",
+          "name": "TestEmbedPreservesDeadlineWhileReadingResponse",
+          "seam": "focused_local_http_adapter",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/localembedding",
+              "-run",
+              "^TestEmbedPreservesDeadlineWhileReadingResponse$",
+              "-count=1"
+            ]
+          }
+        }
+      ],
+      "platform_note": "The Unix socket test explicitly skips Windows; the declared current macOS environment should execute it."
+    },
+    {
+      "id": "op32_ablation_before_composition",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Automatic recall can retain its original capability grant while model read schemas and dispatch are disabled.",
+        "Actual composed request bytes and saved snapshot agree; no post-composition stripping.",
+        "Default behavior and legacy per-turn resolution remain enabled."
+      ],
+      "tests": [
+        {
+          "path": "internal/agent/retrieval_ablation_acceptance_test.go",
+          "name": "TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch$",
+              "-count=1"
+            ]
+          }
+        },
+        {
+          "path": "internal/agent/retrieval_ablation_acceptance_test.go",
+          "name": "TestModelMemoryRetrievalDefaultsToEnabledAndKeepsLegacyTurnResolution",
+          "seam": "complete_turn_real_sqlite",
+          "command": {
+            "cwd": ".",
+            "argv": [
+              "go",
+              "test",
+              "./internal/agent",
+              "-run",
+              "^TestModelMemoryRetrievalDefaultsToEnabledAndKeepsLegacyTurnResolution$",
+              "-count=1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op33_compact_ui_outcomes",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [
+        "partial",
+        "failed",
+        "unavailable",
+        "empty",
+        "cancelled",
+        "exhausted"
+      ],
+      "required_assertions": [
+        "Each state has its distinct compact label.",
+        "Partial and exhausted retain supplied evidence count and are not called No matches."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/chat/MemoryInvestigationActivity.test.tsx",
+          "names": [
+            "investigation activity preserves each resource and failure outcome"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/chat/MemoryInvestigationActivity.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op34_original_request_activity",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Saved request is recorded/prepared until assistant commit.",
+        "Activity describes supplied sources, not inferred model citation or use.",
+        "Historical counts are frozen request metadata."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/chat/MemoryActivity.test.tsx",
+          "names": [
+            "labels a saved request as recorded until its assistant response commits",
+            "offers the supplied accepted memory for inspection without claiming an answer citation",
+            "summarizes historical, retired and conflicting evidence as recorded for that request"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/chat/MemoryActivity.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op35_source_inspection_ui",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Exact request association, access restriction, speaker, unknown fact dates and conflict authority survive rendering."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx",
+          "names": [
+            "keeps the answer's original requests separate and does not call interrupted evidence supplied",
+            "never renders retained source text after current access is denied",
+            "preserves a conversation excerpt's speaker, uncertainty and exact source range without inventing a Claim",
+            "shows a historical retired Claim with actual acceptance time and unknown validity rather than treating read filters as fact dates",
+            "shows explicit Kernel conflicts while labeling newer owner wording only as a potential discrepancy"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/artifacts/MemoryEvidence.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op36_graph_source_links_ui",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Original path order is visible; links target only currently available support sources."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/artifacts/GraphEvidencePath.test.tsx",
+          "names": [
+            "renders an ordered two-hop original path with links to each available supporting Claim's source",
+            "keeps the original path but does not link or render inaccessible bridge source data"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/artifacts/GraphEvidencePath.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op37_dense_generation_ui",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "Original discovery generation is inspectable without rerunning retrieval; unavailable source does not render retained text or generation."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/artifacts/MemoryEvidenceDense.test.tsx",
+          "names": [
+            "inspection shows the original discovery generation without rerunning retrieval"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/artifacts/MemoryEvidenceDense.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op38_explicit_knowledge_pin_ui",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "An explicit knowledge filter is visible independently of current/historical intent."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+          "names": [
+            "an explicit knowledge date stays visible on a current evidence view"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/artifacts/MemoryEvidenceInvestigation.test.tsx"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "op39_inspection_http_client",
+      "execution_status": "not_run_in_this_mapping_task",
+      "expected_statuses": [],
+      "required_assertions": [
+        "HTTP client requests no-store and rejects another selected conversation."
+      ],
+      "tests": [
+        {
+          "path": "internal/web/ui/src/api/memoryEvidence.test.ts",
+          "names": [
+            "inspects the selected request with no-store and rejects a different conversation response"
+          ],
+          "seam": "focused_ui",
+          "command": {
+            "cwd": "internal/web/ui",
+            "argv": [
+              "./node_modules/.bin/vitest",
+              "run",
+              "src/api/memoryEvidence.test.ts"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "id": "gap02_actual_kernel_call_measurement",
+      "status": "integrated_instrumentation_pending",
+      "detail": "Exhaustion tests check outcomes and finite bytes; SearchAttempts includes refused post-budget attempts. The integrated runner must count actual delegated Kernel searches independently to compare with the adopted max8 gate."
+    },
+    {
+      "id": "gap03_six_condition_resources_and_reader_results",
+      "status": "harness_and_execution_pending",
+      "detail": "This map cannot establish the newly adopted 24-case, six-condition model quality, latency, serialized cost, per-case index/RSS or semantic rubric results. Run the frozen harness and record every outcome; prior component passes are development evidence only."
+    },
+    {
+      "id": "gap04_quantified_cancellation_tail",
+      "status": "integrated_timing_pending",
+      "detail": "Existing full-turn cancel/lease tests assert no late effects, and adapter tests have bounded completion waits. The integrated operating report still must record actual cancellation/deadline tail measurements; do not invent a duration from the timeout constant."
+    }
+  ],
+  "verification_instructions": [
+    "Resolve every mapped test against the frozen exported tree; source names were statically verified when this manifest was authored.",
+    "Run exact listed commands or equivalent package-batched anchored names and preserve raw output. Exit0 without actually matched tests is not a pass.",
+    "Do not run timing/model experiments concurrently with these CPU-heavy checks.",
+    "Record assertions, observed statuses, elapsed time, failures and skips separately from this expectation manifest.",
+    "Run ./scripts/verify-change.sh before handoff; this mapping does not replace required repository verification."
+  ],
+  "resolved_coverage": [
+    {
+      "id": "gap01_wrong_manifest_complete_turn",
+      "coverage_status": "mapped_existing_complete_turn",
+      "execution_status": "not_run_in_this_mapping_task",
+      "test_name": "TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput",
+      "path": "internal/agent/retrieval_dense_manifest_acceptance_test.go",
+      "operating_row": "op30_embedding_manifest_and_vector_contract"
+    }
+  ]
+}

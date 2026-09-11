@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "I’d choose a **good-quality jasmine tea gift set** for Maya—you’ve told me your mother is fond of jasmine tea. A tin of jasmine pearls with a beautiful cup would make a thoughtful birthday present.\n\nWhat’s your budget?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 3198,
+    "output_tokens": 51,
+    "total_tokens": 3249,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 1601
+  }
+}

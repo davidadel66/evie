@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "If MOM-27 is for your mother Maya, I’d suggest a **jasmine tea gift set**—a quality loose-leaf tea with a pretty cup or infuser. You’ve told me she’s fond of jasmine tea.\n\nI couldn’t confirm what MOM-27 refers to, so that recommendation depends on it being for her."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2534,
+    "output_tokens": 72,
+    "total_tokens": 2606,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 937
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/grader.py",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+    "--evidence-report",
+    "/tmp/evie-memory-stage5/integrated-development-v4-evidence/evidence-report.json",
+    "--assessments",
+    "/tmp/evie-memory-stage5/integrated-development-v4-assessments",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-development-v4-quality"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T06:21:05.319275+00:00",
+  "started_at_utc": "2026-09-11T06:21:05.166373+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

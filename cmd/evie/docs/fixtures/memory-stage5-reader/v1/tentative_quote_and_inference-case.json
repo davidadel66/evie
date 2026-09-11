@@ -1,0 +1,24 @@
+{
+  "answers": [
+    "Based on the available information:\n\n1. You mentioned, \"I might visit Kyoto next spring. Nothing is booked.\" (Event ID: 4b339ba8-ecc8-47b9-b277-1427955671ca). This statement indicates that you have no definite plans to travel to Kyoto at this time.\n\n2. Your colleague stated, \"I'll definitely travel to Kyoto,\" but it was noted that this was her plan, not yours (Event ID: d5a0a91b-1dde-49a1-80dd-871285af9943). This inference was made by the assistant and is not a direct statement from you.\n\nNo explicit confirmation of your Kyoto trip has been recorded. The mention of your colleague's definite plan does not apply to your own travel arrangements."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "4b339ba8-ecc8-47b9-b277-1427955671ca",
+    "d5a0a91b-1dde-49a1-80dd-871285af9943"
+  ],
+  "model_calls": 1,
+  "name": "tentative_quote_and_inference",
+  "question": "Is my Kyoto trip confirmed, and whose definite plan was mentioned? Distinguish the original statement from any assistant inference. Include source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "trip-statements",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Kyoto\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 13114499292
+}

@@ -1,0 +1,88 @@
+{
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "source_archive": {
+    "path": "/tmp/evie-memory-stage5/integrated-heldout-v2/compiled-source.tar.gz",
+    "sha256": "3b4e0cc90c9c82f2167b171672ffb05207f0a7ed3914c114400bef731445bec3",
+    "manifest_sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+    "members_verified": 394,
+    "go_embed_declarations": 0,
+    "non_go_compilation_inputs": [
+      "go.mod",
+      "go.sum"
+    ]
+  },
+  "canonical_inputs": {
+    "archive": "/tmp/evie-memory-stage5/integrated-heldout-v2/prepared-inputs.tar.gz",
+    "sha256": "95826cfcd43404ad8e14c5f9971a0b965a4ea6179ebfe84dcbfb727bfc9349d4",
+    "manifest_sha256": "72dd8ab4c1e6d6f497af0938bd1448672537e44ab309a989582d1f18f93241c5",
+    "members_verified": 48
+  },
+  "go_version": "go version go1.26.3 darwin/arm64",
+  "same_development_executable": true,
+  "binary_sha256": "06ba5e56aecf5684f2209bd801074ea65ed032dc88181d07a4d016260532f072",
+  "binary_excluded_from_repo": true,
+  "build_command_source": "/tmp/evie-memory-stage5/integrated-development-v4/build.json",
+  "build_command": [
+    "go",
+    "test",
+    "-c",
+    "./internal/agent",
+    "-o",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test"
+  ],
+  "run_commands": {
+    "reader": {
+      "record": "/tmp/evie-memory-stage5/integrated-heldout-v2-reader/execution.json",
+      "sha256": "457061a39c8b75656ef62eff60d5cee84f771065b7a263873bec429a693f2261",
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedReaderEvaluation$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "exit_code": 1,
+      "closed": true
+    },
+    "local": {
+      "record": "/tmp/evie-memory-stage5/integrated-heldout-v2-local/execution.json",
+      "sha256": "03c42f1be1cd57f18307275ffc35f7b728bfb72b8f61134f27f17eee6463c1df",
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedLocalEvaluation$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "exit_code": 1,
+      "closed": true
+    },
+    "index": {
+      "record": "/tmp/evie-memory-stage5/integrated-heldout-v2-index/execution.json",
+      "sha256": "b8d0099f578b4e4c8276631fd7ad64a66a1dc7e9f40001fe3c4cda6d8febeaac",
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedIndexMeasurements$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "exit_code": 1,
+      "closed": true
+    },
+    "operating": {
+      "record": "/tmp/evie-memory-stage5/integrated-heldout-v2-operating/execution.json",
+      "sha256": "4f39a1abfb1b81c8fe247fe5e6e197255dadad840a40eec0390a0fe43cfb1576",
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedOperatingMeasurements$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "exit_code": 0,
+      "closed": true
+    }
+  },
+  "no_build_or_model_called": true
+}

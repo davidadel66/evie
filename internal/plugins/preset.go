@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	EvieVersion                    = "1.0.0"
-	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+	EvieVersion                                = "1.0.0"
+	StandardPresetID                  PresetID = "standard"
+	StandardPresetVersion                      = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
+	preRetrievalStandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
 
 	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
 	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
@@ -114,7 +115,7 @@ func preTreeTodoStandardPreset() Preset {
 }
 
 func preClaimsTodoStandardPreset() Preset {
-	preset := standardPresetContent()
+	preset := preRetrievalStandardPreset()
 	preset.Version = preClaimsTodoPresetVersion
 	preset.RequiredCapabilities = preset.RequiredCapabilities[:len(preset.RequiredCapabilities)-2]
 	return preset
@@ -137,7 +138,7 @@ func preLifecycleTodoStandardPreset() Preset {
 			{ID: TodoAddCapabilityID, Compatibility: compatibility},
 			{ID: TodoGetCapabilityID, Compatibility: compatibility},
 		},
-		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+		OptionalCapabilities: preRetrievalMemoryCapabilityRequirements(compatibility),
 	}
 }
 
@@ -157,7 +158,7 @@ func preDurableTodoStandardPreset() Preset {
 			{ID: TodoListCapabilityID, Compatibility: compatibility},
 			{ID: TodoAddCapabilityID, Compatibility: compatibility},
 		},
-		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+		OptionalCapabilities: preRetrievalMemoryCapabilityRequirements(compatibility),
 	}
 }
 
@@ -175,7 +176,7 @@ func preTodoStandardPreset() Preset {
 			{ID: YouTubeTranscriptCapabilityID, Compatibility: compatibility},
 			{ID: YouTubeScrapeChannelCapabilityID, Compatibility: compatibility},
 		},
-		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+		OptionalCapabilities: preRetrievalMemoryCapabilityRequirements(compatibility),
 	}
 }
 
@@ -191,7 +192,7 @@ func preYouTubeStandardPreset() Preset {
 			{ID: WebFetchCapabilityID, Compatibility: compatibility},
 			{ID: WebSearchCapabilityID, Compatibility: compatibility},
 		},
-		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+		OptionalCapabilities: preRetrievalMemoryCapabilityRequirements(compatibility),
 	}
 }
 
@@ -217,6 +218,30 @@ func memoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequir
 		requirements[i] = CapabilityRequirement{ID: id, Compatibility: compatibility}
 	}
 	return requirements
+}
+
+// Historical presets retain this exact capability order. Adding a new Memory
+// Capability cannot change the content addressed by an existing preset hash.
+func preRetrievalMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
+	ids := []CapabilityID{
+		MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
+		MemoryQueryClaimsCapabilityID, MemoryLookupAliasCapabilityID, MemoryTraverseCapabilityID,
+		MemoryRememberLiteralCapabilityID, MemoryRememberEntityCapabilityID, MemoryCorrectClaimCapabilityID,
+		MemoryCreateGraphLinkCapabilityID, MemoryPromoteClaimCapabilityID, MemoryRetireCapabilityID,
+		MemoryRestoreCapabilityID, MemoryRetractSourceCapabilityID, MemoryRestoreSourceCapabilityID,
+	}
+	requirements := make([]CapabilityRequirement, len(ids))
+	for i, id := range ids {
+		requirements[i] = CapabilityRequirement{ID: id, Compatibility: compatibility}
+	}
+	return requirements
+}
+
+func preRetrievalStandardPreset() Preset {
+	preset := standardPresetContent()
+	preset.Version = preRetrievalStandardPresetVersion
+	preset.OptionalCapabilities = preRetrievalMemoryCapabilityRequirements(VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"})
+	return preset
 }
 
 // BuiltinStandardPreset returns a detached snapshot so callers cannot mutate
@@ -598,6 +623,9 @@ func (m *Manager) ResumeCompositionContext(
 	}
 	if receipt.Preset.Version == preClaimsTodoPresetVersion {
 		return m.resumePreset(preClaimsTodoStandardPreset(), receipt)
+	}
+	if receipt.Preset.Version == preRetrievalStandardPresetVersion {
+		return m.resumePreset(preRetrievalStandardPreset(), receipt)
 	}
 	return m.resumePreset(BuiltinStandardPreset(), receipt)
 }

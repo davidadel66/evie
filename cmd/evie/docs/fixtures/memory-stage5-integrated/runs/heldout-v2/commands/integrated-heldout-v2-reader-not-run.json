@@ -1,0 +1,8 @@
+{
+  "failed_modes": [
+    "index",
+    "local"
+  ],
+  "reason": "Prerequisite execution failed; no reader generations started.",
+  "recorded_at_utc": "2026-09-11T06:44:19.830279+00:00"
+}

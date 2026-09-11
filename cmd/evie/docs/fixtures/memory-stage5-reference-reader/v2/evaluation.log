@@ -1,0 +1,21 @@
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/mother_after_debugging
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/mother_or_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/misleading_recent_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/compacted_mother
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/compacted_ambiguous
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/explicit_uuid
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/opaque_alias
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/no_evidence
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/scope_excluded_sister
+--- PASS: TestMemoryStage5ReferenceReaderEvaluation (26.34s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/mother_after_debugging (2.35s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/mother_or_sister (1.83s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/misleading_recent_sister (2.53s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/compacted_mother (2.98s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/compacted_ambiguous (2.26s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/explicit_uuid (2.75s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/opaque_alias (4.04s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/no_evidence (3.03s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/scope_excluded_sister (4.22s)
+PASS

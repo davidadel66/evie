@@ -1,0 +1,51 @@
+=== RUN   TestMemoryStage5IntegratedPrepare
+=== RUN   TestMemoryStage5IntegratedPrepare/dev01_fresh_tea
+=== RUN   TestMemoryStage5IntegratedPrepare/dev02_fresh_desk
+=== RUN   TestMemoryStage5IntegratedPrepare/dev03_uncompiled_bike
+=== RUN   TestMemoryStage5IntegratedPrepare/dev04_uncompiled_plant
+=== RUN   TestMemoryStage5IntegratedPrepare/dev05_clear_reference
+=== RUN   TestMemoryStage5IntegratedPrepare/dev06_ambiguous_reference
+=== RUN   TestMemoryStage5IntegratedPrepare/dev07_compacted_clear
+=== RUN   TestMemoryStage5IntegratedPrepare/dev08_compacted_ambiguous
+=== RUN   TestMemoryStage5IntegratedPrepare/dev09_exact_alias
+=== RUN   TestMemoryStage5IntegratedPrepare/dev10_exact_entity_id
+=== RUN   TestMemoryStage5IntegratedPrepare/dev11_graph_bridge
+=== RUN   TestMemoryStage5IntegratedPrepare/dev12_dense_sleep
+=== RUN   TestMemoryStage5IntegratedPrepare/dev13_neighbor_clamp
+=== RUN   TestMemoryStage5IntegratedPrepare/dev14_neighbor_tentative
+=== RUN   TestMemoryStage5IntegratedPrepare/dev15_historical_validity
+=== RUN   TestMemoryStage5IntegratedPrepare/dev16_retired_suppression
+=== RUN   TestMemoryStage5IntegratedPrepare/dev17_conflict_newer_owner
+=== RUN   TestMemoryStage5IntegratedPrepare/dev18_conflict_tentative_update
+=== RUN   TestMemoryStage5IntegratedPrepare/dev19_quoted_other_person
+=== RUN   TestMemoryStage5IntegratedPrepare/dev20_assistant_inference
+=== RUN   TestMemoryStage5IntegratedPrepare/dev21_unanswerable
+=== RUN   TestMemoryStage5IntegratedPrepare/dev22_memory_unavailable
+=== RUN   TestMemoryStage5IntegratedPrepare/dev23_no_memory_needed
+=== RUN   TestMemoryStage5IntegratedPrepare/dev24_scope_boundary
+--- PASS: TestMemoryStage5IntegratedPrepare (3.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev01_fresh_tea (0.42s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev02_fresh_desk (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev03_uncompiled_bike (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev04_uncompiled_plant (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev05_clear_reference (0.12s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev06_ambiguous_reference (0.13s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev07_compacted_clear (0.28s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev08_compacted_ambiguous (0.29s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev09_exact_alias (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev10_exact_entity_id (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev11_graph_bridge (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev12_dense_sleep (0.18s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev13_neighbor_clamp (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev14_neighbor_tentative (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev15_historical_validity (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev16_retired_suppression (0.13s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev17_conflict_newer_owner (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev18_conflict_tentative_update (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev19_quoted_other_person (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev20_assistant_inference (0.07s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev21_unanswerable (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev22_memory_unavailable (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev23_no_memory_needed (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/dev24_scope_boundary (0.09s)
+PASS

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 1942,
+    "output_tokens": 90,
+    "total_tokens": 2032,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1490,
+    "cache_write_input_tokens": 449
+  }
+}

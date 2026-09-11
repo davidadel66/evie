@@ -1,0 +1,95 @@
+package agent
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/davidadel66/evie/internal/memory"
+)
+
+func TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle(t *testing.T) {
+	f := newRetrievalFixture(t)
+	source, reader := f.global(), f.global()
+	original := referencePreference(f, source, "Maya", "mother", "MOM-27", "jasmine tea")
+	f.refresh()
+	var alias memory.SemanticAlias
+	for _, item := range original.Aliases {
+		if item.Value == "MOM-27" {
+			alias = item
+		}
+	}
+	if alias.ID == "" {
+		t.Fatal("fixture lacks accepted alias")
+	}
+	client := &fakeClient{steps: []step{assistantStep("The accepted alias mapping supports Maya.", nil)}}
+	if err := f.automaticSession(reader, client).Send(context.Background(), "For MOM-27, what present would she like?", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var supplied struct {
+		Evidence []struct {
+			ClaimID memory.SemanticID `json:"claim_id"`
+			Matches []struct {
+				Kind       string            `json:"kind"`
+				EntityID   memory.SemanticID `json:"entity_id"`
+				AliasID    memory.SemanticID `json:"alias_id"`
+				AliasValue string            `json:"alias_value"`
+			} `json:"identity_matches"`
+		} `json:"evidence"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(retrievalData(t, client.reqs[0]), "EVIE_MEMORY_DATA\n")), &supplied); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range supplied.Evidence {
+		if item.ClaimID == original.Claim.ID {
+			for _, match := range item.Matches {
+				found = found || match.Kind == "alias" && match.EntityID == original.Claim.SubjectEntityID && match.AliasID == alias.ID && match.AliasValue == "MOM-27"
+			}
+		}
+	}
+	if !found {
+		t.Fatal("exact alias search supplied no Kernel-proven alias-to-entity mapping to the actual reader")
+	}
+	events, err := f.store.LoadEvents(context.Background(), reader.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var refs []memory.RetrievalReference
+	for _, event := range events {
+		if event.Type != memory.EventContextSnapshot {
+			continue
+		}
+		var snapshot memory.ContextSnapshotPayload
+		if err := json.Unmarshal(event.Payload, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Memory != nil {
+			refs = snapshot.Memory.Evidence
+			raw, _ := json.Marshal(refs)
+			if strings.Contains(string(raw), "MOM-27") {
+				t.Fatal("immutable receipt copied alias value instead of content-free identity reference")
+			}
+			if !strings.Contains(string(raw), string(alias.ID)) {
+				t.Fatal("immutable receipt lost exact accepted alias ID")
+			}
+		}
+	}
+	f.lifecycle(source, "memory_retire", memory.SemanticObjectAlias, alias.ID)
+	inspected, err := f.store.InspectMemoryEvidence(context.Background(), reader.ScopeContext(), refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(inspected)
+	if strings.Contains(string(raw), "MOM-27") {
+		t.Fatal("old receipt inspection revived retired alias mapping")
+	}
+	second := &fakeClient{steps: []step{assistantStep("The old alias does not establish current identity.", nil)}}
+	if err := f.automaticSession(reader, second).Send(context.Background(), "For MOM-27, what would Maya like?", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(retrievalData(t, second.reqs[0]), `"alias_value":"MOM-27"`) {
+		t.Fatal("automatic reference recall revived retired alias")
+	}
+}

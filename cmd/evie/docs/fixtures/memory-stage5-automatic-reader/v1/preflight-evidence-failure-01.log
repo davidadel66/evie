@@ -1,0 +1,13 @@
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/vegetarian_dinner
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/uncompiled_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/unavailable_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/compacted_greenhouse
+    retrieval_automatic_reader_evaluation_test.go:174: unexpected source supplied to automatic reader: 6a9c3927-551d-4dec-8509-b1b66b7197c8 ("Debug checksum routine number 06.")
+    retrieval_automatic_reader_evaluation_test.go:174: required source absent on automatic provider dispatch: 60394956-ba67-4ce4-bedb-cf5c7e81819b
+--- FAIL: TestMemoryStage5AutomaticReaderEvidenceContract (0.40s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/vegetarian_dinner (0.10s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/uncompiled_greenhouse (0.09s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/unavailable_greenhouse (0.07s)
+    --- FAIL: TestMemoryStage5AutomaticReaderEvidenceContract/compacted_greenhouse (0.14s)
+FAIL

@@ -84,6 +84,73 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 	}
 }
 
+func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
+	makeManager := func(memoryPlugin Plugin) *Manager {
+		manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}), memoryPlugin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
+			if err := manager.SetEnabled(id, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return manager
+	}
+	plugin := NewMemory(&stubSemanticKernel{})
+	legacyPreset := BuiltinStandardPreset()
+	legacyPreset.Version = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+	legacyPreset.OptionalCapabilities = nil
+	for _, capability := range plugin.ResumableToolCapabilities("1.1.0") {
+		legacyPreset.OptionalCapabilities = append(legacyPreset.OptionalCapabilities, CapabilityRequirement{ID: capability.ID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	}
+	if got := canonicalPresetVersion(legacyPreset); got != legacyPreset.Version {
+		t.Fatalf("historical content hash=%s, want frozen %s", got, legacyPreset.Version)
+	}
+	legacy, err := makeManager(preRetrievalMemoryPlugin{plugin}).resolvePreset(legacyPreset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := makeManager(plugin)
+	resumed, err := current.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatal("resuming added capabilities or rewrote the old receipt")
+	}
+	if countSchema(resumed.Toolset, "memory_search") != 0 {
+		t.Fatal("old conversation gained relevance search")
+	}
+	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
+		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
+	}
+	fresh, err := current.ResolvePreset(StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Receipt.Preset.Version == legacy.Receipt.Preset.Version || countSchema(fresh.Toolset, "memory_search") != 1 {
+		t.Fatal("new conversation does not pin a new retrieval composition")
+	}
+}
+
+type preRetrievalMemoryPlugin struct{ *Memory }
+
+func (p preRetrievalMemoryPlugin) ToolCapabilities() []ToolCapability {
+	return p.Memory.ResumableToolCapabilities("1.1.0")
+}
+func (p preRetrievalMemoryPlugin) Manifest() Manifest {
+	manifest := p.Memory.Manifest()
+	manifest.ImplementationVersion = "1.1.0"
+	manifest.ResumableFrom = nil
+	manifest.Capabilities = nil
+	for _, capability := range p.ToolCapabilities() {
+		manifest.Capabilities = append(manifest.Capabilities, CapabilityContract{ID: capability.ID, Version: capability.ContractVersion})
+	}
+	return manifest
+}
+
 func TestPreYouTubeExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {
 	if got := canonicalPresetVersion(preYouTubeStandardPreset()); got != preYouTubeStandardPresetVersion {
 		t.Fatalf("pre-YouTube canonical version = %q, want frozen %q", got, preYouTubeStandardPresetVersion)

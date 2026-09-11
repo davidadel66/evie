@@ -1,0 +1,9 @@
+=== RUN   TestMemoryStage5LocalReaderEvaluation
+=== RUN   TestMemoryStage5LocalReaderEvaluation/historical_retired
+=== RUN   TestMemoryStage5LocalReaderEvaluation/saved_boston_newer_chicago
+=== RUN   TestMemoryStage5LocalReaderEvaluation/tentative_quote_and_inference
+--- PASS: TestMemoryStage5LocalReaderEvaluation (56.66s)
+    --- PASS: TestMemoryStage5LocalReaderEvaluation/historical_retired (28.41s)
+    --- PASS: TestMemoryStage5LocalReaderEvaluation/saved_boston_newer_chicago (15.06s)
+    --- PASS: TestMemoryStage5LocalReaderEvaluation/tentative_quote_and_inference (13.18s)
+PASS

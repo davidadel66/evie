@@ -1,0 +1,59 @@
+{
+  "version": "memory-stage5-configured-production-reader-development-v4",
+  "frozen_at_utc": "2026-09-11T00:28:47.585302+00:00",
+  "git_baseline": "4ec5429a32c1e7a5cd2c1f30e3298aeb4d9ac95a",
+  "adapter_sha256": "99e8526b03a5fe24545c0bf96445a8551863719ee2cc648f124f7051dfd22035",
+  "test_sha256": "b4d582bb0ad75def47ad269a58550055a1118c596358155e398fe9174714eb6e",
+  "rubric_source": "../v1/README.md",
+  "rubric_sha256": "928e8efbe702c8c91413c619cc630814d2ab5a47c7c81d80c0f846b04a68ef15",
+  "protocol_and_methodology_sha256": "fd3a476ee05228e838fd877235041a6b5aa00e7d2c89aae8ac83537129a0a31e",
+  "model": "openai/gpt-6-astra",
+  "canonical_model": "openai/gpt-6-astra-20260903",
+  "profile": {
+    "ConfiguredModel": "openai/gpt-6-astra",
+    "AdvertisedModel": "openai/gpt-6-astra",
+    "CanonicalModel": "openai/gpt-6-astra-20260903",
+    "AdvertisedWindowTokens": 1050000,
+    "HardWindowTokens": 922768,
+    "WorkingTokens": 24576,
+    "OutputReserveTokens": 768,
+    "EstimationMarginTokens": 4096,
+    "Source": "remote_metadata"
+  },
+  "protocol": "normal production OpenRouter Responses",
+  "parameters": {
+    "max_output_tokens": 768,
+    "reasoning": {
+      "effort": "low",
+      "summary": "concise"
+    },
+    "stream": true,
+    "store": false,
+    "provider": {
+      "require_parameters": true
+    },
+    "temperature": "omitted; unsupported by production encoding",
+    "seed": "omitted; normal production encoding",
+    "max_model_calls_per_case": 3,
+    "per_call_deadline_seconds": 120
+  },
+  "scenarios": [
+    "historical_retired",
+    "saved_boston_newer_chicago",
+    "tentative_quote_and_inference"
+  ],
+  "quality_judgment": "fixed text markers plus predeclared manual source/authority/uncertainty rubric; no model judge",
+  "partition": "#159 development only; separate from #167/#168 heldout",
+  "metadata_files_sha256": {
+    "model-metadata.json": "8100bbd93c5820ccc23f36919e6acc3edf593fcd815f599920aa807da6033721",
+    "preflight-metadata-02-http.json": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+    "endpoint-metadata.json": "b3197b549a51d5587b7c44580ecdcb6797204edd22e5130a03745cc13cbf360a",
+    "preflight-metadata-02-wire-response.raw": "8fe473cb17cd757544ffff8029ae6c44a651b41360aaefa98255586446807b57",
+    "availability.json": "3e1191d15bb622e23d953e29160e0262f8d006b549aae0aaecdb2b004832bab5",
+    "preflight-context-profile.json": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+    "preflight-metadata-01-http.json": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+    "preflight-metadata-01-wire-response.raw": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5"
+  },
+  "hosted_pinning_limit": "Official canonical model and metadata snapshot; normal route policy is frozen, but vendor selection and model weight digests are not controlled or exposed by the existing client. No immutable hosted-weight claim.",
+  "previous_failures": "v1-v3 preserved; same original cases and manual rubric; production reader chosen because it is the configured application default."
+}

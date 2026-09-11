@@ -376,6 +376,9 @@ func (s *Store) appendEvent(
 	if projectID.Valid {
 		event.ProjectID = memory.ProjectID(projectID.String)
 	}
+	if err := appendConversationProjection(ctx, executor, event); err != nil {
+		return memory.Event{}, fmt.Errorf("project conversation evidence: %w", err)
+	}
 	return event, nil
 }
 

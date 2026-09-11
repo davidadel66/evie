@@ -1,0 +1,1997 @@
+{
+  "schema_version": 1,
+  "label": "memory-stage5-reference-reader-v1",
+  "issue": 161,
+  "original_export": "/tmp/evie-stage5-161-eval-v1",
+  "archive": "memory-stage5-reference-reader-v1-source.tar.gz",
+  "archive_sha256": "e273699a0aee1b4083961c3aa85c965d6a8b594f7a3def302f6ef1c035dac720",
+  "archive_bytes": 595571,
+  "uncompressed_source_bytes": 2790455,
+  "source_file_count": 218,
+  "members": [
+    {
+      "path": "go.mod",
+      "sha256": "e052d1b811a50613f04cfa32ad0fbf254baff83bead3bf7cf3555eb7e487079e",
+      "bytes": 696,
+      "origin": "/tmp/evie-stage5-161-eval-v1/go.mod",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": false
+    },
+    {
+      "path": "go.sum",
+      "sha256": "c129db23cd6bb43dca28d2539528893fd1c4d57782bc4f5c5756378112f255fb",
+      "bytes": 71403,
+      "origin": "/tmp/evie-stage5-161-eval-v1/go.sum",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": false
+    },
+    {
+      "path": "internal/agent/agent.go",
+      "sha256": "b0b529f07105aa2fff132b142d2dd98ace2bab9798d41760a10f097481d9d814",
+      "bytes": 16626,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/agent.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/agent_test.go",
+      "sha256": "5a182dabec4ec0aeca5a01e5b37464b2562848ce2c612de8b4ff4dc1d0fc3690",
+      "bytes": 58498,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/agent_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/automatic_compaction.go",
+      "sha256": "6f31bef57574f938e6989169d1ef8a4e71f7a18bb7291c98aee3967e2cb8ece5",
+      "bytes": 8263,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/automatic_compaction.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/automatic_compaction_test.go",
+      "sha256": "b35c0996841e49b5bf530ef97c64fd5898247693f0d44ec70476d8a17f339887",
+      "bytes": 24124,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/automatic_compaction_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/compaction.go",
+      "sha256": "2a1cd8bdeea1ceebce010320dc139a11c83f6c214f3942a3455f6673afd25799",
+      "bytes": 21847,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/compaction.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/compaction_test.go",
+      "sha256": "595cd9b685789ef4e40a3971fdad12f723b8280302c52da5abcf3e644a9f2b30",
+      "bytes": 41355,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/compaction_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/context.go",
+      "sha256": "ca90d7025a2523173f80702c8658c49f948220a66795e1636b17ab13a03ca130",
+      "bytes": 26929,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/context.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/context_test.go",
+      "sha256": "a463386a35b1af4323f504dc97b9b0b9b1cb7f759e6b24ced0d86f3590e5e4be",
+      "bytes": 24222,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/context_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/foreground_measurement.go",
+      "sha256": "3d27af57606d2155f465d582f1a2eb7981ea2380383d7986b2963551ec230b83",
+      "bytes": 2856,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/foreground_measurement.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/foreground_measurement_test.go",
+      "sha256": "cebd8795a8e7e4b9c9ba736b06b5b12288a89a3feb988ea5c82dab394ed6cfc6",
+      "bytes": 4233,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/foreground_measurement_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/history.go",
+      "sha256": "056f0969cf58db0720c8c367192df2b475036d71baba491158bcf65dd182b9a6",
+      "bytes": 8845,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/history.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/history_test.go",
+      "sha256": "3dee5a20cc6fe0331dbd808c155136681273d7b016c512f0d2c3c728e0f3b1ab",
+      "bytes": 6886,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/history_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/memory_plugin_test.go",
+      "sha256": "8ce0f817343b0db140e1665b75fbe6916bfd7bcf549f8094ef0a50d25dcb5582",
+      "bytes": 6778,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/memory_plugin_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/ownership.go",
+      "sha256": "9bd8b8334a873995e069299f29651fabf5049a2f85e1c3326011597aead93f34",
+      "bytes": 8899,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/ownership.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/prompt.go",
+      "sha256": "18849b893839363b02ba8f6f9274acb1292778e333303efa5c3ef4811e3472ee",
+      "bytes": 6856,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/prompt.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/responses_test.go",
+      "sha256": "777cf48b80168cad222905ce9a083d2b641d15ed1cb17dfb9bca33d804dbb227",
+      "bytes": 9224,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/responses_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval.go",
+      "sha256": "f191f8d563ba7cec4e559fd97b47150a3a4809db457778b9b46d2675f0db466b",
+      "bytes": 9422,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_acceptance_test.go",
+      "sha256": "6344371ba49b7133e959d39ad9cf0ee7d9fd2813cf818610a782b8e1af856db2",
+      "bytes": 15405,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_automatic.go",
+      "sha256": "8bc0cce8d681bcc407bd8b2cab8acc1f9b63cad9a7e804a4a183b3cb33b882e0",
+      "bytes": 9749,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_automatic.go",
+      "origin_mtime_ns": 1789089780001936627,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_automatic_acceptance_test.go",
+      "sha256": "0391c39253b1f8d82f20b5e014a185553bd0268e9737097ae81518f912d71a7a",
+      "bytes": 16358,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_automatic_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_automatic_measurement_test.go",
+      "sha256": "7d6239625758ec0928ae62e3bd73022147b60c9a697aeabff2049c44415ddede",
+      "bytes": 4489,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_automatic_measurement_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_automatic_reader_evaluation_test.go",
+      "sha256": "93754c064d32bc3386695787ef2ec51425409ce851737eb9278c5f8853f48aae",
+      "bytes": 15580,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_automatic_reader_evaluation_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_conflict_acceptance_test.go",
+      "sha256": "9a8185167315f4ab518e0e2aecdb24f695fda5d58cac6cc1e1c7c48e1c5c3ca7",
+      "bytes": 7391,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_conflict_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_conversation_acceptance_test.go",
+      "sha256": "f9cd0bf1177c1ca498cfd712b5773897e3980c7d21601f161d8c0ebab5635dde",
+      "bytes": 4833,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_conversation_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_conversation_scope_acceptance_test.go",
+      "sha256": "678fb8fa0b63cfee7d9a1fad7e689aa0dabe32a37b5ad63b7a873f69cca4b15b",
+      "bytes": 5606,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_conversation_scope_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_expansion_acceptance_test.go",
+      "sha256": "8221fabe788c833c11af64b42946345a0637f6653c0efb0c6ba20250fc8bb9f3",
+      "bytes": 3326,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_expansion_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_expansion_boundary_test.go",
+      "sha256": "7bfb893febc3d6faaa25aa96ff8d5d614dc6fa6580ec23040b4e64bedc8f7ab1",
+      "bytes": 18186,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_expansion_boundary_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_expansion_coverage_test.go",
+      "sha256": "21ae02fc7a84010f61b0c22a98d747600612351f40fbada74c24c7608b77a120",
+      "bytes": 5717,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_expansion_coverage_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_expansion_limits_test.go",
+      "sha256": "40f8f37376d80150cd6b648ebf4b7e5b5dcda12dd8a889f742307a6011312fb2",
+      "bytes": 3450,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_expansion_limits_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_expansion_measurement_test.go",
+      "sha256": "cf4f2b5614311cbad4b04c02a080aeed6c7817cc40b0df581eb86cce9d0e209f",
+      "bytes": 3055,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_expansion_measurement_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_graph_acceptance_test.go",
+      "sha256": "7b9b0345af89a1609d21218908aa7dfce4c9304f72821ad147873d4c67277518",
+      "bytes": 21452,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_graph_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_graph_experiment_test.go",
+      "sha256": "d237705e7c5880f500bac97960d08c26bb3af9eb548a31080c9b13dc959bf91b",
+      "bytes": 5114,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_graph_experiment_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_historical_acceptance_test.go",
+      "sha256": "29f968adb362a1056641773bd296a2f60ab31048d955c56102b0762919917649",
+      "bytes": 4943,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_historical_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_historical_expansion_test.go",
+      "sha256": "6fa089383193a9c7cafd2150944cd9093ba7f3e51353601d003a9b0b508d4fc1",
+      "bytes": 7127,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_historical_expansion_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_measurement_test.go",
+      "sha256": "483522be959dbe22fe657a5e3a280d3600ed839004aa3c3ea6fe80c7fd840b47",
+      "bytes": 10575,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_measurement_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_production_reader_evaluation_test.go",
+      "sha256": "e14a29b062f9c1a33a8494706f85cd71442558381890ea4fd77595aeee75b3d8",
+      "bytes": 11145,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_production_reader_evaluation_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_reader_evaluation_test.go",
+      "sha256": "9972ba338f9e46dc0d4202de374ad1bbf90289b7c58b5443f169ed96cf6e56e7",
+      "bytes": 20039,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_reader_evaluation_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_receipt_acceptance_test.go",
+      "sha256": "86eea47a29e8dfc5259fb3c1c352dafb626dcc9c189bf093b070d995fbbc8d7c",
+      "bytes": 7106,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_receipt_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_reference_acceptance_test.go",
+      "sha256": "e327f43f991a3fc07ade1a5aafe1719cde4c280d7b92b74ec68ae053559bfb95",
+      "bytes": 7102,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_reference_acceptance_test.go",
+      "origin_mtime_ns": 1789089780002360088,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_reference_cases_test.go",
+      "sha256": "935ca542790d2146916b69187bd70a1e0513637658712140a3eead7bd11bfd82",
+      "bytes": 6733,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_reference_cases_test.go",
+      "origin_mtime_ns": 1789089780002789382,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_reference_reader_evaluation_test.go",
+      "sha256": "13ad33b454bcf108618831dbb87732b9e11556bb655d61017a923285ae2b4109",
+      "bytes": 9916,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_reference_reader_evaluation_test.go",
+      "origin_mtime_ns": 1789089780003073759,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_retirement_acceptance_test.go",
+      "sha256": "a4f8a783b7cf8963af690f808865dbcc50c350b9a1ce498913f33d89aba0fdcb",
+      "bytes": 8692,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_retirement_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_scope_acceptance_test.go",
+      "sha256": "82833d5f00a53472d1fd4953cf7bc06d6512d5875f9f0f8bf8dd7caf0b798684",
+      "bytes": 8211,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_scope_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/retrieval_temporal_acceptance_test.go",
+      "sha256": "0b50c3c460f0e5095c139e586b579fe72c46afe949b9c486528c2a7a6868d190",
+      "bytes": 3672,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/retrieval_temporal_acceptance_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/semantic_memory.go",
+      "sha256": "8ae400953c283a11758500d6e0c211ee97adfc1e1a4b15dd63e775812c3f2c11",
+      "bytes": 21568,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/semantic_memory.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/semantic_memory_test.go",
+      "sha256": "555d98ef459d8e35a50bb5042c18984be182316f3c21d32a2977d09707392e2b",
+      "bytes": 11194,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/semantic_memory_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/standard_preset_test.go",
+      "sha256": "36317da2bce890a8b060fd2fd2ed8e4d3d829575da24cd7f21d15d669641bf61",
+      "bytes": 34500,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/standard_preset_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/tool_results.go",
+      "sha256": "f02593890bdb7ddd4c798fbbbcef0d9a28c5e1a0c802a99e8d15944303e95799",
+      "bytes": 6080,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/tool_results.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/tool_results_test.go",
+      "sha256": "3d43bd93d0fcbd7d33964491ceef2e3d27887afcd55e1f67a74e2836ab1f4c35",
+      "bytes": 4067,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/tool_results_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/turn.go",
+      "sha256": "f1d83add8f2dd4cfbd6031a08ef97e3fd86b654f2491dbd41dbc2255f1042d52",
+      "bytes": 23244,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/turn.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/turn_owner_integration_test.go",
+      "sha256": "742355a8d1d3ff28f180b7b2bdf07cc6cf8c7cc2f8b199f023fef977db575260",
+      "bytes": 10596,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/turn_owner_integration_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/turn_ownership_test.go",
+      "sha256": "61a5cd7ef54e0361dc786748ac20eb23c767d9cb6ee7942545ce17b743cafd84",
+      "bytes": 86143,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/turn_ownership_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/agent/web_plugin_test.go",
+      "sha256": "71ec7623c8b44aa499574ae85c791add703f2af01b95e89d121b86948ccd3bfc",
+      "bytes": 2714,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/agent/web_plugin_test.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/composition/receipt.go",
+      "sha256": "9bfb8e4b1e8defb972940f42f508875de7489b4e857a5932d2fbed114ad5d822",
+      "bytes": 15613,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/composition/receipt.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_destination.go",
+      "sha256": "804ae43c1eddab98ac1f468085f8e5bdc59b47bc5ca4a9f61d1a87b0b988e818",
+      "bytes": 4076,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_destination.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "sha256": "0c68ea7d6be7b3198674a093c4c40c53048e5006f4ec1350f3fb723ce218bd5e",
+      "bytes": 23665,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_apply.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_authority.go",
+      "sha256": "f7afed415aa4399d3430f57fb48c4020c60ede6af41c5bace9a4bd546ec68fa9",
+      "bytes": 4931,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_authority.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch.go",
+      "sha256": "90d63346577c90691d3567fca0c813556065d46d67a3bb31acd945269ef23341",
+      "bytes": 23078,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_batch.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_compound.go",
+      "sha256": "fd3587479ace2b3bfc2b1a4b4afda187bc30cccaac29db8db0f65d6f14e20b2a",
+      "bytes": 29084,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_compound.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_correction_schema.go",
+      "sha256": "fa8b1792e966252d13af8fce06fe77f4f6ac804b679ef06cfd6e71ea35961b05",
+      "bytes": 7366,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_correction_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_edit.go",
+      "sha256": "55cacb7bdb3f330b57640402a1bc1b716d5601d506beee30ca349e1ec9370b18",
+      "bytes": 9881,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_edit.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "sha256": "158ab47670d0cf5422b5bd4a92ed2f96fa1a72f27624e6c86dd45fc9351405cd",
+      "bytes": 3827,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_encoding.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history.go",
+      "sha256": "7ffa169ed8bd21e720d36f58456e327b5968f9d54018efffb80c0885f74be714",
+      "bytes": 6483,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_history.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity.go",
+      "sha256": "7fb049a61a3075eea19a3511a60542893e6caff210f3df3e4eb65f822f412ada",
+      "bytes": 15696,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_identity.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "sha256": "bd1cfad7efccd192f6b386cb679206561e1f990c06b0371f7aa96d9f26733676",
+      "bytes": 12912,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_identity_effect.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "sha256": "fb121ba7fb7ca082f40b96d2e88cf81fa79147e353e548caec057edf6d806d30",
+      "bytes": 10346,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "sha256": "610dc9783824be7ed44f68d335e2d3905a986de2bf655a703d6db3b8d401660e",
+      "bytes": 13496,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_prepare.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_provenance.go",
+      "sha256": "6a2bcb39d0065720e4311955331c7f665b642b5eda2b517cd96ad6127f539a01",
+      "bytes": 7179,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_provenance.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_replay.go",
+      "sha256": "9db3aaae8d80e35aca2f7b6880375c4e628c4b57cbffc852efddb920a853a0a3",
+      "bytes": 2279,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_replay.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "sha256": "bcb13ab2ccdea0574ac849027e04eac34888f54361a9d72e4930826c89fb778c",
+      "bytes": 5741,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_scopes.go",
+      "sha256": "61f4a1895b69817bb3299723e21a7f10b9719f32b1b615347c2186f527851813",
+      "bytes": 6064,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_scopes.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_sources.go",
+      "sha256": "d85bb9e59a0577168ff07e36b96f5d747908848517eca0db2979a8b722302043",
+      "bytes": 5209,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_sources.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal.go",
+      "sha256": "10ba3322e4110ef83a639b06beb4af21d692309b7643d4bafb2a78736216cb7e",
+      "bytes": 11361,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_temporal.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_effect.go",
+      "sha256": "df1df1d681560022ae638232e927f822c12e75dd6ee554dec458120a40c6711a",
+      "bytes": 9229,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/candidate_review_temporal_effect.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_activation.go",
+      "sha256": "4189769f57e2b3bad8107d21509f5c0ccf8e46f7609556ba2df79e6b6caac15c",
+      "bytes": 14255,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_activation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_schema.go",
+      "sha256": "6bfeecd2bc04cd293af5de15f3837818fdd077443b335b594587b0ac3b7aa31d",
+      "bytes": 4366,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_activation_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_ancestry.go",
+      "sha256": "db73a3cebd8e8c5e6d053b8f998cb2dc32f6d74e97368f17b5a5673e6965a80e",
+      "bytes": 1580,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_ancestry.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics.go",
+      "sha256": "47b18780c3f1d7d3bd94112b8dd88ec51aa60ae51cdc8e4675b7ad23e230b988",
+      "bytes": 10867,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_diagnostics.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_measurement.go",
+      "sha256": "a618ab79cfad39071e291ce16e8f3c938305a4fd70545ab807845a031e1e9afa",
+      "bytes": 4092,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_diagnostics_measurement.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_navigation.go",
+      "sha256": "e8cefd234cbc63b490ec2607dadd585d2d2bee8c1d2f8371685217da91d52c89",
+      "bytes": 3823,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_diagnostics_navigation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_schema.go",
+      "sha256": "78da85436890d0b6a5b6f6266b3ec09648ab83131f37d76e6341f929fd6111ec",
+      "bytes": 11052,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_diagnostics_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_views.go",
+      "sha256": "3bf75c2e653d6f8a73a4c08ddf4174ff798ac7a089dbdcc4e5f2b5b7adbdf33b",
+      "bytes": 16572,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_diagnostics_views.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_history.go",
+      "sha256": "7192daa80250f98914e19040001b9896e109195f50c1ec22f37623945d3256ad",
+      "bytes": 14371,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_history.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "sha256": "c9ddbe0db056463974441974379d53de3d3ac6427fae01d240896c664302b098",
+      "bytes": 5682,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_history_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_history_reconciliation.go",
+      "sha256": "32d6464fb95d6a2fbcba40b7ca08102d5d6db3734d7d54fa87d2f413d1fa42b3",
+      "bytes": 11886,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_history_reconciliation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_history_resume.go",
+      "sha256": "0267309eaa98a3cf74c3c753c5dc0bbac5133c2f65df716002c679ae42fa0796",
+      "bytes": 2751,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_history_resume.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_history_schema.go",
+      "sha256": "b02140f0fda53f2f379c5d879d4094750426fd5d53570ba4c59840f8f3910b18",
+      "bytes": 7929,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_history_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_identity.go",
+      "sha256": "83de8c1f4546cc0605fef55d7690c38cb21292f3c2ba131c92bd0dc87f2ac4e1",
+      "bytes": 7964,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_identity.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_inspection.go",
+      "sha256": "c33134f2632cf25b924f3285863e60d692909fa3007fbc19a7e2e595d3fe6af9",
+      "bytes": 5498,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_intervals.go",
+      "sha256": "5c124cecb5a03c978f95e4b5221279e639ca26a674e94f518e55fbbe44e522da",
+      "bytes": 2563,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_intervals.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "sha256": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6",
+      "bytes": 12325,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_reconciliation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence.go",
+      "sha256": "5f74365253c09b6f8f30b6ded4fd62b1d7fe06be8ac8c3a16d98c8be3beceb3c",
+      "bytes": 10807,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_recurrence.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_encoding.go",
+      "sha256": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d",
+      "bytes": 4276,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_recurrence_encoding.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_inspection.go",
+      "sha256": "3922ab29b23d5cd88cea376b7716056e70726be5574c303fa0f141bc9ca8c351",
+      "bytes": 3530,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_recurrence_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_schema.go",
+      "sha256": "13f987b9f1cf75e6aefb6e40200bc7e3c22ed06dfa3c08a2b0b4832098b68e03",
+      "bytes": 4661,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_recurrence_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_schema.go",
+      "sha256": "42cccff6ae69ff3460f90460b656cc9d4f3f984a84425ef396b1e97324476ce5",
+      "bytes": 5572,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "sha256": "b9f261334299358ebedf0378975b43cf35b9e83ff8f7d5b177e6ed15d393b66f",
+      "bytes": 19003,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_source.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection.go",
+      "sha256": "8f37753b5faa25a1ca7bf096a3ab7c9b9f254c3745aabfe1fc26c43f22f94857",
+      "bytes": 11989,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_status_projection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_temporal.go",
+      "sha256": "e1d40ba45dcc569cc2bf01938a42887b717410000d80d3883aba2f994a7ad65f",
+      "bytes": 4563,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_temporal.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_tool_observation.go",
+      "sha256": "ea5cae91fe3a7c0bc3c17fc5b47d9176b1d4073bcf2f6e96bd9ffded12d0a540",
+      "bytes": 13027,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_tool_observation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_validation.go",
+      "sha256": "30bac0bba8cb912242a298c9a343be98f5bc23e9177cf1ba9b062b19e708ec12",
+      "bytes": 10629,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_validation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "sha256": "fa7a554582ef6d3db0bfbdf069d48e5994699985fed7c918ee54631ca8095f0a",
+      "bytes": 27647,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_work.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_worker.go",
+      "sha256": "2356d0820b3f4601396a0f76f34c95b30629b8ef6b81f7a5de87b34f8d81e4e3",
+      "bytes": 31468,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_worker.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/compiler_worker_inspection.go",
+      "sha256": "dabcc06a8df06b75996a79e720ac27c5b5a4de584b8168d996729399563ff3ef",
+      "bytes": 4022,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/compiler_worker_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/composition_receipts.go",
+      "sha256": "d9319ef543849d3338fe8d168a444131596164b119d1f80d83487120f4d1f1bf",
+      "bytes": 8921,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/composition_receipts.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/database_browser.go",
+      "sha256": "f26c8231fed09bd411b7c16560e7d45efd077a9be647fd128072dc9cc10f16d9",
+      "bytes": 12054,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/database_browser.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/db.go",
+      "sha256": "075360c21cd63cabeb58cfccae6a42e58eeb14a0cb6af75d37e48d4abbf254a6",
+      "bytes": 57517,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/db.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/events.go",
+      "sha256": "183aec44dcda3c889b9059ab8a4771506eb41f73e26dd7e897c31958230d29b3",
+      "bytes": 27120,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/events.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/history.go",
+      "sha256": "a57654bd16f475296b0b58b6d44aeb071804348e909f0b732a471a649812a2b0",
+      "bytes": 1012,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/history.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/immediate_tx.go",
+      "sha256": "b2f21ffbf0751d8033ae26d99800291686dc455c7784b12af4696e73c438d30e",
+      "bytes": 3056,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/immediate_tx.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/plugin_configuration.go",
+      "sha256": "45effc996569f9990d4891d16c96ddd542adc9231472c61df67c6e5bb7e69267",
+      "bytes": 2973,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/plugin_configuration.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/projects.go",
+      "sha256": "166469618ef8c560bba7007d34ffa760ad8a7aae4d29184af420c2c7955a185d",
+      "bytes": 5026,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/projects.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval.go",
+      "sha256": "bcfdc80e6a7949ff09ad09f5c626c27f307811db9950df2f82c938983f39c692",
+      "bytes": 15015,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_conflict.go",
+      "sha256": "dc4ca3440b98e9099cddce32560086d610981f9d95132a2be006bd41564451aa",
+      "bytes": 10096,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_conflict.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_conversation.go",
+      "sha256": "47ab378c6d6dbe0316cb0c92ef48a79beb22d056c9c43749bf7453b340d7665e",
+      "bytes": 13600,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_conversation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_conversation_index.go",
+      "sha256": "5a5ba83f8a7f491e6c7e9c0f4bf1eb49f35e87e5317aea438bd1b3e80dcb112b",
+      "bytes": 8263,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_conversation_index.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_expansion.go",
+      "sha256": "67cea21d8779c27cf81e538e5d92f0b8a0bfb77e46fadf953d724109ccfaa89a",
+      "bytes": 9131,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_expansion.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_graph.go",
+      "sha256": "cd60075f8eda4716a87d0f4869915a51e27622c9678dd7f619a92ab7bb1b0326",
+      "bytes": 16108,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_graph.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_index.go",
+      "sha256": "b74577461108fda7d2e581a151b0806b804f699542794d442a1311c21d0deb62",
+      "bytes": 8954,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_index.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_inspection.go",
+      "sha256": "9db418af799a28862d3ff6fd092e56a631286550f1c49657c438bce38a479ab7",
+      "bytes": 4762,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_inspection.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/retrieval_temporal.go",
+      "sha256": "bfd636255293c36200a55bea99890c9e8b7687fdab97482872fba36bdbf6c1ba",
+      "bytes": 4833,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/retrieval_temporal.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic.go",
+      "sha256": "04ff0c0a88b9c20d22692a422af6aed2a693d7feb0d39875d311cefca43130ee",
+      "bytes": 86126,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_conflicts.go",
+      "sha256": "8bea446edad8b28247da407c8f3f0a6d6ae2a08e13ebf4b068f17710fe5ada04",
+      "bytes": 5697,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_conflicts.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_correction.go",
+      "sha256": "0155b9ed61e129efcad5f9fa95319b260df2328dd6fe258d59c498c6668961e8",
+      "bytes": 54702,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_correction.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_destination.go",
+      "sha256": "1e36b7b71e821d91ce03e569534b5b56b98c30ecb04b39d8948446b9d7e9fe90",
+      "bytes": 1418,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_destination.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_encoding.go",
+      "sha256": "47458ce3da0416f1f9e8323b70b5e449d2f7b6ce019021605a0c7f3ffcf9dd65",
+      "bytes": 16067,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_encoding.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_entity.go",
+      "sha256": "1f027a344fab26883868e8db9a4ca8decae6ee7ccaeff6c9928c563e9a12c5ca",
+      "bytes": 47727,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_entity.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_graph.go",
+      "sha256": "8404532ab795c1eb1a83cdbdbd369002dd26a87573f106bc8280e62c561f46fa",
+      "bytes": 42450,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_graph.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_lifecycle.go",
+      "sha256": "949ec49fef4aa241f6e30dde917fda88dc57914878fc9ba0db77dba6b606cdb4",
+      "bytes": 54120,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_lifecycle.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_promotion.go",
+      "sha256": "2fb2eca9be8ce07561a830d268100f7650cc59d564395779402ea65d28519dd6",
+      "bytes": 37840,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_promotion.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_replay.go",
+      "sha256": "d71f98ed3f3cdb5cca68f3b9233c4379c658148ef0b5aed58d0fa30a570f47d5",
+      "bytes": 61700,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_replay.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/semantic_scope.go",
+      "sha256": "f3174dc4bf5c3fff95b3306b9b917ca4580d8bf95a133b180ee4136eff09dc99",
+      "bytes": 3064,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/semantic_scope.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/session_titles.go",
+      "sha256": "3ccb84a4331c67e883b50469f8bb5560592271be62a7b2ca44cceb5a4a7874f2",
+      "bytes": 3628,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/session_titles.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/sessions.go",
+      "sha256": "11053360bae8da465bc944b0b96824b658dce09eecd1890a69d861ccf4e9882c",
+      "bytes": 21077,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/sessions.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/sessions_delegated.go",
+      "sha256": "331a6ecd6f94e7a3850c21891113c454fb0258979c5ffb06c0a17fc3cfdd9935",
+      "bytes": 3016,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/sessions_delegated.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup.go",
+      "sha256": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+      "bytes": 1591,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/sqlite_startup.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/store.go",
+      "sha256": "652f67cf357df5807fd5a1339753ce5441564880b15de838502a4bf6f1cae16d",
+      "bytes": 1082,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/store.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/task_idempotency.go",
+      "sha256": "214e953f665063afa87155699b1db9c96bd5c93dcef805a9a6db03d84b9ed61e",
+      "bytes": 8578,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/task_idempotency.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks.go",
+      "sha256": "8a79469602c565fd42a8a75a42f6e20faa5c495ff887d381501aa6cac99ccc83",
+      "bytes": 45170,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks_claims.go",
+      "sha256": "06417a8ba2a9427b349d931aaf2e675921276938a4d3b5b2ed2358026975efb4",
+      "bytes": 29745,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks_claims.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks_grants.go",
+      "sha256": "b704b5a477cad21b19e76e7d847c243b9fc8d60315b8bff7c9b13f63f9f8dbd7",
+      "bytes": 9435,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks_grants.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks_import.go",
+      "sha256": "85b9dd8bf0d02e8d9e7e575a7ab2c5af940746067ef8f23963e53f9b9ad8643c",
+      "bytes": 11399,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks_import.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks_scope.go",
+      "sha256": "041c92a080365c8e4505506776dd122a7cb28f585a18009984a6b017dff774b3",
+      "bytes": 12013,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks_scope.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/tasks_tree.go",
+      "sha256": "c6917c4d0e6b9c3f5a04fffe40e06cbad988290ffe53662b47b7d0314ebf3a50",
+      "bytes": 18306,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/tasks_tree.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/turn_leases.go",
+      "sha256": "8afefe0fd34e222b9140c0998b3c99134e81ee2ef13cce684f61b8e411fad20f",
+      "bytes": 13145,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/turn_leases.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/turn_owner.go",
+      "sha256": "99faa180c5f973dc3f418258327374331c807c4c46524e451878859d4837a060",
+      "bytes": 3048,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/turn_owner.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/usage.go",
+      "sha256": "a77c651a59796591ee9b159b1059833a657d9f91903a24fa4c9fe9aa653fe51d",
+      "bytes": 2827,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/usage.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/eviedb/workspaces.go",
+      "sha256": "88c1103229c0044bb835b8fe7a2f372946ed3fe1061ef666ba962b13528a5c65",
+      "bytes": 4406,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/eviedb/workspaces.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/categorize.go",
+      "sha256": "bbf15f3f89147f2995850b460809e9e716350a9413cdd170117bb958f28a3038",
+      "bytes": 5932,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/categorize.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/client.go",
+      "sha256": "4d8d1b1cae65a37b6f4c5595312033576acc3c4bfa2e777ce27f56d2fedd5489",
+      "bytes": 1390,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/client.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/db.go",
+      "sha256": "5d4b644d542f22c610b334537fb7efa92dda44380c2ceefbfac4af24b89cdcfa",
+      "bytes": 4904,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/db.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/link.go",
+      "sha256": "c2323b904c5b8e83b286f7d226fc5715fb83a8b66933ca438e367d6e0503620a",
+      "bytes": 3614,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/link.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/query.go",
+      "sha256": "481372262738ea91ad84067bdc2dbdd140b91c401ae5b27aa21b0835956a8c31",
+      "bytes": 1110,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/query.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/finance/sync.go",
+      "sha256": "9e117321207d06303473072a4360525e5a2829a08f075bc348453c6f395226a7",
+      "bytes": 11568,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/finance/sync.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/candidate_batch.go",
+      "sha256": "51f59eaedd58cd2d6e69f09e44a4a1b16585c8e965791d2dbdafd793f63f1e0b",
+      "bytes": 4927,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/candidate_batch.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/candidate_identity.go",
+      "sha256": "b0e8fbebf6b167b63f675efd639f7668087a01cb2b6e41e98b74137739ff4301",
+      "bytes": 3288,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/candidate_identity.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/candidate_review.go",
+      "sha256": "2a3eeb0fd33bec827ed232001fee5b41c9168c770e7aef56e584a9716678b049",
+      "bytes": 5483,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/candidate_review.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/candidate_review_scopes.go",
+      "sha256": "70853df581ca4f30ac25fb423180e8f1f4f2f70c6cc37e5421fd3a775de308fc",
+      "bytes": 607,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/candidate_review_scopes.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/candidate_temporal.go",
+      "sha256": "707b0121aa0aea2428853ecbc57119f737aefacd2bad00aca4d43ec3208529eb",
+      "bytes": 3022,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/candidate_temporal.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler.go",
+      "sha256": "30a1e0ff8830f6b7bcc3fefffde8ccad60e8b9d7e8c86997973a8e1a2f0f028e",
+      "bytes": 6603,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_activation.go",
+      "sha256": "096e737528215a3abfd5f210022252351f41d803b11bdb19f0076b5f79d104fb",
+      "bytes": 2466,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_activation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "sha256": "110b3150e92ed3709b34881ce0ed3e3ea7610ceb0e8aedd027b1a1b9058ad97d",
+      "bytes": 7409,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_contract.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_diagnostics.go",
+      "sha256": "0b69224a8190e9bd25ad3b8c6ddf497bfcc2c5c11b1a78263eec55807d21fbac",
+      "bytes": 5986,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_diagnostics.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_history.go",
+      "sha256": "f0edb9402fb50d3e2bed682d080a7003aa5ec119d39609aec710a228d4c575ff",
+      "bytes": 2674,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_history.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_observation.go",
+      "sha256": "bd5ca5ec09ef3771e40f1acc9aea01086d2524c831d8b532bee57411d17d84c1",
+      "bytes": 988,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_observation.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_recurrence.go",
+      "sha256": "7c99d842e66481347dbe425d6069aca8f140782951b4240da406f64fa228d453",
+      "bytes": 1285,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_recurrence.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/compiler_status.go",
+      "sha256": "fec3e352456ab9d567a535304be4ad830a2d385268dad74955edf2535fe87e08",
+      "bytes": 1282,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/compiler_status.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/destination.go",
+      "sha256": "2e5f70dae5b0586cd8e401773b22621b6b5b90c1faae1d63dfa699352069981a",
+      "bytes": 1412,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/destination.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/event.go",
+      "sha256": "08cd596d7d80de37ed0e971a66835268614e871c99e050cefe21ec7cdbe90bc4",
+      "bytes": 20336,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/event.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/lease.go",
+      "sha256": "70d42dabddcc8f10e6324a01822b7afe742a9cda1270067625fb91f1849c8a2b",
+      "bytes": 604,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/lease.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/retrieval.go",
+      "sha256": "3396e9fcf69345ebba7885cb4ebd52f296228486ebbf01f838e4a7f4a703274d",
+      "bytes": 7655,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/retrieval.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/retrieval_outcome.go",
+      "sha256": "d1b2e33fbdeeef0f0a001b124ec2de71fe0d8e3d185c8547130497cb4c3e3a34",
+      "bytes": 935,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/retrieval_outcome.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/retrieval_receipt.go",
+      "sha256": "464fb9eda99b51c6897b96bac97229b53594c4d15d50a7b318dc8582535bb2bd",
+      "bytes": 1333,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/retrieval_receipt.go",
+      "origin_mtime_ns": 1789089780027729450,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/retrieval_render.go",
+      "sha256": "0a131a9924740a53dc3f403512266e3194ca2194ac3f1d954e0b5a92392d8bf6",
+      "bytes": 880,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/retrieval_render.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/scope.go",
+      "sha256": "b09ab23dd8fa70ed15ef28c4eaf5f942dcb34fff70573ce1e7cdca2aecc0f76b",
+      "bytes": 3264,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/scope.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/scope_instructions.go",
+      "sha256": "fabed4b11ecfce1734374c8a815f9826450d7aa38840761e3ac042b78a7fa5cc",
+      "bytes": 2619,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/scope_instructions.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/semantic.go",
+      "sha256": "87b634c6d6b3a33f0e5c48b6a7224e681dea757daa0a24465bf57bba76ebda9b",
+      "bytes": 31636,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/semantic.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/memory/title.go",
+      "sha256": "31ac1189a3132d67c41abce18cf7be6249d5c23bfe6a79c7cd653588b84594b5",
+      "bytes": 2363,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/memory/title.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/client.go",
+      "sha256": "ba9d517142ac7bbfb155f2f3646a685cdbfe60e626946ccdc7cc589b9666b6e0",
+      "bytes": 9535,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/client.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/context_profile.go",
+      "sha256": "741acfdf844c26c213c870a1c5f0ecd27287cf3f7860c112acbced8f2a69886c",
+      "bytes": 14357,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/context_profile.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/responses.go",
+      "sha256": "878f8f05bf0200c712795f01fd074367f3d97199baa7e59f73550f83c736c0d2",
+      "bytes": 9162,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/responses.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/responses_request.go",
+      "sha256": "235ea6d053e81c24b7f3bbea0254a9d030ccedf3707262b9f8be4faddb5ad7d0",
+      "bytes": 8012,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/responses_request.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/schema.go",
+      "sha256": "b415ff074729cfccf2a07a94ed88ffde9f122a3211f8f9761a39281c93709ae3",
+      "bytes": 6767,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/schema.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/openrouter/usage.go",
+      "sha256": "b5111371f9f5beebcf25ccb736e7f0c282bc66fbbac98aca07b5968e516ffc1a",
+      "bytes": 5237,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/openrouter/usage.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/finance.go",
+      "sha256": "489cc445a4b2579d5dee6773d7c9860e7b436b306a1b4c23f3bfae8c135bfd45",
+      "bytes": 1569,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/finance.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/manager.go",
+      "sha256": "5a2b3cb87610b1529d12d9ac3ce81a14d3861a38d156e601c4d643005ff25759",
+      "bytes": 53551,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/manager.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/memory.go",
+      "sha256": "2616eb121fd8bc60fd1e53a3025864651373c517eb0e8d3c1b64c8d6f102c0f0",
+      "bytes": 43025,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/memory.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/memory_retrieval.go",
+      "sha256": "16ca904dab6b12630c93e5e7a8d94e41b6dcea1dc529bb52d0e17cc4ce23b7d9",
+      "bytes": 4524,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/memory_retrieval.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/preset.go",
+      "sha256": "dbf1c0bd1fa5eed5b0ba44132dc5eece91089c2baba54ff30b825aa893943ca4",
+      "bytes": 36211,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/preset.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/todo.go",
+      "sha256": "cc3b3ec3ce390e25fad37ceae6b74b25e7500f56dff75f6034db32deb1fdd25f",
+      "bytes": 24522,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/todo.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/todo_arguments.go",
+      "sha256": "8cf3f21555ca824c0d38a3e3c7ac72124466cb1623ee183af7b6a93a68d44125",
+      "bytes": 6509,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/todo_arguments.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/web.go",
+      "sha256": "0c8f8d177c3f4f2d1efd3b6180ef0bdabb0c90efde5fb9896796b05cd383e0c0",
+      "bytes": 1174,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/web.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/plugins/youtube.go",
+      "sha256": "ae32bbe6f0949a89f09f6608ed69fbc113b9cdd2be0228f920c93f42976f43ed",
+      "bytes": 1407,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/plugins/youtube.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/task/canonical.go",
+      "sha256": "8bd2e2d15100a8d903f1ee5d8f1bddcc6c82dbbc3331f7d50bc28a4f54e1be68",
+      "bytes": 6024,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/task/canonical.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/task/task.go",
+      "sha256": "e90192414e7588f9eebb96a29e2eb99e3b0cc8463707b8dbec38c4e90483699d",
+      "bytes": 20166,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/task/task.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/bash.go",
+      "sha256": "2049c7af31792b3adae539dd5c8cb72f9cb65a80a849bbfc1fa26249bb4167b7",
+      "bytes": 10398,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/bash.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/cron.go",
+      "sha256": "c3c0f3298e937680caebde315772d935234b3f03ab916106c294151246e5e5ea",
+      "bytes": 25899,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/cron.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/db.go",
+      "sha256": "4ae0054fbe042d2aeb7a6514c36bde6ea3f95c863a431971331c715ef90a9a87",
+      "bytes": 17959,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/db.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/file.go",
+      "sha256": "3d551b4b20f829a4bad2d795f90e5f2a35ea15669969a508a7869275da7d1e46",
+      "bytes": 17219,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/file.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/finance.go",
+      "sha256": "98d8b7c5495bede226539826f3c5e3a254d89c5107328bb7942d42fce3166f9b",
+      "bytes": 4477,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/finance.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/registry.go",
+      "sha256": "97553306bd3c886376f83d01828bfda8b670e06effaab3423a8a455b30496749",
+      "bytes": 16538,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/registry.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/shellsnapshot.go",
+      "sha256": "fe27090624d3587b29e7beaa007a12d935b968f06ac1fa5bddc93da4743f4c27",
+      "bytes": 8161,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/shellsnapshot.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/time.go",
+      "sha256": "e7a6acf4f951aec1fbfffbec5cf96c47196ef561ab16045268273378469e6f26",
+      "bytes": 789,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/time.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/todo.go",
+      "sha256": "cd94faa7867c48c84143982ef76c1a7fa8e906fa094dd3e3aaced8b2582b3ca3",
+      "bytes": 15330,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/todo.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/webfetch.go",
+      "sha256": "2b699d486aeff7e800048885f0ed72953d148c95a272c7a68ce4e7107c3f1a26",
+      "bytes": 18921,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/webfetch.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/websearch.go",
+      "sha256": "4b4370f278321626b221d47e6371e0905acadb05263e0a9b74fa78339ba46ace",
+      "bytes": 8016,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/websearch.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/tools/youtube.go",
+      "sha256": "11583778c1175321b18fe0a417ae7d77e2ceb360bbc92cb3cc08afc957b85402",
+      "bytes": 8524,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/tools/youtube.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/usage/codex.go",
+      "sha256": "467645f3b4db3ec9ea360b4bc2ae94932feb4d9fa9a583f03fbee8f130c6dc4b",
+      "bytes": 8291,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/usage/codex.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/usage/local.go",
+      "sha256": "c7fcf1841bacb5de6a13d43a0d87495db61faef124c9fd1ef2f8d8d8ce9b779f",
+      "bytes": 7828,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/usage/local.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/usage/service.go",
+      "sha256": "b965b8fb90fc3a54f07b883f869c2e908faae97ef7c8f90fcaea18232e3a2370",
+      "bytes": 7057,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/usage/service.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/usage/usage.go",
+      "sha256": "16a266c9e8a9fc8963bb21b9de7ea38676c4ed8f39106fc437639b08358c8c6b",
+      "bytes": 7342,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/usage/usage.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/youtube/client.go",
+      "sha256": "5af5c9c02230289f776865098bb2db09a22e0268a4b219dac17354f73ce35b84",
+      "bytes": 37550,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/youtube/client.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/youtube/db.go",
+      "sha256": "8b884f9468a6279c777cf58a1f9bad7d7ebaa50c3ffbad09b649fbaa8feb0021",
+      "bytes": 8683,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/youtube/db.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/youtube/import.go",
+      "sha256": "17ea37295301817211e9974606525a6fede488f7a8c07303cb7cc962e37beaa5",
+      "bytes": 11811,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/youtube/import.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/youtube/service.go",
+      "sha256": "968c2e72232153a50cbd0bdbf7299ce8736469ab7e0bc1613541a8789738cfda",
+      "bytes": 16297,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/youtube/service.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    },
+    {
+      "path": "internal/youtube/store.go",
+      "sha256": "3d36cb75711707305e930f136ea26557e5f4c1b55642a653f77e5478912a6941",
+      "bytes": 6894,
+      "origin": "/tmp/evie-stage5-161-eval-v1/internal/youtube/store.go",
+      "origin_mtime_ns": 1789088893000000000,
+      "mode": 420,
+      "frozen_hash_declared": true
+    }
+  ],
+  "declared_inventory": "memory-stage5-reference-reader-v1-declared-inventory.json",
+  "declared_inventory_sha256": "3907019880dc4e3df22b42a4bafc76da4d0962ae141ff85718caa596d5e91887",
+  "immutable_run_metadata": {
+    "cmd/evie/docs/fixtures/memory-stage5-reference-reader/v1/freeze.json": "61ef417133f1d130fe426bd4dbd6120acbc5cf5c18f027c01c88a7104edf2101"
+  },
+  "local_packages": [
+    "internal/agent",
+    "internal/composition",
+    "internal/eviedb",
+    "internal/finance",
+    "internal/memory",
+    "internal/openrouter",
+    "internal/plugins",
+    "internal/task",
+    "internal/tools",
+    "internal/usage",
+    "internal/youtube"
+  ],
+  "local_go_embed_directives": [],
+  "scope": "Static traversal of all agent Go test/production imports and non-test local dependency imports, overapproximating build-tag variants. Exact frozen hashes override any later export edits. go.mod/go.sum retained. Other third-party source/assets are module-pinned, not vendored. No Go build or model rerun performed.",
+  "reconstruction_note": "Original isolated export and exact matching retained source bytes; no source bytes inferred.",
+  "binary_note": "Original binary identity stays in immutable run metadata. This supplement preserves source, not an executable or a claim of path-independent byte-identical relinking."
+}

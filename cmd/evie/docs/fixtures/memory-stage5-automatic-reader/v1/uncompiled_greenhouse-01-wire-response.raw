@@ -1,0 +1,194 @@
+: 
+
+: 
+
+data: {"type":"response.created","response":{"id":"gen-1789088450-m9QtMB0NKEnrZWhn4Qg2","object":"response","created_at":1789088450,"model":"openai/gpt-6-astra","status":"in_progress","completed_at":null,"output":[],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"auto","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":null},"sequence_number":0}
+
+data: {"type":"response.in_progress","response":{"id":"gen-1789088450-m9QtMB0NKEnrZWhn4Qg2","object":"response","created_at":1789088450,"model":"openai/gpt-6-astra","status":"in_progress","completed_at":null,"output":[],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"auto","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":null},"sequence_number":1}
+
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_tmp_04zlquj2rat1","type":"message","status":"in_progress","role":"assistant","content":[],"phase":"final_answer"},"sequence_number":2}
+
+data: {"type":"response.content_part.added","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"part":{"type":"output_text","text":"","annotations":[],"logprobs":[]},"sequence_number":3}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"You","logprobs":[],"sequence_number":4}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" planted","logprobs":[],"sequence_number":5}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" **","logprobs":[],"sequence_number":6}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"s","logprobs":[],"sequence_number":7}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"aff","logprobs":[],"sequence_number":8}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"ron","logprobs":[],"sequence_number":9}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" cro","logprobs":[],"sequence_number":10}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"c","logprobs":[],"sequence_number":11}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"uses","logprobs":[],"sequence_number":12}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"**","logprobs":[],"sequence_number":13}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" in","logprobs":[],"sequence_number":14}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" the","logprobs":[],"sequence_number":15}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" greenhouse","logprobs":[],"sequence_number":16}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":".","logprobs":[],"sequence_number":17}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" The","logprobs":[],"sequence_number":18}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" plan","logprobs":[],"sequence_number":19}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" was","logprobs":[],"sequence_number":20}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" still","logprobs":[],"sequence_number":21}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" experimental","logprobs":[],"sequence_number":22}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"—not","logprobs":[],"sequence_number":23}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" a","logprobs":[],"sequence_number":24}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" settled","logprobs":[],"sequence_number":25}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" harvest","logprobs":[],"sequence_number":26}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" plan","logprobs":[],"sequence_number":27}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":".\n\n","logprobs":[],"sequence_number":28}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"Your","logprobs":[],"sequence_number":29}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" original","logprobs":[],"sequence_number":30}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" statement","logprobs":[],"sequence_number":31}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":":","logprobs":[],"sequence_number":32}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" “","logprobs":[],"sequence_number":33}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"I","logprobs":[],"sequence_number":34}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" planted","logprobs":[],"sequence_number":35}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" saff","logprobs":[],"sequence_number":36}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"ron","logprobs":[],"sequence_number":37}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" cro","logprobs":[],"sequence_number":38}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"c","logprobs":[],"sequence_number":39}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"uses","logprobs":[],"sequence_number":40}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" in","logprobs":[],"sequence_number":41}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" the","logprobs":[],"sequence_number":42}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" greenhouse","logprobs":[],"sequence_number":43}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":".","logprobs":[],"sequence_number":44}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" It","logprobs":[],"sequence_number":45}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" is","logprobs":[],"sequence_number":46}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" still","logprobs":[],"sequence_number":47}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" an","logprobs":[],"sequence_number":48}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" experiment","logprobs":[],"sequence_number":49}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":",","logprobs":[],"sequence_number":50}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" not","logprobs":[],"sequence_number":51}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" a","logprobs":[],"sequence_number":52}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" harvest","logprobs":[],"sequence_number":53}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" plan","logprobs":[],"sequence_number":54}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":".”\n\n","logprobs":[],"sequence_number":55}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"**","logprobs":[],"sequence_number":56}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"Source","logprobs":[],"sequence_number":57}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":":**","logprobs":[],"sequence_number":58}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" owner","logprobs":[],"sequence_number":59}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" message","logprobs":[],"sequence_number":60}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":",","logprobs":[],"sequence_number":61}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" event","logprobs":[],"sequence_number":62}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" ID","logprobs":[],"sequence_number":63}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":" `","logprobs":[],"sequence_number":64}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"c","logprobs":[],"sequence_number":65}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"084","logprobs":[],"sequence_number":66}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"dc","logprobs":[],"sequence_number":67}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"7","logprobs":[],"sequence_number":68}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"e","logprobs":[],"sequence_number":69}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"-c","logprobs":[],"sequence_number":70}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"d","logprobs":[],"sequence_number":71}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"3","logprobs":[],"sequence_number":72}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"f","logprobs":[],"sequence_number":73}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"-","logprobs":[],"sequence_number":74}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"40","logprobs":[],"sequence_number":75}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"dd","logprobs":[],"sequence_number":76}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"-b","logprobs":[],"sequence_number":77}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"7","logprobs":[],"sequence_number":78}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"f","logprobs":[],"sequence_number":79}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"4","logprobs":[],"sequence_number":80}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"-","logprobs":[],"sequence_number":81}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"76","logprobs":[],"sequence_number":82}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"d","logprobs":[],"sequence_number":83}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"367","logprobs":[],"sequence_number":84}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"b","logprobs":[],"sequence_number":85}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"5","logprobs":[],"sequence_number":86}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"ae","logprobs":[],"sequence_number":87}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"55","logprobs":[],"sequence_number":88}
+
+data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"delta":"`.","logprobs":[],"sequence_number":89}
+
+data: {"type":"response.output_text.done","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"text":"You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`.","logprobs":[],"sequence_number":90}
+
+data: {"type":"response.content_part.done","output_index":0,"item_id":"msg_tmp_04zlquj2rat1","content_index":0,"part":{"type":"output_text","text":"You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`.","annotations":[],"logprobs":[]},"sequence_number":91}
+
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_tmp_04zlquj2rat1","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`.","annotations":[],"logprobs":[]}],"phase":"final_answer"},"sequence_number":92}
+
+data: {"type":"response.completed","response":{"id":"gen-1789088450-m9QtMB0NKEnrZWhn4Qg2","object":"response","created_at":1789088450,"model":"openai/gpt-6-astra","status":"completed","completed_at":1789088453,"output":[{"id":"msg_tmp_04zlquj2rat1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"You planted **saffron crocuses** in the greenhouse. The plan was still experimental—not a settled harvest plan.\n\nYour original statement: “I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.”\n\n**Source:** owner message, event ID `c084dc7e-cd3f-40dd-b7f4-76d367b5ae55`.","annotations":[],"logprobs":[]}],"phase":"final_answer"}],"error":null,"incomplete_details":null,"tools":[{"type":"function","name":"memory_search","description":"Search relevant accepted memory. Evidence is supplied as attributed EVIE_MEMORY_DATA in the next request. Empty, failed, unavailable and exhausted are different outcomes; absence is not proof of a negative answer.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."},"valid_at":{"type":"string","description":"Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown."}},"required":["query"]}},{"type":"function","name":"memory_search_conversations","description":"Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.","strict":false,"parameters":{"type":"object","properties":{"as_known_at":{"type":"string","description":"Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."},"intent":{"type":"string","enum":["current","historical"]},"query":{"type":"string","description":"Focused words, exact identifiers, or accepted aliases."}},"required":["query"]}}],"tool_choice":"auto","parallel_tool_calls":true,"max_output_tokens":768,"temperature":1,"top_p":1,"presence_penalty":0,"frequency_penalty":0,"top_logprobs":0,"max_tool_calls":null,"metadata":{},"background":false,"previous_response_id":null,"service_tier":"default","truncation":"disabled","store":false,"instructions":null,"text":{"format":{"type":"text"}},"reasoning":{"effort":"low","summary":"concise","context":"all_turns","mode":"standard"},"safety_identifier":null,"prompt_cache_key":null,"prompt_cache_options":null,"usage":{"input_tokens":1942,"input_tokens_details":{"cached_tokens":1490,"cache_write_tokens":449},"output_tokens":90,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":2032,"cost":0.0116325,"is_byok":false,"cost_details":{"upstream_inference_cost":0.0116325,"upstream_inference_input_cost":0.0071325,"upstream_inference_output_cost":0.0045}}},"sequence_number":93}
+
+data: [DONE]
+

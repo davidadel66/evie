@@ -1,0 +1,21 @@
+{
+  "attempt": 1,
+  "binary_sha256": "06ba5e56aecf5684f2209bd801074ea65ed032dc88181d07a4d016260532f072",
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py",
+    "run",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/freeze.json",
+    "--mode",
+    "reader",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-heldout-v2-reader"
+  ],
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "original_wrapper_withheld_record_sha256": "2d9de4e92125ac19e46f014e0a98f8b96aa68c4c59e13d7a2567d9c591a56472",
+  "reason": "Complete the user-required independent reader assessment after local/index execution failures. This is the first reader attempt, following the original wrapper withholding it. The continuation changes the wrapper stop policy after observing prerequisite outputs and is explicitly a protocol deviation; it does not change frozen code, corpus, annotations, scores, budgets, or gates. Preserve every failed prerequisite and failed/blocked reader turn in the planned denominators. No failed gate is waived and no result may claim release readiness. No retry, warmup, replacement, or retuning.",
+  "recorded_at_utc": "2026-09-11T06:52:12.007551+00:00",
+  "workload_sha256": "22cd641595f6aa9791f212db4f9ce95a745edbd68444a073d106b5bc3b52582b"
+}

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Your mother Maya likes jasmine tea, so I’d choose **a gift tin of good-quality jasmine pearl tea**, perhaps paired with a lovely teacup or a small teapot. It’s a thoughtful present grounded in something you’ve told me she enjoys."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 3144,
+    "output_tokens": 55,
+    "total_tokens": 3199,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1679,
+    "cache_write_input_tokens": 1462
+  }
+}

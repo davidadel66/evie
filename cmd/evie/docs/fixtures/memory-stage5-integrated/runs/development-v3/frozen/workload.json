@@ -1,0 +1,2059 @@
+{
+  "version": 1,
+  "partition": "development",
+  "cases": [
+    {
+      "id": "dev01_fresh_tea",
+      "family": "fresh_accepted_preference",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev01_tea",
+          "kind": "accepted_literal",
+          "session_id": "dev01_source",
+          "scope": "global",
+          "text": "Remember that my preferred evening tea is roasted barley tea.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "evening_tea",
+            "label": "preferred evening tea",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "roasted barley tea"
+          }
+        },
+        {
+          "id": "dev01_stationery",
+          "kind": "accepted_literal",
+          "session_id": "dev01_source",
+          "scope": "global",
+          "text": "Remember that I use dotted paper for language practice.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "practice_paper",
+            "label": "language practice paper",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "dotted paper"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which tea did I say I prefer in the evening? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev01_tea"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner's preferred evening tea is roasted barley tea."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted owner statement."
+        ],
+        "reader_rules": [
+          "Do not invent a health benefit, occasion, or new memory save."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev02_fresh_desk",
+      "family": "fresh_accepted_preference",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev02_lamp",
+          "kind": "accepted_literal",
+          "session_id": "dev02_source",
+          "scope": "global",
+          "text": "Remember that I prefer a warm amber desk lamp when I draw after dinner.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "drawing_lamp",
+            "label": "preferred drawing desk lamp",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "warm amber desk lamp"
+          }
+        },
+        {
+          "id": "dev02_stool",
+          "kind": "accepted_literal",
+          "session_id": "dev02_source",
+          "scope": "global",
+          "text": "Remember that my workshop stool has a cork seat.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "workshop_stool",
+            "label": "workshop stool seat",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "cork seat"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What kind of desk lamp suits my stated preference for drawing after dinner? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev02_lamp"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Recommend the warm amber desk lamp on the basis of the stated preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted owner statement."
+        ],
+        "reader_rules": [
+          "General buying advice is optional and must not become an invented personal requirement."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev03_uncompiled_bike",
+      "family": "uncompiled_original_statement",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev03_bike",
+          "kind": "owner_conversation",
+          "session_id": "dev03_source",
+          "scope": "global",
+          "text": "For the repair log: my touring bicycle makes a dry clicking sound only when I pedal uphill in the largest rear cog."
+        },
+        {
+          "id": "dev03_bell",
+          "kind": "owner_conversation",
+          "session_id": "dev03_source",
+          "scope": "global",
+          "text": "I replaced the bicycle bell with a brass one last month."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What exact riding condition did I associate with the dry clicking sound on my touring bicycle? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev03_bike"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The reported condition was pedaling uphill in the largest rear cog."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Original owner conversation; not an accepted diagnosis."
+        ],
+        "reader_rules": [
+          "Do not diagnose a damaged component or claim the episode was compiled into accepted memory."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev04_uncompiled_plant",
+      "family": "uncompiled_original_statement",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev04_plant",
+          "kind": "owner_conversation",
+          "session_id": "dev04_source",
+          "scope": "global",
+          "text": "The balcony fern perked up after I moved it away from the vent; I have not tried changing its watering schedule."
+        },
+        {
+          "id": "dev04_pots",
+          "kind": "owner_conversation",
+          "session_id": "dev04_source",
+          "scope": "global",
+          "text": "The spare terracotta pots are stacked beside the balcony door."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What change had I actually tried when the balcony fern perked up, and what had I not tried? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev04_plant"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The fern was moved away from the vent.",
+          "The watering schedule had not been changed."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Owner reported an observation, not proof of a causal explanation."
+        ],
+        "reader_rules": [
+          "Do not claim a new watering routine caused the improvement."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev05_clear_reference",
+      "family": "cross_topic_reference",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev05_elena",
+          "kind": "accepted_entity",
+          "session_id": "dev05_source",
+          "scope": "global",
+          "text": "Elena, my aunt, likes apricot preserves as a small present.",
+          "subject": {
+            "key": "elena",
+            "name": "Elena",
+            "entity_type": "person",
+            "alias": "Elena"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "apricot_preserves",
+            "name": "apricot preserves",
+            "entity_type": "food"
+          }
+        },
+        {
+          "id": "dev05_bruno",
+          "kind": "accepted_entity",
+          "session_id": "dev05_source",
+          "scope": "global",
+          "text": "Bruno, my cousin, likes cedar pencils as a small present.",
+          "subject": {
+            "key": "bruno",
+            "name": "Bruno",
+            "entity_type": "person",
+            "alias": "Bruno"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "cedar_pencils",
+            "name": "cedar pencils",
+            "entity_type": "item"
+          }
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "dev05_topic",
+          "owner": "I am choosing a small thank-you present for my aunt Elena.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev05_noise1",
+          "owner": "The image export still swaps the two color channels.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev05_noise2",
+          "owner": "Bruno helped diagnose the export bug; the thank-you present is still for Elena.",
+          "assistant": "Understood."
+        }
+      ],
+      "question": "What small present would she like? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev05_elena"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "dev05_bruno"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The intended recipient is Elena, the aunt.",
+          "Apricot preserves fit her stated preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted owner statement about Elena."
+        ],
+        "reader_rules": [
+          "Do not switch the recipient to the more recently mentioned Bruno.",
+          "Do not ask who the recipient is when the discussion already identifies Elena."
+        ]
+      },
+      "gate_roles": [
+        "clear_reference",
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev06_ambiguous_reference",
+      "family": "cross_topic_reference",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev06_celia",
+          "kind": "accepted_entity",
+          "session_id": "dev06_source",
+          "scope": "global",
+          "text": "Celia, my aunt, likes smoked almonds as a small present.",
+          "subject": {
+            "key": "celia",
+            "name": "Celia",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "almonds",
+            "name": "smoked almonds",
+            "entity_type": "food"
+          }
+        },
+        {
+          "id": "dev06_daria",
+          "kind": "accepted_entity",
+          "session_id": "dev06_source",
+          "scope": "global",
+          "text": "Daria, my neighbor, likes linen notebooks as a small present.",
+          "subject": {
+            "key": "daria",
+            "name": "Daria",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "notebooks",
+            "name": "linen notebooks",
+            "entity_type": "item"
+          }
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "dev06_topic",
+          "owner": "Celia and Daria both did me a favor. I have not decided whose thank-you present to choose first.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev06_noise",
+          "owner": "The scanner driver can wait until after lunch.",
+          "assistant": "Understood."
+        }
+      ],
+      "question": "What small present would she like? If you need to identify the recipient first, ask one focused question before recommending a personal present.",
+      "gold": {
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [
+          "dev06_celia",
+          "dev06_daria"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "clarify",
+        "require_source_event_citations": false,
+        "attribution": [],
+        "reader_rules": [
+          "Ask whether the owner means Celia or Daria.",
+          "Do not recommend either preference, even conditionally, before resolving the recipient.",
+          "The number of candidates alone is not the criterion; the discussion explicitly leaves the recipient undecided."
+        ]
+      },
+      "gate_roles": [
+        "material_clarification"
+      ]
+    },
+    {
+      "id": "dev07_compacted_clear",
+      "family": "compacted_continuity",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev07_leona",
+          "kind": "accepted_entity",
+          "session_id": "dev07_source",
+          "scope": "global",
+          "text": "Leona, my mentor, prefers a pocket star atlas over a decorative mug.",
+          "subject": {
+            "key": "leona",
+            "name": "Leona",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_present",
+            "label": "prefers as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "atlas",
+            "name": "pocket star atlas",
+            "entity_type": "book"
+          }
+        },
+        {
+          "id": "dev07_tomas",
+          "kind": "accepted_entity",
+          "session_id": "dev07_source",
+          "scope": "global",
+          "text": "Tomas, my colleague, prefers a woven key strap.",
+          "subject": {
+            "key": "tomas",
+            "name": "Tomas",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_present",
+            "label": "prefers as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "strap",
+            "name": "woven key strap",
+            "entity_type": "item"
+          }
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "dev07_topic",
+          "owner": "The retirement present we are selecting is for my mentor Leona.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise00",
+          "owner": "The raster cache retry trace numbered 00 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise01",
+          "owner": "The raster cache retry trace numbered 01 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise02",
+          "owner": "The raster cache retry trace numbered 02 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise03",
+          "owner": "The raster cache retry trace numbered 03 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise04",
+          "owner": "The raster cache retry trace numbered 04 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise05",
+          "owner": "The raster cache retry trace numbered 05 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise06",
+          "owner": "The raster cache retry trace numbered 06 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise07",
+          "owner": "The raster cache retry trace numbered 07 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise08",
+          "owner": "The raster cache retry trace numbered 08 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise09",
+          "owner": "The raster cache retry trace numbered 09 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise10",
+          "owner": "The raster cache retry trace numbered 10 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise11",
+          "owner": "The raster cache retry trace numbered 11 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise12",
+          "owner": "The raster cache retry trace numbered 12 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise13",
+          "owner": "The raster cache retry trace numbered 13 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise14",
+          "owner": "The raster cache retry trace numbered 14 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise15",
+          "owner": "The raster cache retry trace numbered 15 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise16",
+          "owner": "The raster cache retry trace numbered 16 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise17",
+          "owner": "The raster cache retry trace numbered 17 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise18",
+          "owner": "The raster cache retry trace numbered 18 still needs investigation.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev07_noise19",
+          "owner": "The raster cache retry trace numbered 19 still needs investigation.",
+          "assistant": "Understood."
+        }
+      ],
+      "question": "What present would she prefer? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev07_leona"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "dev07_tomas"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The recipient is Leona, the mentor.",
+          "A pocket star atlas matches her preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted original owner statement; compaction provides topic continuity only."
+        ],
+        "reader_rules": [
+          "The compaction summary is not a source for the gift preference.",
+          "Do not ask for the recipient again when continuity is clear."
+        ]
+      },
+      "compaction_continuity": "Leona mentor retirement present remains to choose. Recent raster cache debugging is unrelated. Retrieve her original preference before recommending a personal present.",
+      "gate_roles": [
+        "clear_reference"
+      ]
+    },
+    {
+      "id": "dev08_compacted_ambiguous",
+      "family": "compacted_continuity",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev08_roxana",
+          "kind": "accepted_entity",
+          "session_id": "dev08_source",
+          "scope": "global",
+          "text": "Roxana likes carved soapstone birds as keepsakes.",
+          "subject": {
+            "key": "roxana",
+            "name": "Roxana",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "likes_keepsake",
+            "label": "likes as a keepsake",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "bird",
+            "name": "carved soapstone bird",
+            "entity_type": "item"
+          }
+        },
+        {
+          "id": "dev08_selma",
+          "kind": "accepted_entity",
+          "session_id": "dev08_source",
+          "scope": "global",
+          "text": "Selma likes indigo cotton scarves as keepsakes.",
+          "subject": {
+            "key": "selma",
+            "name": "Selma",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "likes_keepsake",
+            "label": "likes as a keepsake",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "scarf",
+            "name": "indigo cotton scarf",
+            "entity_type": "item"
+          }
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "dev08_topic",
+          "owner": "Roxana and Selma both have celebrations this month. I have not chosen which person to shop for yet.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise00",
+          "owner": "The thumbnail queue stall report numbered 00 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise01",
+          "owner": "The thumbnail queue stall report numbered 01 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise02",
+          "owner": "The thumbnail queue stall report numbered 02 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise03",
+          "owner": "The thumbnail queue stall report numbered 03 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise04",
+          "owner": "The thumbnail queue stall report numbered 04 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise05",
+          "owner": "The thumbnail queue stall report numbered 05 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise06",
+          "owner": "The thumbnail queue stall report numbered 06 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise07",
+          "owner": "The thumbnail queue stall report numbered 07 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise08",
+          "owner": "The thumbnail queue stall report numbered 08 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise09",
+          "owner": "The thumbnail queue stall report numbered 09 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise10",
+          "owner": "The thumbnail queue stall report numbered 10 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise11",
+          "owner": "The thumbnail queue stall report numbered 11 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise12",
+          "owner": "The thumbnail queue stall report numbered 12 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise13",
+          "owner": "The thumbnail queue stall report numbered 13 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise14",
+          "owner": "The thumbnail queue stall report numbered 14 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise15",
+          "owner": "The thumbnail queue stall report numbered 15 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise16",
+          "owner": "The thumbnail queue stall report numbered 16 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise17",
+          "owner": "The thumbnail queue stall report numbered 17 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise18",
+          "owner": "The thumbnail queue stall report numbered 18 remains open.",
+          "assistant": "Understood."
+        },
+        {
+          "id": "dev08_noise19",
+          "owner": "The thumbnail queue stall report numbered 19 remains open.",
+          "assistant": "Understood."
+        }
+      ],
+      "question": "What keepsake would she like? If the recipient is still unresolved, ask one focused question before suggesting a personal keepsake.",
+      "gold": {
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [
+          "dev08_roxana",
+          "dev08_selma"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "clarify",
+        "require_source_event_citations": false,
+        "attribution": [],
+        "reader_rules": [
+          "Ask whether the owner means Roxana or Selma.",
+          "Do not turn the summary into an accepted identity decision or offer both personal keepsakes before clarification."
+        ]
+      },
+      "compaction_continuity": "Roxana and Selma celebrations are approaching; recipient has not been chosen. Thumbnail queue investigation was a separate topic. Original preferences require retrieval.",
+      "gate_roles": [
+        "material_clarification"
+      ]
+    },
+    {
+      "id": "dev09_exact_alias",
+      "family": "exact_identity",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev09_ines",
+          "kind": "accepted_entity",
+          "session_id": "dev09_source",
+          "scope": "global",
+          "text": "Ines is the person I label KIN-84. She likes candied orange peel.",
+          "subject": {
+            "key": "ines",
+            "name": "Ines",
+            "entity_type": "person",
+            "alias": "KIN-84"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "peel",
+            "name": "candied orange peel",
+            "entity_type": "food"
+          }
+        },
+        {
+          "id": "dev09_hugo",
+          "kind": "accepted_entity",
+          "session_id": "dev09_source",
+          "scope": "global",
+          "text": "Hugo is the person I label KIN-48. He likes fennel crackers.",
+          "subject": {
+            "key": "hugo",
+            "name": "Hugo",
+            "entity_type": "person",
+            "alias": "KIN-48"
+          },
+          "predicate": {
+            "token": "likes_present",
+            "label": "likes as a present",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "crackers",
+            "name": "fennel crackers",
+            "entity_type": "food"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "For KIN-84, what edible present matches the recorded preference? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev09_ines"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "KIN-84 resolves to Ines through the accepted alias.",
+          "Candied orange peel matches the recorded preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Kernel-proven accepted alias mapping and accepted owner preference."
+        ],
+        "reader_rules": [
+          "Do not select KIN-48.",
+          "An unresolved alias answer is incomplete when the eligible accepted alias mapping is supplied."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev10_exact_entity_id",
+      "family": "exact_identity",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev10_soren",
+          "kind": "accepted_entity",
+          "session_id": "dev10_source",
+          "scope": "global",
+          "text": "Soren prefers a folding watercolor palette for travel.",
+          "subject": {
+            "key": "soren",
+            "name": "Soren",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "travel_art_item",
+            "label": "preferred travel art item",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "palette",
+            "name": "folding watercolor palette",
+            "entity_type": "item"
+          }
+        },
+        {
+          "id": "dev10_vesna",
+          "kind": "accepted_entity",
+          "session_id": "dev10_source",
+          "scope": "global",
+          "text": "Vesna prefers a graphite stick set for travel.",
+          "subject": {
+            "key": "vesna",
+            "name": "Vesna",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "travel_art_item",
+            "label": "preferred travel art item",
+            "cardinality": "many"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "graphite",
+            "name": "graphite stick set",
+            "entity_type": "item"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "For the entity {{subject_entity_id:dev10_soren}}, which travel art item was preferred? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev10_soren"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The exact entity is Soren.",
+          "The preference is a folding watercolor palette."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Exact accepted Entity ID and original owner source."
+        ],
+        "reader_rules": [
+          "Do not treat an identifier as a guessed name or use another person with a related topic."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev11_graph_bridge",
+      "family": "graph_and_dense_paraphrase",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev11_bridge",
+          "kind": "accepted_entity",
+          "session_id": "dev11_source",
+          "scope": "global",
+          "text": "Lucia's climbing partner is Omar.",
+          "subject": {
+            "key": "lucia",
+            "name": "Lucia",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "climbing_partner",
+            "label": "climbing partner",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "omar",
+            "name": "Omar",
+            "entity_type": "person"
+          }
+        },
+        {
+          "id": "dev11_preference",
+          "kind": "accepted_entity",
+          "session_id": "dev11_source",
+          "scope": "global",
+          "text": "Omar prefers dried mulberries on long walks.",
+          "subject": {
+            "key": "omar",
+            "name": "Omar",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "trail_snack",
+            "label": "preferred trail snack",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "mulberries",
+            "name": "dried mulberries",
+            "entity_type": "food"
+          }
+        },
+        {
+          "id": "dev11_distractor",
+          "kind": "accepted_entity",
+          "session_id": "dev11_source",
+          "scope": "global",
+          "text": "Paolo prefers sesame brittle on long walks.",
+          "subject": {
+            "key": "paolo",
+            "name": "Paolo",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "trail_snack",
+            "label": "preferred trail snack",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "entity",
+            "key": "brittle",
+            "name": "sesame brittle",
+            "entity_type": "food"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which snack would fit Lucia's climbing partner on a long walk? Cite the original source event IDs for both the relationship and the snack preference; if either link is missing, state that gap.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev11_bridge",
+            "dev11_preference"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Lucia’s climbing partner is Omar.",
+          "Omar prefers dried mulberries."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Two distinct accepted owner Claims, with their complete ordered relationship support."
+        ],
+        "reader_rules": [
+          "Do not transfer Omar’s preference to Lucia.",
+          "The snack source alone cannot establish who Lucia’s partner is."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev12_dense_sleep",
+      "family": "graph_and_dense_paraphrase",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev12_target",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "On overnight rail journeys, a rolled sweater under my neck lets me doze without waking up stiff."
+        },
+        {
+          "id": "dev12_noise01",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "For station sketches I pack a charcoal block in the outer pocket."
+        },
+        {
+          "id": "dev12_noise02",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "The luggage label on my weekend bag is green."
+        },
+        {
+          "id": "dev12_noise03",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "My rail ticket folder has a transparent front sleeve."
+        },
+        {
+          "id": "dev12_noise04",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "The platform bakery wraps its rye rolls in paper."
+        },
+        {
+          "id": "dev12_noise05",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "For bicycle errands I use a rear wire basket."
+        },
+        {
+          "id": "dev12_noise06",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "The bus route map is folded inside my sketchbook."
+        },
+        {
+          "id": "dev12_noise07",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "The tram display changed its typeface last winter."
+        },
+        {
+          "id": "dev12_noise08",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "I keep spare shoelaces in a tin near the front door."
+        },
+        {
+          "id": "dev12_noise09",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "My rain jacket has a repaired cuff."
+        },
+        {
+          "id": "dev12_noise10",
+          "kind": "owner_conversation",
+          "session_id": "dev12_source",
+          "scope": "global",
+          "text": "The ferry terminal clock runs two minutes fast."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What improvised support helped me rest comfortably while traveling through the night? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev12_target"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "A rolled sweater placed under the neck helped the owner doze without waking stiff during overnight rail travel."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Original owner observation, not a medical recommendation or accepted diagnosis."
+        ],
+        "reader_rules": [
+          "This paraphrase case is intended to measure retrieval; do not rewrite its question after seeing results.",
+          "Do not infer a special purchased pillow."
+        ]
+      },
+      "gate_roles": []
+    },
+    {
+      "id": "dev13_neighbor_clamp",
+      "family": "bounded_neighbor_investigation",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev13_anchor",
+          "kind": "owner_conversation",
+          "session_id": "dev13_source",
+          "scope": "global",
+          "text": "For the pop-up print stall, the fold-flat easel is the option I selected."
+        },
+        {
+          "id": "dev13_neighbor",
+          "kind": "assistant_conversation",
+          "session_id": "dev13_source",
+          "scope": "global",
+          "text": "For that selected option, the assembly note in this conversation is: tighten the blue clamp before hanging the sample frame. This is advice, not an action already taken."
+        },
+        {
+          "id": "dev13_later",
+          "kind": "owner_conversation",
+          "session_id": "dev13_source",
+          "scope": "global",
+          "text": "The price cards will use black ink."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "For the fold-flat easel I selected, what assembly advice appeared immediately after my selection? Cite the original source event IDs for the selection and the advice, and distinguish my decision from the assistant’s suggestion.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev13_anchor",
+            "dev13_neighbor"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner selected the fold-flat easel.",
+          "The assistant advised tightening the blue clamp before hanging the sample frame."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Selection is an owner statement.",
+          "Assembly advice is an assistant statement, not an owner preference or completed action."
+        ],
+        "reader_rules": [
+          "A bounded neighbor expansion may recover the advice after the selection anchor.",
+          "Do not claim the clamp was actually tightened."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev14_neighbor_tentative",
+      "family": "bounded_neighbor_investigation",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev14_anchor",
+          "kind": "owner_conversation",
+          "session_id": "dev14_source",
+          "scope": "global",
+          "text": "For the hilltop sketch outing, the square canvas stool is still only my provisional choice."
+        },
+        {
+          "id": "dev14_neighbor",
+          "kind": "assistant_conversation",
+          "session_id": "dev14_source",
+          "scope": "global",
+          "text": "If you choose that option, test the rear latch on level ground before packing it. I am proposing a precaution, not reporting a test."
+        },
+        {
+          "id": "dev14_later",
+          "kind": "owner_conversation",
+          "session_id": "dev14_source",
+          "scope": "global",
+          "text": "I will decide after I check the forecast."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What option was I considering for the hilltop sketch outing, and what precaution followed it in the conversation? Cite both original source event IDs and say whether the decision or test was final.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev14_anchor",
+            "dev14_neighbor"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "dev14_later"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The square canvas stool was provisional.",
+          "The assistant suggested testing the rear latch on level ground before packing.",
+          "Neither a final selection nor a completed latch test was established."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Provisional owner choice and conditional assistant precaution remain distinct."
+        ],
+        "reader_rules": [
+          "Do not turn the suggestion into a verified action.",
+          "Retrieve useful adjacent context within the existing expansion bound."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev15_historical_validity",
+      "family": "historical_and_retired",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev15_old",
+          "kind": "accepted_literal",
+          "session_id": "dev15_source",
+          "scope": "global",
+          "text": "Remember that my rehearsal venue was the Willow annex from 1 March 2022 until 1 November 2022.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "rehearsal_venue",
+            "label": "rehearsal venue",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Willow annex"
+          },
+          "valid_time": {
+            "from": "2022-03-01T00:00:00Z",
+            "to": "2022-11-01T00:00:00Z"
+          },
+          "retired": true
+        },
+        {
+          "id": "dev15_current",
+          "kind": "accepted_literal",
+          "session_id": "dev15_source",
+          "scope": "global",
+          "text": "Remember that my current rehearsal venue is the Harbor loft.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "rehearsal_venue",
+            "label": "rehearsal venue",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Harbor loft"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Using a historical memory read, which rehearsal venue was valid on 15 June 2022? Cite the original source event ID and distinguish the recorded validity interval from the time the statement was saved. Do not present that old venue as current.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev15_old"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "dev15_current"
+        ],
+        "forbidden_current_record_ids": [
+          "dev15_old"
+        ],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Willow annex was valid on 15 June 2022.",
+          "Its recorded validity interval runs from 1 March 2022 until 1 November 2022.",
+          "The source is historical and retired, not current venue evidence."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted owner historical Claim with explicit valid time and separately bound actual source observation time."
+        ],
+        "reader_rules": [
+          "The query read pins are not the dates of the real-world fact.",
+          "Do not invent a 2022 save/observation timestamp; use only the actual timestamp supplied by the constructed source.",
+          "Explicit historical retrieval may supply dev15_old; it is forbidden in a current-intent projection."
+        ],
+        "oracle_intent": "historical",
+        "oracle_valid_at": "2022-06-15T00:00:00Z"
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev16_retired_suppression",
+      "family": "historical_and_retired",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev16_retired",
+          "kind": "accepted_literal",
+          "session_id": "dev16_source",
+          "scope": "global",
+          "text": "Remember that the parcel shelf instruction is violet-pigeon rack.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "parcel_shelf",
+            "label": "parcel shelf instruction",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "violet-pigeon rack"
+          },
+          "retired": true
+        },
+        {
+          "id": "dev16_active",
+          "kind": "accepted_literal",
+          "session_id": "dev16_source",
+          "scope": "global",
+          "text": "Remember that the parcel shelf instruction is the east entrance locker.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "parcel_shelf",
+            "label": "parcel shelf instruction",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "east entrance locker"
+          }
+        },
+        {
+          "id": "dev16_live",
+          "kind": "accepted_literal",
+          "session_id": "dev16_source",
+          "scope": "global",
+          "text": "Remember that my parcel label tape is matte cream.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "parcel_tape",
+            "label": "parcel label tape",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "matte cream"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What parcel shelf instruction and label tape should I use from current memory? Do not include retired instructions. Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev16_active",
+            "dev16_live"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "dev16_retired"
+        ],
+        "forbidden_current_text": [
+          "violet-pigeon rack"
+        ],
+        "expected_answer_components": [
+          "Use the east entrance locker instruction.",
+          "The label tape is matte cream."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Two currently active accepted owner statements."
+        ],
+        "reader_rules": [
+          "Suppress the retired shelf source from the complete current provider payload.",
+          "Retiring one Claim must not suppress the unrelated live tape preference."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev17_conflict_newer_owner",
+      "family": "conflicting_claims_and_newer_statement",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev17_first",
+          "kind": "accepted_literal",
+          "session_id": "dev17_source",
+          "scope": "global",
+          "text": "Remember that I live in Fairhaven.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "residence",
+            "label": "live in",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Fairhaven"
+          }
+        },
+        {
+          "id": "dev17_second",
+          "kind": "accepted_literal",
+          "session_id": "dev17_source",
+          "scope": "global",
+          "text": "Remember that I live in Brookfield.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "residence",
+            "label": "live in",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Brookfield"
+          }
+        },
+        {
+          "id": "dev17_newer",
+          "kind": "owner_conversation",
+          "session_id": "dev17_source",
+          "scope": "global",
+          "text": "I live in Alderwick now; I have not approved a memory correction yet."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What do the available records say about where I live, including any accepted disagreement and newer owner statement? Cite each original source event ID and do not silently choose one as an approved correction.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev17_first",
+            "dev17_second",
+            "dev17_newer"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Active accepted records disagree between Fairhaven and Brookfield for the single-valued residence predicate.",
+          "A newer original owner statement says Alderwick.",
+          "The newer statement has not replaced the accepted Claims through approval."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Kernel-reported conflict between accepted Claims.",
+          "Newer owner conversation is a possible discrepancy, not a new accepted fact or a Kernel-proven third contradiction."
+        ],
+        "reader_rules": [
+          "Show the discrepancy and ask for correction or confirmation if a current choice is needed.",
+          "Do not overwrite or claim to have saved any new residence.",
+          "Do not equate observation time with validity time."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev18_conflict_tentative_update",
+      "family": "conflicting_claims_and_newer_statement",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev18_first",
+          "kind": "accepted_literal",
+          "session_id": "dev18_source",
+          "scope": "global",
+          "text": "Remember that my pottery class is on Tuesday.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "pottery_day",
+            "label": "pottery class day",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Tuesday"
+          }
+        },
+        {
+          "id": "dev18_second",
+          "kind": "accepted_literal",
+          "session_id": "dev18_source",
+          "scope": "global",
+          "text": "Remember that my pottery class is on Thursday.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "pottery_day",
+            "label": "pottery class day",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Thursday"
+          }
+        },
+        {
+          "id": "dev18_newer",
+          "kind": "owner_conversation",
+          "session_id": "dev18_source",
+          "scope": "global",
+          "text": "The pottery class might move to Saturday, but the organizer has not confirmed the day."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Can you determine my pottery class day from the accepted records and newer discussion? Cite the original source event IDs and preserve any disagreement or uncertainty.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev18_first",
+            "dev18_second",
+            "dev18_newer"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Accepted single-valued pottery-day Claims conflict between Tuesday and Thursday.",
+          "Saturday is only a possible unconfirmed move in the newer owner discussion.",
+          "No single confirmed current class day can be selected from these records."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Accepted conflict is separate from a tentative owner report."
+        ],
+        "reader_rules": [
+          "Do not present Saturday as a resolved correction.",
+          "Do not invent organizer confirmation or infer that a newer observation makes the tentative statement certain."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev19_quoted_other_person",
+      "family": "speaker_quote_and_tentative_attribution",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev19_quote",
+          "kind": "owner_conversation",
+          "session_id": "dev19_source",
+          "scope": "global",
+          "text": "At lunch, Niko said, \"I would rather have pear jam than marmalade.\" I am quoting him; I have not said this is my own preference."
+        },
+        {
+          "id": "dev19_other",
+          "kind": "owner_conversation",
+          "session_id": "dev19_source",
+          "scope": "global",
+          "text": "The lunch table had a blue paper runner."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Who was reported to prefer pear jam, and does that establish my own preference? Quote the relevant original wording and cite its source event ID.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev19_quote"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner reported Niko saying he preferred pear jam to marmalade.",
+          "This does not establish the owner’s preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Owner is the recorded speaker; Niko is the attributed quoted speaker.",
+          "The statement is a report of a quote, not an accepted personal preference."
+        ],
+        "reader_rules": [
+          "A short exact quote must lie within the original source locator.",
+          "Do not label Niko’s words as a direct recorded message from Niko or as the owner’s accepted fact."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev20_assistant_inference",
+      "family": "speaker_quote_and_tentative_attribution",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev20_prompt",
+          "kind": "owner_conversation",
+          "session_id": "dev20_source",
+          "scope": "global",
+          "text": "I have been sketching birds beside the canal recently."
+        },
+        {
+          "id": "dev20_inference",
+          "kind": "assistant_conversation",
+          "session_id": "dev20_source",
+          "scope": "global",
+          "text": "You might enjoy a field guide with water-resistant pages, but that is my suggestion; you have not told me it is your preference."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What did the assistant suggest after I mentioned sketching beside the canal, and had I endorsed it? Cite the original source event ID for the suggestion and preserve its tentative status.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev20_inference"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "dev20_prompt"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The assistant suggested a field guide with water-resistant pages.",
+          "The owner had not endorsed that as a preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Assistant proposal, not owner-authored accepted memory."
+        ],
+        "reader_rules": [
+          "Do not turn “might enjoy” into an established personal preference.",
+          "Do not invent an owner acceptance or completed purchase."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev21_unanswerable",
+      "family": "unanswerable_and_unavailable",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev21_unrelated",
+          "kind": "accepted_literal",
+          "session_id": "dev21_source",
+          "scope": "global",
+          "text": "Remember that I keep sketch clips in a copper tin.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "sketch_storage",
+            "label": "sketch clip storage",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "copper tin"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What exact inscription did I choose for the silver bookmark? If no supporting source exists, say you cannot determine it rather than inventing an inscription.",
+      "gold": {
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "abstain",
+        "require_source_event_citations": false,
+        "attribution": [],
+        "reader_rules": [
+          "State that the available evidence does not establish the inscription.",
+          "Do not claim an exhaustive personal-history search merely because a bounded search was empty.",
+          "A focused request for the missing inscription is acceptable."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev22_memory_unavailable",
+      "family": "unanswerable_and_unavailable",
+      "reader_scope": "global",
+      "memory_mode": "unavailable",
+      "records": [
+        {
+          "id": "dev22_hidden",
+          "kind": "accepted_literal",
+          "session_id": "dev22_source",
+          "scope": "global",
+          "text": "Remember that my exhibition badge color is cobalt-orchard blue.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "badge_color",
+            "label": "exhibition badge color",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "cobalt-orchard blue"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What exhibition badge color did I record? If Memory cannot be accessed, explain that limit and do not guess or say that no record exists.",
+      "gold": {
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "dev22_hidden"
+        ],
+        "forbidden_current_text": [
+          "cobalt-orchard blue"
+        ],
+        "expected_answer_components": [],
+        "response_kind": "abstain",
+        "require_source_event_citations": false,
+        "attribution": [],
+        "reader_rules": [
+          "Memory unavailability is different from a successful empty search.",
+          "Do not disclose the source text, source event ID, or Claim ID through any provider field.",
+          "Do not claim no record exists; the configured access condition prevents that conclusion."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev23_no_memory_needed",
+      "family": "scope_and_no_memory_needed",
+      "reader_scope": "global",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev23_unrelated",
+          "kind": "accepted_literal",
+          "session_id": "dev23_source",
+          "scope": "global",
+          "text": "Remember that my sketch clips are stored in a walnut box.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "sketch_storage",
+            "label": "sketch clip storage",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "walnut box"
+          }
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Rewrite this sentence in plain English without adding personal details: \"The meeting will commence subsequent to lunch.\"",
+      "gold": {
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "A faithful plain-language rewrite says the meeting will start after lunch."
+        ],
+        "response_kind": "general",
+        "require_source_event_citations": false,
+        "attribution": [],
+        "reader_rules": [
+          "Answer the supplied language task without invoking personal memory.",
+          "Unrelated memory delivery counts as unwanted recall even if the answer ignores it.",
+          "Do not ask a clarification question or add the stored sketch preference."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    },
+    {
+      "id": "dev24_scope_boundary",
+      "family": "scope_and_no_memory_needed",
+      "reader_scope": "project:reader",
+      "memory_mode": "enabled",
+      "records": [
+        {
+          "id": "dev24_shared",
+          "kind": "accepted_literal",
+          "session_id": "dev24_source",
+          "scope": "global",
+          "text": "Remember everywhere that my telescope tripod grip length is twelve centimeters.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "tripod_grip",
+            "label": "telescope tripod grip length",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "twelve centimeters"
+          }
+        },
+        {
+          "id": "dev24_other_project",
+          "kind": "accepted_literal",
+          "session_id": "dev24_other_source",
+          "scope": "project:other",
+          "text": "Remember in this project that my telescope tripod grip length is coral-raven nineteen centimeters.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "tripod_grip",
+            "label": "telescope tripod grip length",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "coral-raven nineteen centimeters"
+          }
+        },
+        {
+          "id": "dev24_raw_global",
+          "kind": "owner_conversation",
+          "session_id": "dev24_global_raw",
+          "scope": "global",
+          "text": "My uncompiled telescope tripod note says amber-dolphin seventeen centimeters."
+        }
+      ],
+      "recent_discussion": [],
+      "question": "In this project, what approved telescope tripod grip length is available to me? Cite the original source event ID for each personal fact you report; if the evidence is missing, say so instead of guessing.",
+      "gold": {
+        "support_sets": [
+          [
+            "dev24_shared"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "dev24_other_project",
+          "dev24_raw_global"
+        ],
+        "forbidden_current_text": [
+          "coral-raven nineteen centimeters",
+          "amber-dolphin seventeen centimeters"
+        ],
+        "expected_answer_components": [
+          "The globally accepted and permitted grip length is twelve centimeters."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Globally accepted owner Claim is visible; unrelated-project accepted memory and raw Global history are not."
+        ],
+        "reader_rules": [
+          "A globally accepted anchor must not grant access to raw Global conversation or a different project.",
+          "Forbidden source event IDs, Claim IDs, locators, and distinctive text must be absent from the complete provider payload."
+        ]
+      },
+      "gate_roles": [
+        "critical_semantic"
+      ]
+    }
+  ]
+}

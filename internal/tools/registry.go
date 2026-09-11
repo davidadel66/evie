@@ -75,6 +75,22 @@ func (t Toolset) WithTools(extra []Tool) Toolset {
 	return NewToolset(definitions)
 }
 
+// WithoutTools narrows both schemas and executable definitions without changing
+// the original resolved capability grant.
+func (t Toolset) WithoutTools(names ...string) Toolset {
+	omit := make(map[string]bool, len(names))
+	for _, name := range names {
+		omit[name] = true
+	}
+	definitions := make([]Tool, 0, len(t.tools))
+	for _, definition := range t.tools {
+		if !omit[definition.Schema.Function.Name] {
+			definitions = append(definitions, definition)
+		}
+	}
+	return NewToolset(definitions)
+}
+
 func cloneSchema(schema openrouter.Tool) openrouter.Tool {
 	clone := schema
 	clone.Function.Parameters.Required = append([]string(nil), schema.Function.Parameters.Required...)
@@ -150,6 +166,7 @@ type PreparedTool struct {
 // It is deliberately absent from model arguments: a Capability can use the
 // current scope, source event, and live turn fence but cannot choose them.
 type InvocationContext struct {
+	SearchMemory  func(context.Context, memory.RetrievalQuery) (memory.RetrievalResult, error)
 	Scope         memory.ScopeContext
 	Lease         memory.TurnLease
 	SourceEventID memory.EventID

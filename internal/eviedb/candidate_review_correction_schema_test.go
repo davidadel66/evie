@@ -65,6 +65,11 @@ func newStage3CorrectionMigrationFixture(t *testing.T) (*sql.DB, string) {
 	if err := ensureSemanticObjectScopeColumns(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	// Current public event writes maintain derived indexes. Populate through
+	// those APIs, then remove the later retrieval schema before migration.
+	if err := ensureRetrievalSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	store := NewStore(db)
 	session, err := store.CreateGlobalSession(ctx)
 	if err != nil {
@@ -111,6 +116,7 @@ func newStage3CorrectionMigrationFixture(t *testing.T) (*sql.DB, string) {
 	if err := store.ReleaseTurnLease(ctx, lease.SessionID, lease.HolderID, lease.FencingToken); err != nil {
 		t.Fatal(err)
 	}
+	removeRetrievalSchemaFromLegacyFixture(t, ctx, db)
 	var currentVersions int
 	if err := db.QueryRow(`SELECT count(*) FROM semantic_operations WHERE schema_version>5`).Scan(&currentVersions); err != nil || currentVersions != 0 {
 		t.Fatalf("fixture has non-Stage-3 operations: %d, %v", currentVersions, err)

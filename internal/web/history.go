@@ -27,6 +27,7 @@ type historyItem struct {
 	Streaming bool             `json:"streaming"`
 	StartedAt int64            `json:"startedAt"`
 	Tone      string           `json:"tone,omitempty"`
+	Memory    *memoryActivity  `json:"memory,omitempty"`
 }
 
 func (s *Server) handleContextSessionHistory(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +105,14 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 		roots[e.ID] = turn
 		first := len(items)
 		switch e.Type {
+		case memory.EventContextSnapshot:
+			activity, err := projectMemoryActivity(e)
+			if err != nil {
+				return nil, err
+			}
+			if activity != nil {
+				items = append(items, historyItem{Kind: "memory", Key: string(e.ID), Memory: activity})
+			}
 		case memory.EventUserMessage:
 			items = append(items, historyItem{Kind: "user", Key: string(e.ID), Text: e.Content})
 		case memory.EventAssistantMessage:
@@ -159,6 +168,27 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 			text := "No completed result was recorded."
 			items[i].Result = &text
 			items[i].IsError = true
+		}
+	}
+	requests, err := memoryRequestRecords(events)
+	if err != nil {
+		return nil, err
+	}
+	bySnapshot := make(map[memory.EventID]memoryRequestRecord, len(requests))
+	answers := make(map[memory.EventID]memory.EventID)
+	for _, request := range requests {
+		bySnapshot[request.event.ID] = request
+		if request.final {
+			answers[request.rootID] = request.responseID
+		}
+	}
+	for _, item := range items {
+		if item.Memory != nil {
+			if request, ok := bySnapshot[item.Memory.SnapshotID]; ok {
+				item.Memory.RequestStatus = request.status
+				item.Memory.Iteration = request.snapshot.Iteration
+				item.Memory.AnswerID = answers[request.rootID]
+			}
 		}
 	}
 	return items, nil

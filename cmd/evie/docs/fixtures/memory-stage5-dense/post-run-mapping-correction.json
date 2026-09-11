@@ -1,0 +1,31 @@
+{
+  "change": "Current harness corpus source_link_id mapping now uses proposal.SourceLinkID rather than proposal.Source.ID. Reporting-only fix after all actual measurements; frozen source archives and executables unchanged.",
+  "current_harness_sha256": "8f53a9f8e97fc617416987e44dcac604a77dcbbca57ffa1a19ceecf7e705ff36",
+  "frozen_harness_sha256": {
+    "v1": "e08c43c3ac337df5bdb2c4a8232398df10e2654668192457093c99a451dc693e",
+    "v2": "e08c43c3ac337df5bdb2c4a8232398df10e2654668192457093c99a451dc693e"
+  },
+  "derived_association_coverage": [
+    {
+      "partition": "development-v1",
+      "original_claim_mappings": 192,
+      "observed_associations": 25
+    },
+    {
+      "partition": "heldout-v1",
+      "original_claim_mappings": 192,
+      "observed_associations": 30
+    },
+    {
+      "partition": "development-v2",
+      "original_claim_mappings": 192,
+      "observed_associations": 25
+    },
+    {
+      "partition": "heldout-regression-v2",
+      "original_claim_mappings": 192,
+      "observed_associations": 29
+    }
+  ],
+  "not_reclassified": "v1 heldout 81.25% failure; v2 known-regression93.75% pass unchanged."
+}

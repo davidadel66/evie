@@ -1,0 +1,25 @@
+{
+  "model_state": {
+    "models": [
+      {
+        "details": {
+          "families": [
+            "bert"
+          ],
+          "family": "bert",
+          "format": "gguf",
+          "parameter_size": "23M",
+          "parent_model": "",
+          "quantization_level": "F16"
+        },
+        "digest": "1b226e2802dbb772b5fc32a58f103ca1804ef7501331012de126ab22f67475ef",
+        "expires_at": "2026-09-11T00:27:07.903621-04:00",
+        "model": "all-minilm:22m",
+        "name": "all-minilm:22m",
+        "size": 585846784,
+        "size_vram": 585846784
+      }
+    ]
+  },
+  "observed_at_utc": "2026-09-11T04:26:37.922270+00:00"
+}

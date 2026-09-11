@@ -60,9 +60,10 @@ export default function App() {
   const selectedInspection = selectedFileInspection(selectedFile, contextSessions.snapshot?.activeSession?.id, items);
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
+  const visibleOverride = inspectorOverride?.kind === "memory-evidence" && inspectorOverride.sessionId !== contextSessions.snapshot?.activeSession?.id ? undefined : inspectorOverride;
   const inspectorTarget: InspectorTarget = selectedInspection
     ? {kind: "file", file: selectedInspection}
-    : inspectorOverride ?? defaultInspectorTarget(activeView, activeWorkspace, contextSessions.snapshot?.activeScope, latestFile ? {kind: "file", file: latestFile} : undefined);
+    : visibleOverride ?? defaultInspectorTarget(activeView, activeWorkspace, contextSessions.snapshot?.activeScope, latestFile ? {kind: "file", file: latestFile} : undefined);
 
   const closeInspector = () => {
     setInspectorOpen(false);
@@ -256,6 +257,15 @@ export default function App() {
                       fileTrigger.current = trigger;
                       activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
                       setSelectedFile({sessionId, key});
+                      setInspectorOpen(true);
+                      setInspectorFocused(false);
+                    }} onOpenMemory={(snapshotId, trigger) => {
+                      const sessionId = contextSessions.snapshot?.activeSession?.id;
+                      if (!sessionId) return;
+                      fileTrigger.current = trigger;
+                      activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
+                      setSelectedFile(undefined);
+                      setInspectorOverride({kind: "memory-evidence", sessionId, snapshotId});
                       setInspectorOpen(true);
                       setInspectorFocused(false);
                     }} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />

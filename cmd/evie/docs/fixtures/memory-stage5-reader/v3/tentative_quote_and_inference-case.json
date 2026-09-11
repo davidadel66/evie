@@ -1,0 +1,24 @@
+{
+  "answers": [
+    "Based on the available information, your Kyoto trip is not confirmed. The statement \"I'll definitely travel to Kyoto\" was made by a colleague but does not represent your own definite plan.\n\nHere are the details from the source:\n\n1. **Colleague's Statement**: \"I'll definitely travel to Kyoto\", event ID: `f103c2ae-46dd-47c9-bd66-3d1711a79ace`.\n2. **Your Uncertain Plan**: \"I might visit Kyoto next spring. Nothing is booked.\", event ID: `b22b31b6-60b1-489c-b03f-c5126c1fddce`.\n\nThe assistant inference that the Kyoto trip could be confirmed was based on your colleague's statement, but it does not reflect a definite plan from you."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "f103c2ae-46dd-47c9-bd66-3d1711a79ace",
+    "93eea48f-370f-45bd-b64d-d371c6c685ca"
+  ],
+  "model_calls": 1,
+  "name": "tentative_quote_and_inference",
+  "question": "Is my Kyoto trip confirmed, and whose definite plan was mentioned? Distinguish the original statement from any assistant inference. Include source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "trip-statements",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Kyoto\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 13021326708
+}

@@ -1,0 +1,29 @@
+{
+  "initial": {
+    "command": [
+      "git",
+      "diff",
+      "--cached",
+      "--check"
+    ],
+    "working_directory": "/Users/davidboktor/code/evie-memory-stage-5",
+    "started_at_utc": "2026-09-11T05:37:24.954381+00:00",
+    "finished_at_utc": "2026-09-11T05:37:25.074089+00:00",
+    "exit_code": 2
+  },
+  "initial_output": "cmd/evie/docs/fixtures/memory-stage5-integrated/evaluation-procedure.md:190: new blank line at EOF.\ncmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v3/frozen/procedure.md:190: new blank line at EOF.\n",
+  "corrected": {
+    "command": [
+      "git",
+      "diff",
+      "--cached",
+      "--check"
+    ],
+    "working_directory": "/Users/davidboktor/code/evie-memory-stage-5",
+    "started_at_utc": "2026-09-11T05:38:00.899757+00:00",
+    "finished_at_utc": "2026-09-11T05:38:01.010204+00:00",
+    "exit_code": 0,
+    "output": ""
+  },
+  "correction": "Remove only extra EOF newline from maintained procedure; retain exact frozen procedure bytes as a Git binary artifact. No measurement, semantic definition, source behavior or numerical gate changed."
+}

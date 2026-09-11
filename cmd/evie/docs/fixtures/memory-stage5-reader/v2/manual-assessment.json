@@ -1,0 +1,34 @@
+{
+  "version": "memory-stage5-reader-manual-assessment-v2",
+  "rubric": "../v1/README.md, unchanged and hash-pinned before model generation",
+  "assessor": "implementation agent, direct inspection of complete raw responses and source evidence; no model judge",
+  "overall_pass": false,
+  "cases": {
+    "historical_retired": {
+      "pass": false,
+      "old_preference_named": true,
+      "correct_original_source_event_cited": true,
+      "past_acceptance_distinguished_from_current_retirement": false,
+      "refrains_from_asserting_current_preference": false,
+      "no_invented_replacement_or_precise_original_date": true,
+      "finding": "Answer says the retired preference should still be treated as current unless subsequently changed, despite supplied current_status:retired and the compact explicit instruction."
+    },
+    "saved_boston_newer_chicago": {
+      "pass": true,
+      "both_places_exposed": true,
+      "accepted_record_and_later_statement_distinguished": true,
+      "discrepancy_expressed": true,
+      "both_sources_correctly_cited": true,
+      "does_not_claim_memory_was_corrected": true
+    },
+    "tentative_quote_and_inference": {
+      "pass": false,
+      "owner_uncertainty_preserved": true,
+      "definite_plan_attributed_to_colleague": true,
+      "quote_cited_to_original_owner_source": false,
+      "assistant_inference_distinguished_from_owner_quotation": true,
+      "no_invented_booking_itinerary_or_precise_date": true,
+      "finding": "The text distinguishes assistant inference, but cites the colleague quotation to the assistant event instead of its original owner event."
+    }
+  }
+}

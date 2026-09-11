@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "state": "proposal_before_pilot",
+  "partition": "development",
+  "adoption_required_before_generation": true,
+  "reader_cases": 24,
+  "behavior_families": 12,
+  "reader_repetitions_per_case_condition": 1,
+  "conditions": [
+    "no_recall",
+    "recent_context",
+    "tool_only",
+    "automatic",
+    "automatic_deeper",
+    "oracle"
+  ],
+  "reader_turns": 144,
+  "quality_condition": "automatic_deeper",
+  "comparison_operators": {
+    "min": ">=",
+    "max": "<=",
+    "agreement": "=="
+  },
+  "denominators": {
+    "micro_source_recall": "Distinct required source records supplied divided by the total required records in the frozen selected workload; first request, final request and turn union reported separately. Use each predeclared minimum sufficient support alternative; no-support cases add no denominator.",
+    "complete_support_case_fraction": "Answerable cases whose final provider request contains an entire permitted gold support set divided by all answerable cases in the frozen selected workload.",
+    "supported_answer_component_recall": "Semantically supported expected personal answer components divided by all declared expected personal components for answerable cases in the frozen selected workload. Missing, contradicted and unsupported components receive zero; honest abstention cannot remove a component from the denominator.",
+    "personal_proposition_grounding": "Grounded personal propositions divided by all personal propositions actually asserted. An empty proposition set is not a perfect grounding score and does not improve the aggregate.",
+    "original_event_citation_accuracy": "Correctly cited required support records divided by all required support records in the frozen selected workload. A missing required source citation receives zero. Invented citations separately violate the zero-fabrication boundary.",
+    "unwanted_evidence_fraction": "Distinct delivered source records outside gold support and acceptable contextual records divided by all distinct delivered source records, pooled across all 24 cases. Deduplicate overlap and Claim/excerpt copies of one original source.",
+    "family_semantic_pass_fraction": "Semantically passing cases divided by two within each named family; zero-support cases use clarification, abstention or general-task criteria instead of evidence recall.",
+    "reader_latency_quantile": "All 24 attempted cases per condition and repetition, nearest rank; retain timeouts and failures with their bound and status. No successful-only quantile can establish a passing gate.",
+    "local_latency_quantile": "20 fresh-reader repetitions per case and condition; report each condition and cold/warm policy separately. Repetitions do not increase the number of independent semantic cases.",
+    "index_cost": "Report per-case database source count and costs plus aggregate workload totals. Cases are isolated; 61 records across the workload must not be reported as one measured 61-record query index unless an additional combined benchmark is actually run.",
+    "operating_tails": "20 repetitions per declared cancellation, lease-loss and deadline scenario. Compare every measured tail after signal or ownership loss with 1000 ms, and report nearest-rank p50/p95 plus maximum; no successful-only filtering."
+  },
+  "quality": {
+    "initial_source_micro_recall_min": 0.55,
+    "final_source_micro_recall_min": 0.75,
+    "union_source_micro_recall_min": 0.85,
+    "complete_support_case_fraction_min": 0.8,
+    "each_family_semantic_pass_fraction_min": 0.5,
+    "supported_answer_component_recall_min": 0.85,
+    "personal_proposition_grounding_min": 0.95,
+    "original_event_citation_accuracy_min": 0.95,
+    "unwanted_evidence_fraction_max": 0.35,
+    "oracle_supported_answer_component_recall_min": 0.95,
+    "oracle_grounding_min": 0.95,
+    "oracle_citation_accuracy_min": 0.95,
+    "required_role_selectors": [
+      {
+        "gate_role": "material_clarification",
+        "minimum_selected_cases": 2,
+        "all_matching_cases_must_pass": true,
+        "obligation": "A focused recipient clarification precedes any personal recommendation."
+      },
+      {
+        "gate_role": "clear_reference",
+        "minimum_selected_cases": 2,
+        "all_matching_cases_must_pass": true,
+        "obligation": "The clear reference resolves without unnecessary recipient clarification."
+      },
+      {
+        "gate_role": "critical_semantic",
+        "minimum_selected_cases": 15,
+        "all_matching_cases_must_pass": true,
+        "obligation": "All case-specific semantic and required demonstration criteria pass; aggregate quality cannot waive failure."
+      }
+    ]
+  },
+  "hard_boundaries": {
+    "forbidden_provider_payload_occurrences_max": 0,
+    "fabricated_source_citations_max": 0,
+    "retired_as_current_assertions_max": 0,
+    "authority_or_speaker_violations_max": 0,
+    "silent_conflict_resolutions_max": 0,
+    "request_receipt_hash_and_byte_agreement": 1,
+    "source_locator_and_hash_agreement": 1,
+    "restart_agreement": 1,
+    "rebuild_agreement": 1,
+    "deterministic_acceptance_pass_fraction": 1
+  },
+  "units": {
+    "quality_and_agreement": "unitless fraction in [0,1]",
+    "occurrences_and_violations": "count",
+    "bytes": "bytes, with KiB=1024 bytes and MiB=1048576 bytes",
+    "time_ms": "elapsed monotonic milliseconds",
+    "tokens": "configured model token budget, separately reported from exact serialized byte measurements",
+    "attempts_items_calls_messages": "count"
+  },
+  "resources": {
+    "working_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "request_serialized_bytes_max": 98304,
+    "kernel_searches_per_turn_max": 8,
+    "refused_post_budget_attempts": "Report separately; SearchAttempts includes these refusals and is not the Kernel work count.",
+    "held_evidence_items_max": 8,
+    "search_result_bytes_max": 12288,
+    "cumulative_memory_message_bytes_max": 36864,
+    "cumulative_kernel_work_ms_max": 3000,
+    "expansion_before_max": 2,
+    "expansion_after_max": 2,
+    "expansion_messages_max": 5,
+    "expansion_message_bytes_max": 800,
+    "reader_calls_per_turn_max": 6,
+    "reader_turn_deadline_ms": 120000,
+    "reader_whole_turn_p95_ms_max": 120000,
+    "local_repetitions_per_case_condition": 20,
+    "local_initial_request_p95_ms_max": 1500,
+    "local_retrieval_work_p95_ms_max": 3000,
+    "quantile_definition": "nearest_rank",
+    "index_build_ms_max": 30000,
+    "index_rebuild_ms_max": 30000,
+    "derived_index_database_and_wal_growth_bytes_max": 33554432,
+    "warm_incremental_worker_rss_growth_bytes_max": 536870912,
+    "index_coverage_required": "active",
+    "cancellation_tail_ms_max": 1000,
+    "operating_repetitions": 20
+  },
+  "operating_failures": {
+    "expected_status_mismatches_max": 0,
+    "unauthorized_late_effects_max": 0,
+    "failed_generators_reported_as_exhaustive_empty_max": 0,
+    "required_states": [
+      "success",
+      "empty",
+      "unavailable",
+      "partial",
+      "failed",
+      "cancelled",
+      "exhausted"
+    ],
+    "required_recovery_scenarios": [
+      "source_restriction",
+      "retirement",
+      "correction",
+      "lease_loss",
+      "index_rebuild",
+      "restart"
+    ]
+  },
+  "development_selector_examples": {
+    "original_required_demonstration_case_ids": [
+      "dev01_fresh_tea",
+      "dev03_uncompiled_bike",
+      "dev05_clear_reference",
+      "dev13_neighbor_clamp",
+      "dev15_historical_validity",
+      "dev16_retired_suppression",
+      "dev17_conflict_newer_owner",
+      "dev22_memory_unavailable"
+    ],
+    "material_clarification": [
+      "dev06_ambiguous_reference",
+      "dev08_compacted_ambiguous"
+    ],
+    "clear_reference": [
+      "dev05_clear_reference",
+      "dev07_compacted_clear"
+    ],
+    "critical_semantic": [
+      "dev01_fresh_tea",
+      "dev03_uncompiled_bike",
+      "dev05_clear_reference",
+      "dev13_neighbor_clamp",
+      "dev14_neighbor_tentative",
+      "dev15_historical_validity",
+      "dev16_retired_suppression",
+      "dev17_conflict_newer_owner",
+      "dev18_conflict_tentative_update",
+      "dev19_quoted_other_person",
+      "dev20_assistant_inference",
+      "dev21_unanswerable",
+      "dev22_memory_unavailable",
+      "dev23_no_memory_needed",
+      "dev24_scope_boundary"
+    ]
+  },
+  "development_reference_counts": {
+    "required_source_records_per_condition_repetition": 27,
+    "answerable_cases_per_condition_repetition": 19,
+    "expected_answer_components_per_condition_repetition": 37
+  }
+}

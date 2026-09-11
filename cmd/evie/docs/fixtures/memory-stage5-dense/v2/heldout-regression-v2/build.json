@@ -1,0 +1,743 @@
+{
+  "batch_limit": 256,
+  "batches": [
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 2078,
+        "indexed": 717
+      },
+      "elapsed_ns": 444220042,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1870,
+        "indexed": 805
+      },
+      "elapsed_ns": 122315167,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1614,
+        "indexed": 821
+      },
+      "elapsed_ns": 141451916,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1358,
+        "indexed": 837
+      },
+      "elapsed_ns": 143371458,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1102,
+        "indexed": 853
+      },
+      "elapsed_ns": 154469542,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1071,
+        "indexed": 869
+      },
+      "elapsed_ns": 75927792,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1055,
+        "indexed": 885
+      },
+      "elapsed_ns": 59528250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1039,
+        "indexed": 901
+      },
+      "elapsed_ns": 67698875,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1023,
+        "indexed": 917
+      },
+      "elapsed_ns": 62043125,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 1007,
+        "indexed": 933
+      },
+      "elapsed_ns": 67805250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 991,
+        "indexed": 949
+      },
+      "elapsed_ns": 66161458,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 975,
+        "indexed": 965
+      },
+      "elapsed_ns": 71960333,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 959,
+        "indexed": 974
+      },
+      "elapsed_ns": 41280459,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 943,
+        "indexed": 984
+      },
+      "elapsed_ns": 45423333,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 927,
+        "indexed": 994
+      },
+      "elapsed_ns": 43045708,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 911,
+        "indexed": 1003
+      },
+      "elapsed_ns": 38215042,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 895,
+        "indexed": 1013
+      },
+      "elapsed_ns": 39848500,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 879,
+        "indexed": 1022
+      },
+      "elapsed_ns": 36934500,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 863,
+        "indexed": 1032
+      },
+      "elapsed_ns": 37551833,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 847,
+        "indexed": 1042
+      },
+      "elapsed_ns": 37778166,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 831,
+        "indexed": 1051
+      },
+      "elapsed_ns": 35494834,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 815,
+        "indexed": 1061
+      },
+      "elapsed_ns": 37861833,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 799,
+        "indexed": 1071
+      },
+      "elapsed_ns": 38291416,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 783,
+        "indexed": 1080
+      },
+      "elapsed_ns": 33959917,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 767,
+        "indexed": 1090
+      },
+      "elapsed_ns": 40171750,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 751,
+        "indexed": 1099
+      },
+      "elapsed_ns": 38337791,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 735,
+        "indexed": 1109
+      },
+      "elapsed_ns": 41767292,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 719,
+        "indexed": 1119
+      },
+      "elapsed_ns": 47217958,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 703,
+        "indexed": 1128
+      },
+      "elapsed_ns": 39637000,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 687,
+        "indexed": 1138
+      },
+      "elapsed_ns": 41059791,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 671,
+        "indexed": 1147
+      },
+      "elapsed_ns": 37624417,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 655,
+        "indexed": 1157
+      },
+      "elapsed_ns": 38177375,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 639,
+        "indexed": 1167
+      },
+      "elapsed_ns": 36452375,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 623,
+        "indexed": 1176
+      },
+      "elapsed_ns": 40882208,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 607,
+        "indexed": 1186
+      },
+      "elapsed_ns": 38009917,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 591,
+        "indexed": 1195
+      },
+      "elapsed_ns": 34102958,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 575,
+        "indexed": 1205
+      },
+      "elapsed_ns": 36937334,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 559,
+        "indexed": 1215
+      },
+      "elapsed_ns": 37387584,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 543,
+        "indexed": 1224
+      },
+      "elapsed_ns": 34478583,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 527,
+        "indexed": 1234
+      },
+      "elapsed_ns": 37914292,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 511,
+        "indexed": 1243
+      },
+      "elapsed_ns": 38130333,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 495,
+        "indexed": 1253
+      },
+      "elapsed_ns": 39034125,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 479,
+        "indexed": 1263
+      },
+      "elapsed_ns": 37653833,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 463,
+        "indexed": 1272
+      },
+      "elapsed_ns": 34008125,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 447,
+        "indexed": 1282
+      },
+      "elapsed_ns": 38666958,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 431,
+        "indexed": 1291
+      },
+      "elapsed_ns": 32236083,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 415,
+        "indexed": 1301
+      },
+      "elapsed_ns": 35959250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 399,
+        "indexed": 1311
+      },
+      "elapsed_ns": 35709583,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 383,
+        "indexed": 1320
+      },
+      "elapsed_ns": 32427875,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 367,
+        "indexed": 1330
+      },
+      "elapsed_ns": 39195250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 351,
+        "indexed": 1339
+      },
+      "elapsed_ns": 37389542,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 335,
+        "indexed": 1349
+      },
+      "elapsed_ns": 37289959,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 319,
+        "indexed": 1359
+      },
+      "elapsed_ns": 36618417,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 303,
+        "indexed": 1368
+      },
+      "elapsed_ns": 33282125,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 287,
+        "indexed": 1378
+      },
+      "elapsed_ns": 38550417,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 271,
+        "indexed": 1387
+      },
+      "elapsed_ns": 35268583,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 255,
+        "indexed": 1397
+      },
+      "elapsed_ns": 39890958,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 239,
+        "indexed": 1407
+      },
+      "elapsed_ns": 44205375,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 223,
+        "indexed": 1416
+      },
+      "elapsed_ns": 41106208,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 207,
+        "indexed": 1426
+      },
+      "elapsed_ns": 44000250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 191,
+        "indexed": 1435
+      },
+      "elapsed_ns": 43791042,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 175,
+        "indexed": 1445
+      },
+      "elapsed_ns": 46300791,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 159,
+        "indexed": 1455
+      },
+      "elapsed_ns": 42822917,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 143,
+        "indexed": 1464
+      },
+      "elapsed_ns": 37452250,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 127,
+        "indexed": 1474
+      },
+      "elapsed_ns": 40346000,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 111,
+        "indexed": 1483
+      },
+      "elapsed_ns": 35948916,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 95,
+        "indexed": 1493
+      },
+      "elapsed_ns": 39400000,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 79,
+        "indexed": 1503
+      },
+      "elapsed_ns": 37057042,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 63,
+        "indexed": 1512
+      },
+      "elapsed_ns": 33594542,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 47,
+        "indexed": 1522
+      },
+      "elapsed_ns": 40799791,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 31,
+        "indexed": 1531
+      },
+      "elapsed_ns": 35943875,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "building",
+        "pending": 15,
+        "indexed": 1541
+      },
+      "elapsed_ns": 39911125,
+      "failed": false
+    },
+    {
+      "coverage": {
+        "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+        "state": "active",
+        "pending": 0,
+        "indexed": 1546
+      },
+      "elapsed_ns": 19009166,
+      "failed": false
+    }
+  ],
+  "final_coverage": {
+    "generation": "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3+dense:36692e69-1452-455e-9e97-05db9d135bb1",
+    "state": "active",
+    "pending": 0,
+    "indexed": 1546
+  },
+  "fixture_setup_ns": 1421368042,
+  "maintenance_ns": 3805893667
+}

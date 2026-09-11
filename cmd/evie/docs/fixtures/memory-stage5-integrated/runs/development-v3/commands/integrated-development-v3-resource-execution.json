@@ -1,0 +1,28 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v3/resources.py",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v3/freeze.json",
+    "--evidence-report",
+    "/tmp/evie-memory-stage5/integrated-development-v3-evidence/evidence-report.json",
+    "--quality-report",
+    "/tmp/evie-memory-stage5/integrated-development-v3-quality/quality-report.json",
+    "--local",
+    "/tmp/evie-memory-stage5/integrated-development-v3-local",
+    "--index",
+    "/tmp/evie-memory-stage5/integrated-development-v3-index",
+    "--operating",
+    "/tmp/evie-memory-stage5/integrated-development-v3-operating",
+    "--deterministic",
+    "/tmp/evie-memory-stage5/integrated-development-v3-deterministic.json",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-development-v3-resource"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T05:31:00.887258+00:00",
+  "started_at_utc": "2026-09-11T05:30:57.709769+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

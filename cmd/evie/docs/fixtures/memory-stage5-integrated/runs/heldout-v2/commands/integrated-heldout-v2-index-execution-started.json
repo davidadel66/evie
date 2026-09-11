@@ -1,0 +1,16 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py",
+    "run",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-heldout-v2/freeze.json",
+    "--mode",
+    "index",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-heldout-v2-index"
+  ],
+  "started_at_utc": "2026-09-11T06:41:46.016967+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

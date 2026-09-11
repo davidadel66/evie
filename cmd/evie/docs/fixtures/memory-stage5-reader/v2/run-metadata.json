@@ -1,0 +1,640 @@
+{
+  "recorded_at_utc": "2026-09-11T00:12:02.966533+00:00",
+  "test_binary_sha256": "f86c1b58f2c7f59b567c053bbb018e0f2006fca1d1c77664c9f92f591fbd4185",
+  "test_binary_build": "go test -c -o /tmp/evie-memory-stage5-reader-v2.test ./internal/agent",
+  "go_version": "go version go1.26.3 darwin/arm64",
+  "git_parent": "51a401e1a4e75e71acc34930b236a662ffa87c5a",
+  "production_go_tree_sha256": "c6f862ecf5203735f25b56f34f2cf22502064ff4e98d51edbd0180ef2ed7507b",
+  "production_go_files": [
+    {
+      "path": "internal/agent/agent.go",
+      "sha256": "c8cf9b6bdf925da3c109b66d019736ec30849f4c8c73cbb42b8b8e98db41e125"
+    },
+    {
+      "path": "internal/agent/automatic_compaction.go",
+      "sha256": "6f31bef57574f938e6989169d1ef8a4e71f7a18bb7291c98aee3967e2cb8ece5"
+    },
+    {
+      "path": "internal/agent/compaction.go",
+      "sha256": "2a1cd8bdeea1ceebce010320dc139a11c83f6c214f3942a3455f6673afd25799"
+    },
+    {
+      "path": "internal/agent/context.go",
+      "sha256": "ca90d7025a2523173f80702c8658c49f948220a66795e1636b17ab13a03ca130"
+    },
+    {
+      "path": "internal/agent/foreground_measurement.go",
+      "sha256": "3d27af57606d2155f465d582f1a2eb7981ea2380383d7986b2963551ec230b83"
+    },
+    {
+      "path": "internal/agent/history.go",
+      "sha256": "056f0969cf58db0720c8c367192df2b475036d71baba491158bcf65dd182b9a6"
+    },
+    {
+      "path": "internal/agent/ownership.go",
+      "sha256": "9bd8b8334a873995e069299f29651fabf5049a2f85e1c3326011597aead93f34"
+    },
+    {
+      "path": "internal/agent/prompt.go",
+      "sha256": "18849b893839363b02ba8f6f9274acb1292778e333303efa5c3ef4811e3472ee"
+    },
+    {
+      "path": "internal/agent/retrieval.go",
+      "sha256": "f2af343b563057efa66542cbc4c3bf22db8526905d7a7135153eaaa778e91865"
+    },
+    {
+      "path": "internal/agent/semantic_memory.go",
+      "sha256": "8ae400953c283a11758500d6e0c211ee97adfc1e1a4b15dd63e775812c3f2c11"
+    },
+    {
+      "path": "internal/agent/tool_results.go",
+      "sha256": "f02593890bdb7ddd4c798fbbbcef0d9a28c5e1a0c802a99e8d15944303e95799"
+    },
+    {
+      "path": "internal/agent/turn.go",
+      "sha256": "c49b79239aa250a4e6b3faca72804a701be0cac2dc3674f1320647be8c1911dd"
+    },
+    {
+      "path": "internal/eviedb/candidate_destination.go",
+      "sha256": "804ae43c1eddab98ac1f468085f8e5bdc59b47bc5ca4a9f61d1a87b0b988e818"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_apply.go",
+      "sha256": "0c68ea7d6be7b3198674a093c4c40c53048e5006f4ec1350f3fb723ce218bd5e"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_authority.go",
+      "sha256": "f7afed415aa4399d3430f57fb48c4020c60ede6af41c5bace9a4bd546ec68fa9"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_batch.go",
+      "sha256": "90d63346577c90691d3567fca0c813556065d46d67a3bb31acd945269ef23341"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_compound.go",
+      "sha256": "fd3587479ace2b3bfc2b1a4b4afda187bc30cccaac29db8db0f65d6f14e20b2a"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_correction_schema.go",
+      "sha256": "fa8b1792e966252d13af8fce06fe77f4f6ac804b679ef06cfd6e71ea35961b05"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_edit.go",
+      "sha256": "55cacb7bdb3f330b57640402a1bc1b716d5601d506beee30ca349e1ec9370b18"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_encoding.go",
+      "sha256": "158ab47670d0cf5422b5bd4a92ed2f96fa1a72f27624e6c86dd45fc9351405cd"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_history.go",
+      "sha256": "7ffa169ed8bd21e720d36f58456e327b5968f9d54018efffb80c0885f74be714"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity.go",
+      "sha256": "7fb049a61a3075eea19a3511a60542893e6caff210f3df3e4eb65f822f412ada"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_identity_effect.go",
+      "sha256": "bd1cfad7efccd192f6b386cb679206561e1f990c06b0371f7aa96d9f26733676"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_inspection.go",
+      "sha256": "fb121ba7fb7ca082f40b96d2e88cf81fa79147e353e548caec057edf6d806d30"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_prepare.go",
+      "sha256": "610dc9783824be7ed44f68d335e2d3905a986de2bf655a703d6db3b8d401660e"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_provenance.go",
+      "sha256": "6a2bcb39d0065720e4311955331c7f665b642b5eda2b517cd96ad6127f539a01"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_replay.go",
+      "sha256": "9db3aaae8d80e35aca2f7b6880375c4e628c4b57cbffc852efddb920a853a0a3"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_schema.go",
+      "sha256": "bcb13ab2ccdea0574ac849027e04eac34888f54361a9d72e4930826c89fb778c"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_scopes.go",
+      "sha256": "61f4a1895b69817bb3299723e21a7f10b9719f32b1b615347c2186f527851813"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_sources.go",
+      "sha256": "d85bb9e59a0577168ff07e36b96f5d747908848517eca0db2979a8b722302043"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal.go",
+      "sha256": "10ba3322e4110ef83a639b06beb4af21d692309b7643d4bafb2a78736216cb7e"
+    },
+    {
+      "path": "internal/eviedb/candidate_review_temporal_effect.go",
+      "sha256": "df1df1d681560022ae638232e927f822c12e75dd6ee554dec458120a40c6711a"
+    },
+    {
+      "path": "internal/eviedb/compiler_activation.go",
+      "sha256": "4189769f57e2b3bad8107d21509f5c0ccf8e46f7609556ba2df79e6b6caac15c"
+    },
+    {
+      "path": "internal/eviedb/compiler_activation_schema.go",
+      "sha256": "6bfeecd2bc04cd293af5de15f3837818fdd077443b335b594587b0ac3b7aa31d"
+    },
+    {
+      "path": "internal/eviedb/compiler_ancestry.go",
+      "sha256": "db73a3cebd8e8c5e6d053b8f998cb2dc32f6d74e97368f17b5a5673e6965a80e"
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics.go",
+      "sha256": "47b18780c3f1d7d3bd94112b8dd88ec51aa60ae51cdc8e4675b7ad23e230b988"
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_measurement.go",
+      "sha256": "a618ab79cfad39071e291ce16e8f3c938305a4fd70545ab807845a031e1e9afa"
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_navigation.go",
+      "sha256": "e8cefd234cbc63b490ec2607dadd585d2d2bee8c1d2f8371685217da91d52c89"
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_schema.go",
+      "sha256": "78da85436890d0b6a5b6f6266b3ec09648ab83131f37d76e6341f929fd6111ec"
+    },
+    {
+      "path": "internal/eviedb/compiler_diagnostics_views.go",
+      "sha256": "3bf75c2e653d6f8a73a4c08ddf4174ff798ac7a089dbdcc4e5f2b5b7adbdf33b"
+    },
+    {
+      "path": "internal/eviedb/compiler_history.go",
+      "sha256": "7192daa80250f98914e19040001b9896e109195f50c1ec22f37623945d3256ad"
+    },
+    {
+      "path": "internal/eviedb/compiler_history_inspection.go",
+      "sha256": "c9ddbe0db056463974441974379d53de3d3ac6427fae01d240896c664302b098"
+    },
+    {
+      "path": "internal/eviedb/compiler_history_reconciliation.go",
+      "sha256": "32d6464fb95d6a2fbcba40b7ca08102d5d6db3734d7d54fa87d2f413d1fa42b3"
+    },
+    {
+      "path": "internal/eviedb/compiler_history_resume.go",
+      "sha256": "0267309eaa98a3cf74c3c753c5dc0bbac5133c2f65df716002c679ae42fa0796"
+    },
+    {
+      "path": "internal/eviedb/compiler_history_schema.go",
+      "sha256": "b02140f0fda53f2f379c5d879d4094750426fd5d53570ba4c59840f8f3910b18"
+    },
+    {
+      "path": "internal/eviedb/compiler_identity.go",
+      "sha256": "83de8c1f4546cc0605fef55d7690c38cb21292f3c2ba131c92bd0dc87f2ac4e1"
+    },
+    {
+      "path": "internal/eviedb/compiler_inspection.go",
+      "sha256": "c33134f2632cf25b924f3285863e60d692909fa3007fbc19a7e2e595d3fe6af9"
+    },
+    {
+      "path": "internal/eviedb/compiler_intervals.go",
+      "sha256": "5c124cecb5a03c978f95e4b5221279e639ca26a674e94f518e55fbbe44e522da"
+    },
+    {
+      "path": "internal/eviedb/compiler_reconciliation.go",
+      "sha256": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6"
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence.go",
+      "sha256": "5f74365253c09b6f8f30b6ded4fd62b1d7fe06be8ac8c3a16d98c8be3beceb3c"
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_encoding.go",
+      "sha256": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d"
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_inspection.go",
+      "sha256": "3922ab29b23d5cd88cea376b7716056e70726be5574c303fa0f141bc9ca8c351"
+    },
+    {
+      "path": "internal/eviedb/compiler_recurrence_schema.go",
+      "sha256": "13f987b9f1cf75e6aefb6e40200bc7e3c22ed06dfa3c08a2b0b4832098b68e03"
+    },
+    {
+      "path": "internal/eviedb/compiler_schema.go",
+      "sha256": "42cccff6ae69ff3460f90460b656cc9d4f3f984a84425ef396b1e97324476ce5"
+    },
+    {
+      "path": "internal/eviedb/compiler_source.go",
+      "sha256": "b9f261334299358ebedf0378975b43cf35b9e83ff8f7d5b177e6ed15d393b66f"
+    },
+    {
+      "path": "internal/eviedb/compiler_status_projection.go",
+      "sha256": "8f37753b5faa25a1ca7bf096a3ab7c9b9f254c3745aabfe1fc26c43f22f94857"
+    },
+    {
+      "path": "internal/eviedb/compiler_temporal.go",
+      "sha256": "e1d40ba45dcc569cc2bf01938a42887b717410000d80d3883aba2f994a7ad65f"
+    },
+    {
+      "path": "internal/eviedb/compiler_tool_observation.go",
+      "sha256": "ea5cae91fe3a7c0bc3c17fc5b47d9176b1d4073bcf2f6e96bd9ffded12d0a540"
+    },
+    {
+      "path": "internal/eviedb/compiler_validation.go",
+      "sha256": "30bac0bba8cb912242a298c9a343be98f5bc23e9177cf1ba9b062b19e708ec12"
+    },
+    {
+      "path": "internal/eviedb/compiler_work.go",
+      "sha256": "fa7a554582ef6d3db0bfbdf069d48e5994699985fed7c918ee54631ca8095f0a"
+    },
+    {
+      "path": "internal/eviedb/compiler_worker.go",
+      "sha256": "2356d0820b3f4601396a0f76f34c95b30629b8ef6b81f7a5de87b34f8d81e4e3"
+    },
+    {
+      "path": "internal/eviedb/compiler_worker_inspection.go",
+      "sha256": "dabcc06a8df06b75996a79e720ac27c5b5a4de584b8168d996729399563ff3ef"
+    },
+    {
+      "path": "internal/eviedb/composition_receipts.go",
+      "sha256": "d9319ef543849d3338fe8d168a444131596164b119d1f80d83487120f4d1f1bf"
+    },
+    {
+      "path": "internal/eviedb/database_browser.go",
+      "sha256": "f26c8231fed09bd411b7c16560e7d45efd077a9be647fd128072dc9cc10f16d9"
+    },
+    {
+      "path": "internal/eviedb/db.go",
+      "sha256": "075360c21cd63cabeb58cfccae6a42e58eeb14a0cb6af75d37e48d4abbf254a6"
+    },
+    {
+      "path": "internal/eviedb/events.go",
+      "sha256": "183aec44dcda3c889b9059ab8a4771506eb41f73e26dd7e897c31958230d29b3"
+    },
+    {
+      "path": "internal/eviedb/history.go",
+      "sha256": "a57654bd16f475296b0b58b6d44aeb071804348e909f0b732a471a649812a2b0"
+    },
+    {
+      "path": "internal/eviedb/immediate_tx.go",
+      "sha256": "b2f21ffbf0751d8033ae26d99800291686dc455c7784b12af4696e73c438d30e"
+    },
+    {
+      "path": "internal/eviedb/plugin_configuration.go",
+      "sha256": "45effc996569f9990d4891d16c96ddd542adc9231472c61df67c6e5bb7e69267"
+    },
+    {
+      "path": "internal/eviedb/projects.go",
+      "sha256": "166469618ef8c560bba7007d34ffa760ad8a7aae4d29184af420c2c7955a185d"
+    },
+    {
+      "path": "internal/eviedb/retrieval.go",
+      "sha256": "2e0929e554fdf5d7506d67e3f12dacacf944fcfb11df8b86e000c1b8f48defcb"
+    },
+    {
+      "path": "internal/eviedb/retrieval_conflict.go",
+      "sha256": "29bad8565d987e6fcb8be8f72a5440ab339a083c724cd1e8a4b6d1c8b10e6032"
+    },
+    {
+      "path": "internal/eviedb/retrieval_conversation.go",
+      "sha256": "2ff7c84d080d0e4954e8c2c8ce2e0323722eaa04a89641249f05428e15f99a9a"
+    },
+    {
+      "path": "internal/eviedb/retrieval_conversation_index.go",
+      "sha256": "5a5ba83f8a7f491e6c7e9c0f4bf1eb49f35e87e5317aea438bd1b3e80dcb112b"
+    },
+    {
+      "path": "internal/eviedb/retrieval_expansion.go",
+      "sha256": "67cea21d8779c27cf81e538e5d92f0b8a0bfb77e46fadf953d724109ccfaa89a"
+    },
+    {
+      "path": "internal/eviedb/retrieval_index.go",
+      "sha256": "b74577461108fda7d2e581a151b0806b804f699542794d442a1311c21d0deb62"
+    },
+    {
+      "path": "internal/eviedb/retrieval_inspection.go",
+      "sha256": "9216729db6e18c6829f7b5bc13631a477bee80b81fcc16bf92e4dbcc9b5d8286"
+    },
+    {
+      "path": "internal/eviedb/retrieval_temporal.go",
+      "sha256": "bfd636255293c36200a55bea99890c9e8b7687fdab97482872fba36bdbf6c1ba"
+    },
+    {
+      "path": "internal/eviedb/semantic.go",
+      "sha256": "04ff0c0a88b9c20d22692a422af6aed2a693d7feb0d39875d311cefca43130ee"
+    },
+    {
+      "path": "internal/eviedb/semantic_conflicts.go",
+      "sha256": "8bea446edad8b28247da407c8f3f0a6d6ae2a08e13ebf4b068f17710fe5ada04"
+    },
+    {
+      "path": "internal/eviedb/semantic_correction.go",
+      "sha256": "0155b9ed61e129efcad5f9fa95319b260df2328dd6fe258d59c498c6668961e8"
+    },
+    {
+      "path": "internal/eviedb/semantic_destination.go",
+      "sha256": "1e36b7b71e821d91ce03e569534b5b56b98c30ecb04b39d8948446b9d7e9fe90"
+    },
+    {
+      "path": "internal/eviedb/semantic_encoding.go",
+      "sha256": "47458ce3da0416f1f9e8323b70b5e449d2f7b6ce019021605a0c7f3ffcf9dd65"
+    },
+    {
+      "path": "internal/eviedb/semantic_entity.go",
+      "sha256": "1f027a344fab26883868e8db9a4ca8decae6ee7ccaeff6c9928c563e9a12c5ca"
+    },
+    {
+      "path": "internal/eviedb/semantic_graph.go",
+      "sha256": "8404532ab795c1eb1a83cdbdbd369002dd26a87573f106bc8280e62c561f46fa"
+    },
+    {
+      "path": "internal/eviedb/semantic_lifecycle.go",
+      "sha256": "80b9fea005ec7ba406e50abe5b1a56632c8f361e94668ec06c412318d8c5e813"
+    },
+    {
+      "path": "internal/eviedb/semantic_promotion.go",
+      "sha256": "2fb2eca9be8ce07561a830d268100f7650cc59d564395779402ea65d28519dd6"
+    },
+    {
+      "path": "internal/eviedb/semantic_replay.go",
+      "sha256": "d71f98ed3f3cdb5cca68f3b9233c4379c658148ef0b5aed58d0fa30a570f47d5"
+    },
+    {
+      "path": "internal/eviedb/semantic_scope.go",
+      "sha256": "f3174dc4bf5c3fff95b3306b9b917ca4580d8bf95a133b180ee4136eff09dc99"
+    },
+    {
+      "path": "internal/eviedb/session_titles.go",
+      "sha256": "3ccb84a4331c67e883b50469f8bb5560592271be62a7b2ca44cceb5a4a7874f2"
+    },
+    {
+      "path": "internal/eviedb/sessions.go",
+      "sha256": "11053360bae8da465bc944b0b96824b658dce09eecd1890a69d861ccf4e9882c"
+    },
+    {
+      "path": "internal/eviedb/sessions_delegated.go",
+      "sha256": "331a6ecd6f94e7a3850c21891113c454fb0258979c5ffb06c0a17fc3cfdd9935"
+    },
+    {
+      "path": "internal/eviedb/sqlite_startup.go",
+      "sha256": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60"
+    },
+    {
+      "path": "internal/eviedb/store.go",
+      "sha256": "652f67cf357df5807fd5a1339753ce5441564880b15de838502a4bf6f1cae16d"
+    },
+    {
+      "path": "internal/eviedb/task_idempotency.go",
+      "sha256": "214e953f665063afa87155699b1db9c96bd5c93dcef805a9a6db03d84b9ed61e"
+    },
+    {
+      "path": "internal/eviedb/tasks.go",
+      "sha256": "8a79469602c565fd42a8a75a42f6e20faa5c495ff887d381501aa6cac99ccc83"
+    },
+    {
+      "path": "internal/eviedb/tasks_claims.go",
+      "sha256": "06417a8ba2a9427b349d931aaf2e675921276938a4d3b5b2ed2358026975efb4"
+    },
+    {
+      "path": "internal/eviedb/tasks_grants.go",
+      "sha256": "b704b5a477cad21b19e76e7d847c243b9fc8d60315b8bff7c9b13f63f9f8dbd7"
+    },
+    {
+      "path": "internal/eviedb/tasks_import.go",
+      "sha256": "85b9dd8bf0d02e8d9e7e575a7ab2c5af940746067ef8f23963e53f9b9ad8643c"
+    },
+    {
+      "path": "internal/eviedb/tasks_scope.go",
+      "sha256": "041c92a080365c8e4505506776dd122a7cb28f585a18009984a6b017dff774b3"
+    },
+    {
+      "path": "internal/eviedb/tasks_tree.go",
+      "sha256": "c6917c4d0e6b9c3f5a04fffe40e06cbad988290ffe53662b47b7d0314ebf3a50"
+    },
+    {
+      "path": "internal/eviedb/turn_leases.go",
+      "sha256": "8afefe0fd34e222b9140c0998b3c99134e81ee2ef13cce684f61b8e411fad20f"
+    },
+    {
+      "path": "internal/eviedb/turn_owner.go",
+      "sha256": "99faa180c5f973dc3f418258327374331c807c4c46524e451878859d4837a060"
+    },
+    {
+      "path": "internal/eviedb/usage.go",
+      "sha256": "a77c651a59796591ee9b159b1059833a657d9f91903a24fa4c9fe9aa653fe51d"
+    },
+    {
+      "path": "internal/eviedb/workspaces.go",
+      "sha256": "88c1103229c0044bb835b8fe7a2f372946ed3fe1061ef666ba962b13528a5c65"
+    },
+    {
+      "path": "internal/memory/candidate_batch.go",
+      "sha256": "51f59eaedd58cd2d6e69f09e44a4a1b16585c8e965791d2dbdafd793f63f1e0b"
+    },
+    {
+      "path": "internal/memory/candidate_identity.go",
+      "sha256": "b0e8fbebf6b167b63f675efd639f7668087a01cb2b6e41e98b74137739ff4301"
+    },
+    {
+      "path": "internal/memory/candidate_review.go",
+      "sha256": "2a3eeb0fd33bec827ed232001fee5b41c9168c770e7aef56e584a9716678b049"
+    },
+    {
+      "path": "internal/memory/candidate_review_scopes.go",
+      "sha256": "70853df581ca4f30ac25fb423180e8f1f4f2f70c6cc37e5421fd3a775de308fc"
+    },
+    {
+      "path": "internal/memory/candidate_temporal.go",
+      "sha256": "707b0121aa0aea2428853ecbc57119f737aefacd2bad00aca4d43ec3208529eb"
+    },
+    {
+      "path": "internal/memory/compiler.go",
+      "sha256": "30a1e0ff8830f6b7bcc3fefffde8ccad60e8b9d7e8c86997973a8e1a2f0f028e"
+    },
+    {
+      "path": "internal/memory/compiler_activation.go",
+      "sha256": "096e737528215a3abfd5f210022252351f41d803b11bdb19f0076b5f79d104fb"
+    },
+    {
+      "path": "internal/memory/compiler_contract.go",
+      "sha256": "110b3150e92ed3709b34881ce0ed3e3ea7610ceb0e8aedd027b1a1b9058ad97d"
+    },
+    {
+      "path": "internal/memory/compiler_diagnostics.go",
+      "sha256": "0b69224a8190e9bd25ad3b8c6ddf497bfcc2c5c11b1a78263eec55807d21fbac"
+    },
+    {
+      "path": "internal/memory/compiler_history.go",
+      "sha256": "f0edb9402fb50d3e2bed682d080a7003aa5ec119d39609aec710a228d4c575ff"
+    },
+    {
+      "path": "internal/memory/compiler_observation.go",
+      "sha256": "bd5ca5ec09ef3771e40f1acc9aea01086d2524c831d8b532bee57411d17d84c1"
+    },
+    {
+      "path": "internal/memory/compiler_recurrence.go",
+      "sha256": "7c99d842e66481347dbe425d6069aca8f140782951b4240da406f64fa228d453"
+    },
+    {
+      "path": "internal/memory/compiler_status.go",
+      "sha256": "fec3e352456ab9d567a535304be4ad830a2d385268dad74955edf2535fe87e08"
+    },
+    {
+      "path": "internal/memory/destination.go",
+      "sha256": "2e5f70dae5b0586cd8e401773b22621b6b5b90c1faae1d63dfa699352069981a"
+    },
+    {
+      "path": "internal/memory/event.go",
+      "sha256": "08cd596d7d80de37ed0e971a66835268614e871c99e050cefe21ec7cdbe90bc4"
+    },
+    {
+      "path": "internal/memory/lease.go",
+      "sha256": "70d42dabddcc8f10e6324a01822b7afe742a9cda1270067625fb91f1849c8a2b"
+    },
+    {
+      "path": "internal/memory/retrieval.go",
+      "sha256": "0cefaa9bb09c7bcfe918d9c42a89c4074f34612be8b0c4817d4fbfd373e7f05f"
+    },
+    {
+      "path": "internal/memory/retrieval_outcome.go",
+      "sha256": "d1b2e33fbdeeef0f0a001b124ec2de71fe0d8e3d185c8547130497cb4c3e3a34"
+    },
+    {
+      "path": "internal/memory/retrieval_receipt.go",
+      "sha256": "75694c93ab88924e2ed9a4322990dcbb9edb600d8868050020553d9e5d62b7fe"
+    },
+    {
+      "path": "internal/memory/retrieval_render.go",
+      "sha256": "0a131a9924740a53dc3f403512266e3194ca2194ac3f1d954e0b5a92392d8bf6"
+    },
+    {
+      "path": "internal/memory/scope.go",
+      "sha256": "b09ab23dd8fa70ed15ef28c4eaf5f942dcb34fff70573ce1e7cdca2aecc0f76b"
+    },
+    {
+      "path": "internal/memory/scope_instructions.go",
+      "sha256": "fabed4b11ecfce1734374c8a815f9826450d7aa38840761e3ac042b78a7fa5cc"
+    },
+    {
+      "path": "internal/memory/semantic.go",
+      "sha256": "87b634c6d6b3a33f0e5c48b6a7224e681dea757daa0a24465bf57bba76ebda9b"
+    },
+    {
+      "path": "internal/memory/title.go",
+      "sha256": "31ac1189a3132d67c41abce18cf7be6249d5c23bfe6a79c7cd653588b84594b5"
+    },
+    {
+      "path": "internal/plugins/finance.go",
+      "sha256": "489cc445a4b2579d5dee6773d7c9860e7b436b306a1b4c23f3bfae8c135bfd45"
+    },
+    {
+      "path": "internal/plugins/manager.go",
+      "sha256": "5a2b3cb87610b1529d12d9ac3ce81a14d3861a38d156e601c4d643005ff25759"
+    },
+    {
+      "path": "internal/plugins/memory.go",
+      "sha256": "2616eb121fd8bc60fd1e53a3025864651373c517eb0e8d3c1b64c8d6f102c0f0"
+    },
+    {
+      "path": "internal/plugins/memory_retrieval.go",
+      "sha256": "16ca904dab6b12630c93e5e7a8d94e41b6dcea1dc529bb52d0e17cc4ce23b7d9"
+    },
+    {
+      "path": "internal/plugins/preset.go",
+      "sha256": "dbf1c0bd1fa5eed5b0ba44132dc5eece91089c2baba54ff30b825aa893943ca4"
+    },
+    {
+      "path": "internal/plugins/todo.go",
+      "sha256": "cc3b3ec3ce390e25fad37ceae6b74b25e7500f56dff75f6034db32deb1fdd25f"
+    },
+    {
+      "path": "internal/plugins/todo_arguments.go",
+      "sha256": "8cf3f21555ca824c0d38a3e3c7ac72124466cb1623ee183af7b6a93a68d44125"
+    },
+    {
+      "path": "internal/plugins/web.go",
+      "sha256": "0c8f8d177c3f4f2d1efd3b6180ef0bdabb0c90efde5fb9896796b05cd383e0c0"
+    },
+    {
+      "path": "internal/plugins/youtube.go",
+      "sha256": "ae32bbe6f0949a89f09f6608ed69fbc113b9cdd2be0228f920c93f42976f43ed"
+    },
+    {
+      "path": "internal/openrouter/client.go",
+      "sha256": "ba9d517142ac7bbfb155f2f3646a685cdbfe60e626946ccdc7cc589b9666b6e0"
+    },
+    {
+      "path": "internal/openrouter/context_profile.go",
+      "sha256": "741acfdf844c26c213c870a1c5f0ecd27287cf3f7860c112acbced8f2a69886c"
+    },
+    {
+      "path": "internal/openrouter/responses.go",
+      "sha256": "878f8f05bf0200c712795f01fd074367f3d97199baa7e59f73550f83c736c0d2"
+    },
+    {
+      "path": "internal/openrouter/responses_request.go",
+      "sha256": "235ea6d053e81c24b7f3bbea0254a9d030ccedf3707262b9f8be4faddb5ad7d0"
+    },
+    {
+      "path": "internal/openrouter/schema.go",
+      "sha256": "b415ff074729cfccf2a07a94ed88ffde9f122a3211f8f9761a39281c93709ae3"
+    },
+    {
+      "path": "internal/openrouter/usage.go",
+      "sha256": "b5111371f9f5beebcf25ccb736e7f0c282bc66fbbac98aca07b5968e516ffc1a"
+    },
+    {
+      "path": "internal/tools/bash.go",
+      "sha256": "2049c7af31792b3adae539dd5c8cb72f9cb65a80a849bbfc1fa26249bb4167b7"
+    },
+    {
+      "path": "internal/tools/cron.go",
+      "sha256": "c3c0f3298e937680caebde315772d935234b3f03ab916106c294151246e5e5ea"
+    },
+    {
+      "path": "internal/tools/db.go",
+      "sha256": "4ae0054fbe042d2aeb7a6514c36bde6ea3f95c863a431971331c715ef90a9a87"
+    },
+    {
+      "path": "internal/tools/file.go",
+      "sha256": "3d551b4b20f829a4bad2d795f90e5f2a35ea15669969a508a7869275da7d1e46"
+    },
+    {
+      "path": "internal/tools/finance.go",
+      "sha256": "98d8b7c5495bede226539826f3c5e3a254d89c5107328bb7942d42fce3166f9b"
+    },
+    {
+      "path": "internal/tools/registry.go",
+      "sha256": "97553306bd3c886376f83d01828bfda8b670e06effaab3423a8a455b30496749"
+    },
+    {
+      "path": "internal/tools/shellsnapshot.go",
+      "sha256": "fe27090624d3587b29e7beaa007a12d935b968f06ac1fa5bddc93da4743f4c27"
+    },
+    {
+      "path": "internal/tools/time.go",
+      "sha256": "e7a6acf4f951aec1fbfffbec5cf96c47196ef561ab16045268273378469e6f26"
+    },
+    {
+      "path": "internal/tools/todo.go",
+      "sha256": "cd94faa7867c48c84143982ef76c1a7fa8e906fa094dd3e3aaced8b2582b3ca3"
+    },
+    {
+      "path": "internal/tools/webfetch.go",
+      "sha256": "2b699d486aeff7e800048885f0ed72953d148c95a272c7a68ce4e7107c3f1a26"
+    },
+    {
+      "path": "internal/tools/websearch.go",
+      "sha256": "4b4370f278321626b221d47e6371e0905acadb05263e0a9b74fa78339ba46ace"
+    },
+    {
+      "path": "internal/tools/youtube.go",
+      "sha256": "11583778c1175321b18fe0a417ae7d77e2ceb360bbc92cb3cc08afc957b85402"
+    },
+    {
+      "path": "internal/composition/receipt.go",
+      "sha256": "9bfb8e4b1e8defb972940f42f508875de7489b4e857a5932d2fbed114ad5d822"
+    }
+  ],
+  "freeze_sha256": "13f839b3b6efeeaa2b25c32f9597e0467344368edbb3a7aa1d8c3dda43cdffe8",
+  "scope": "Uncommitted #159 production state; no v2 model inference occurred before this metadata was written."
+}

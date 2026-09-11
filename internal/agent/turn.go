@@ -147,6 +147,8 @@ func (s *Session) runOwnedTurn(
 	}
 	rendered := &progress.rendered
 	iteration := 0
+	recall := s.newRetrievalTurn()
+	modelTools := s.modelToolset()
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -179,11 +181,24 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
 			}
 		}
+		if iteration == 1 && !s.automaticRecallDisabled {
+			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
+		}
+		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
+			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
-			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 			Continuation: continuation,
+		}
+		composeInput, err = recall.fitContext(composeInput, s.composer)
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
+			return s.classifyLocalError(coordinator, err)
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
 		if err != nil {
@@ -232,6 +247,15 @@ func (s *Session) runOwnedTurn(
 				}
 			}
 		}
+		composeInput.MemoryData, composeInput.MemoryReceipt = recall.projection(coordinator.ctx)
+		composeInput, err = recall.fitContext(composeInput, s.composer)
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
+			return s.classifyLocalError(coordinator, err)
+		}
 		composed, err := s.composer.Compose(composeInput)
 		if err != nil {
 			if IsContextOverflow(err) {
@@ -239,6 +263,18 @@ func (s *Session) runOwnedTurn(
 				return err
 			}
 			return s.classifyLocalError(coordinator, err)
+		}
+		boundedData, boundedReceipt, reduced, err := recall.admitRequest(composed.Request)
+		if err != nil {
+			coordinator.selectCause(causeContextOverflow, err, 0)
+			return err
+		}
+		if reduced {
+			composeInput.MemoryData, composeInput.MemoryReceipt = boundedData, boundedReceipt
+			composed, err = s.composer.Compose(composeInput)
+			if err != nil {
+				return s.classifyLocalError(coordinator, err)
+			}
 		}
 		if required && failureCategory == memory.ContextCompactionFailureNone &&
 			composed.Snapshot.RetainedFirstEventID != plan.FirstRetained.ID {
@@ -253,6 +289,7 @@ func (s *Session) runOwnedTurn(
 			return overflow
 		}
 		composed.Snapshot.CompactionFailureCategory = failureCategory
+		recall.recordAccounting(composed.Snapshot.Memory)
 		if err := composed.Snapshot.Validate(); err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("validate final context snapshot: %w", err))
 		}
@@ -263,12 +300,17 @@ func (s *Session) runOwnedTurn(
 		if !coordinator.beginCommitBoundary() {
 			return s.observeTurnContext(coordinator)
 		}
-		_, err = s.history.Append(coordinator.ctx, lease, memory.EventInput{
+		snapshotEvent, err := s.history.Append(coordinator.ctx, lease, memory.EventInput{
 			ParentID: requestParentID, Type: memory.EventContextSnapshot, Payload: snapshotPayload,
 		})
 		if err != nil {
 			coordinator.abortCommitBoundary()
 			return s.classifyLocalError(coordinator, fmt.Errorf("persist context snapshot: %w", err))
+		}
+		if memoryReceipt != nil {
+			if activity, ok := ev.(MemoryActivityEvents); ok {
+				activity.MemoryRetrieved(snapshotEvent)
+			}
 		}
 		coordinator.finishCommitBoundary(memory.StageProvider)
 		req := composed.Request
@@ -493,7 +535,7 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
-				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
+				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, SearchMemory: recall.searchForTool(call.ID),
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),
@@ -501,7 +543,7 @@ func (s *Session) runOwnedTurn(
 				WorkspaceID: string(s.scope.WorkspaceID), ProjectID: string(s.scope.ProjectID),
 				LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
 			})
-			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
+			result, isErr, err := modelTools.ExecuteWithApprovalAuthorizedCompletion(
 				toolCtx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {

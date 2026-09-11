@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py", line 509, in <module>
+    {"freeze": freeze, "run": run, "seal-release": seal_release}[arguments.command](arguments)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py", line 372, in run
+    run_command([frozen["binary_path"], "-test.run=^" + test + "$", "-test.count=1",
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                 "-test.v", "-test.timeout=3h"], source, output / "execution", env)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/evie-memory-stage5/integrated-heldout-v2/run.py", line 132, in run_command
+    raise RuntimeError(f"command failed ({exit_code}); retained {output}.log")
+RuntimeError: command failed (1); retained /private/tmp/evie-memory-stage5/integrated-heldout-v2-reader/execution.log

@@ -1,0 +1,32 @@
+{
+  "fold-source-preservation-owners.py": {
+    "source": "/tmp/evie-memory-stage5/fold-source-preservation-owners.py",
+    "sha256": "e2b32b073ce9e493ccbcf34ee9f814febfd1aaf944c6d56cef312e71dff06dc7",
+    "mtime_ns": 1789108063494794212,
+    "bytes": 3569
+  },
+  "source-preservation-owner-fold.json": {
+    "source": "/tmp/evie-memory-stage5/source-preservation-owner-fold.json",
+    "sha256": "2ca40a6c55e31118f05599457cc372f04fe6ce50a09498d66be8a0f7d932d715",
+    "mtime_ns": 1789108069520012093,
+    "bytes": 11486
+  },
+  "164-165-preservation-staging-manifest.json": {
+    "source": "/tmp/evie-memory-stage5/164-165-preservation-staging-manifest.json",
+    "sha256": "d36da2dd4c040b5ce3b9b659838af5f0429568111f1e510312f31aa352d8d885",
+    "mtime_ns": 1789107782335778916,
+    "bytes": 2048
+  },
+  "reader-source-preservation-owner-manifest.json": {
+    "source": "/tmp/evie-memory-stage5/reader-source-preservation-owner-manifest.json",
+    "sha256": "3c83504e1e5a1c87c1743e4b2f4e4ed21ada21f3831208a5363dbbee388b2303",
+    "mtime_ns": 1789107927405862803,
+    "bytes": 7993
+  },
+  "commit-ownership-pre-heldout-v4.json": {
+    "source": "/tmp/evie-memory-stage5/commit-ownership-pre-heldout-v4.json",
+    "sha256": "aef9e2f58a4464b44d757eb081bc0dd3dfd1d9c53022cb3b125ef3ed6c9d1c65",
+    "mtime_ns": 1789107749491879882,
+    "bytes": 31834
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "status": "prepared_only_do_not_run_until_corrected_167_passes_and_is_committed",
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/run.py",
+    "seal-release",
+    "--development-freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+    "--development-report",
+    "/tmp/evie-memory-stage5/integrated-development-v4-resource/report.json",
+    "--repository",
+    "/Users/davidboktor/code/evie-memory-stage-5",
+    "--workload",
+    "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/workload.json",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-heldout-v1",
+    "--version",
+    "integrated-heldout-v1"
+  ],
+  "corpus_sha256": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd"
+}

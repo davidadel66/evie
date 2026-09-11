@@ -1,0 +1,22 @@
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/mother_after_debugging
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/mother_or_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/misleading_recent_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/compacted_mother
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/compacted_ambiguous
+    retrieval_reference_reader_evaluation_test.go:197: predeclared reference check failed: gift_not_guessed_before_disambiguation; raw answer retained
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/explicit_uuid
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/opaque_alias
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/no_evidence
+=== RUN   TestMemoryStage5ReferenceReaderEvaluation/scope_excluded_sister
+--- FAIL: TestMemoryStage5ReferenceReaderEvaluation (32.42s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/mother_after_debugging (3.81s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/mother_or_sister (2.14s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/misleading_recent_sister (3.20s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/compacted_mother (3.88s)
+    --- FAIL: TestMemoryStage5ReferenceReaderEvaluation/compacted_ambiguous (2.62s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/explicit_uuid (4.77s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/opaque_alias (6.68s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/no_evidence (1.64s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvaluation/scope_excluded_sister (3.41s)
+FAIL

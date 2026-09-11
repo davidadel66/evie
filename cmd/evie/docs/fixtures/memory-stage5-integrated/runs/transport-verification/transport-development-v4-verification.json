@@ -1,0 +1,22 @@
+{
+  "archived_original_times_and_modes_verified": true,
+  "content_integrity_verified": true,
+  "direct_file_checkout_metadata_difference_count": 0,
+  "direct_file_checkout_metadata_differences": [],
+  "direct_file_original_times_and_modes_claimed_preserved_by_git": false,
+  "direct_original_files": 64,
+  "directory": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v4",
+  "freeze_sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+  "input_archive_members": 48,
+  "limitations": [
+    "Hash integrity is relative to retained manifests and repository identity; no signature or independent authenticity is claimed.",
+    "A fresh Git checkout preserves contents, not original direct-file mtimes or complete POSIX modes. Recorded originals remain in the plan and archive metadata.",
+    "No executable was rebuilt, model invoked, source tree extracted, or evaluation result reclassified. This is transport verification, not a new measurement or release gate."
+  ],
+  "preservation_archive_members": 2041,
+  "preservation_manifest_sha256": "34ae44a3477a2bc5ea8464dc9c0deb612318566f4f062b9a0fda7f29a78d0d1f",
+  "repository_records_verified": 15,
+  "retained_files": 73,
+  "schema_version": 1,
+  "source_archive_members": 394
+}

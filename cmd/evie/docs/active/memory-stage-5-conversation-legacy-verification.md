@@ -1,0 +1,7 @@
+# Conversation retrieval: Stage 3 migration fixture compatibility (#157)
+
+The Stage 3 correction fixture populates an old canonical schema using public current prepare/apply APIs. #157's fenced event append also maintains derived conversation retrieval, so those current APIs require the derived index during fixture population. Without it, the legacy test fails before any startup migration, rollback or replay assertion executes.
+
+The fixture temporarily creates the current derived retrieval schema solely for population. It then removes all post-version retrieval objects through the shared historical-fixture helper, verifies byte-for-byte preservation of canonical memory/operations/events, and checks the original Stage 3 correction primary key and operation schema versions. Startup still receives the genuine prior canonical schema with no later retrieval objects. No production projection error is ignored or treated as success; migration/rollback/concurrent-open assertions remain intact.
+
+All three original tests fail on untouched `97c630c`. After this fixture correction, `go test ./internal/eviedb -run '^(TestCorrectionSchemaStage3UpgradePreservesBytesAndReplay|TestCorrectionSchemaMigrationRollbackAndCommitResolution|TestCorrectionSchemaConcurrentAndRepeatedStartup)$' -count=1 -v` passes in 1.118s, including operation failure, cancellation, absent commit and durable-commit/response-lost cases. `go vet ./internal/eviedb` passes. The implementation owner folds this correction into the owning #157 commit.

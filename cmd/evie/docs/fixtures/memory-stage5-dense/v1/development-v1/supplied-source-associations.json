@@ -1,0 +1,503 @@
+{
+  "derived_from_trace_sha256": "ad91007871ad9929e60aeba7552483d127b9e90065acb03c1e6aee9bd7429545",
+  "original_corpus_claim_mappings": 192,
+  "original_empty_source_link_ids": 192,
+  "observed_association_count": 25,
+  "associations": [
+    {
+      "fixture_id": "distractor-190/claim",
+      "claim_id": "095b1784-4bf0-4dbb-84f0-557c83a3ec64",
+      "source_link_id": "4afd0ddd-695b-47d1-9f0e-262b7008816a",
+      "source_event_id": "5e100112-7a56-44c8-9698-b7e7a7dae016",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "distractor-200/claim",
+      "claim_id": "0e047c7b-2f49-4e7b-8d61-ac8f4bd3ca77",
+      "source_link_id": "ba511185-603c-44a2-a5eb-75e34c66d736",
+      "source_event_id": "b6faa9fe-4d12-4ae7-83b0-a43cfccc58bb",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "distractor-180/claim",
+      "claim_id": "0e92b4da-393f-4047-b2ad-1e71349913b6",
+      "source_link_id": "394543a5-9f06-414e-85ae-12e8f0ba6370",
+      "source_event_id": "2f622f4f-1d50-4a35-adc5-63f320ccdf40",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "development-08-forbidden/claim",
+      "claim_id": "120f0187-4521-4685-a6c9-1861254f8c50",
+      "source_link_id": "7d728cfb-908d-4e5b-bf59-4e07a7462b35",
+      "source_event_id": "8d0ee252-4572-48dd-b08d-18e2dcc65031",
+      "source_session_id": "96b577a7-11f5-43fc-bf50-5c3aa3f9468d",
+      "first_observed_trace": {
+        "case": "development-04-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "distractor-040/claim",
+      "claim_id": "1355fbed-92dd-4eab-b67e-66ff9e82fc5f",
+      "source_link_id": "3b48a017-ec13-4c96-ad61-f0145ba2a821",
+      "source_event_id": "8551a5ff-d46a-49c5-b2e0-f022f0a2dd48",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "distractor-290/claim",
+      "claim_id": "14b0c82d-2615-46ec-a0c7-cfa2988f024e",
+      "source_link_id": "f97fd579-1f6c-49ce-97bf-00f611a776ad",
+      "source_event_id": "6e62a645-db2b-450f-b73b-a5c139d3481f",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 3
+    },
+    {
+      "fixture_id": "development-04/claim",
+      "claim_id": "1b1d4cd9-fbcb-4b4d-8cdd-4fb87e54c961",
+      "source_link_id": "ee356f2d-6677-4892-88b9-0798dd77f580",
+      "source_event_id": "8655c713-7280-471e-bf24-2ce9a76ccc7b",
+      "source_session_id": "96b577a7-11f5-43fc-bf50-5c3aa3f9468d",
+      "first_observed_trace": {
+        "case": "development-04-paraphrase",
+        "method": "hybrid",
+        "repetition": 0
+      },
+      "observed_count": 15
+    },
+    {
+      "fixture_id": "heldout-12-forbidden/claim",
+      "claim_id": "1bfd4d39-c1c7-4e66-8683-7f32f8eef12d",
+      "source_link_id": "a745e55a-cd9e-4cc9-a105-fcba71e188c3",
+      "source_event_id": "b3207a06-d5d8-4f81-8204-b46a83d8b689",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "development-02/claim",
+      "claim_id": "217b6331-5ad0-48b0-9980-142f8a4e5385",
+      "source_link_id": "095ecd18-8f4c-47d8-a720-bce967be7ec8",
+      "source_event_id": "9a427306-ceb5-4c3e-8933-9137d2b8fa46",
+      "source_session_id": "ca285383-d359-490b-bd2f-12c82d133090",
+      "first_observed_trace": {
+        "case": "development-02-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 12
+    },
+    {
+      "fixture_id": "distractor-210/claim",
+      "claim_id": "28dc7b16-b5b6-4317-afeb-4ec88940a2e3",
+      "source_link_id": "f4dc08f2-943c-4b40-b6f2-dfb96b4e3410",
+      "source_event_id": "449eea77-f641-481d-ac3f-186467ed05e2",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-10-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 3
+    },
+    {
+      "fixture_id": "heldout-00/claim",
+      "claim_id": "2cc53f62-c42a-42c0-9ff2-c2204a23d147",
+      "source_link_id": "12b666d1-9f4c-4841-beb0-3d7bad2c96ea",
+      "source_event_id": "dc991014-90ec-487a-bcb2-4a93b926bb50",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-02-paraphrase",
+        "method": "hybrid",
+        "repetition": 0
+      },
+      "observed_count": 21
+    },
+    {
+      "fixture_id": "development-14-forbidden/claim",
+      "claim_id": "321c197a-9ad4-42ce-8227-8c948e87d930",
+      "source_link_id": "083f52fb-5f4a-4553-887c-4e079857c079",
+      "source_event_id": "f660305e-f483-496c-b47d-786465f2bbed",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "heldout-12/claim",
+      "claim_id": "40537d4b-c4d2-4570-aefc-54a3f11382cd",
+      "source_link_id": "801eb899-19d0-4dd8-95f4-5ae8182b5706",
+      "source_event_id": "b3afa08d-c2b4-48ae-be6d-56e1021e2dd7",
+      "source_session_id": "ca285383-d359-490b-bd2f-12c82d133090",
+      "first_observed_trace": {
+        "case": "development-02-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "development-02-forbidden/claim",
+      "claim_id": "4e7d95f0-b025-4f50-8bcd-2d1997a9f248",
+      "source_link_id": "243318a8-446d-43ae-b4aa-caa2b34a4bee",
+      "source_event_id": "6fb07726-f80e-4dc5-928c-14969d5d3f9c",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "heldout-10/claim",
+      "claim_id": "5353df57-7a4b-4292-9cbb-976a140f2658",
+      "source_link_id": "5bfcf141-911e-4cfa-90bc-ae9fc16b76eb",
+      "source_event_id": "88582888-61bf-4cb1-b8b7-cd904d01848f",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-06-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 21
+    },
+    {
+      "fixture_id": "development-10/claim",
+      "claim_id": "85e04b70-4273-4e6f-b1e6-59865e7c0eb5",
+      "source_link_id": "1f7ac088-3497-40ac-a576-a82e7b9af1e4",
+      "source_event_id": "8c98f513-930f-434d-81f5-0c58753445c0",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-00-lexical_control",
+        "method": "hybrid",
+        "repetition": 0
+      },
+      "observed_count": 12
+    },
+    {
+      "fixture_id": "heldout-06-forbidden/claim",
+      "claim_id": "8bc402cf-80ab-4be9-85b3-ff3318bca681",
+      "source_link_id": "42998697-2120-4639-9827-d6e6aa17fc35",
+      "source_event_id": "d2cd2f34-ee33-4c57-9c68-3e50e4990f16",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "development-12/claim",
+      "claim_id": "8c34c17f-2f53-44a8-a2fb-e3d09694b344",
+      "source_link_id": "a0c73720-e203-44b5-9269-503aefc7f58c",
+      "source_event_id": "95cb55d0-a321-42ca-aaba-98297c8587cd",
+      "source_session_id": "ca285383-d359-490b-bd2f-12c82d133090",
+      "first_observed_trace": {
+        "case": "development-12-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 12
+    },
+    {
+      "fixture_id": "development-14/claim",
+      "claim_id": "9e4dcdda-21bb-495b-b4a4-eda0927a1f3a",
+      "source_link_id": "fae7e735-4624-40c5-a636-486316a6b90f",
+      "source_event_id": "1db5d592-3e98-497a-acd3-008409e7cfa0",
+      "source_session_id": "96b577a7-11f5-43fc-bf50-5c3aa3f9468d",
+      "first_observed_trace": {
+        "case": "development-04-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 18
+    },
+    {
+      "fixture_id": "development-06/claim",
+      "claim_id": "a75a6d02-4333-4c4e-bfde-58a4af9d7810",
+      "source_link_id": "bd71298e-9094-4256-8a9d-6d0263307573",
+      "source_event_id": "4d2b3102-eed2-4cc2-98f8-89d550ee9ab5",
+      "source_session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+      "first_observed_trace": {
+        "case": "development-06-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 12
+    },
+    {
+      "fixture_id": "development-00/claim",
+      "claim_id": "c469bcde-c9d1-468e-a630-6de17818c31e",
+      "source_link_id": "764ec006-0d2c-4a6e-848d-dfb862245d02",
+      "source_event_id": "b238e19d-f296-4f77-82b0-8793707b7da2",
+      "source_session_id": "6d0b5b4e-c1fc-4247-8408-eb18a8759ca3",
+      "first_observed_trace": {
+        "case": "development-00-paraphrase",
+        "method": "hybrid",
+        "repetition": 0
+      },
+      "observed_count": 30
+    },
+    {
+      "fixture_id": "heldout-14-forbidden/claim",
+      "claim_id": "e513fa7d-ff28-4412-b51e-f4cc7ce4470a",
+      "source_link_id": "c3d91322-7f06-44f3-aa85-dc87fca0312d",
+      "source_event_id": "7cbfc850-ea59-4cc1-b136-598b5e5d15dc",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-lexical_control",
+        "method": "hybrid",
+        "repetition": 0
+      },
+      "observed_count": 3
+    },
+    {
+      "fixture_id": "heldout-08-forbidden/claim",
+      "claim_id": "f9c1f060-8f2a-48ea-863b-f9472a22059e",
+      "source_link_id": "4f786c52-0333-41a8-b24d-7c5cd7205978",
+      "source_event_id": "f751c899-ac8e-4bbc-883e-4ae24fc5896d",
+      "source_session_id": "96b577a7-11f5-43fc-bf50-5c3aa3f9468d",
+      "first_observed_trace": {
+        "case": "development-04-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 15
+    },
+    {
+      "fixture_id": "heldout-08/claim",
+      "claim_id": "fbac30f7-7991-4be5-8d8c-4ec0df29d79d",
+      "source_link_id": "6ed20799-52bf-4342-997e-74621dbb0349",
+      "source_event_id": "45e2cb75-3370-47cd-a804-cadffd2a77bd",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 6
+    },
+    {
+      "fixture_id": "development-08/claim",
+      "claim_id": "fe6c4001-d788-4675-97c4-4d0b8e97313a",
+      "source_link_id": "45447215-3887-42a0-93e6-0d040e4522f3",
+      "source_event_id": "64978431-c1e9-4c26-aaef-3b7a7a266429",
+      "source_session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+      "first_observed_trace": {
+        "case": "development-08-paraphrase",
+        "method": "lexical",
+        "repetition": 0
+      },
+      "observed_count": 12
+    }
+  ],
+  "limitation": "Derived only from actual supplied accepted evidence and matching durable receipts. Corpus Claims never supplied have no reconstructed Source Link ID. Original mapping/freezes unchanged.",
+  "unobserved_fixture_ids": [
+    "development-00-forbidden/claim",
+    "development-04-forbidden/claim",
+    "development-06-forbidden/claim",
+    "development-10-forbidden/claim",
+    "development-12-forbidden/claim",
+    "distractor-000/claim",
+    "distractor-002/claim",
+    "distractor-004/claim",
+    "distractor-006/claim",
+    "distractor-008/claim",
+    "distractor-010/claim",
+    "distractor-012/claim",
+    "distractor-014/claim",
+    "distractor-016/claim",
+    "distractor-018/claim",
+    "distractor-020/claim",
+    "distractor-022/claim",
+    "distractor-024/claim",
+    "distractor-026/claim",
+    "distractor-028/claim",
+    "distractor-030/claim",
+    "distractor-032/claim",
+    "distractor-034/claim",
+    "distractor-036/claim",
+    "distractor-038/claim",
+    "distractor-042/claim",
+    "distractor-044/claim",
+    "distractor-046/claim",
+    "distractor-048/claim",
+    "distractor-050/claim",
+    "distractor-052/claim",
+    "distractor-054/claim",
+    "distractor-056/claim",
+    "distractor-058/claim",
+    "distractor-060/claim",
+    "distractor-062/claim",
+    "distractor-064/claim",
+    "distractor-066/claim",
+    "distractor-068/claim",
+    "distractor-070/claim",
+    "distractor-072/claim",
+    "distractor-074/claim",
+    "distractor-076/claim",
+    "distractor-078/claim",
+    "distractor-080/claim",
+    "distractor-082/claim",
+    "distractor-084/claim",
+    "distractor-086/claim",
+    "distractor-088/claim",
+    "distractor-090/claim",
+    "distractor-092/claim",
+    "distractor-094/claim",
+    "distractor-096/claim",
+    "distractor-098/claim",
+    "distractor-100/claim",
+    "distractor-102/claim",
+    "distractor-104/claim",
+    "distractor-106/claim",
+    "distractor-108/claim",
+    "distractor-110/claim",
+    "distractor-112/claim",
+    "distractor-114/claim",
+    "distractor-116/claim",
+    "distractor-118/claim",
+    "distractor-120/claim",
+    "distractor-122/claim",
+    "distractor-124/claim",
+    "distractor-126/claim",
+    "distractor-128/claim",
+    "distractor-130/claim",
+    "distractor-132/claim",
+    "distractor-134/claim",
+    "distractor-136/claim",
+    "distractor-138/claim",
+    "distractor-140/claim",
+    "distractor-142/claim",
+    "distractor-144/claim",
+    "distractor-146/claim",
+    "distractor-148/claim",
+    "distractor-150/claim",
+    "distractor-152/claim",
+    "distractor-154/claim",
+    "distractor-156/claim",
+    "distractor-158/claim",
+    "distractor-160/claim",
+    "distractor-162/claim",
+    "distractor-164/claim",
+    "distractor-166/claim",
+    "distractor-168/claim",
+    "distractor-170/claim",
+    "distractor-172/claim",
+    "distractor-174/claim",
+    "distractor-176/claim",
+    "distractor-178/claim",
+    "distractor-182/claim",
+    "distractor-184/claim",
+    "distractor-186/claim",
+    "distractor-188/claim",
+    "distractor-192/claim",
+    "distractor-194/claim",
+    "distractor-196/claim",
+    "distractor-198/claim",
+    "distractor-202/claim",
+    "distractor-204/claim",
+    "distractor-206/claim",
+    "distractor-208/claim",
+    "distractor-212/claim",
+    "distractor-214/claim",
+    "distractor-216/claim",
+    "distractor-218/claim",
+    "distractor-220/claim",
+    "distractor-222/claim",
+    "distractor-224/claim",
+    "distractor-226/claim",
+    "distractor-228/claim",
+    "distractor-230/claim",
+    "distractor-232/claim",
+    "distractor-234/claim",
+    "distractor-236/claim",
+    "distractor-238/claim",
+    "distractor-240/claim",
+    "distractor-242/claim",
+    "distractor-244/claim",
+    "distractor-246/claim",
+    "distractor-248/claim",
+    "distractor-250/claim",
+    "distractor-252/claim",
+    "distractor-254/claim",
+    "distractor-256/claim",
+    "distractor-258/claim",
+    "distractor-260/claim",
+    "distractor-262/claim",
+    "distractor-264/claim",
+    "distractor-266/claim",
+    "distractor-268/claim",
+    "distractor-270/claim",
+    "distractor-272/claim",
+    "distractor-274/claim",
+    "distractor-276/claim",
+    "distractor-278/claim",
+    "distractor-280/claim",
+    "distractor-282/claim",
+    "distractor-284/claim",
+    "distractor-286/claim",
+    "distractor-288/claim",
+    "distractor-292/claim",
+    "distractor-294/claim",
+    "distractor-296/claim",
+    "distractor-298/claim",
+    "distractor-300/claim",
+    "distractor-302/claim",
+    "distractor-304/claim",
+    "distractor-306/claim",
+    "distractor-308/claim",
+    "distractor-310/claim",
+    "distractor-312/claim",
+    "distractor-314/claim",
+    "distractor-316/claim",
+    "distractor-318/claim",
+    "heldout-00-forbidden/claim",
+    "heldout-02-forbidden/claim",
+    "heldout-02/claim",
+    "heldout-04-forbidden/claim",
+    "heldout-04/claim",
+    "heldout-06/claim",
+    "heldout-10-forbidden/claim",
+    "heldout-14/claim"
+  ]
+}
