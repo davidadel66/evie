@@ -425,7 +425,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	composed, err := s.composer.Compose(ContextComposeInput{
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
-		Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+		Tools: s.modelToolset().Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 	})
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)

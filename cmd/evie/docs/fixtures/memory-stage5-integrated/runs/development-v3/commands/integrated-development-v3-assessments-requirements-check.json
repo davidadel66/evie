@@ -1,0 +1,295 @@
+{
+  "assessments": [
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev17_conflict_newer_owner-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev18_conflict_tentative_update-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev19_quoted_other_person-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev20_assistant_inference-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev21_unanswerable-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev22_memory_unavailable-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev23_no_memory_needed-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    },
+    {
+      "path": "/tmp/evie-memory-stage5/integrated-development-v3-assessments-requirements/dev24_scope_boundary-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered_by_assessor": true
+    }
+  ],
+  "schema_valid": true,
+  "semantic_judging_performed_by_helper": false,
+  "release_ready": false
+}

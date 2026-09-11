@@ -1,0 +1,924 @@
+{
+  "schema_version": 1,
+  "reviewed_at_utc": "2026-09-11T06:02:24.223490+00:00",
+  "repository": "/Users/davidboktor/code/evie-memory-stage-5",
+  "base": "f27546d5872c3c175dc45fca0ce814cbb5eb5afb",
+  "head": "52d00bf5aa40c6323321253b54e66bf153de7ccd",
+  "read_only_audit": true,
+  "commit_count": 12,
+  "issues_in_order": [
+    156,
+    157,
+    158,
+    165,
+    159,
+    163,
+    164,
+    160,
+    161,
+    162,
+    166,
+    167
+  ],
+  "exactly_one_each_156_through_167": true,
+  "mapping": [
+    {
+      "issue": 156,
+      "commit": "fae7dbe760f65491c429c9c8e76a5d3051c21996",
+      "subject": "feat(memory): search accepted evidence with original sources (#156)",
+      "dependencies": [],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "cmd/evie/main.go",
+        "cmd/evie/memory_retrieval_host.go",
+        "internal/agent/context.go",
+        "internal/agent/prompt.go",
+        "internal/agent/retrieval.go",
+        "internal/agent/turn.go",
+        "internal/eviedb/db.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_index.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/memory/event.go",
+        "internal/memory/retrieval.go",
+        "internal/memory/retrieval_receipt.go",
+        "internal/memory/retrieval_render.go",
+        "internal/plugins/memory.go",
+        "internal/plugins/memory_retrieval.go",
+        "internal/plugins/preset.go",
+        "internal/tools/registry.go",
+        "internal/web/history.go",
+        "internal/web/memory_evidence.go",
+        "internal/web/serve.go",
+        "internal/web/ui/src/App.tsx",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/artifacts/Panel.tsx",
+        "internal/web/ui/src/chat/Activity.tsx",
+        "internal/web/ui/src/chat/Chat.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.tsx",
+        "internal/web/ui/src/chat/activityModel.ts",
+        "internal/web/ui/src/store/events.ts",
+        "internal/web/ui/src/store/reducer.ts"
+      ],
+      "test_or_experiment_check_files": [
+        "cmd/evie/memory_retrieval_host_test.go",
+        "cmd/evie/semantic_memory_stage3_acceptance_test.go",
+        "internal/agent/retrieval_acceptance_test.go",
+        "internal/agent/retrieval_measurement_test.go",
+        "internal/agent/retrieval_scope_acceptance_test.go",
+        "internal/eviedb/retrieval_legacy_fixture_test.go",
+        "internal/eviedb/semantic_test.go",
+        "internal/plugins/memory_test.go",
+        "internal/plugins/preset_test.go",
+        "internal/web/memory_evidence_test.go",
+        "internal/web/ui/src/api/memoryEvidence.test.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-accepted-legacy-verification.md",
+        "cmd/evie/docs/active/memory-stage-5-implementation.md"
+      ],
+      "changed_file_count": 48,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "6f4af8f32955432587e69b17aae2c55a0953f8ab84a73030e28c4ccb2290d4f4"
+    },
+    {
+      "issue": 157,
+      "commit": "5588b07212ea643290f3752652356fb2b0202c3c",
+      "subject": "feat(memory): retrieve scoped conversation excerpts (#157)",
+      "dependencies": [
+        156
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/eviedb/events.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_conversation.go",
+        "internal/eviedb/retrieval_conversation_index.go",
+        "internal/eviedb/retrieval_index.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/memory/retrieval.go",
+        "internal/plugins/memory.go",
+        "internal/plugins/memory_retrieval.go",
+        "internal/plugins/preset.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.tsx"
+      ],
+      "test_or_experiment_check_files": [
+        "cmd/evie/semantic_memory_stage3_acceptance_test.go",
+        "internal/agent/retrieval_conversation_acceptance_test.go",
+        "internal/agent/retrieval_conversation_scope_acceptance_test.go",
+        "internal/agent/retrieval_measurement_test.go",
+        "internal/agent/retrieval_retirement_acceptance_test.go",
+        "internal/eviedb/candidate_review_correction_schema_test.go",
+        "internal/plugins/memory_test.go",
+        "internal/web/memory_conversation_evidence_test.go",
+        "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-conversation-legacy-verification.md",
+        "cmd/evie/docs/active/memory-stage-5-implementation.md"
+      ],
+      "changed_file_count": 25,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "f0895aec9c49258cd9a96c99f0d64eb7abc1dca187f7a7d56d1ef76d26847777"
+    },
+    {
+      "issue": 158,
+      "commit": "1a64fde6348bcafb84b26e74937ea19ca8a8919a",
+      "subject": "feat(memory): expand retrieved conversation context safely (#158)",
+      "dependencies": [
+        157
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/history.go",
+        "internal/agent/retrieval.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_expansion.go",
+        "internal/memory/retrieval.go",
+        "internal/plugins/memory.go",
+        "internal/plugins/memory_retrieval.go",
+        "internal/plugins/preset.go"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_expansion_acceptance_test.go",
+        "internal/agent/retrieval_expansion_boundary_test.go",
+        "internal/agent/retrieval_expansion_coverage_test.go",
+        "internal/agent/retrieval_expansion_limits_test.go",
+        "internal/agent/retrieval_expansion_measurement_test.go",
+        "internal/plugins/memory_test.go",
+        "internal/web/memory_expansion_evidence_test.go"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-implementation.md"
+      ],
+      "changed_file_count": 17,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "2f82ad74891ebda57336ba5373997b0c0c6c9b51a5eaf75aeffd1857c70fc9e2"
+    },
+    {
+      "issue": 165,
+      "commit": "78fbfef5cdde6ff32759126663388ed58b0ae8da",
+      "subject": "experiment(memory): select measured local semantic retrieval (#165)",
+      "dependencies": [
+        157
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "scripts/memory-retrieval-spike/check_endpoint.py",
+        "scripts/memory-retrieval-spike/check_sqlite_rebuild.py",
+        "scripts/memory-retrieval-spike/endpoint.py",
+        "scripts/memory-retrieval-spike/fixtures.py",
+        "scripts/memory-retrieval-spike/main.go",
+        "scripts/memory-retrieval-spike/measure.py"
+      ],
+      "test_or_experiment_check_files": [
+        "scripts/memory-retrieval-spike/check_endpoint.py",
+        "scripts/memory-retrieval-spike/check_sqlite_rebuild.py"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-implementation.md",
+        "docs/experiments/memory-retrieval-spike/DECISION.md",
+        "docs/experiments/memory-retrieval-spike/v1/development-decision.md",
+        "scripts/memory-retrieval-spike/README.md"
+      ],
+      "changed_file_count": 30,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "8c0ae618d9f67efa2d7bf0bfca7176a9ac0a0f12e401c9fb2e161599a852c365"
+    },
+    {
+      "issue": 159,
+      "commit": "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68",
+      "subject": "feat(memory): expose historical and conflicting evidence (#159)",
+      "dependencies": [
+        157
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/prompt.go",
+        "internal/agent/retrieval.go",
+        "internal/agent/turn.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_conflict.go",
+        "internal/eviedb/retrieval_conversation.go",
+        "internal/eviedb/retrieval_conversation_index.go",
+        "internal/eviedb/retrieval_expansion.go",
+        "internal/eviedb/retrieval_index.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/eviedb/retrieval_temporal.go",
+        "internal/memory/retrieval.go",
+        "internal/memory/retrieval_outcome.go",
+        "internal/plugins/memory_retrieval.go",
+        "internal/web/memory_evidence.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.tsx",
+        "internal/web/ui/src/store/reducer.ts"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_acceptance_test.go",
+        "internal/agent/retrieval_conflict_acceptance_test.go",
+        "internal/agent/retrieval_historical_acceptance_test.go",
+        "internal/agent/retrieval_historical_expansion_test.go",
+        "internal/agent/retrieval_production_reader_evaluation_test.go",
+        "internal/agent/retrieval_reader_evaluation_test.go",
+        "internal/agent/retrieval_temporal_acceptance_test.go",
+        "internal/web/memory_historical_evidence_test.go",
+        "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-implementation.md"
+      ],
+      "changed_file_count": 169,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "23232159593efcb167d8df3a3f555c4af403e2c8eeaad618aa003883e2438bc3"
+    },
+    {
+      "issue": 163,
+      "commit": "05ab9a8da3c1949c187df2afebaeb744fd77976a",
+      "subject": "feat(memory): inspect each answer's original requests (#163)",
+      "dependencies": [
+        157
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/eviedb/semantic_lifecycle.go",
+        "internal/web/history.go",
+        "internal/web/memory_evidence.go",
+        "internal/web/memory_receipt.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.tsx",
+        "internal/web/ui/src/store/reducer.ts"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_historical_acceptance_test.go",
+        "internal/agent/retrieval_receipt_acceptance_test.go",
+        "internal/web/memory_receipt_evidence_test.go",
+        "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-source-inspection.md"
+      ],
+      "changed_file_count": 14,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "8a2efce0530ad4611cde3f47f8f02cb3b8d58c8e8865a5a79f48a456d8e81185"
+    },
+    {
+      "issue": 164,
+      "commit": "575fee4cf2a77176ccf8e483012df9d4c9715b1a",
+      "subject": "feat(memory): discover source-supported relationships (#164)",
+      "dependencies": [
+        156
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_graph.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/memory/retrieval.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/GraphEvidencePath.tsx",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/artifacts/memoryEvidenceAnchor.ts"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_graph_acceptance_test.go",
+        "internal/agent/retrieval_graph_experiment_test.go",
+        "internal/web/ui/src/artifacts/GraphEvidencePath.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-graph.md"
+      ],
+      "changed_file_count": 19,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "5dfded953e4d8b1967185a27bbd54bb5c4c18e3c15e9d310216a4083a33f0420"
+    },
+    {
+      "issue": 160,
+      "commit": "c8fab78089ee6082a50f08aadd8a21f85709819e",
+      "subject": "feat(memory): recall evidence for ordinary messages (#160)",
+      "dependencies": [
+        157
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/agent.go",
+        "internal/agent/retrieval.go",
+        "internal/agent/retrieval_automatic.go",
+        "internal/agent/turn.go",
+        "internal/eviedb/retrieval_conflict.go",
+        "internal/eviedb/retrieval_conversation.go",
+        "internal/memory/retrieval.go",
+        "internal/memory/retrieval_receipt.go"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_acceptance_test.go",
+        "internal/agent/retrieval_automatic_acceptance_test.go",
+        "internal/agent/retrieval_automatic_measurement_test.go",
+        "internal/agent/retrieval_automatic_reader_evaluation_test.go",
+        "internal/agent/retrieval_production_reader_evaluation_test.go",
+        "internal/agent/retrieval_reader_evaluation_test.go",
+        "internal/web/memory_automatic_evidence_test.go",
+        "internal/web/memory_evidence_test.go",
+        "internal/web/memory_historical_evidence_test.go"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-automatic.md"
+      ],
+      "changed_file_count": 119,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "9525cd381fa5eac35746b470a61b4ca9c858423462cb64ed82b71375fc6203b0"
+    },
+    {
+      "issue": 161,
+      "commit": "959f8accc1c426dd98c30dcc92b5ae5f982d15a2",
+      "subject": "feat(memory): resolve contextual references with eligible identities (#161)",
+      "dependencies": [
+        160
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/retrieval.go",
+        "internal/agent/retrieval_automatic.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_alias.go",
+        "internal/eviedb/retrieval_graph.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/memory/retrieval.go",
+        "internal/memory/retrieval_identity.go",
+        "internal/memory/retrieval_receipt.go"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_reference_acceptance_test.go",
+        "internal/agent/retrieval_reference_alias_test.go",
+        "internal/agent/retrieval_reference_boundary_test.go",
+        "internal/agent/retrieval_reference_cases_test.go",
+        "internal/agent/retrieval_reference_reader_evaluation_test.go"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-references.md"
+      ],
+      "changed_file_count": 250,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "bb84bc1555792ac9b4a40a616fe6179a83cdd8bcf96a63d4736c6733aa96381a"
+    },
+    {
+      "issue": 162,
+      "commit": "31334386b1e0f43b565d7c4a0b900435a7afab7e",
+      "subject": "feat(memory): reuse and refresh bounded turn investigations (#162)",
+      "dependencies": [
+        158,
+        160
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/retrieval.go",
+        "internal/agent/retrieval_accounting.go",
+        "internal/agent/retrieval_budget.go",
+        "internal/agent/retrieval_context.go",
+        "internal/agent/retrieval_refresh.go",
+        "internal/agent/turn.go",
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_correction_refresh.go",
+        "internal/eviedb/retrieval_graph.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/eviedb/retrieval_refresh_validity.go",
+        "internal/memory/retrieval.go",
+        "internal/memory/retrieval_investigation.go",
+        "internal/memory/retrieval_receipt.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.tsx"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_expansion_limits_test.go",
+        "internal/agent/retrieval_investigation_acceptance_test.go",
+        "internal/agent/retrieval_investigation_context_test.go",
+        "internal/agent/retrieval_investigation_continuation_test.go",
+        "internal/agent/retrieval_investigation_hard_limit_test.go",
+        "internal/agent/retrieval_investigation_identity_test.go",
+        "internal/agent/retrieval_investigation_measurement_test.go",
+        "internal/agent/retrieval_investigation_new_conflict_test.go",
+        "internal/agent/retrieval_investigation_refresh_view_test.go",
+        "internal/agent/retrieval_investigation_relations_test.go",
+        "internal/agent/retrieval_investigation_restored_information_test.go",
+        "internal/agent/retrieval_investigation_scope_refresh_test.go",
+        "internal/web/memory_investigation_test.go",
+        "internal/web/ui/src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+        "internal/web/ui/src/chat/MemoryActivity.test.tsx",
+        "internal/web/ui/src/chat/MemoryInvestigationActivity.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-investigation.md"
+      ],
+      "changed_file_count": 50,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "8318f63f7894aa1386120837607aacc83d14ededac9c9ea0799d2d1760358153"
+    },
+    {
+      "issue": 166,
+      "commit": "c3d94283955e90df50c92c2174360ed6d8cffb18",
+      "subject": "feat(memory): integrate verified local semantic retrieval (#166)",
+      "dependencies": [
+        164,
+        165
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/eviedb/retrieval.go",
+        "internal/eviedb/retrieval_conflict.go",
+        "internal/eviedb/retrieval_conversation.go",
+        "internal/eviedb/retrieval_conversation_index.go",
+        "internal/eviedb/retrieval_dense.go",
+        "internal/eviedb/retrieval_dense_conversation.go",
+        "internal/eviedb/retrieval_dense_index.go",
+        "internal/eviedb/retrieval_dense_query.go",
+        "internal/eviedb/retrieval_graph.go",
+        "internal/eviedb/retrieval_index.go",
+        "internal/eviedb/retrieval_inspection.go",
+        "internal/eviedb/retrieval_refresh_validity.go",
+        "internal/localembedding/client.go",
+        "internal/memory/retrieval.go",
+        "internal/web/ui/src/api/memoryEvidence.ts",
+        "internal/web/ui/src/artifacts/MemoryEvidence.tsx"
+      ],
+      "test_or_experiment_check_files": [
+        "cmd/evie/semantic_memory_stage3_acceptance_test.go",
+        "internal/agent/retrieval_dense_acceptance_test.go",
+        "internal/agent/retrieval_dense_experiment_test.go",
+        "internal/agent/retrieval_dense_lifecycle_test.go",
+        "internal/agent/retrieval_dense_manifest_acceptance_test.go",
+        "internal/agent/retrieval_dense_model_test.go",
+        "internal/agent/retrieval_dense_scope_acceptance_test.go",
+        "internal/agent/retrieval_dense_upgrade_test.go",
+        "internal/eviedb/retrieval_legacy_fixture_test.go",
+        "internal/localembedding/client_test.go",
+        "internal/localembedding/generation_test.go",
+        "internal/web/ui/src/artifacts/MemoryEvidenceDense.test.tsx"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-dense.md"
+      ],
+      "changed_file_count": 93,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "66928189e6afc6677a9f09d6c75fae5322c373d2731adf5e5b4f551279bd9503"
+    },
+    {
+      "issue": 167,
+      "commit": "52d00bf5aa40c6323321253b54e66bf153de7ccd",
+      "subject": "feat(memory): verify integrated pilot and freeze release gates (#167)",
+      "dependencies": [
+        159,
+        161,
+        162,
+        163,
+        166
+      ],
+      "dependencies_present_earlier": true,
+      "implementation_files": [
+        "internal/agent/agent.go",
+        "internal/agent/context.go",
+        "internal/agent/turn.go",
+        "internal/tools/registry.go"
+      ],
+      "test_or_experiment_check_files": [
+        "internal/agent/retrieval_ablation_acceptance_test.go",
+        "internal/agent/retrieval_integrated_evaluation_test.go",
+        "internal/agent/retrieval_integrated_fixture_test.go",
+        "internal/agent/retrieval_integrated_index_test.go",
+        "internal/agent/retrieval_integrated_local_test.go",
+        "internal/agent/retrieval_integrated_operating_test.go",
+        "internal/agent/retrieval_integrated_probe_test.go",
+        "internal/agent/retrieval_integrated_reader_test.go"
+      ],
+      "documentation_files": [
+        "cmd/evie/docs/active/memory-stage-5-integrated-pilot.md"
+      ],
+      "changed_file_count": 225,
+      "all_three_categories_present": true,
+      "changed_paths_sha256": "fb90eaeba975e68df7361bb53cef2935b6fc8d2f13935eb10373415c149b2eaf"
+    }
+  ],
+  "missing_internal_go_imports": [],
+  "missing_relative_ui_imports": [],
+  "possible_later_same_package_call_tokens": [
+    {
+      "commit": "fae7dbe760f65491c429c9c8e76a5d3051c21996",
+      "file": "internal/agent/retrieval.go",
+      "name": "RevalidateMemoryEvidence"
+    },
+    {
+      "commit": "fae7dbe760f65491c429c9c8e76a5d3051c21996",
+      "file": "internal/agent/retrieval.go",
+      "name": "SearchMemory"
+    },
+    {
+      "commit": "1a64fde6348bcafb84b26e74937ea19ca8a8919a",
+      "file": "internal/agent/retrieval.go",
+      "name": "RevalidateMemoryEvidence"
+    },
+    {
+      "commit": "1a64fde6348bcafb84b26e74937ea19ca8a8919a",
+      "file": "internal/agent/retrieval.go",
+      "name": "SearchMemory"
+    },
+    {
+      "commit": "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68",
+      "file": "internal/agent/retrieval.go",
+      "name": "RevalidateMemoryEvidence"
+    },
+    {
+      "commit": "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68",
+      "file": "internal/agent/retrieval.go",
+      "name": "SearchMemory"
+    }
+  ],
+  "all_declared_dependencies_precede_their_commit": true,
+  "scope_refresh_fts_ownership": {
+    "issue162_table": "memory_retrieval_event_fts",
+    "issue166_table": "memory_retrieval_event_fts_v3",
+    "authorized_scope_union_folded_into162": true,
+    "single_limit9_preserved": true
+  },
+  "limitations": [
+    "Static declaration/import checks do not prove each commit compiles or all acceptance criteria pass. No builds, heavy Go checks, model calls or held-out payload reads were performed. Existing isolated-stage verification records are evidence from their original runs, not rerun results."
+  ],
+  "commands": [
+    [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    [
+      "git",
+      "rev-list",
+      "--reverse",
+      "f27546d..52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "fae7dbe760f65491c429c9c8e76a5d3051c21996"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "5588b07212ea643290f3752652356fb2b0202c3c"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "1a64fde6348bcafb84b26e74937ea19ca8a8919a"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "78fbfef5cdde6ff32759126663388ed58b0ae8da"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "05ab9a8da3c1949c187df2afebaeb744fd77976a"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "575fee4cf2a77176ccf8e483012df9d4c9715b1a"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "c8fab78089ee6082a50f08aadd8a21f85709819e"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "959f8accc1c426dd98c30dcc92b5ae5f982d15a2"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "31334386b1e0f43b565d7c4a0b900435a7afab7e"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "c3d94283955e90df50c92c2174360ed6d8cffb18"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    ],
+    [
+      "git",
+      "cat-file",
+      "--batch",
+      "(unique tracked Go/TS source blobs only; no artifact payloads)"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "fae7dbe760f65491c429c9c8e76a5d3051c21996"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "fae7dbe760f65491c429c9c8e76a5d3051c21996"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "5588b07212ea643290f3752652356fb2b0202c3c"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "5588b07212ea643290f3752652356fb2b0202c3c"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "1a64fde6348bcafb84b26e74937ea19ca8a8919a"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "1a64fde6348bcafb84b26e74937ea19ca8a8919a"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "78fbfef5cdde6ff32759126663388ed58b0ae8da"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "78fbfef5cdde6ff32759126663388ed58b0ae8da"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "7012c0eb7b3345fafaa4c5b6abaf6fb389324b68"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "05ab9a8da3c1949c187df2afebaeb744fd77976a"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "05ab9a8da3c1949c187df2afebaeb744fd77976a"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "575fee4cf2a77176ccf8e483012df9d4c9715b1a"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "575fee4cf2a77176ccf8e483012df9d4c9715b1a"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "c8fab78089ee6082a50f08aadd8a21f85709819e"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "c8fab78089ee6082a50f08aadd8a21f85709819e"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "959f8accc1c426dd98c30dcc92b5ae5f982d15a2"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "959f8accc1c426dd98c30dcc92b5ae5f982d15a2"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "31334386b1e0f43b565d7c4a0b900435a7afab7e"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "31334386b1e0f43b565d7c4a0b900435a7afab7e"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "c3d94283955e90df50c92c2174360ed6d8cffb18"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "c3d94283955e90df50c92c2174360ed6d8cffb18"
+    ],
+    [
+      "git",
+      "show",
+      "-s",
+      "--format=%s",
+      "52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    ],
+    [
+      "git",
+      "diff-tree",
+      "--no-commit-id",
+      "--name-only",
+      "-r",
+      "52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    ],
+    [
+      "git",
+      "rev-parse",
+      "f27546d"
+    ],
+    [
+      "git",
+      "show",
+      "fae7dbe760f65491c429c9c8e76a5d3051c21996:internal/agent/retrieval.go"
+    ],
+    [
+      "git",
+      "diff",
+      "--name-status",
+      "f9706f8d0a5cb0d18fcdac22ef969e5bef824ccf",
+      "1a64fde6348bcafb84b26e74937ea19ca8a8919a"
+    ],
+    [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      "f9706f8d0a5cb0d18fcdac22ef969e5bef824ccf",
+      "52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    ],
+    [
+      "git",
+      "cat-file",
+      "--batch-all-objects",
+      "--batch-check=%(objectname) %(objecttype)"
+    ],
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "<each of273 local commits>",
+      "--",
+      "internal/agent/retrieval_automatic.go",
+      "internal/agent/retrieval_automatic_acceptance_test.go",
+      "internal/agent/retrieval_graph_acceptance_test.go",
+      "internal/eviedb/retrieval_graph.go"
+    ],
+    [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ]
+  ],
+  "completed_at_utc": "2026-09-11T06:22:29.485686+00:00",
+  "observed_head_at_completion": "52d00bf5aa40c6323321253b54e66bf153de7ccd",
+  "mapping_checks_pass": true,
+  "same_package_token_review": {
+    "disposition": "All six tokens are interface method declarations in MemoryRetrieval, not calls to later test helper implementations. Both contracts and Store methods exist from issue156.",
+    "unresolved_future_dependency_findings": [],
+    "bounded_static_review_only": true
+  },
+  "issue165_test_category_note": "Issue165 owns an experimental broker/measurement implementation, observable endpoint and persisted SQLite rebuild checks, and documentation; it does not contain a conventional Go _test.go file.",
+  "artifact_reproducibility_findings": [
+    {
+      "issue": 165,
+      "status": "preservation_fix_prepared_uncommitted",
+      "finding": "Original measured f9706f8d revision exists locally but is not an ancestor of the rewritten branch, so the old git-archive instruction alone is not fresh-clone reproducible.",
+      "repair": "docs/experiments/memory-retrieval-spike/reproduction/v1/README.md",
+      "exact_original_files_preserved": 173,
+      "all_archive_hashes_verified": true,
+      "original_broker_hash_matches": true,
+      "original_freeze_unchanged": true
+    },
+    {
+      "issue": 164,
+      "status": "explicit_original_source_gaps_remain",
+      "finding": "Measured graph source snapshots included disabled draft Automatic Recall code absent from the owning commit. Exact original source bytes could be recovered for296/300 v1 and299/301 v2 files; four distinct file hashes remain unavailable.",
+      "preservation_record": "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/README.md",
+      "v1_recovered": 296,
+      "v1_total": 300,
+      "v2_recovered": 299,
+      "v2_total": 301,
+      "original_both_binary_hashes_match": true,
+      "original_source_rebuild_demonstrated": false,
+      "original_freezes_unchanged": true
+    },
+    {
+      "issues": [
+        159,
+        160,
+        161
+      ],
+      "status": "independently_delegated_preservation",
+      "owner": "/root/experiment_readiness",
+      "finding": "Historical reader source hashes differ from later owning-commit edits; exact source preservation is delegated and is not asserted complete by this report."
+    },
+    {
+      "issues": [
+        162,
+        166
+      ],
+      "status": "retained_source_archives_present",
+      "finding": "Issue162 owns three frozen-go-inputs.tar.gz archives; issue166 owns v1/v2 compiled-source.tar.gz archives. Presence was reviewed without rerunning historical experiments or reading held-out payloads."
+    }
+  ],
+  "documentation_repairs_separate_from_read_only_commit_audit": true
+}

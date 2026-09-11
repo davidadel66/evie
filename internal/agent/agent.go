@@ -36,11 +36,12 @@ func (e sessionUnavailableError) Unwrap() []error {
 }
 
 type Session struct {
-	automaticRecallDisabled bool
-	mu                      sync.Mutex
-	client                  Client
-	compactor               Client
-	toolset                 tools.Toolset
+	automaticRecallDisabled  bool
+	modelMemoryReadsDisabled bool
+	mu                       sync.Mutex
+	client                   Client
+	compactor                Client
+	toolset                  tools.Toolset
 	// legacyToolsetPending supports the former New + Send(extra...) entry
 	// point. It is resolved once, before the first turn, and never changes
 	// afterward. New production sessions use NewWithToolset instead.
@@ -344,14 +345,28 @@ func NewWithCompactorAndToolset(
 	return session
 }
 
-// SessionOption configures a session before its first turn. Options do not
-// change the resolved capabilities, source access, or remote-memory opt-in.
+// SessionOption configures a session before its first turn. Options may narrow
+// model reads but do not expand the resolved capability grant, source access,
+// or remote-memory opt-in.
 type SessionOption func(*Session)
 
 // WithAutomaticMemoryRecall permits controlled tool-only evaluation or an
 // embedding host's narrower read policy. Production defaults to automatic recall.
 func WithAutomaticMemoryRecall(enabled bool) SessionOption {
 	return func(session *Session) { session.automaticRecallDisabled = !enabled }
+}
+
+// WithModelMemoryRetrieval narrows model-directed search and expansion while
+// retaining authorized automatic recall. Model-directed reads default to enabled.
+func WithModelMemoryRetrieval(enabled bool) SessionOption {
+	return func(session *Session) { session.modelMemoryReadsDisabled = !enabled }
+}
+
+func (s *Session) modelToolset() tools.Toolset {
+	if s.modelMemoryReadsDisabled {
+		return s.toolset.WithoutTools("memory_search", "memory_search_conversations", "memory_expand_conversation")
+	}
+	return s.toolset
 }
 
 func (s *Session) ContextProfile() openrouter.ContextProfileDiagnostics {

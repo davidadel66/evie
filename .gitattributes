@@ -5,3 +5,6 @@ cmd/evie/docs/fixtures/memory-stage5-automatic-reader/*/*-wire-response.raw bina
 
 cmd/evie/docs/fixtures/memory-stage5-reference-reader/*/*-wire-response.raw binary
 cmd/evie/docs/fixtures/memory-stage5-reference-reader/verification/161-export-ui-build.log binary
+
+# Preserve the byte-identified frozen protocol; the maintained procedure is text.
+cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v3/frozen/procedure.md binary

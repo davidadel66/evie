@@ -148,6 +148,7 @@ func (s *Session) runOwnedTurn(
 	rendered := &progress.rendered
 	iteration := 0
 	recall := s.newRetrievalTurn()
+	modelTools := s.modelToolset()
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -188,7 +189,7 @@ func (s *Session) runOwnedTurn(
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
-			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 			Continuation: continuation,
 		}
 		composeInput, err = recall.fitContext(composeInput, s.composer)
@@ -542,7 +543,7 @@ func (s *Session) runOwnedTurn(
 				WorkspaceID: string(s.scope.WorkspaceID), ProjectID: string(s.scope.ProjectID),
 				LeaseToken: uint64(lease.FencingToken), LeaseGeneration: uint64(lease.Generation),
 			})
-			result, isErr, err := s.toolset.ExecuteWithApprovalAuthorizedCompletion(
+			result, isErr, err := modelTools.ExecuteWithApprovalAuthorizedCompletion(
 				toolCtx, call, wrappedApprover, observeApproval, authorize,
 				func() {
 					if s.timing.beforeToolResultHandoff != nil {

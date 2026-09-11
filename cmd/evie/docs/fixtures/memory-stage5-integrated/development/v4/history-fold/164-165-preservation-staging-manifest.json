@@ -1,0 +1,52 @@
+{
+  "cmd/evie/docs/active/memory-stage-5-graph.md": {
+    "sha256": "eec1340efee434c6249676aaa1f0fbefee81e58122c803e5b1abdea8ee22f507",
+    "bytes": 12434,
+    "issue": 164
+  },
+  "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/README.md": {
+    "sha256": "6679d5ca40c1dcc940424f8a3541bc49a04e84798ba5004603515de4d87682e7",
+    "bytes": 4037,
+    "issue": 164
+  },
+  "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/v1/recovered-source-subset.tar.gz": {
+    "sha256": "247b48adb515144355aa351b77da3fc358c19864c573d5be4459a8be3ae35e9c",
+    "bytes": 851720,
+    "issue": 164
+  },
+  "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/v1/source-manifest.json": {
+    "sha256": "bf7e5beb96c4684b2453994075d8026a70a783b50c15214c60df6ed3b0f55f52",
+    "bytes": 94050,
+    "issue": 164
+  },
+  "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/v2/recovered-source-subset.tar.gz": {
+    "sha256": "0c400b8caff2ecc195b10b8bc7f48e380da012f12d667d0cf7141564c214a852",
+    "bytes": 861246,
+    "issue": 164
+  },
+  "cmd/evie/docs/fixtures/memory-stage5-graph/reproduction/v2/source-manifest.json": {
+    "sha256": "8b109c58caef6200455cfa226021901e4d9472626fdd38458b1ae1cb68c3be86",
+    "bytes": 94767,
+    "issue": 164
+  },
+  "docs/experiments/memory-retrieval-spike/DECISION.md": {
+    "sha256": "5089552bf52228bb05582ced9979f9b49439d875cfc5d0534b78e2b8f159aa71",
+    "bytes": 11244,
+    "issue": 165
+  },
+  "docs/experiments/memory-retrieval-spike/reproduction/v1/README.md": {
+    "sha256": "2d7d83611d46bb515c7f71dc9bcf4f5ab95edfca1d0fb0e2741c5cd9b94e8dde",
+    "bytes": 3691,
+    "issue": 165
+  },
+  "docs/experiments/memory-retrieval-spike/reproduction/v1/original-baseline-source.tar.gz": {
+    "sha256": "aeed6266e3d48fd095aa69686d6cbb594abd99ef679d46a30e12663f04f8ddac",
+    "bytes": 465241,
+    "issue": 165
+  },
+  "docs/experiments/memory-retrieval-spike/reproduction/v1/source-manifest.json": {
+    "sha256": "402311f2efe9f0beeaf22a1a8e270983c48355c39ffd81337d4b6ec98d841bce",
+    "bytes": 45892,
+    "issue": 165
+  }
+}

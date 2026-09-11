@@ -1,0 +1,10 @@
+{
+  "command": [
+    "/private/tmp/evie-memory-stage5/integrated-development-v2/integrated.test",
+    "-test.run=^TestMemoryStage5ProductionReaderPreflight$",
+    "-test.count=1",
+    "-test.v"
+  ],
+  "started_at_utc": "2026-09-11T04:26:34.217829+00:00",
+  "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v2/source"
+}
