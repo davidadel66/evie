@@ -1,0 +1,11 @@
+{
+  "process_exit_code": 0,
+  "report_sha256": "c30f96c8562b496a52a840ec80978750575853038b1ba597d20c919895920dcf",
+  "log_sha256": "1117ac5aee209c3d76409fba606fc8f2dee38a7cbc6d977bcfc01319247a803d",
+  "target_or_empty": 30,
+  "cases": 30,
+  "non_target_evidence": 0,
+  "p95_whole_turn_ns": 5001875,
+  "max_complete_request_bytes": 22893,
+  "max_serialized_memory_message_bytes": 2335
+}

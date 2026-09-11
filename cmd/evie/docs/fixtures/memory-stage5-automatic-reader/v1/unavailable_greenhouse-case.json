@@ -1,0 +1,19 @@
+{
+  "allowed_source_ids": null,
+  "answers": [
+    "",
+    "",
+    "I can’t verify what you planted, how settled the plan was, or the original source event ID because memory retrieval is unavailable in this session.\n\nIf you provide the original conversation excerpt with its event metadata, I can distinguish confirmed planting from tentative plans and cite the exact source event ID."
+  ],
+  "error": "\u003cnil\u003e",
+  "model_calls": 3,
+  "name": "unavailable_greenhouse",
+  "question": "What did I plant in the greenhouse, and how settled was the plan? Include the original source event ID.",
+  "required_source_ids": null,
+  "scripted_initial_searches": false,
+  "setup": null,
+  "whole_turn_elapsed_ns": 6296856500,
+  "withheld_source_ids": [
+    "4b4e11d5-0533-482a-841b-651995baa547"
+  ]
+}

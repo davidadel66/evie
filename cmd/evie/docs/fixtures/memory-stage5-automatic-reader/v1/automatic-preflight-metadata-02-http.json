@@ -1,0 +1,6 @@
+{
+  "content_type": "application/json",
+  "method": "GET",
+  "status": 200,
+  "url": "https://openrouter.ai/api/v1/models/openai/gpt-6-astra-20260903/endpoints"
+}

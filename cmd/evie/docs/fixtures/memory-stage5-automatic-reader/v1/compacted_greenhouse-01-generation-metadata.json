@@ -1,0 +1,25 @@
+{
+  "retrieved_at_utc": "2026-09-11T01:02:10.146435+00:00",
+  "http_status": 200,
+  "metadata_scope": "allowlisted generation/model/provider/accounting fields only; account/key labels omitted",
+  "data": {
+    "id": "gen-1789088460-3obileRvDW285N8AknvZ",
+    "model": "openai/gpt-6-astra-20260903",
+    "provider_name": "OpenAI",
+    "streamed": true,
+    "cancelled": false,
+    "finish_reason": "stop",
+    "native_finish_reason": "completed",
+    "tokens_prompt": 2782,
+    "tokens_completion": 64,
+    "native_tokens_prompt": 2338,
+    "native_tokens_completion": 74,
+    "native_tokens_reasoning": 0,
+    "native_tokens_cached": 0,
+    "latency": 2736,
+    "generation_time": 3681,
+    "total_cost": 0.0329175,
+    "upstream_inference_cost": 0,
+    "created_at": "2026-09-11T01:01:00.312Z"
+  }
+}

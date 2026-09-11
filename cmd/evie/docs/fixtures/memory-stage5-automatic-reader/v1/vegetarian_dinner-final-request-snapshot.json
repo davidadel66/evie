@@ -1,0 +1,75 @@
+{
+  "memory": {
+    "interpretation": {
+      "version": "bounded-conversation-lexical-v3",
+      "outcome": "success",
+      "current_bytes": 22,
+      "earlier_messages": 0,
+      "earlier_bytes": 0,
+      "summary_bytes": 0,
+      "query_bytes": 6
+    },
+    "version": "memory-retrieval-v2",
+    "status": "success",
+    "evidence": [
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "claim:24c93375-ecd5-4cc6-872b-81c629e34ff9",
+        "kind": "accepted_memory",
+        "claim_id": "24c93375-ecd5-4cc6-872b-81c629e34ff9",
+        "claim_operation_id": "c3f8b2ab-e05d-4b4c-b724-281f6aeae7e1",
+        "as_known_at": "2026-09-11T01:00:47.794831Z",
+        "valid_at": "2026-09-11T01:00:47.794831Z",
+        "scope_key": "global",
+        "status": "active",
+        "sources": [
+          {
+            "source_link_id": "210f8dbd-792c-4588-9652-51e57a839c4f",
+            "session_id": "3c41f2d9-ba0e-40c6-9a7d-cba16beca445",
+            "scope_key": "global",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:00:47.786098000Z",
+            "event_id": "52aacf53-860f-40d9-b39c-29ba752c1706",
+            "event_part": "content",
+            "locator_kind": "whole",
+            "locator_value": "",
+            "evidence_sha256": "sha256:ac97b1b3dab83e11b16d0bc8506e2ccb46885b40cd4499964dea6c16010bd6a9"
+          }
+        ],
+        "paths": [
+          "lexical"
+        ]
+      }
+    ]
+  },
+  "schema_version": 1,
+  "composer_version": "context-composer-v2",
+  "estimator_version": "canonical-provider-json-bytes-v2",
+  "iteration": 1,
+  "configured_model": "openai/gpt-6-astra",
+  "canonical_model": "openai/gpt-6-astra-20260903",
+  "advertised_model": "openai/gpt-6-astra",
+  "profile_source": "remote_metadata",
+  "advertised_window_tokens": 1050000,
+  "hard_window_tokens": 922768,
+  "working_ceiling_tokens": 24576,
+  "output_reserve_tokens": 768,
+  "estimation_margin_tokens": 4096,
+  "usable_input_bytes": 19712,
+  "serialized_bytes": 10966,
+  "rough_token_estimate": 2742,
+  "request_sha256": "a22902b10202a9dcbc116d2d620cbf89744a66d42082f8bdfe89e45f3362a13a",
+  "retained_first_event_id": "cb4cf9fc-d898-4d54-99c9-9bf4c2cea686",
+  "retained_first_sequence": 1,
+  "retained_last_event_id": "cb4cf9fc-d898-4d54-99c9-9bf4c2cea686",
+  "retained_last_sequence": 1,
+  "message_count": 3,
+  "tool_schema_count": 2,
+  "system_message_bytes": 6706,
+  "summary_message_bytes": 0,
+  "history_message_bytes": 2423,
+  "tool_schema_bytes": 1609,
+  "request_settings_bytes": 225
+}

@@ -34,13 +34,14 @@ const (
 )
 
 type retrievalTurn struct {
-	kernel    MemoryRetrieval
-	scope     memory.ScopeContext
-	searches  int
-	work      time.Duration
-	delivered int
-	status    string
-	evidence  []memory.RetrievalEvidence
+	interpretation *memory.RetrievalInterpretation
+	kernel         MemoryRetrieval
+	scope          memory.ScopeContext
+	searches       int
+	work           time.Duration
+	delivered      int
+	status         string
+	evidence       []memory.RetrievalEvidence
 }
 
 func (s *Session) newRetrievalTurn() *retrievalTurn {
@@ -178,10 +179,26 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 			r.evidence = nil
 			r.status = "unavailable"
 		} else {
+			if len(valid) < len(r.evidence) {
+				r.status = memory.RetrievalPartial
+				if len(valid) == 0 {
+					r.status = memory.RetrievalUnavailable
+				}
+			}
 			r.evidence = valid
 		}
 	}
-	receipt := &memory.RetrievalReceipt{Version: retrievalVersion, Status: r.status, Evidence: []memory.RetrievalReference{}}
+	return r.renderProjection(true)
+}
+
+// A sizing preview is local only: compaction sees original durable messages,
+// never this synthetic evidence. Revalidate and charge the final projection
+// after compaction, immediately before composing the provider-bound request.
+func (r *retrievalTurn) renderProjection(charge bool) (string, *memory.RetrievalReceipt) {
+	if r.status == "" {
+		return "", nil
+	}
+	receipt := &memory.RetrievalReceipt{Version: retrievalVersion, Status: r.status, Evidence: []memory.RetrievalReference{}, Interpretation: r.interpretation}
 	for _, evidence := range r.evidence {
 		receipt.Evidence = append(receipt.Evidence, evidence.Reference())
 	}
@@ -215,6 +232,8 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 	}
 	content = "EVIE_MEMORY_DATA\n" + string(encoded)
 	serialized, _ = json.Marshal(openrouter.Message{Role: "user", Content: content})
-	r.delivered += len(serialized)
+	if charge {
+		r.delivered += len(serialized)
+	}
 	return content, receipt
 }

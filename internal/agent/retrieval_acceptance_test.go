@@ -123,7 +123,9 @@ func (f *retrievalFixture) session(record memory.Session, client Client, extra .
 	}
 	definitions = append(definitions, extra...)
 	holder := memory.LeaseHolderID("retrieval-" + string(record.ID))
-	return NewWithToolset(client, testContextProfile("test-model"), f.store.BindHistory(record.ID, holder), record.ScopeContext(), f.store.BindTurnOwner(record.ID, holder), tools.NewToolset(definitions))
+	// These fixtures isolate model-directed retrieval. Automatic recall has its
+	// own real-turn matrix using the production-default constructor.
+	return NewWithToolset(client, testContextProfile("test-model"), f.store.BindHistory(record.ID, holder), record.ScopeContext(), f.store.BindTurnOwner(record.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
 }
 
 func (f *retrievalFixture) remember(record memory.Session, destination memory.MemoryDestination, value string) memory.RememberLiteralProposal {

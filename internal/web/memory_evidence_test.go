@@ -74,7 +74,7 @@ func TestMemoryEvidenceHTTPInspectsOriginalRequestAfterRestart(t *testing.T) {
 		{toolCalls: []openrouter.ToolCall{{ID: "lookup", Type: "function", Function: openrouter.FunctionCall{Name: "memory_search", Arguments: `{"query":"Detroit"}`}}}},
 		{content: "Original evidence received."},
 	}}
-	runtime := agent.NewWithToolset(client, webTestContextProfile("test"), store.BindHistory(reader.ID, "evidence-reader"), reader.ScopeContext(), store.BindTurnOwner(reader.ID, "evidence-reader"), tools.NewToolset(definitions))
+	runtime := agent.NewWithToolset(client, webTestContextProfile("test"), store.BindHistory(reader.ID, "evidence-reader"), reader.ScopeContext(), store.BindTurnOwner(reader.ID, "evidence-reader"), tools.NewToolset(definitions), agent.WithAutomaticMemoryRecall(false))
 	stream := httptest.NewRecorder()
 	events, err := newSSEEvents(stream)
 	if err != nil {

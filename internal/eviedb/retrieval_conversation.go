@@ -205,7 +205,8 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
  WHERE memory_retrieval_event_fts MATCH ? AND f.generation=? AND f.scope_key=?
  AND `+conversationObservedTimeSQL+`<=?
  AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
- ORDER BY bm25(memory_retrieval_event_fts),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, retrievalCandidateLimit)
+ AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
+ ORDER BY bm25(memory_retrieval_event_fts),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, retrievalCandidateLimit)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}

@@ -1,0 +1,31 @@
+{
+  "verified_at_utc": "2026-09-11T01:06:12.123198+00:00",
+  "frozen_rubric_metadata_new_harness_and_production_sources_unchanged": true,
+  "actual_run_verified_all_frozen_fixture_sources_before_generation": true,
+  "announced_post_run_legacy_fixture_changes": [
+    {
+      "path": "internal/agent/retrieval_production_reader_evaluation_test.go",
+      "frozen_sha256": "99e8526b03a5fe24545c0bf96445a8551863719ee2cc648f124f7051dfd22035",
+      "post_run_sha256": "e14a29b062f9c1a33a8494706f85cd71442558381890ea4fd77595aeee75b3d8"
+    },
+    {
+      "path": "internal/agent/retrieval_reader_evaluation_test.go",
+      "frozen_sha256": "b4d582bb0ad75def47ad269a58550055a1118c596358155e398fe9174714eb6e",
+      "post_run_sha256": "9972ba338f9e46dc0d4202de374ad1bbf90289b7c58b5443f169ed96cf6e56e7"
+    }
+  ],
+  "post_run_change_reason": "Implementation owner later added WithAutomaticMemoryRecall(false) only to two older #159 tool-only test constructors; actual automatic-reader run already completed. Frozen binary and hashes preserved.",
+  "credential_scan": "no credential match in artifacts",
+  "json_artifacts_valid": true,
+  "compile": "PASS",
+  "evidence_contract": "PASS 0.33s",
+  "provider_preflight": "PASS; === RUN   TestMemoryStage5AutomaticReaderPreflight\n--- PASS: TestMemoryStage5AutomaticReaderPreflight (0.52s)\nPASS",
+  "actual_model_test": "PASS 16.69s",
+  "manual_rubric": "PASS 4/4",
+  "race_command": "go test -race ./internal/agent -run '^TestMemoryStage5AutomaticReaderEvidenceContract$' -count=1",
+  "race_result": "PASS 7.190s",
+  "vet_command": "go vet ./internal/agent",
+  "vet_result": "PASS",
+  "repository_wide_verification": "implementation owner handoff check",
+  "initial_harness_recovery": "Inverse of observed diagnostic-only edits exactly matches d4fb183c4d0eb8bd22402e37c9f226f4a08e7f8a5f4fda3252acab551b6bdbd2; retained preflight-initial-harness.go.txt supports previous measurement reproduction."
+}

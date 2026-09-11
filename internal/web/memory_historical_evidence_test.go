@@ -107,7 +107,7 @@ func TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration(t *tes
 		{toolCalls: []openrouter.ToolCall{{ID: "historical-lookup", Type: "function", Function: openrouter.FunctionCall{Name: "memory_search", Arguments: `{"query":"Boston","intent":"historical"}`}}}},
 		{content: "Historical statement received."},
 	}}
-	runtime := agent.NewWithToolset(client, webTestContextProfile("test"), store.BindHistory(reader.ID, "historical-reader"), reader.ScopeContext(), store.BindTurnOwner(reader.ID, "historical-reader"), tools.NewToolset(definitions))
+	runtime := agent.NewWithToolset(client, webTestContextProfile("test"), store.BindHistory(reader.ID, "historical-reader"), reader.ScopeContext(), store.BindTurnOwner(reader.ID, "historical-reader"), tools.NewToolset(definitions), agent.WithAutomaticMemoryRecall(false))
 	stream := httptest.NewRecorder()
 	streamEvents, err := newSSEEvents(stream)
 	if err != nil {

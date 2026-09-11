@@ -180,7 +180,10 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
 			}
 		}
-		memoryData, memoryReceipt := recall.projection(coordinator.ctx)
+		if iteration == 1 && !s.automaticRecallDisabled {
+			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
+		}
+		memoryData, memoryReceipt := recall.renderProjection(false)
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
@@ -235,6 +238,7 @@ func (s *Session) runOwnedTurn(
 				}
 			}
 		}
+		composeInput.MemoryData, composeInput.MemoryReceipt = recall.projection(coordinator.ctx)
 		composed, err := s.composer.Compose(composeInput)
 		if err != nil {
 			if IsContextOverflow(err) {

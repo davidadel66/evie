@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "How about **chickpea and spinach curry with rice**? It’s a satisfying vegetarian dinner, ready in about 25 minutes.\n\nSauté onion and garlic with curry powder, add canned chickpeas, chopped tomatoes, and coconut milk, then simmer for 15 minutes. Stir in spinach until wilted and finish with lemon or lime."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2217,
+    "output_tokens": 72,
+    "total_tokens": 2289,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cache_write_input_tokens": 2214
+  }
+}

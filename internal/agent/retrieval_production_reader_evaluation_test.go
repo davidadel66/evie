@@ -255,7 +255,7 @@ func TestMemoryStage5ProductionReaderEvaluation(t *testing.T) {
 				}
 			}
 			holder := memory.LeaseHolderID("production-reader-" + string(reader.ID))
-			session := NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions))
+			session := NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
 			started := time.Now()
 			err = session.Send(context.Background(), test.question, &recorder{}, nil)
 			productionReaderWrite(t, directory, name+"-case.json", map[string]any{"name": name, "question": test.question, "expected_source_ids": test.sources, "scripted_initial_searches": test.searches, "whole_turn_elapsed_ns": time.Since(started).Nanoseconds(), "model_calls": client.calls, "answers": client.answers, "error": fmt.Sprint(err)})

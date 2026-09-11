@@ -1,0 +1,219 @@
+package agent
+
+import (
+	"context"
+	"os"
+	"sort"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
+)
+
+const automaticRecallVersion = "bounded-conversation-lexical-v3"
+
+// This plan selects interpretation input, not additional source evidence. Only
+// the Kernel's subsequent scoped search can supply a source-bearing result.
+type automaticRecallPlan struct {
+	query       string
+	diagnostics memory.RetrievalInterpretation
+}
+
+func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root memory.EventID) automaticRecallPlan {
+	plan := automaticRecallPlan{diagnostics: memory.RetrievalInterpretation{Version: automaticRecallVersion, Outcome: "insufficient"}}
+	var current string
+	var earlier []memory.Event
+	for _, event := range events {
+		if event.Type != memory.EventUserMessage || event.Role != memory.RoleUser {
+			continue
+		}
+		if event.ID == root {
+			current = boundedRecallText(event.Content, 512)
+			break
+		}
+		earlier = append(earlier, event)
+	}
+	// Inspect at most the last sixteen roots; distribute the remaining query
+	// quota across relevant earlier roots and continuity instead of concatenating
+	// an unbounded transcript or letting a long latest message consume it all.
+	if len(earlier) > 16 {
+		earlier = earlier[len(earlier)-16:]
+	}
+	terms := recallTerms(current, 16)
+	plan.diagnostics.CurrentBytes = len(current)
+	var continuityTerms []string
+	if summary != nil {
+		continuity := boundedRecallText(summary.Content, 512)
+		continuityTerms = recallTerms(continuity, 6)
+		plan.diagnostics.SummaryBytes = len(continuity)
+	}
+	relevanceTerms := appendRecallTerms(append([]string(nil), terms...), continuityTerms, 32)
+	type contextCandidate struct {
+		text  string
+		index int
+		score int
+	}
+	var candidates []contextCandidate
+	for i, event := range earlier {
+		text := boundedRecallText(event.Content, 384)
+		candidate := contextCandidate{text: text, index: i}
+		for _, word := range recallTerms(text, 32) {
+			for _, term := range relevanceTerms {
+				if word == term {
+					candidate.score++
+				}
+			}
+		}
+		// Validated continuity provides a topic anchor after compaction. Do not
+		// spend its small query/result budget on unrelated retained discussion.
+		if len(continuityTerms) > 0 && candidate.score == 0 {
+			continue
+		}
+		candidates = append(candidates, candidate)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		// Keep an earlier subject in the bounded window when lexical overlap
+		// ties; recency alone cannot resolve an ambiguous reference.
+		return candidates[i].index < candidates[j].index
+	})
+	if len(candidates) > 2 {
+		candidates = candidates[:2]
+	}
+	for _, candidate := range candidates {
+		terms = appendRecallTerms(terms, recallTerms(candidate.text, 5), 26)
+		plan.diagnostics.EarlierMessages++
+		plan.diagnostics.EarlierBytes += len(candidate.text)
+	}
+	terms = appendRecallTerms(terms, continuityTerms, 32)
+	plan.query = boundedRecallText(strings.Join(terms, " "), 1024)
+	plan.diagnostics.QueryBytes = len(plan.query)
+	if plan.query != "" {
+		plan.diagnostics.Outcome = "searched"
+	}
+	return plan
+}
+
+func boundedRecallText(text string, limit int) string {
+	if !utf8.ValidString(text) || memory.HasRetrievalSecret([]byte(text)) {
+		return ""
+	}
+	if len(text) <= limit {
+		return text
+	}
+	for limit > 0 && !utf8.RuneStart(text[limit]) {
+		limit--
+	}
+	return text[:limit]
+}
+
+func recallTerms(text string, limit int) []string {
+	// Function words are query noise, not a domain-specific preference or entity
+	// dictionary. Every content term still comes from the bounded conversation.
+	const noise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us it its this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest "
+	var terms []string
+	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if len(word) < 2 || strings.Contains(noise, " "+word+" ") {
+			continue
+		}
+		terms = appendRecallTerms(terms, []string{word}, limit)
+	}
+	return terms
+}
+
+func appendRecallTerms(terms, additions []string, limit int) []string {
+	for _, word := range additions {
+		if len(terms) >= limit {
+			break
+		}
+		found := false
+		for _, term := range terms {
+			found = found || word == term
+		}
+		if !found {
+			terms = append(terms, word)
+		}
+	}
+	return terms
+}
+
+func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, summary *ContextSummary, root memory.EventID, schemas []openrouter.Tool) {
+	kinds := make(map[string]bool)
+	memoryTools := false
+	for _, schema := range schemas {
+		memoryTools = memoryTools || strings.HasPrefix(schema.Function.Name, "memory_")
+		switch schema.Function.Name {
+		case "memory_search":
+			kinds[memory.RetrievalAcceptedMemory] = true
+		case "memory_search_conversations":
+			kinds[memory.RetrievalConversationExcerpt] = true
+		}
+	}
+	if len(kinds) == 0 {
+		// Fresh opt-out compositions omit model-facing reads. They can still
+		// report unavailable memory without performing a lookup or disclosing IDs.
+		if memoryTools && os.Getenv("EVIE_REMOTE_MEMORY") != "on" {
+			r.status = memory.RetrievalUnavailable
+		}
+		return
+	}
+	plan := planAutomaticRecall(events, summary, root)
+	r.interpretation = &plan.diagnostics
+	if r.kernel == nil || os.Getenv("EVIE_REMOTE_MEMORY") != "on" {
+		r.status = memory.RetrievalUnavailable
+		return
+	}
+	if plan.query == "" {
+		r.status = memory.RetrievalEmpty
+		return
+	}
+	// Two independent evidence kinds, at most two selected results from each.
+	// The same turn ledger leaves the remaining capacity for model-directed
+	// follow-up; automatic success never resets the shared work/context budget.
+	var outcomes []string
+	for _, kind := range []string{memory.RetrievalAcceptedMemory, memory.RetrievalConversationExcerpt} {
+		if !kinds[kind] {
+			continue
+		}
+		result, _ := r.search(ctx, memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true})
+		outcomes = append(outcomes, result.Status)
+	}
+	r.status = combinedRecallStatus(outcomes)
+	r.interpretation.Outcome = r.status
+}
+
+func combinedRecallStatus(outcomes []string) string {
+	if len(outcomes) > 0 {
+		same := true
+		for _, outcome := range outcomes[1:] {
+			same = same && outcome == outcomes[0]
+		}
+		if same {
+			return outcomes[0]
+		}
+	}
+	status := memory.RetrievalEmpty
+	incomplete := ""
+	for _, outcome := range outcomes {
+		switch outcome {
+		case memory.RetrievalCancelled:
+			return outcome
+		case memory.RetrievalSuccess:
+			status = outcome
+		case memory.RetrievalEmpty:
+		case memory.RetrievalPartial, memory.RetrievalFailed, memory.RetrievalUnavailable, memory.RetrievalExhausted:
+			incomplete = outcome
+		}
+	}
+	if incomplete != "" {
+		if len(outcomes) > 1 {
+			return memory.RetrievalPartial
+		}
+		return incomplete
+	}
+	return status
+}

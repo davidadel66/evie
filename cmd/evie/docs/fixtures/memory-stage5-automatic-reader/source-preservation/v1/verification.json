@@ -1,0 +1,15 @@
+{
+  "directory": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1",
+  "source_archives": [
+    {
+      "label": "memory-stage5-automatic-reader-v1",
+      "source_files_verified": 215,
+      "declared_inventory_entries_matched_to_original_freeze": 673,
+      "archive_sha256": "9c4fcb23db5c2e50a7019b8bbec9cbca6207cf18e3e3e56182dbadac806b2a00",
+      "archive_bytes": 591037,
+      "complete": true
+    }
+  ],
+  "verified": true,
+  "no_build_or_model_calls": true
+}

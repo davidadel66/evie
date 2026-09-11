@@ -414,7 +414,7 @@ func runMemoryReaderCases(t *testing.T, model bool) {
 				}
 			}
 			holder := memory.LeaseHolderID("reader-" + string(reader.ID))
-			session := NewWithToolset(c, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions))
+			session := NewWithToolset(c, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
 			started := time.Now()
 			err = session.Send(context.Background(), test.question, &recorder{}, nil)
 			elapsed := time.Since(started)

@@ -20,18 +20,21 @@ const (
 // RetrievalQuery contains caller requests, never authority. The Kernel resolves
 // effective scopes from the durable session before looking at any index hit.
 type RetrievalQuery struct {
-	Kind      string               `json:"kind,omitempty"`
-	Intent    string               `json:"intent,omitempty"`
-	AnchorID  string               `json:"evidence_id,omitempty"`
-	Anchor    *RetrievalReference  `json:"-"`
-	Covered   []RetrievalReference `json:"-"`
-	Before    int                  `json:"before,omitempty"`
-	After     int                  `json:"after,omitempty"`
-	Text      string               `json:"text"`
-	Limit     int                  `json:"limit,omitempty"`
-	MaxBytes  int                  `json:"max_bytes,omitempty"`
-	ValidAt   *time.Time           `json:"valid_at,omitempty"`
-	AsKnownAt *time.Time           `json:"as_known_at,omitempty"`
+	// Automatic interpretation omits exact copies of the active user request.
+	// The Kernel resolves that request from the bound session, never model text.
+	ExcludeCurrentRequestCopies bool                 `json:"-"`
+	Kind                        string               `json:"kind,omitempty"`
+	Intent                      string               `json:"intent,omitempty"`
+	AnchorID                    string               `json:"evidence_id,omitempty"`
+	Anchor                      *RetrievalReference  `json:"-"`
+	Covered                     []RetrievalReference `json:"-"`
+	Before                      int                  `json:"before,omitempty"`
+	After                       int                  `json:"after,omitempty"`
+	Text                        string               `json:"text"`
+	Limit                       int                  `json:"limit,omitempty"`
+	MaxBytes                    int                  `json:"max_bytes,omitempty"`
+	ValidAt                     *time.Time           `json:"valid_at,omitempty"`
+	AsKnownAt                   *time.Time           `json:"as_known_at,omitempty"`
 }
 
 type RetrievalCoverage struct {

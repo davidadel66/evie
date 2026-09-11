@@ -36,10 +36,11 @@ func (e sessionUnavailableError) Unwrap() []error {
 }
 
 type Session struct {
-	mu        sync.Mutex
-	client    Client
-	compactor Client
-	toolset   tools.Toolset
+	automaticRecallDisabled bool
+	mu                      sync.Mutex
+	client                  Client
+	compactor               Client
+	toolset                 tools.Toolset
 	// legacyToolsetPending supports the former New + Send(extra...) entry
 	// point. It is resolved once, before the first turn, and never changes
 	// afterward. New production sessions use NewWithToolset instead.
@@ -288,8 +289,9 @@ func NewWithToolset(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 	toolset tools.Toolset,
+	options ...SessionOption,
 ) *Session {
-	return NewWithCompactorAndToolset(client, client, profile, history, scope, owner, toolset)
+	return NewWithCompactorAndToolset(client, client, profile, history, scope, owner, toolset, options...)
 }
 
 // NewWithCompactor keeps summary generation separately controllable while the
@@ -320,9 +322,10 @@ func NewWithCompactorAndToolset(
 	scope memory.ScopeContext,
 	owner TurnOwnership,
 	toolset tools.Toolset,
+	options ...SessionOption,
 ) *Session {
 	reasoning, configurationErr := resolveModelReasoning(profile.Model(), os.Getenv("EVIE_REASONING"))
-	return &Session{
+	session := &Session{
 		client:           client,
 		compactor:        compactor,
 		toolset:          toolset,
@@ -335,6 +338,20 @@ func NewWithCompactorAndToolset(
 		composer:         NewContextComposer(CanonicalRequestEstimator{}),
 		timing:           defaultTurnTiming,
 	}
+	for _, option := range options {
+		option(session)
+	}
+	return session
+}
+
+// SessionOption configures a session before its first turn. Options do not
+// change the resolved capabilities, source access, or remote-memory opt-in.
+type SessionOption func(*Session)
+
+// WithAutomaticMemoryRecall permits controlled tool-only evaluation or an
+// embedding host's narrower read policy. Production defaults to automatic recall.
+func WithAutomaticMemoryRecall(enabled bool) SessionOption {
+	return func(session *Session) { session.automaticRecallDisabled = !enabled }
 }
 
 func (s *Session) ContextProfile() openrouter.ContextProfileDiagnostics {

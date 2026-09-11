@@ -1,0 +1,11 @@
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/vegetarian_dinner
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/uncompiled_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/unavailable_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvidenceContract/compacted_greenhouse
+--- PASS: TestMemoryStage5AutomaticReaderEvidenceContract (0.33s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/vegetarian_dinner (0.08s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/uncompiled_greenhouse (0.06s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/unavailable_greenhouse (0.06s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvidenceContract/compacted_greenhouse (0.13s)
+PASS
