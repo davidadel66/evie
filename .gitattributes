@@ -2,3 +2,6 @@
 # Preserve their exact bytes; normalized response JSON remains reviewable text.
 cmd/evie/docs/fixtures/memory-stage5-reader/*/*-wire-response.raw binary
 cmd/evie/docs/fixtures/memory-stage5-automatic-reader/*/*-wire-response.raw binary
+
+cmd/evie/docs/fixtures/memory-stage5-reference-reader/*/*-wire-response.raw binary
+cmd/evie/docs/fixtures/memory-stage5-reference-reader/verification/161-export-ui-build.log binary

@@ -85,6 +85,10 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 					evidence.Intent = memory.RetrievalCurrent
 				}
 				evidence.ValidAtConstrained = ref.ValidAtConstrained
+				evidence.IdentityMatches, err = resolveRetrievalIdentityMatches(ctx, tx, metadata, evidence, ref.IdentityMatches)
+				if err != nil {
+					return nil, err
+				}
 				evidence.Paths = append([]string(nil), ref.Paths...)
 				evidence.GraphPaths = ref.GraphPaths
 				item.Evidence = &evidence

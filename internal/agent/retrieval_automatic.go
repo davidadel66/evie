@@ -10,14 +10,18 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/google/uuid"
 )
 
-const automaticRecallVersion = "bounded-conversation-lexical-v3"
+const automaticRecallVersion = "bounded-reference-lexical-v2"
+
+const automaticReferenceReadingGuide = "Resolve references using relevant earlier discussion and eligible original sources; compaction continuity and proposed identities are hypotheses, not new facts. Use a targeted memory read if useful. When remaining recipient ambiguity materially changes the answer, ask one focused question before giving person-specific recommendations. Do not ask merely because multiple people are known when context already identifies the recipient."
 
 // This plan selects interpretation input, not additional source evidence. Only
 // the Kernel's subsequent scoped search can supply a source-bearing result.
 type automaticRecallPlan struct {
 	query       string
+	exact       []string
 	diagnostics memory.RetrievalInterpretation
 }
 
@@ -41,6 +45,11 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 	if len(earlier) > 16 {
 		earlier = earlier[len(earlier)-16:]
 	}
+	plan.exact = explicitRecallSelectors(current)
+	plan.diagnostics.ExactSelectors = len(plan.exact)
+	for _, selector := range plan.exact {
+		plan.diagnostics.ExactQueryBytes += len(selector)
+	}
 	terms := recallTerms(current, 16)
 	plan.diagnostics.CurrentBytes = len(current)
 	var continuityTerms []string
@@ -51,15 +60,21 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 	}
 	relevanceTerms := appendRecallTerms(append([]string(nil), terms...), continuityTerms, 32)
 	type contextCandidate struct {
-		text  string
-		index int
-		score int
+		text            string
+		terms           []string
+		index           int
+		score           int
+		distinctiveness int
 	}
 	var candidates []contextCandidate
+	frequency := make(map[string]int)
 	for i, event := range earlier {
 		text := boundedRecallText(event.Content, 384)
-		candidate := contextCandidate{text: text, index: i}
-		for _, word := range recallTerms(text, 32) {
+		plan.diagnostics.ExaminedEarlierMessages++
+		plan.diagnostics.ExaminedEarlierBytes += len(text)
+		candidate := contextCandidate{text: text, terms: recallTerms(text, 32), index: i}
+		for _, word := range candidate.terms {
+			frequency[word]++
 			for _, term := range relevanceTerms {
 				if word == term {
 					candidate.score++
@@ -73,9 +88,23 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		}
 		candidates = append(candidates, candidate)
 	}
+	for i := range candidates {
+		for _, word := range candidates[i].terms {
+			candidates[i].distinctiveness += 1024 / frequency[word]
+		}
+		if len(candidates[i].terms) > 0 {
+			candidates[i].distinctiveness /= len(candidates[i].terms)
+		}
+	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
 			return candidates[i].score > candidates[j].score
+		}
+		// Repeated topic noise must not crowd out a distinct earlier subject.
+		// Mean inverse frequency stays independent of domain vocabulary and
+		// prevents a long message from winning merely by containing more words.
+		if candidates[i].distinctiveness != candidates[j].distinctiveness {
+			return candidates[i].distinctiveness > candidates[j].distinctiveness
 		}
 		// Keep an earlier subject in the bounded window when lexical overlap
 		// ties; recency alone cannot resolve an ambiguous reference.
@@ -96,6 +125,39 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		plan.diagnostics.Outcome = "searched"
 	}
 	return plan
+}
+
+// Explicit selectors are query hypotheses, never identities accepted by this
+// planner. The existing Kernel search must resolve every token in current scope.
+func explicitRecallSelectors(text string) []string {
+	var selectors []string
+	for _, field := range strings.Fields(text) {
+		field = strings.TrimFunc(field, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+		if len(field) == 0 || len(field) > 128 {
+			continue
+		}
+		if id, err := uuid.Parse(field); err == nil {
+			selectors = appendRecallTerms(selectors, []string{id.String()}, 2)
+			continue
+		}
+		letter, digit, separator, valid := false, false, false, true
+		for _, r := range field {
+			switch {
+			case unicode.IsLetter(r):
+				letter = true
+			case unicode.IsDigit(r):
+				digit = true
+			case r == '-' || r == '_' || r == ':':
+				separator = true
+			default:
+				valid = false
+			}
+		}
+		if valid && letter && digit && separator {
+			selectors = appendRecallTerms(selectors, []string{field}, 2)
+		}
+	}
+	return selectors
 }
 
 func boundedRecallText(text string, limit int) string {
@@ -171,7 +233,8 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 		r.status = memory.RetrievalEmpty
 		return
 	}
-	// Two independent evidence kinds, at most two selected results from each.
+	// At most two explicit selector hypotheses follow the two independent
+	// evidence kinds, with at most two selected results from each search.
 	// The same turn ledger leaves the remaining capacity for model-directed
 	// follow-up; automatic success never resets the shared work/context budget.
 	var outcomes []string
@@ -181,6 +244,12 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 		}
 		result, _ := r.search(ctx, memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true})
 		outcomes = append(outcomes, result.Status)
+	}
+	if kinds[memory.RetrievalAcceptedMemory] {
+		for _, selector := range plan.exact {
+			result, _ := r.search(ctx, memory.RetrievalQuery{Kind: memory.RetrievalAcceptedMemory, Text: selector, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true})
+			outcomes = append(outcomes, result.Status)
+		}
 	}
 	r.status = combinedRecallStatus(outcomes)
 	r.interpretation.Outcome = r.status

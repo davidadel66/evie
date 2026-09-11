@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Maya would likely enjoy a good-quality jasmine tea gift set—perhaps jasmine pearls with a simple infuser or teacup. You mentioned she’s fond of jasmine tea, so that’s a well-supported choice."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2355,
+    "output_tokens": 47,
+    "total_tokens": 2402,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 758
+  }
+}

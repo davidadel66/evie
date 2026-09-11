@@ -393,6 +393,10 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 		if current.ClaimOperationID != prior.ClaimOperationID || current.Text != prior.Text {
 			continue
 		}
+		current.IdentityMatches, err = resolveRetrievalIdentityMatches(ctx, tx, readMetadata, current, prior.Reference().IdentityMatches)
+		if err != nil {
+			return nil, err
+		}
 		current.Paths = append([]string(nil), prior.Paths...)
 		current.GraphPaths = prior.Reference().GraphPaths
 		if !sameRetrievalSources(current.Reference().Sources, prior.Reference().Sources) {

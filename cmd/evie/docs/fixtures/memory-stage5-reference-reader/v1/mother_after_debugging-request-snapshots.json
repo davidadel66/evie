@@ -1,0 +1,135 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 7,
+        "examined_earlier_bytes": 299,
+        "earlier_messages": 2,
+        "earlier_bytes": 108,
+        "summary_bytes": 0,
+        "query_bytes": 84
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:9d8ed482-a2bd-4fe0-b31a-f97d47cc928b",
+          "kind": "accepted_memory",
+          "claim_id": "9d8ed482-a2bd-4fe0-b31a-f97d47cc928b",
+          "claim_operation_id": "32fb3e2e-eed1-4c05-b050-266372aa6a6b",
+          "as_known_at": "2026-09-11T01:23:49.027655Z",
+          "valid_at": "2026-09-11T01:23:49.027655Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "014097e9-d9a5-44f6-a64a-3ff89ca7117d",
+              "session_id": "1e180b4d-59dc-4e93-aab9-92cef2cb0dd0",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:48.986740000Z",
+              "event_id": "2f53d250-c2d0-4723-b34d-6ca170aa4400",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "lexical"
+          ]
+        },
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "excerpt:e53b39ba-4858-44d9-87af-cda250160b97:0:74",
+          "kind": "conversation_excerpt",
+          "as_known_at": "2026-09-11T01:23:49.029366Z",
+          "valid_at": "2026-09-11T01:23:49.029366Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "session_id": "862e831f-d6d2-469b-91f7-233898c9b7a0",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:48.996413Z",
+              "event_id": "e53b39ba-4858-44d9-87af-cda250160b97",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "0:74",
+              "evidence_sha256": "0aedd36b96f78235104ffb44ed2059b02aef0ec32f853ca9c31874ecf432bec1"
+            }
+          ],
+          "paths": [
+            "conversation_lexical"
+          ]
+        },
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "excerpt:fbe12f80-1c7b-4004-bafd-c27b18acd14d:0:34",
+          "kind": "conversation_excerpt",
+          "as_known_at": "2026-09-11T01:23:49.029366Z",
+          "valid_at": "2026-09-11T01:23:49.029366Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "session_id": "862e831f-d6d2-469b-91f7-233898c9b7a0",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:49.018255Z",
+              "event_id": "fbe12f80-1c7b-4004-bafd-c27b18acd14d",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "0:34",
+              "evidence_sha256": "71d7e624d6236ec5802d7da6816b35f6c9ec1b5f3bf7cda6e14687b36710df95"
+            }
+          ],
+          "paths": [
+            "conversation_lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 15493,
+    "rough_token_estimate": 3874,
+    "request_sha256": "d125cb3995b34deb1c65be5b10f7d8d3511ceae30e5b2a4d52a9f7c7aad1fab2",
+    "retained_first_event_id": "0725296f-6852-40c6-97d8-d48001426d54",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "8488e506-8849-46c9-8010-de0a5604b5e5",
+    "retained_last_sequence": 22,
+    "message_count": 17,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 6246,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

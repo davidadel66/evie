@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Do you mean your mother Maya or your sister Nora? You told me Maya likes jasmine tea, while Nora likes ceramic bowls—either would be a good starting point for her gift."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 3703,
+    "output_tokens": 40,
+    "total_tokens": 3743,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cache_write_input_tokens": 3700
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Maya, your mother, would likely enjoy a **jasmine tea gift set**—a quality loose-leaf jasmine tea paired with a pretty cup or infuser. Jasmine pearls would be a lovely choice.\n\nThat’s based on your statement that she’s fond of jasmine tea."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2441,
+    "output_tokens": 60,
+    "total_tokens": 2501,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 844
+  }
+}

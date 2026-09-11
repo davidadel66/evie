@@ -1,0 +1,20 @@
+--- FAIL: TestCorrectionSchemaStage3UpgradePreservesBytesAndReplay (0.06s)
+    candidate_review_correction_schema_test.go:202: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+--- FAIL: TestCorrectionSchemaMigrationRollbackAndCommitResolution (0.19s)
+    --- FAIL: TestCorrectionSchemaMigrationRollbackAndCommitResolution/operation_failure (0.05s)
+        candidate_review_correction_schema_test.go:239: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+    --- FAIL: TestCorrectionSchemaMigrationRollbackAndCommitResolution/cancelled (0.04s)
+        candidate_review_correction_schema_test.go:239: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+    --- FAIL: TestCorrectionSchemaMigrationRollbackAndCommitResolution/commit_absent (0.05s)
+        candidate_review_correction_schema_test.go:239: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+    --- FAIL: TestCorrectionSchemaMigrationRollbackAndCommitResolution/commit_durable_response_lost (0.05s)
+        candidate_review_correction_schema_test.go:239: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+--- FAIL: TestCorrectionSchemaConcurrentAndRepeatedStartup (0.05s)
+    candidate_review_correction_schema_test.go:302: turn lease write: project conversation evidence: SQL logic error: no such table: memory_retrieval_event_fts (1)
+--- FAIL: TestSemanticSchemaUpgradesLiteralClaimsFromIssue104AndAcceptsEntityClaims (0.08s)
+    semantic_test.go:489: build issue #104 schema: SQL logic error: error in trigger memory_retrieval_alias_added: no such table: main.semantic_claims (1)
+--- FAIL: TestSemanticObjectScopeMigrationSupportsConcurrentLegacyOpens (0.09s)
+    semantic_test.go:598: build issue #104 schema: SQL logic error: error in trigger memory_retrieval_alias_added: no such table: main.semantic_claims (1)
+FAIL
+FAIL	github.com/davidadel66/evie/internal/eviedb	0.727s
+FAIL

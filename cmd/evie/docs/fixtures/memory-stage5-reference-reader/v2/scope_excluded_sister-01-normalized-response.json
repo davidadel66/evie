@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "For your mother Maya, I’d choose **a lovely tin of high-quality jasmine tea**, perhaps jasmine pearls, paired with a beautiful teacup and a handwritten birthday note. You’ve told me she’s fond of jasmine tea, so it’s a thoughtful choice grounded in something she enjoys.\n\nWhat budget do you have in mind?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 3262,
+    "output_tokens": 70,
+    "total_tokens": 3332,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 1665
+  }
+}

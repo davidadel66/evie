@@ -1,0 +1,81 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 70,
+        "exact_selectors": 1,
+        "exact_query_bytes": 36,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 53
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:5040d636-5962-4563-90c7-3e8c2d4fdd52",
+          "kind": "accepted_memory",
+          "claim_id": "5040d636-5962-4563-90c7-3e8c2d4fdd52",
+          "claim_operation_id": "f2077bc0-5edb-4b50-b4c3-cb9152678c4b",
+          "as_known_at": "2026-09-11T01:24:04.650093Z",
+          "valid_at": "2026-09-11T01:24:04.650093Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "36431b56-d1f6-4972-aeb2-ec72abb3f200",
+              "session_id": "3bec1d6f-35ef-412a-a495-bd1f18fde86b",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:24:04.642940000Z",
+              "event_id": "768dbc16-24d4-4670-b785-a3ce7f379cc0",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "exact_or_alias"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 11690,
+    "rough_token_estimate": 2923,
+    "request_sha256": "140ed3c40cbdd4b77dfdcd2310dd4459a038d4ddbdf4c399e9c2c4972eb261bb",
+    "retained_first_event_id": "54b2314d-3ab7-4171-99a4-9a76819f8e57",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "54b2314d-3ab7-4171-99a4-9a76819f8e57",
+    "retained_last_sequence": 1,
+    "message_count": 3,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 2429,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

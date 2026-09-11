@@ -1,0 +1,165 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 7,
+        "examined_earlier_bytes": 345,
+        "earlier_messages": 2,
+        "earlier_bytes": 154,
+        "summary_bytes": 0,
+        "query_bytes": 75
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:15fbe8bf-efce-4279-9454-725e2df082f3",
+          "kind": "accepted_memory",
+          "claim_id": "15fbe8bf-efce-4279-9454-725e2df082f3",
+          "claim_operation_id": "d3ca9dfb-32dc-4b49-adea-dc1e4531aab6",
+          "as_known_at": "2026-09-11T01:23:52.827931Z",
+          "valid_at": "2026-09-11T01:23:52.827931Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "ff1fbb0a-0313-4ce0-b396-bcdc2849728f",
+              "session_id": "6a3201ee-345f-410f-80ba-10d0d4052680",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:52.793667000Z",
+              "event_id": "e23a393e-5644-4304-a8c4-c430b6f2541f",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "lexical"
+          ]
+        },
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:a77198ea-5050-495e-a056-53d62e38ddf2",
+          "kind": "accepted_memory",
+          "claim_id": "a77198ea-5050-495e-a056-53d62e38ddf2",
+          "claim_operation_id": "3e943966-3cfe-4f4a-99bf-9788acf9d026",
+          "as_known_at": "2026-09-11T01:23:52.827931Z",
+          "valid_at": "2026-09-11T01:23:52.827931Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "4893f276-114c-4c97-b627-b753b5167c40",
+              "session_id": "aca2dbb1-657d-4b67-826f-01073e780647",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:52.797907000Z",
+              "event_id": "a1347e9a-51a4-4bd1-8462-8e11defa2b01",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:b05e0f936ed4ba10377d57858185684fb4c15565f6901a00143ff5c57f229248"
+            }
+          ],
+          "paths": [
+            "lexical"
+          ]
+        },
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "excerpt:66d13854-b0ae-49b2-a270-8fb2f9c6d366:0:34",
+          "kind": "conversation_excerpt",
+          "as_known_at": "2026-09-11T01:23:52.830269Z",
+          "valid_at": "2026-09-11T01:23:52.830269Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "session_id": "a569ae66-dc8e-4a0b-8676-99c1b37d293d",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:52.818932Z",
+              "event_id": "66d13854-b0ae-49b2-a270-8fb2f9c6d366",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "0:34",
+              "evidence_sha256": "71d7e624d6236ec5802d7da6816b35f6c9ec1b5f3bf7cda6e14687b36710df95"
+            }
+          ],
+          "paths": [
+            "conversation_lexical"
+          ]
+        },
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "excerpt:aaca659e-c4d0-4ec9-a894-7d09329ce13c:0:34",
+          "kind": "conversation_excerpt",
+          "as_known_at": "2026-09-11T01:23:52.830269Z",
+          "valid_at": "2026-09-11T01:23:52.830269Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "session_id": "a569ae66-dc8e-4a0b-8676-99c1b37d293d",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:23:52.808589Z",
+              "event_id": "aaca659e-c4d0-4ec9-a894-7d09329ce13c",
+              "event_part": "content",
+              "locator_kind": "utf8_byte_range",
+              "locator_value": "0:34",
+              "evidence_sha256": "71d7e624d6236ec5802d7da6816b35f6c9ec1b5f3bf7cda6e14687b36710df95"
+            }
+          ],
+          "paths": [
+            "conversation_lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 17314,
+    "rough_token_estimate": 4329,
+    "request_sha256": "45d43f76020bca171eba74f4663b75ddc4dcf49e15b72359cd7e0fc5fef56cf0",
+    "retained_first_event_id": "874c0e8f-3a34-4d23-9486-98f2e2713f84",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "0f49d91e-1870-4406-a388-7564d298bb5a",
+    "retained_last_sequence": 22,
+    "message_count": 17,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 8067,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

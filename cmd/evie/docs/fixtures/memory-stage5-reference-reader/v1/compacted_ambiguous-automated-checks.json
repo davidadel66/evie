@@ -1,0 +1,8 @@
+{
+  "does_not_claim_new_save": true,
+  "excluded_preference_absent": true,
+  "gift_not_guessed_before_disambiguation": false,
+  "nonempty_answer": true,
+  "one_focused_question_marker": true,
+  "recipient_options_named": true
+}

@@ -13,11 +13,15 @@ type RetrievalReceipt struct {
 // Interpretation diagnostics contain only measured bounds and versioned
 // outcomes, never query text, summary contents, or hidden model reasoning.
 type RetrievalInterpretation struct {
-	Version         string `json:"version"`
-	Outcome         string `json:"outcome"`
-	CurrentBytes    int    `json:"current_bytes"`
-	EarlierMessages int    `json:"earlier_messages"`
-	EarlierBytes    int    `json:"earlier_bytes"`
-	SummaryBytes    int    `json:"summary_bytes"`
-	QueryBytes      int    `json:"query_bytes"`
+	Version                 string `json:"version"`
+	Outcome                 string `json:"outcome"`
+	CurrentBytes            int    `json:"current_bytes"`
+	ExactSelectors          int    `json:"exact_selectors"`
+	ExactQueryBytes         int    `json:"exact_query_bytes"`
+	ExaminedEarlierMessages int    `json:"examined_earlier_messages"`
+	ExaminedEarlierBytes    int    `json:"examined_earlier_bytes"`
+	EarlierMessages         int    `json:"earlier_messages"`
+	EarlierBytes            int    `json:"earlier_bytes"`
+	SummaryBytes            int    `json:"summary_bytes"`
+	QueryBytes              int    `json:"query_bytes"`
 }

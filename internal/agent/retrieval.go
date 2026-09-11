@@ -212,6 +212,9 @@ func (r *retrievalTurn) renderProjection(charge bool) (string, *memory.Retrieval
 	if len(r.evidence) > 0 {
 		data.ReadingGuide = "current_status:retired cannot establish a current fact, even with status:active at as_known_at. Prefer paraphrases with original event citations. Use quotation marks only for verbatim source text, preserving case and punctuation; keep formatting outside the quotation. Cite that source entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation."
 	}
+	if r.interpretation != nil {
+		data.ReadingGuide += " " + automaticReferenceReadingGuide
+	}
 	for _, evidence := range r.evidence {
 		if evidence.CurrentStatus == memory.SemanticStatusRetired {
 			data.HistoricalOnly = append(data.HistoricalOnly, evidence.ID)

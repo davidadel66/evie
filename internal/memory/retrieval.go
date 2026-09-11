@@ -45,27 +45,28 @@ type RetrievalCoverage struct {
 }
 
 type RetrievalEvidence struct {
-	GraphPaths            []RetrievalGraphPath   `json:"graph_paths,omitempty"`
-	Intent                string                 `json:"intent"`
-	ValidAtConstrained    bool                   `json:"valid_at_constrained"`
-	CurrentStatus         SemanticObjectStatus   `json:"current_status"`
-	Claim                 *SemanticClaim         `json:"claim,omitempty"`
-	EffectiveValidTime    *ValidTime             `json:"effective_valid_time,omitempty"`
-	CorrectionMode        CorrectionMode         `json:"correction_mode,omitempty"`
-	CurrentCorrectionMode CorrectionMode         `json:"current_correction_mode,omitempty"`
-	Conflicts             []ClaimConflictWarning `json:"conflicts,omitempty"`
-	RelatedClaimIDs       []SemanticID           `json:"related_claim_ids,omitempty"`
-	ID                    string                 `json:"id"`
-	Kind                  string                 `json:"kind"`
-	ClaimID               SemanticID             `json:"claim_id,omitempty"`
-	ClaimOperationID      SemanticID             `json:"claim_operation_id,omitempty"`
-	AsKnownAt             time.Time              `json:"as_known_at"`
-	ValidAt               time.Time              `json:"valid_at"`
-	ScopeKey              string                 `json:"scope_key"`
-	Status                SemanticObjectStatus   `json:"status"`
-	Text                  string                 `json:"text"`
-	Sources               []SemanticSource       `json:"sources"`
-	Paths                 []string               `json:"paths"`
+	IdentityMatches       []RetrievalIdentityMatch `json:"identity_matches,omitempty"`
+	GraphPaths            []RetrievalGraphPath     `json:"graph_paths,omitempty"`
+	Intent                string                   `json:"intent"`
+	ValidAtConstrained    bool                     `json:"valid_at_constrained"`
+	CurrentStatus         SemanticObjectStatus     `json:"current_status"`
+	Claim                 *SemanticClaim           `json:"claim,omitempty"`
+	EffectiveValidTime    *ValidTime               `json:"effective_valid_time,omitempty"`
+	CorrectionMode        CorrectionMode           `json:"correction_mode,omitempty"`
+	CurrentCorrectionMode CorrectionMode           `json:"current_correction_mode,omitempty"`
+	Conflicts             []ClaimConflictWarning   `json:"conflicts,omitempty"`
+	RelatedClaimIDs       []SemanticID             `json:"related_claim_ids,omitempty"`
+	ID                    string                   `json:"id"`
+	Kind                  string                   `json:"kind"`
+	ClaimID               SemanticID               `json:"claim_id,omitempty"`
+	ClaimOperationID      SemanticID               `json:"claim_operation_id,omitempty"`
+	AsKnownAt             time.Time                `json:"as_known_at"`
+	ValidAt               time.Time                `json:"valid_at"`
+	ScopeKey              string                   `json:"scope_key"`
+	Status                SemanticObjectStatus     `json:"status"`
+	Text                  string                   `json:"text"`
+	Sources               []SemanticSource         `json:"sources"`
+	Paths                 []string                 `json:"paths"`
 }
 
 // RetrievalGraphPath names accepted, source-bearing Claims in traversal order.
@@ -88,24 +89,25 @@ type RetrievalSourceReference struct {
 }
 
 type RetrievalReference struct {
-	GraphPaths            []RetrievalGraphPath       `json:"graph_paths,omitempty"`
-	Intent                string                     `json:"intent"`
-	ValidAtConstrained    bool                       `json:"valid_at_constrained"`
-	CurrentStatus         SemanticObjectStatus       `json:"current_status"`
-	CorrectionMode        CorrectionMode             `json:"correction_mode,omitempty"`
-	CurrentCorrectionMode CorrectionMode             `json:"current_correction_mode,omitempty"`
-	Conflicts             []ClaimConflictWarning     `json:"conflicts,omitempty"`
-	RelatedClaimIDs       []SemanticID               `json:"related_claim_ids,omitempty"`
-	ID                    string                     `json:"id"`
-	Kind                  string                     `json:"kind"`
-	ClaimID               SemanticID                 `json:"claim_id,omitempty"`
-	ClaimOperationID      SemanticID                 `json:"claim_operation_id,omitempty"`
-	AsKnownAt             time.Time                  `json:"as_known_at"`
-	ValidAt               time.Time                  `json:"valid_at"`
-	ScopeKey              string                     `json:"scope_key"`
-	Status                SemanticObjectStatus       `json:"status"`
-	Sources               []RetrievalSourceReference `json:"sources"`
-	Paths                 []string                   `json:"paths"`
+	IdentityMatches       []RetrievalIdentityReference `json:"identity_matches,omitempty"`
+	GraphPaths            []RetrievalGraphPath         `json:"graph_paths,omitempty"`
+	Intent                string                       `json:"intent"`
+	ValidAtConstrained    bool                         `json:"valid_at_constrained"`
+	CurrentStatus         SemanticObjectStatus         `json:"current_status"`
+	CorrectionMode        CorrectionMode               `json:"correction_mode,omitempty"`
+	CurrentCorrectionMode CorrectionMode               `json:"current_correction_mode,omitempty"`
+	Conflicts             []ClaimConflictWarning       `json:"conflicts,omitempty"`
+	RelatedClaimIDs       []SemanticID                 `json:"related_claim_ids,omitempty"`
+	ID                    string                       `json:"id"`
+	Kind                  string                       `json:"kind"`
+	ClaimID               SemanticID                   `json:"claim_id,omitempty"`
+	ClaimOperationID      SemanticID                   `json:"claim_operation_id,omitempty"`
+	AsKnownAt             time.Time                    `json:"as_known_at"`
+	ValidAt               time.Time                    `json:"valid_at"`
+	ScopeKey              string                       `json:"scope_key"`
+	Status                SemanticObjectStatus         `json:"status"`
+	Sources               []RetrievalSourceReference   `json:"sources"`
+	Paths                 []string                     `json:"paths"`
 }
 
 func (e RetrievalEvidence) Reference() RetrievalReference {
@@ -114,6 +116,14 @@ func (e RetrievalEvidence) Reference() RetrievalReference {
 		Intent: e.Intent, ValidAtConstrained: e.ValidAtConstrained, CurrentStatus: e.CurrentStatus,
 		CorrectionMode: e.CorrectionMode, CurrentCorrectionMode: e.CurrentCorrectionMode,
 		RelatedClaimIDs: append([]SemanticID(nil), e.RelatedClaimIDs...)}
+	for _, match := range e.IdentityMatches {
+		ref := match.RetrievalIdentityReference
+		if ref.Source != nil {
+			source := *ref.Source
+			ref.Source = &source
+		}
+		r.IdentityMatches = append(r.IdentityMatches, ref)
+	}
 	for _, conflict := range e.Conflicts {
 		conflict.ClaimIDs = append([]SemanticID(nil), conflict.ClaimIDs...)
 		r.Conflicts = append(r.Conflicts, conflict)

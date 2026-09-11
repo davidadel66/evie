@@ -1,0 +1,53 @@
+=== RUN   TestReferenceRecallKeepsEarlierRecipientAcrossUnrelatedTopicRoots
+--- PASS: TestReferenceRecallKeepsEarlierRecipientAcrossUnrelatedTopicRoots (0.10s)
+=== RUN   TestReferenceRecallPreservesExactIdentitySelectors
+=== RUN   TestReferenceRecallPreservesExactIdentitySelectors/entity_UUID
+=== RUN   TestReferenceRecallPreservesExactIdentitySelectors/opaque_alias
+--- PASS: TestReferenceRecallPreservesExactIdentitySelectors (0.14s)
+    --- PASS: TestReferenceRecallPreservesExactIdentitySelectors/entity_UUID (0.07s)
+    --- PASS: TestReferenceRecallPreservesExactIdentitySelectors/opaque_alias (0.07s)
+=== RUN   TestReferenceRecallOpaqueNoiseDoesNotSuppressCurrentSubject
+--- PASS: TestReferenceRecallOpaqueNoiseDoesNotSuppressCurrentSubject (0.07s)
+=== RUN   TestReferenceRecallHypothesesCannotReviveRestrictedEvidence
+=== RUN   TestReferenceRecallHypothesesCannotReviveRestrictedEvidence/retired
+=== RUN   TestReferenceRecallHypothesesCannotReviveRestrictedEvidence/retracted
+--- PASS: TestReferenceRecallHypothesesCannotReviveRestrictedEvidence (0.16s)
+    --- PASS: TestReferenceRecallHypothesesCannotReviveRestrictedEvidence/retired (0.08s)
+    --- PASS: TestReferenceRecallHypothesesCannotReviveRestrictedEvidence/retracted (0.08s)
+=== RUN   TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle
+--- PASS: TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle (0.08s)
+=== RUN   TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim
+--- PASS: TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim (0.09s)
+=== RUN   TestReferenceRecallAllowsTargetedHypothesisWithoutChangingIdentity
+--- PASS: TestReferenceRecallAllowsTargetedHypothesisWithoutChangingIdentity (0.08s)
+=== RUN   TestReferenceRecallMeasuresBoundedInputsWithManyOpaqueHypotheses
+    retrieval_reference_boundary_test.go:88: REFERENCE_BOUND_REPORT={"complete_request_bytes":46231,"evidence_count":2,"interpretation":{"version":"bounded-reference-lexical-v2","outcome":"success","current_bytes":512,"exact_selectors":2,"exact_query_bytes":14,"examined_earlier_messages":16,"examined_earlier_bytes":6144,"earlier_messages":2,"earlier_bytes":768,"summary_bytes":0,"query_bytes":72},"model_quality":"not measured; scripted provider","version":"reference-boundaries-v1"}
+--- PASS: TestReferenceRecallMeasuresBoundedInputsWithManyOpaqueHypotheses (0.14s)
+=== RUN   TestReferenceRecallCompactedCandidatesRemainOriginalEvidence
+=== RUN   TestReferenceRecallCompactedCandidatesRemainOriginalEvidence/compacted_mother
+=== RUN   TestReferenceRecallCompactedCandidatesRemainOriginalEvidence/compacted_ambiguous
+--- PASS: TestReferenceRecallCompactedCandidatesRemainOriginalEvidence (0.29s)
+    --- PASS: TestReferenceRecallCompactedCandidatesRemainOriginalEvidence/compacted_mother (0.15s)
+    --- PASS: TestReferenceRecallCompactedCandidatesRemainOriginalEvidence/compacted_ambiguous (0.15s)
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/mother_after_debugging
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/mother_or_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/misleading_recent_sister
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/compacted_mother
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/compacted_ambiguous
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/explicit_uuid
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/opaque_alias
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/no_evidence
+=== RUN   TestMemoryStage5ReferenceReaderEvidenceContract/scope_excluded_sister
+--- PASS: TestMemoryStage5ReferenceReaderEvidenceContract (0.78s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/mother_after_debugging (0.08s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/mother_or_sister (0.08s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/misleading_recent_sister (0.09s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/compacted_mother (0.15s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/compacted_ambiguous (0.14s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/explicit_uuid (0.05s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/opaque_alias (0.06s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/no_evidence (0.05s)
+    --- PASS: TestMemoryStage5ReferenceReaderEvidenceContract/scope_excluded_sister (0.08s)
+PASS
+ok  	github.com/davidadel66/evie/internal/agent	2.192s

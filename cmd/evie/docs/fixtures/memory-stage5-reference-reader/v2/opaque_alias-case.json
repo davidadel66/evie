@@ -1,0 +1,171 @@
+{
+  "answers": [
+    "Your mother Maya would likely enjoy a **jasmine tea gift set**—a good-quality jasmine tea paired with an elegant cup or small teapot. You’ve mentioned she’s fond of jasmine tea, so that’s a well-grounded choice."
+  ],
+  "error": "\u003cnil\u003e",
+  "forbidden_source_ids": null,
+  "model_calls": 1,
+  "name": "opaque_alias",
+  "original_preferences": [
+    {
+      "schema_version": 1,
+      "kind": "remember_entity_claim",
+      "operation_id": "1b302be0-bbcd-4b58-97ad-318c42f4d08b",
+      "idempotency_key": "idem:v1:2d1206f1-84f0-45d7-bb7d-058ec3cd7f84",
+      "actor": "owner",
+      "session_id": "afecb476-5810-4978-83a5-a3f2ba6acad9",
+      "scope": {
+        "scope_id": "a32c9ed2-f31e-4b33-aa81-38494252d6b2",
+        "scope_key": "global",
+        "revision": 0
+      },
+      "scopes": [
+        {
+          "scope_id": "a32c9ed2-f31e-4b33-aa81-38494252d6b2",
+          "scope_key": "global",
+          "revision": 0
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 0
+        }
+      ],
+      "predicate": {
+        "predicate_id": "3003880d-1b89-4643-b312-dd7d162b5c0a",
+        "token": "prefers",
+        "version": 1,
+        "label": "prefers",
+        "object_constraint": "entity",
+        "cardinality": "many",
+        "create": true
+      },
+      "entities": [
+        {
+          "entity_id": "a39d4cbe-56dd-4c45-912e-984d13f19f6b",
+          "scope_key": "global",
+          "canonical_name": "owner",
+          "entity_type": "person",
+          "anchor_kind": "owner",
+          "create": true
+        },
+        {
+          "entity_id": "5874833e-e837-4bc6-8ba5-d6cddfb9364f",
+          "scope_key": "global",
+          "canonical_name": "Evie",
+          "entity_type": "agent",
+          "anchor_kind": "evie",
+          "create": true
+        },
+        {
+          "entity_id": "25fa8e93-46cc-4745-8634-32a67939d541",
+          "scope_key": "global",
+          "canonical_name": "Maya",
+          "entity_type": "person",
+          "anchor_kind": "",
+          "create": true
+        },
+        {
+          "entity_id": "516d1f67-6bdb-4adf-ae39-a3378be2dad7",
+          "scope_key": "global",
+          "canonical_name": "jasmine tea",
+          "entity_type": "gift",
+          "anchor_kind": "",
+          "create": true
+        }
+      ],
+      "aliases": [
+        {
+          "alias_id": "2d766f57-3149-411b-8e03-c31141d08d83",
+          "entity_id": "25fa8e93-46cc-4745-8634-32a67939d541",
+          "scope_key": "global",
+          "value": "MOM-27",
+          "normalized_value": "mom-27",
+          "source_event_id": "594e3141-6372-4b97-ab65-7ca57a129573",
+          "create": true
+        },
+        {
+          "alias_id": "9ef1cb62-8b8e-4db5-9ae8-cffe7654d76c",
+          "entity_id": "516d1f67-6bdb-4adf-ae39-a3378be2dad7",
+          "scope_key": "global",
+          "value": "jasmine tea",
+          "normalized_value": "jasmine tea",
+          "source_event_id": "594e3141-6372-4b97-ab65-7ca57a129573",
+          "create": true
+        }
+      ],
+      "claim": {
+        "claim_id": "90a42bfc-3ef4-4980-b431-8ae076618885",
+        "scope_key": "global",
+        "subject_entity_id": "25fa8e93-46cc-4745-8634-32a67939d541",
+        "predicate_id": "3003880d-1b89-4643-b312-dd7d162b5c0a",
+        "predicate_token": "prefers",
+        "predicate_version": 1,
+        "object_entity_id": "516d1f67-6bdb-4adf-ae39-a3378be2dad7",
+        "polarity": "affirmed",
+        "valid_time": {
+          "from": null,
+          "to": null
+        },
+        "create": true
+      },
+      "source": {
+        "source_link_id": "0db1b2bc-2a1f-4570-8b81-0a9e9b5c9e10",
+        "operation_id": "1b302be0-bbcd-4b58-97ad-318c42f4d08b",
+        "event_id": "594e3141-6372-4b97-ab65-7ca57a129573",
+        "session_id": "afecb476-5810-4978-83a5-a3f2ba6acad9",
+        "source_scope_key": "global",
+        "event_part": "content",
+        "locator_kind": "whole",
+        "locator_value": "",
+        "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77",
+        "actor": "owner",
+        "source_type": "user_message",
+        "authority": "owner_statement",
+        "observed_at": "2026-09-11T01:32:55.105553000Z",
+        "evidence": "My mother Maya is fond of jasmine tea.",
+        "eligibility": "eligible",
+        "create": true
+      },
+      "resulting_revision": 1,
+      "resulting_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "request": {
+        "IdempotencyKey": "idem:v1:2d1206f1-84f0-45d7-bb7d-058ec3cd7f84",
+        "SourceEventID": "594e3141-6372-4b97-ab65-7ca57a129573",
+        "Predicate": "prefers",
+        "PredicateLabel": "prefers",
+        "PredicateCardinality": "many",
+        "Polarity": "affirmed",
+        "ValidTime": {
+          "from": null,
+          "to": null
+        },
+        "Subject": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "Maya",
+          "EntityType": "person",
+          "Alias": "MOM-27"
+        },
+        "Object": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "jasmine tea",
+          "EntityType": "gift",
+          "Alias": "jasmine tea"
+        },
+        "UseSessionScope": false
+      }
+    }
+  ],
+  "question": "For MOM-27, what present would she like?",
+  "scripted_initial_searches": false,
+  "setup": {},
+  "whole_turn_elapsed_ns": 3967970167
+}

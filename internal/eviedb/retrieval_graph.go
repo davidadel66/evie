@@ -145,6 +145,9 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 	if err := c.directGenerator(ctx, ids, "exact_or_alias"); err != nil {
 		return nil, err
 	}
+	if err := c.exactIdentityMatches(ctx, ids); err != nil {
+		return nil, err
+	}
 	ids, err = c.ids(ctx, retrievalLexicalCandidates, `SELECT claim_id FROM memory_retrieval_fts WHERE memory_retrieval_fts MATCH ?
  AND generation=? AND scope_key IN (?,?,?) AND claim_id NOT IN (SELECT claim_id FROM memory_retrieval_dirty)
  ORDER BY bm25(memory_retrieval_fts),claim_id LIMIT ?`, lexical, memoryIndexGeneration, keys[0], keys[1], keys[2])
