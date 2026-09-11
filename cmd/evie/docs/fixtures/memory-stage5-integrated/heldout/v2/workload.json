@@ -1,0 +1,2392 @@
+{
+  "version": 1,
+  "partition": "heldout",
+  "cases": [
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold01_pattern_pages",
+      "family": "fresh_accepted_preference",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "pattern_format",
+          "kind": "accepted_literal",
+          "session_id": "pattern_archive",
+          "scope": "global",
+          "text": "I prefer sewing patterns on A3 sheets with the seam allowances already included.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "sewing_pattern_format",
+            "label": "sewing pattern format",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "A3 sheets with seam allowances included"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "button_box",
+          "kind": "owner_conversation",
+          "session_id": "button_sorting",
+          "scope": "global",
+          "text": "I sorted my wooden buttons into a shallow tin.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "I am about to print a sewing pattern. What page format and allowance treatment suit my saved preference?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "pattern_format"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Use A3 sheets for the sewing pattern.",
+          "Include seam allowances, following the accepted owner preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "pattern_format is an active accepted owner Claim."
+        ],
+        "reader_rules": [
+          "Tie both format details to the original source event. Do not invent a printer setting or claim to print anything."
+        ]
+      }
+    },
+    {
+      "gate_roles": [],
+      "id": "hold02_audiobook_cast",
+      "family": "fresh_accepted_preference",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "single_narrator",
+          "kind": "accepted_literal",
+          "session_id": "listening_notes",
+          "scope": "global",
+          "text": "For audiobooks I prefer one narrator throughout; switching among an ensemble makes the voices hard for me to follow.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "audiobook_narration",
+            "label": "audiobook narration",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "one narrator throughout"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "radio_drama",
+          "kind": "owner_conversation",
+          "session_id": "radio_conversation",
+          "scope": "global",
+          "text": "My neighbor enjoys radio dramas with a large cast.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "I can borrow a solo-narrated audiobook or a full-cast edition. Which fits what you know about how I like listening?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "single_narrator"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Recommend the solo-narrated edition because the owner prefers one narrator.",
+          "The owner said ensemble voice changes are hard to follow."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The narration preference and stated difficulty belong to the owner; the neighbor's taste does not."
+        ],
+        "reader_rules": [
+          "Treat the stated difficulty as the owner's explanation, without inventing a medical cause. Cite the accepted original."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold03_damp_dough",
+      "family": "uncompiled_original_statement",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "dough_observation",
+          "kind": "owner_conversation",
+          "session_id": "bread_log",
+          "scope": "global",
+          "text": "When I proofed the rye dough beside the open pantry window yesterday, its surface dried into a leathery skin. The covered bowl stayed soft.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "flour_purchase",
+          "kind": "owner_conversation",
+          "session_id": "pantry_purchase",
+          "scope": "global",
+          "text": "I bought a smaller bag of oat flour for crackers.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Why might I cover the rye dough during proofing, based on the comparison I described?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "dough_observation"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner reported that uncovered rye dough near the open pantry window developed a leathery skin.",
+          "The covered bowl stayed soft in that reported comparison."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "dough_observation is original owner-reported conversation, not an accepted Claim or controlled experiment."
+        ],
+        "reader_rules": [
+          "A recommendation to cover the bowl may follow the observation. Do not call this a scientifically established cause or a saved memory operation. Cite the original event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [],
+      "id": "hold04_projector_sound",
+      "family": "uncompiled_original_statement",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "projector_observation",
+          "kind": "owner_conversation",
+          "session_id": "projection_trial",
+          "scope": "global",
+          "text": "During my slide show the projector rattled only while the loose lens cap was hanging from its tether. Holding the cap still stopped the rattle.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "screen_storage",
+          "kind": "owner_conversation",
+          "session_id": "screen_cleanup",
+          "scope": "global",
+          "text": "The portable projection screen is behind the bookcase.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What should I check first about that projector rattle, using what I told you from the slide show?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "projector_observation"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner reported rattling while the loose lens cap hung from its tether.",
+          "Holding the cap still stopped the rattle in that observation."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "This is the owner's uncompiled observation, not a confirmed repair diagnosis."
+        ],
+        "reader_rules": [
+          "Suggest checking or securing the cap based on the report; do not claim a repair was completed or a Claim accepted. Cite the original owner event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "clear_reference",
+        "critical_semantic"
+      ],
+      "id": "hold05_choir_feedback",
+      "family": "cross_topic_reference",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "amara_format",
+          "kind": "accepted_entity",
+          "session_id": "choir_preferences",
+          "scope": "global",
+          "text": "Amara Fell prefers rehearsal corrections as marked score pages.",
+          "subject": {
+            "key": "amara",
+            "name": "Amara Fell",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_feedback",
+            "label": "prefers feedback",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "marked_scores",
+            "name": "marked score pages",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "priya_format",
+          "kind": "accepted_entity",
+          "session_id": "stage_preferences",
+          "scope": "global",
+          "text": "Priya Noor prefers rehearsal corrections as spoken voice memos.",
+          "subject": {
+            "key": "priya",
+            "name": "Priya Noor",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_feedback",
+            "label": "prefers feedback",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "voice_memos",
+            "name": "spoken voice memos",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "rehearsal_plan",
+          "owner": "I am preparing rehearsal notes for Amara Fell. Help me choose a feedback format for her.",
+          "assistant": "We can choose a format that makes the corrections easy for Amara to use."
+        },
+        {
+          "id": "riser_detour",
+          "owner": "Separate question: Priya Noor reported a squeak in the folding riser. Could a loose hinge cause that?",
+          "assistant": "A loose hinge is one possible source; inspect the riser before using it."
+        }
+      ],
+      "question": "Back to the rehearsal notes: how should I give her the corrections?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "amara_format"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "priya_format"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The rehearsal-note recipient is Amara Fell.",
+          "Send Amara marked score pages according to her accepted feedback preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The recent rehearsal discussion identifies Amara; her accepted original establishes the format."
+        ],
+        "reader_rules": [
+          "Resolve the clear return to Amara without a recipient clarification. Priya's later unrelated riser discussion does not change the recipient. Cite Amara's original preference event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "material_clarification"
+      ],
+      "id": "hold06_onboarding_recipient",
+      "family": "cross_topic_reference",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "ravi_format",
+          "kind": "accepted_entity",
+          "session_id": "onboarding_ravi",
+          "scope": "global",
+          "text": "Ravi Iqbal prefers onboarding instructions as a written checklist.",
+          "subject": {
+            "key": "ravi",
+            "name": "Ravi Iqbal",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_onboarding",
+            "label": "prefers onboarding",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "written_checklist",
+            "name": "written checklist",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "tomas_format",
+          "kind": "accepted_entity",
+          "session_id": "onboarding_tomas",
+          "scope": "global",
+          "text": "Tomas Wynn prefers onboarding instructions as a narrated screen recording.",
+          "subject": {
+            "key": "tomas",
+            "name": "Tomas Wynn",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_onboarding",
+            "label": "prefers onboarding",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "screen_recording",
+            "name": "narrated screen recording",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "two_new_helpers",
+          "owner": "Ravi Iqbal and Tomas Wynn are both joining the intake desk. I need to show each of them the process.",
+          "assistant": "Both will need an introduction; we have not selected which person to plan for first."
+        },
+        {
+          "id": "unrelated_clock",
+          "owner": "Before that, the wall clock has stopped again.",
+          "assistant": "Check whether the battery is seated properly."
+        }
+      ],
+      "question": "How should I teach him the intake process?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [
+          "ravi_format",
+          "tomas_format"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "clarify",
+        "require_source_event_citations": false,
+        "attribution": [
+          "Both named people remain plausible recipients in the actual reader discussion."
+        ],
+        "reader_rules": [
+          "Ask one focused question identifying the intended recipient before giving any personalized teaching recommendation. Do not give conditional recommendations for both people. If reader context is absent, ask whom the owner means without inventing names."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "clear_reference"
+      ],
+      "id": "hold07_handover_continuity",
+      "family": "compacted_continuity",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "hollis_format",
+          "kind": "accepted_entity",
+          "session_id": "equipment_hollis",
+          "scope": "global",
+          "text": "Hollis Ward prefers equipment instructions as numbered diagrams.",
+          "subject": {
+            "key": "hollis",
+            "name": "Hollis Ward",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_instructions",
+            "label": "prefers instructions",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "numbered_diagrams",
+            "name": "numbered diagrams",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "ellis_format",
+          "kind": "accepted_entity",
+          "session_id": "equipment_ellis",
+          "scope": "global",
+          "text": "Ellis Pike prefers equipment instructions as a live demonstration.",
+          "subject": {
+            "key": "ellis",
+            "name": "Ellis Pike",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_instructions",
+            "label": "prefers instructions",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "live_demo",
+            "name": "live demonstration",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "handover_focus",
+          "owner": "The equipment handover I am writing is for Hollis Ward. Keep them as the recipient when we return to it.",
+          "assistant": "The handover is for Hollis Ward."
+        },
+        {
+          "id": "train_detour",
+          "owner": "Ellis Pike says the local train is delayed. I will check the station board.",
+          "assistant": "The station board can confirm the service information."
+        },
+        {
+          "id": "neutral_exchange_hold07",
+          "owner": "One moment.",
+          "assistant": "Okay."
+        }
+      ],
+      "question": "Back to the equipment handover: how should I explain the controls to them?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "hollis_format"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "ellis_format"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Hollis Ward is the intended recipient of the equipment handover.",
+          "Explain the controls using numbered diagrams, matching Hollis's accepted preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Compaction preserves the handover recipient only; the accepted original supplies Hollis's preference."
+        ],
+        "reader_rules": [
+          "Do not ask an unnecessary recipient question. Do not cite the compaction summary as the original source of the preference."
+        ]
+      },
+      "compaction_continuity": "The equipment handover is being prepared for Hollis Ward. The separate mention of Ellis Pike concerned a delayed train; it did not change the handover recipient."
+    },
+    {
+      "gate_roles": [
+        "material_clarification"
+      ],
+      "id": "hold08_volunteer_pickup",
+      "family": "compacted_continuity",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "lena_pickup",
+          "kind": "accepted_entity",
+          "session_id": "volunteer_lena",
+          "scope": "global",
+          "text": "Lena Orr prefers volunteer-event pickups at the front entrance.",
+          "subject": {
+            "key": "lena",
+            "name": "Lena Orr",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_pickup_point",
+            "label": "prefers pickup point",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "front_entrance",
+            "name": "front entrance",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "noor_pickup",
+          "kind": "accepted_entity",
+          "session_id": "volunteer_noor",
+          "scope": "global",
+          "text": "Noor Vale prefers volunteer-event pickups at the courtyard gate.",
+          "subject": {
+            "key": "noor",
+            "name": "Noor Vale",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "prefers_pickup_point",
+            "label": "prefers pickup point",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "courtyard_gate",
+            "name": "courtyard gate",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [
+        {
+          "id": "two_passengers",
+          "owner": "Lena Orr and Noor Vale both need rides after the volunteer event. We have not assigned either one a pickup yet.",
+          "assistant": "We still need to choose whose ride to arrange first."
+        },
+        {
+          "id": "poster_detour",
+          "owner": "The event poster also needs a larger date line.",
+          "assistant": "Increasing the date size should make the poster easier to scan."
+        },
+        {
+          "id": "neutral_exchange_hold08",
+          "owner": "One moment.",
+          "assistant": "Okay."
+        }
+      ],
+      "question": "Where should I tell her to meet the driver?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [
+          "lena_pickup",
+          "noor_pickup"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "clarify",
+        "require_source_event_citations": false,
+        "attribution": [
+          "The compacted discussion retains two possible people and no selected passenger."
+        ],
+        "reader_rules": [
+          "Ask which person needs pickup before recommending a personal meeting point. Conditional instructions for both people fail the clarification obligation. Without supplied context, ask for the passenger identity without inventing candidate names."
+        ]
+      },
+      "compaction_continuity": "Lena Orr and Noor Vale both need rides after the volunteer event. Neither passenger has been selected for the next pickup plan. The later poster discussion does not resolve that choice."
+    },
+    {
+      "gate_roles": [],
+      "id": "hold09_darkroom_alias",
+      "family": "exact_identity",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "quill_darkroom",
+          "kind": "accepted_entity",
+          "session_id": "darkroom_roster",
+          "scope": "global",
+          "text": "Juniper Moss, whom I call Quill, uses the Tern darkroom.",
+          "subject": {
+            "key": "juniper",
+            "name": "Juniper Moss",
+            "entity_type": "person",
+            "alias": "Quill"
+          },
+          "predicate": {
+            "token": "uses_darkroom",
+            "label": "uses darkroom",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "tern_darkroom",
+            "name": "Tern darkroom",
+            "entity_type": "place",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "quilla_darkroom",
+          "kind": "accepted_entity",
+          "session_id": "other_darkroom_roster",
+          "scope": "global",
+          "text": "Quilla Stone uses the Kestrel darkroom.",
+          "subject": {
+            "key": "quilla",
+            "name": "Quilla Stone",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "uses_darkroom",
+            "label": "uses darkroom",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "kestrel_darkroom",
+            "name": "Kestrel darkroom",
+            "entity_type": "place",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which darkroom does Quill use?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "quill_darkroom"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The accepted alias Quill identifies Juniper Moss, whose accepted Claim says she uses the Tern darkroom."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "Quill is an explicitly accepted subject Alias, not a fuzzy match to Quilla."
+        ],
+        "reader_rules": [
+          "Require the supplied exact accepted alias association or its complete validated accepted origin. An incidental raw name occurrence cannot bind identity. Answer directly when that mapping is present and cite its original event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [],
+      "id": "hold10_instrument_entity_id",
+      "family": "exact_identity",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "soren_instrument",
+          "kind": "accepted_entity",
+          "session_id": "recorder_player",
+          "scope": "global",
+          "text": "Soren Bell plays an alto recorder.",
+          "subject": {
+            "key": "soren_bell",
+            "name": "Soren Bell",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "plays_instrument",
+            "label": "plays instrument",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "alto_recorder",
+            "name": "alto recorder",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "other_soren_instrument",
+          "kind": "accepted_entity",
+          "session_id": "horn_player",
+          "scope": "global",
+          "text": "Soren Hale plays a tenor horn.",
+          "subject": {
+            "key": "soren_hale",
+            "name": "Soren Hale",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "plays_instrument",
+            "label": "plays instrument",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "tenor_horn",
+            "name": "tenor horn",
+            "entity_type": "concept",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which instrument is played by Entity ID {{subject_entity_id:soren_instrument}}?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "soren_instrument"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The exact requested subject Entity plays an alto recorder."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The literal Entity ID placeholder is bound to soren_instrument's canonical accepted subject."
+        ],
+        "reader_rules": [
+          "Use the exact delivered subject Entity binding; do not infer identity from similar personal names. Cite the original event for the bound Claim."
+        ]
+      }
+    },
+    {
+      "gate_roles": [],
+      "id": "hold11_observatory_chain",
+      "family": "graph_and_dense_paraphrase",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "nadia_observatory",
+          "kind": "accepted_entity",
+          "session_id": "observatory_volunteer",
+          "scope": "global",
+          "text": "Nadia Rusk volunteers with the Fern Observatory.",
+          "subject": {
+            "key": "nadia",
+            "name": "Nadia Rusk",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "volunteers_with",
+            "label": "volunteers with",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "fern_observatory",
+            "name": "Fern Observatory",
+            "entity_type": "organization",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "fern_checker",
+          "kind": "accepted_entity",
+          "session_id": "observatory_service",
+          "scope": "global",
+          "text": "The Fern Observatory has its instruments checked by Dr. Lenox Vale.",
+          "subject": {
+            "key": "fern_observatory",
+            "name": "Fern Observatory",
+            "entity_type": "organization"
+          },
+          "predicate": {
+            "token": "instrument_checker",
+            "label": "instrument checker",
+            "cardinality": "one"
+          },
+          "object": {
+            "key": "lenox",
+            "name": "Dr. Lenox Vale",
+            "entity_type": "person",
+            "kind": "entity"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "other_observatory",
+          "kind": "owner_conversation",
+          "session_id": "observatory_news",
+          "scope": "global",
+          "text": "The Dune Observatory bought a new dome motor.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Who checks the instruments for the observatory Nadia Rusk volunteers with?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "nadia_observatory",
+            "fern_checker"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Nadia Rusk volunteers with the Fern Observatory.",
+          "Dr. Lenox Vale checks that observatory's instruments."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The answer follows two distinct accepted Claims through the same canonical Fern Observatory Entity."
+        ],
+        "reader_rules": [
+          "Both accepted support Claims and both original event citations are required. A conversation copy cannot replace the accepted bridge. Do not attribute instrument checking to Nadia."
+        ]
+      }
+    },
+    {
+      "gate_roles": [],
+      "id": "hold12_screen_free_errands",
+      "family": "graph_and_dense_paraphrase",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "paper_errands",
+          "kind": "accepted_literal",
+          "session_id": "errand_habit",
+          "scope": "global",
+          "text": "I prefer a printed errand list so I do not have to unlock a screen while I am out.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "errand_list_medium",
+            "label": "errand list medium",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "a printed errand list"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "home_calendar",
+          "kind": "owner_conversation",
+          "session_id": "household_calendar",
+          "scope": "global",
+          "text": "At home I put recycling dates on the wall calendar.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What would suit me for keeping track of my stops without pulling out my phone?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "paper_errands"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Suggest a printed errand list, matching the owner's accepted preference to avoid unlocking a screen while out."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The accepted owner source supplies the preference; the current question paraphrases its purpose."
+        ],
+        "reader_rules": [
+          "Preserve the preference and reason without claiming a particular app was rejected or making a memory write. Cite the original event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold13_shadow_box_choice",
+      "family": "bounded_neighbor_investigation",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "backing_options",
+          "kind": "owner_conversation",
+          "session_id": "shadow_box_trial",
+          "scope": "global",
+          "text": "For the shadow-box backing I can choose cork tile or grey felt. The cork catches on the glass lip; the felt lies flat.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "backing_prompt",
+          "kind": "assistant_conversation",
+          "session_id": "shadow_box_trial",
+          "scope": "global",
+          "text": "Which backing will you use for this frame?",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "backing_selection",
+          "kind": "owner_conversation",
+          "session_id": "shadow_box_trial",
+          "scope": "global",
+          "text": "I picked the latter for this frame.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which backing did I choose for the shadow box, and why?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "backing_options",
+            "backing_selection"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "backing_prompt"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner chose grey felt, the latter of the two stated backing options.",
+          "The owner's comparison said the felt lay flat while cork caught on the glass lip."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The owner's selection and its preceding owner comparison are distinct original events in one session."
+        ],
+        "reader_rules": [
+          "Use both original neighbors to resolve the latter and explain the stated comparison. Cite both owner events. Do not present the assistant's question as the owner's decision."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold14_divider_trial",
+      "family": "bounded_neighbor_investigation",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "divider_tentative",
+          "kind": "owner_conversation",
+          "session_id": "cabinet_design",
+          "scope": "global",
+          "text": "For the seed-packet cabinet, I am leaning toward sliding dividers, but I have not settled it.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "divider_suggested_test",
+          "kind": "assistant_conversation",
+          "session_id": "cabinet_design",
+          "scope": "global",
+          "text": "Before choosing, load one drawer with full packets and check that the dividers do not bow.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What did we settle on for the seed-packet cabinet, and did we check it under load?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "divider_tentative",
+            "divider_suggested_test"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner was only leaning toward sliding dividers and had not settled the choice.",
+          "The assistant suggested a loaded-drawer check for bowing; the exchange does not record that check being performed."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The provisional option is the owner's statement; the load check is an assistant suggestion with no completion evidence."
+        ],
+        "reader_rules": [
+          "Do not upgrade the option to a final choice or the suggested check to a performed test. Cite the separate original owner and assistant events."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold15_archive_historical",
+      "family": "historical_and_retired",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "old_archive_pickup",
+          "kind": "accepted_literal",
+          "session_id": "archive_history",
+          "scope": "global",
+          "text": "My archive-box pickup point was the Marlow boathouse from 2019-04-01T00:00:00Z until 2020-08-15T00:00:00Z, excluding that ending instant.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "archive_pickup_point",
+            "label": "archive pickup point",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Marlow boathouse"
+          },
+          "valid_time": {
+            "from": "2019-04-01T00:00:00Z",
+            "to": "2020-08-15T00:00:00Z"
+          },
+          "retired": true
+        },
+        {
+          "id": "current_archive_pickup",
+          "kind": "accepted_literal",
+          "session_id": "archive_present",
+          "scope": "global",
+          "text": "My current archive-box pickup point is the Ashbridge vault.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "archive_pickup_point",
+            "label": "archive pickup point",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Ashbridge vault"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Historically, where did I collect archive boxes on 2020-01-20? State the recorded validity interval, whether that memory is retired now, and when its original statement was recorded.",
+      "gold": {
+        "oracle_intent": "historical",
+        "support_sets": [
+          [
+            "old_archive_pickup"
+          ]
+        ],
+        "acceptable_context_record_ids": [
+          "current_archive_pickup"
+        ],
+        "forbidden_current_record_ids": [
+          "old_archive_pickup"
+        ],
+        "forbidden_current_text": [
+          "Marlow boathouse"
+        ],
+        "expected_answer_components": [
+          "The historical pickup point on 2020-01-20 was the Marlow boathouse.",
+          "The accepted validity is the half-open interval from 2019-04-01T00:00:00Z to 2020-08-15T00:00:00Z, with the end excluded.",
+          "This historical Claim is currently retired.",
+          "The actual original observation/recording time comes from the supplied event metadata and must not be backdated to the fact's validity."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The retired accepted Claim establishes the historical location at a known valid-world-time point."
+        ],
+        "reader_rules": [
+          "Supply the retired source only under explicit historical intent with exact current lifecycle labels and authorized source access. Both validity bounds must be known and contain the requested point. The current contextual pickup Claim cannot prove the historical location. Cite the retired Claim's original source event."
+        ],
+        "oracle_valid_at": "2020-01-20T00:00:00Z"
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold16_print_returns_current",
+      "family": "historical_and_retired",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "retired_return_route",
+          "kind": "accepted_literal",
+          "session_id": "print_returns",
+          "scope": "global",
+          "text": "For print-cooperative returns, use the basement chute.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "print_return_route",
+            "label": "print return route",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "basement chute"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": true
+        },
+        {
+          "id": "active_return_route",
+          "kind": "accepted_literal",
+          "session_id": "print_returns",
+          "scope": "global",
+          "text": "For current print-cooperative returns, hand parcels to the front desk.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "print_return_route",
+            "label": "print return route",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "front desk"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "receipt_location",
+          "kind": "owner_conversation",
+          "session_id": "print_returns",
+          "scope": "global",
+          "text": "The print-cooperative return receipts are kept in the violet binder.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Where should I hand in print-cooperative returns now, and where are the receipts kept?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "active_return_route",
+            "receipt_location"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "retired_return_route"
+        ],
+        "forbidden_current_text": [
+          "basement chute"
+        ],
+        "expected_answer_components": [
+          "Hand current returns to the front desk, according to the active accepted Claim.",
+          "The owner reported that the return receipts are kept in the violet binder."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The handoff location is accepted memory; the receipt location is an eligible owner Conversation Excerpt from the same session."
+        ],
+        "reader_rules": [
+          "Never supply or mention the retired route in any current provider payload, including neighboring excerpts or replay. Retirement of one source must not hide unrelated live receipt information in the same session. Cite both live original events."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold17_volunteer_shift_conflict",
+      "family": "conflicting_claims_and_newer_statement",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "shift_ten",
+          "kind": "accepted_literal",
+          "session_id": "shift_saved_first",
+          "scope": "global",
+          "text": "My regular volunteer shift starts at 10:00.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "volunteer_shift_start",
+            "label": "volunteer shift start",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "10:00"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "shift_twelve",
+          "kind": "accepted_literal",
+          "session_id": "shift_saved_second",
+          "scope": "global",
+          "text": "My regular volunteer shift starts at 12:00.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "volunteer_shift_start",
+            "label": "volunteer shift start",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "12:00"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "shift_new_report",
+          "kind": "owner_conversation",
+          "session_id": "shift_roster_update",
+          "scope": "global",
+          "text": "I checked the new roster: my regular volunteer shift now starts at 11:00.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What start time do you have for my regular volunteer shift? Account for any disagreement and newer update.",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "shift_ten",
+            "shift_twelve",
+            "shift_new_report"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "Two active accepted Claims disagree between 10:00 and 12:00.",
+          "A newer owner episode explicitly reports 11:00 from the new roster, but it has not corrected the accepted Claims."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The accepted disagreement and the newer explicit owner report retain different authority and state."
+        ],
+        "reader_rules": [
+          "Expose both accepted times and the newer attributed report. Do not silently pick a current value, automatically resolve the conflict, or claim to save a correction. Cite all three original events."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold18_catering_pickup_conflict",
+      "family": "conflicting_claims_and_newer_statement",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "pickup_north",
+          "kind": "accepted_literal",
+          "session_id": "catering_first",
+          "scope": "global",
+          "text": "My catering pickup counter is North Hall.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "catering_pickup_counter",
+            "label": "catering pickup counter",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "North Hall"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "pickup_east",
+          "kind": "accepted_literal",
+          "session_id": "catering_second",
+          "scope": "global",
+          "text": "My catering pickup counter is the East gate.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "catering_pickup_counter",
+            "label": "catering pickup counter",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "East gate"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "pickup_tentative",
+          "kind": "owner_conversation",
+          "session_id": "catering_possible_update",
+          "scope": "global",
+          "text": "The coordinator might move my catering pickup to the Garden kiosk; I have not confirmed that.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Where is my catering pickup counter, considering what is saved and the possible change I mentioned?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "pickup_north",
+            "pickup_east",
+            "pickup_tentative"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The active accepted Claims disagree between North Hall and the East gate.",
+          "The newer owner report only tentatively mentions the Garden kiosk and explicitly says it is unconfirmed."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The owner reports a possible coordinator change; recency does not make it confirmed or accepted."
+        ],
+        "reader_rules": [
+          "Keep both active Claims visible and distinguish the tentative update. Do not silently choose a counter or claim a correction. Asking the owner to confirm is acceptable. Cite all three original events."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold19_collar_reported_speech",
+      "family": "speaker_quote_and_tentative_attribution",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "beatrice_quote",
+          "kind": "owner_conversation",
+          "session_id": "costume_fitting",
+          "scope": "global",
+          "text": "At the costume fitting, Beatrice Kwan told me, \"Velvet collars itch; linen is comfortable.\" I am recording her words, not my own clothing preference.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "costume_storage",
+          "kind": "owner_conversation",
+          "session_id": "wardrobe_cleanup",
+          "scope": "global",
+          "text": "The spare costume hangers are stacked in the green crate.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What did Beatrice say about collar fabric, and does that statement establish my clothing preference?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "beatrice_quote"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner reported Beatrice Kwan saying velvet collars itch and linen is comfortable.",
+          "This does not establish the owner's clothing preference or a newly accepted Claim."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The stored speaker is the owner reporting Beatrice's words; this is not a direct stored message from Beatrice."
+        ],
+        "reader_rules": [
+          "Keep the two speaker levels explicit. If quoting, reproduce the exact original quoted bytes. Cite the owner's original report event."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold20_manual_flag_suggestion",
+      "family": "speaker_quote_and_tentative_attribution",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "manual_problem",
+          "kind": "owner_conversation",
+          "session_id": "manual_reading",
+          "scope": "global",
+          "text": "I keep losing my place in long manuals.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "flag_suggestion",
+          "kind": "assistant_conversation",
+          "session_id": "manual_reading",
+          "scope": "global",
+          "text": "A page tab might help; perhaps you would like a removable index flag.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "In our manual-reading exchange, had I said I preferred removable index flags, or was that your suggestion?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "manual_problem",
+            "flag_suggestion"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The owner said they kept losing their place in long manuals.",
+          "The removable index flag was the assistant's tentative suggestion, not a stated or accepted owner preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The problem belongs to the owner; the proposed aid and tentative preference inference belong to the assistant."
+        ],
+        "reader_rules": [
+          "Restrict the conclusion to this exchange rather than claiming an exhaustive absence across all history. Do not claim the suggestion was tried or saved. Cite both original speaker events."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold21_mount_serial_gap",
+      "family": "unanswerable_and_unavailable",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "mount_donation",
+          "kind": "owner_conversation",
+          "session_id": "telescope_donation",
+          "scope": "global",
+          "text": "I donated my telescope mount to the Brook astronomy club. I did not copy its serial label.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "What was the serial suffix on the telescope mount I donated?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [
+          "mount_donation"
+        ],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [],
+        "response_kind": "abstain",
+        "require_source_event_citations": false,
+        "attribution": [
+          "Any donation context remains an owner report; it does not supply a serial suffix."
+        ],
+        "reader_rules": [
+          "Explain that the available evidence does not establish the suffix. Do not invent it, infer it from the club name, or claim a bounded search proves it was never mentioned."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold22_sculpture_unavailable",
+      "family": "unanswerable_and_unavailable",
+      "reader_scope": "global",
+      "memory_mode": "unavailable",
+      "records": [
+        {
+          "id": "sculpture_sponsorship",
+          "kind": "accepted_literal",
+          "session_id": "sponsorship_record",
+          "scope": "global",
+          "text": "I sponsored the sculpture Tidal Ladder for the neighborhood art walk.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "art_walk_sculpture",
+            "label": "art walk sculpture",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "Tidal Ladder"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Which sculpture did I sponsor for the neighborhood art walk?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "sculpture_sponsorship"
+        ],
+        "forbidden_current_text": [
+          "Tidal Ladder"
+        ],
+        "expected_answer_components": [],
+        "response_kind": "abstain",
+        "require_source_event_citations": false,
+        "attribution": [
+          "The seeded sponsorship Claim is unavailable to the measured reader; hidden setup content does not ground an answer."
+        ],
+        "reader_rules": [
+          "Explain that a supporting memory cannot be accessed here. Do not say there is no sponsorship record, guess a sculpture, or reveal forbidden content. A baseline with no memory-status signal need not invent an outage diagnosis."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold23_active_voice_rewrite",
+      "family": "scope_and_no_memory_needed",
+      "reader_scope": "global",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "ferry_seat",
+          "kind": "accepted_literal",
+          "session_id": "ferry_trip",
+          "scope": "global",
+          "text": "I prefer the upper-deck window seat on the island ferry.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "ferry_seat_preference",
+            "label": "ferry seat preference",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "upper-deck window seat"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "Rewrite this sentence in active voice: \"The samples were placed in the freezer by the technician.\"",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          []
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [],
+        "forbidden_current_text": [],
+        "expected_answer_components": [
+          "The technician placed the samples in the freezer."
+        ],
+        "response_kind": "general",
+        "require_source_event_citations": false,
+        "attribution": [
+          "All task information is in the current request; no personal memory is needed."
+        ],
+        "reader_rules": [
+          "A semantically faithful active-voice rewrite passes. Answer directly without personalization, irrelevant stored facts, or a clarification question. Any retrieved memory is unwanted context."
+        ]
+      }
+    },
+    {
+      "gate_roles": [
+        "critical_semantic"
+      ],
+      "id": "hold24_invoice_scope",
+      "family": "scope_and_no_memory_needed",
+      "reader_scope": "project:seed-library",
+      "memory_mode": "available",
+      "records": [
+        {
+          "id": "global_invoice_preference",
+          "kind": "accepted_literal",
+          "session_id": "global_invoice_archive",
+          "scope": "global",
+          "text": "I generally prefer invoices as plain-text attachments.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "invoice_format",
+            "label": "invoice format",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "plain-text attachments"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "other_project_invoice",
+          "kind": "accepted_literal",
+          "session_id": "festival_invoices",
+          "scope": "project:lantern-festival",
+          "text": "For the lantern-festival project I require invoices on canary paper.",
+          "subject": {
+            "key": "owner",
+            "name": "Owner",
+            "entity_type": "person"
+          },
+          "predicate": {
+            "token": "invoice_format",
+            "label": "invoice format",
+            "cardinality": "one"
+          },
+          "object": {
+            "kind": "literal",
+            "literal_kind": "text",
+            "value": "canary paper"
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        },
+        {
+          "id": "raw_global_invoice",
+          "kind": "owner_conversation",
+          "session_id": "global_scrapbook_discussion",
+          "scope": "global",
+          "text": "For a private scrapbook invoice experiment I am considering folded vellum slips.",
+          "subject": {
+            "key": "",
+            "name": "",
+            "entity_type": "concept"
+          },
+          "predicate": {
+            "token": "",
+            "label": "",
+            "cardinality": ""
+          },
+          "object": {
+            "key": "",
+            "name": "",
+            "entity_type": "",
+            "kind": "",
+            "literal_kind": "",
+            "value": ""
+          },
+          "valid_time": {
+            "from": null,
+            "to": null
+          },
+          "retired": false
+        }
+      ],
+      "recent_discussion": [],
+      "question": "For this seed-library project, what invoice format should I use based on my saved general preference?",
+      "gold": {
+        "oracle_intent": "current",
+        "support_sets": [
+          [
+            "global_invoice_preference"
+          ]
+        ],
+        "acceptable_context_record_ids": [],
+        "forbidden_current_record_ids": [
+          "other_project_invoice",
+          "raw_global_invoice"
+        ],
+        "forbidden_current_text": [
+          "canary paper",
+          "folded vellum slips"
+        ],
+        "expected_answer_components": [
+          "Use plain-text attachments, following the permitted accepted Global invoice preference."
+        ],
+        "response_kind": "answer",
+        "require_source_event_citations": true,
+        "attribution": [
+          "The accepted Global Claim is permitted in the selected project; another project's Claim and raw Global discussion are not."
+        ],
+        "reader_rules": [
+          "Neither reveal nor rely on forbidden source identities or distinctive text anywhere in provider payloads or replay. Do not treat access to accepted Global knowledge as raw Global-history access. Cite the permitted accepted original event."
+        ]
+      }
+    }
+  ]
+}

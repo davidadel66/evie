@@ -8,3 +8,7 @@ cmd/evie/docs/fixtures/memory-stage5-reference-reader/verification/161-export-ui
 
 # Preserve the byte-identified frozen protocol; the maintained procedure is text.
 cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v3/frozen/procedure.md binary
+
+# Exact hashed Vite verification captures contain a reporter's trailing space.
+cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v2/final-verification/verify_change.log binary
+cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v2/final-verification-v2/verify_change.log binary

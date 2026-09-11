@@ -1,0 +1,6 @@
+=== RUN   TestStage5BrowserFixture
+    memory_stage5_browser_test.go:125: browser lifecycle state=active expected=retired: <nil>
+--- FAIL: TestStage5BrowserFixture (0.25s)
+FAIL
+FAIL	github.com/davidadel66/evie/cmd/evie	0.582s
+FAIL

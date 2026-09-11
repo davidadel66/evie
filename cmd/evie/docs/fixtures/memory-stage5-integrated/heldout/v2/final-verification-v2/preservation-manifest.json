@@ -1,0 +1,54 @@
+{
+  "source": "/tmp/evie-memory-stage5/168-final-handoff-checks-v2",
+  "files": {
+    "demonstrations-started.json": {
+      "sha256": "3c39c90390c97950d5a55bc4383e599bebeb732bffe1a0f243d1f7c81b4ddc7d",
+      "bytes": 850
+    },
+    "demonstrations.json": {
+      "sha256": "9f1a5fbdb2f62f27889d913eb01d92d5e666793a697af3b304d7166fc64e1ec8",
+      "bytes": 956
+    },
+    "demonstrations.log": {
+      "sha256": "5b42923a0adbbbefc51b2e606ac58bbbc0b01ed80c994205a9be2c24c0256237",
+      "bytes": 12495
+    },
+    "handoff-verification.json": {
+      "sha256": "13871dc378404d0b329932358ecf1aca895532bd9b0a9886875ce8a41c88a1b0",
+      "bytes": 4129
+    },
+    "ui-results.json": {
+      "sha256": "8cf60ba69a9974ac1eba9586c8f6094f28a1916d216247506b568024fe8b96a9",
+      "bytes": 9042
+    },
+    "ui_demonstrations-started.json": {
+      "sha256": "9f6ead369c1f4d0f2a5820ca3dcb85c25a46c1a65c27bcff4881159f56269317",
+      "bytes": 652
+    },
+    "ui_demonstrations.json": {
+      "sha256": "838598d55c39f439ea3fd75ea1ee4331f9890bcf5298589142a74f3cc30fcbb6",
+      "bytes": 758
+    },
+    "ui_demonstrations.log": {
+      "sha256": "5814291fe7b4309abe60aad28bfe817501aa4887ba8cb10ec687a3aaa61c1575",
+      "bytes": 91
+    },
+    "verified-source-manifest.json": {
+      "sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+      "bytes": 44404
+    },
+    "verify_change-started.json": {
+      "sha256": "a43738751ebe868851485c2f854b23d03f7e66a4509c8e5d82c427cd1de8e6cc",
+      "bytes": 182
+    },
+    "verify_change.json": {
+      "sha256": "cd2ea65b669646fc56fa6978b4c358aae55579eedefd1563f9a75470cd755000",
+      "bytes": 288
+    },
+    "verify_change.log": {
+      "sha256": "320d385b6a218910a75806d161ef274be66feea448b224fa46743c3263609cad",
+      "bytes": 28743
+    }
+  },
+  "all_copy_hashes_verified": true
+}

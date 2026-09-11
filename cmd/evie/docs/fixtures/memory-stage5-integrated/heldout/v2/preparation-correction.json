@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "corpus_directory_revision": "v2",
+  "workload_schema_version": 1,
+  "partition": "heldout",
+  "curator": {
+    "kind": "agent",
+    "identity": "/root/heldout_curator",
+    "role": "original curator performing bounded structural preparation correction"
+  },
+  "created_at_utc": "2026-09-11T06:40:07.171412+00:00",
+  "reason": "Root reported that the first exact frozen V4 seal-release attempt failed canonical preparation only for hold07_handover_continuity and hold08_volunteer_pickup: two completed discussion turns leave nothing eligible because compaction requires at least three and retains the newest two. This report arrived before any held-out reader answer or query-performance output.",
+  "authorization": "Create V2 by appending exactly one neutral nonpersonal exchange to each of the two cases. Preserve V1 and all existing V1 content. Root alone retries canonical preparation and sealing in a new directory, preserving the failed V1 attempt.",
+  "frozen_implementation_commit_reported_by_parent": "efef0db",
+  "contract_reads": [
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v4/source/internal/agent/compaction.go",
+      "sha256": "2a1cd8bdeea1ceebce010320dc139a11c83f6c214f3942a3455f6673afd25799"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v4/source/internal/agent/retrieval_integrated_fixture_test.go",
+      "sha256": "270674cd227ffd644e5834dbfbe9e0ddc5bbf55537af368e1f4b7a72560d3906"
+    }
+  ],
+  "contract_basis": {
+    "fixture": "Each recent_discussion owner/assistant pair creates a completed reader turn before invoking scripted compaction.",
+    "compaction": "selectManualCompaction rejects fewer than three completed turns and retains the newest two; appending a third makes the original first turn eligible.",
+    "code_or_configuration_changed": false
+  },
+  "v1_file_sha256_before": {
+    "curation-record.json": "0f13c3bbe224480fc45f0474a07c6d2570ee5913eac530819646b49936bbc5eb",
+    "workload.json": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+    "report-author-metadata-exposure.json": "0852caa6fad36d557642f195f0aa857653e58df5588daf1ffc44f47cc2fd6db1",
+    "curation.md": "3ec8b1354bc0ead24e7d8885aa3d61cbc649183cb6d7f2b93a68f97f4a3bc499"
+  },
+  "v2_workload_sha256": "22cd641595f6aa9791f212db4f9ce95a745edbd68444a073d106b5bc3b52582b",
+  "v2_workload_bytes": 76665,
+  "exact_json_diff": [
+    {
+      "op": "add",
+      "path": "/cases/6/recent_discussion/2",
+      "value": {
+        "id": "neutral_exchange_hold07",
+        "owner": "One moment.",
+        "assistant": "Okay."
+      }
+    },
+    {
+      "op": "add",
+      "path": "/cases/7/recent_discussion/2",
+      "value": {
+        "id": "neutral_exchange_hold08",
+        "owner": "One moment.",
+        "assistant": "Okay."
+      }
+    }
+  ],
+  "static_checks": {
+    "result": "pass",
+    "exact_diff_contains_only_two_appended_elements": true,
+    "all_original_strings_exactly_preserved": true,
+    "removing_added_elements_restores_original_serialized_v1_bytes": true,
+    "other_22_cases_identical": true,
+    "all_records_gold_questions_continuity_roles_metadata_unchanged": true,
+    "each_corrected_case_has_three_completed_discussion_pairs": true,
+    "new_discussion_ids_globally_fresh": true,
+    "family_and_role_counts_unchanged": true,
+    "workload_version_still_one": true,
+    "v1_file_bytes_unchanged": true
+  },
+  "neutrality_review": "The two exchanges contain only owner: One moment. and assistant: Okay. They introduce no people, preferences, task-answer clues, recipient choice, factual support for a gold component, or claims that an action was completed. All existing compaction-continuity and ambiguity obligations remain exact.",
+  "output_access": {
+    "development_answers_or_traces_read": false,
+    "heldout_reader_answers_read": false,
+    "heldout_retrieval_performance_outputs_read": false,
+    "failed_preparation_outputs_read_directly": false,
+    "failure_basis": "Root's bounded setup-failure report and independent inspection of the frozen compaction and fixture contract."
+  },
+  "actions_not_performed": [
+    "Canonical preparation",
+    "Reader/model calls",
+    "Embedding calls",
+    "Retrieval-performance queries",
+    "Production code/configuration/rubric/gate changes",
+    "V1 edits",
+    "Git staging or commits"
+  ],
+  "verification_command": "python3 /private/tmp/evie-memory-stage5-correct-heldout-v2.py",
+  "retention": "V1 and its failed preparation remain immutable. This V2 correction record does not replace the original curation provenance.",
+  "canonical_preparation_status": "pending_root_new_attempt",
+  "release_ready": false,
+  "v1_file_sha256_after": {
+    "curation-record.json": "0f13c3bbe224480fc45f0474a07c6d2570ee5913eac530819646b49936bbc5eb",
+    "workload.json": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+    "report-author-metadata-exposure.json": "0852caa6fad36d557642f195f0aa857653e58df5588daf1ffc44f47cc2fd6db1",
+    "curation.md": "3ec8b1354bc0ead24e7d8885aa3d61cbc649183cb6d7f2b93a68f97f4a3bc499"
+  }
+}

@@ -210,3 +210,99 @@ python3 -B cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v4/p
 
 The verifier reports 2,105 verified originals, 73 output files, 15 repository
 records and `all_member_hashes_times_modes_verified: true`, without model calls.
+
+## Held-out v1 setup and v2 release assessment
+
+`heldout-v1-failed-setup/` preserves the first held-out preparation failure:
+22 of 24 cases prepared; two compacted-reference fixtures lacked a third
+completed root required by the public compaction contract. There was no sealed
+held-out freeze, reader call, index measurement or local/operating cohort in v1.
+The independent curator appended one neutral completed exchange to each affected
+fixture before evaluation. Removing those two additions reconstructs the entire
+v1 workload byte for byte. Original wording, questions, gold and the other
+22 cases stayed unchanged. Both versions and qualification records remain in
+[`heldout/`](../heldout/).
+
+`heldout-v2/` preserves the completed, **failed** release assessment. Its
+[freeze](heldout-v2/frozen/freeze.json) was sealed at
+2026-09-11 06:41:45.948626 UTC, SHA-256
+`c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2`.
+It reuses the exact development-v4 executable and all 394 compilation inputs.
+No corpus, configuration, gate or scoring program changed after held-out output.
+The original wrapper withheld reader execution after index/local failures;
+the explicit first reader continuation is retained as a protocol deviation,
+with no replacement attempt or waived gate.
+
+The [resource report](heldout-v2/reports/resource-report.json) contains
+**1,051 passing, 23 failing and three incomplete gates** out of 1,077.
+All readiness flags are false. All 144 manual agent assessments are retained;
+142 validate, with 14 errors across two truthful raw-source judgments rejected
+by the frozen accepted-record binding. Validated semantic passes are 126/144;
+raw manual passes are 128/144. These denominators are not interchangeable.
+The [release assessment](../../../active/memory-stage-5-release-assessment.md)
+separates retrieval coverage, answer quality, oracle behavior, resource costs,
+annotation limitations and the actual silent-conflict-resolution error.
+
+All 144 reader cases remain: 187 prepared requests, 184 actual wire/HTTP calls,
+and three failed turns with requests blocked before dispatch. All 2,880 local
+samples remain, including 20 failed historical-oracle samples with unknown final
+runtime totals. Index checks pass in 23/24 cases; operating checks pass in all
+60 samples. The historical gold also forbids its own required location text;
+that diagnosed contradiction stays a failed gate. No failed sample was removed,
+retried as a replacement, or converted to a successful measurement.
+
+The exact [gate ledger](../heldout/v2/post-run-diagnostics/heldout-v2-final-gate-ledger.json)
+contains every failure, threshold and validation message. Lossless archives
+retain requests, responses, source packets, judgments, local/index/operating
+traces and closed executions. `curation-provenance.tar.gz` also captures the
+final repository checks and the separate disposable browser demonstration;
+the readable originals are under [`heldout/v2/`](../heldout/v2/).
+Those eight scripted UI/state demonstrations do not replace real-reader quality.
+
+From the original preserved working tree, check all exact copied bytes,
+archive members, original timestamps and modes without model calls:
+
+```sh
+python3 -B cmd/evie/docs/fixtures/memory-stage5-integrated/runs/heldout-v2/preserve-integrated-heldout-v2.py verify \
+  --directory cmd/evie/docs/fixtures/memory-stage5-integrated/runs/heldout-v2
+```
+
+The preservation manifest identifies exact inventories and hashes. Keep new
+notes outside each immutable run directory. Git does not preserve direct-file
+modification times; use the separately documented transport verification for a
+fresh checkout, without presenting checkout times as observed run timestamps.
+Future evaluator or runtime corrections need a separate fresh assessment;
+these held-out cases are now known regression material.
+
+The held-out v2 preservation verifier reports 2,438 verified original entries,
+81 output files, 23 unchanged repository references and
+`all_member_hashes_times_modes_verified: true`. Its payload is 19,012,435 bytes
+before the final preservation manifest. The source and canonical input archives
+are complete; compiled executables and model weights are explicitly excluded.
+
+## Verifying a fresh Git checkout
+
+The supplementary [transport verifier](transport-verification/verify-preserved-transport.py)
+checks the exact file set, content hashes, archive-member metadata, frozen source
+and seed manifests, and repository references. It reports direct-file checkout
+mtime/mode differences without claiming those original values survived Git.
+The immutable strict verifiers above remain useful against the original local
+copies. Neither verification method reruns or reclassifies the experiment.
+
+```sh
+python3 -B cmd/evie/docs/fixtures/memory-stage5-integrated/runs/transport-verification/verify-preserved-transport.py \
+  --repository . \
+  --directory cmd/evie/docs/fixtures/memory-stage5-integrated/runs/heldout-v2 \
+  --output /tmp/evie-heldout-v2-transport-verification.json
+```
+
+Use a new output filename. The [observed held-out check](transport-verification/heldout-v2-transport-result.json)
+passed all 81 retained files, 2,369 preservation-archive members, 394 source
+inputs, 48 canonical seed/map inputs and 23 repository references. Controls
+changed all 64 direct-file timestamps in a disposable development-v4 copy:
+transport checking passed while the strict verifier correctly rejected the
+metadata differences. A changed freeze byte was rejected. The
+[reconstruction note](transport-verification/heldout-v2-transport-verification-note.md)
+and exact control records explain the distinction and original build/run paths.
+This does not claim bit-identical executable rebuilds or deterministic live
+provider answers.

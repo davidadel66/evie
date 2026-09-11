@@ -1,0 +1,4764 @@
+{
+  "auditor_sha256": "e64eab8a6b1c9b5acce956b366fb348fffac8b5f8c6c74a40fb669ab2fd319dc",
+  "cases": [
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "fresh_accepted_preference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7077
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2539500250
+    },
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "fresh_accepted_preference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7077
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5043013000
+    },
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "pattern_format"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "pattern_format"
+      ],
+      "request_bytes": [
+        9413,
+        12547
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "pattern_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4412388292
+    },
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "pattern_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "pattern_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "pattern_format"
+      ],
+      "request_bytes": [
+        11142
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "pattern_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2648480750
+    },
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "pattern_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "pattern_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "pattern_format"
+      ],
+      "request_bytes": [
+        13573
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "pattern_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3415384959
+    },
+    {
+      "case_id": "hold01_pattern_pages",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "pattern_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "pattern_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "pattern_format"
+      ],
+      "request_bytes": [
+        10078
+      ],
+      "required": [
+        "pattern_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "pattern_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2725333834
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "fresh_accepted_preference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7088
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4283182208
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "fresh_accepted_preference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7088
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4225357375
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "single_narrator"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "single_narrator"
+      ],
+      "request_bytes": [
+        9424,
+        12553
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "single_narrator"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4466632834
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "request_bytes": [
+        12399
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "radio_drama"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3120542542
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "request_bytes": [
+        14735
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "radio_drama",
+        "single_narrator"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "radio_drama"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2502013792
+    },
+    {
+      "case_id": "hold02_audiobook_cast",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "fresh_accepted_preference",
+      "final": [
+        "single_narrator"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "single_narrator"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "single_narrator"
+      ],
+      "request_bytes": [
+        10087
+      ],
+      "required": [
+        "single_narrator"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "single_narrator"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2189630000
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "uncompiled_original_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7058
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2821260625
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "uncompiled_original_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7058
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3337289208
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "dough_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "dough_observation"
+      ],
+      "request_bytes": [
+        9394,
+        10099,
+        12293
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 3,
+      "union": [
+        "dough_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6055783375
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "request_bytes": [
+        10421
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "flour_purchase"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2739682125
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "request_bytes": [
+        12757
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "dough_observation",
+        "flour_purchase"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "flour_purchase"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3498404959
+    },
+    {
+      "case_id": "hold03_damp_dough",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "dough_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "dough_observation"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "dough_observation"
+      ],
+      "request_bytes": [
+        9241
+      ],
+      "required": [
+        "dough_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "dough_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2104649083
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "uncompiled_original_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7070
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3433679041
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "uncompiled_original_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7070
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3929435083
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "projector_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "projector_observation"
+      ],
+      "request_bytes": [
+        9406,
+        10090,
+        12272
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 3,
+      "union": [
+        "projector_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6457285208
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "projector_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "projector_observation"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "projector_observation"
+      ],
+      "request_bytes": [
+        9364
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "projector_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3442007666
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "projector_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "projector_observation"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "projector_observation"
+      ],
+      "request_bytes": [
+        11700
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "projector_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3504750625
+    },
+    {
+      "case_id": "hold04_projector_sound",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "uncompiled_original_statement",
+      "final": [
+        "projector_observation"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "projector_observation"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "projector_observation"
+      ],
+      "request_bytes": [
+        9261
+      ],
+      "required": [
+        "projector_observation"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "projector_observation"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3275598042
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7040
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6649724958
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7795
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6091486958
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "cross_topic_reference",
+      "final": [
+        "amara_format",
+        "priya_format"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "amara_format",
+        "priya_format"
+      ],
+      "request_bytes": [
+        10131,
+        15099
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "amara_format",
+        "priya_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5707544750
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "cross_topic_reference",
+      "final": [
+        "amara_format",
+        "priya_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "amara_format",
+        "priya_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "amara_format",
+        "priya_format",
+        "recent:rehearsal_plan:26dff162-1894-4c07-965e-4fb29f642bd7",
+        "recent:riser_detour:30ce3493-8cf0-4534-a577-37b767938d9d"
+      ],
+      "request_bytes": [
+        15019
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "amara_format",
+        "priya_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "recent:rehearsal_plan:26dff162-1894-4c07-965e-4fb29f642bd7",
+        "recent:riser_detour:30ce3493-8cf0-4534-a577-37b767938d9d"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4467180417
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "cross_topic_reference",
+      "final": [
+        "amara_format",
+        "priya_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "amara_format",
+        "priya_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "amara_format",
+        "priya_format",
+        "recent:rehearsal_plan:26dff162-1894-4c07-965e-4fb29f642bd7",
+        "recent:riser_detour:30ce3493-8cf0-4534-a577-37b767938d9d"
+      ],
+      "request_bytes": [
+        17355
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "amara_format",
+        "priya_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "recent:rehearsal_plan:26dff162-1894-4c07-965e-4fb29f642bd7",
+        "recent:riser_detour:30ce3493-8cf0-4534-a577-37b767938d9d"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3012461625
+    },
+    {
+      "case_id": "hold05_choir_feedback",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "cross_topic_reference",
+      "final": [
+        "amara_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "amara_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "amara_format"
+      ],
+      "request_bytes": [
+        10719
+      ],
+      "required": [
+        "amara_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "amara_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4825517708
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "no_recall",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7015
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4218059458
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "recent_context",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7712
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1269327667
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "tool_only",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        10048
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1560927667
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "automatic",
+      "family": "cross_topic_reference",
+      "final": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "ravi_format",
+        "recent:two_new_helpers:d026b8fc-650c-4630-8792-53d735a492fc",
+        "recent:unrelated_clock:97b32727-15c1-4b9b-ac53-81cdc66b6b1e",
+        "tomas_format"
+      ],
+      "request_bytes": [
+        14882
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "recent:two_new_helpers:d026b8fc-650c-4630-8792-53d735a492fc",
+        "recent:unrelated_clock:97b32727-15c1-4b9b-ac53-81cdc66b6b1e"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2198618500
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "automatic_deeper",
+      "family": "cross_topic_reference",
+      "final": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "ravi_format",
+        "recent:two_new_helpers:d026b8fc-650c-4630-8792-53d735a492fc",
+        "recent:unrelated_clock:97b32727-15c1-4b9b-ac53-81cdc66b6b1e",
+        "tomas_format"
+      ],
+      "request_bytes": [
+        17218
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [
+        "ravi_format",
+        "tomas_format"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "recent:two_new_helpers:d026b8fc-650c-4630-8792-53d735a492fc",
+        "recent:unrelated_clock:97b32727-15c1-4b9b-ac53-81cdc66b6b1e"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2065361792
+    },
+    {
+      "case_id": "hold06_onboarding_recipient",
+      "complete_final_support": null,
+      "condition": "oracle",
+      "family": "cross_topic_reference",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        8311
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1616882334
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7047
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5420249459
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        8121
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5394200709
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": false,
+      "condition": "tool_only",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        10457
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4860747917
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "compacted_continuity",
+      "final": [
+        "hollis_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "hollis_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "hollis_format",
+        "recent:handover_focus:0196dad8-06aa-461f-983d-54f38cdec787",
+        "recent:handover_focus:03182360-f46f-4c6c-950d-bced806daf49"
+      ],
+      "request_bytes": [
+        13333
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "hollis_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "recent:handover_focus:0196dad8-06aa-461f-983d-54f38cdec787",
+        "recent:handover_focus:03182360-f46f-4c6c-950d-bced806daf49"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6054686708
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "compacted_continuity",
+      "final": [
+        "hollis_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "hollis_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "hollis_format",
+        "recent:handover_focus:0196dad8-06aa-461f-983d-54f38cdec787",
+        "recent:handover_focus:03182360-f46f-4c6c-950d-bced806daf49"
+      ],
+      "request_bytes": [
+        15669
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "hollis_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "recent:handover_focus:0196dad8-06aa-461f-983d-54f38cdec787",
+        "recent:handover_focus:03182360-f46f-4c6c-950d-bced806daf49"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5582067209
+    },
+    {
+      "case_id": "hold07_handover_continuity",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "compacted_continuity",
+      "final": [
+        "hollis_format"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "hollis_format"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "hollis_format"
+      ],
+      "request_bytes": [
+        11056
+      ],
+      "required": [
+        "hollis_format"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "hollis_format"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4363476375
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "no_recall",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7016
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1542108459
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "recent_context",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        8095
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1366734750
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "tool_only",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        10431
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1978775083
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "automatic",
+      "family": "compacted_continuity",
+      "final": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "lena_pickup",
+        "noor_pickup",
+        "recent:two_passengers:42d5149f-6083-4966-90ef-7f2f4179ebe9"
+      ],
+      "request_bytes": [
+        15206
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "recent:two_passengers:42d5149f-6083-4966-90ef-7f2f4179ebe9"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2056053583
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "automatic_deeper",
+      "family": "compacted_continuity",
+      "final": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "lena_pickup",
+        "noor_pickup",
+        "recent:two_passengers:42d5149f-6083-4966-90ef-7f2f4179ebe9"
+      ],
+      "request_bytes": [
+        17546
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [
+        "lena_pickup",
+        "noor_pickup"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "recent:two_passengers:42d5149f-6083-4966-90ef-7f2f4179ebe9"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1677630250
+    },
+    {
+      "case_id": "hold08_volunteer_pickup",
+      "complete_final_support": null,
+      "condition": "oracle",
+      "family": "compacted_continuity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        8694
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1625635834
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "exact_identity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7003
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1542180166
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "exact_identity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7003
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2275231417
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "exact_identity",
+      "final": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "request_bytes": [
+        9339,
+        14214
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "quilla_darkroom"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3827191125
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "exact_identity",
+      "final": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "request_bytes": [
+        13985
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "quilla_darkroom"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2440890375
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "exact_identity",
+      "final": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "request_bytes": [
+        16317
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "quill_darkroom",
+        "quilla_darkroom"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "quilla_darkroom"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2377324917
+    },
+    {
+      "case_id": "hold09_darkroom_alias",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "exact_identity",
+      "final": [
+        "quill_darkroom"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "quill_darkroom"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "quill_darkroom"
+      ],
+      "request_bytes": [
+        10553
+      ],
+      "required": [
+        "quill_darkroom"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "quill_darkroom"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2032887583
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "exact_identity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7050
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2414916208
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "exact_identity",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7050
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2257764250
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "exact_identity",
+      "final": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "request_bytes": [
+        9386,
+        14274
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "other_soren_instrument"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4277177417
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "exact_identity",
+      "final": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 3,
+      "model_calls": 1,
+      "present_records": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "request_bytes": [
+        14004
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "other_soren_instrument"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2701423708
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "exact_identity",
+      "final": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 3,
+      "model_calls": 1,
+      "present_records": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "request_bytes": [
+        16338
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "other_soren_instrument",
+        "soren_instrument"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [
+        "other_soren_instrument"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2386888667
+    },
+    {
+      "case_id": "hold10_instrument_entity_id",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "exact_identity",
+      "final": [
+        "soren_instrument"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "soren_instrument"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 3,
+      "model_calls": 1,
+      "present_records": [
+        "soren_instrument"
+      ],
+      "request_bytes": [
+        10040
+      ],
+      "required": [
+        "soren_instrument"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "soren_instrument"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2348378708
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7047
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2030118417
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7047
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1929165875
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "graph_and_dense_paraphrase",
+      "final": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "final_source_hits": 2,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "request_bytes": [
+        9383,
+        14332
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 2,
+      "union": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4338815917
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "graph_and_dense_paraphrase",
+      "final": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "request_bytes": [
+        14113
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2477380958
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "graph_and_dense_paraphrase",
+      "final": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "request_bytes": [
+        16449
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2269699916
+    },
+    {
+      "case_id": "hold11_observatory_chain",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "graph_and_dense_paraphrase",
+      "final": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "request_bytes": [
+        12535
+      ],
+      "required": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "fern_checker",
+        "nadia_observatory"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2061172750
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7051
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2810965833
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7051
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2654725250
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": false,
+      "condition": "tool_only",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [],
+      "request_bytes": [
+        9387,
+        10125,
+        10698
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 3,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6619157458
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "paper_errands"
+      ],
+      "request_bytes": [
+        9221
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4898261791
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": false,
+      "condition": "automatic_deeper",
+      "family": "graph_and_dense_paraphrase",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "paper_errands"
+      ],
+      "request_bytes": [
+        11557
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3580628333
+    },
+    {
+      "case_id": "hold12_screen_free_errands",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "graph_and_dense_paraphrase",
+      "final": [
+        "paper_errands"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "paper_errands"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "paper_errands"
+      ],
+      "request_bytes": [
+        10009
+      ],
+      "required": [
+        "paper_errands"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "paper_errands"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4071886125
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "bounded_neighbor_investigation",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7028
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2599435250
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "bounded_neighbor_investigation",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7028
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2306244958
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "final_source_hits": 2,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 3,
+      "model_calls": 4,
+      "present_records": [
+        "auxiliary:68ed8b04-44bd-40d0-9078-3e39ccdbf6b9",
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "request_bytes": [
+        9364,
+        10051,
+        13196,
+        15715
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 4,
+      "union": [
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [
+        "auxiliary:68ed8b04-44bd-40d0-9078-3e39ccdbf6b9"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 7944925292
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "backing_options",
+        "backing_prompt"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "backing_options",
+        "backing_prompt"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "backing_options",
+        "backing_prompt"
+      ],
+      "request_bytes": [
+        10357
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "backing_options",
+        "backing_prompt"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2899407500
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "backing_options",
+        "backing_prompt"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 4,
+      "model_calls": 3,
+      "present_records": [
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "request_bytes": [
+        12693,
+        13094,
+        14676
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 3,
+      "union": [
+        "backing_options",
+        "backing_prompt",
+        "backing_selection"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 7532579458
+    },
+    {
+      "case_id": "hold13_shadow_box_choice",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "request_bytes": [
+        10139
+      ],
+      "required": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "backing_options",
+        "backing_selection"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2881769166
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "bounded_neighbor_investigation",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7055
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2694781042
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "bounded_neighbor_investigation",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7055
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2969159583
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "final_source_hits": 2,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 3,
+      "model_calls": 4,
+      "present_records": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "request_bytes": [
+        9391,
+        10109,
+        12203,
+        13897
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 4,
+      "union": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 9410064292
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "request_bytes": [
+        10425
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3587937959
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 4,
+      "model_calls": 3,
+      "present_records": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "request_bytes": [
+        12765,
+        13176,
+        15406
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 3,
+      "union": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 8406229916
+    },
+    {
+      "case_id": "hold14_divider_trial",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "bounded_neighbor_investigation",
+      "final": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "request_bytes": [
+        10223
+      ],
+      "required": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "divider_suggested_test",
+        "divider_tentative"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3201487375
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7155
+      ],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2995291459
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7155
+      ],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4333245917
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "tool_only",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        9491
+      ],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [
+        "dispatch lacks an actual HTTP request or response-status artifact",
+        "forbidden source text in complete encoded request",
+        "reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details"
+      ],
+      "whole_turn_elapsed_ns": 2185294792
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "historical_and_retired",
+      "final": [
+        "current_archive_pickup"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "current_archive_pickup"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "current_archive_pickup",
+        "unlabeled-event:4b3b78f8-98e9-41da-9f8d-9b80bd81705f"
+      ],
+      "request_bytes": [
+        12124
+      ],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "current_archive_pickup"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "unlabeled-event:4b3b78f8-98e9-41da-9f8d-9b80bd81705f"
+      ],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4467961542
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "automatic_deeper",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [
+        "current_archive_pickup"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 3,
+      "model_calls": 1,
+      "present_records": [
+        "current_archive_pickup",
+        "unlabeled-event:4b3b78f8-98e9-41da-9f8d-9b80bd81705f"
+      ],
+      "request_bytes": [
+        14475
+      ],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "current_archive_pickup"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [
+        "unlabeled-event:4b3b78f8-98e9-41da-9f8d-9b80bd81705f"
+      ],
+      "violations": [
+        "dispatch lacks an actual HTTP request or response-status artifact",
+        "forbidden source text in complete encoded request",
+        "reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details"
+      ],
+      "whole_turn_elapsed_ns": 2235051292
+    },
+    {
+      "case_id": "hold15_archive_historical",
+      "complete_final_support": false,
+      "condition": "oracle",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 0,
+      "present_records": [],
+      "request_bytes": [],
+      "required": [
+        "old_archive_pickup"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 0,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [
+        "dispatch lacks an actual HTTP request or response-status artifact",
+        "forbidden source text in complete encoded request",
+        "no captured request with successful HTTP response",
+        "reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details"
+      ],
+      "whole_turn_elapsed_ns": 7007542
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7059
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2485937792
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "historical_and_retired",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7059
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2272506834
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "historical_and_retired",
+      "final": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "final_source_hits": 2,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "request_bytes": [
+        9395,
+        12459,
+        15136
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 3,
+      "union": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6318206208
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "historical_and_retired",
+      "final": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "request_bytes": [
+        12262
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2857887667
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "historical_and_retired",
+      "final": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "request_bytes": [
+        14596
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2641246542
+    },
+    {
+      "case_id": "hold16_print_returns_current",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "historical_and_retired",
+      "final": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "request_bytes": [
+        11020
+      ],
+      "required": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "active_return_route",
+        "receipt_location"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3010639959
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7079
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2982854291
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7079
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3479439292
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "final_source_hits": 3,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "request_bytes": [
+        9415,
+        14726,
+        18341
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 3,
+      "union": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 7647700750
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "request_bytes": [
+        14437
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3627716292
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "final_source_hits": 3,
+      "first": [
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 3,
+      "model_calls": 2,
+      "present_records": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "request_bytes": [
+        16773,
+        18230
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 2,
+      "union": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6293695292
+    },
+    {
+      "case_id": "hold17_volunteer_shift_conflict",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "final_source_hits": 3,
+      "first": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "initial_source_hits": 3,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "request_bytes": [
+        13313
+      ],
+      "required": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [
+        "shift_new_report",
+        "shift_ten",
+        "shift_twelve"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3464968792
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7072
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2795693167
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7072
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2970772042
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "final_source_hits": 3,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "request_bytes": [
+        9408,
+        14770,
+        18449
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 3,
+      "union": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 7940716541
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "pickup_east",
+        "pickup_north"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "pickup_east",
+        "pickup_north"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "pickup_east",
+        "pickup_north"
+      ],
+      "request_bytes": [
+        14461
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [
+        "pickup_east",
+        "pickup_north"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3703289458
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "final_source_hits": 3,
+      "first": [
+        "pickup_east",
+        "pickup_north"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 3,
+      "model_calls": 2,
+      "present_records": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "request_bytes": [
+        16797,
+        18298
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 2,
+      "union": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5881326792
+    },
+    {
+      "case_id": "hold18_catering_pickup_conflict",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "conflicting_claims_and_newer_statement",
+      "final": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "final_source_hits": 3,
+      "first": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "initial_source_hits": 3,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "request_bytes": [
+        13380
+      ],
+      "required": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "source_denominator": 3,
+      "successful_http_responses": 1,
+      "union": [
+        "pickup_east",
+        "pickup_north",
+        "pickup_tentative"
+      ],
+      "union_source_hits": 3,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3941894167
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7073
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3707117875
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7073
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3314159666
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "beatrice_quote"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "beatrice_quote"
+      ],
+      "request_bytes": [
+        9409,
+        11780
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "beatrice_quote"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 5946173125
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "beatrice_quote"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "beatrice_quote"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "beatrice_quote"
+      ],
+      "request_bytes": [
+        9391
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "beatrice_quote"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2722377000
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "beatrice_quote"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "beatrice_quote"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "beatrice_quote"
+      ],
+      "request_bytes": [
+        11727
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "beatrice_quote"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2583049459
+    },
+    {
+      "case_id": "hold19_collar_reported_speech",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "beatrice_quote"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "beatrice_quote"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "beatrice_quote"
+      ],
+      "request_bytes": [
+        9288
+      ],
+      "required": [
+        "beatrice_quote"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "beatrice_quote"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2141968125
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7079
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4698581208
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7079
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2587812416
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": false,
+      "condition": "tool_only",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "flag_suggestion"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "flag_suggestion"
+      ],
+      "request_bytes": [
+        9415,
+        11624
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 2,
+      "union": [
+        "flag_suggestion"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 7221754333
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": false,
+      "condition": "automatic",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "flag_suggestion"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "flag_suggestion"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "flag_suggestion"
+      ],
+      "request_bytes": [
+        9221
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "flag_suggestion"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2836226375
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": false,
+      "condition": "automatic_deeper",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "flag_suggestion"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "flag_suggestion"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "flag_suggestion"
+      ],
+      "request_bytes": [
+        11557
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "flag_suggestion"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2931803500
+    },
+    {
+      "case_id": "hold20_manual_flag_suggestion",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "speaker_quote_and_tentative_attribution",
+      "final": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "final_source_hits": 2,
+      "first": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "initial_source_hits": 2,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "request_bytes": [
+        10097
+      ],
+      "required": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "source_denominator": 2,
+      "successful_http_responses": 1,
+      "union": [
+        "flag_suggestion",
+        "manual_problem"
+      ],
+      "union_source_hits": 2,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2842274541
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "no_recall",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7033
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3076775500
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "recent_context",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7033
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2697333583
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "tool_only",
+      "family": "unanswerable_and_unavailable",
+      "final": [
+        "mount_donation"
+      ],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 3,
+      "present_records": [
+        "mount_donation"
+      ],
+      "request_bytes": [
+        9369,
+        10090,
+        12196
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 3,
+      "union": [
+        "mount_donation"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6743876041
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "automatic",
+      "family": "unanswerable_and_unavailable",
+      "final": [
+        "mount_donation"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "mount_donation"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "mount_donation"
+      ],
+      "request_bytes": [
+        9219
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [
+        "mount_donation"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3425216125
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "automatic_deeper",
+      "family": "unanswerable_and_unavailable",
+      "final": [
+        "mount_donation"
+      ],
+      "final_source_hits": 0,
+      "first": [
+        "mount_donation"
+      ],
+      "initial_source_hits": 0,
+      "kernel_searches": 4,
+      "model_calls": 3,
+      "present_records": [
+        "mount_donation"
+      ],
+      "request_bytes": [
+        11555,
+        12120,
+        12616
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 3,
+      "union": [
+        "mount_donation"
+      ],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 6572457375
+    },
+    {
+      "case_id": "hold21_mount_serial_gap",
+      "complete_final_support": null,
+      "condition": "oracle",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7632
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2523748666
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "no_recall",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7033
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2794768375
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "recent_context",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7033
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2260328042
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "tool_only",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 3,
+      "present_records": [],
+      "request_bytes": [
+        9369,
+        9750,
+        10145
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 3,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4507798500
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "automatic",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7638
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1839899375
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "automatic_deeper",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 3,
+      "present_records": [],
+      "request_bytes": [
+        9974,
+        10381,
+        10802
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 3,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 4263020042
+    },
+    {
+      "case_id": "hold22_sculpture_unavailable",
+      "complete_final_support": null,
+      "condition": "oracle",
+      "family": "unanswerable_and_unavailable",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7638
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1507863000
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "no_recall",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7073
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1519180375
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "recent_context",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7073
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1926131750
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "tool_only",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        9409
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1643812250
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "automatic",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7674
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1531962625
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "automatic_deeper",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        10010
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1760273792
+    },
+    {
+      "case_id": "hold23_active_voice_rewrite",
+      "complete_final_support": null,
+      "condition": "oracle",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7672
+      ],
+      "required": [],
+      "source_denominator": 0,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 1249791375
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": false,
+      "condition": "no_recall",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7074
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2724564416
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": false,
+      "condition": "recent_context",
+      "family": "scope_and_no_memory_needed",
+      "final": [],
+      "final_source_hits": 0,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 0,
+      "model_calls": 1,
+      "present_records": [],
+      "request_bytes": [
+        7074
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [],
+      "union_source_hits": 0,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3179783083
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": true,
+      "condition": "tool_only",
+      "family": "scope_and_no_memory_needed",
+      "final": [
+        "global_invoice_preference"
+      ],
+      "final_source_hits": 1,
+      "first": [],
+      "initial_source_hits": 0,
+      "kernel_searches": 1,
+      "model_calls": 2,
+      "present_records": [
+        "global_invoice_preference"
+      ],
+      "request_bytes": [
+        9410,
+        12438
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 2,
+      "union": [
+        "global_invoice_preference"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 3796592958
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": true,
+      "condition": "automatic",
+      "family": "scope_and_no_memory_needed",
+      "final": [
+        "global_invoice_preference"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "global_invoice_preference"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "global_invoice_preference"
+      ],
+      "request_bytes": [
+        9989
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "global_invoice_preference"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2427327458
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": true,
+      "condition": "automatic_deeper",
+      "family": "scope_and_no_memory_needed",
+      "final": [
+        "global_invoice_preference"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "global_invoice_preference"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "global_invoice_preference"
+      ],
+      "request_bytes": [
+        12325
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "global_invoice_preference"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2193885041
+    },
+    {
+      "case_id": "hold24_invoice_scope",
+      "complete_final_support": true,
+      "condition": "oracle",
+      "family": "scope_and_no_memory_needed",
+      "final": [
+        "global_invoice_preference"
+      ],
+      "final_source_hits": 1,
+      "first": [
+        "global_invoice_preference"
+      ],
+      "initial_source_hits": 1,
+      "kernel_searches": 2,
+      "model_calls": 1,
+      "present_records": [
+        "global_invoice_preference"
+      ],
+      "request_bytes": [
+        9994
+      ],
+      "required": [
+        "global_invoice_preference"
+      ],
+      "source_denominator": 1,
+      "successful_http_responses": 1,
+      "union": [
+        "global_invoice_preference"
+      ],
+      "union_source_hits": 1,
+      "unwanted": [],
+      "violations": [],
+      "whole_turn_elapsed_ns": 2582686500
+    }
+  ],
+  "conditions": {
+    "automatic": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.6842105263157895,
+      "final_source_macro_recall": 0.8070175438596492,
+      "final_source_micro_recall": 0.7857142857142857,
+      "initial_source_macro_recall": 0.8070175438596492,
+      "initial_source_micro_recall": 0.7857142857142857,
+      "max_request_bytes": 15206,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.8070175438596492,
+      "union_source_micro_recall": 0.7857142857142857,
+      "unwanted_evidence_fraction": 0.27906976744186046,
+      "violations": 0,
+      "whole_turn_p50_ms": 2836.226375,
+      "whole_turn_p95_ms": 4898.261791
+    },
+    "automatic_deeper": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.8421052631578947,
+      "final_source_macro_recall": 0.868421052631579,
+      "final_source_micro_recall": 0.8928571428571429,
+      "initial_source_macro_recall": 0.8070175438596492,
+      "initial_source_micro_recall": 0.7857142857142857,
+      "max_request_bytes": 18298,
+      "observed_model_calls": 34,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.868421052631579,
+      "union_source_micro_recall": 0.8928571428571429,
+      "unwanted_evidence_fraction": 0.2608695652173913,
+      "violations": 3,
+      "whole_turn_p50_ms": 2931.8035,
+      "whole_turn_p95_ms": 7532.579458
+    },
+    "no_recall": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.0,
+      "final_source_macro_recall": 0.0,
+      "final_source_micro_recall": 0.0,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 7155,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.0,
+      "union_source_micro_recall": 0.0,
+      "unwanted_evidence_fraction": null,
+      "violations": 0,
+      "whole_turn_p50_ms": 2795.693167,
+      "whole_turn_p95_ms": 5420.249459
+    },
+    "oracle": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.9473684210526315,
+      "final_source_macro_recall": 0.9473684210526315,
+      "final_source_micro_recall": 0.9642857142857143,
+      "initial_source_macro_recall": 0.9473684210526315,
+      "initial_source_micro_recall": 0.9642857142857143,
+      "max_request_bytes": 13380,
+      "observed_model_calls": 23,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.9473684210526315,
+      "union_source_micro_recall": 0.9642857142857143,
+      "unwanted_evidence_fraction": 0.0,
+      "violations": 4,
+      "whole_turn_p50_ms": 2523.748666,
+      "whole_turn_p95_ms": 4363.476375
+    },
+    "recent_context": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.0,
+      "final_source_macro_recall": 0.0,
+      "final_source_micro_recall": 0.0,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 8121,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.0,
+      "union_source_micro_recall": 0.0,
+      "unwanted_evidence_fraction": null,
+      "violations": 0,
+      "whole_turn_p50_ms": 2697.333583,
+      "whole_turn_p95_ms": 5394.200709
+    },
+    "tool_only": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.7894736842105263,
+      "final_source_macro_recall": 0.8157894736842105,
+      "final_source_micro_recall": 0.8571428571428571,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 18449,
+      "observed_model_calls": 55,
+      "planned_cases": 24,
+      "required_source_records": 28,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.8157894736842105,
+      "union_source_micro_recall": 0.8571428571428571,
+      "unwanted_evidence_fraction": 0.1,
+      "violations": 3,
+      "whole_turn_p50_ms": 4860.747917,
+      "whole_turn_p95_ms": 7944.925292
+    }
+  },
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "partition": "heldout",
+  "release_ready": false,
+  "results_manifest_sha256": "3b9c34b8f18cf7e20afc59e02760e7724ebbed1e157da67a2ded17bb95c79110",
+  "results_path": "/private/tmp/evie-memory-stage5/integrated-heldout-v2-reader",
+  "scorer_sha256": "a6842713f3d05278f016403c19fa0ceb924fc067067f338c242698dcb207403c",
+  "status": "evidence audit only; semantic adjudication and remaining gates required",
+  "violations": [
+    "hold15_archive_historical-tool_only: dispatch lacks an actual HTTP request or response-status artifact",
+    "hold15_archive_historical-tool_only: forbidden source text in complete encoded request",
+    "hold15_archive_historical-tool_only: reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details",
+    "hold15_archive_historical-automatic_deeper: dispatch lacks an actual HTTP request or response-status artifact",
+    "hold15_archive_historical-automatic_deeper: forbidden source text in complete encoded request",
+    "hold15_archive_historical-automatic_deeper: reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details",
+    "hold15_archive_historical-oracle: dispatch lacks an actual HTTP request or response-status artifact",
+    "hold15_archive_historical-oracle: forbidden source text in complete encoded request",
+    "hold15_archive_historical-oracle: no captured request with successful HTTP response",
+    "hold15_archive_historical-oracle: reader turn failed or is missing: integrated provider boundary failure; retained dispatch contains details"
+  ]
+}

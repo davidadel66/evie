@@ -1,0 +1,298 @@
+{
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "grader_sha256": "b6ac839a5c7709462b820f26868c1e6ab96ae3a5c849135be36fd691223040d8",
+  "assessment_count": 48,
+  "assessments": [
+    {
+      "file": "hold17_volunteer_shift_conflict-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold17_volunteer_shift_conflict-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold17_volunteer_shift_conflict-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold17_volunteer_shift_conflict-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold17_volunteer_shift_conflict-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold17_volunteer_shift_conflict-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold18_catering_pickup_conflict-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold19_collar_reported_speech-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold20_manual_flag_suggestion-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": false
+    },
+    {
+      "file": "hold21_mount_serial_gap-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold21_mount_serial_gap-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold21_mount_serial_gap-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold21_mount_serial_gap-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold21_mount_serial_gap-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold21_mount_serial_gap-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold22_sculpture_unavailable-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold23_active_voice_rewrite-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-automatic.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-automatic_deeper.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-no_recall.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-oracle.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-recent_context.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    },
+    {
+      "file": "hold24_invoice_scope-tool_only.json",
+      "errors": [],
+      "review_complete": true,
+      "semantic_pass_as_entered": true
+    }
+  ],
+  "schema_valid": true,
+  "semantic_judgment_performed_by_program": false,
+  "release_ready": false
+}
