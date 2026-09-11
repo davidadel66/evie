@@ -84,6 +84,7 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 				if evidence.Intent == "" {
 					evidence.Intent = memory.RetrievalCurrent
 				}
+				evidence.AsKnownAtConstrained = ref.AsKnownAtConstrained
 				evidence.ValidAtConstrained = ref.ValidAtConstrained
 				evidence.IdentityMatches, err = resolveRetrievalIdentityMatches(ctx, tx, metadata, evidence, ref.IdentityMatches)
 				if err != nil {

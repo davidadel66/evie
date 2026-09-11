@@ -42,7 +42,7 @@ it("keeps the supplied-memory activity attached to its completed turn", () => {
 it("distinguishes unavailable memory from a successful empty search", () => {
   const unavailable = renderToStaticMarkup(<MemoryActivity activity={{ snapshotId: "request-2", status: "failed", acceptedCount: 0, excerptCount: 0 }} onOpen={() => undefined} />);
   const empty = renderToStaticMarkup(<MemoryActivity activity={{ snapshotId: "request-3", status: "empty", acceptedCount: 0, excerptCount: 0 }} onOpen={() => undefined} />);
-  expect(unavailable).toContain("Memory unavailable");
+  expect(unavailable).toContain("Memory search failed");
   expect(unavailable).not.toContain("No matches");
   expect(empty).toContain("No matches");
   expect(empty).not.toContain("Memory unavailable");

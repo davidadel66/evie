@@ -86,7 +86,7 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
           <p>Accepted on: {item.evidence.claim.transaction_time}</p>
           <p>Valid from: {(item.evidence.effective_valid_time ?? item.evidence.claim.valid_time).from ?? "Unknown"} · Valid until: {(item.evidence.effective_valid_time ?? item.evidence.claim.valid_time).to ?? "Unknown"}</p>
         </div>}
-        {(item.reference.intent === "historical" || item.reference.valid_at_constrained) && <details className="text-muted-text mt-2 text-xs leading-5">
+        {(item.reference.intent === "historical" || item.reference.valid_at_constrained || item.reference.as_known_at_constrained) && <details className="text-muted-text mt-2 text-xs leading-5">
           <summary className="cursor-pointer">Read filters</summary>
           <p>Known by: {item.reference.as_known_at}</p>
           {item.reference.valid_at_constrained && <p>Valid at: {item.reference.valid_at}</p>}

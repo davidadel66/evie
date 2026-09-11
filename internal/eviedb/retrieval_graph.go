@@ -130,6 +130,9 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 			graph:       retrievalGraphBounds{anchors: retrievalGraphAnchors, width: retrievalGraphWidth, depth: retrievalGraphDepth},
 			authorities: []memory.SourceAuthority{memory.AuthorityOwnerStatement, memory.AuthorityToolObservation}},
 		seen: make(map[memory.SemanticID]bool), eligible: make(map[memory.SemanticID]*retrievalCandidate)}
+	if err := c.correctionRefreshGenerator(ctx); err != nil {
+		return nil, err
+	}
 	keys := c.plan.scopes
 	ids, err := c.ids(ctx, retrievalExactCandidates, `SELECT DISTINCT c.claim_id FROM semantic_claims c JOIN semantic_scopes sc ON sc.scope_id=c.scope_id
  WHERE sc.scope_key IN (?,?,?) AND (c.claim_id=? OR c.subject_entity_id=? OR c.object_entity_id=?

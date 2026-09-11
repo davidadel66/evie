@@ -28,6 +28,7 @@ type RetrievalQuery struct {
 	AnchorID                    string               `json:"evidence_id,omitempty"`
 	Anchor                      *RetrievalReference  `json:"-"`
 	Covered                     []RetrievalReference `json:"-"`
+	RefreshReferences           []RetrievalReference `json:"-"`
 	Before                      int                  `json:"before,omitempty"`
 	After                       int                  `json:"after,omitempty"`
 	Text                        string               `json:"text"`
@@ -45,6 +46,7 @@ type RetrievalCoverage struct {
 }
 
 type RetrievalEvidence struct {
+	AsKnownAtConstrained  bool                     `json:"as_known_at_constrained,omitempty"`
 	IdentityMatches       []RetrievalIdentityMatch `json:"identity_matches,omitempty"`
 	GraphPaths            []RetrievalGraphPath     `json:"graph_paths,omitempty"`
 	Intent                string                   `json:"intent"`
@@ -89,6 +91,7 @@ type RetrievalSourceReference struct {
 }
 
 type RetrievalReference struct {
+	AsKnownAtConstrained  bool                         `json:"as_known_at_constrained,omitempty"`
 	IdentityMatches       []RetrievalIdentityReference `json:"identity_matches,omitempty"`
 	GraphPaths            []RetrievalGraphPath         `json:"graph_paths,omitempty"`
 	Intent                string                       `json:"intent"`
@@ -111,7 +114,7 @@ type RetrievalReference struct {
 }
 
 func (e RetrievalEvidence) Reference() RetrievalReference {
-	r := RetrievalReference{ID: e.ID, Kind: e.Kind, ClaimID: e.ClaimID, ClaimOperationID: e.ClaimOperationID,
+	r := RetrievalReference{AsKnownAtConstrained: e.AsKnownAtConstrained, ID: e.ID, Kind: e.Kind, ClaimID: e.ClaimID, ClaimOperationID: e.ClaimOperationID,
 		AsKnownAt: e.AsKnownAt, ValidAt: e.ValidAt, ScopeKey: e.ScopeKey, Status: e.Status, Paths: append([]string(nil), e.Paths...),
 		Intent: e.Intent, ValidAtConstrained: e.ValidAtConstrained, CurrentStatus: e.CurrentStatus,
 		CorrectionMode: e.CorrectionMode, CurrentCorrectionMode: e.CurrentCorrectionMode,

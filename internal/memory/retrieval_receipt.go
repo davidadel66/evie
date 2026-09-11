@@ -4,6 +4,7 @@ package memory
 // provider request. It is part of the fenced context-snapshot append, not a
 // second episode or a claim that the model cited or used the evidence.
 type RetrievalReceipt struct {
+	Investigation  *RetrievalInvestigation  `json:"investigation,omitempty"`
 	Interpretation *RetrievalInterpretation `json:"interpretation,omitempty"`
 	Version        string                   `json:"version"`
 	Status         string                   `json:"status"`

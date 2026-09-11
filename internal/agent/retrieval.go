@@ -42,6 +42,15 @@ type retrievalTurn struct {
 	delivered      int
 	status         string
 	evidence       []memory.RetrievalEvidence
+	queries        []retrievalQueryRecord
+	origins        map[string]int
+	refreshes      int
+	toolIDs        map[string]bool
+	requestReserve int
+	contextBytes   int
+	outcomes       []string
+	withheld       bool
+	lastReceipt    *memory.RetrievalReceipt
 }
 
 func (s *Session) newRetrievalTurn() *retrievalTurn {
@@ -71,7 +80,7 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 		result.Status = "cancelled"
 	} else if !validAnchor {
 		result.Status = memory.RetrievalUnavailable
-	} else if r.searches > retrievalSearchLimit || r.work >= retrievalTurnWork || r.delivered >= retrievalTurnBytes || len(r.evidence) >= retrievalResultLimit {
+	} else if r.status == memory.RetrievalExhausted || r.searches > retrievalSearchLimit || r.work >= retrievalTurnWork || retrievalTurnBytes-r.delivered < 512 {
 		result.Status = "exhausted"
 	} else if r.kernel != nil && os.Getenv("EVIE_REMOTE_MEMORY") == "on" {
 		if query.Limit <= 0 || query.Limit > retrievalResultLimit {
@@ -80,7 +89,6 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 		if query.MaxBytes <= 0 || query.MaxBytes > retrievalResultBytes {
 			query.MaxBytes = retrievalResultBytes
 		}
-		query.Limit = min(query.Limit, retrievalResultLimit-len(r.evidence))
 		query.MaxBytes = min(query.MaxBytes, retrievalTurnBytes-r.delivered)
 		searchCtx, cancel := context.WithTimeout(ctx, min(retrievalSearchDeadline, retrievalTurnWork-r.work))
 		started := time.Now()
@@ -98,13 +106,40 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 			}
 		}
 	}
+	if len(query.RefreshReferences) > 0 {
+		// Refresh only lost evidence. A broad old query cannot replace the
+		// explicit temporal view or unchanged pin of another held result.
+		var refreshed []memory.RetrievalEvidence
+		for _, item := range result.Evidence {
+			held := false
+			for _, current := range r.evidence {
+				held = held || current.ID == item.ID
+			}
+			if !held {
+				refreshed = append(refreshed, item)
+			}
+		}
+		result.Evidence = refreshed
+	}
 	// Validate the internal result before retaining it. Its copied source text
 	// is not a tool result; only the next revalidated memory projection sends it.
 	encoded, encodeErr := json.Marshal(result)
 	if encodeErr != nil || memory.HasRetrievalSecret(encoded) {
 		result = memory.RetrievalResult{Status: memory.RetrievalUnavailable}
 	}
-	r.status = result.Status
+	if !slices.Contains(r.outcomes, result.Status) {
+		r.outcomes = append(r.outcomes, result.Status)
+	}
+	r.status = combinedRecallStatus(r.outcomes)
+	if slices.Contains(r.outcomes, memory.RetrievalExhausted) {
+		r.status = memory.RetrievalExhausted
+	}
+	if slices.Contains(r.outcomes, memory.RetrievalCancelled) {
+		r.status = memory.RetrievalCancelled
+	}
+	if len(result.Evidence) > 0 {
+		r.rememberQuery(query, result.Evidence)
+	}
 	for _, evidence := range result.Evidence {
 		found := false
 		for i, existing := range r.evidence {
@@ -132,30 +167,43 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 				break
 			}
 		}
-		if !found && len(r.evidence) < retrievalResultLimit {
-			r.evidence = append(r.evidence, evidence)
+		if !found {
+			if len(r.evidence) == retrievalResultLimit {
+				// New requested evidence can replace old context. Keep the incoming
+				// result's support group intact and invalidate an evicted older plan
+				// so automatic refresh cannot undo the explicit follow-up.
+				for i := len(r.evidence) - 1; i >= 0; i-- {
+					incoming := false
+					for _, item := range result.Evidence {
+						incoming = incoming || item.ID == r.evidence[i].ID
+					}
+					if !incoming {
+						r.origins[r.evidence[i].ID] = -1
+						r.evidence = append(r.evidence[:i], r.evidence[i+1:]...)
+						break
+					}
+				}
+			}
+			if len(r.evidence) < retrievalResultLimit {
+				r.evidence = append(r.evidence, evidence)
+			}
 		}
+	}
+	if len(result.Evidence) > 0 {
+		r.withheld = false
 	}
 	return result, nil
 }
 
-// Bind the actual call ID so accounting includes the exact serialized tool
-// outcome, not an internal source-bearing object that never reaches a provider.
+// Bind actual call IDs so each serialized replay is charged when a request is
+// admitted. Executing a tool is not itself delivery to the provider.
 func (r *retrievalTurn) searchForTool(callID string) func(context.Context, memory.RetrievalQuery) (memory.RetrievalResult, error) {
 	return func(ctx context.Context, query memory.RetrievalQuery) (memory.RetrievalResult, error) {
-		result, err := r.search(ctx, query)
-		if err != nil {
-			return result, err
+		if r.toolIDs == nil {
+			r.toolIDs = make(map[string]bool)
 		}
-		content, renderErr := memory.RenderRetrievalOutcome(result)
-		encoded, encodeErr := json.Marshal(openrouter.Message{Role: "tool", ToolCallID: callID, Content: content})
-		if renderErr != nil || encodeErr != nil || len(encoded) > retrievalTurnBytes-r.delivered {
-			result = memory.RetrievalResult{Status: memory.RetrievalExhausted}
-			r.status = result.Status
-		} else {
-			r.delivered += len(encoded)
-		}
-		return result, nil
+		r.toolIDs[callID] = true
+		return r.search(ctx, query)
 	}
 }
 
@@ -179,22 +227,31 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 			r.evidence = nil
 			r.status = "unavailable"
 		} else {
-			if len(valid) < len(r.evidence) {
+			prior := r.evidence
+			r.evidence = valid
+			if len(valid) < len(prior) {
+				r.withheld = true
 				r.status = memory.RetrievalPartial
 				if len(valid) == 0 {
 					r.status = memory.RetrievalUnavailable
 				}
+				r.refreshInvalidated(ctx, prior, valid)
 			}
-			r.evidence = valid
 		}
 	}
-	return r.renderProjection(true)
+	if os.Getenv("EVIE_REMOTE_MEMORY") != "on" {
+		r.evidence, r.status = nil, memory.RetrievalUnavailable
+	}
+	if r.withheld && len(r.evidence) == 0 && r.status != memory.RetrievalFailed && r.status != memory.RetrievalCancelled && r.status != memory.RetrievalExhausted {
+		r.status = memory.RetrievalUnavailable
+	}
+	return r.renderProjection()
 }
 
 // A sizing preview is local only: compaction sees original durable messages,
 // never this synthetic evidence. Revalidate and charge the final projection
 // after compaction, immediately before composing the provider-bound request.
-func (r *retrievalTurn) renderProjection(charge bool) (string, *memory.RetrievalReceipt) {
+func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 	if r.status == "" {
 		return "", nil
 	}
@@ -223,20 +280,57 @@ func (r *retrievalTurn) renderProjection(charge bool) (string, *memory.Retrieval
 	encoded, err := json.Marshal(data)
 	content := "EVIE_MEMORY_DATA\n" + string(encoded)
 	serialized, _ := json.Marshal(openrouter.Message{Role: "user", Content: content})
-	if err != nil || memory.HasRetrievalSecret(encoded) || len(serialized) > retrievalTurnBytes-r.delivered {
+	if err != nil || memory.HasRetrievalSecret(encoded) {
 		receipt.Evidence = nil
-		receipt.Status = "exhausted"
-		if err != nil || memory.HasRetrievalSecret(encoded) {
-			receipt.Status = "unavailable"
-		}
+		receipt.Status = "unavailable"
 		data.Status, data.Evidence = receipt.Status, nil
 		data.ReadingGuide, data.HistoricalOnly = "", nil
 		encoded, _ = json.Marshal(data)
 	}
+	limit := retrievalTurnBytes - r.delivered - r.requestReserve
+	if r.contextBytes > 0 {
+		limit = min(limit, r.contextBytes)
+	}
+	for {
+		content = "EVIE_MEMORY_DATA\n" + string(encoded)
+		serialized, _ = json.Marshal(openrouter.Message{Role: "user", Content: content})
+		if len(serialized) <= limit || len(data.Evidence) == 0 {
+			break
+		}
+		receipt.Status, data.Status = memory.RetrievalExhausted, memory.RetrievalExhausted
+		remove := len(data.Evidence) - 1
+		if r.contextBytes > 0 {
+			// A large first finding must not crowd out a smaller original that
+			// can still support an answer within the request's actual headroom.
+			for i, evidence := range data.Evidence {
+				candidate := data
+				candidate.Evidence = []memory.RetrievalEvidence{evidence}
+				candidate.HistoricalOnly = nil
+				if evidence.CurrentStatus == memory.SemanticStatusRetired {
+					candidate.HistoricalOnly = []string{evidence.ID}
+				}
+				body, _ := json.Marshal(candidate)
+				message, _ := json.Marshal(openrouter.Message{Role: "user", Content: "EVIE_MEMORY_DATA\n" + string(body)})
+				if len(message) > limit {
+					remove = i
+					break
+				}
+			}
+		}
+		data.Evidence = projectionSupportedEvidence(slices.Delete(slices.Clone(data.Evidence), remove, remove+1))
+		receipt.Evidence, data.HistoricalOnly = nil, nil
+		for _, item := range data.Evidence {
+			receipt.Evidence = append(receipt.Evidence, item.Reference())
+			if item.CurrentStatus == memory.SemanticStatusRetired {
+				data.HistoricalOnly = append(data.HistoricalOnly, item.ID)
+			}
+		}
+		if len(data.Evidence) == 0 {
+			data.ReadingGuide = ""
+		}
+		encoded, _ = json.Marshal(data)
+	}
 	content = "EVIE_MEMORY_DATA\n" + string(encoded)
 	serialized, _ = json.Marshal(openrouter.Message{Role: "user", Content: content})
-	if charge {
-		r.delivered += len(serialized)
-	}
 	return content, receipt
 }

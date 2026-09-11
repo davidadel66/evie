@@ -183,13 +183,21 @@ func (s *Session) runOwnedTurn(
 		if iteration == 1 && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
-		memoryData, memoryReceipt := recall.renderProjection(false)
+		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
 			Continuation: continuation,
+		}
+		composeInput, err = recall.fitContext(composeInput, s.composer)
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
+			return s.classifyLocalError(coordinator, err)
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
 		if err != nil {
@@ -239,6 +247,14 @@ func (s *Session) runOwnedTurn(
 			}
 		}
 		composeInput.MemoryData, composeInput.MemoryReceipt = recall.projection(coordinator.ctx)
+		composeInput, err = recall.fitContext(composeInput, s.composer)
+		if err != nil {
+			if IsContextOverflow(err) {
+				coordinator.selectCause(causeContextOverflow, err, 0)
+				return err
+			}
+			return s.classifyLocalError(coordinator, err)
+		}
 		composed, err := s.composer.Compose(composeInput)
 		if err != nil {
 			if IsContextOverflow(err) {
@@ -246,6 +262,18 @@ func (s *Session) runOwnedTurn(
 				return err
 			}
 			return s.classifyLocalError(coordinator, err)
+		}
+		boundedData, boundedReceipt, reduced, err := recall.admitRequest(composed.Request)
+		if err != nil {
+			coordinator.selectCause(causeContextOverflow, err, 0)
+			return err
+		}
+		if reduced {
+			composeInput.MemoryData, composeInput.MemoryReceipt = boundedData, boundedReceipt
+			composed, err = s.composer.Compose(composeInput)
+			if err != nil {
+				return s.classifyLocalError(coordinator, err)
+			}
 		}
 		if required && failureCategory == memory.ContextCompactionFailureNone &&
 			composed.Snapshot.RetainedFirstEventID != plan.FirstRetained.ID {
@@ -260,6 +288,7 @@ func (s *Session) runOwnedTurn(
 			return overflow
 		}
 		composed.Snapshot.CompactionFailureCategory = failureCategory
+		recall.recordAccounting(composed.Snapshot.Memory)
 		if err := composed.Snapshot.Validate(); err != nil {
 			return s.classifyLocalError(coordinator, fmt.Errorf("validate final context snapshot: %w", err))
 		}

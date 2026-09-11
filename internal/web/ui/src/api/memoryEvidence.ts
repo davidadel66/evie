@@ -43,6 +43,7 @@ export type MemoryReference = {
   current_status?: string;
   intent?: string;
   valid_at_constrained?: boolean;
+  as_known_at_constrained?: boolean;
   correction_mode?: string;
   current_correction_mode?: string;
   conflicts?: SemanticObjectInspection["conflicts"];

@@ -12,10 +12,10 @@ import (
 
 func TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows(t *testing.T) {
 	for _, test := range []struct {
-		name          string
-		calls, window int
-		status        string
-	}{{"mixed call budget", 8, 0, "exhausted"}, {"invalid large window", 1, 3, "failed"}} {
+		name               string
+		calls, window      int
+		status, toolStatus string
+	}{{"mixed call budget", 8, 0, "exhausted", "exhausted"}, {"invalid large window", 1, 3, "partial", "failed"}} {
 		t.Run(test.name, func(t *testing.T) {
 			f := newRetrievalFixture(t)
 			source := f.global()
@@ -44,6 +44,18 @@ func TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows(t *testin
 			data := retrievalData(t, client.reqs[2])
 			if !strings.Contains(data, `"status":"`+test.status+`"`) || !strings.Contains(data, "boundedlotus") {
 				t.Fatalf("bounds lost supported evidence/status: %s", data)
+			}
+			if len(expansionBoundaryEvidence(t, client.reqs[2])) != 1 {
+				t.Fatal("rejected expansion changed the bounded source set")
+			}
+			found := false
+			for _, message := range client.reqs[2].Messages {
+				if message.Role == "tool" && strings.Contains(message.Content, `"status":"`+test.toolStatus+`"`) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("aggregate activity erased the rejected expansion's individual outcome")
 			}
 		})
 	}

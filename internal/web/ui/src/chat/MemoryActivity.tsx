@@ -4,9 +4,8 @@ import { Database } from "../ui/Icon";
 export type MemoryOpener = (snapshotId: string, trigger: HTMLButtonElement) => void;
 
 export function MemoryActivity({ activity, onOpen }: { activity: MemoryActivityData; onOpen?: MemoryOpener }) {
-  const unavailable = ["failed", "unavailable", "partial"].includes(activity.status);
   const kinds = activity.excerptCount > 0 ? activity.acceptedCount > 0 ? "Accepted memory · Conversation excerpt" : "Conversation excerpt" : "Accepted memory";
-  const label = unavailable ? "Memory unavailable" : activity.status === "cancelled" ? "Memory search cancelled" : activity.status === "exhausted" ? "Memory budget exhausted" : kinds;
+  const label = activity.status === "partial" ? "Memory partially available" : activity.status === "failed" ? "Memory search failed" : activity.status === "unavailable" ? "Memory unavailable" : activity.status === "cancelled" ? "Memory search cancelled" : activity.status === "exhausted" ? "Memory budget exhausted" : kinds;
   const recorded = activity.requestStatus === "prepared" || activity.requestStatus === "interrupted";
   const detail = activity.status === "empty" ? "No matches" : `${activity.acceptedCount + activity.excerptCount} ${recorded ? "recorded" : "supplied"}`;
   const states = [

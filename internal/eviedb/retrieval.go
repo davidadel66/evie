@@ -123,6 +123,9 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
+	for i := range result.Evidence {
+		result.Evidence[i].AsKnownAtConstrained = query.AsKnownAt != nil
+	}
 	if err = tx.Commit(); err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -368,11 +371,18 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 			if prior.ValidAtConstrained {
 				currentMetadata.ValidAt = prior.ValidAt
 			}
-			_, eligible, err := s.retrievalClaim(ctx, tx, currentMetadata, prior.ClaimID, memory.RetrievalCurrent, prior.ValidAtConstrained)
+			current, eligible, err := s.retrievalClaim(ctx, tx, currentMetadata, prior.ClaimID, memory.RetrievalCurrent, prior.ValidAtConstrained)
 			if err != nil {
 				return nil, err
 			}
 			if !eligible {
+				continue
+			}
+			changed, err := s.hasNewRetrievalInformation(ctx, tx, scope, currentMetadata, current, prior)
+			if err != nil {
+				return nil, err
+			}
+			if changed {
 				continue
 			}
 		}
@@ -397,6 +407,7 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 		if err != nil {
 			return nil, err
 		}
+		current.AsKnownAtConstrained = prior.AsKnownAtConstrained
 		current.Paths = append([]string(nil), prior.Paths...)
 		current.GraphPaths = prior.Reference().GraphPaths
 		if !sameRetrievalSources(current.Reference().Sources, prior.Reference().Sources) {
