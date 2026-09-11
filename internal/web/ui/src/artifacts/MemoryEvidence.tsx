@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { inspectMemoryEvidence, type MemoryEvidenceReceipt } from "../api/memoryEvidence";
+import { GraphEvidencePath } from "./GraphEvidencePath";
+import { memoryEvidenceAnchor } from "./memoryEvidenceAnchor";
 
 export function MemoryEvidence({ sessionId, snapshotId }: { sessionId: string; snapshotId: string }) {
   const [receipt, setReceipt] = useState<MemoryEvidenceReceipt>();
@@ -52,7 +54,7 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
     <h3 className="text-body text-sm font-medium">{heading}</h3>
     <p className="text-muted-text mt-2 text-xs leading-5">{explanation}</p>
     {receipt.evidence.length === 0 && <p className="text-muted-text mt-4 text-xs">{receipt.status === "empty" ? "The search returned no matches." : "No evidence is recorded for this request."}</p>}
-    {receipt.evidence.map((item) => <section key={item.reference.id} className="border-hair mt-5 border-t pt-4">
+    {receipt.evidence.map((item) => <section key={item.reference.id} id={memoryEvidenceAnchor(item.reference.id)} className="border-hair mt-5 border-t pt-4">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <h3 className="text-teal">{item.reference.kind === "conversation_excerpt" ? "Conversation excerpt" : "Accepted memory"}</h3>
         {item.reference.intent === "historical" && <span className="text-muted-text">Historical</span>}
@@ -65,6 +67,7 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
           <p>Claim ID: {item.reference.claim_id}<br />Claim version: {item.reference.claim_operation_id || "Unavailable"}</p>
         </details>}
         {item.reference.kind === "conversation_excerpt" && <p className="text-muted-text mt-2 text-xs">Attributed conversation evidence; preserves what was said and its uncertainty.</p>}
+        <GraphEvidencePath item={item} evidence={receipt.evidence} />
         {(item.reference.conflicts?.length ?? 0) > 0 && <div className="text-amber-ink mt-3 text-xs leading-5">
           <p>Conflicting accepted Claims</p>
           {item.reference.conflicts?.map((conflict) => <p key={`${conflict.code}:${conflict.claim_ids.join(":")}`}>{conflict.predicate_token}: {conflict.code === "opposite_polarity" ? "Opposite assertions" : conflict.code === "one_cardinality_overlap" ? "Different accepted values" : "Conflicting evidence"} · {conflict.claim_ids.join(", ")}</p>)}

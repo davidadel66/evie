@@ -1,0 +1,14 @@
+{
+  "binary_unchanged_after_measurement": true,
+  "binary_sha256": "d95f46a90fd0031128e5d7eb2866b5052809034b1a95521f54d2abf1f0c44afc",
+  "report_sha256": "fdfa5c43812818bac53def7ebe32dab3435a29faf871f044f645d15c2c2d519f",
+  "command": "EVIE_GRAPH_REPORT_DIR=$PWD/cmd/evie/docs/fixtures/memory-stage5-graph/v1 /tmp/evie-memory-stage5/graph-tests -test.run '^TestMemoryGraphBoundsExperiment$' -test.count=1 -test.v",
+  "result": "PASS",
+  "samples": 120,
+  "truncated_samples_by_fanout": {
+    "1": 0,
+    "4": 0,
+    "12": 30,
+    "24": 30
+  }
+}

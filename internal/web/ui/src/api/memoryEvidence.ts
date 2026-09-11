@@ -26,6 +26,11 @@ export type MemorySourceReference = {
   evidence_sha256: string;
 };
 
+export type MemoryGraphPath = {
+  anchor_entity_id: string;
+  claim_ids: string[];
+};
+
 export type MemoryReference = {
   id: string;
   kind: string;
@@ -42,6 +47,7 @@ export type MemoryReference = {
   current_correction_mode?: string;
   conflicts?: SemanticObjectInspection["conflicts"];
   related_claim_ids?: string[];
+  graph_paths?: MemoryGraphPath[];
   paths: string[];
   sources: MemorySourceReference[];
 };
@@ -66,6 +72,7 @@ export type MemoryEvidenceReceipt = {
       current_correction_mode?: string;
       conflicts?: SemanticObjectInspection["conflicts"];
       related_claim_ids?: string[];
+      graph_paths?: MemoryGraphPath[];
       sources: {
         source_link_id?: string;
         event_id: string;

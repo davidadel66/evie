@@ -86,6 +86,7 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 				}
 				evidence.ValidAtConstrained = ref.ValidAtConstrained
 				evidence.Paths = append([]string(nil), ref.Paths...)
+				evidence.GraphPaths = ref.GraphPaths
 				item.Evidence = &evidence
 				item.Available = true
 			}
@@ -102,6 +103,9 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 	}
 	// Reconstruct relations only within the exact, currently accessible set;
 	// a source restriction must not leave an unsupported peer ID behind.
+	// Preserve the original source inspection even when another path member
+	// is unavailable, but expose only paths whose complete support is visible.
+	pruneRetrievalGraphSupport(supplied)
 	decorateRetrievalRelations(supplied)
 	for i, position := range positions {
 		result[position].Evidence = &supplied[i]

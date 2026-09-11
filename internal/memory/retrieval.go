@@ -42,6 +42,7 @@ type RetrievalCoverage struct {
 }
 
 type RetrievalEvidence struct {
+	GraphPaths            []RetrievalGraphPath   `json:"graph_paths,omitempty"`
 	Intent                string                 `json:"intent"`
 	ValidAtConstrained    bool                   `json:"valid_at_constrained"`
 	CurrentStatus         SemanticObjectStatus   `json:"current_status"`
@@ -64,6 +65,14 @@ type RetrievalEvidence struct {
 	Paths                 []string               `json:"paths"`
 }
 
+// RetrievalGraphPath names accepted, source-bearing Claims in traversal order.
+// Every supporting Claim must also occur in the selected evidence set. A path
+// explains discovery; it does not accept an inferred relationship.
+type RetrievalGraphPath struct {
+	AnchorEntityID SemanticID   `json:"anchor_entity_id"`
+	ClaimIDs       []SemanticID `json:"claim_ids"`
+}
+
 // RetrievalSourceReference is content-free and can survive in a request
 // snapshot. Inspection must resolve its exact locator and apply current access.
 type RetrievalSourceReference struct {
@@ -76,6 +85,7 @@ type RetrievalSourceReference struct {
 }
 
 type RetrievalReference struct {
+	GraphPaths            []RetrievalGraphPath       `json:"graph_paths,omitempty"`
 	Intent                string                     `json:"intent"`
 	ValidAtConstrained    bool                       `json:"valid_at_constrained"`
 	CurrentStatus         SemanticObjectStatus       `json:"current_status"`
@@ -104,6 +114,10 @@ func (e RetrievalEvidence) Reference() RetrievalReference {
 	for _, conflict := range e.Conflicts {
 		conflict.ClaimIDs = append([]SemanticID(nil), conflict.ClaimIDs...)
 		r.Conflicts = append(r.Conflicts, conflict)
+	}
+	for _, path := range e.GraphPaths {
+		path.ClaimIDs = append([]SemanticID(nil), path.ClaimIDs...)
+		r.GraphPaths = append(r.GraphPaths, path)
 	}
 	for _, s := range e.Sources {
 		r.Sources = append(r.Sources, RetrievalSourceReference{SourceLinkID: s.ID, SessionID: s.SessionID, ScopeKey: s.ScopeKey,

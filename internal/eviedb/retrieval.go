@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -107,100 +106,19 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		result.Status = memory.RetrievalUnavailable
 		return result, nil
 	}
-	type candidate struct {
-		id    memory.SemanticID
-		score float64
-		paths []string
-	}
-	candidates := map[memory.SemanticID]*candidate{}
-	add := func(id memory.SemanticID, path string, rank int) {
-		c := candidates[id]
-		if c == nil {
-			if len(candidates) >= retrievalCandidateLimit {
-				return
-			}
-			c = &candidate{id: id}
-			candidates[id] = c
-		}
-		c.score += 1 / float64(60+rank)
-		if !containsString(c.paths, path) {
-			c.paths = append(c.paths, path)
-		}
-	}
-	// Exact identities and accepted aliases contribute independently of FTS.
-	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT c.claim_id FROM semantic_claims c JOIN semantic_scopes sc ON sc.scope_id=c.scope_id
- WHERE sc.scope_key IN (?,?,?) AND (c.claim_id=? OR c.subject_entity_id=? OR c.object_entity_id=?
- OR c.subject_entity_id IN (SELECT a.entity_id FROM semantic_aliases a WHERE a.normalized_value=?
- AND (SELECT state FROM semantic_state_events se WHERE se.object_kind='alias' AND se.object_id=a.alias_id AND se.transaction_time<=? ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1)='active'))
- ORDER BY c.claim_id LIMIT ?`, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), query.Text, query.Text, query.Text, normalizeAlias(query.Text), formatSemanticTime(metadata.AsKnownAt), retrievalCandidateLimit)
+	candidates, err := s.acceptedRetrievalCandidates(ctx, tx, scope, query, metadata, fts)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
-	rank := 0
-	for rows.Next() {
-		var id memory.SemanticID
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return retrievalReadFailure(ctx, result, err)
-		}
-		rank++
-		add(id, "exact_or_alias", rank)
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return retrievalReadFailure(ctx, result, err)
-	}
-	rows.Close()
-	rows, err = tx.QueryContext(ctx, `SELECT claim_id FROM memory_retrieval_fts WHERE memory_retrieval_fts MATCH ?
- AND generation=? AND scope_key IN (?,?,?) AND claim_id NOT IN (SELECT claim_id FROM memory_retrieval_dirty)
- ORDER BY bm25(memory_retrieval_fts),claim_id LIMIT ?`, fts, memoryIndexGeneration, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), retrievalCandidateLimit)
-	if err != nil {
-		return retrievalReadFailure(ctx, result, err)
-	}
-	rank = 0
-	for rows.Next() {
-		var id memory.SemanticID
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
-			return retrievalReadFailure(ctx, result, err)
-		}
-		rank++
-		add(id, "lexical", rank)
-	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return retrievalReadFailure(ctx, result, err)
-	}
-	rows.Close()
-	ordered := make([]*candidate, 0, len(candidates))
-	for _, c := range candidates {
-		ordered = append(ordered, c)
-	}
-	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].score != ordered[j].score {
-			return ordered[i].score > ordered[j].score
-		}
-		return ordered[i].id < ordered[j].id
-	})
-	for _, c := range ordered {
-		evidence, eligible, err := s.retrievalClaim(ctx, tx, metadata, c.id, query.Intent, query.ValidAt != nil)
-		if err != nil {
-			return retrievalReadFailure(ctx, result, err)
-		}
-		if !eligible {
-			continue
-		}
-		evidence.Paths = c.paths
+	for _, candidate := range candidates.ordered() {
 		if len(result.Evidence) == query.Limit {
 			result.Truncated = true
 			break
 		}
-		result.Evidence = append(result.Evidence, evidence)
+		result.Evidence = append(result.Evidence, candidate.evidence)
 	}
-	seen := make(map[memory.SemanticID]bool, len(candidates))
-	for id := range candidates {
-		seen[id] = true
-	}
+	result.Truncated = result.Truncated || candidates.truncated
+	seen := candidates.seen
 	incomplete, err := s.supplementAcceptedRetrieval(ctx, tx, scope, query, metadata, &result, seen)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
@@ -216,6 +134,7 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		result.Status = memory.RetrievalPartial
 	}
 	for {
+		result.Evidence = pruneRetrievalGraphPaths(result.Evidence)
 		decorateRetrievalRelations(result.Evidence)
 		encoded, err := json.Marshal(result)
 		if err != nil {
@@ -475,11 +394,13 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 			continue
 		}
 		current.Paths = append([]string(nil), prior.Paths...)
+		current.GraphPaths = prior.Reference().GraphPaths
 		if !sameRetrievalSources(current.Reference().Sources, prior.Reference().Sources) {
 			continue
 		}
 		valid = append(valid, current)
 	}
+	valid = pruneRetrievalGraphPaths(valid)
 	decorateRetrievalRelations(valid)
 	return valid, tx.Commit()
 }
