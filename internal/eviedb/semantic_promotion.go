@@ -179,7 +179,7 @@ func (s *Store) PreparePromotion(
 		promotedSources = append(promotedSources, source)
 	}
 	evidence, err := loadLifecycleEvidence(s.db.QueryRowContext(ctx, `
-		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, request.SourceEventID), scope.SessionID, request.SourceEventID, contextKey)
 	if err != nil {
 		return memory.PromotionProposal{}, err
@@ -401,7 +401,7 @@ func (s *Store) ApplyPromotion(
 		}
 
 		evidence, err := loadLifecycleEvidence(writer.queryRowContext(ctx, `
-			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 		`, proposal.Evidence.EventID), proposal.SessionID, proposal.Evidence.EventID, scopeKeyForContext(bound))
 		if err != nil || evidence != proposal.Evidence {
 			return errors.New("Promotion approval evidence changed")

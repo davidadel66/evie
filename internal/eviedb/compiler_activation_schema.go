@@ -54,13 +54,14 @@ CREATE VIEW IF NOT EXISTS memory_compiler_activation_invalid_claims AS
  SELECT l.job_id FROM memory_compiler_activation_jobs l JOIN memory_compiler_activations a USING(activation_id)
  JOIN memory_compiler_jobs j USING(job_id) LEFT JOIN memory_compiler_activation_claims c USING(job_id)
  WHERE a.work_paused=1 OR c.job_id IS NULL OR c.fence<>j.fence OR c.work_epoch<>a.work_epoch;
-CREATE TRIGGER IF NOT EXISTS memory_compiler_activation_append AFTER INSERT ON memory_compiler_event_positions BEGIN
+DROP TRIGGER IF EXISTS memory_compiler_activation_append;
+CREATE TRIGGER memory_compiler_activation_append AFTER INSERT ON memory_compiler_event_positions BEGIN
  INSERT INTO memory_compiler_activation_dirty(activation_id,session_id,high_position)
  SELECT a.activation_id,e.session_id,NEW.commit_position
  FROM events e JOIN sessions s ON s.id=e.session_id JOIN memory_compiler_activations a
  ON a.source_scope=CASE WHEN s.workspace_id IS NOT NULL THEN 'workspace:'||s.workspace_id WHEN s.project_id IS NOT NULL THEN 'project:'||s.project_id ELSE 'global' END
  AND (a.source_session='' OR a.source_session=e.session_id)
- WHERE e.id=NEW.event_id AND a.through_position IS NULL AND NEW.commit_position>a.after_position
+ WHERE e.id=NEW.event_id AND s.parent_session_id IS NULL AND a.through_position IS NULL AND NEW.commit_position>a.after_position
  ON CONFLICT(activation_id,session_id) DO UPDATE SET high_position=excluded.high_position;
 END;
 `

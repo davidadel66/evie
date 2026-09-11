@@ -13,12 +13,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/subagents"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/davidadel66/evie/internal/usage"
 	"github.com/davidadel66/evie/internal/web"
@@ -94,6 +96,24 @@ func main() {
 	if _, err := kernelStore.RecoverInactiveTaskClaims(context.Background()); err != nil {
 		log.Fatalf("failed to recover inactive Task claims: %v", err)
 	}
+	subagentPolicy, err := configuredSubagentPolicy(os.Getenv)
+	if err != nil {
+		log.Fatalf("invalid Subagents configuration: %v", err)
+	}
+	supervisor, err := subagents.New(kernelStore, subagentPolicy)
+	if err != nil {
+		log.Fatalf("initialize Subagents: %v", err)
+	}
+	if _, err := kernelStore.RecoverSubagents(context.Background()); err != nil {
+		log.Fatalf("recover Subagents: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := supervisor.Stop(ctx); err != nil {
+			log.Printf("Subagents shutdown: %v", err)
+		}
+	}()
 	pluginManager, err := plugins.NewManager(
 		tools.KernelToolset(),
 		plugins.NewWeb(),
@@ -101,6 +121,7 @@ func main() {
 		plugins.NewYouTube(),
 		plugins.NewTodo(kernelStore),
 		plugins.NewMemory(kernelStore),
+		plugins.NewSubagents(supervisor),
 	)
 	if err != nil {
 		log.Fatalf("failed to load compiled plugins: %v", err)
@@ -108,6 +129,7 @@ func main() {
 	if err := pluginManager.ConfigureEnabledState(context.Background(), kernelStore, map[plugins.PluginID]bool{
 		plugins.WebPluginID: true, plugins.FinancePluginID: true,
 		plugins.YouTubePluginID: true, plugins.TodoPluginID: true, plugins.MemoryPluginID: true,
+		plugins.SubagentsPluginID: false,
 	}); err != nil {
 		log.Fatalf("failed to apply plugin enabled configuration: %v", err)
 	}
@@ -147,6 +169,7 @@ func main() {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
 
+		configureSubagentRuntime(supervisor, pluginManager, client, profile)
 		store := kernelStore
 
 		selection, err := selectStoredSession(store, defaultComposition)
@@ -195,6 +218,8 @@ func main() {
 	case "":
 		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stopSignals()
+		stopSubagentRecovery := startSubagentRecovery(runtimeCtx, supervisor)
+		defer stopSubagentRecovery()
 		stopInput := closeInputOnCancellation(runtimeCtx, os.Stdin)
 		defer stopInput()
 		launchDir, err := os.Getwd()
@@ -216,6 +241,8 @@ func main() {
 	case "serve":
 		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stopSignals()
+		stopSubagentRecovery := startSubagentRecovery(runtimeCtx, supervisor)
+		defer stopSubagentRecovery()
 		codexHomes, err := usage.CodexHomes()
 		if err != nil {
 			log.Fatalf("usage configuration: %v", err)
@@ -250,6 +277,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
+		configureSubagentRuntime(supervisor, pluginManager, client, profile)
 		controller := newWebContextSessionController(kernelStore, pluginManager, func(
 			session memory.Session,
 			composition plugins.ResolvedComposition,

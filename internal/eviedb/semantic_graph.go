@@ -203,7 +203,7 @@ func (s *Store) PrepareCreateGraphLink(ctx context.Context, scope memory.ScopeCo
 	if !errors.Is(err, sql.ErrNoRows) {
 		return memory.CreateGraphLinkProposal{}, err
 	}
-	evidence, err := loadLifecycleEvidence(s.db.QueryRowContext(ctx, `SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?`, request.SourceEventID), scope.SessionID, request.SourceEventID, targetKey)
+	evidence, err := loadLifecycleEvidence(s.db.QueryRowContext(ctx, `SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)`, request.SourceEventID), scope.SessionID, request.SourceEventID, targetKey)
 	if err != nil {
 		return memory.CreateGraphLinkProposal{}, err
 	}
@@ -325,7 +325,7 @@ func (s *Store) ApplyCreateGraphLink(ctx context.Context, lease memory.TurnLease
 		if !endpointAllowedInTarget(expected, contextKey, sessionKey, sourceScope.Key) || !endpointAllowedInTarget(expected, contextKey, sessionKey, targetScope.Key) {
 			return errors.New("Graph Link endpoint scope changed after approval")
 		}
-		evidence, err := loadLifecycleEvidence(writer.queryRowContext(ctx, `SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?`, proposal.Evidence.EventID), proposal.SessionID, proposal.Evidence.EventID, proposal.Scope.Key)
+		evidence, err := loadLifecycleEvidence(writer.queryRowContext(ctx, `SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)`, proposal.Evidence.EventID), proposal.SessionID, proposal.Evidence.EventID, proposal.Scope.Key)
 		if err != nil || evidence != proposal.Evidence {
 			return errors.New("Graph Link evidence changed")
 		}

@@ -173,7 +173,7 @@ func (s *Session) runOwnedTurn(
 			return s.classifyLocalError(coordinator, fmt.Errorf("reconstruct durable compaction chain: %w", err))
 		}
 		workingContext := ""
-		if provider, ok := s.history.(workingContextProvider); ok {
+		if provider, ok := s.history.(workingContextProvider); ok && s.workerInstructions == "" {
 			workingContext, err = provider.WorkingContext(coordinator.ctx)
 			if err != nil {
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
@@ -182,7 +182,7 @@ func (s *Session) runOwnedTurn(
 		composeInput := ContextComposeInput{
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
-			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+			Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 			Continuation: continuation,
 		}
 		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
@@ -493,7 +493,7 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
-				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID,
+				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID,
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),

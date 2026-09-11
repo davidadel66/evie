@@ -1162,6 +1162,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade Workspace Context Scope: %w", err)
 	}
+	if err := ensureSubagentSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := ensureSemanticSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create Semantic Memory schema: %w", err)

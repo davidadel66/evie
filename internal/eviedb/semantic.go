@@ -1130,7 +1130,7 @@ func (s *Store) PrepareRememberLiteral(
 	var eventType, role, content, recordedAt string
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at
-		FROM events WHERE id = ?
+		FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, request.SourceEventID).Scan(&eventSession, &eventType, &role, &content, &recordedAt); err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("load source event: %w", err)
 	}
@@ -1669,7 +1669,7 @@ func (s *Store) ApplyRememberLiteral(
 
 		var eventSession, eventType, eventRole, eventContent, eventRecorded string
 		if err := writer.queryRowContext(ctx, `
-			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 		`, proposal.Source.EventID).Scan(&eventSession, &eventType, &eventRole, &eventContent, &eventRecorded); err != nil {
 			return fmt.Errorf("revalidate source event: %w", err)
 		}

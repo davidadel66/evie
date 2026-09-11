@@ -268,6 +268,9 @@ func (s *Store) withTurnLeaseWrite(
 			return err
 		}
 
+		if err := s.authorizeSubagentChild(ctx, conn, sessionID); err != nil {
+			return err
+		}
 		writer := &turnLeaseWriter{conn: conn}
 		writeErr := func() error {
 			defer writer.close()
@@ -281,6 +284,9 @@ func (s *Store) withTurnLeaseWrite(
 		// commit. BEGIN IMMEDIATE holds SQLite's write lock throughout.
 		nowText, err = validateTurnLeaseAccess(sessionID, holderID, token, s.now())
 		if err != nil {
+			return err
+		}
+		if err := s.authorizeSubagentChild(ctx, conn, sessionID); err != nil {
 			return err
 		}
 		return fenceTurnLeaseWrite(ctx, conn, sessionID, holderID, token, nowText)

@@ -457,7 +457,8 @@ type TokenUsage struct {
 }
 
 type ToolIntentPayload struct {
-	Call ToolCall `json:"call"`
+	Lease *TurnLease `json:"lease,omitempty"`
+	Call  ToolCall   `json:"call"`
 }
 
 type ToolResultPayload struct {

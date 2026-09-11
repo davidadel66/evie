@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	EvieVersion                    = "1.0.0"
-	StandardPresetID      PresetID = "standard"
-	StandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+	EvieVersion                                = "1.0.0"
+	StandardPresetID                  PresetID = "standard"
+	StandardPresetVersion                      = "sha256:ea528f3f1eed0716eb107c00b8fc99f62c93edc14185158c73f0c6b958428f02"
+	preSubagentsStandardPresetVersion          = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
 
 	preMemoryStandardPresetVersion  = "sha256:41b87e45541e81e6a6e45b4cb5877db1d6fb7ab0ebb3cea5f4b24df5f77c2734"
 	preYouTubeStandardPresetVersion = "sha256:b9907aeee8dcd35e3297ea0f56d8d79eaf44851d3d9a67c0595eb7334022ea16"
@@ -82,7 +83,7 @@ type ResolvedComposition struct {
 	CompatibilityResolutions []CompatibilityResolution
 }
 
-func standardPresetContent() Preset {
+func preSubagentsStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	return Preset{
 		ID: StandardPresetID,
@@ -114,7 +115,7 @@ func preTreeTodoStandardPreset() Preset {
 }
 
 func preClaimsTodoStandardPreset() Preset {
-	preset := standardPresetContent()
+	preset := preSubagentsStandardPresetContent()
 	preset.Version = preClaimsTodoPresetVersion
 	preset.RequiredCapabilities = preset.RequiredCapabilities[:len(preset.RequiredCapabilities)-2]
 	return preset
@@ -258,6 +259,9 @@ func (m *Manager) ResolvePresetContext(ctx context.Context, id PresetID) (Resolv
 	if id == "" {
 		id = StandardPresetID
 	}
+	if id == ResearchPresetID {
+		return m.resolvePreset(BuiltinResearchPreset())
+	}
 	if id != StandardPresetID {
 		return ResolvedComposition{}, fmt.Errorf("Agent Preset %q is not allowed; choose %q", id, StandardPresetID)
 	}
@@ -274,7 +278,7 @@ func (m *Manager) InspectPresetsContext(ctx context.Context) ([]PresetInspection
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return nil, err
 	}
-	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true)}, nil
+	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true), m.inspectPreset(BuiltinResearchPreset(), true)}, nil
 }
 
 // ValidatePreset validates exactly the requested built-in. Unknown IDs are
@@ -286,6 +290,9 @@ func (m *Manager) ValidatePreset(id PresetID) (PresetInspection, error) {
 func (m *Manager) validatePresetCurrent(id PresetID) PresetInspection {
 	if id == "" {
 		id = StandardPresetID
+	}
+	if id == ResearchPresetID {
+		return m.inspectPreset(BuiltinResearchPreset(), true)
 	}
 	if id != StandardPresetID {
 		return PresetInspection{
@@ -377,9 +384,13 @@ func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
 		}
 	}
 
+	base := m.base
+	if preset.ID == ResearchPresetID {
+		base = tools.NewToolset(nil)
+	}
 	definitions := make([]tools.Tool, 0, len(selected))
 	schemaOwner := make(map[string]string)
-	for _, schema := range m.base.Schemas() {
+	for _, schema := range base.Schemas() {
 		schemaOwner[schema.Function.Name] = "Kernel"
 	}
 	providers := make(map[PluginID]ProviderReceipt)
@@ -409,7 +420,7 @@ func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
 	}
 	sort.Slice(providerReceipts, func(i, j int) bool { return providerReceipts[i].ID < providerReceipts[j].ID })
 
-	toolset := m.base.WithTools(definitions)
+	toolset := base.WithTools(definitions)
 	receipt := CompositionReceipt{
 		FormatVersion: composition.FormatVersion,
 		Preset:        PresetIdentity{ID: string(preset.ID), Version: preset.Version},
@@ -571,6 +582,14 @@ func (m *Manager) ResumeCompositionContext(
 ) (ResolvedComposition, error) {
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return ResolvedComposition{}, err
+	}
+	if receipt.Preset.Version == preSubagentsStandardPresetVersion {
+		p := preSubagentsStandardPresetContent()
+		p.Version = preSubagentsStandardPresetVersion
+		return m.resumePreset(p, receipt)
+	}
+	if receipt.Preset.ID == string(ResearchPresetID) {
+		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
 	switch receipt.Preset.Version {
 	case preMemoryStandardPresetVersion:
@@ -854,4 +873,10 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 		}
 	}
 	return ImplementationCompatibility{}, false
+}
+
+func standardPresetContent() Preset {
+	p := preSubagentsStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities, CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	return p
 }

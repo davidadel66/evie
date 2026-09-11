@@ -66,9 +66,12 @@ func compilerAuthorize(ctx context.Context, q interface {
 	if owner.OwnerID != memory.LocalOwnerID || owner.SessionID != sel.SessionID {
 		return errors.New("compiler requires exact owner source context")
 	}
-	var workspace, project sql.NullString
-	if err := q.QueryRowContext(ctx, `SELECT workspace_id,project_id FROM sessions WHERE id=?`, sel.SessionID).Scan(&workspace, &project); err != nil {
+	var workspace, project, parent sql.NullString
+	if err := q.QueryRowContext(ctx, `SELECT workspace_id,project_id,parent_session_id FROM sessions WHERE id=?`, sel.SessionID).Scan(&workspace, &project, &parent); err != nil {
 		return err
+	}
+	if parent.Valid {
+		return errors.New("delegated assignments are ineligible for owner-memory compilation")
 	}
 	if workspace.String != string(owner.WorkspaceID) || project.String != string(owner.ProjectID) {
 		return errors.New("compiler source lineage mismatch")

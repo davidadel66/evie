@@ -403,3 +403,16 @@ func modelSegments(model string) (string, string, error) {
 	}
 	return author, slug, nil
 }
+
+// WithOutputLimit narrows an already resolved profile before request composition.
+// It preserves provider/model identity and cannot raise the parent's allowance.
+func (p ContextProfile) WithOutputLimit(limit int64) (ContextProfile, error) {
+	if limit <= 0 {
+		return ContextProfile{}, errors.New("output limit must be positive")
+	}
+	d := p.Diagnostics()
+	if limit < d.OutputReserveTokens {
+		d.OutputReserveTokens = limit
+	}
+	return newContextProfile(d)
+}

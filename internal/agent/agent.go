@@ -36,10 +36,11 @@ func (e sessionUnavailableError) Unwrap() []error {
 }
 
 type Session struct {
-	mu        sync.Mutex
-	client    Client
-	compactor Client
-	toolset   tools.Toolset
+	workerInstructions string
+	mu                 sync.Mutex
+	client             Client
+	compactor          Client
+	toolset            tools.Toolset
 	// legacyToolsetPending supports the former New + Send(extra...) entry
 	// point. It is resolved once, before the first turn, and never changes
 	// afterward. New production sessions use NewWithToolset instead.
@@ -150,7 +151,15 @@ func (s *Session) Send(
 		return err
 	}
 
+	var origin json.RawMessage
+	if s.workerInstructions != "" {
+		origin, err = json.Marshal(map[string]string{"origin": "delegated_assignment", "parent_session_id": string(s.scope.ParentSessionID)})
+		if err != nil {
+			return err
+		}
+	}
 	rootEvent, err := s.history.Append(coordinator.ctx, lease, memory.EventInput{
+		Payload: origin,
 		Type:    memory.EventUserMessage,
 		Role:    memory.RoleUser,
 		Content: input,
@@ -522,4 +531,15 @@ func approvalEventInputWithHashes(
 		ExecutionID: executionID,
 		Payload:     payloadJSON,
 	}, nil
+}
+
+// NewDelegatedWithToolset reuses the normal fenced conversation loop while
+// making the trusted role and automatic-context policy explicit.
+func NewDelegatedWithToolset(client Client, profile openrouter.ContextProfile, history History, scope memory.ScopeContext, owner TurnOwnership, toolset tools.Toolset, instructions string) *Session {
+	s := NewWithToolset(client, profile, history, scope, owner, toolset)
+	if scope.ParentSessionID == "" || instructions == "" {
+		s.configurationErr = errors.New("delegated session requires parent lineage and pinned instructions")
+	}
+	s.workerInstructions = instructions
+	return s
 }

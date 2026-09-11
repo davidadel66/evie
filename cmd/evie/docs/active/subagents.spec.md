@@ -1,3 +1,10 @@
+> Amended 2026-09-10 by the owner's implementation request. The parallel
+> foreground and orchestrator Task Tree decisions in [subagents.decisions.md](subagents.decisions.md)
+> supersede the original single-child restriction and the exclusions of parallel
+> foreground work and orchestrator-owned Task updates. GitHub #155 and #169–#175
+> describe the original foundation; they have not been changed or retroactively
+> treated as acceptance criteria for this extension.
+
 ## Problem Statement
 
 Evie cannot delegate a bounded assignment to another agent through its normal
@@ -18,7 +25,7 @@ from owner assertions.
 ## Solution
 
 Add a compiled First-party Subagents Plugin that exposes foreground delegation.
-A non-removable Kernel supervisor admits and runs one bounded child assignment,
+A non-removable Kernel supervisor admits and runs bounded child assignments,
 using the existing conversation runtime with a separate durable session,
 Composition Receipt, history, and turn ownership. The child returns findings
 and supporting evidence; the primary agent remains responsible for the answer
@@ -32,8 +39,9 @@ and no automatic retrieval of memory. This establishes explicit composition
 without implementing every possible worker preset. Later presets may select
 additional plugin capabilities under the same Kernel authority rules.
 
-Foreground delegation waits for a bounded result. Parallel foreground workers,
-background continuation, and worker management panels are separate outcomes.
+Foreground delegation waits for bounded results. A bounded batch runs independent
+children concurrently under configurable finite per-parent and runtime limits.
+Background continuation and worker management panels remain separate outcomes.
 The first execution path is eligible Global/project sessions. Workspace
 execution additionally depends on reviewed Workspace preset allowances; missing
 allowances produce an explicit refusal rather than a change of scope.
@@ -192,8 +200,8 @@ allowances produce an explicit refusal rather than a change of scope.
   invocation remaining authorized. An active child lease alone is insufficient.
   Child execution does not acquire the parent's session lock again or write
   directly into the parent's history.
-- **Execution limits.** The first release admits at most one active child per
-  parent turn and permits depth one. The child has no delegation capability,
+- **Execution limits.** The amended release enforces configurable finite per-parent and
+  runtime concurrency and permits depth one. The child has no delegation capability,
   and Kernel admission also rejects nested requests. Enforce finite configured
   runtime-wide capacity, wall-clock deadline, total model-call allowance, input
   and output context limits, and returned-result size. Count conversational
@@ -330,8 +338,8 @@ allowances produce an explicit refusal rather than a change of scope.
 
 ## Out of Scope
 
-- Parallel foreground fan-out, asynchronous spawn/status/wait/cancel
-  capabilities, background continuation, restart-driven execution, recurring
+- Asynchronous spawn/status/wait/cancel capabilities, background continuation,
+  restart-driven execution, recurring
   scheduling, result outboxes, and notifications.
 - Nested delegation, sibling messaging, child-session resume or multi-turn
   worker conversations, and arbitrary model-selected worker presets.
@@ -339,8 +347,8 @@ allowances produce an explicit refusal rather than a change of scope.
   mutation, worktree isolation, shell access, or a coding-worker preset.
 - Memory-enabled worker presets, automatic retrieval for workers, semantic
   memory writes, or compiling worker transcripts into accepted knowledge.
-- Child Todo capabilities, Task Access Grants, Task Focus, Task Claims, Task
-  decomposition, and Task progress/result mutations. Existing contracts remain
+- Child Todo capabilities, Task Access Grants, Task Focus, Task Claims, child Task
+  decomposition, and child Task progress/result mutations. Existing contracts remain
   the basis for a later Task-capable preset.
 - A generic Subagent Provider family, remote agent frameworks, third-party
   plugin distribution, dynamic executable loading, universal provider

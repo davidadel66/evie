@@ -308,7 +308,7 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 		return memory.CorrectClaimProposal{}, err
 	}
 	source, err := loadOwnerSource(s.db.QueryRowContext(ctx, `
-		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, request.SourceEventID), scope.SessionID, request.SourceEventID, targetKey)
 	if err != nil {
 		return memory.CorrectClaimProposal{}, err
@@ -423,7 +423,7 @@ func typedLiteralPointersEqual(left, right *memory.TypedLiteral) bool {
 func validateCorrectionSource(ctx context.Context, writer turnLeaseWriteExecutor, proposal memory.CorrectClaimProposal) error {
 	var sessionID, eventType, role, content, recordedAt string
 	if err := writer.queryRowContext(ctx, `
-		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, proposal.Source.EventID).Scan(&sessionID, &eventType, &role, &content, &recordedAt); err != nil {
 		return err
 	}

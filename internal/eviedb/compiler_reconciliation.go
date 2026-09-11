@@ -41,6 +41,14 @@ func (s *Store) ReconcileCompilerEvidence(ctx context.Context, config CompilerSu
 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET checked_order=(SELECT COALESCE(MAX(checked_order),0)+1 FROM memory_compiler_activation_roots) WHERE activation_id=? AND root_id=?`, activation, root); err != nil {
 			return err
 		}
+		var delegated bool
+		if err := conn.QueryRowContext(ctx, `SELECT parent_session_id IS NOT NULL FROM sessions WHERE id=?`, session).Scan(&delegated); err != nil {
+			return err
+		}
+		if delegated {
+			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_roots SET state='excluded',reason='prohibited_source' WHERE activation_id=? AND root_id=?`, activation, root)
+			return err
+		}
 		extractor := config.Extractors[generationID]
 		if extractor == nil || extractor.ServerIdentity() == "" {
 			result.State = "configuration_paused"
@@ -147,6 +155,14 @@ func discoverCompilerEvidenceInTransaction(ctx context.Context, conn compilerAct
 		return nil
 	}
 	if err != nil {
+		return err
+	}
+	var delegated bool
+	if err := conn.QueryRowContext(ctx, `SELECT parent_session_id IS NOT NULL FROM sessions WHERE id=?`, session).Scan(&delegated); err != nil {
+		return err
+	}
+	if delegated {
+		_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_activation_dirty SET scanned_position=high_position WHERE activation_id=? AND session_id=?`, activation, session)
 		return err
 	}
 	var event, kind, role, payload string

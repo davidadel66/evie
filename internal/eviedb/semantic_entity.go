@@ -329,7 +329,7 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		referenceContext = "global"
 	}
 	source, err := loadOwnerSource(s.db.QueryRowContext(ctx, `
-		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, request.SourceEventID), scope.SessionID, request.SourceEventID, sourceKey)
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
@@ -708,7 +708,7 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 			return err
 		}
 		source, err := loadOwnerSource(writer.queryRowContext(ctx, `
-			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 		`, proposal.Source.EventID), proposal.SessionID, proposal.Source.EventID, proposal.Source.ScopeKey)
 		if err != nil || source.EventID != proposal.Source.EventID || source.SessionID != proposal.Source.SessionID ||
 			source.ScopeKey != proposal.Source.ScopeKey || source.EventPart != proposal.Source.EventPart ||

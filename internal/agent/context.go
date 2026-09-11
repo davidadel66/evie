@@ -68,16 +68,17 @@ func (CanonicalRequestEstimator) Estimate(request openrouter.ChatRequest) (Reque
 }
 
 type ContextComposeInput struct {
-	Profile        openrouter.ContextProfile
-	Summary        *ContextSummary
-	Events         []memory.Event
-	ActiveRootID   memory.EventID
-	TriggerEventID memory.EventID
-	Iteration      int
-	Tools          []openrouter.Tool
-	Reasoning      *openrouter.ReasoningConfig
-	WorkingContext string
-	Continuation   map[memory.EventID][]json.RawMessage
+	WorkerInstructions string
+	Profile            openrouter.ContextProfile
+	Summary            *ContextSummary
+	Events             []memory.Event
+	ActiveRootID       memory.EventID
+	TriggerEventID     memory.EventID
+	Iteration          int
+	Tools              []openrouter.Tool
+	Reasoning          *openrouter.ReasoningConfig
+	WorkingContext     string
+	Continuation       map[memory.EventID][]json.RawMessage
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -200,7 +201,11 @@ func (c *ContextComposer) projectAtStart(
 			return fmt.Errorf("project durable history: %w", err)
 		}
 		messages := make([]openrouter.Message, 0, len(projection.conversation)+2)
-		messages = append(messages, openrouter.Message{Role: "system", Content: systemPrompt})
+		instructions := systemPrompt
+		if input.WorkerInstructions != "" {
+			instructions = input.WorkerInstructions
+		}
+		messages = append(messages, openrouter.Message{Role: "system", Content: instructions})
 		if input.Summary != nil {
 			messages = append(messages, openrouter.Message{Role: "system", Content: input.Summary.Content})
 		}
@@ -393,7 +398,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 		iteration = latest.Manifest.Iteration + 1
 	}
 	workingContext := ""
-	if provider, ok := s.history.(workingContextProvider); ok {
+	if provider, ok := s.history.(workingContextProvider); ok && s.workerInstructions == "" {
 		workingContext, err = provider.WorkingContext(ctx)
 		if err != nil {
 			return ContextDiagnostics{}, fmt.Errorf("load working context: %w", err)
@@ -402,7 +407,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	composed, err := s.composer.Compose(ContextComposeInput{
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
-		Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext,
+		Tools: s.toolset.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 	})
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)

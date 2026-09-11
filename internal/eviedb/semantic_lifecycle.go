@@ -647,7 +647,7 @@ func (s *Store) PrepareMemoryLifecycle(ctx context.Context, scope memory.ScopeCo
 		return memory.MemoryLifecycleProposal{}, err
 	}
 	evidence, err := loadLifecycleEvidence(s.db.QueryRowContext(ctx, `
-		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+		SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 	`, request.SourceEventID), scope.SessionID, request.SourceEventID, target.Key)
 	if err != nil {
 		return memory.MemoryLifecycleProposal{}, err
@@ -790,7 +790,7 @@ func (s *Store) ApplyMemoryLifecycle(ctx context.Context, lease memory.TurnLease
 			return errors.New("memory lifecycle proposal is outside its immutable session Context Scope")
 		}
 		evidence, err := loadLifecycleEvidence(writer.queryRowContext(ctx, `
-			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ?
+			SELECT session_id, event_type, COALESCE(role, ''), content, recorded_at FROM events WHERE id = ? AND session_id IN (SELECT id FROM sessions WHERE parent_session_id IS NULL)
 		`, proposal.Evidence.EventID), proposal.SessionID, proposal.Evidence.EventID, proposal.Scope.Key)
 		if err != nil || evidence != proposal.Evidence {
 			return errors.New("memory lifecycle evidence changed")

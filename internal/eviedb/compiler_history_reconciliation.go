@@ -58,6 +58,14 @@ func (s *Store) ReconcileCompilerHistory(ctx context.Context, config CompilerSup
 		if _, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET checked_order=? WHERE request_id=? AND range_ordinal=? AND root_id=?`, check, request, ordinal, root); err != nil {
 			return err
 		}
+		var delegated bool
+		if err := conn.QueryRowContext(ctx, `SELECT parent_session_id IS NOT NULL FROM sessions WHERE id=?`, session).Scan(&delegated); err != nil {
+			return err
+		}
+		if delegated {
+			_, err := conn.ExecContext(ctx, `UPDATE memory_compiler_history_roots SET state='excluded',reason='prohibited_source' WHERE request_id=? AND range_ordinal=? AND root_id=?`, request, ordinal, root)
+			return err
+		}
 		extractor := config.Extractors[generationID]
 		if extractor == nil || extractor.ServerIdentity() == "" {
 			result.State = "configuration_paused"
