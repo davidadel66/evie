@@ -49,11 +49,16 @@ export function activityTurns(items: Item[], streaming: boolean): ActivityGroup[
 }
 
 export function needsAttention(item: Item): boolean {
-  return item.kind === "memory" || item.kind === "notice" || (item.kind === "assistant" && !!item.discarded) ||
+  if (item.kind === "memory") {
+    const memory = item.memory;
+    return (memory.status !== "success" && memory.status !== "empty") || memory.requestStatus === "interrupted" ||
+      !!(memory.historicalCount || memory.retiredCount || memory.conflictCount);
+  }
+  return item.kind === "notice" || (item.kind === "assistant" && !!item.discarded) ||
     (item.kind === "tool" && (!!item.isErr || item.approval?.state === "pending" || item.approval?.state === "declined" || item.approval?.state === "expired"));
 }
 
-type ActionKind = "read" | "edit" | "command" | "search" | "data" | "tool";
+type ActionKind = "read" | "edit" | "command" | "search" | "data" | "memory" | "tool";
 const actions: Record<string, { kind: ActionKind; action: string; done: string; subject: string[] }> = {
   read_file: {kind: "read", action: "Read file", done: "Read file", subject: ["path"]},
   edit_file: {kind: "edit", action: "Edit file", done: "Edited file", subject: ["path"]},
@@ -62,6 +67,11 @@ const actions: Record<string, { kind: ActionKind; action: string; done: string; 
   web_fetch: {kind: "read", action: "Fetch page", done: "Fetched page", subject: ["url"]},
   query_db: {kind: "data", action: "Query data", done: "Queried data", subject: ["query", "sql"]},
   edit_db: {kind: "edit", action: "Edit data", done: "Edited data", subject: ["query", "sql"]},
+  memory_search: {kind: "memory", action: "Search memory", done: "Searched memory", subject: ["query"]},
+  memory_list_objects: {kind: "memory", action: "List memory records", done: "Listed memory records", subject: []},
+  memory_get_object: {kind: "memory", action: "Read memory record", done: "Read memory record", subject: []},
+  memory_search_conversations: {kind: "memory", action: "Search conversations", done: "Searched conversations", subject: ["query"]},
+  memory_expand_conversation: {kind: "memory", action: "Read conversation context", done: "Read conversation context", subject: []},
 };
 
 export function toolLabel(tool: ToolItem) {
@@ -96,6 +106,7 @@ export function toolBatchLabel(tools: ToolItem[]): string {
       case "command": return "Ran commands";
       case "search": return "Searched web";
       case "data": return "Queried data";
+      case "memory": return "Checked memory";
       default: return "Used tools";
     }
   }));

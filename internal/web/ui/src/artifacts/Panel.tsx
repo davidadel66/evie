@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ContextScope, Workspace } from "../api/contextSessions";
 import type { SemanticObjectInspection } from "../api/memory";
-import { Cross, Database, FileIcon, Folder, Layers } from "../ui/Icon";
+import { Cross, Database, FileIcon, Folder, Layers, Wrench } from "../ui/Icon";
+import type { ToolItem } from "../chat/activityModel";
+import { ToolInspection } from "./ToolInspection";
 import { Diff } from "../chat/Diff";
 import { FilePath, FileViewer } from "./FileViewer";
 import type { FileInspection as InspectedFile } from "./fileInspection";
@@ -9,6 +11,7 @@ import { MemoryEvidence } from "./MemoryEvidence";
 
 export type InspectorTarget =
   | { kind: "file"; file: InspectedFile }
+  | { kind: "tool"; tool: ToolItem }
   | { kind: "memory"; detail: SemanticObjectInspection }
   | { kind: "memory-evidence"; sessionId: string; snapshotId: string }
   | { kind: "workspace"; workspace: Workspace }
@@ -25,16 +28,16 @@ type Props = {
 
 export function Panel({ target, focused, onClose }: Props) {
   const closeButton = useRef<HTMLButtonElement>(null);
-  const fileKey = target.kind === "file" ? target.file.key : undefined;
+  const selectionKey = target.kind === "file" ? target.file.key : target.kind === "tool" ? target.tool.key : target.kind === "memory-evidence" ? `${target.sessionId}:${target.snapshotId}` : undefined;
   useEffect(() => {
-    if (fileKey) closeButton.current?.focus();
-  }, [fileKey]);
+    if (selectionKey) closeButton.current?.focus();
+  }, [selectionKey]);
   return (
     <aside
       aria-label="Inspector"
       onKeyDown={(event) => {
-        if (target.kind !== "file" || event.key !== "Tab" || !window.matchMedia("(max-width: 639px)").matches) return;
-        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], [tabindex="0"]')].filter((node) => node.tabIndex >= 0 && !node.matches(":disabled") && node.getClientRects().length > 0);
+        if (!selectionKey || event.key !== "Tab" || !window.matchMedia(target.kind === "file" ? "(max-width: 639px)" : "(max-width: 767px)").matches) return;
+        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button, summary, a[href], [tabindex="0"]')].filter((node) => node.tabIndex >= 0 && !node.matches(":disabled") && node.getClientRects().length > 0);
         const destination = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1) : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : undefined;
         if (destination) { event.preventDefault(); destination.focus(); }
       }}
@@ -53,6 +56,7 @@ export function Panel({ target, focused, onClose }: Props) {
 
       <div className={target.kind === "file" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto"}>
         {target.kind === "file" && <FileViewer key={target.file.key} file={target.file} />}
+        {target.kind === "tool" && <ToolInspection key={target.tool.key} tool={target.tool} />}
         {target.kind === "memory" && <MemoryInspection detail={target.detail} />}
         {target.kind === "memory-evidence" && <MemoryEvidence key={`${target.sessionId}:${target.snapshotId}`} sessionId={target.sessionId} snapshotId={target.snapshotId} />}
         {target.kind === "workspace" && <WorkspaceInspection workspace={target.workspace} />}
@@ -206,12 +210,14 @@ function MetaLine({ children }: { children: React.ReactNode }) {
 }
 
 function TargetIcon({ target }: { target: InspectorTarget }) {
+  if (target.kind === "tool") return <Wrench size={13} />;
   if (target.kind === "memory" || target.kind === "memory-evidence" || target.kind === "data") return <Database size={13} />;
   if (target.kind === "workspace" || target.kind === "scope") return <Folder size={13} />;
   return <FileIcon size={13} />;
 }
 
 function targetTitle(target: InspectorTarget) {
+  if (target.kind === "tool") return "Tool activity";
   if (target.kind === "file") return target.file.path.split("/").filter(Boolean).pop() ?? target.file.path;
   if (target.kind === "memory") return memoryTitle(target.detail);
   if (target.kind === "memory-evidence") return "Original memory evidence";

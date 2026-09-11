@@ -5,6 +5,17 @@ import { Activity } from "./Activity";
 import { activityTurns, toolLabel } from "./activityModel";
 
 describe("activity transcript", () => {
+  it("names inspect buttons with their query so repeated searches remain distinguishable", () => {
+    const items: Item[] = [
+      {kind: "tool", key: "one", id: "one", name: "memory_search", args: '{"query":"saved diet"}', result: "first raw result", startedAt: 0},
+      {kind: "tool", key: "two", id: "two", name: "memory_search", args: '{"query":"response style"}', result: "second raw result", startedAt: 0},
+    ];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} onOpenTool={() => {}} />);
+    expect(html).toContain('aria-label="Inspect Searched memory: saved diet"');
+    expect(html).toContain('aria-label="Inspect Searched memory: response style"');
+    expect(html).not.toContain("raw result");
+  });
+
   it("retains elapsed time for a plain completed response with no public summary", () => {
     const turn = {id: "u", startedAt: 1000, finishedAt: 5000, status: "complete"} as const;
     const items: Item[] = [{kind: "user", key: "u", text: "hello", turn}, {kind: "assistant", key: "a", text: "Hi.", streaming: false, phase: "final_answer", turn}];
@@ -53,10 +64,10 @@ describe("activity transcript", () => {
     expect(html).toContain("Approval required");
     expect(html).toContain("Command failed");
     expect(html).toContain("go test ./...");
-    expect(html).toContain("Arguments");
-    expect(html).toContain("Result");
+    expect(html).not.toContain("Arguments");
+    expect(html).not.toContain("Result");
+    expect(html).not.toContain("exit 1");
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain("<summary");
   });
 
   it("does not call requested or declined edits successful", () => {
@@ -67,14 +78,14 @@ describe("activity transcript", () => {
     expect(toolLabel({...tool, name: "bash", args: '{"command":"cat file; rm file"}', result: "ok"}).label).toBe("Ran command");
   });
 
-  it("keeps exact arguments and removes expired approval controls as soon as the result arrives", () => {
+  it("keeps raw arguments out of chat and removes expired approval controls as soon as the result arrives", () => {
     let items = appendUser([], "test");
     items = reduce(items, {type: "tool_call", id: "c", name: "edit_file", args: '{"id":9007199254740993,"key":1,"key":2}'});
     items = reduce(items, {type: "approval_request", id: "p", name: "edit_file", args: "{}"});
     items = reduce(items, {type: "tool_result", id: "c", content: "expired", isError: true});
     const html = renderToStaticMarkup(<Activity group={activityTurns(items, true)[0]} onAnswer={() => {}} />);
-    expect(html).toContain("9007199254740993");
-    expect(html).toContain("&quot;key&quot;:1,&quot;key&quot;:2");
+    expect(html).not.toContain("9007199254740993");
+    expect(html).not.toContain("&quot;key&quot;:1,&quot;key&quot;:2");
     expect(html).not.toContain("Approval required");
     expect(items[1]).toMatchObject({approval: {state: "expired"}});
   });

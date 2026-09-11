@@ -13,6 +13,7 @@ type Props = {
   streaming: boolean;
   onAnswer: (reqId: string, approve: boolean) => void;
   onOpenFile?: (key: string, trigger: HTMLButtonElement) => void;
+  onOpenTool?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenMemory?: MemoryOpener;
   historyLoading?: boolean;
   historyProblem?: string | null;
@@ -21,7 +22,7 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenMemory, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenTool, onOpenMemory, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const prependHeight = useRef<number | null>(null);
@@ -51,7 +52,7 @@ export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenMem
       {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
       {activityTurns(items, streaming).map((group) => <Fragment key={group.key}>
         {group.user && <UserMessage text={group.user.text} />}
-        <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenMemory={onOpenMemory} />
+        <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />
         {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
       </Fragment>)}
       {queued.map((text, i) => (

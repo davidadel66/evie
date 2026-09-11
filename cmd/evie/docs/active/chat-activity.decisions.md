@@ -35,3 +35,19 @@
   block. Read files show only breadcrumb path and highlighted source. Edit
   comparisons remain available; partial/proposed/error qualifiers stay concise,
   and recorded approval state is accessible in the path tooltip.
+- David's September 11 request moves generic tool arguments and results from
+  chat to the selected action's inspector. Expanded chat retains compact,
+  readable action rows. The inspector shows useful action and outcome details
+  first; exact arguments and results remain inert, unchanged strings behind
+  **Debug details**, closed by default. Existing file presentation and approval
+  previews remain unchanged.
+- Generic tool selection follows the file selection boundary: session ID and
+  item key identify the action, and the inspector derives its current approval
+  and result state from the transcript. Later actions do not replace selection;
+  session or workbench navigation clears it. Keyboard opening, closing, and
+  focus restoration apply to generic tool inspection as well as files.
+- Collapsed activity shows the latest routine memory receipt while retaining
+  earlier warnings, interrupted requests, historical or retired evidence, and
+  conflicts. Expanded activity and source inspection preserve access to the
+  original receipts and request sequence. This is presentation grouping only;
+  evidence identity, status, scope, attribution, and current access do not change.

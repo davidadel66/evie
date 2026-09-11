@@ -165,3 +165,61 @@ reference directly; no extra toolbar, cards, or explanatory labels are added.
 
 Verification covers the absent read metadata/tabs, inert and exact highlighted
 source, edit comparison and partial/error qualifiers, plus browser screenshots.
+
+### Tool inspection amendment — September 11, 2026
+
+David requested less tool and debug noise in chat, with readable information in
+the inspector and raw logs behind a button. This supersedes the earlier inline
+placement of generic tool arguments and results. Expanded activity retains
+compact action rows; selecting a generic tool opens its details beside chat.
+The inspector leads with the readable action, subject, outcome, and recorded
+approval state. Exact arguments and results remain inert, unchanged strings
+under a keyboard-accessible **Debug details** disclosure, closed by default.
+Opening the inspector does not itself expose raw logs.
+
+Selection is bound to the session ID and tool item key. The selected action
+stays pinned as later actions arrive and reflects live approval and result
+updates. Session or workbench navigation clears selection. Close/Escape returns
+focus to the originating action, its activity header, or the inspector toggle
+when the original control is no longer visible. Narrow-screen inspection keeps
+keyboard focus within the overlay.
+
+Pending approvals retain their readable effect previews and actionable controls.
+Failures, declined or expired approvals, discarded-response warnings, and
+incomplete turns remain visible when activity is collapsed. A requested or
+approved action without a recorded result never claims successful execution.
+The existing file viewer keeps its breadcrumb and source presentation,
+File/Changes controls, recorded-content boundaries, and concise qualifiers.
+
+Collapsed activity shows the latest routine memory receipt. Earlier receipts
+with warnings, interrupted requests, historical or retired evidence, or
+conflicts remain visible. Expanded activity retains the individual receipts,
+and the source inspector retains the full original request sequence. Accepted
+memory and Conversation excerpt labels, recorded-versus-supplied status, source
+availability, and original-versus-current evidence state remain explicit.
+
+Verification covers absent inline raw payloads, closed initial debug details,
+exact inert argument/result rendering, session-bound selection and live updates,
+approval and failure visibility, file inspection, and memory receipt grouping.
+Synthetic desktop/mobile checks cover opening actions, closing and focus
+restoration, and bounded scrolling without remote model requests. No backend,
+retrieval, persistence, or dependency changes are required.
+
+Verification on September 11, 2026:
+
+- `./internal/web/ui/node_modules/.bin/vitest run --root internal/web/ui` passed:
+  48 files, 263 tests. Regression cases cover exact logs, accessible action
+  names, independent memory warning states, and session-bound live selection.
+- `./scripts/verify-change.sh` passed: UI lint/build, full Go tests/vet, staged
+  and unstaged whitespace checks. Existing warnings remain: five Fast Refresh
+  export warnings and Vite chunks larger than 500 kB. No required check skipped.
+- A disposable real SQLite fixture with a scripted provider was inspected in
+  the browser at desktop and 390 px width. Confirmed compact completed activity,
+  closed initial debug details, keyboard expansion, reset on another action,
+  Escape focus restoration after collapsing activity, mobile Tab/Shift+Tab
+  containment, original request/source navigation, session isolation, and no
+  browser warnings or errors. The running personal server was not changed.
+
+To demonstrate: expand a completed turn's Worked row, select a tool's Inspect
+action, then open Debug details. Close the inspector or press Escape to return
+to chat. The memory badge opens the original sources and request sequence.

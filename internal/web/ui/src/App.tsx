@@ -7,7 +7,8 @@ import type {
 } from "./api/contextSessions";
 import { MemoryPresentationProvider } from "./memory/presentation";
 import { Panel, type InspectorTarget } from "./artifacts/Panel";
-import { inspectToolFile, selectedFileInspection, type FileSelection } from "./artifacts/fileInspection";
+import { inspectToolFile } from "./artifacts/fileInspection";
+import { selectedToolInspection, type ToolSelection } from "./artifacts/toolSelection";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
@@ -48,7 +49,7 @@ export default function App() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorFocused, setInspectorFocused] = useState(false);
   const [inspectorOverride, setInspectorOverride] = useState<InspectorTarget>();
-  const [selectedFile, setSelectedFile] = useState<FileSelection>();
+  const [selectedAction, setSelectedAction] = useState<ToolSelection>();
   const fileTrigger = useRef<HTMLButtonElement | null>(null);
   const activityTrigger = useRef<HTMLButtonElement | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("memory");
@@ -57,12 +58,14 @@ export default function App() {
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
-  const selectedInspection = selectedFileInspection(selectedFile, contextSessions.snapshot?.activeSession?.id, items);
+  const selectedTool = selectedToolInspection(selectedAction, contextSessions.snapshot?.activeSession?.id, items);
+  const selectedInspection = selectedTool ? inspectToolFile(selectedTool) : null;
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
   const visibleOverride = inspectorOverride?.kind === "memory-evidence" && inspectorOverride.sessionId !== contextSessions.snapshot?.activeSession?.id ? undefined : inspectorOverride;
   const inspectorTarget: InspectorTarget = selectedInspection
     ? {kind: "file", file: selectedInspection}
+    : selectedTool ? {kind: "tool", tool: selectedTool}
     : visibleOverride ?? defaultInspectorTarget(activeView, activeWorkspace, contextSessions.snapshot?.activeScope, latestFile ? {kind: "file", file: latestFile} : undefined);
 
   const closeInspector = () => {
@@ -73,7 +76,7 @@ export default function App() {
     });
   };
   useEffect(() => {
-    if (!inspectorOpen || !selectedFile) return;
+    if (!inspectorOpen || (!selectedAction && inspectorOverride?.kind !== "memory-evidence")) return;
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -83,7 +86,18 @@ export default function App() {
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [inspectorOpen, selectedFile]);
+  }, [inspectorOpen, selectedAction, inspectorOverride]);
+
+  const openTool = (key: string, trigger: HTMLButtonElement) => {
+    const sessionId = contextSessions.snapshot?.activeSession?.id;
+    if (!sessionId) return;
+    fileTrigger.current = trigger;
+    activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
+    setSelectedAction({sessionId, key});
+    setInspectorOverride(undefined);
+    setInspectorOpen(true);
+    setInspectorFocused(false);
+  };
 
   const pending = items.find((item) => item.kind === "tool" && item.approval?.state === "pending");
   const pendingId = pending?.kind === "tool" ? pending.approval?.reqId : undefined;
@@ -123,7 +137,7 @@ export default function App() {
     setViews((current) => current.some((open) => open.id === view.id) ? current : [...current, view]);
     setActiveViewId(view.id);
     setInspectorOverride(undefined);
-    setSelectedFile(undefined);
+    setSelectedAction(undefined);
     setMobileNavOpen(false);
   };
 
@@ -134,7 +148,7 @@ export default function App() {
   const activateView = (view: WorkbenchView) => {
     setActiveViewId(view.id);
     setInspectorOverride(undefined);
-    setSelectedFile(undefined);
+    setSelectedAction(undefined);
   };
 
   const closeView = (view: WorkbenchView) => {
@@ -144,7 +158,7 @@ export default function App() {
     setViews(next);
     if (view.id === activeViewId) setActiveViewId(next[Math.max(0, index - 1)]?.id ?? "chat");
     setInspectorOverride(undefined);
-    setSelectedFile(undefined);
+    setSelectedAction(undefined);
   };
 
   const selectSession = async (selection: ContextSessionSelection) => {
@@ -153,7 +167,7 @@ export default function App() {
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
-      setSelectedFile(undefined);
+      setSelectedAction(undefined);
       setMobileNavOpen(false);
     } catch {
       // useContextSessions owns the actionable error message.
@@ -184,7 +198,7 @@ export default function App() {
       setDraft("");
       setActiveViewId("chat");
       setInspectorOverride(undefined);
-      setSelectedFile(undefined);
+      setSelectedAction(undefined);
     } catch {
       // useContextSessions owns the actionable error message.
     }
@@ -251,20 +265,12 @@ export default function App() {
               {activeView.kind === "chat" && (
                 contextSessions.snapshot?.activeScope ? (
                   <>
-                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={(key, trigger) => {
+                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
                       if (!sessionId) return;
                       fileTrigger.current = trigger;
                       activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
-                      setSelectedFile({sessionId, key});
-                      setInspectorOpen(true);
-                      setInspectorFocused(false);
-                    }} onOpenMemory={(snapshotId, trigger) => {
-                      const sessionId = contextSessions.snapshot?.activeSession?.id;
-                      if (!sessionId) return;
-                      fileTrigger.current = trigger;
-                      activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
-                      setSelectedFile(undefined);
+                      setSelectedAction(undefined);
                       setInspectorOverride({kind: "memory-evidence", sessionId, snapshotId});
                       setInspectorOpen(true);
                       setInspectorFocused(false);
@@ -297,7 +303,7 @@ export default function App() {
                   onSource={(source) => {
                     setDataSource(source);
                     setInspectorOverride(undefined);
-                    setSelectedFile(undefined);
+                    setSelectedAction(undefined);
                   }}
                   snapshot={contextSessions.snapshot}
                 />

@@ -4,6 +4,35 @@ import { MemoryActivity } from "./MemoryActivity";
 import { appendUser, reduce } from "../store/reducer";
 import { Chat } from "./Chat";
 
+it("keeps only the latest routine receipt in collapsed chat while preserving earlier warnings", () => {
+  let items = appendUser([], "Check my saved preferences.");
+  items = reduce(items, {type: "turn_started", id: "root", status: "working"});
+  for (const [index, status] of ["unavailable", "empty", "success", "empty"].entries()) {
+    items = reduce(items, {type: "memory_activity", snapshotId: `request-${index}`, requestStatus: "completed", status, acceptedCount: status === "success" ? 2 : 0, excerptCount: 0});
+  }
+  items = reduce(items, {type: "assistant_done", content: "Checked.", terminal: true});
+  const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
+  expect(html.match(/No matches/g)).toHaveLength(1);
+  expect(html).toContain("Memory unavailable");
+  expect(html).not.toContain("2 supplied");
+  expect(items.filter((item) => item.kind === "memory")).toHaveLength(4);
+});
+
+it.each([
+  {annotation: {requestStatus: "interrupted"}, label: "Request interrupted"},
+  {annotation: {historicalCount: 1}, label: "1 historical"},
+  {annotation: {retiredCount: 1}, label: "1 marked retired"},
+  {annotation: {conflictCount: 1}, label: "1 with conflicts"},
+])("keeps an earlier $label visible independently of the latest receipt", ({annotation, label}) => {
+  let items = appendUser([], "Check history.");
+  items = reduce(items, {type: "turn_started", id: "root", status: "working"});
+  items = reduce(items, {type: "memory_activity", snapshotId: "earlier", requestStatus: "completed", status: "success", acceptedCount: 1, excerptCount: 0, ...annotation});
+  items = reduce(items, {type: "memory_activity", snapshotId: "latest", requestStatus: "completed", status: "empty", acceptedCount: 0, excerptCount: 0});
+  items = reduce(items, {type: "assistant_done", content: "Checked.", terminal: true});
+  const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
+  for (const value of [label, "No matches"]) expect(html).toContain(value);
+});
+
 it("labels a saved request as recorded until its assistant response commits", () => {
   let items = appendUser([], "Check my earlier sources.");
   items = reduce(items, { type: "turn_started", id: "receipt-root", status: "working" });
