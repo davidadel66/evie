@@ -10,7 +10,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const memoryIndexGeneration = "accepted-fts-unicode61-v2"
+const memoryIndexGeneration = "accepted-fts-unicode61-v3"
 
 // The checkpoint and dirty queue belong to the projection, never accepted
 // memory. Triggers enqueue inside the accepting transaction; foreground reads
@@ -24,9 +24,9 @@ CREATE TRIGGER IF NOT EXISTS memory_retrieval_configuration_immutable
  BEFORE UPDATE OF generation,configuration ON memory_retrieval_generations
  BEGIN SELECT RAISE(ABORT,'retrieval configuration is immutable'); END;
 INSERT OR IGNORE INTO memory_retrieval_generations(generation,configuration,state)
- VALUES ('accepted-fts-unicode61-v2','{"tokenizer":"unicode61","document_version":2,"lifecycle":"source-eligible-history"}', 'building');
+ VALUES ('accepted-fts-unicode61-v3','{"tokenizer":"unicode61","document_version":3,"lifecycle":"source-eligible-history"}', 'building');
 CREATE TABLE IF NOT EXISTS memory_retrieval_dirty (claim_id TEXT PRIMARY KEY);
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_fts USING fts5(
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_fts_v3 USING fts5(
  generation UNINDEXED, claim_id UNINDEXED, scope_key UNINDEXED, body, tokenize='unicode61'
 );
 CREATE TRIGGER IF NOT EXISTS memory_retrieval_claim_added AFTER INSERT ON semantic_claims BEGIN
@@ -58,7 +58,7 @@ END;
 `
 
 func ensureRetrievalSchema(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, retrievalSchema+conversationRetrievalSchema)
+	_, err := db.ExecContext(ctx, retrievalSchema+conversationRetrievalSchema+denseRetrievalSchema)
 	return err
 }
 
@@ -67,7 +67,7 @@ func memoryIndexCoverage(ctx context.Context, q semanticInspectionQueryer) (memo
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM semantic_claims WHERE rowid>g.checkpoint)
  +(SELECT count(*) FROM memory_retrieval_dirty d JOIN semantic_claims c ON c.claim_id=d.claim_id WHERE c.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_fts WHERE generation=g.generation)
+ (SELECT count(*) FROM memory_retrieval_fts_v3 WHERE generation=g.generation)
  FROM memory_retrieval_generations g WHERE generation=?`, memoryIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }
@@ -158,7 +158,7 @@ func (s *Store) refreshAcceptedMemoryIndex(ctx context.Context, limit int) (memo
 }
 
 func (s *Store) refreshMemoryClaim(ctx context.Context, q *sql.Conn, id memory.SemanticID) error {
-	if _, err := q.ExecContext(ctx, `DELETE FROM memory_retrieval_fts WHERE generation=? AND claim_id=?`, memoryIndexGeneration, id); err != nil {
+	if _, err := q.ExecContext(ctx, `DELETE FROM memory_retrieval_fts_v3 WHERE generation=? AND claim_id=?`, memoryIndexGeneration, id); err != nil {
 		return err
 	}
 	claim, err := loadSemanticClaim(ctx, q, id)
@@ -226,7 +226,7 @@ func (s *Store) refreshMemoryClaim(ctx context.Context, q *sql.Conn, id memory.S
 	if len(body) > 16384 || compilerHasSecret(body) {
 		return nil
 	}
-	_, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_fts(generation,claim_id,scope_key,body) VALUES(?,?,?,?)`, memoryIndexGeneration, id, claim.ScopeKey, body)
+	_, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_fts_v3(generation,claim_id,scope_key,body) VALUES(?,?,?,?)`, memoryIndexGeneration, id, claim.ScopeKey, body)
 	if err != nil {
 		return fmt.Errorf("refresh accepted memory projection: %w", err)
 	}

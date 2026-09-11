@@ -92,8 +92,8 @@ func (s *Store) hasNewRetrievalOwnerStatement(ctx context.Context, tx *sql.Tx, s
 			after = observed
 		}
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT e.id FROM memory_retrieval_event_fts f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts MATCH ? AND f.generation=? AND f.scope_key=? AND e.event_type='user_message' AND e.role='user'
+	rows, err := tx.QueryContext(ctx, `SELECT e.id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=? AND e.event_type='user_message' AND e.role='user'
  AND `+conversationObservedTimeSQL+`>? AND `+conversationObservedTimeSQL+`<=?
  AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
  ORDER BY `+conversationObservedTimeSQL+` DESC,e.id LIMIT 9`, match, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(after), formatSemanticTime(metadata.AsKnownAt), scope.SessionID, scope.SessionID)

@@ -40,12 +40,15 @@ type retrievalCandidate struct {
 }
 
 type retrievalCandidates struct {
-	store     *Store
-	tx        *sql.Tx
-	plan      retrievalQueryPlan
-	seen      map[memory.SemanticID]bool
-	eligible  map[memory.SemanticID]*retrievalCandidate
-	truncated bool
+	store            *Store
+	tx               *sql.Tx
+	plan             retrievalQueryPlan
+	seen             map[memory.SemanticID]bool
+	eligible         map[memory.SemanticID]*retrievalCandidate
+	truncated        bool
+	denseCoverage    *memory.RetrievalCoverage
+	denseIncomplete  bool
+	densePreparation *denseQueryPreparation
 }
 
 func (c *retrievalCandidates) read(ctx context.Context, id memory.SemanticID) (*retrievalCandidate, error) {
@@ -130,6 +133,12 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 			graph:       retrievalGraphBounds{anchors: retrievalGraphAnchors, width: retrievalGraphWidth, depth: retrievalGraphDepth},
 			authorities: []memory.SourceAuthority{memory.AuthorityOwnerStatement, memory.AuthorityToolObservation}},
 		seen: make(map[memory.SemanticID]bool), eligible: make(map[memory.SemanticID]*retrievalCandidate)}
+	prepared, err := prepareDenseQuery(ctx, tx, query.Text)
+	if err != nil {
+		return nil, err
+	}
+	c.densePreparation = prepared
+	defer prepared.close()
 	if err := c.correctionRefreshGenerator(ctx); err != nil {
 		return nil, err
 	}
@@ -151,9 +160,10 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 	if err := c.exactIdentityMatches(ctx, ids); err != nil {
 		return nil, err
 	}
-	ids, err = c.ids(ctx, retrievalLexicalCandidates, `SELECT claim_id FROM memory_retrieval_fts WHERE memory_retrieval_fts MATCH ?
+	ids, err = c.ids(ctx, retrievalLexicalCandidates, `SELECT claim_id FROM memory_retrieval_fts_v3 WHERE memory_retrieval_fts_v3 MATCH ?
  AND generation=? AND scope_key IN (?,?,?) AND claim_id NOT IN (SELECT claim_id FROM memory_retrieval_dirty)
- ORDER BY bm25(memory_retrieval_fts),claim_id LIMIT ?`, lexical, memoryIndexGeneration, keys[0], keys[1], keys[2])
+ AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=memory_retrieval_fts_v3.generation AND g.state='active')
+ ORDER BY bm25(memory_retrieval_fts_v3),claim_id LIMIT ?`, lexical, memoryIndexGeneration, keys[0], keys[1], keys[2])
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +173,9 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 	if query.ValidAt != nil {
 		// This generator intersects textual relevance with actual recorded
 		// Valid Time; observation time cannot stand in for unknown fact dates.
-		ids, err = c.ids(ctx, retrievalTemporalCandidates, `SELECT c.claim_id FROM memory_retrieval_fts f JOIN semantic_claims c ON c.claim_id=f.claim_id
- WHERE memory_retrieval_fts MATCH ? AND f.generation=? AND f.scope_key IN (?,?,?)
+		ids, err = c.ids(ctx, retrievalTemporalCandidates, `SELECT c.claim_id FROM memory_retrieval_fts_v3 f JOIN semantic_claims c ON c.claim_id=f.claim_id
+ WHERE memory_retrieval_fts_v3 MATCH ? AND f.generation=? AND f.scope_key IN (?,?,?)
+ AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=f.generation AND g.state='active')
  AND f.claim_id NOT IN (SELECT claim_id FROM memory_retrieval_dirty)
  AND (c.valid_from IS NOT NULL OR c.valid_to IS NOT NULL)
  AND (c.valid_from IS NULL OR c.valid_from<=?) AND (c.valid_to IS NULL OR c.valid_to>?)
@@ -175,6 +186,9 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 		if err := c.directGenerator(ctx, ids, "temporal"); err != nil {
 			return nil, err
 		}
+	}
+	if err := c.denseGenerator(ctx); err != nil {
+		return nil, err
 	}
 	if err := c.graphGenerator(ctx); err != nil {
 		return nil, err

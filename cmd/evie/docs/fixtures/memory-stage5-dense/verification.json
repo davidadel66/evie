@@ -1,0 +1,46 @@
+{
+  "artifact_integrity_checks": [
+    {
+      "version": "v1",
+      "partition": "development-v1",
+      "turns": 192,
+      "exact_encoded_requests_verified": 384,
+      "report_recall_and_p95_recomputed": true,
+      "provider_evidence_and_receipt_counts_verified": true,
+      "freeze_sha256": "75b8415a43d9a3b6565eb9f450f0333af861b29285e74db9b0e2297be585f730"
+    },
+    {
+      "version": "v1",
+      "partition": "heldout-v1",
+      "turns": 192,
+      "exact_encoded_requests_verified": 384,
+      "report_recall_and_p95_recomputed": true,
+      "provider_evidence_and_receipt_counts_verified": true,
+      "freeze_sha256": "75b8415a43d9a3b6565eb9f450f0333af861b29285e74db9b0e2297be585f730"
+    },
+    {
+      "version": "v2",
+      "partition": "development-v2",
+      "turns": 192,
+      "exact_encoded_requests_verified": 384,
+      "report_recall_and_p95_recomputed": true,
+      "provider_evidence_and_receipt_counts_verified": true,
+      "freeze_sha256": "52d197e8e052ff7b06061a5d2b4dfab6f3d9287094f38f04b4ed7dd9118c87c4"
+    },
+    {
+      "version": "v2",
+      "partition": "heldout-regression-v2",
+      "turns": 192,
+      "exact_encoded_requests_verified": 384,
+      "report_recall_and_p95_recomputed": true,
+      "provider_evidence_and_receipt_counts_verified": true,
+      "freeze_sha256": "52d197e8e052ff7b06061a5d2b4dfab6f3d9287094f38f04b4ed7dd9118c87c4"
+    }
+  ],
+  "python_runners_compile": true,
+  "source_archives_compile_offline": true,
+  "frozen_v2_agent_vet": "go vet ./internal/agent: PASS",
+  "actual_model_results": "v1 development PASS; v1 heldout FAIL 85-percent gate; v2 development PASS; v2 known-regression PASS; failed attempt preserved",
+  "required_full_repository_verification": "owned by parent; not claimed here",
+  "validator_note": "Initial supplemental checker rejected nullable empty JSON arrays; corrected null handling before completing these integrity checks. Measurement artifacts unchanged."
+}

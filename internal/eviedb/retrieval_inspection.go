@@ -92,6 +92,7 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 				}
 				evidence.Paths = append([]string(nil), ref.Paths...)
 				evidence.GraphPaths = ref.GraphPaths
+				evidence.RetrievalGeneration = ref.RetrievalGeneration
 				item.Evidence = &evidence
 				item.Available = true
 			}

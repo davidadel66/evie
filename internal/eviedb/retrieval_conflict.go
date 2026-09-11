@@ -166,12 +166,12 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 		if subject.AnchorKind != "owner" {
 			match += " AND " + retrievalPhrase(subject.CanonicalName)
 		}
-		rows, err := q.QueryContext(ctx, `SELECT e.id FROM memory_retrieval_event_fts f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts MATCH ? AND f.generation=? AND f.scope_key=? AND e.event_type='user_message' AND e.role='user'
+		rows, err := q.QueryContext(ctx, `SELECT e.id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=? AND e.event_type='user_message' AND e.role='user'
  AND `+conversationObservedTimeSQL+`>? AND `+conversationObservedTimeSQL+`<=?
  AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
  AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY `+conversationObservedTimeSQL+` DESC,bm25(memory_retrieval_event_fts),e.id LIMIT ?`, match, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(after), formatSemanticTime(metadata.AsKnownAt), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, remaining+1)
+ ORDER BY `+conversationObservedTimeSQL+` DESC,bm25(memory_retrieval_event_fts_v3),e.id LIMIT ?`, match, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(after), formatSemanticTime(metadata.AsKnownAt), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, remaining+1)
 		if err != nil {
 			return false, err
 		}

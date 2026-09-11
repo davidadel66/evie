@@ -68,6 +68,12 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
         </details>}
         {item.reference.kind === "conversation_excerpt" && <p className="text-muted-text mt-2 text-xs">Attributed conversation evidence; preserves what was said and its uncertainty.</p>}
         <GraphEvidencePath item={item} evidence={receipt.evidence} />
+        {item.reference.retrieval_generation && <details className="text-muted-text mt-2 break-all text-[11px] leading-5">
+          <summary className="cursor-pointer">Original discovery details</summary>
+          <p>Index generation: {item.reference.retrieval_generation}</p>
+          <p>Discovery paths: {item.reference.paths.join(", ")}</p>
+          <p>Discovery does not change source authority or establish that the answer used this evidence.</p>
+        </details>}
         {(item.reference.conflicts?.length ?? 0) > 0 && <div className="text-amber-ink mt-3 text-xs leading-5">
           <p>Conflicting accepted Claims</p>
           {item.reference.conflicts?.map((conflict) => <p key={`${conflict.code}:${conflict.claim_ids.join(":")}`}>{conflict.predicate_token}: {conflict.code === "opposite_polarity" ? "Opposite assertions" : conflict.code === "one_cardinality_overlap" ? "Different accepted values" : "Conflicting evidence"} · {conflict.claim_ids.join(", ")}</p>)}

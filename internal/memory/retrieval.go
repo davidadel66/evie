@@ -48,6 +48,7 @@ type RetrievalCoverage struct {
 type RetrievalEvidence struct {
 	AsKnownAtConstrained  bool                     `json:"as_known_at_constrained,omitempty"`
 	IdentityMatches       []RetrievalIdentityMatch `json:"identity_matches,omitempty"`
+	RetrievalGeneration   string                   `json:"retrieval_generation,omitempty"`
 	GraphPaths            []RetrievalGraphPath     `json:"graph_paths,omitempty"`
 	Intent                string                   `json:"intent"`
 	ValidAtConstrained    bool                     `json:"valid_at_constrained"`
@@ -93,6 +94,7 @@ type RetrievalSourceReference struct {
 type RetrievalReference struct {
 	AsKnownAtConstrained  bool                         `json:"as_known_at_constrained,omitempty"`
 	IdentityMatches       []RetrievalIdentityReference `json:"identity_matches,omitempty"`
+	RetrievalGeneration   string                       `json:"retrieval_generation,omitempty"`
 	GraphPaths            []RetrievalGraphPath         `json:"graph_paths,omitempty"`
 	Intent                string                       `json:"intent"`
 	ValidAtConstrained    bool                         `json:"valid_at_constrained"`
@@ -115,7 +117,8 @@ type RetrievalReference struct {
 
 func (e RetrievalEvidence) Reference() RetrievalReference {
 	r := RetrievalReference{AsKnownAtConstrained: e.AsKnownAtConstrained, ID: e.ID, Kind: e.Kind, ClaimID: e.ClaimID, ClaimOperationID: e.ClaimOperationID,
-		AsKnownAt: e.AsKnownAt, ValidAt: e.ValidAt, ScopeKey: e.ScopeKey, Status: e.Status, Paths: append([]string(nil), e.Paths...),
+		RetrievalGeneration: e.RetrievalGeneration,
+		AsKnownAt:           e.AsKnownAt, ValidAt: e.ValidAt, ScopeKey: e.ScopeKey, Status: e.Status, Paths: append([]string(nil), e.Paths...),
 		Intent: e.Intent, ValidAtConstrained: e.ValidAtConstrained, CurrentStatus: e.CurrentStatus,
 		CorrectionMode: e.CorrectionMode, CurrentCorrectionMode: e.CurrentCorrectionMode,
 		RelatedClaimIDs: append([]SemanticID(nil), e.RelatedClaimIDs...)}
@@ -144,6 +147,7 @@ func (e RetrievalEvidence) Reference() RetrievalReference {
 }
 
 type RetrievalResult struct {
+	DenseCoverage   *RetrievalCoverage  `json:"dense_coverage,omitempty"`
 	Status          string              `json:"status"`
 	Evidence        []RetrievalEvidence `json:"evidence"`
 	Coverage        RetrievalCoverage   `json:"coverage"`

@@ -194,19 +194,38 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		return retrievalReadFailure(ctx, result, err)
 	}
 	if result.Coverage.State != "active" {
-		result.Status = memory.RetrievalUnavailable
-		return result, nil
+		dense, err := denseIndexCoverage(ctx, tx)
+		if err != nil {
+			return retrievalReadFailure(ctx, result, err)
+		}
+		if dense.State != "active" {
+			result.Status = memory.RetrievalUnavailable
+			return result, nil
+		}
 	}
 	known := s.now().UTC()
 	if query.AsKnownAt != nil {
 		known = query.AsKnownAt.UTC()
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT f.event_id FROM memory_retrieval_event_fts f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts MATCH ? AND f.generation=? AND f.scope_key=?
+	prepared, err := prepareDenseQuery(ctx, tx, query.Text)
+	if err != nil {
+		return retrievalReadFailure(ctx, result, err)
+	}
+	defer prepared.close()
+	lexicalLimit := retrievalCandidateLimit
+	if prepared != nil && prepared.coverage.State == "active" {
+		// Use the same bounded lexical allocation as accepted-memory plans.
+		// Common words cannot spend all authoritative candidate work before an
+		// independent dense generator has contributed eligible suggestions.
+		lexicalLimit = retrievalLexicalCandidates
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT f.event_id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
+ AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=f.generation AND g.state='active')
  AND `+conversationObservedTimeSQL+`<=?
  AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
  AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY bm25(memory_retrieval_event_fts),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, retrievalCandidateLimit)
+ ORDER BY bm25(memory_retrieval_event_fts_v3),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, lexicalLimit+1)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -216,6 +235,10 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		if err = rows.Scan(&id); err != nil {
 			rows.Close()
 			return retrievalReadFailure(ctx, result, err)
+		}
+		if len(ids) == lexicalLimit {
+			result.Truncated = true
+			break
 		}
 		ids = append(ids, id)
 	}
@@ -247,6 +270,14 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		result.Truncated = result.Truncated || span.start > 0 || span.end < len(e.content)
 		result.Evidence = append(result.Evidence, conversationTypedExcerpt(e, span, known, known, query.Intent))
 	}
+	dense, denseCoverage, denseIncomplete, denseTruncated, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-len(ids), prepared)
+	if err != nil {
+		return retrievalReadFailure(ctx, result, err)
+	}
+	result.DenseCoverage = denseCoverage
+	var fusedTruncated bool
+	result.Evidence, fusedTruncated = fuseConversationEvidence(result.Evidence, dense, query.Limit)
+	result.Truncated = result.Truncated || denseTruncated || fusedTruncated
 	if err = tx.Commit(); err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -254,8 +285,11 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 	if len(result.Evidence) == 0 {
 		result.Status = memory.RetrievalEmpty
 	}
-	if result.Coverage.Pending > 0 {
+	if result.Coverage.State != "active" || result.Coverage.Pending > 0 || denseIncomplete {
 		result.Status = memory.RetrievalPartial
+	}
+	if result.Coverage.State != "active" && len(result.Evidence) == 0 && (result.DenseCoverage == nil || result.DenseCoverage.State != "active") {
+		result.Status = memory.RetrievalUnavailable
 	}
 	for {
 		encoded, err := json.Marshal(result)
@@ -340,6 +374,7 @@ func (s *Store) resolveConversationReferenceAt(ctx context.Context, q semanticIn
 		return memory.RetrievalEvidence{}, false, nil
 	}
 	resolved.Paths = append([]string(nil), ref.Paths...)
+	resolved.RetrievalGeneration = ref.RetrievalGeneration
 	resolved.RelatedClaimIDs = append([]memory.SemanticID(nil), ref.RelatedClaimIDs...)
 	return resolved, true, nil
 }

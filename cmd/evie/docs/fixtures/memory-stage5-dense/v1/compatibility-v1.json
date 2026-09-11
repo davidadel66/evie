@@ -1,0 +1,16 @@
+{
+  "binary_sha256": "8e312acedaf9a177bf01faa3555cf57d9770d8be14b20789c2f77abc0e3cb13d",
+  "command": [
+    "/tmp/evie-stage5-dense-integration-v1.test",
+    "-test.run=^TestDenseSelectedModelHandlesBoundedTokenDenseSources$",
+    "-test.v",
+    "-test.count=1",
+    "-test.timeout=60s"
+  ],
+  "environment": {
+    "EVIE_MEMORY_DENSE_MODEL_ENDPOINT": "http://127.0.0.1:11565"
+  },
+  "exit_code": 0,
+  "stdout": "=== RUN   TestDenseSelectedModelHandlesBoundedTokenDenseSources\n--- PASS: TestDenseSelectedModelHandlesBoundedTokenDenseSources (0.46s)\nPASS\n",
+  "scope": "Separate development compatibility check after timed comparisons; no recall-quality claim."
+}

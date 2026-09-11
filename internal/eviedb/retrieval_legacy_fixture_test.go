@@ -15,7 +15,7 @@ import (
 func removeRetrievalSchemaFromLegacyFixture(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	before := correctionMigrationBytes(t, db)
-	rows, err := db.QueryContext(ctx, `SELECT type,name FROM sqlite_schema WHERE name GLOB 'memory_retrieval_*' AND type IN ('trigger','table') ORDER BY CASE type WHEN 'trigger' THEN 0 ELSE 1 END,name`)
+	rows, err := db.QueryContext(ctx, `SELECT type,name FROM sqlite_schema WHERE (name GLOB 'memory_retrieval_*' OR name GLOB 'memory_dense_*') AND type IN ('trigger','table') ORDER BY CASE type WHEN 'trigger' THEN 0 ELSE 1 END,name`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func removeRetrievalSchemaFromLegacyFixture(t *testing.T, ctx context.Context, d
 		}
 	}
 	var remaining int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_schema WHERE name GLOB 'memory_retrieval_*'`).Scan(&remaining); err != nil || remaining != 0 {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_schema WHERE name GLOB 'memory_retrieval_*' OR name GLOB 'memory_dense_*'`).Scan(&remaining); err != nil || remaining != 0 {
 		t.Fatalf("historical fixture retains %d later retrieval objects: %v", remaining, err)
 	}
 	if after := correctionMigrationBytes(t, db); !reflect.DeepEqual(before, after) {

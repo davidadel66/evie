@@ -10,13 +10,13 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const conversationIndexGeneration = "conversation-fts-unicode61-v2"
+const conversationIndexGeneration = "conversation-fts-unicode61-v3"
 
 const conversationRetrievalSchema = `
 INSERT OR IGNORE INTO memory_retrieval_generations(generation,configuration,state)
- VALUES ('conversation-fts-unicode61-v2','{"tokenizer":"unicode61","document_version":2,"lifecycle":"source-eligible-history","fields":["user_message.content","assistant_message.content"]}','building');
+ VALUES ('conversation-fts-unicode61-v3','{"tokenizer":"unicode61","document_version":3,"lifecycle":"source-eligible-history","fields":["user_message.content","assistant_message.content"]}','building');
 CREATE TABLE IF NOT EXISTS memory_retrieval_event_dirty(event_id TEXT PRIMARY KEY);
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_event_fts USING fts5(
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_event_fts_v3 USING fts5(
  generation UNINDEXED,event_id UNINDEXED,scope_key UNINDEXED,body,tokenize='unicode61');
 CREATE TRIGGER IF NOT EXISTS memory_retrieval_event_source_added AFTER INSERT ON semantic_source_links BEGIN
  INSERT OR IGNORE INTO memory_retrieval_event_dirty VALUES(NEW.event_id);
@@ -39,7 +39,7 @@ func conversationIndexCoverage(ctx context.Context, q semanticInspectionQueryer)
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM events WHERE rowid>g.checkpoint)
  +(SELECT count(*) FROM memory_retrieval_event_dirty d JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_event_fts WHERE generation=g.generation)
+ (SELECT count(*) FROM memory_retrieval_event_fts_v3 WHERE generation=g.generation)
  FROM memory_retrieval_generations g WHERE generation=?`, conversationIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }
@@ -59,6 +59,18 @@ func combinedRetrievalCoverage(ctx context.Context, q semanticInspectionQueryer)
 	if events.State != "active" {
 		accepted.State = "building"
 	}
+	dense, err := denseIndexCoverage(ctx, q)
+	if err != nil {
+		return accepted, err
+	}
+	if dense.State != "disabled" {
+		accepted.Generation += "+" + dense.Generation
+		accepted.Pending += dense.Pending
+		accepted.Indexed += dense.Indexed
+		if dense.State != "active" {
+			accepted.State = "building"
+		}
+	}
 	return accepted, nil
 }
 
@@ -72,7 +84,7 @@ func appendConversationProjection(ctx context.Context, q eventQueryExecutor, eve
 	eligible := (event.Type == memory.EventUserMessage && event.Role == memory.RoleUser) || (event.Type == memory.EventAssistantMessage && event.Role == memory.RoleAssistant)
 	if eligible && event.Content != "" && len(event.Content) <= 32768 && utf8.ValidString(event.Content) && !memory.HasRetrievalSecret([]byte(event.Content)) {
 		var generation string
-		if err := q.queryRowContext(ctx, `INSERT INTO memory_retrieval_event_fts(generation,event_id,scope_key,body) VALUES(?,?,?,?) RETURNING generation`,
+		if err := q.queryRowContext(ctx, `INSERT INTO memory_retrieval_event_fts_v3(generation,event_id,scope_key,body) VALUES(?,?,?,?) RETURNING generation`,
 			conversationIndexGeneration, event.ID, scopeKeyForContext(memory.ScopeContext{SessionID: event.SessionID, WorkspaceID: event.WorkspaceID, ProjectID: event.ProjectID}), event.Content).Scan(&generation); err != nil {
 			return err
 		}
@@ -135,7 +147,7 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 			rows.Close()
 		}
 		for _, e := range entries {
-			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_event_fts WHERE generation=? AND event_id=?`, conversationIndexGeneration, e.id); err != nil {
+			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_event_fts_v3 WHERE generation=? AND event_id=?`, conversationIndexGeneration, e.id); err != nil {
 				return err
 			}
 			event, eligible, err := loadConversationEvidence(ctx, q, e.id)
@@ -152,7 +164,7 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 					parts = append(parts, event.content[span.start:span.end])
 				}
 				if body := strings.Join(parts, "\n"); strings.TrimSpace(body) != "" {
-					if _, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_event_fts(generation,event_id,scope_key,body) VALUES(?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body); err != nil {
+					if _, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_event_fts_v3(generation,event_id,scope_key,body) VALUES(?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body); err != nil {
 						return err
 					}
 				}
@@ -182,21 +194,40 @@ func (s *Store) RefreshMemoryIndex(ctx context.Context, limit int) (memory.Retri
 	if limit < 1 || limit > 256 {
 		return memory.RetrievalCoverage{}, errors.New("retrieval refresh batch must be between 1 and 256")
 	}
+	denseLimit := 0
+	if denseEndpoint() != "" && limit > 1 {
+		denseLimit = min(16, max(1, limit/3))
+	}
+	lexicalLimit := limit - denseLimit
 	accepted, err := memoryIndexCoverage(ctx, s.db)
 	if err != nil {
 		return accepted, err
 	}
+	if limit == 1 && denseEndpoint() != "" && accepted.State == "active" && accepted.Pending == 0 {
+		conversation, err := conversationIndexCoverage(ctx, s.db)
+		if err != nil {
+			return conversation, err
+		}
+		if conversation.State == "active" && conversation.Pending == 0 {
+			denseLimit, lexicalLimit = 1, 0
+		}
+	}
 	acceptedLimit := 0
 	if accepted.State != "active" || accepted.Pending > 0 {
-		acceptedLimit = max(1, limit/2)
+		acceptedLimit = max(1, lexicalLimit/2)
 	}
 	if acceptedLimit > 0 {
 		if _, err = s.refreshAcceptedMemoryIndex(ctx, acceptedLimit); err != nil {
 			return memory.RetrievalCoverage{}, err
 		}
 	}
-	if remaining := limit - acceptedLimit; remaining > 0 {
+	if remaining := lexicalLimit - acceptedLimit; remaining > 0 {
 		if err = s.refreshConversationIndex(ctx, remaining); err != nil {
+			return memory.RetrievalCoverage{}, err
+		}
+	}
+	if denseLimit > 0 || denseEndpoint() == "" {
+		if _, err := s.refreshDenseIndex(ctx, denseLimit); err != nil {
 			return memory.RetrievalCoverage{}, err
 		}
 	}

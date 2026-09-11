@@ -732,6 +732,7 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		WHERE name NOT LIKE 'sqlite_%'
 		  AND name NOT GLOB 'memory_retrieval_fts*'
 		  AND name NOT GLOB 'memory_retrieval_event_fts*'
+		  AND name NOT IN ('memory_dense_vectors','memory_dense_event_vectors')
 		  AND ((lower(name) LIKE '%candidate%' AND
 		        name NOT GLOB 'memory_compiler_*' AND name NOT GLOB 'memory_review_*') OR lower(name) LIKE '%fts%' OR
 		       lower(name) LIKE '%vector%' OR lower(name) LIKE '%ranking%' OR

@@ -1,0 +1,19 @@
+{
+  "archive_sha256": "2d31c9546cd262f84a40b2408fbd8a46c4ec22570b1f715463ffaaa4f5cc2b28",
+  "verified_members": 1041,
+  "command": [
+    "go",
+    "test",
+    "-c",
+    "./internal/agent",
+    "-o",
+    "/tmp/evie-stage5-dense-v1-archive-check.test"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "source_directory": "/tmp/evie-stage5-dense-v1-archive-check",
+  "dependencies": "existing cache; GOPROXY=off GOSUMDB=off",
+  "note": "Compilation from portable exact source archive; executable byte identity is not claimed across changed source path.",
+  "rebuilt_binary_sha256": "5666c4f94e6b2e22bf56e4c7b55c3d8adc76f601a2cc56eef0974367686c454e"
+}

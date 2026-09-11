@@ -103,13 +103,20 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		return retrievalReadFailure(ctx, result, err)
 	}
 	if result.Coverage.State != "active" {
-		result.Status = memory.RetrievalUnavailable
-		return result, nil
+		dense, err := denseIndexCoverage(ctx, tx)
+		if err != nil {
+			return retrievalReadFailure(ctx, result, err)
+		}
+		if dense.State != "active" {
+			result.Status = memory.RetrievalUnavailable
+			return result, nil
+		}
 	}
 	candidates, err := s.acceptedRetrievalCandidates(ctx, tx, scope, query, metadata, fts)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
+	result.DenseCoverage = candidates.denseCoverage
 	for _, candidate := range candidates.ordered() {
 		if len(result.Evidence) == query.Limit {
 			result.Truncated = true
@@ -133,8 +140,11 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	if len(result.Evidence) == 0 {
 		result.Status = memory.RetrievalEmpty
 	}
-	if result.Coverage.Pending > 0 || incomplete {
+	if result.Coverage.State != "active" || result.Coverage.Pending > 0 || incomplete || candidates.denseIncomplete {
 		result.Status = memory.RetrievalPartial
+	}
+	if result.Coverage.State != "active" && len(result.Evidence) == 0 && (result.DenseCoverage == nil || result.DenseCoverage.State != "active") {
+		result.Status = memory.RetrievalUnavailable
 	}
 	for {
 		result.Evidence = pruneRetrievalGraphPaths(result.Evidence)
@@ -410,6 +420,7 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 		current.AsKnownAtConstrained = prior.AsKnownAtConstrained
 		current.Paths = append([]string(nil), prior.Paths...)
 		current.GraphPaths = prior.Reference().GraphPaths
+		current.RetrievalGeneration = prior.RetrievalGeneration
 		if !sameRetrievalSources(current.Reference().Sources, prior.Reference().Sources) {
 			continue
 		}

@@ -36,6 +36,7 @@ export type MemoryReference = {
   kind: string;
   claim_id?: string;
   claim_operation_id?: string;
+  retrieval_generation?: string;
   as_known_at: string;
   valid_at: string;
   scope_key: string;
