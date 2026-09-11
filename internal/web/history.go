@@ -170,5 +170,26 @@ func projectHistory(events []memory.Event) ([]historyItem, error) {
 			items[i].IsError = true
 		}
 	}
+	requests, err := memoryRequestRecords(events)
+	if err != nil {
+		return nil, err
+	}
+	bySnapshot := make(map[memory.EventID]memoryRequestRecord, len(requests))
+	answers := make(map[memory.EventID]memory.EventID)
+	for _, request := range requests {
+		bySnapshot[request.event.ID] = request
+		if request.final {
+			answers[request.rootID] = request.responseID
+		}
+	}
+	for _, item := range items {
+		if item.Memory != nil {
+			if request, ok := bySnapshot[item.Memory.SnapshotID]; ok {
+				item.Memory.RequestStatus = request.status
+				item.Memory.Iteration = request.snapshot.Iteration
+				item.Memory.AnswerID = answers[request.rootID]
+			}
+		}
+	}
 	return items, nil
 }

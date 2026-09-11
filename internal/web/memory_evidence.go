@@ -19,8 +19,9 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		SessionID  memory.SessionID `json:"sessionId"`
 		SnapshotID memory.EventID   `json:"snapshotId"`
+		AnswerID   memory.EventID   `json:"answerId"`
 	}
-	if status, err := decodeManagementJSON(w, r, &request); err != nil || request.SessionID == "" || request.SnapshotID == "" {
+	if status, err := decodeManagementJSON(w, r, &request); err != nil || request.SessionID == "" || (request.SnapshotID == "" && request.AnswerID == "") {
 		if status == 0 {
 			status = http.StatusBadRequest
 		}
@@ -33,31 +34,29 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 		managementJSONError(w, http.StatusConflict, "memory_session_changed", "The selected conversation changed. Open its sources again.")
 		return
 	}
-	events, err := s.session.HistoryEvents(r.Context())
+	var events []memory.Event
+	var err error
+	if history, ok := s.memoryEvidence.(MemoryEvidenceHistory); ok {
+		events, err = history.LoadEvents(r.Context(), request.SessionID)
+	} else {
+		events, err = s.session.HistoryEvents(r.Context())
+	}
 	if err != nil {
 		managementJSONError(w, http.StatusConflict, "memory_evidence_unavailable", "The original request could not be inspected.")
 		return
 	}
-	for _, event := range events {
-		if event.ID != request.SnapshotID || event.Type != memory.EventContextSnapshot || event.SessionID != request.SessionID {
-			continue
-		}
-		var snapshot memory.ContextSnapshotPayload
-		if json.Unmarshal(event.Payload, &snapshot) != nil || snapshot.Memory == nil {
-			break
-		}
-		inspected, err := s.memoryEvidence.InspectMemoryEvidence(r.Context(), s.activeSession.ScopeContext(), snapshot.Memory.Evidence)
-		if err != nil {
-			managementJSONError(w, http.StatusUnprocessableEntity, "memory_evidence_unavailable", "The original evidence is unavailable under current access.")
-			return
-		}
-		writeJSON(w, http.StatusOK, struct {
-			SessionID  memory.SessionID             `json:"sessionId"`
-			SnapshotID memory.EventID               `json:"snapshotId"`
-			Version    string                       `json:"version"`
-			Status     string                       `json:"status"`
-			Evidence   []memory.RetrievalInspection `json:"evidence"`
-		}{request.SessionID, request.SnapshotID, snapshot.Memory.Version, snapshot.Memory.Status, inspected})
+	records, err := memoryRequestRecords(events)
+	if err != nil {
+		managementJSONError(w, http.StatusConflict, "memory_evidence_unavailable", "The original request could not be inspected.")
+		return
+	}
+	result, err := inspectMemoryRequests(r.Context(), s.memoryEvidence, s.activeSession.ScopeContext(), records, request.SnapshotID, request.AnswerID)
+	if err != nil {
+		managementJSONError(w, http.StatusUnprocessableEntity, "memory_evidence_unavailable", "The original evidence is unavailable under current access.")
+		return
+	}
+	if result != nil {
+		writeJSON(w, http.StatusOK, result)
 		return
 	}
 	managementJSONError(w, http.StatusNotFound, "memory_evidence_unavailable", "No original evidence reference is available for this request.")
@@ -65,6 +64,9 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 
 type memoryActivity struct {
 	SnapshotID      memory.EventID `json:"snapshotId"`
+	RequestStatus   string         `json:"requestStatus,omitempty"`
+	Iteration       int            `json:"iteration,omitempty"`
+	AnswerID        memory.EventID `json:"answerId,omitempty"`
 	Status          string         `json:"status"`
 	AcceptedCount   int            `json:"acceptedCount"`
 	ExcerptCount    int            `json:"excerptCount"`
@@ -84,7 +86,7 @@ func projectMemoryActivity(event memory.Event) (*memoryActivity, error) {
 	if snapshot.Memory == nil {
 		return nil, nil
 	}
-	activity := &memoryActivity{SnapshotID: event.ID, Status: snapshot.Memory.Status}
+	activity := &memoryActivity{SnapshotID: event.ID, RequestStatus: "prepared", Iteration: snapshot.Iteration, Status: snapshot.Memory.Status}
 	for _, ref := range snapshot.Memory.Evidence {
 		switch ref.Kind {
 		case memory.RetrievalAcceptedMemory:

@@ -3,8 +3,28 @@ import { expect, it } from "vitest";
 import { MemoryEvidenceView } from "./MemoryEvidence";
 import type { MemoryEvidenceReceipt } from "../api/memoryEvidence";
 
+it("keeps the answer's original requests separate and does not call interrupted evidence supplied", () => {
+  const receipt = {
+    sessionId: "reader", snapshotId: "interrupted-request", version: "retrieval-v1", status: "success", evidence: [],
+    requests: [
+      { snapshotId: "completed-request", responseId: "tool-response", requestStatus: "completed", iteration: 1, requestSHA256: "first-wire-hash", serializedBytes: 41, version: "retrieval-v1", status: "empty", evidence: [] },
+      { snapshotId: "interrupted-request", requestStatus: "interrupted", iteration: 2, requestSHA256: "second-wire-hash", serializedBytes: 82, version: "retrieval-v1", status: "success", evidence: [] },
+    ],
+  };
+  const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
+  for (const value of ["Original provider requests", "Request 1", "Request 2", "Completed response", "Request interrupted", "second-wire-hash", "Provider delivery and source use are unconfirmed"]) expect(html).toContain(value);
+  expect(html).not.toContain("Supplied to model");
+  expect(html).not.toContain("Cited by answer");
+  const pending = { ...receipt, requests: receipt.requests.map((request) => ({ ...request, requestStatus: request.snapshotId === receipt.snapshotId ? "prepared" : request.requestStatus })) };
+  const pendingHtml = renderToStaticMarkup(<MemoryEvidenceView receipt={pending} />);
+  expect(pendingHtml).toContain("Prepared for request");
+  expect(pendingHtml).toContain("No completed response is recorded");
+  expect(pendingHtml).not.toContain("Supplied to model");
+});
+
 it("shows exact supplied evidence and attribution separately from current state", () => {
   const receipt: MemoryEvidenceReceipt = { sessionId: "session-1", snapshotId: "request-1", version: "retrieval-v1", status: "success", evidence: [{ reference: { id: "claim-1", kind: "accepted_memory", scope_key: "global", status: "active", as_known_at: "2026-09-10T10:00:00Z", valid_at: "2026-09-10T10:00:00Z", paths: ["exact"], sources: [] }, available: true, current_status: "retired", evidence: { text: "timezone: Detroit", sources: [{ event_id: "event-1", session_id: "source-session", source_scope_key: "global", authority: "owner_statement", observed_at: "2026-09-09T10:00:00Z", evidence: "I live in Detroit.", locator_kind: "whole", locator_value: "", evidence_sha256: "recorded-hash" }] } }] };
+  receipt.requests = [{ snapshotId: receipt.snapshotId, requestStatus: "completed", iteration: 1, requestSHA256: "wire-hash", serializedBytes: 42, version: receipt.version, status: receipt.status, evidence: receipt.evidence }];
   const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
   for (const value of ["Accepted memory", "Supplied to model", "timezone: Detroit", "I live in Detroit.", "owner_statement", "event-1", "retired"]) expect(html).toContain(value);
   expect(html).not.toContain("Cited by answer");
@@ -15,6 +35,20 @@ it("never renders retained source text after current access is denied", () => {
   const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
   expect(html).toContain("Source unavailable under current access.");
   expect(html).not.toContain("restricted-owner-fact");
+});
+
+it("exposes the original Claim version without assigning a Claim identity to conversation evidence", () => {
+  const receipt = { sessionId: "reader", snapshotId: "request", version: "retrieval-v1", status: "success", evidence: [{
+    reference: { id: "claim:original", kind: "accepted_memory", claim_id: "original-claim-id", claim_operation_id: "original-acceptance-operation", scope_key: "global", status: "active", as_known_at: "2026-09-10T00:00:00Z", valid_at: "2026-09-10T00:00:00Z", paths: ["exact"], sources: [] },
+    available: true, current_status: "superseded", evidence: { text: "home: Boston", sources: [] },
+  }] };
+  const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
+  expect(html).toContain("Claim ID: original-claim-id");
+  expect(html).toContain("Claim version: original-acceptance-operation");
+  const conversation = { ...receipt, evidence: receipt.evidence.map((item) => ({ ...item, reference: { ...item.reference, kind: "conversation_excerpt", claim_id: undefined, claim_operation_id: undefined } })) };
+  const conversationHtml = renderToStaticMarkup(<MemoryEvidenceView receipt={conversation} />);
+  expect(conversationHtml).not.toContain("Claim ID:");
+  expect(conversationHtml).not.toContain("Claim version:");
 });
 
 it("preserves a conversation excerpt's speaker, uncertainty and exact source range without inventing a Claim", () => {

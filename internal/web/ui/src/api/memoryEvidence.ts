@@ -2,6 +2,9 @@ import type { SemanticClaim, SemanticObjectInspection } from "./memory";
 
 export type MemoryActivityData = {
   snapshotId: string;
+  requestStatus?: string;
+  iteration?: number;
+  answerId?: string;
   status: string;
   acceptedCount: number;
   excerptCount: number;
@@ -46,6 +49,8 @@ export type MemoryReference = {
 export type MemoryEvidenceReceipt = {
   sessionId: string;
   snapshotId: string;
+  answerId?: string;
+  requests?: MemoryEvidenceRequest[];
   version: string;
   status: string;
   evidence: {
@@ -76,6 +81,18 @@ export type MemoryEvidenceReceipt = {
       }[];
     };
   }[];
+};
+
+export type MemoryEvidenceRequest = {
+  snapshotId: string;
+  responseId?: string;
+  requestStatus: string;
+  iteration: number;
+  requestSHA256: string;
+  serializedBytes: number;
+  version: string;
+  status: string;
+  evidence: MemoryEvidenceReceipt["evidence"];
 };
 
 export async function inspectMemoryEvidence(sessionId: string, snapshotId: string, signal?: AbortSignal): Promise<MemoryEvidenceReceipt> {

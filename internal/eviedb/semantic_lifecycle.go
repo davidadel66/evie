@@ -528,9 +528,9 @@ func deriveLifecycleTransitions(ctx context.Context, query lifecycleQueryer, req
 		if latest.State != memory.SemanticStateEligible {
 			return "", nil, errors.New("only the latest eligible Source Link can be retracted")
 		}
-		if err := requireSourceClaimActive(ctx, query, request.ObjectID); err != nil {
-			return "", nil, err
-		}
+		// Original answer receipts can still expose retired or superseded
+		// Claims. Their eligible sources must remain retractable; only
+		// restoration requires an active Claim.
 		return latest.State, []memory.SemanticTransition{{ObjectKind: "source_link", ObjectID: request.ObjectID, State: memory.SemanticStateRetracted}}, nil
 	case memory.LifecycleRestoreSource:
 		if latest.State != memory.SemanticStateRetracted {

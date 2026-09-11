@@ -4,6 +4,21 @@ import { MemoryActivity } from "./MemoryActivity";
 import { appendUser, reduce } from "../store/reducer";
 import { Chat } from "./Chat";
 
+it("labels a saved request as recorded until its assistant response commits", () => {
+  let items = appendUser([], "Check my earlier sources.");
+  items = reduce(items, { type: "turn_started", id: "receipt-root", status: "working" });
+  items = reduce(items, { type: "memory_activity", snapshotId: "pending-request", requestStatus: "prepared", iteration: 2, status: "success", acceptedCount: 1, excerptCount: 1 });
+  const pending = items.find((item) => item.kind === "memory");
+  expect(pending?.kind === "memory" && pending.memory.requestStatus).toBe("prepared");
+  const pendingHtml = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
+  expect(pendingHtml).toContain("2 recorded");
+  expect(pendingHtml).not.toContain("2 supplied");
+  items = reduce(items, { type: "assistant_done", content: "Evidence checked.", terminal: true });
+  const completed = items.find((item) => item.kind === "memory");
+  expect(completed?.kind === "memory" && completed.memory.requestStatus).toBe("completed");
+  expect(renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />)).toContain("2 supplied");
+});
+
 it("offers the supplied accepted memory for inspection without claiming an answer citation", () => {
   const html = renderToStaticMarkup(<MemoryActivity activity={{ snapshotId: "request-1", status: "success", acceptedCount: 2, excerptCount: 0 }} onOpen={() => undefined} />);
   expect(html).toContain("Accepted memory");

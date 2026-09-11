@@ -97,6 +97,11 @@ export function reduce(
   } else if (current && (ev.type === "error" || ev.type === "turn_done") && current.status === "working") {
     turn = { ...current, status: "incomplete" };
   }
+  if (ev.type === "assistant_done") {
+    const index = items.findLastIndex((item) => item.kind === "memory" && item.turn?.id === current?.id && item.memory.requestStatus === "prepared");
+    const request = items[index];
+    if (request?.kind === "memory") items = replaceAt(items, index, { ...request, memory: { ...request.memory, requestStatus: "completed" } });
+  }
   const existing = new Set(items.map((item) => item.key));
   return reduceEvent(items, ev, now).map((item) => {
     if (turn && (item.turn?.id === turn.id || !existing.has(item.key))) return { ...item, turn };
@@ -107,7 +112,7 @@ export function reduce(
 function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" }>, now: Clock): Item[] {
   switch (ev.type) {
     case "memory_activity":
-      return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount, historicalCount: ev.historicalCount, retiredCount: ev.retiredCount, conflictCount: ev.conflictCount } }];
+      return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, requestStatus: ev.requestStatus, iteration: ev.iteration, answerId: ev.answerId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount, historicalCount: ev.historicalCount, retiredCount: ev.retiredCount, conflictCount: ev.conflictCount } }];
     case "delta": {
       const last = items[items.length - 1];
       if (last?.kind === "assistant" && last.streaming) {

@@ -60,7 +60,7 @@ func TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAcce
 	if err != nil || after.ScopeRevision != before.ScopeRevision || len(after.Claims) != len(before.Claims) {
 		t.Fatalf("historical read mutated accepted state: %+v %v", after, err)
 	}
-	// Existing mutation rules require an active owning Claim for source retraction.
+	// Exercise restoration and subsequent source retraction as separate changes.
 	f.lifecycle(source, "memory_restore", memory.SemanticObjectClaim, accepted.ClaimID)
 	f.lifecycle(source, "memory_retract_source", memory.SemanticObjectSourceLink, accepted.SourceLinkID)
 	restricted := f.historicalSearch(f.global(), "memory_search", "iridium", nil)
