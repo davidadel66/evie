@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"errors"
+	"os"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -14,15 +15,24 @@ func (p *Memory) searchTool() tools.Tool {
 }
 
 func (p *Memory) searchConversationsTool() tools.Tool {
-	return p.retrievalTool("memory_search_conversations", "Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Retired corresponding evidence is excluded. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.", memory.RetrievalConversationExcerpt)
+	return p.retrievalTool("memory_search_conversations", "Find attributed short excerpts from eligible conversations in this same area. Excerpts establish what was recorded, not accepted current facts. Use historical intent explicitly for past or retired evidence; it never restores source access. Evidence appears in EVIE_MEMORY_DATA; failed or partial search does not establish absence.", memory.RetrievalConversationExcerpt)
 }
 
 func (p *Memory) retrievalTool(name, description, kind string) tools.Tool {
-	return tools.Tool{Schema: toolSchema(name, description, map[string]openrouter.Property{
-		"query": stringProperty("Focused words, exact identifiers, or accepted aliases."),
-	}, "query"), Execute: func(ctx context.Context, raw string) (string, error) {
+	properties := map[string]openrouter.Property{
+		"query":       stringProperty("Focused words, exact identifiers, or accepted aliases."),
+		"intent":      enumProperty("current", "historical"),
+		"as_known_at": stringProperty("Optional RFC3339 knowledge cutoff. Conversation results were recorded by this time; it is not world validity."),
+	}
+	if kind == memory.RetrievalAcceptedMemory {
+		properties["valid_at"] = stringProperty("Optional RFC3339 world-validity constraint on accepted Claims. Unknown bounds remain unknown.")
+	}
+	return tools.Tool{Schema: toolSchema(name, description, properties, "query"), Execute: func(ctx context.Context, raw string) (string, error) {
 		var args struct {
-			Query string `json:"query"`
+			Query     string `json:"query"`
+			Intent    string `json:"intent"`
+			ValidAt   string `json:"valid_at"`
+			AsKnownAt string `json:"as_known_at"`
 		}
 		if err := decodeMemoryArgs(raw, &args); err != nil {
 			return "", err
@@ -34,7 +44,15 @@ func (p *Memory) retrievalTool(name, description, kind string) tools.Tool {
 		if invocation.SearchMemory == nil {
 			return "", errors.New("memory search requires an active turn")
 		}
-		result, err := invocation.SearchMemory(ctx, memory.RetrievalQuery{Text: args.Query, Kind: kind})
+		valid, err := parseOptionalTime(args.ValidAt)
+		if err != nil {
+			return renderRetrievalOutcome(memory.RetrievalResult{Status: memory.RetrievalFailed})
+		}
+		known, err := parseOptionalTime(args.AsKnownAt)
+		if err != nil {
+			return renderRetrievalOutcome(memory.RetrievalResult{Status: memory.RetrievalFailed})
+		}
+		result, err := invocation.SearchMemory(ctx, memory.RetrievalQuery{Text: args.Query, Kind: kind, Intent: args.Intent, ValidAt: valid, AsKnownAt: known})
 		if err != nil {
 			return "", err
 		}
@@ -43,14 +61,10 @@ func (p *Memory) retrievalTool(name, description, kind string) tools.Tool {
 }
 
 func renderRetrievalOutcome(result memory.RetrievalResult) (string, error) {
-	// Persist counts/status only. Source text and references reach the provider
-	// only after revalidation in the next synthetic request projection.
-	return renderMemoryRead(struct {
-		Status    string                   `json:"status"`
-		Matches   int                      `json:"matches"`
-		Coverage  memory.RetrievalCoverage `json:"coverage"`
-		Truncated bool                     `json:"truncated"`
-	}{result.Status, len(result.Evidence), result.Coverage, result.Truncated})
+	if os.Getenv("EVIE_REMOTE_MEMORY") != "on" {
+		return "", errors.New("model-facing memory reads require EVIE_REMOTE_MEMORY=on")
+	}
+	return memory.RenderRetrievalOutcome(result)
 }
 
 func (p *Memory) expandConversationTool() tools.Tool {

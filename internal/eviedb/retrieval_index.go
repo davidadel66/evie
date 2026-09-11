@@ -10,7 +10,7 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const memoryIndexGeneration = "accepted-fts-unicode61-v1"
+const memoryIndexGeneration = "accepted-fts-unicode61-v2"
 
 // The checkpoint and dirty queue belong to the projection, never accepted
 // memory. Triggers enqueue inside the accepting transaction; foreground reads
@@ -24,7 +24,7 @@ CREATE TRIGGER IF NOT EXISTS memory_retrieval_configuration_immutable
  BEFORE UPDATE OF generation,configuration ON memory_retrieval_generations
  BEGIN SELECT RAISE(ABORT,'retrieval configuration is immutable'); END;
 INSERT OR IGNORE INTO memory_retrieval_generations(generation,configuration,state)
- VALUES ('accepted-fts-unicode61-v1','{"tokenizer":"unicode61","document_version":1}', 'building');
+ VALUES ('accepted-fts-unicode61-v2','{"tokenizer":"unicode61","document_version":2,"lifecycle":"source-eligible-history"}', 'building');
 CREATE TABLE IF NOT EXISTS memory_retrieval_dirty (claim_id TEXT PRIMARY KEY);
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_fts USING fts5(
  generation UNINDEXED, claim_id UNINDEXED, scope_key UNINDEXED, body, tokenize='unicode61'
@@ -171,13 +171,6 @@ func (s *Store) refreshMemoryClaim(ctx context.Context, q *sql.Conn, id memory.S
 	_, known, err := s.semanticQueryTimes(ctx, q, memory.ClaimQuery{})
 	if err != nil {
 		return err
-	}
-	state, err := latestStateAt(ctx, q, memory.SemanticObjectClaim, id, formatSemanticTime(known))
-	if err != nil {
-		return err
-	}
-	if state != memory.SemanticStateActive {
-		return nil
 	}
 	sources, err := loadEligibleSourcesAt(ctx, q, id, known)
 	if err != nil {

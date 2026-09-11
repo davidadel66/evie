@@ -27,14 +27,14 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 	for _, ref := range refs {
 		item := memory.RetrievalInspection{Reference: ref}
 		if ref.Kind == memory.RetrievalConversationExcerpt {
-			evidence, eligible, err := s.resolveConversationReference(ctx, tx, scope, ref)
+			evidence, eligible, err := s.resolveConversationReferenceAt(ctx, tx, scope, ref, true)
 			if err != nil {
 				return nil, err
 			}
 			if eligible {
 				item.Evidence = &evidence
 				item.Available = true
-				item.CurrentStatus = memory.SemanticStatusActive
+				item.CurrentStatus = evidence.CurrentStatus
 			}
 			result = append(result, item)
 			continue
@@ -68,7 +68,9 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 			return nil, err
 		}
 		state.Close()
-		evidence, eligible, err := s.retrievalClaim(ctx, tx, metadata, ref.ClaimID)
+		// Selected durable receipts are explicit source inspection. Resolve the
+		// original read despite later retirement, with current source access.
+		evidence, eligible, err := s.retrievalClaim(ctx, tx, metadata, ref.ClaimID, memory.RetrievalHistorical, ref.ValidAtConstrained || ref.Intent != memory.RetrievalHistorical)
 		if err != nil {
 			return nil, err
 		}
@@ -78,12 +80,31 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 				visible = visible && source.Evidence != ""
 			}
 			if visible {
+				evidence.Intent = ref.Intent
+				if evidence.Intent == "" {
+					evidence.Intent = memory.RetrievalCurrent
+				}
+				evidence.ValidAtConstrained = ref.ValidAtConstrained
 				evidence.Paths = append([]string(nil), ref.Paths...)
 				item.Evidence = &evidence
 				item.Available = true
 			}
 		}
 		result = append(result, item)
+	}
+	var supplied []memory.RetrievalEvidence
+	var positions []int
+	for i := range result {
+		if result[i].Available && result[i].Evidence != nil {
+			supplied = append(supplied, *result[i].Evidence)
+			positions = append(positions, i)
+		}
+	}
+	// Reconstruct relations only within the exact, currently accessible set;
+	// a source restriction must not leave an unsupported peer ID behind.
+	decorateRetrievalRelations(supplied)
+	for i, position := range positions {
+		result[position].Evidence = &supplied[i]
 	}
 	return result, tx.Commit()
 }

@@ -1,0 +1,3 @@
+# Captured SSE byte streams include protocol keep-alives and final delimiters.
+# Preserve their exact bytes; normalized response JSON remains reviewable text.
+cmd/evie/docs/fixtures/memory-stage5-reader/*/*-wire-response.raw binary

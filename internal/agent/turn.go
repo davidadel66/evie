@@ -501,7 +501,7 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
-				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, SearchMemory: recall.search,
+				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, SearchMemory: recall.searchForTool(call.ID),
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),

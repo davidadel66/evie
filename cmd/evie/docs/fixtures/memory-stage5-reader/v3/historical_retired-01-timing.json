@@ -1,0 +1,7 @@
+{
+  "elapsed_ns": 29096507167,
+  "ollama_request_bytes": 13206,
+  "output_tokens": 116,
+  "prompt_tokens": 3248,
+  "response_bytes": 813
+}

@@ -1,0 +1,11 @@
+=== RUN   TestMemoryStage5ProductionReaderPreflight
+--- PASS: TestMemoryStage5ProductionReaderPreflight (0.53s)
+=== RUN   TestMemoryStage5ReaderEvidenceContract
+=== RUN   TestMemoryStage5ReaderEvidenceContract/historical_retired
+=== RUN   TestMemoryStage5ReaderEvidenceContract/saved_boston_newer_chicago
+=== RUN   TestMemoryStage5ReaderEvidenceContract/tentative_quote_and_inference
+--- PASS: TestMemoryStage5ReaderEvidenceContract (0.26s)
+    --- PASS: TestMemoryStage5ReaderEvidenceContract/historical_retired (0.11s)
+    --- PASS: TestMemoryStage5ReaderEvidenceContract/saved_boston_newer_chicago (0.07s)
+    --- PASS: TestMemoryStage5ReaderEvidenceContract/tentative_quote_and_inference (0.07s)
+PASS

@@ -6,6 +6,8 @@ const (
 	RetrievalAcceptedMemory        = "accepted_memory"
 	RetrievalConversationExcerpt   = "conversation_excerpt"
 	RetrievalConversationExpansion = "conversation_expansion"
+	RetrievalCurrent               = "current"
+	RetrievalHistorical            = "historical"
 	RetrievalSuccess               = "success"
 	RetrievalEmpty                 = "empty"
 	RetrievalUnavailable           = "unavailable"
@@ -19,6 +21,7 @@ const (
 // effective scopes from the durable session before looking at any index hit.
 type RetrievalQuery struct {
 	Kind      string               `json:"kind,omitempty"`
+	Intent    string               `json:"intent,omitempty"`
 	AnchorID  string               `json:"evidence_id,omitempty"`
 	Anchor    *RetrievalReference  `json:"-"`
 	Covered   []RetrievalReference `json:"-"`
@@ -39,17 +42,26 @@ type RetrievalCoverage struct {
 }
 
 type RetrievalEvidence struct {
-	ID               string               `json:"id"`
-	Kind             string               `json:"kind"`
-	ClaimID          SemanticID           `json:"claim_id,omitempty"`
-	ClaimOperationID SemanticID           `json:"claim_operation_id,omitempty"`
-	AsKnownAt        time.Time            `json:"as_known_at"`
-	ValidAt          time.Time            `json:"valid_at"`
-	ScopeKey         string               `json:"scope_key"`
-	Status           SemanticObjectStatus `json:"status"`
-	Text             string               `json:"text"`
-	Sources          []SemanticSource     `json:"sources"`
-	Paths            []string             `json:"paths"`
+	Intent                string                 `json:"intent"`
+	ValidAtConstrained    bool                   `json:"valid_at_constrained"`
+	CurrentStatus         SemanticObjectStatus   `json:"current_status"`
+	Claim                 *SemanticClaim         `json:"claim,omitempty"`
+	EffectiveValidTime    *ValidTime             `json:"effective_valid_time,omitempty"`
+	CorrectionMode        CorrectionMode         `json:"correction_mode,omitempty"`
+	CurrentCorrectionMode CorrectionMode         `json:"current_correction_mode,omitempty"`
+	Conflicts             []ClaimConflictWarning `json:"conflicts,omitempty"`
+	RelatedClaimIDs       []SemanticID           `json:"related_claim_ids,omitempty"`
+	ID                    string                 `json:"id"`
+	Kind                  string                 `json:"kind"`
+	ClaimID               SemanticID             `json:"claim_id,omitempty"`
+	ClaimOperationID      SemanticID             `json:"claim_operation_id,omitempty"`
+	AsKnownAt             time.Time              `json:"as_known_at"`
+	ValidAt               time.Time              `json:"valid_at"`
+	ScopeKey              string                 `json:"scope_key"`
+	Status                SemanticObjectStatus   `json:"status"`
+	Text                  string                 `json:"text"`
+	Sources               []SemanticSource       `json:"sources"`
+	Paths                 []string               `json:"paths"`
 }
 
 // RetrievalSourceReference is content-free and can survive in a request
@@ -64,21 +76,35 @@ type RetrievalSourceReference struct {
 }
 
 type RetrievalReference struct {
-	ID               string                     `json:"id"`
-	Kind             string                     `json:"kind"`
-	ClaimID          SemanticID                 `json:"claim_id,omitempty"`
-	ClaimOperationID SemanticID                 `json:"claim_operation_id,omitempty"`
-	AsKnownAt        time.Time                  `json:"as_known_at"`
-	ValidAt          time.Time                  `json:"valid_at"`
-	ScopeKey         string                     `json:"scope_key"`
-	Status           SemanticObjectStatus       `json:"status"`
-	Sources          []RetrievalSourceReference `json:"sources"`
-	Paths            []string                   `json:"paths"`
+	Intent                string                     `json:"intent"`
+	ValidAtConstrained    bool                       `json:"valid_at_constrained"`
+	CurrentStatus         SemanticObjectStatus       `json:"current_status"`
+	CorrectionMode        CorrectionMode             `json:"correction_mode,omitempty"`
+	CurrentCorrectionMode CorrectionMode             `json:"current_correction_mode,omitempty"`
+	Conflicts             []ClaimConflictWarning     `json:"conflicts,omitempty"`
+	RelatedClaimIDs       []SemanticID               `json:"related_claim_ids,omitempty"`
+	ID                    string                     `json:"id"`
+	Kind                  string                     `json:"kind"`
+	ClaimID               SemanticID                 `json:"claim_id,omitempty"`
+	ClaimOperationID      SemanticID                 `json:"claim_operation_id,omitempty"`
+	AsKnownAt             time.Time                  `json:"as_known_at"`
+	ValidAt               time.Time                  `json:"valid_at"`
+	ScopeKey              string                     `json:"scope_key"`
+	Status                SemanticObjectStatus       `json:"status"`
+	Sources               []RetrievalSourceReference `json:"sources"`
+	Paths                 []string                   `json:"paths"`
 }
 
 func (e RetrievalEvidence) Reference() RetrievalReference {
 	r := RetrievalReference{ID: e.ID, Kind: e.Kind, ClaimID: e.ClaimID, ClaimOperationID: e.ClaimOperationID,
-		AsKnownAt: e.AsKnownAt, ValidAt: e.ValidAt, ScopeKey: e.ScopeKey, Status: e.Status, Paths: append([]string(nil), e.Paths...)}
+		AsKnownAt: e.AsKnownAt, ValidAt: e.ValidAt, ScopeKey: e.ScopeKey, Status: e.Status, Paths: append([]string(nil), e.Paths...),
+		Intent: e.Intent, ValidAtConstrained: e.ValidAtConstrained, CurrentStatus: e.CurrentStatus,
+		CorrectionMode: e.CorrectionMode, CurrentCorrectionMode: e.CurrentCorrectionMode,
+		RelatedClaimIDs: append([]SemanticID(nil), e.RelatedClaimIDs...)}
+	for _, conflict := range e.Conflicts {
+		conflict.ClaimIDs = append([]SemanticID(nil), conflict.ClaimIDs...)
+		r.Conflicts = append(r.Conflicts, conflict)
+	}
 	for _, s := range e.Sources {
 		r.Sources = append(r.Sources, RetrievalSourceReference{SourceLinkID: s.ID, SessionID: s.SessionID, ScopeKey: s.ScopeKey,
 			Authority: s.Authority, ObservedAt: s.ObservedAt, EvidenceLocator: EvidenceLocator{EventID: s.EventID,

@@ -64,10 +64,13 @@ func (s *Server) handleMemoryEvidence(w http.ResponseWriter, r *http.Request) {
 }
 
 type memoryActivity struct {
-	SnapshotID    memory.EventID `json:"snapshotId"`
-	Status        string         `json:"status"`
-	AcceptedCount int            `json:"acceptedCount"`
-	ExcerptCount  int            `json:"excerptCount"`
+	SnapshotID      memory.EventID `json:"snapshotId"`
+	Status          string         `json:"status"`
+	AcceptedCount   int            `json:"acceptedCount"`
+	ExcerptCount    int            `json:"excerptCount"`
+	HistoricalCount int            `json:"historicalCount,omitempty"`
+	RetiredCount    int            `json:"retiredCount,omitempty"`
+	ConflictCount   int            `json:"conflictCount,omitempty"`
 }
 
 func projectMemoryActivity(event memory.Event) (*memoryActivity, error) {
@@ -88,6 +91,15 @@ func projectMemoryActivity(event memory.Event) (*memoryActivity, error) {
 			activity.AcceptedCount++
 		case memory.RetrievalConversationExcerpt:
 			activity.ExcerptCount++
+		}
+		if ref.Intent == memory.RetrievalHistorical {
+			activity.HistoricalCount++
+		}
+		if ref.Status == memory.SemanticStatusRetired || ref.CurrentStatus == memory.SemanticStatusRetired {
+			activity.RetiredCount++
+		}
+		if len(ref.Conflicts) > 0 {
+			activity.ConflictCount++
 		}
 	}
 	return activity, nil

@@ -10,11 +10,11 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const conversationIndexGeneration = "conversation-fts-unicode61-v1"
+const conversationIndexGeneration = "conversation-fts-unicode61-v2"
 
 const conversationRetrievalSchema = `
 INSERT OR IGNORE INTO memory_retrieval_generations(generation,configuration,state)
- VALUES ('conversation-fts-unicode61-v1','{"tokenizer":"unicode61","document_version":1,"fields":["user_message.content","assistant_message.content"]}','building');
+ VALUES ('conversation-fts-unicode61-v2','{"tokenizer":"unicode61","document_version":2,"lifecycle":"source-eligible-history","fields":["user_message.content","assistant_message.content"]}','building');
 CREATE TABLE IF NOT EXISTS memory_retrieval_event_dirty(event_id TEXT PRIMARY KEY);
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_event_fts USING fts5(
  generation UNINDEXED,event_id UNINDEXED,scope_key UNINDEXED,body,tokenize='unicode61');
@@ -143,7 +143,7 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 				return err
 			}
 			if eligible {
-				spans, err := eligibleConversationSpans(ctx, q, event)
+				spans, err := conversationReadSpans(ctx, q, event, memory.RetrievalHistorical, s.now().UTC())
 				if err != nil {
 					return err
 				}

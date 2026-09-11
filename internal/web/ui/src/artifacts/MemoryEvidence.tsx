@@ -25,11 +25,37 @@ export function MemoryEvidenceView({ receipt }: { receipt: MemoryEvidenceReceipt
     <p className="text-muted-text mt-2 text-xs leading-5">Evidence included in this request. An explicit answer citation is recorded separately when present.</p>
     {receipt.evidence.length === 0 && <p className="text-muted-text mt-4 text-xs">{receipt.status === "empty" ? "The search returned no matches." : "No evidence was supplied by this search."}</p>}
     {receipt.evidence.map((item) => <section key={item.reference.id} className="border-hair mt-5 border-t pt-4">
-      <h3 className="text-teal text-xs">{item.reference.kind === "conversation_excerpt" ? "Conversation excerpt" : "Accepted memory"}</h3>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <h3 className="text-teal">{item.reference.kind === "conversation_excerpt" ? "Conversation excerpt" : "Accepted memory"}</h3>
+        {item.reference.intent === "historical" && <span className="text-muted-text">Historical</span>}
+        {(item.reference.status === "retired" || item.current_status === "retired" || item.reference.current_status === "retired") && <span className="text-amber-ink">{item.current_status === "retired" ? "Retired now" : item.reference.current_status === "retired" ? "Retired at retrieval" : "Retired in historical view"}</span>}
+      </div>
       {!item.available || !item.evidence ? <p className="text-muted-text mt-2 text-xs">Source unavailable under current access.</p> : <>
         <p className="text-body mt-2 text-sm leading-6 whitespace-pre-wrap">{item.evidence.text}</p>
         {item.reference.kind === "conversation_excerpt" && <p className="text-muted-text mt-2 text-xs">Attributed conversation evidence; preserves what was said and its uncertainty.</p>}
-        <p className="text-muted-text mt-2 text-xs">Original state: {item.reference.status}{item.current_status !== item.reference.status && <> · Current state: {item.current_status}</>}</p>
+        {(item.reference.conflicts?.length ?? 0) > 0 && <div className="text-amber-ink mt-3 text-xs leading-5">
+          <p>Conflicting accepted Claims</p>
+          {item.reference.conflicts?.map((conflict) => <p key={`${conflict.code}:${conflict.claim_ids.join(":")}`}>{conflict.predicate_token}: {conflict.code === "opposite_polarity" ? "Opposite assertions" : conflict.code === "one_cardinality_overlap" ? "Different accepted values" : "Conflicting evidence"} · {conflict.claim_ids.join(", ")}</p>)}
+        </div>}
+        {item.reference.paths.includes("newer_owner_statement") && (item.reference.related_claim_ids?.length ?? 0) > 0 && <div className="text-amber-ink mt-3 text-xs leading-5">
+          <p>Potential discrepancy</p>
+          <p>Newer owner wording to compare with accepted Claims: {item.reference.related_claim_ids?.join(", ")}. Recency alone does not establish a correction.</p>
+        </div>}
+        <p className="text-muted-text mt-2 text-xs">Original state: {item.reference.status}{item.reference.current_status && item.reference.current_status !== item.reference.status && <> · At retrieval: {item.reference.current_status}</>}{item.current_status && (item.current_status !== item.reference.status || item.current_status !== (item.reference.current_status ?? item.reference.status)) && <> · Current state: {item.current_status}</>}</p>
+        {(item.reference.correction_mode || item.reference.current_correction_mode || item.evidence.current_correction_mode) && <div className="text-muted-text mt-2 text-xs leading-5">
+          {item.reference.correction_mode && <p>Original correction: {correctionLabel(item.reference.correction_mode)}</p>}
+          {item.reference.current_correction_mode && item.reference.current_correction_mode !== item.reference.correction_mode && <p>Correction at retrieval: {correctionLabel(item.reference.current_correction_mode)}</p>}
+          {item.evidence.current_correction_mode && item.evidence.current_correction_mode !== item.reference.current_correction_mode && <p>Current correction: {correctionLabel(item.evidence.current_correction_mode)}</p>}
+        </div>}
+        {item.reference.kind === "accepted_memory" && item.evidence.claim && <div className="text-muted-text mt-2 text-xs leading-5">
+          <p>Accepted on: {item.evidence.claim.transaction_time}</p>
+          <p>Valid from: {(item.evidence.effective_valid_time ?? item.evidence.claim.valid_time).from ?? "Unknown"} · Valid until: {(item.evidence.effective_valid_time ?? item.evidence.claim.valid_time).to ?? "Unknown"}</p>
+        </div>}
+        {(item.reference.intent === "historical" || item.reference.valid_at_constrained) && <details className="text-muted-text mt-2 text-xs leading-5">
+          <summary className="cursor-pointer">Read filters</summary>
+          <p>Known by: {item.reference.as_known_at}</p>
+          {item.reference.valid_at_constrained && <p>Valid at: {item.reference.valid_at}</p>}
+        </details>}
         {item.evidence.sources.map((source) => <div key={`${source.event_id}:${source.locator_value}`} className="border-hair mt-4 border-l pl-3">
           <blockquote className="text-body text-xs leading-5 whitespace-pre-wrap">{source.evidence || "Source text unavailable."}</blockquote>
           <p className="text-muted-text mt-2 text-xs">{source.actor && <>Speaker: {source.actor} · </>}Authority: {source.authority} · {source.observed_at}</p>
@@ -40,4 +66,8 @@ export function MemoryEvidenceView({ receipt }: { receipt: MemoryEvidenceReceipt
       </>}
     </section>)}
   </div>;
+}
+
+function correctionLabel(mode: string) {
+  return mode === "error" ? "Corrected as an error" : mode === "changed" ? "Changed over time" : mode;
 }

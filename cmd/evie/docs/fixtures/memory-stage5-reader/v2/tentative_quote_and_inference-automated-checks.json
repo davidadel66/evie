@@ -1,0 +1,8 @@
+{
+  "assistant_inference_distinguished": true,
+  "destination_named": true,
+  "nonempty_answer": true,
+  "quoted_plan_attributed": true,
+  "requested_source_event_ids_present": true,
+  "uncertainty_expressed": true
+}

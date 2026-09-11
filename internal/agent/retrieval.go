@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -23,7 +24,7 @@ type MemoryActivityEvents interface {
 }
 
 const (
-	retrievalVersion        = "memory-retrieval-v1"
+	retrievalVersion        = "memory-retrieval-v2"
 	retrievalSearchLimit    = 8
 	retrievalResultLimit    = 8
 	retrievalResultBytes    = 12 * 1024
@@ -96,22 +97,36 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 			}
 		}
 	}
-	// Charge the complete search result even though the persisted tool outcome
-	// contains only its smaller count/status projection. Mixed calls cannot avoid
-	// the turn cap by postponing the next provider request.
+	// Validate the internal result before retaining it. Its copied source text
+	// is not a tool result; only the next revalidated memory projection sends it.
 	encoded, encodeErr := json.Marshal(result)
 	if encodeErr != nil || memory.HasRetrievalSecret(encoded) {
 		result = memory.RetrievalResult{Status: memory.RetrievalUnavailable}
-	} else if len(encoded) > retrievalTurnBytes-r.delivered {
-		result = memory.RetrievalResult{Status: memory.RetrievalExhausted}
-	} else {
-		r.delivered += len(encoded)
 	}
 	r.status = result.Status
 	for _, evidence := range result.Evidence {
 		found := false
-		for _, existing := range r.evidence {
+		for i, existing := range r.evidence {
 			if existing.ID == evidence.ID {
+				// A second current read of the same immutable excerpt must not erase
+				// its already-discovered relation to held Claims. Dispatch revalidation
+				// still prunes every relation whose supporting Claim is no longer valid.
+				// Historical or explicitly constrained reads select an independent view.
+				if existing.Intent == memory.RetrievalCurrent && evidence.Intent == memory.RetrievalCurrent &&
+					!existing.ValidAtConstrained && !evidence.ValidAtConstrained && slices.Contains(existing.Paths, "newer_owner_statement") {
+					for _, id := range existing.RelatedClaimIDs {
+						if !slices.Contains(evidence.RelatedClaimIDs, id) {
+							evidence.RelatedClaimIDs = append(evidence.RelatedClaimIDs, id)
+						}
+					}
+					if !slices.Contains(evidence.Paths, "newer_owner_statement") {
+						evidence.Paths = append(evidence.Paths, "newer_owner_statement")
+					}
+				}
+				// A targeted temporal read may intentionally select a different view of
+				// the same immutable Claim or excerpt. Its new request receipt must carry
+				// the requested view; older receipts remain untouched.
+				r.evidence[i] = evidence
 				found = true
 				break
 			}
@@ -121,6 +136,26 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 		}
 	}
 	return result, nil
+}
+
+// Bind the actual call ID so accounting includes the exact serialized tool
+// outcome, not an internal source-bearing object that never reaches a provider.
+func (r *retrievalTurn) searchForTool(callID string) func(context.Context, memory.RetrievalQuery) (memory.RetrievalResult, error) {
+	return func(ctx context.Context, query memory.RetrievalQuery) (memory.RetrievalResult, error) {
+		result, err := r.search(ctx, query)
+		if err != nil {
+			return result, err
+		}
+		content, renderErr := memory.RenderRetrievalOutcome(result)
+		encoded, encodeErr := json.Marshal(openrouter.Message{Role: "tool", ToolCallID: callID, Content: content})
+		if renderErr != nil || encodeErr != nil || len(encoded) > retrievalTurnBytes-r.delivered {
+			result = memory.RetrievalResult{Status: memory.RetrievalExhausted}
+			r.status = result.Status
+		} else {
+			r.delivered += len(encoded)
+		}
+		return result, nil
+	}
 }
 
 func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.RetrievalReceipt) {
@@ -151,10 +186,20 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 		receipt.Evidence = append(receipt.Evidence, evidence.Reference())
 	}
 	data := struct {
-		Version  string                     `json:"version"`
-		Status   string                     `json:"status"`
-		Evidence []memory.RetrievalEvidence `json:"evidence"`
-	}{retrievalVersion, r.status, r.evidence}
+		Version        string                     `json:"version"`
+		Status         string                     `json:"status"`
+		ReadingGuide   string                     `json:"reading_guide,omitempty"`
+		HistoricalOnly []string                   `json:"historical_only,omitempty"`
+		Evidence       []memory.RetrievalEvidence `json:"evidence"`
+	}{Version: retrievalVersion, Status: r.status, Evidence: r.evidence}
+	if len(r.evidence) > 0 {
+		data.ReadingGuide = "current_status:retired cannot establish a current fact, even with status:active at as_known_at. Prefer paraphrases with original event citations. Use quotation marks only for verbatim source text, preserving case and punctuation; keep formatting outside the quotation. Cite that source entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation."
+	}
+	for _, evidence := range r.evidence {
+		if evidence.CurrentStatus == memory.SemanticStatusRetired {
+			data.HistoricalOnly = append(data.HistoricalOnly, evidence.ID)
+		}
+	}
 	encoded, err := json.Marshal(data)
 	content := "EVIE_MEMORY_DATA\n" + string(encoded)
 	serialized, _ := json.Marshal(openrouter.Message{Role: "user", Content: content})
@@ -165,6 +210,7 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 			receipt.Status = "unavailable"
 		}
 		data.Status, data.Evidence = receipt.Status, nil
+		data.ReadingGuide, data.HistoricalOnly = "", nil
 		encoded, _ = json.Marshal(data)
 	}
 	content = "EVIE_MEMORY_DATA\n" + string(encoded)

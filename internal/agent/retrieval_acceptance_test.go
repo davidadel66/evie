@@ -207,10 +207,15 @@ func (f *retrievalFixture) lifecycle(record memory.Session, toolName string, kin
 	if err := f.session(record, client).Send(context.Background(), "Apply the requested memory lifecycle change.", &recorder{}, func(context.Context, string, string, *tools.FileChangePreview) tools.Decision { return tools.Approved }); err != nil {
 		f.t.Fatal(err)
 	}
-	for _, m := range client.reqs[1].Messages {
-		if m.Role == "tool" && strings.Contains(m.Content, "Error:") {
-			f.t.Fatalf("lifecycle failed: %s", m.Content)
-		}
+	inspected, err := f.store.InspectSemanticObject(context.Background(), record.ScopeContext(), kind, id)
+	expected := map[string]memory.SemanticObjectStatus{
+		"memory_retire":         memory.SemanticStatusRetired,
+		"memory_restore":        memory.SemanticStatusActive,
+		"memory_retract_source": memory.SemanticStatusSourceRetracted,
+		"memory_restore_source": memory.SemanticStatusEligible,
+	}[toolName]
+	if err != nil || expected == "" || inspected.Status != expected {
+		f.t.Fatalf("lifecycle %s did not produce %s: status=%s error=%v", toolName, expected, inspected.Status, err)
 	}
 }
 

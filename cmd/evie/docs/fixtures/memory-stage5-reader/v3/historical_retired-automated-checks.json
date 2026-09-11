@@ -1,0 +1,7 @@
+{
+  "does_not_assert_current_preference": true,
+  "historical_preference_named": true,
+  "nonempty_answer": true,
+  "old_or_retired_status_expressed": true,
+  "requested_source_event_ids_present": true
+}

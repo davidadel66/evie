@@ -26,10 +26,19 @@ const (
 var ErrInvalidRetrievalQuery = errors.New("invalid bounded memory query")
 
 func normalizeRetrievalQuery(q memory.RetrievalQuery) (memory.RetrievalQuery, string, error) {
+	if q.Intent == "" {
+		q.Intent = memory.RetrievalCurrent
+	}
+	if q.Intent != memory.RetrievalCurrent && q.Intent != memory.RetrievalHistorical {
+		return q, "", ErrInvalidRetrievalQuery
+	}
 	if q.Kind == "" {
 		q.Kind = memory.RetrievalAcceptedMemory
 	}
 	if q.Kind != memory.RetrievalAcceptedMemory && q.Kind != memory.RetrievalConversationExcerpt {
+		return q, "", ErrInvalidRetrievalQuery
+	}
+	if q.Kind == memory.RetrievalConversationExcerpt && q.ValidAt != nil || q.ValidAt != nil && q.ValidAt.IsZero() || q.AsKnownAt != nil && q.AsKnownAt.IsZero() {
 		return q, "", ErrInvalidRetrievalQuery
 	}
 	q.Text = strings.TrimSpace(q.Text)
@@ -174,7 +183,7 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		return ordered[i].id < ordered[j].id
 	})
 	for _, c := range ordered {
-		evidence, eligible, err := s.retrievalClaim(ctx, tx, metadata, c.id)
+		evidence, eligible, err := s.retrievalClaim(ctx, tx, metadata, c.id, query.Intent, query.ValidAt != nil)
 		if err != nil {
 			return retrievalReadFailure(ctx, result, err)
 		}
@@ -188,6 +197,14 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		}
 		result.Evidence = append(result.Evidence, evidence)
 	}
+	seen := make(map[memory.SemanticID]bool, len(candidates))
+	for id := range candidates {
+		seen[id] = true
+	}
+	incomplete, err := s.supplementAcceptedRetrieval(ctx, tx, scope, query, metadata, &result, seen)
+	if err != nil {
+		return retrievalReadFailure(ctx, result, err)
+	}
 	if err = tx.Commit(); err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -195,10 +212,11 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 	if len(result.Evidence) == 0 {
 		result.Status = memory.RetrievalEmpty
 	}
-	if result.Coverage.Pending > 0 {
+	if result.Coverage.Pending > 0 || incomplete {
 		result.Status = memory.RetrievalPartial
 	}
 	for {
+		decorateRetrievalRelations(result.Evidence)
 		encoded, err := json.Marshal(result)
 		if err != nil {
 			return result, err
@@ -231,7 +249,7 @@ func retrievalReadFailure(ctx context.Context, result memory.RetrievalResult, er
 	return result, err
 }
 
-func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer, metadata memory.ExactReadMetadata, id memory.SemanticID) (memory.RetrievalEvidence, bool, error) {
+func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer, metadata memory.ExactReadMetadata, id memory.SemanticID, intent string, validAtConstrained bool) (memory.RetrievalEvidence, bool, error) {
 	e := memory.RetrievalEvidence{}
 	claim, err := loadSemanticClaim(ctx, q, id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -248,20 +266,41 @@ func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer,
 	if err != nil {
 		return e, false, err
 	}
+	var currentState memory.SemanticStateValue
+	if err = q.QueryRowContext(ctx, `SELECT state FROM semantic_state_events WHERE object_kind='claim' AND object_id=? ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1`, id).Scan(&currentState); err != nil {
+		return e, false, err
+	}
+	if intent == "" {
+		intent = memory.RetrievalCurrent
+	}
+	historical := intent == memory.RetrievalHistorical
+	if !historical && currentState == memory.SemanticStateRetired {
+		return e, false, nil
+	}
 	effective := claim.ValidTime
 	correction, found, err := loadVisibleCorrection(ctx, q, id, metadata.AsKnownAt)
 	if err != nil {
 		return e, false, err
 	}
 	if found {
-		if correction.Mode == memory.CorrectionError {
+		if correction.Mode == memory.CorrectionError && !historical {
 			return e, false, nil
 		}
-		effective = correction.OldAfter
-	} else if state != memory.SemanticStateActive {
+		if correction.Mode == memory.CorrectionChanged {
+			effective = correction.OldAfter
+		}
+	} else if state != memory.SemanticStateActive && !historical {
 		return e, false, nil
 	}
-	if !validTimeContains(effective, metadata.ValidAt) {
+	if (!historical || validAtConstrained) && !validTimeContains(effective, metadata.ValidAt) {
+		return e, false, nil
+	}
+	var currentCorrection memory.CorrectionMode
+	err = q.QueryRowContext(ctx, `SELECT mode FROM semantic_claim_corrections WHERE old_claim_id=? ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1`, id).Scan(&currentCorrection)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return e, false, err
+	}
+	if !historical && currentCorrection == memory.CorrectionError {
 		return e, false, nil
 	}
 	sources, err := loadEligibleSourcesAt(ctx, q, id, metadata.AsKnownAt)
@@ -306,7 +345,9 @@ func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer,
 		return e, false, nil
 	}
 	e = memory.RetrievalEvidence{ID: "claim:" + string(id), Kind: memory.RetrievalAcceptedMemory, ClaimID: id, ClaimOperationID: claim.CreatedOperationID,
-		AsKnownAt: metadata.AsKnownAt, ValidAt: metadata.ValidAt, ScopeKey: claim.ScopeKey, Status: memory.SemanticStatusActive, Text: text, Sources: eligibleSources, Paths: []string{}}
+		AsKnownAt: metadata.AsKnownAt, ValidAt: metadata.ValidAt, ScopeKey: claim.ScopeKey, Status: semanticStatus(state), Text: text, Sources: eligibleSources, Paths: []string{},
+		Intent: intent, ValidAtConstrained: validAtConstrained, CurrentStatus: semanticStatus(currentState), Claim: &claim, EffectiveValidTime: &effective,
+		CorrectionMode: correction.Mode, CurrentCorrectionMode: currentCorrection}
 	return e, true, nil
 }
 
@@ -400,7 +441,30 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 		if prior.Kind != memory.RetrievalAcceptedMemory {
 			continue
 		}
-		current, eligible, err := s.retrievalClaim(ctx, tx, metadata, prior.ClaimID)
+		if prior.ValidAt.IsZero() || prior.AsKnownAt.IsZero() {
+			continue
+		}
+		if prior.Intent != memory.RetrievalHistorical {
+			currentMetadata := metadata
+			if prior.ValidAtConstrained {
+				currentMetadata.ValidAt = prior.ValidAt
+			}
+			_, eligible, err := s.retrievalClaim(ctx, tx, currentMetadata, prior.ClaimID, memory.RetrievalCurrent, prior.ValidAtConstrained)
+			if err != nil {
+				return nil, err
+			}
+			if !eligible {
+				continue
+			}
+		}
+		// Eligibility above is current; the delivered proposition and temporal
+		// metadata below describe the original read. Never relabel a newer
+		// correction with an older as_known_at timestamp.
+		readMetadata, err := s.exactReadMetadata(ctx, tx, scope, memory.ClaimQuery{ValidAt: &prior.ValidAt, AsKnownAt: &prior.AsKnownAt}, nil, true)
+		if err != nil {
+			return nil, err
+		}
+		current, eligible, err := s.retrievalClaim(ctx, tx, readMetadata, prior.ClaimID, prior.Intent, prior.ValidAtConstrained)
 		if err != nil {
 			return nil, err
 		}
@@ -410,15 +474,13 @@ func (s *Store) RevalidateMemoryEvidence(ctx context.Context, scope memory.Scope
 		if current.ClaimOperationID != prior.ClaimOperationID || current.Text != prior.Text {
 			continue
 		}
-		// Preserve the original read version for identical supplied evidence.
-		current.AsKnownAt = prior.AsKnownAt
-		current.ValidAt = prior.ValidAt
 		current.Paths = append([]string(nil), prior.Paths...)
 		if !sameRetrievalSources(current.Reference().Sources, prior.Reference().Sources) {
 			continue
 		}
 		valid = append(valid, current)
 	}
+	decorateRetrievalRelations(valid)
 	return valid, tx.Commit()
 }
 

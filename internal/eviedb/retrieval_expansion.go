@@ -45,6 +45,7 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 		result.Status = memory.RetrievalUnavailable
 		return result, nil
 	}
+	known, valid, intent := anchor.AsKnownAt, anchor.ValidAt, anchor.Intent
 	anchorEvent, eligible, err := loadConversationEvidence(ctx, tx, anchor.Sources[0].EventID)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
@@ -112,10 +113,11 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 		if before {
 			windowOperator = ">="
 		}
-		statement := `SELECT id,sequence FROM events WHERE session_id=? AND sequence ` + operator + ` ? AND sequence ` + windowOperator + ` ?
+		statement := `SELECT e.id,e.sequence FROM events e WHERE session_id=? AND sequence ` + operator + ` ? AND sequence ` + windowOperator + ` ?
  AND event_type IN ('user_message','assistant_message') AND content!='' AND (?=0 OR sequence<?)
+ AND ` + conversationObservedTimeSQL + `<=?
  ORDER BY sequence ` + order + ` LIMIT ?`
-		rows, err := tx.QueryContext(ctx, statement, anchorEvent.session, anchorEvent.sequence, bound, cutoff, cutoff, count)
+		rows, err := tx.QueryContext(ctx, statement, anchorEvent.session, anchorEvent.sequence, bound, cutoff, cutoff, formatSemanticTime(known), count)
 		if err != nil {
 			return err
 		}
@@ -139,8 +141,8 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 			// An indexed sequence probe reports an incomplete bounded window
 			// without scanning farther to discover the next public message.
 			var outside bool
-			statement = `SELECT EXISTS(SELECT 1 FROM events WHERE session_id=? AND sequence ` + operator + ` ? AND (?=0 OR sequence<?))`
-			if err = tx.QueryRowContext(ctx, statement, anchorEvent.session, bound, cutoff, cutoff).Scan(&outside); err != nil {
+			statement = `SELECT EXISTS(SELECT 1 FROM events e WHERE session_id=? AND sequence ` + operator + ` ? AND (?=0 OR sequence<?) AND ` + conversationObservedTimeSQL + `<=?)`
+			if err = tx.QueryRowContext(ctx, statement, anchorEvent.session, bound, cutoff, cutoff, formatSemanticTime(known)).Scan(&outside); err != nil {
 				return err
 			}
 			result.Truncated = result.Truncated || outside
@@ -154,7 +156,6 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 		return retrievalReadFailure(ctx, result, err)
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].sequence < candidates[j].sequence })
-	known := s.now().UTC()
 	anchorSpan, err := conversationLocatorSpan(anchorEvent, query.Anchor.Sources[0].EvidenceLocator)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
@@ -168,15 +169,24 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 			result.Truncated = true
 			continue
 		}
-		spans, err := eligibleConversationSpans(ctx, tx, e)
+		spans, err := conversationReadSpans(ctx, tx, e, intent, known)
 		if err != nil {
 			return retrievalReadFailure(ctx, result, err)
 		}
-		if len(spans) != 1 || spans[0].start != 0 || spans[0].end != len(e.content) {
+		eligibleBytes := 0
+		var additional []conversationReadSpan
+		for _, span := range spans {
+			eligibleBytes += span.end - span.start
+			for _, uncovered := range subtractCoveredEvidence([]evidenceSpan{span.evidenceSpan}, covered[e.id]) {
+				part := span
+				part.evidenceSpan = uncovered
+				additional = append(additional, part)
+			}
+		}
+		if eligibleBytes < len(e.content) {
 			result.Truncated = true
 		}
-		spans = subtractCoveredEvidence(spans, covered[e.id])
-		for _, span := range spans {
+		for _, span := range additional {
 			if strings.TrimSpace(e.content[span.start:span.end]) == "" {
 				continue
 			}
@@ -199,7 +209,7 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 					}
 				}
 			}
-			evidence := conversationExcerpt(e, selected, known, known)
+			evidence := conversationTypedExcerpt(e, selected, known, valid, intent)
 			evidence.Paths = []string{memory.RetrievalConversationExpansion}
 			result.Evidence = append(result.Evidence, evidence)
 		}

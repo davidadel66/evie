@@ -339,3 +339,183 @@ outputs and absence of fallback. The disposable server was stopped after use.
 - Independent SHA256 recheck of every frozen script and fixture and both
   result-to-freeze references — passed; `git diff --check` — passed.
 - Final repository verification remains pending all feature integration.
+
+## #159: historical reads and attributed discrepancies
+
+Search tools carry explicit `current` or `historical` intent and RFC3339
+Transaction Time constraints. Accepted-memory reads additionally support Valid
+Time constraints. Historical reads without a world-time constraint preserve
+unknown bounds; read timestamps never become invented world dates. Conversation
+search rejects unsupported Valid Time filters. Expansion inherits its trusted
+anchor's historical intent and knowledge cutoff.
+
+The evidence separates state at the original `as_known_at` read from current
+lifecycle state, actual Claim transaction time, effective validity, and later
+correction mode. Explicit historical reads can recover corresponding retired
+intervals, marked retired now, without restoring retracted source access. The
+versioned FTS projections retain eligible history; ordinary reads still apply
+current retirement exclusions. Exact historical aliases use their original
+lifecycle view. Free-text combinations containing retired aliases have limited
+lexical coverage because the FTS document retains active aliases only.
+
+Accepted search supplies eligible same-subject/predicate conflicts and up to two
+relevant newer owner excerpts under its existing candidate/result/byte limits.
+A newer excerpt is an attributed possible discrepancy, never an accepted
+correction. Exact Source Link intervals are subtracted from these companion
+candidates to avoid presenting the accepted source twice as new corroboration.
+Conflict references survive only when both sides are actually supplied and
+currently accessible. Historical source inspection preserves the original
+receipt while showing later retirement or correction separately.
+
+The first actual pinned Qwen development run passed only one of three manual
+rubrics despite passing all weak text markers: retirement was mistaken for a
+current preference and a quotation was attributed to the wrong source. Its
+frozen inputs, wire requests, raw answers, timings and failures remain immutable
+in `../fixtures/memory-stage5-reader/v1/`. Production guidance now distinguishes
+original status from current status and requires exact source attribution for
+quotes and assistant inference. A separately frozen v2 run evaluates that fix;
+these development cases do not establish final release quality.
+
+A full-turn regression exposed duplicated internal-object accounting after the
+new temporal metadata: the Kernel result was charged as though it were a tool
+message, then charged again in the actual evidence projection. The shared tool
+renderer now charges the actual serialized count/status outcome including its
+call ID; each provider-bound synthetic evidence message is charged separately.
+The original eight-call/eight-result/12 KiB result/36 KiB cumulative/three-second
+work caps remain unchanged. Complete requests still pass the context composer.
+This replaces the conservative internal-result accounting described in #156.
+
+Real-turn regressions cover half-open Valid Time endpoints, exact transaction
+cutoffs, unknown validity, retired historical excerpts and expansion, original
+receipts after retirement, retracted sources, same-turn future correction,
+conflicting active Claims and newer owner statements, and unchanged accepted
+state. Focused HTTP/UI tests preserve the saved activity annotation after a
+restore and expose original-versus-current status in the existing inspector.
+
+### #159 verification and outstanding reader gate
+
+- `go test ./internal/agent ./internal/plugins ./internal/web ./cmd/evie` —
+  pass (agent 7.932 s; plugins cached; web 5.982 s; command 12.851 s).
+- `go test ./internal/agent -run '^(TestHistorical|TestOriginalMemoryReceipt|TestMemoryCorrectionBeforeDispatch|TestMemorySearch|TestConversationSearch|TestConversationExpansion|TestMemoryStage5ReaderEvidenceContract|TestContext)' -count=1`
+  — pass, 4.776 s, after adding the bounded reader guide.
+- `go test -race ./internal/agent -run '^(TestHistorical|TestOriginalMemoryReceipt|TestMemoryCorrectionBeforeDispatch|TestMemorySearchSuppliesConflicting)' -count=1`
+  — pass, 11.971 s. The conflict pattern in this command did not match the
+  actual conflict test name; its ordinary complete-turn test passed separately.
+- `go vet ./internal/agent ./internal/eviedb ./internal/plugins ./internal/web ./cmd/evie`
+  — pass. A prior test/vet invocation raced a test-file import edit and failed
+  to import `slices`; the stable sequential reruns above passed.
+- `go test ./internal/web -run '^TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart$' -count=1`
+  — pass, 0.432 s, including source revocation and immutable original references.
+- From `internal/web/ui`, `npx vitest run src/chat/MemoryActivity.test.tsx src/artifacts/MemoryEvidence.test.tsx src/api/memoryEvidence.test.ts`
+  — 3 files, 14 tests passed; `npx tsc -b` — pass.
+- Actual pinned Qwen reader v1: process PASS 56.66 s, manual 1/3 pass.
+  v2: process PASS 51.92 s, manual 1/3 pass. v3: process FAIL 54.65 s,
+  manual 1/3 pass. These are development attempts with unchanged cases,
+  model settings and manual rubric, not held-out assessments. Exact executable
+  hashes, environment commands and results are retained beside each freeze.
+
+**Reader quality remains unresolved.** V3's explicit historical-only labels
+fixed retirement wording, but Boston/Chicago incorrectly asserted supersession
+and Kyoto produced an unsupported citation identifier. No gate is waived.
+The deterministic retrieval implementation is committed so independent tickets
+can proceed; #159 answer quality and the dependent integrated pilot/readiness
+remain pending. The final PR must fold the reader fix into this owning commit.
+The latest rendering version is `memory-retrieval-v2`; its reading guide and
+negative-only historical labels are derived after access revalidation and share
+the existing byte budget. They do not grant evidence new authority.
+
+The failed reader run also exposed an implementation bug: re-reading the same
+current excerpt replaced its previously discovered newer-statement relation.
+A new complete-turn regression first failed, then verified that the relation
+survives duplicate reads while dispatch still prunes inaccessible support.
+Explicit historical/constrained reads retain their separate temporal view.
+
+Demonstration: record Boston, then state Chicago without accepting a correction;
+search and inspect both originals. Retire a saved preference and request its
+history; it remains retired now. Restore then retract its Source Link and reopen
+the old receipt: its original reference persists while source text is unavailable.
+Model answers still require the documented reader-quality correction before
+Stage 5 can be declared ready. Final repository verification remains pending.
+
+### #159 reader gate resolved with the configured production reader
+
+The separately frozen v4 attempt uses the application's actual configured
+OpenRouter Responses reader, canonical `openai/gpt-6-astra-20260903`, through
+its normal route and context-profile discovery. All three original development
+cases pass the unchanged manual rubric and exact source checks. The complete
+actual evaluation passed in 11.86 s with one request per case; native input/output
+tokens were 2820/103, 2726/162 and 2360/148, and model-call times were 3.058,
+4.538 and 3.463 s. These three timings are observations, not latency percentiles.
+The provider reported a total cost of $0.0851825.
+
+The prior outstanding #159 reader gate is therefore resolved for the configured
+production reader. The 7B Qwen configuration's failures remain documented; no
+rubric or threshold changed and no local-reader success is claimed. V4 also
+contains the committed repeated-read relation fix, so it is not represented as
+a controlled model-only comparison. It does not establish automatic tool
+selection, the complete Standard toolset, repeated-generation robustness, or
+release readiness. Raw successful wire payloads, actual backend/model identities,
+frozen configuration, manual assessments, exact reproduction commands and
+source hashes are in `../fixtures/memory-stage5-reader/v4/`.
+
+The archived production snapshot plus test adapter compiled, passed metadata
+preflight (0.53 s), the original deterministic evidence contract (0.26 s), the
+actual production reader evaluation (11.86 s), package vet and whitespace
+checks. The repeated-read regression added after v3 passed with the complete
+historical/expansion set in 2.707 s. All future integration and final release
+checks remain required; these results are development evidence only.
+
+### #159 exact quotation failures in the integrated development reader
+
+The frozen integrated development v2 run exposed five further reader failures
+under the unchanged exact-byte quotation rubric. In `dev13_neighbor_clamp`,
+the oracle and tool-only answers capitalized the source's lowercase `tighten`
+inside a claimed original quote. In `dev14_neighbor_tentative`, the automatic
+and oracle answers replaced the original period after `provisional choice`
+with a comma inside quotation marks. In `dev17_conflict_newer_owner`, the
+automatic answer inserted literal Markdown `**` around `Alderwick` inside the
+source quotation. Their source identities and underlying meanings were correct;
+their quoted bytes were not. The original requests, answers and manual failures
+remain preserved with the integrated v2 artifacts. These reader failures are
+separate from that run's source-auditor matching defects.
+
+The generic reading guide now prefers paraphrases with original event citations.
+Quotation marks are reserved for verbatim source text with unchanged case and
+punctuation, and formatting must remain outside the quotation. Existing source
+actor, original event, lifecycle and uncertainty rules remain in the same bounded
+projection. No case-specific wording, answer rewriting, source changes or gate
+changes are introduced.
+
+The actual v2 answers establish the reader-test failure. The freshly frozen
+integrated v3 run completed all 144 reader turns in 178 actual model calls.
+Manual assessment found all 48 literal source quotations exact across the six
+conditions, and each of the five v2 quotation-failure case/condition pairs above
+now semantically passes. The complete production automatic-plus-deeper condition
+and oracle each pass 24/24 cases; the combined development report passes all
+1,077/1,077 required gates.
+
+These are integrated known-development observations with one reader repetition,
+not isolated #159 causal attribution or fresh release evidence. The integrated
+run also contains later retrieval and evaluator corrections, so its result does
+not measure the guide change alone. The v2 failures and isolated owning-#159
+checks remain preserved. The later [#167 pilot record](memory-stage-5-integrated-pilot.md)
+and [retained integrated artifacts](../fixtures/memory-stage5-integrated/runs/)
+contain the frozen requests, answers, source audit, manual assessments and exact
+combined verification results.
+
+- `go test ./internal/agent -run '^(TestHistorical|TestOriginalMemoryReceipt|TestMemoryReceipt|TestMemorySearchReceipt|TestMemorySearchTurnSuppliesConflicting|TestConversationSearchKeepsUTF8|TestMemoryStage5ReaderEvidenceContract|TestAutomaticMemoryRecallRevalidatesEgressAfterCompaction|TestAutomaticMemoryRecallUsesEarlierDiscussionAndCompaction|TestMemoryInvestigationBoundsEvidenceToActualRequestHeadroom|TestMemoryInvestigationContext)' -count=1`
+  — pass, 2.437 s. This covers complete-turn original sources, durable receipts,
+  historical views, compaction revalidation and actual request headroom.
+- `gofmt -w internal/agent/retrieval.go` and
+  `git diff --check -- internal/agent/retrieval.go cmd/evie/docs/active/memory-stage-5-implementation.md`
+  — pass. The fresh integrated v3 reader and combined development verification
+  are recorded above; final handoff and release verification remain separate.
+
+The same guide-only change also passes at the owning #159 boundary: an isolated
+`git archive 6f9cff0` export contains exactly one changed source line, the
+`ReadingGuide` string. The evidence projection fields and `go.mod`/`go.sum` match
+that commit. From that export,
+`go test ./internal/agent -run '^(TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess|TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins|TestHistoricalMemorySearchPreservesUnknownValidity|TestHistoricalConversationSearchPartitionsRetiredEvidenceAndKnowledgeCutoff|TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin|TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation|TestMemorySearchReceiptSurvivesRestartAndRechecksSourceAccess|TestConversationSearchKeepsUTF8SpeakerAndRestartSources|TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting|TestMemoryStage5ReaderEvidenceContract)$' -count=1 -v`
+passed all ten named complete-turn tests in 1.512 s. `gofmt -l` reported no
+formatting changes. No model calls, later-stage production changes, dependency
+changes, branch changes or index mutations were part of this isolated check.

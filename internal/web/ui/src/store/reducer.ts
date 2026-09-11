@@ -107,7 +107,7 @@ export function reduce(
 function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_started" }>, now: Clock): Item[] {
   switch (ev.type) {
     case "memory_activity":
-      return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount } }];
+      return [...items, { kind: "memory", key: ev.snapshotId, memory: { snapshotId: ev.snapshotId, status: ev.status, acceptedCount: ev.acceptedCount, excerptCount: ev.excerptCount, historicalCount: ev.historicalCount, retiredCount: ev.retiredCount, conflictCount: ev.conflictCount } }];
     case "delta": {
       const last = items[items.length - 1];
       if (last?.kind === "assistant" && last.streaming) {

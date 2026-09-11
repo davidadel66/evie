@@ -43,3 +43,20 @@ it("labels conversation excerpts separately and counts all supplied evidence", (
   expect(mixed).toContain("Conversation excerpt");
   expect(mixed).toContain("3 supplied");
 });
+
+it("summarizes historical, retired and conflicting evidence as recorded for that request", () => {
+  const activity = { snapshotId: "historical-request", status: "success", acceptedCount: 2, excerptCount: 1, historicalCount: 2, retiredCount: 1, conflictCount: 2 };
+  const html = renderToStaticMarkup(<MemoryActivity activity={activity} onOpen={() => undefined} />);
+  for (const value of ["3 supplied", "2 historical", "1 marked retired", "2 with conflicts"]) expect(html).toContain(value);
+  expect(html).not.toContain("2 conflicts");
+  expect(html).not.toContain("retired now");
+});
+
+it("retains original historical annotations through live activity reduction", () => {
+  let items = appendUser([], "What did I say before the change?");
+  items = reduce(items, { type: "turn_started", id: "historical-root", status: "working" });
+  items = reduce(items, { type: "memory_activity", snapshotId: "historical-request", status: "success", acceptedCount: 1, excerptCount: 0, historicalCount: 1, retiredCount: 1, conflictCount: 1 });
+  items = reduce(items, { type: "assistant_done", content: "You had recorded Boston.", terminal: true, parts: [{ text: "You had recorded Boston.", phase: "final_answer" }] });
+  const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming={false} onAnswer={() => undefined} onOpenMemory={() => undefined} />);
+  for (const value of ["1 historical", "1 marked retired", "1 with conflicts"]) expect(html).toContain(value);
+});

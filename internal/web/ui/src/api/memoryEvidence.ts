@@ -1,8 +1,13 @@
+import type { SemanticClaim, SemanticObjectInspection } from "./memory";
+
 export type MemoryActivityData = {
   snapshotId: string;
   status: string;
   acceptedCount: number;
   excerptCount: number;
+  historicalCount?: number;
+  retiredCount?: number;
+  conflictCount?: number;
 };
 
 export type MemorySourceReference = {
@@ -27,6 +32,13 @@ export type MemoryReference = {
   valid_at: string;
   scope_key: string;
   status: string;
+  current_status?: string;
+  intent?: string;
+  valid_at_constrained?: boolean;
+  correction_mode?: string;
+  current_correction_mode?: string;
+  conflicts?: SemanticObjectInspection["conflicts"];
+  related_claim_ids?: string[];
   paths: string[];
   sources: MemorySourceReference[];
 };
@@ -42,6 +54,13 @@ export type MemoryEvidenceReceipt = {
     current_status: string;
     evidence?: {
       text: string;
+      claim?: Pick<SemanticClaim, "transaction_time" | "valid_time">;
+      effective_valid_time?: SemanticClaim["valid_time"];
+      current_status?: string;
+      correction_mode?: string;
+      current_correction_mode?: string;
+      conflicts?: SemanticObjectInspection["conflicts"];
+      related_claim_ids?: string[];
       sources: {
         source_link_id?: string;
         event_id: string;
