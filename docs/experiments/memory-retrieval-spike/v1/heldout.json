@@ -1,0 +1,450 @@
+[
+  {
+    "id": "heldout-00-paraphrase",
+    "family": "heldout-00",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "How do I protect my hearing on rail journeys?",
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden": [
+      "heldout-00-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-00-lexical_control",
+    "family": "heldout-00",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "earplugs train",
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden": [
+      "heldout-00-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-01-paraphrase",
+    "family": "heldout-01",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "Where does my sibling track foods she must avoid?",
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden": [
+      "heldout-01-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-01-lexical_control",
+    "family": "heldout-01",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "sister ingredients",
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden": [
+      "heldout-01-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-02-paraphrase",
+    "family": "heldout-02",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "What renewable energy powers my home?",
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden": [
+      "heldout-02-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-02-lexical_control",
+    "family": "heldout-02",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "roof sunlight",
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden": [
+      "heldout-02-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-03-paraphrase",
+    "family": "heldout-03",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "What proof of purchase do I need for the broken appliance refund?",
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden": [
+      "heldout-03-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-03-lexical_control",
+    "family": "heldout-03",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "receipt kettle",
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden": [
+      "heldout-03-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-04-paraphrase",
+    "family": "heldout-04",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "Why was our outdoor lunch delayed?",
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden": [
+      "heldout-04-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-04-lexical_control",
+    "family": "heldout-04",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "picnic showers",
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden": [
+      "heldout-04-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-05-paraphrase",
+    "family": "heldout-05",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "How do I decide whether my flowering houseplant needs a drink?",
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden": [
+      "heldout-05-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-05-lexical_control",
+    "family": "heldout-05",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "orchid dry",
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden": [
+      "heldout-05-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-06-paraphrase",
+    "family": "heldout-06",
+    "scope": "general",
+    "kind": "accepted_memory",
+    "query": "What helps my dad see tiny letters?",
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden": [
+      "heldout-06-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-06-lexical_control",
+    "family": "heldout-06",
+    "scope": "general",
+    "kind": "accepted_memory",
+    "query": "father magnifying",
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden": [
+      "heldout-06-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-07-paraphrase",
+    "family": "heldout-07",
+    "scope": "workspace",
+    "kind": "conversation_excerpt",
+    "query": "What safeguard precedes a data migration?",
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden": [
+      "heldout-07-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-07-lexical_control",
+    "family": "heldout-07",
+    "scope": "workspace",
+    "kind": "conversation_excerpt",
+    "query": "database schema",
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden": [
+      "heldout-07-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-08-paraphrase",
+    "family": "heldout-08",
+    "scope": "project_a",
+    "kind": "accepted_memory",
+    "query": "Why do I prefer sitting beside the walkway on flights?",
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden": [
+      "heldout-08-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-08-lexical_control",
+    "family": "heldout-08",
+    "scope": "project_a",
+    "kind": "accepted_memory",
+    "query": "seat aisle",
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden": [
+      "heldout-08-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-09-paraphrase",
+    "family": "heldout-09",
+    "scope": "project_b",
+    "kind": "conversation_excerpt",
+    "query": "What timing constraint protects the cold chain for my shopping?",
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden": [
+      "heldout-09-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-09-lexical_control",
+    "family": "heldout-09",
+    "scope": "project_b",
+    "kind": "conversation_excerpt",
+    "query": "grocery frozen",
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden": [
+      "heldout-09-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-10-paraphrase",
+    "family": "heldout-10",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "How do I calm anxiety before public speaking?",
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden": [
+      "heldout-10-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-10-lexical_control",
+    "family": "heldout-10",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "breathing presentations",
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden": [
+      "heldout-10-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-11-paraphrase",
+    "family": "heldout-11",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "What maintenance follows the fire detector's low-power sound?",
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden": [
+      "heldout-11-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-11-lexical_control",
+    "family": "heldout-11",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "smoke battery",
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden": [
+      "heldout-11-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-12-paraphrase",
+    "family": "heldout-12",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "What keeps my footwear from slipping on frozen pavement?",
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden": [
+      "heldout-12-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-12-lexical_control",
+    "family": "heldout-12",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "boots grooves",
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden": [
+      "heldout-12-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-13-paraphrase",
+    "family": "heldout-13",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "Why does that file require restricted access?",
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden": [
+      "heldout-13-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-13-lexical_control",
+    "family": "heldout-13",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "confidential salaries",
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden": [
+      "heldout-13-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-14-paraphrase",
+    "family": "heldout-14",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "Where does the youngster get weekend reading material?",
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden": [
+      "heldout-14-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-14-lexical_control",
+    "family": "heldout-14",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "child library",
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden": [
+      "heldout-14-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "heldout-15-paraphrase",
+    "family": "heldout-15",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "Where can I find a light during a nighttime power failure?",
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden": [
+      "heldout-15-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "heldout-15-lexical_control",
+    "family": "heldout-15",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "flashlight drawer",
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden": [
+      "heldout-15-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  }
+]

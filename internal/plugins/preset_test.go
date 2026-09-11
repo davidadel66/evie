@@ -11,7 +11,9 @@ import (
 	"time"
 
 	kernelcomposition "github.com/davidadel66/evie/internal/composition"
+	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/subagents"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 )
@@ -20,6 +22,60 @@ type cancelingEnabledStateStore struct {
 	*enabledStateMemoryStore
 	cancelReads bool
 	entered     chan struct{}
+}
+
+func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	supervisor, err := subagents.New(eviedb.NewStore(db), delegation.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}), NewMemory(&stubSemanticKernel{}), NewSubagents(supervisor))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID, SubagentsPluginID} {
+		if err = manager.Enable(context.Background(), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	beforeSubagents := preSubagentsStandardPresetContent()
+	beforeSubagents.Version = preSubagentsStandardPresetVersion
+	for _, tc := range []struct {
+		name                  string
+		preset                Preset
+		retrieval, delegation int
+	}{
+		{"baseline", preRetrievalStandardPreset(), 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1},
+		{"combined", BuiltinStandardPreset(), 1, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
+				t.Fatalf("historical definition changed: %s, want %s", got, tc.preset.Version)
+			}
+			selected, err := manager.resolvePreset(tc.preset)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := manager.ResumeComposition(selected.Receipt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(selected.Receipt, reopened.Receipt) || !reflect.DeepEqual(selected.Toolset.Schemas(), reopened.Toolset.Schemas()) {
+				t.Fatal("reopening changed pinned receipt or tools")
+			}
+			if countSchema(reopened.Toolset, "memory_search") != tc.retrieval || countSchema(reopened.Toolset, delegation.ToolName) != tc.delegation {
+				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
+			}
+		})
+	}
 }
 
 func (s *cancelingEnabledStateStore) PluginEnabled(
@@ -82,6 +138,73 @@ func TestStandardPresetComposesOnlyItsPinnedCapabilities(t *testing.T) {
 		!strings.Contains(err.Error(), `Agent Preset "missing" is not allowed`) {
 		t.Fatalf("unknown explicit preset error = %v", err)
 	}
+}
+
+func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
+	makeManager := func(memoryPlugin Plugin) *Manager {
+		manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}), memoryPlugin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
+			if err := manager.SetEnabled(id, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return manager
+	}
+	plugin := NewMemory(&stubSemanticKernel{})
+	legacyPreset := BuiltinStandardPreset()
+	legacyPreset.Version = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+	legacyPreset.OptionalCapabilities = nil
+	for _, capability := range plugin.ResumableToolCapabilities("1.1.0") {
+		legacyPreset.OptionalCapabilities = append(legacyPreset.OptionalCapabilities, CapabilityRequirement{ID: capability.ID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	}
+	if got := canonicalPresetVersion(legacyPreset); got != legacyPreset.Version {
+		t.Fatalf("historical content hash=%s, want frozen %s", got, legacyPreset.Version)
+	}
+	legacy, err := makeManager(preRetrievalMemoryPlugin{plugin}).resolvePreset(legacyPreset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := makeManager(plugin)
+	resumed, err := current.ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatal("resuming added capabilities or rewrote the old receipt")
+	}
+	if countSchema(resumed.Toolset, "memory_search") != 0 {
+		t.Fatal("old conversation gained relevance search")
+	}
+	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
+		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
+	}
+	fresh, err := current.ResolvePreset(StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Receipt.Preset.Version == legacy.Receipt.Preset.Version || countSchema(fresh.Toolset, "memory_search") != 1 {
+		t.Fatal("new conversation does not pin a new retrieval composition")
+	}
+}
+
+type preRetrievalMemoryPlugin struct{ *Memory }
+
+func (p preRetrievalMemoryPlugin) ToolCapabilities() []ToolCapability {
+	return p.Memory.ResumableToolCapabilities("1.1.0")
+}
+func (p preRetrievalMemoryPlugin) Manifest() Manifest {
+	manifest := p.Memory.Manifest()
+	manifest.ImplementationVersion = "1.1.0"
+	manifest.ResumableFrom = nil
+	manifest.Capabilities = nil
+	for _, capability := range p.ToolCapabilities() {
+		manifest.Capabilities = append(manifest.Capabilities, CapabilityContract{ID: capability.ID, Version: capability.ContractVersion})
+	}
+	return manifest
 }
 
 func TestPreYouTubeExtractionStandardReceiptResumesWithoutMutation(t *testing.T) {

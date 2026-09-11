@@ -201,14 +201,20 @@ func main() {
 			resolvedComposition.Resolved.Toolset,
 		)
 	}
-	startCompilerForRuntime := func(ctx context.Context) func() {
-		stop, err := startConfiguredCompilerHost(ctx, os.Getenv("EVIE_COMPILER_CONFIG"), kernelStore)
+	startMemoryForRuntime := func(ctx context.Context) func() {
+		ctx, cancel := context.WithCancel(ctx)
+		stopRetrieval := startMemoryRetrievalHost(ctx, kernelStore)
+		stopCompiler, err := startConfiguredCompilerHost(ctx, os.Getenv("EVIE_COMPILER_CONFIG"), kernelStore)
 		if err != nil {
 			log.Printf("memory compiler unavailable: %v", err)
-			return func() {}
+			stopCompiler = func() error { return nil }
 		}
 		return func() {
-			if err := stop(); err != nil {
+			cancel()
+			if err := stopRetrieval(); err != nil {
+				log.Printf("memory retrieval shutdown: %v", err)
+			}
+			if err := stopCompiler(); err != nil {
 				log.Printf("memory compiler shutdown: %v", err)
 			}
 		}
@@ -235,9 +241,9 @@ func main() {
 			)
 			return boundStore.selection(selected), err
 		})
-		stopCompiler := startCompilerForRuntime(runtimeCtx)
+		stopMemory := startMemoryForRuntime(runtimeCtx)
 		runREPLContextIOWithMemory(runtimeCtx, session, scanner, os.Stdout, kernelStore)
-		stopCompiler()
+		stopMemory()
 	case "serve":
 		runtimeCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stopSignals()
@@ -254,9 +260,9 @@ func main() {
 		}
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
-			stopCompiler := startCompilerForRuntime(runtimeCtx)
+			stopMemory := startMemoryForRuntime(runtimeCtx)
 			serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), usageReader))
-			stopCompiler()
+			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
 			}
@@ -293,9 +299,9 @@ func main() {
 				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
 			), nil
 		})
-		stopCompiler := startCompilerForRuntime(runtimeCtx)
+		stopMemory := startMemoryForRuntime(runtimeCtx)
 		serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader))
-		stopCompiler()
+		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)
 		}

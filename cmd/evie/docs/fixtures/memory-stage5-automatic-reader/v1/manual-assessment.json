@@ -1,0 +1,46 @@
+{
+  "version": "memory-stage5-automatic-reader-manual-assessment-v1",
+  "rubric": "README.md, hash-pinned before model generation",
+  "assessor": "implementation agent, direct inspection of complete public answers and supplied evidence; no model judge",
+  "overall_pass": true,
+  "cases": {
+    "vegetarian_dinner": {
+      "pass": true,
+      "useful_vegetarian_suggestion": true,
+      "no_meat_or_fish_recommendation": true,
+      "no_invented_dietary_restriction": true,
+      "no_new_save_claim": true,
+      "no_routine_lookup_narration": true
+    },
+    "uncompiled_greenhouse": {
+      "pass": true,
+      "correct_crop_named": true,
+      "experimental_status_preserved": true,
+      "original_owner_statement_attributed": true,
+      "correct_original_event_cited": true,
+      "no_claim_of_accepted_memory_update": true,
+      "no_invented_harvest_commitment_schedule_or_yield": true
+    },
+    "unavailable_greenhouse": {
+      "pass": true,
+      "unavailable_memory_explained": true,
+      "no_false_successful_empty_search": true,
+      "no_invented_crop": true,
+      "no_fabricated_source": true,
+      "no_claim_owner_never_recorded_information": true,
+      "actual_model_calls": 3,
+      "actual_read_attempts": 2
+    },
+    "compacted_greenhouse": {
+      "pass": true,
+      "correct_crop_named": true,
+      "experimental_status_preserved": true,
+      "original_owner_statement_attributed": true,
+      "correct_original_event_cited": true,
+      "no_claim_of_accepted_memory_update": true,
+      "no_invented_harvest_commitment_schedule_or_yield": true,
+      "original_fact_retrieved_separately_from_summary": true,
+      "model_generated_compaction_quality_evaluated": false
+    }
+  }
+}

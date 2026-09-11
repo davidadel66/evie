@@ -1,0 +1,35 @@
+{
+  "version": "memory-stage5-reader-manual-assessment-v4",
+  "rubric": "../v1/README.md, unchanged and hash-pinned before model generation",
+  "assessor": "implementation agent, direct inspection of complete public answers and supplied source evidence; no model judge",
+  "overall_pass": true,
+  "cases": {
+    "historical_retired": {
+      "pass": true,
+      "old_preference_named": true,
+      "correct_original_source_event_cited": true,
+      "past_acceptance_distinguished_from_current_retirement": true,
+      "refrains_from_asserting_current_preference": true,
+      "no_invented_replacement_or_precise_original_date": true
+    },
+    "saved_boston_newer_chicago": {
+      "pass": true,
+      "both_places_exposed": true,
+      "accepted_record_and_later_statement_distinguished": true,
+      "discrepancy_expressed": true,
+      "both_sources_correctly_cited": true,
+      "does_not_claim_memory_was_corrected": true
+    },
+    "tentative_quote_and_inference": {
+      "pass": true,
+      "owner_uncertainty_preserved": true,
+      "definite_plan_attributed_to_colleague": true,
+      "quote_cited_to_original_owner_source": true,
+      "owner_uncertain_plan_cited_to_original_owner_source": true,
+      "assistant_inference_distinguished_from_owner_quotation": true,
+      "both_original_source_events_cited": true,
+      "no_invented_source_event_id": true,
+      "no_invented_booking_itinerary_or_precise_date": true
+    }
+  }
+}

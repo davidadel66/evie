@@ -1,0 +1,32 @@
+{
+  "answers": [
+    "Based on the saved records:\n\n- Your home city is recorded as Boston, with a direct statement from you: \"Remember that I live in Boston.\" (Event ID: de93fd11-0a40-4992-a24c-278ac2225c8a).\n- A later conversation update states: \"An update: I now live in Chicago after moving from Boston.\" (Event ID: 612e54e4-d923-446a-a7e4-9831c1d2f86a).\n\nThere appears to be a discrepancy between the two records. The initial statement places your home city as Boston, while the later update indicates you now live in Chicago after moving from Boston.\n\nWould you like me to update this information or clarify which is correct?"
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "de93fd11-0a40-4992-a24c-278ac2225c8a",
+    "612e54e4-d923-446a-a7e4-9831c1d2f86a"
+  ],
+  "model_calls": 1,
+  "name": "saved_boston_newer_chicago",
+  "question": "Where do I live, and is there anything inconsistent in your saved memory? Attribute the saved record and the later statement, including both source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "saved-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "arguments": "{\"query\":\"Boston Chicago\",\"intent\":\"current\"}"
+      }
+    },
+    {
+      "id": "later-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Chicago\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 14894667000
+}

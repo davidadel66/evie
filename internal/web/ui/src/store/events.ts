@@ -1,3 +1,5 @@
+import type { MemoryActivityData } from "../api/memoryEvidence";
+
 // The wire vocabulary, mirroring internal/web/events.go exactly. If a field
 // name changes there, it changes here — these types are the contract.
 
@@ -27,6 +29,7 @@ export type ActivityTurn = {
 export type PublicPart = { text: string; phase: "commentary" | "final_answer" };
 
 export type ServerEvent =
+  | ({ type: "memory_activity" } & MemoryActivityData)
   | ({ type: "turn_started" } & ActivityTurn)
   | { type: "delta"; text: string }
   | { type: "reasoning"; text: string }
@@ -49,6 +52,7 @@ export type ServerEvent =
  *  the whiteboard feature adds board_start/delta/end and critic_note to this
  *  same stream, and an older UI must not choke on them. */
 const KNOWN = new Set([
+  "memory_activity",
   "turn_started",
   "delta",
   "reasoning",

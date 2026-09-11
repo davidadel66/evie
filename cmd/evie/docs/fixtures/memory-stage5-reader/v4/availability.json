@@ -1,0 +1,20 @@
+{
+  "checked_at_utc": "2026-09-11T00:23:48.114812+00:00",
+  "model": "openai/gpt-6-astra",
+  "credential_present": true,
+  "transport": "direct HTTPS official API, no proxies or redirects",
+  "checks": [
+    {
+      "path": "/model/openai/gpt-6-astra",
+      "status": 200,
+      "started_at_utc": "2026-09-11T00:23:47.464895+00:00",
+      "body_sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5"
+    },
+    {
+      "path": "/models/openai/gpt-6-astra-20260903/endpoints",
+      "status": 200,
+      "started_at_utc": "2026-09-11T00:23:47.713663+00:00",
+      "body_sha256": "8fe473cb17cd757544ffff8029ae6c44a651b41360aaefa98255586446807b57"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "version": "stage5-browser-preservation-v1",
+  "recorded_at": "2026-09-11T07:58:50.952549+00:00",
+  "source_checkout_head_at_preservation": "efef0dba4d34bc8d28d0b2f80ab91e1a3621f1f6",
+  "not_reader_quality_evaluation": true,
+  "browser_operator": "Codex root agent through the real browser UI",
+  "human_review_claimed": false,
+  "closed_reason": "user defined signal 1",
+  "live_process_exit_code": 0,
+  "live_test_wall_seconds_including_browser_wait": 1576.97,
+  "fresh_answer_id": "43bebadd-5ecb-45b3-bd6e-b2822edf8a52",
+  "fresh_snapshot_id": "cee43e3b-3bb7-4263-bbdc-f5159129d19d",
+  "fresh_answer_persisted": true,
+  "fresh_memory_statuses": [
+    "success"
+  ],
+  "browser_ax_observations": 11,
+  "browser_screenshots": 8,
+  "archive_members": 106,
+  "captured_requests_by_run": {
+    "preflight-v1": 13,
+    "preflight-v2": 28,
+    "preflight-v3": 28,
+    "live-v1": 29
+  },
+  "original_binary_path": "/tmp/evie-memory-stage5/heldout-v2-browser.test",
+  "binary_included": false,
+  "binary_sha256": "71d97e3382655f32941f851c26e72fececdc8b68b4c07284c05a276bd71e4dda",
+  "helper_sha256": "fd82bd86759860734c725b136e401431c13c8c0939b0d1d361397373a41cbe9a",
+  "frozen_compiled_input_count": 394,
+  "frozen_input_mismatches": [],
+  "new_cmd_helper_outside_frozen_manifest": true,
+  "prebuild_complete_cmd_input_manifest_was_recorded": false,
+  "source_snapshot_qualification": "Final helper bytes and three referenced existing cmd test-helper files are retained. The 394 frozen inputs are verified unchanged. Build reproduction uses the reviewed repository and these exact helper bytes; no bit-identical executable rebuild is claimed."
+}

@@ -1,0 +1,57 @@
+--- a/internal/agent/retrieval_automatic.go
++++ b/internal/agent/retrieval_automatic.go
+@@ -15 +15 @@
+-const automaticRecallVersion = "bounded-conversation-lexical-v3"
++const automaticRecallVersion = "bounded-conversation-lexical-v2"
+@@ -46,7 +45,0 @@
+-	var continuityTerms []string
+-	if summary != nil {
+-		continuity := boundedRecallText(summary.Content, 512)
+-		continuityTerms = recallTerms(continuity, 6)
+-		plan.diagnostics.SummaryBytes = len(continuity)
+-	}
+-	relevanceTerms := appendRecallTerms(append([]string(nil), terms...), continuityTerms, 32)
+@@ -63 +56 @@
+-			for _, term := range relevanceTerms {
++			for _, term := range terms {
+@@ -68,5 +60,0 @@
+-		}
+-		// Validated continuity provides a topic anchor after compaction. Do not
+-		// spend its small query/result budget on unrelated retained discussion.
+-		if len(continuityTerms) > 0 && candidate.score == 0 {
+-			continue
+@@ -92 +80,5 @@
+-	terms = appendRecallTerms(terms, continuityTerms, 32)
++	if summary != nil {
++		continuity := boundedRecallText(summary.Content, 512)
++		terms = appendRecallTerms(terms, recallTerms(continuity, 6), 32)
++		plan.diagnostics.SummaryBytes = len(continuity)
++	}
+--- a/internal/agent/retrieval_automatic_acceptance_test.go
++++ b/internal/agent/retrieval_automatic_acceptance_test.go
+@@ -353,3 +352,0 @@
+-				if compacted && strings.Contains(item.Text, "compiler diagnostics") {
+-					t.Fatal("unrelated earlier debugging topic diluted compaction continuity")
+-				}
+@@ -382 +379 @@
+-			if interpretation == nil || !compacted && interpretation.EarlierMessages == 0 || compacted && interpretation.SummaryBytes == 0 {
++			if interpretation == nil || interpretation.EarlierMessages == 0 || compacted && interpretation.SummaryBytes == 0 {
+--- a/internal/agent/retrieval_automatic_reader_evaluation_test.go
++++ b/internal/agent/retrieval_automatic_reader_evaluation_test.go
+@@ -142 +142 @@
+-				t.Errorf("unexpected source supplied to automatic reader: %s (%q)", source.EventID, evidence.Text)
++				t.Fatalf("unexpected source supplied to automatic reader: %s", source.EventID)
+@@ -175,3 +174,0 @@
+-	if c.t.Failed() {
+-		return openrouter.ChatResponse{}, errors.New("automatic evidence contract failed before provider dispatch")
+-	}
+--- a/internal/agent/retrieval_production_reader_evaluation_test.go
++++ b/internal/agent/retrieval_production_reader_evaluation_test.go
+@@ -258 +258 @@
+-			session := NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
++			session := NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions))
+--- a/internal/agent/retrieval_reader_evaluation_test.go
++++ b/internal/agent/retrieval_reader_evaluation_test.go
+@@ -417 +417 @@
+-			session := NewWithToolset(c, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
++			session := NewWithToolset(c, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions))

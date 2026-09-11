@@ -144,3 +144,33 @@ Task grants to children, memory-enabled workers, distributed execution, new UI
 panels or Workspace authoring. Model usage remains unknown when complete provider
 measurements are unavailable. A single-turn child has no prior closed turns to
 compact; the existing runtime rejects pressure without a legal compaction boundary.
+
+## Integration with Memory Stage 5 — 2026-09-11
+
+Local master advanced to `fe55a666abd21cc78d076c4da6cbc13f83c7fbd7` before the
+owner requested the merge. Integration preserves both runtime hosts and parent
+retrieval accounting, while delegated construction explicitly disables automatic
+and model-directed memory retrieval. Conversation indexing and its shared exact
+source loader exclude delegated session lineage, preventing child assignments
+from becoming owner statements or entering embedding requests.
+
+The combined Standard preset has a new content hash. Exact historical definitions
+remain available for the original preset (`35d56…`), retrieval-only (`3c812…`) and
+Subagents-only (`ea528…`). Regression checks reopen all three and the combined
+preset without changing receipts or capabilities.
+
+New real-SQLite tests cover lexical and dense child exclusion after append,
+reopen and index rebuild, automatic recall, persisted memory receipts, and legacy
+child references rejected by inspection, revalidation and expansion. Positive
+owner controls remain available. The partial-failure fixture now waits for both
+completed siblings to become durable before cancellation. The message-ordering
+fixture leaves room for both features' trusted instructions; context-overflow
+boundaries remain separately tested.
+
+Integration verification passed:
+
+- `./scripts/verify-change.sh` — full Go tests/vet, UI lint/build and both
+  whitespace checks; only the existing Vite chunk-size warning.
+- `go test -race ./internal/subagents ./internal/agent ./internal/eviedb ./internal/plugins -run 'Subagent|Delegated|ForegroundBatch|ForegroundAssignment|BatchRetains|ChildModel|DuplicateWaiter|ComposedParent|TaskAssociation|RuntimeCapacity|AuthorityLoss|RecoveryPreservesAcceptedChild|ConfiguredDeadline|WorkspaceAdmission|ChildOutputLimit|ProviderFailures|ChildPersistenceFailure|ChildComposedContext|OngoingRecovery|ParallelAndRetrievalPreset' -timeout 180s`
+  — all four packages passed, with no races.
+- Read-only integration review — no remaining findings.

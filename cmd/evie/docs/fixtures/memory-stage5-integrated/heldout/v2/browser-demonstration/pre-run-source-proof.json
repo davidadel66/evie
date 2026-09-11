@@ -1,0 +1,12 @@
+{
+  "recorded_at": "2026-09-11T07:30:25.407454+00:00",
+  "kind": "scripted_browser_demonstration_preparation_not_quality_measurement",
+  "helper": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/memory_stage5_browser_test.go",
+  "helper_sha256": "fd82bd86759860734c725b136e401431c13c8c0939b0d1d361397373a41cbe9a",
+  "frozen_source_manifest": "/tmp/evie-memory-stage5/integrated-heldout-v2/compiled-source-manifest.json",
+  "frozen_source_manifest_sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+  "frozen_compiled_input_count": 394,
+  "mismatches": [],
+  "helper_outside_frozen_inputs": true,
+  "new_helper_trailing_whitespace_lines": []
+}

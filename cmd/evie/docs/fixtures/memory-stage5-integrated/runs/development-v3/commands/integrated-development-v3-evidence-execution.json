@@ -1,0 +1,18 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v3/scorer.py",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v3/freeze.json",
+    "--results",
+    "/tmp/evie-memory-stage5/integrated-development-v3-reader",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-development-v3-evidence"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T05:21:58.142744+00:00",
+  "started_at_utc": "2026-09-11T05:21:57.537120+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

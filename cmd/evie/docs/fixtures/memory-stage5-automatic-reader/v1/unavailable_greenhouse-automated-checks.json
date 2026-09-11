@@ -1,0 +1,6 @@
+{
+  "no_false_successful_absence": true,
+  "nonempty_answer": true,
+  "unavailability_or_insufficient_support_expressed": true,
+  "withheld_fact_not_invented": true
+}

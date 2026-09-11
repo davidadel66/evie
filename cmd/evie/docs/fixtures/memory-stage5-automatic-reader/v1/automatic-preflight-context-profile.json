@@ -1,0 +1,11 @@
+{
+  "ConfiguredModel": "openai/gpt-6-astra",
+  "AdvertisedModel": "openai/gpt-6-astra",
+  "CanonicalModel": "openai/gpt-6-astra-20260903",
+  "AdvertisedWindowTokens": 1050000,
+  "HardWindowTokens": 922768,
+  "WorkingTokens": 24576,
+  "OutputReserveTokens": 768,
+  "EstimationMarginTokens": 4096,
+  "Source": "remote_metadata"
+}

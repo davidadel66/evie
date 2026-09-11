@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/private/tmp/evie-memory-stage5/integrated-development-v1/integrated.test",
+    "-test.run=^TestMemoryStage5IntegratedPrepare$",
+    "-test.count=1",
+    "-test.v",
+    "-test.timeout=30m"
+  ],
+  "started_at_utc": "2026-09-11T03:41:03.132842+00:00",
+  "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v1/source"
+}

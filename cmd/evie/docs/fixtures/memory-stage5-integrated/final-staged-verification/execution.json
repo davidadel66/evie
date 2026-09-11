@@ -1,0 +1,12 @@
+{
+  "command": [
+    "./scripts/verify-change.sh"
+  ],
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5",
+  "started_at_utc": "2026-09-11T08:03:53.717443+00:00",
+  "finished_at_utc": "2026-09-11T08:05:16.049754+00:00",
+  "exit_code": 0,
+  "raw_log_sha256": "5c13cf27f764c08eee9211983ff3fe5ff60c51aeb4ab76fd831b4fe015816a74",
+  "compressed_log_sha256": "fe28f01ae9425b001c71d5cf7a2df28ed036724d254c3a811af9cbcdfa37322e",
+  "reason": "Final full repository check with all issue168 files staged. Exact prior Vite log captures are marked binary by narrow .gitattributes entries to preserve their hashed bytes; maintained source whitespace remains checked."
+}

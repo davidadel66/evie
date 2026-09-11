@@ -1,0 +1,466 @@
+{
+  "recorded_at_utc": "2026-09-11T06:22:25.614781+00:00",
+  "partition": "development",
+  "complete": true,
+  "all_required_gates_pass": true,
+  "release_ready": false,
+  "gate_counts": {
+    "pass": 1077
+  },
+  "failures": [],
+  "input_sha256": {
+    "integrated-development-v4/freeze.json": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+    "integrated-development-v4-resource/report.json": "30a2e068ded9637dc38a3a9ec015d756c7c5338f8fd0267a85ba378fdcfd8e43",
+    "integrated-development-v4-quality/quality-report.json": "7c4893588b2ad4d7ace5925796fa9416be0ffbccc2649bccb4098e7d3db9f3fb",
+    "integrated-development-v4-assessment-manifest.json": "e390b48ef58b33237ff66cbd083a08e175696a5a8c88c073eabe30b551a1d2f6"
+  },
+  "source_quality": {
+    "automatic": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.9473684210526315,
+      "final_source_macro_recall": 0.9473684210526315,
+      "final_source_micro_recall": 0.9629629629629629,
+      "initial_source_macro_recall": 0.9473684210526315,
+      "initial_source_micro_recall": 0.9629629629629629,
+      "max_request_bytes": 15316,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.9473684210526315,
+      "union_source_micro_recall": 0.9629629629629629,
+      "unwanted_evidence_fraction": 0.24444444444444444,
+      "violations": 0,
+      "whole_turn_p50_ms": 2885.408375,
+      "whole_turn_p95_ms": 5095.593
+    },
+    "automatic_deeper": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 1.0,
+      "final_source_macro_recall": 1.0,
+      "final_source_micro_recall": 1.0,
+      "initial_source_macro_recall": 0.9473684210526315,
+      "initial_source_micro_recall": 0.9629629629629629,
+      "max_request_bytes": 17648,
+      "observed_model_calls": 29,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 1.0,
+      "union_source_micro_recall": 1.0,
+      "unwanted_evidence_fraction": 0.2391304347826087,
+      "violations": 0,
+      "whole_turn_p50_ms": 2798.312916,
+      "whole_turn_p95_ms": 6964.228667
+    },
+    "no_recall": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.0,
+      "final_source_macro_recall": 0.0,
+      "final_source_micro_recall": 0.0,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 7215,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.0,
+      "union_source_micro_recall": 0.0,
+      "unwanted_evidence_fraction": null,
+      "violations": 0,
+      "whole_turn_p50_ms": 2988.531833,
+      "whole_turn_p95_ms": 5847.686625
+    },
+    "oracle": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 1.0,
+      "final_source_macro_recall": 1.0,
+      "final_source_micro_recall": 1.0,
+      "initial_source_macro_recall": 1.0,
+      "initial_source_micro_recall": 1.0,
+      "max_request_bytes": 13353,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 1.0,
+      "union_source_micro_recall": 1.0,
+      "unwanted_evidence_fraction": 0.0,
+      "violations": 0,
+      "whole_turn_p50_ms": 2518.767375,
+      "whole_turn_p95_ms": 4507.163541
+    },
+    "recent_context": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 0.0,
+      "final_source_macro_recall": 0.0,
+      "final_source_micro_recall": 0.0,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 8219,
+      "observed_model_calls": 24,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 0.0,
+      "union_source_micro_recall": 0.0,
+      "unwanted_evidence_fraction": null,
+      "violations": 0,
+      "whole_turn_p50_ms": 2947.459875,
+      "whole_turn_p95_ms": 5473.599292
+    },
+    "tool_only": {
+      "answerable_cases": 19,
+      "complete_final_support_fraction": 1.0,
+      "final_source_macro_recall": 1.0,
+      "final_source_micro_recall": 1.0,
+      "initial_source_macro_recall": 0.0,
+      "initial_source_micro_recall": 0.0,
+      "max_request_bytes": 18377,
+      "observed_model_calls": 54,
+      "planned_cases": 24,
+      "required_source_records": 27,
+      "timing_complete": true,
+      "union_source_macro_recall": 1.0,
+      "union_source_micro_recall": 1.0,
+      "unwanted_evidence_fraction": 0.1388888888888889,
+      "violations": 0,
+      "whole_turn_p50_ms": 5672.912125,
+      "whole_turn_p95_ms": 9139.179416
+    }
+  },
+  "answer_quality": {
+    "automatic": {
+      "additional_citation_denominator": 2,
+      "additional_correct_citations": 2,
+      "citation_denominator": 29,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 28,
+      "observed_grounded_propositions": 48,
+      "observed_personal_propositions": 48,
+      "original_event_citation_accuracy": 0.9655172413793104,
+      "personal_proposition_grounding": 1.0,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 26,
+      "semantic_passes": 23,
+      "supported_answer_component_recall": 0.918918918918919,
+      "supported_components": 34,
+      "valid_assessments": 24
+    },
+    "automatic_deeper": {
+      "additional_citation_denominator": 1,
+      "additional_correct_citations": 1,
+      "citation_denominator": 28,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 28,
+      "observed_grounded_propositions": 48,
+      "observed_personal_propositions": 48,
+      "original_event_citation_accuracy": 1.0,
+      "personal_proposition_grounding": 1.0,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 27,
+      "semantic_passes": 24,
+      "supported_answer_component_recall": 1.0,
+      "supported_components": 37,
+      "valid_assessments": 24
+    },
+    "no_recall": {
+      "additional_citation_denominator": 0,
+      "additional_correct_citations": 0,
+      "citation_denominator": 27,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 0,
+      "observed_grounded_propositions": 0,
+      "observed_personal_propositions": 0,
+      "original_event_citation_accuracy": 0.0,
+      "personal_proposition_grounding": null,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 0,
+      "semantic_passes": 24,
+      "supported_answer_component_recall": 0.0,
+      "supported_components": 0,
+      "valid_assessments": 24
+    },
+    "oracle": {
+      "additional_citation_denominator": 1,
+      "additional_correct_citations": 1,
+      "citation_denominator": 28,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 28,
+      "observed_grounded_propositions": 48,
+      "observed_personal_propositions": 48,
+      "original_event_citation_accuracy": 1.0,
+      "personal_proposition_grounding": 1.0,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 27,
+      "semantic_passes": 24,
+      "supported_answer_component_recall": 1.0,
+      "supported_components": 37,
+      "valid_assessments": 24
+    },
+    "recent_context": {
+      "additional_citation_denominator": 0,
+      "additional_correct_citations": 0,
+      "citation_denominator": 27,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 0,
+      "observed_grounded_propositions": 2,
+      "observed_personal_propositions": 2,
+      "original_event_citation_accuracy": 0.0,
+      "personal_proposition_grounding": 1.0,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 0,
+      "semantic_passes": 24,
+      "supported_answer_component_recall": 0.05405405405405406,
+      "supported_components": 2,
+      "valid_assessments": 24
+    },
+    "tool_only": {
+      "additional_citation_denominator": 2,
+      "additional_correct_citations": 2,
+      "citation_denominator": 29,
+      "complete": true,
+      "component_denominator": 37,
+      "correct_citations": 29,
+      "observed_grounded_propositions": 48,
+      "observed_personal_propositions": 48,
+      "original_event_citation_accuracy": 1.0,
+      "personal_proposition_grounding": 1.0,
+      "planned_assessments": 24,
+      "required_citation_denominator": 27,
+      "required_correct_citations": 27,
+      "semantic_passes": 24,
+      "supported_answer_component_recall": 1.0,
+      "supported_components": 37,
+      "valid_assessments": 24
+    }
+  },
+  "manual_inventory": {
+    "assessments": 144,
+    "semantic_passes": 143,
+    "source_quotes": 55,
+    "personal_propositions": 194,
+    "semantic_failures": [
+      {
+        "case_id": "dev15_historical_validity",
+        "condition": "automatic",
+        "notes": "Fresh v4 manual review. Only the current Harbor-loft Claim and its original owner statement are supplied; the retired historical Willow-annex source is absent. The response correctly abstains from substituting the current venue, reports the supplied observation/transaction timestamps faithfully and does not treat unspecified validity as June 2022 proof. Nevertheless all three requested historical components and the required original historical citation are missing. Automatic is a retrieval comparison, not an honest-absence no-recall baseline exception; semantic result remains failure."
+      }
+    ]
+  },
+  "hard_violation_totals": {
+    "authority_or_speaker_violations": 0,
+    "fabricated_source_citations": 0,
+    "retired_as_current_assertions": 0,
+    "silent_conflict_resolutions": 0
+  },
+  "validation_errors": [],
+  "local": {
+    "samples": 2880,
+    "cohorts": 144,
+    "all_complete": true,
+    "all_runtime_accounting_complete": true,
+    "largest_cohort_p95": {
+      "first_dispatch": {
+        "case_id": "dev10_exact_entity_id",
+        "condition": "automatic_deeper",
+        "quantiles": {
+          "count": 20,
+          "max_ns": 45438917,
+          "p50_ns": 30891125,
+          "p95_ns": 44677084
+        }
+      },
+      "runtime_work": {
+        "case_id": "dev10_exact_entity_id",
+        "condition": "automatic_deeper",
+        "quantiles": {
+          "count": 20,
+          "max_ns": 65740875,
+          "p50_ns": 44396874,
+          "p95_ns": 63451832
+        }
+      },
+      "whole_turn": {
+        "case_id": "dev07_compacted_clear",
+        "condition": "automatic_deeper",
+        "quantiles": {
+          "count": 20,
+          "max_ns": 146785250,
+          "p50_ns": 74643791,
+          "p95_ns": 104933750
+        }
+      }
+    }
+  },
+  "operating": {
+    "caller_deadline": {
+      "complete": true,
+      "count": 20,
+      "max_ns": 10027500,
+      "p50_ns": 8063542,
+      "p95_ns": 9903959
+    },
+    "cancellation": {
+      "complete": true,
+      "count": 20,
+      "max_ns": 1093459,
+      "p50_ns": 736458,
+      "p95_ns": 935542
+    },
+    "lease_replacement": {
+      "complete": true,
+      "count": 20,
+      "max_ns": 539959,
+      "p50_ns": 409417,
+      "p95_ns": 469875
+    }
+  },
+  "deterministic_required": {
+    "go": 91,
+    "ui": 14
+  },
+  "execution_records": {
+    "index": {
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedIndexMeasurements$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T05:59:20.730209+00:00",
+      "started_at_utc": "2026-09-11T05:59:09.707543+00:00",
+      "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v4/source"
+    },
+    "local": {
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedLocalEvaluation$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:01:00.013877+00:00",
+      "started_at_utc": "2026-09-11T05:59:20.887880+00:00",
+      "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v4/source"
+    },
+    "operating": {
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedOperatingMeasurements$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:01:46.513325+00:00",
+      "started_at_utc": "2026-09-11T06:01:00.241677+00:00",
+      "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v4/source"
+    },
+    "reader": {
+      "command": [
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+        "-test.run=^TestMemoryStage5IntegratedReaderEvaluation$",
+        "-test.count=1",
+        "-test.v",
+        "-test.timeout=3h"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:10:27.160525+00:00",
+      "started_at_utc": "2026-09-11T06:01:46.762432+00:00",
+      "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v4/source"
+    }
+  },
+  "grading_records": {
+    "evidence": {
+      "command": [
+        "python3",
+        "-B",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/scorer.py",
+        "--freeze",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+        "--results",
+        "/tmp/evie-memory-stage5/integrated-development-v4-reader",
+        "--output",
+        "/tmp/evie-memory-stage5/integrated-development-v4-evidence"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:10:36.735183+00:00",
+      "started_at_utc": "2026-09-11T06:10:36.071671+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    "grade": {
+      "command": [
+        "python3",
+        "-B",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/grader.py",
+        "--freeze",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+        "--evidence-report",
+        "/tmp/evie-memory-stage5/integrated-development-v4-evidence/evidence-report.json",
+        "--assessments",
+        "/tmp/evie-memory-stage5/integrated-development-v4-assessments",
+        "--output",
+        "/tmp/evie-memory-stage5/integrated-development-v4-quality"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:21:05.319275+00:00",
+      "started_at_utc": "2026-09-11T06:21:05.166373+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    "resource": {
+      "command": [
+        "python3",
+        "-B",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/resources.py",
+        "--freeze",
+        "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+        "--evidence-report",
+        "/tmp/evie-memory-stage5/integrated-development-v4-evidence/evidence-report.json",
+        "--quality-report",
+        "/tmp/evie-memory-stage5/integrated-development-v4-quality/quality-report.json",
+        "--local",
+        "/tmp/evie-memory-stage5/integrated-development-v4-local",
+        "--index",
+        "/tmp/evie-memory-stage5/integrated-development-v4-index",
+        "--operating",
+        "/tmp/evie-memory-stage5/integrated-development-v4-operating",
+        "--deterministic",
+        "/tmp/evie-memory-stage5/integrated-development-v4-deterministic.json",
+        "--output",
+        "/tmp/evie-memory-stage5/integrated-development-v4-resource"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T06:21:08.670660+00:00",
+      "started_at_utc": "2026-09-11T06:21:05.319694+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    }
+  },
+  "limitations": [
+    "Semantic answer labels remain explicit judgments under the frozen rubric.",
+    "Go worker RSS growth is separate from observed out-of-process embedding-family RSS.",
+    "Resource repetitions are not independent answer-quality repetitions.",
+    "No missing, failed or partial attempt is removed to improve a quantile or gate."
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "content_type": "text/event-stream",
+  "method": "POST",
+  "status": 200,
+  "url": "https://openrouter.ai/api/v1/responses"
+}

@@ -11,6 +11,7 @@ import (
 )
 
 func TestDelegatedConversationUsesPinnedRoleAndOwnAssignment(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	ctx := context.Background()
 	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
 	if err != nil {

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_ZltPFX5Js2kInKnAOCRun2k4",
+            "type": "function",
+            "function": {
+              "name": "memory_search_conversations",
+              "arguments": "{\"query\":\"greenhouse planted planting plan\",\"intent\":\"historical\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "input_tokens": 1603,
+    "output_tokens": 29,
+    "total_tokens": 1632,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1545,
+    "cache_write_input_tokens": 55
+  }
+}

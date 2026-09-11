@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "You live in **Chicago**, according to your later direct statement. **Yes—your saved memory is inconsistent with that update:** it still lists Boston.\n\n- **Saved record: Boston.** Source: **owner**, event `11f364e6-3e54-49ab-8d0f-98c3dd777d3f`: “Remember that I live in Boston.”\n- **Later statement: Chicago.** Source: **owner**, event `dac32e81-8703-4598-aaf0-812870630b62`: “An update: I now live in Chicago after moving from Boston.”\n\nThe Boston record remains active, while the Chicago update appears as conversation evidence rather than an updated accepted memory. I haven’t changed the saved record."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2726,
+    "output_tokens": 162,
+    "total_tokens": 2888,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1490,
+    "cache_write_input_tokens": 1233
+  }
+}

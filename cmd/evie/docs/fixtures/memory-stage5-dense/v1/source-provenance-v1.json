@@ -1,0 +1,9 @@
+{
+  "source": "/Users/davidboktor/code/evie-memory-stage-5",
+  "snapshot": "/tmp/evie-stage5-dense-integration-v1-source",
+  "git_head_at_export": "92dc0fc617f193b6be513aedbcdadf81c2b40d4d",
+  "go_file_count": 1034,
+  "before_after_snapshot_equal": true,
+  "retained_local_export_record_sha256": "7b9c32cda79528e74d1458cb93825346eefaf30ff5381d92781352db2b8ef057",
+  "note": "Post-run provenance record; immutable pre-run freeze unchanged."
+}

@@ -1,0 +1,640 @@
+[
+  {
+    "development_case": {
+      "id": "development-03-paraphrase",
+      "family": "development-03",
+      "scope": "project_a",
+      "kind": "conversation_excerpt",
+      "query": "Where did I leave the spare door key?",
+      "expected": [
+        "development-03/excerpt"
+      ],
+      "forbidden": [
+        "development-03-forbidden/excerpt"
+      ],
+      "category": "paraphrase"
+    },
+    "sample": {
+      "accepted_revisions_unchanged": true,
+      "cap_violations": 0,
+      "case": "development-03-paraphrase",
+      "category": "paraphrase",
+      "complete_request_bytes": [
+        20574,
+        30384
+      ],
+      "expected": [
+        "development-03/excerpt"
+      ],
+      "forbidden_or_scope_count": 0,
+      "ids": [
+        "development-05-forbidden/excerpt",
+        "development-04-forbidden/excerpt",
+        "development-15-forbidden/excerpt",
+        "development-01-forbidden/excerpt",
+        "heldout-13/excerpt",
+        "heldout-15-forbidden/excerpt",
+        "heldout-03/excerpt",
+        "heldout-05-forbidden/excerpt"
+      ],
+      "kind": "conversation_excerpt",
+      "matched": 0,
+      "memory_message_json_bytes": [
+        9279
+      ],
+      "method": "hybrid",
+      "provider_calls": 2,
+      "repetition": 0,
+      "scope": "project_a",
+      "secret_evidence_count": 0,
+      "turn_failed": false,
+      "unmapped_evidence_count": 0,
+      "whole_turn_ns": 21334834
+    },
+    "observed_evidence": [
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:90d7cbee-680a-491a-8678-be676d01fa40:0:60",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "The server keeps a spare copy of every file on another disk.",
+        "sources": [
+          {
+            "event_id": "90d7cbee-680a-491a-8678-be676d01fa40",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:60",
+            "evidence_sha256": "874cadee716c10307c541d9e4137766b4e9525428a60760d3e6c5aa885268c5b",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.112681Z",
+            "evidence": "The server keeps a spare copy of every file on another disk.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:045e956f-3bc3-4cef-9f2d-b3214c52a4c6:0:83",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "Remember my retrieval marker: I turn off phone alerts during the hours I am asleep.",
+        "sources": [
+          {
+            "event_id": "045e956f-3bc3-4cef-9f2d-b3214c52a4c6",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:83",
+            "evidence_sha256": "0b320ac4c29d49a63e7b6bbad1154c3256c355b88ca553658e3e45bd64be040f",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.108294Z",
+            "evidence": "Remember my retrieval marker: I turn off phone alerts during the hours I am asleep.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:852e2e67-baf3-423f-967b-3c01840fed14:0:43",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I switch the display to amber after sunset.",
+        "sources": [
+          {
+            "event_id": "852e2e67-baf3-423f-967b-3c01840fed14",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:43",
+            "evidence_sha256": "db98b8a2d3c8c5e5b0c76d6aeda5f9b0c2b5e3975dd14343c157d000aae73ac1",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.152814Z",
+            "evidence": "I switch the display to amber after sunset.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:9d8beba1-514d-4a49-b2fd-7afea5e0a43b:0:45",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I ride a bicycle to the office every morning.",
+        "sources": [
+          {
+            "event_id": "9d8beba1-514d-4a49-b2fd-7afea5e0a43b",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:45",
+            "evidence_sha256": "e853a58f881e61285924ee61879449c3d881c6f083055c474f73f8f1c8140610",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.096159Z",
+            "evidence": "I ride a bicycle to the office every morning.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:2dba38fb-664f-450a-8adf-543a4350349c:0:73",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I marked the document confidential because it includes employee salaries.",
+        "sources": [
+          {
+            "event_id": "2dba38fb-664f-450a-8adf-543a4350349c",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:73",
+            "evidence_sha256": "b93af69d639d8a5034949cde2b0ad6c2e717f6fada89a19926f80942edac2725",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.208764Z",
+            "evidence": "I marked the document confidential because it includes employee salaries.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:18971b1e-4c64-4a18-b3c0-87da12924555:0:61",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I keep the emergency flashlight in the drawer beside the bed.",
+        "sources": [
+          {
+            "event_id": "18971b1e-4c64-4a18-b3c0-87da12924555",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:61",
+            "evidence_sha256": "25b699eeb321c9753cbb4e15ac430154802954d5aebc423c4748967bc9c8efcb",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.220993Z",
+            "evidence": "I keep the emergency flashlight in the drawer beside the bed.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:4194b0aa-e6b1-4ede-bb67-262fcfbe4e14:0:60",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I saved the receipt so the defective kettle can be returned.",
+        "sources": [
+          {
+            "event_id": "4194b0aa-e6b1-4ede-bb67-262fcfbe4e14",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:60",
+            "evidence_sha256": "f51f706e6215a99cdac0d9b32fb9a25f348269f31544f991e44ff9192b520cc2",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.165984Z",
+            "evidence": "I saved the receipt so the defective kettle can be returned.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:edecf9c3-7e16-4096-84a1-5ed21f7d94de:0:58",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:48:59.481892Z",
+        "valid_at": "2026-09-11T01:48:59.481892Z",
+        "scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+        "status": "active",
+        "text": "I water the orchid only after its potting mix becomes dry.",
+        "sources": [
+          {
+            "event_id": "edecf9c3-7e16-4096-84a1-5ed21f7d94de",
+            "session_id": "a4c70d1d-7796-4007-b33d-eebbf80bae61",
+            "source_scope_key": "project:a51eb5a8-62ec-43f9-843f-8857a000a9a5",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:58",
+            "evidence_sha256": "ef46e1485df1c330ec19fa6e2ee7a90d30114ef755b9703cf04d18b250073f3e",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.178002Z",
+            "evidence": "I water the orchid only after its potting mix becomes dry.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      }
+    ]
+  },
+  {
+    "development_case": {
+      "id": "development-11-paraphrase",
+      "family": "development-11",
+      "scope": "general",
+      "kind": "conversation_excerpt",
+      "query": "When can I view the exhibits after normal business hours?",
+      "expected": [
+        "development-11/excerpt"
+      ],
+      "forbidden": [
+        "development-11-forbidden/excerpt"
+      ],
+      "category": "paraphrase"
+    },
+    "sample": {
+      "accepted_revisions_unchanged": true,
+      "cap_violations": 0,
+      "case": "development-11-paraphrase",
+      "category": "paraphrase",
+      "complete_request_bytes": [
+        20574,
+        30585
+      ],
+      "expected": [
+        "development-11/excerpt"
+      ],
+      "forbidden_or_scope_count": 0,
+      "ids": [
+        "heldout-11/excerpt",
+        "development-01/excerpt",
+        "development-06/excerpt",
+        "distractor-311/excerpt",
+        "distractor-301/excerpt",
+        "distractor-291/excerpt",
+        "distractor-281/excerpt",
+        "distractor-271/excerpt"
+      ],
+      "kind": "conversation_excerpt",
+      "matched": 0,
+      "memory_message_json_bytes": [
+        9460
+      ],
+      "method": "hybrid",
+      "provider_calls": 2,
+      "repetition": 0,
+      "scope": "general",
+      "secret_evidence_count": 0,
+      "turn_failed": false,
+      "unmapped_evidence_count": 0,
+      "whole_turn_ns": 23070458
+    },
+    "observed_evidence": [
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:a88ab3f2-8eab-4d7d-8bb3-da8e43a9492b:0:65",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "We replace the smoke alarm battery when the warning chirp begins.",
+        "sources": [
+          {
+            "event_id": "a88ab3f2-8eab-4d7d-8bb3-da8e43a9492b",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:65",
+            "evidence_sha256": "22c3ef12a6cafa7f3dc39f3fc04946f4a9db5f6e2466ef89e28ea5c7e78a9dca",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.200052Z",
+            "evidence": "We replace the smoke alarm battery when the warning chirp begins.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:982b411b-f3de-44ae-bc63-740f722af683:0:45",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "I ride a bicycle to the office every morning.",
+        "sources": [
+          {
+            "event_id": "982b411b-f3de-44ae-bc63-740f722af683",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:45",
+            "evidence_sha256": "e853a58f881e61285924ee61879449c3d881c6f083055c474f73f8f1c8140610",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.087282Z",
+            "evidence": "I ride a bicycle to the office every morning.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:4d2b3102-eed2-4cc2-98f8-89d550ee9ab5:0:87",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "Remember my retrieval marker: I cannot digest dairy sugar and choose milk alternatives.",
+        "sources": [
+          {
+            "event_id": "4d2b3102-eed2-4cc2-98f8-89d550ee9ab5",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:87",
+            "evidence_sha256": "5d9bdcf25f37c6b3d24717997e7cd015ef2adc839b868896a05e184415a48dac",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:54.114795Z",
+            "evidence": "Remember my retrieval marker: I cannot digest dairy sugar and choose milk alternatives.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:2210c920-1714-4951-b973-2e8d6f1bc485:0:74",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "The white envelope in storage bin 311 was catalogued during the inventory.",
+        "sources": [
+          {
+            "event_id": "2210c920-1714-4951-b973-2e8d6f1bc485",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:74",
+            "evidence_sha256": "669a1a087d792b4b4d9e3e4f579aefa9ab6016a37f09022d9fddad0da02c5449",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:55.249974Z",
+            "evidence": "The white envelope in storage bin 311 was catalogued during the inventory.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:96e3196e-b368-4ffe-97d0-78717f0c863c:0:70",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "The black vase in storage bin 301 was catalogued during the inventory.",
+        "sources": [
+          {
+            "event_id": "96e3196e-b368-4ffe-97d0-78717f0c863c",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:70",
+            "evidence_sha256": "1dfd8f5f797c59bc222641fde4d7f86fdcad00095d4b5eba331866a3808b73f9",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:55.208581Z",
+            "evidence": "The black vase in storage bin 301 was catalogued during the inventory.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:db514404-4435-44bf-b14b-96fb030484f9:0:72",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "The black camera in storage bin 291 was catalogued during the inventory.",
+        "sources": [
+          {
+            "event_id": "db514404-4435-44bf-b14b-96fb030484f9",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:72",
+            "evidence_sha256": "b557abb28dfd578989e9a72991e4ffbb12132b2c39c83f02d81723bdae37449e",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:55.166384Z",
+            "evidence": "The black camera in storage bin 291 was catalogued during the inventory.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:8057a8ed-5c24-4d57-89a1-33554f3f59f6:0:71",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "The brown clock in storage bin 281 was catalogued during the inventory.",
+        "sources": [
+          {
+            "event_id": "8057a8ed-5c24-4d57-89a1-33554f3f59f6",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:71",
+            "evidence_sha256": "e08fd008c64d17b4ff85d729783be4354f1ac3250940baf22c8a82b495ae3e3d",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:55.12617Z",
+            "evidence": "The brown clock in storage bin 281 was catalogued during the inventory.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      },
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:c864a8cd-1d48-4e3d-964c-bd37268346fb:0:74",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:49:00.965452Z",
+        "valid_at": "2026-09-11T01:49:00.965452Z",
+        "scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+        "status": "active",
+        "text": "The silver curtain in storage bin 271 was catalogued during the inventory.",
+        "sources": [
+          {
+            "event_id": "c864a8cd-1d48-4e3d-964c-bd37268346fb",
+            "session_id": "c5fc6cbc-71dd-454f-bf1a-982d94871e4d",
+            "source_scope_key": "workspace:f2f1565d-3ce9-4f7a-b374-ef8eba15f414",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:74",
+            "evidence_sha256": "f687af0aa3d40440a3c8c6eb33d45b8fc13454906dabb5944f8fc2cdd4980588",
+            "actor": "owner",
+            "source_type": "user_message",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:48:55.086821Z",
+            "evidence": "The silver curtain in storage bin 271 was catalogued during the inventory.",
+            "eligibility": "eligible",
+            "create": false
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      }
+    ]
+  }
+]

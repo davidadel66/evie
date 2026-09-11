@@ -1,0 +1,13 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-c",
+    "./internal/agent",
+    "-o",
+    "/private/tmp/evie-stage5-dense-integration-v1.test"
+  ],
+  "exit_code": 0,
+  "stderr": "",
+  "stdout": ""
+}

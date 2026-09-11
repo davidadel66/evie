@@ -1,0 +1,24 @@
+{
+  "answers": [
+    "Your Kyoto trip was **not confirmed in your original statement**: you said, “I might visit Kyoto next spring. Nothing is booked.” The definite plan—“I'll definitely travel to Kyoto”—was **your colleague’s**, not yours.\n\n- **Original owner statement:** event `338a985a-e5c8-49be-8f13-bbf82423d98c`.\n- **Assistant inference:** “I infer that the Kyoto trip could be confirmed.” Event `d37d642d-5121-4aff-8c8b-71c78dbc36ec`, actor: assistant. That was speculation, not confirmation from you, and does not establish that your trip is confirmed."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "338a985a-e5c8-49be-8f13-bbf82423d98c",
+    "d37d642d-5121-4aff-8c8b-71c78dbc36ec"
+  ],
+  "model_calls": 1,
+  "name": "tentative_quote_and_inference",
+  "question": "Is my Kyoto trip confirmed, and whose definite plan was mentioned? Distinguish the original statement from any assistant inference. Include source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "trip-statements",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Kyoto\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 3474548625
+}

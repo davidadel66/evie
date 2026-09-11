@@ -1,0 +1,173 @@
+{
+  "all_copy_hashes_verified": true,
+  "files": {
+    "frozen/assessment.md": {
+      "bytes": 12454,
+      "sha256": "8d18ea6e0736d2de931a871c0de7567106eb416c070ca41c6dbcce864a3e3909"
+    },
+    "frozen/audit_sources.py": {
+      "bytes": 20460,
+      "sha256": "c3a81a142faf04ff11cca21be2bfbfcfe530ac126afaefc492d7358891d5e77b"
+    },
+    "frozen/build-started.json": {
+      "bytes": 316,
+      "sha256": "d90aa2459fb37839ee81d7e6746863b4f6a1bc60bf307f48d2b3b7b2ee10477f"
+    },
+    "frozen/build.json": {
+      "bytes": 422,
+      "sha256": "bb5b14bd5b1c16134156bfd9a9ca5e63b81e7af06c6836264fea19d236bd302c"
+    },
+    "frozen/build.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "frozen/compiled-source-manifest.json": {
+      "bytes": 44033,
+      "sha256": "8dbc4016da1370934dea494e86ea1c14bb8454be39bfadbb3dced484a70b24b2"
+    },
+    "frozen/compiled-source.tar.gz": {
+      "bytes": 1077076,
+      "sha256": "3769619bd7745a8554ce2df2a4b5662fbd600c387671ee7d3e720430a4ff1890"
+    },
+    "frozen/freeze.json": {
+      "bytes": 17246,
+      "sha256": "ec6c2a6cc811f4d03ecf8e67f966fe3d74b7ae2ee423f93a5e9375d177f86e3b"
+    },
+    "frozen/gates.json": {
+      "bytes": 8998,
+      "sha256": "06aaf6f4bff1486a78cef71e88dffeec54ae529f23c322fd8ec5d1bc04c928fd"
+    },
+    "frozen/grader.py": {
+      "bytes": 35271,
+      "sha256": "0881765cef5d7183d163df607bc7bfa5076930e06050080628037c7c9fec4765"
+    },
+    "frozen/index.md": {
+      "bytes": 10228,
+      "sha256": "9072abed35538358cab75109d65572ffdb9810319c806401cbcdd81ff4526932"
+    },
+    "frozen/input-manifest.json": {
+      "bytes": 5035,
+      "sha256": "a42d8273b1c6f642619ffe80eb13b8aaf4cc174e748bef80385f437acdb36802"
+    },
+    "frozen/matrix.json": {
+      "bytes": 72596,
+      "sha256": "6a8be3ff523b854562326135e30a20b60723b83457de4bcd37bba5eb4a396229"
+    },
+    "frozen/operating.md": {
+      "bytes": 6273,
+      "sha256": "14dc0149cdfd3ee49dc2862c114f3a4ff10babbdfb01f51817ec1c6e258b1483"
+    },
+    "frozen/preflight-execution-started.json": {
+      "bytes": 347,
+      "sha256": "6c9a8aee5f81ea0314036e8a6a45ddc2072b005eeb4a675b4cb416dbfcac1d74"
+    },
+    "frozen/preflight-execution.json": {
+      "bytes": 453,
+      "sha256": "e345c14828fbd8de6f516a155831e380ed41e2742077d8bbe89a7632cccf5be1"
+    },
+    "frozen/preflight-execution.log": {
+      "bytes": 117,
+      "sha256": "31d0ae980cbe32d062702d637c62c18b2a52bbcc786360a39a4e187bff28a394"
+    },
+    "frozen/preflight/preflight-context-profile.json": {
+      "bytes": 328,
+      "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5"
+    },
+    "frozen/preflight/preflight-metadata-01-http.json": {
+      "bytes": 143,
+      "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306"
+    },
+    "frozen/preflight/preflight-metadata-01-wire-response.raw": {
+      "bytes": 1603,
+      "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5"
+    },
+    "frozen/preflight/preflight-metadata-02-http.json": {
+      "bytes": 163,
+      "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4"
+    },
+    "frozen/preflight/preflight-metadata-02-wire-response.raw": {
+      "bytes": 7143,
+      "sha256": "2cd19917d07035b8c46c8d610544cb89b041c8870dce0dfa1774aeae19bbb5b2"
+    },
+    "frozen/prepare-execution-started.json": {
+      "bytes": 364,
+      "sha256": "70fb34e989bc3c3be1fecd2b8c8d768ee630464e2237ba2c1bcd709597dfe586"
+    },
+    "frozen/prepare-execution.json": {
+      "bytes": 470,
+      "sha256": "9a1e4413a871708809fa0eec9f0710cc49c28e7ecb216c2da1aeea0f5be0fb3a"
+    },
+    "frozen/prepare-execution.log": {
+      "bytes": 3597,
+      "sha256": "254c017b8ce6ce156075d7a44b9a313945f519e8952d29855808feea23c07e2f"
+    },
+    "frozen/prepared-inputs.tar.gz": {
+      "bytes": 1628188,
+      "sha256": "0119edd7dec3d4e08b83bf5f39c8d306fef067ea2dbaa3d414f3b4991558feaa"
+    },
+    "frozen/procedure.md": {
+      "bytes": 6558,
+      "sha256": "7f6059f1f3b13a4c3e84b7e5374a40bb992bcc34b8f6f701745ec62c9e756919"
+    },
+    "frozen/resources.py": {
+      "bytes": 48074,
+      "sha256": "da140bf1963949af74c2b7404121329911077a20f353093091084860532c830a"
+    },
+    "frozen/rubric.md": {
+      "bytes": 10745,
+      "sha256": "a64da1e7cf6219862c478c24dd8dd1172a4cec7073e55a2508cbf6e7e4bcc813"
+    },
+    "frozen/run.py": {
+      "bytes": 23474,
+      "sha256": "ed75b578b40c0bdbc3a4316c192f2f128d93c1e979e6d8f0f9f0974b1378327d"
+    },
+    "frozen/scorer.py": {
+      "bytes": 22039,
+      "sha256": "a3b60abc43c2013ea35b5bf7eefa39db83c59eb65b5cd075021676579d96e732"
+    },
+    "frozen/workload.json": {
+      "bytes": 70139,
+      "sha256": "2e1aff23f8426b45b6a1cc3301c769026ecb84cc55a9d4f03ba922eff333d562"
+    },
+    "preservation-plan.json": {
+      "bytes": 162508,
+      "sha256": "70934f921d83fbcf91f63c165dc6b807fe2afe461fff0b005b3ed238bfb9032a"
+    },
+    "preserve-integrated-v1.py": {
+      "bytes": 17397,
+      "sha256": "c131892fa3dcd12d406990118f2ba5a2f6eeb3b1992ffcec92015e5b6757a265"
+    },
+    "raw-diagnostics.tar.gz": {
+      "bytes": 1211126,
+      "sha256": "1b0a2533da239f89d910e288ebc4d44c5b787968db064b09eedade8e3090e19a"
+    },
+    "raw-index.tar.gz": {
+      "bytes": 664864,
+      "sha256": "0648a11a25db7dde5f684501c7b693c4d440a69833d64d766ff9c74fd06fa633"
+    },
+    "raw-local.tar.gz": {
+      "bytes": 5684774,
+      "sha256": "30817647443e2909a368583ed533ed7e2fdf869329f459c0ddb4c02cb1715e11"
+    },
+    "raw-operating.tar.gz": {
+      "bytes": 459668,
+      "sha256": "7d3a2192ab9e069a10e3ac2c8ac4501344300b102caf23ed0125c0d2b9293517"
+    },
+    "raw-verification.tar.gz": {
+      "bytes": 117993,
+      "sha256": "34d18606e67ad158a9384f61ac5633e3eb3e7196435825086a7de0a805757bbc"
+    },
+    "reports/deterministic-v1.json": {
+      "bytes": 26272,
+      "sha256": "f301a484983445ad69ad8dc9d9593c8ead706ec00bfd2bc7374646d0b4187a63"
+    },
+    "reports/partial-resource-audit-v1.json": {
+      "bytes": 757383,
+      "sha256": "c3716df646f304c7b97d5bd7d3c2649f124c64e619a9fd0172a8069f58d41c83"
+    }
+  },
+  "freeze_sha256": "ec6c2a6cc811f4d03ecf8e67f966fe3d74b7ae2ee423f93a5e9375d177f86e3b",
+  "original_files": 466,
+  "payload_bytes": 12236338,
+  "schema_version": 1
+}

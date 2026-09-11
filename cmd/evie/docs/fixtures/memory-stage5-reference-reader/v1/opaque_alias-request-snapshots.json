@@ -1,0 +1,242 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 40,
+        "exact_selectors": 1,
+        "exact_query_bytes": 6,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 23
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "kind": "accepted_memory",
+          "claim_id": "6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "claim_operation_id": "f7dbcccf-73b3-4fcc-a78a-0973cd861b87",
+          "as_known_at": "2026-09-11T01:24:09.42314Z",
+          "valid_at": "2026-09-11T01:24:09.42314Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "171ab1b9-3160-4499-bb0d-7d3687787d60",
+              "session_id": "28969ab8-3434-4a23-912a-be3b0c2dd07e",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:24:09.416384000Z",
+              "event_id": "ee64bac5-19f9-4496-a42c-3e426c075736",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "exact_or_alias",
+            "lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 11670,
+    "rough_token_estimate": 2918,
+    "request_sha256": "25d3ed710ee64abe74cf3c1b266e0a12ca611581bb34f253de90501676e168b7",
+    "retained_first_event_id": "352f2283-c54f-4a01-bbda-45d5d9c4793e",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "352f2283-c54f-4a01-bbda-45d5d9c4793e",
+    "retained_last_sequence": 1,
+    "message_count": 3,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 2409,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  },
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 40,
+        "exact_selectors": 1,
+        "exact_query_bytes": 6,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 23
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "kind": "accepted_memory",
+          "claim_id": "6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "claim_operation_id": "f7dbcccf-73b3-4fcc-a78a-0973cd861b87",
+          "as_known_at": "2026-09-11T01:24:11.389586Z",
+          "valid_at": "2026-09-11T01:24:11.389586Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "171ab1b9-3160-4499-bb0d-7d3687787d60",
+              "session_id": "28969ab8-3434-4a23-912a-be3b0c2dd07e",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:24:09.416384000Z",
+              "event_id": "ee64bac5-19f9-4496-a42c-3e426c075736",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "exact_or_alias",
+            "lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 2,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 12194,
+    "rough_token_estimate": 3049,
+    "request_sha256": "dfa72c62f589e1fb454107c22ba2c187a90aa4d5b4de2540fb50bd84dbec40f8",
+    "retained_first_event_id": "352f2283-c54f-4a01-bbda-45d5d9c4793e",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "fc5b5c0c-f0f4-4816-ae61-9985de983918",
+    "retained_last_sequence": 5,
+    "message_count": 5,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 2935,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  },
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 40,
+        "exact_selectors": 1,
+        "exact_query_bytes": 6,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 23
+      },
+      "version": "memory-retrieval-v2",
+      "status": "empty",
+      "evidence": [
+        {
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "kind": "accepted_memory",
+          "claim_id": "6ddc14cf-1c56-43a9-8a52-05fc8c74e92b",
+          "claim_operation_id": "f7dbcccf-73b3-4fcc-a78a-0973cd861b87",
+          "as_known_at": "2026-09-11T01:24:11.389586Z",
+          "valid_at": "2026-09-11T01:24:11.389586Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "171ab1b9-3160-4499-bb0d-7d3687787d60",
+              "session_id": "28969ab8-3434-4a23-912a-be3b0c2dd07e",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:24:09.416384000Z",
+              "event_id": "ee64bac5-19f9-4496-a42c-3e426c075736",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "exact_or_alias",
+            "lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 3,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 14373,
+    "rough_token_estimate": 3594,
+    "request_sha256": "373ffee44b9f6281ed882c611e0a4155c6d71796486bbce67abbfdc0ef235788",
+    "retained_first_event_id": "352f2283-c54f-4a01-bbda-45d5d9c4793e",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "5ec7b007-34de-414e-bb53-79283a9990a8",
+    "retained_last_sequence": 9,
+    "message_count": 7,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 5116,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

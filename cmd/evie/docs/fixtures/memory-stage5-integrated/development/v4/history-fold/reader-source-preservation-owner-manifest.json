@@ -1,0 +1,175 @@
+{
+  "159": {
+    "file_count": 7,
+    "total_bytes": 1027906,
+    "files": [
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/README.md",
+        "bytes": 3297,
+        "sha256": "f1f1a6c4528b131e26255f24ed34025fd024b8fa22bc04c46607cde0222df25a"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/historical-failed-run-source-audit.json",
+        "bytes": 56553,
+        "sha256": "d348a59f9edffc5356a71a403c29b20a272177cac51e10cb55f77cfbd860cb89"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/reader-v4-declared-inventory.json",
+        "bytes": 319873,
+        "sha256": "2006e28b47846f44ebe6c18f84449bf255b65a65289fda6cdae310ff81fbf610"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/reader-v4-source-manifest.json",
+        "bytes": 78101,
+        "sha256": "4a0911a74d876c753141acf824cb61bc189ee1ab8e2b2d91f5660747ecf55291"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/reader-v4-source.tar.gz",
+        "bytes": 566473,
+        "sha256": "2755f858817824d3b04e72c3c2e51fcedb8f676328a8258f3a519867457c3eef"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/verification.json",
+        "bytes": 505,
+        "sha256": "afcda0a4b6deb2ac3487596d47f13b9011432643bc75ffc775597983b3fb9120"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reader/source-preservation/v1/verify-source.py",
+        "bytes": 3104,
+        "sha256": "7ed90d8450c0f61c1e08e6dfac4f7ef66d3a5a9c928ea07f53b5e9bf232e7b44"
+      }
+    ]
+  },
+  "160": {
+    "file_count": 15,
+    "total_bytes": 5220689,
+    "files": [
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/README.md",
+        "bytes": 2751,
+        "sha256": "8f723ae457743a528c69467f42d7b2dcbf4dad9ec85fdf9ef421c061de20af0c"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/memory-stage5-automatic-reader-v1-declared-inventory.json",
+        "bytes": 333800,
+        "sha256": "48ce336b25a3e0207495cbe5116883f606c7e8caa5d9247a75aaab1006f697d8"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/memory-stage5-automatic-reader-v1-source-manifest.json",
+        "bytes": 78332,
+        "sha256": "68bc6c7d380b0817f7bc975d4126b6aa6d4088a15db97f3e24dc6ca2487bfc63"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/memory-stage5-automatic-reader-v1-source.tar.gz",
+        "bytes": 591037,
+        "sha256": "9c4fcb23db5c2e50a7019b8bbec9cbca6207cf18e3e3e56182dbadac806b2a00"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/verification.json",
+        "bytes": 539,
+        "sha256": "96e167aa961a9c520280d01adcec911c76d42431f95c6fe79449ac66a3293424"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic-reader/source-preservation/v1/verify-source.py",
+        "bytes": 3104,
+        "sha256": "7ed90d8450c0f61c1e08e6dfac4f7ef66d3a5a9c928ea07f53b5e9bf232e7b44"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/README.md",
+        "bytes": 3066,
+        "sha256": "fb8da2b684d7f4e242a3ede11427adf8660f99f56d0c582b3f889647cf9a6239"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v2-declared-inventory.json",
+        "bytes": 512581,
+        "sha256": "03fc9d716d117d2d6e33c8695430b6ea942763834093b45418a5847881cf6784"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v2-source-manifest.json",
+        "bytes": 78265,
+        "sha256": "2ac98e3954be3cfd47ce9846ab25e32cebde6afc34934af367fafca0df8ff379"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v2-source.tar.gz",
+        "bytes": 590836,
+        "sha256": "44236942413dba609de63ecff7744338aaf664bfcf78833cf48c89520e21d38b"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v3-declared-inventory.json",
+        "bytes": 2356785,
+        "sha256": "8133cd26621290988d01699038276f000e28b5433f3c455ae1b1677d021956fc"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v3-source-manifest.json",
+        "bytes": 78537,
+        "sha256": "3b95828becd032e5c3a4da122c94cb3e646586c665ea5a700d5fa1b93ee02f75"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/automatic-v3-source.tar.gz",
+        "bytes": 587145,
+        "sha256": "5ed5bee230ea9e81dbb7203568cf0bbece3d89f06662ea50540de11cf266b569"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/verification.json",
+        "bytes": 807,
+        "sha256": "060df48923738603c80ef0cc7828da7a4c3af396213a5d3c5299a962b76a4d0e"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-automatic/source-preservation/v1/verify-source.py",
+        "bytes": 3104,
+        "sha256": "7ed90d8450c0f61c1e08e6dfac4f7ef66d3a5a9c928ea07f53b5e9bf232e7b44"
+      }
+    ]
+  },
+  "161": {
+    "file_count": 9,
+    "total_bytes": 2035097,
+    "files": [
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/README.md",
+        "bytes": 2810,
+        "sha256": "30408ad19fb87dab653d635f536d706f77029c8e38302965200e9051066194d8"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v1-declared-inventory.json",
+        "bytes": 334900,
+        "sha256": "3907019880dc4e3df22b42a4bafc76da4d0962ae141ff85718caa596d5e91887"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v1-source-manifest.json",
+        "bytes": 79547,
+        "sha256": "91908313357fa40bc3bd3a2ba6a47a479530d3f66c86fcaa1a3a6ec46b69b1a8"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v1-source.tar.gz",
+        "bytes": 595571,
+        "sha256": "e273699a0aee1b4083961c3aa85c965d6a8b594f7a3def302f6ef1c035dac720"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v2-declared-inventory.json",
+        "bytes": 336399,
+        "sha256": "c8c909f938e99ba7eaa79a3e76f335035de6f923cf7b76c924460519b1946b34"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v2-source-manifest.json",
+        "bytes": 81109,
+        "sha256": "bb5c3f5d3ebf39f54dd3e01844b89a606a95958b552732280fbfa7f925eb88a9"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/memory-stage5-reference-reader-v2-source.tar.gz",
+        "bytes": 600803,
+        "sha256": "fc85a8cf5b91a50edf93577b653d70c6c561a6a679dcd7a441271843e78e417f"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/verification.json",
+        "bytes": 854,
+        "sha256": "172f0a15aab7c468194d72d3240f9ddfb933d10c763ba4aee21694d6a14d8f55"
+      },
+      {
+        "path": "cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1/verify-source.py",
+        "bytes": 3104,
+        "sha256": "7ed90d8450c0f61c1e08e6dfac4f7ef66d3a5a9c928ea07f53b5e9bf232e7b44"
+      }
+    ]
+  }
+}

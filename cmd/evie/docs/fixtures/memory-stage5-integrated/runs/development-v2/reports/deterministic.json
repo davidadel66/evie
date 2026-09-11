@@ -1,0 +1,479 @@
+{
+  "commands": [
+    {
+      "command": [
+        "./scripts/verify-change.sh"
+      ],
+      "cwd": "/Users/davidboktor/code/evie-memory-stage-5",
+      "exit_code": 0,
+      "id": "verify_change_development_v2",
+      "kind": "verify_change",
+      "log_path": "/tmp/evie-memory-stage5/integrated-development-v2-checks/verify_change.log",
+      "log_sha256": "1da7f0d9ffc4b076c190d710d207af14c1419d47040ea2c907c5a70df4b75d72"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "./internal/agent",
+        "./internal/localembedding",
+        "./internal/web",
+        "-run",
+        "^(TestAutomaticMemoryEvidenceHTTPInspectsFirstOrdinaryRequest|TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch|TestAutomaticMemoryRecallDropsRetiredEvidenceBeforeContinuation|TestAutomaticMemoryRecallFailedSQLiteLookupDoesNotBecomeEmpty|TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable|TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch|TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea|TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest|TestConversationEvidenceHTTPKeepsWorkspaceAttributionWithoutGlobalHistory|TestConversationExpansionCancellationHasNoLateEvidenceReceipt|TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart|TestConversationExpansionReportsBoundedSequenceGap|TestConversationExpansionReportsOmittedSecretNeighbor|TestConversationExpansionReportsRetiredNeighborInterval|TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows|TestConversationExpansionTurnExcludesCurrentRootFromEarlierCurrentSessionAnchor|TestConversationExpansionTurnOmitsRetiredNeighborRangeButKeepsUnrelatedUTF8Passage|TestConversationExpansionTurnOptOutWithholdsSourceReferencesFromCompleteRequest|TestConversationExpansionTurnRejectsForgedAndOutOfScopeAnchors|TestConversationExpansionTurnSubtractsOverlappingUTF8EvidenceAndDuplicateRequests|TestConversationSearchFindsUncompiledOriginalStatement|TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges|TestConversationSearchTurnScopeMatrixAndEarlierRoots|TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild|TestDenseBackfillRechecksConcurrentRetirementAndAcceptedAppend|TestDenseConfigurationUpgradeNeverServesAnObsoleteActiveGeneration|TestDenseConversationTurnKeepsExactContextAndExcludesIndexedLiveRoot|TestDenseConversationTurnRechecksRetiredUTF8RangeAndRevokedSource|TestDenseDisabledGenerationReconcilesAcceptedChangesBeforeReenable|TestDenseEndpointDeadlinePreservesEligibleLexicalEvidenceAsPartial|TestDenseGenerationRebuildReconcilesBeforeServingAndSurvivesRestart|TestDenseMemoryTurnKeepsContextAndCurrentSessionScopeMatrix|TestDenseSingleRowBackfillEventuallyServesCompleteTurn|TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput|TestEmbedOptOutMakesNoRequestAndStopsAfterManifestVerification|TestEmbedPreservesCancellationAndAvoidsDispatchForCanceledCaller|TestEmbedPreservesDeadlineWhileReadingResponse|TestEmbedRejectsMalformedVectorsWithoutReturningPartialBatch|TestEmbedRejectsModelReplacementDuringInference|TestEmbedRejectsRedirectWithoutContactingItsDestination|TestEmbedRejectsUnselectedManifestBeforeSendingInput|TestEmbedUsesUnixSocketAndDoesNotContactConfiguredProxy|TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin|TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration|TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins|TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess|TestHistoricalMemorySearchPreservesUnknownValidity|TestMemoryCorrectionBeforeDispatchPreservesOriginalReadPinAndFreshLifecycle|TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart|TestMemoryEvidenceHTTPRejectsAnotherSelectedConversation|TestMemoryInvestigationBoundsEvidenceToActualRequestHeadroom|TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations|TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet|TestMemoryInvestigationCancellationAndLeaseLossHaveNoLateEffects|TestMemoryInvestigationCannotDispatchPastBudgetWhenProviderContinues|TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings|TestMemoryInvestigationContextKeepsSmallerOriginalWhenFirstFindingCannotFit|TestMemoryInvestigationContextLimitsPreserveOriginalDiscussion|TestMemoryInvestigationDoesNotRefreshThroughRetiredAlias|TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches|TestMemoryInvestigationKeepsFailedSearchDistinctAfterLaterEmptySearch|TestMemoryInvestigationRefreshesCurrentQueryAfterSameTurnCorrection|TestMemoryInvestigationRefreshesLostClaimWithoutUndoingAnotherExplicitView|TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin|TestMemoryInvestigationRefreshesNewOwnerStatementWithoutAdvancingPinnedViews|TestMemoryInvestigationRefreshesRestoredConflictsWithoutAdvancingPinnedViews|TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting|TestMemoryReceiptHTTPAssociatesExactRequestsWithOriginalAnswerAfterRestart|TestMemoryReceiptHTTPDistinguishesPreparedAndInterruptedRequests|TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart|TestMemoryReceiptInspectionRejectsChangedOriginalProvenance|TestMemoryReceiptIsDurableBeforeEachProviderRequestIncludingInterruption|TestMemorySearchOptOutBeforeDispatchWithholdsSupplementalSources|TestMemorySearchOutcomesDistinguishIncompleteEmptyAndMalformed|TestMemorySearchRepeatedCallsShareTurnBudget|TestMemorySearchTurnFindsSourceBearingTwoHopRelationship|TestMemorySearchTurnGraphDoesNotReuseSupportFromDifferentTemporalRead|TestMemorySearchTurnGraphScopeMatrixKeepsGlobalAnchorInsideReaderBoundary|TestMemorySearchTurnGraphSupportRevalidatesBeforeDispatch|TestMemorySearchTurnKeepsPromotedSourceBoundaries|TestMemorySearchTurnScopeMatrix|TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting|TestMemorySearchWithholdsSecretBearingEvidence|TestModelMemoryRetrievalDefaultsToEnabledAndKeepsLegacyTurnResolution|TestNewRejectsRemoteNamedCredentialedAndNonRootEndpoints|TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation|TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim|TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle|TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSources)$",
+        "-count=1"
+      ],
+      "cwd": "/Users/davidboktor/code/evie-memory-stage-5",
+      "exit_code": 0,
+      "id": "go_matrix_development_v2",
+      "kind": "go_matrix",
+      "log_path": "/tmp/evie-memory-stage5/integrated-development-v2-checks/go_matrix.log",
+      "log_sha256": "48bf8bed973a88df95ff79bc1ad92a859e0c1e06516e840069a8042d40ec3e6d",
+      "matched_tests": [
+        {
+          "name": "TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallDropsRetiredEvidenceBeforeContinuation",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallFailedSQLiteLookupDoesNotBecomeEmpty",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionCancellationHasNoLateEvidenceReceipt",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionReportsBoundedSequenceGap",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionReportsOmittedSecretNeighbor",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionReportsRetiredNeighborInterval",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionTurnExcludesCurrentRootFromEarlierCurrentSessionAnchor",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionTurnOmitsRetiredNeighborRangeButKeepsUnrelatedUTF8Passage",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionTurnOptOutWithholdsSourceReferencesFromCompleteRequest",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionTurnRejectsForgedAndOutOfScopeAnchors",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationExpansionTurnSubtractsOverlappingUTF8EvidenceAndDuplicateRequests",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationSearchFindsUncompiledOriginalStatement",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestConversationSearchTurnScopeMatrixAndEarlierRoots",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseBackfillRechecksConcurrentRetirementAndAcceptedAppend",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseConfigurationUpgradeNeverServesAnObsoleteActiveGeneration",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseConversationTurnKeepsExactContextAndExcludesIndexedLiveRoot",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseConversationTurnRechecksRetiredUTF8RangeAndRevokedSource",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseDisabledGenerationReconcilesAcceptedChangesBeforeReenable",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseEndpointDeadlinePreservesEligibleLexicalEvidenceAsPartial",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseGenerationRebuildReconcilesBeforeServingAndSurvivesRestart",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseMemoryTurnKeepsContextAndCurrentSessionScopeMatrix",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseSingleRowBackfillEventuallyServesCompleteTurn",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestHistoricalMemorySearchPreservesUnknownValidity",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryCorrectionBeforeDispatchPreservesOriginalReadPinAndFreshLifecycle",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationBoundsEvidenceToActualRequestHeadroom",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationCancellationAndLeaseLossHaveNoLateEffects",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationCannotDispatchPastBudgetWhenProviderContinues",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationContextKeepsSmallerOriginalWhenFirstFindingCannotFit",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationContextLimitsPreserveOriginalDiscussion",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationDoesNotRefreshThroughRetiredAlias",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationKeepsFailedSearchDistinctAfterLaterEmptySearch",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationRefreshesCurrentQueryAfterSameTurnCorrection",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationRefreshesLostClaimWithoutUndoingAnotherExplicitView",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationRefreshesNewOwnerStatementWithoutAdvancingPinnedViews",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationRefreshesRestoredConflictsWithoutAdvancingPinnedViews",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryReceiptInspectionRejectsChangedOriginalProvenance",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemoryReceiptIsDurableBeforeEachProviderRequestIncludingInterruption",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchOptOutBeforeDispatchWithholdsSupplementalSources",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchOutcomesDistinguishIncompleteEmptyAndMalformed",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchRepeatedCallsShareTurnBudget",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnFindsSourceBearingTwoHopRelationship",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnGraphDoesNotReuseSupportFromDifferentTemporalRead",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnGraphScopeMatrixKeepsGlobalAnchorInsideReaderBoundary",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnGraphSupportRevalidatesBeforeDispatch",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnKeepsPromotedSourceBoundaries",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnScopeMatrix",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestMemorySearchWithholdsSecretBearingEvidence",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestModelMemoryRetrievalDefaultsToEnabledAndKeepsLegacyTurnResolution",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSources",
+          "package": "github.com/davidadel66/evie/internal/agent"
+        },
+        {
+          "name": "TestEmbedOptOutMakesNoRequestAndStopsAfterManifestVerification",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedPreservesCancellationAndAvoidsDispatchForCanceledCaller",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedPreservesDeadlineWhileReadingResponse",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedRejectsMalformedVectorsWithoutReturningPartialBatch",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedRejectsModelReplacementDuringInference",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedRejectsRedirectWithoutContactingItsDestination",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedRejectsUnselectedManifestBeforeSendingInput",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestEmbedUsesUnixSocketAndDoesNotContactConfiguredProxy",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestNewRejectsRemoteNamedCredentialedAndNonRootEndpoints",
+          "package": "github.com/davidadel66/evie/internal/localembedding"
+        },
+        {
+          "name": "TestAutomaticMemoryEvidenceHTTPInspectsFirstOrdinaryRequest",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestConversationEvidenceHTTPKeepsWorkspaceAttributionWithoutGlobalHistory",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryEvidenceHTTPRejectsAnotherSelectedConversation",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryReceiptHTTPAssociatesExactRequestsWithOriginalAnswerAfterRestart",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryReceiptHTTPDistinguishesPreparedAndInterruptedRequests",
+          "package": "github.com/davidadel66/evie/internal/web"
+        },
+        {
+          "name": "TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart",
+          "package": "github.com/davidadel66/evie/internal/web"
+        }
+      ]
+    },
+    {
+      "command": [
+        "./node_modules/.bin/vitest",
+        "run",
+        "src/api/memoryEvidence.test.ts",
+        "src/artifacts/GraphEvidencePath.test.tsx",
+        "src/artifacts/MemoryEvidence.test.tsx",
+        "src/artifacts/MemoryEvidenceDense.test.tsx",
+        "src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+        "src/chat/MemoryActivity.test.tsx",
+        "src/chat/MemoryInvestigationActivity.test.tsx",
+        "--reporter=json",
+        "--outputFile=/tmp/evie-memory-stage5/integrated-development-v2-checks/ui-results.json"
+      ],
+      "cwd": "/Users/davidboktor/code/evie-memory-stage-5/internal/web/ui",
+      "exit_code": 0,
+      "id": "ui_matrix_development_v2",
+      "kind": "ui_matrix",
+      "log_path": "/tmp/evie-memory-stage5/integrated-development-v2-checks/ui_matrix.log",
+      "log_sha256": "95ac8ab344e688aeba26dd16f047d2622af919d251aa1386907be567fd549d33",
+      "matched_tests": [
+        {
+          "name": "inspects the selected request with no-store and rejects a different conversation response",
+          "path": "internal/web/ui/src/api/memoryEvidence.test.ts"
+        },
+        {
+          "name": "keeps the original path but does not link or render inaccessible bridge source data",
+          "path": "internal/web/ui/src/artifacts/GraphEvidencePath.test.tsx"
+        },
+        {
+          "name": "renders an ordered two-hop original path with links to each available supporting Claim's source",
+          "path": "internal/web/ui/src/artifacts/GraphEvidencePath.test.tsx"
+        },
+        {
+          "name": "keeps the answer's original requests separate and does not call interrupted evidence supplied",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx"
+        },
+        {
+          "name": "never renders retained source text after current access is denied",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx"
+        },
+        {
+          "name": "preserves a conversation excerpt's speaker, uncertainty and exact source range without inventing a Claim",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx"
+        },
+        {
+          "name": "shows a historical retired Claim with actual acceptance time and unknown validity rather than treating read filters as fact dates",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx"
+        },
+        {
+          "name": "shows explicit Kernel conflicts while labeling newer owner wording only as a potential discrepancy",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidence.test.tsx"
+        },
+        {
+          "name": "inspection shows the original discovery generation without rerunning retrieval",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidenceDense.test.tsx"
+        },
+        {
+          "name": "an explicit knowledge date stays visible on a current evidence view",
+          "path": "internal/web/ui/src/artifacts/MemoryEvidenceInvestigation.test.tsx"
+        },
+        {
+          "name": "labels a saved request as recorded until its assistant response commits",
+          "path": "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+        },
+        {
+          "name": "offers the supplied accepted memory for inspection without claiming an answer citation",
+          "path": "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+        },
+        {
+          "name": "summarizes historical, retired and conflicting evidence as recorded for that request",
+          "path": "internal/web/ui/src/chat/MemoryActivity.test.tsx"
+        },
+        {
+          "name": "investigation activity preserves each resource and failure outcome",
+          "path": "internal/web/ui/src/chat/MemoryInvestigationActivity.test.tsx"
+        }
+      ],
+      "structured_results_path": "/tmp/evie-memory-stage5/integrated-development-v2-checks/ui-results.json",
+      "structured_results_sha256": "fa430f5c3e4ae9694162339eb37ae0109e117bbc826d6c35a26f1e2f01000fab"
+    }
+  ],
+  "compiled_inputs_equal_verified_checkout": true,
+  "compiled_source_manifest_sha256": "35920d3c0a0448478133796c4a0e7e0a0e91cafd41e7b230df892959d0a22b8e",
+  "freeze_sha256": "d1ee307d4afd81270a8cbceaeaf0a61269b9a77a18a240beb6478e5fa90c1080",
+  "matrix_sha256": "1ef2f25d040fb33e599c3b8b6554a2cabb4ffe97286beb77a1bca724b674c6c6",
+  "timing_note": "All mapped deterministic checks and required repository verification preceded this development freeze; source equality is checked again when binding the completed freeze.",
+  "version": 1
+}

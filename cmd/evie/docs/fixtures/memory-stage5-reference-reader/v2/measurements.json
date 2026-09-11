@@ -1,0 +1,178 @@
+{
+  "version": "v2",
+  "partition": "development, not held out",
+  "model_calls": 9,
+  "whole_request_byte_min": 9936,
+  "whole_request_byte_max": 18235,
+  "maximum_evidence_count": 4,
+  "reported_usage": {
+    "input_tokens": 27759,
+    "output_tokens": 393,
+    "total_tokens": 28152,
+    "reasoning_output_tokens": 0
+  },
+  "samples": [
+    {
+      "case": "compacted_ambiguous",
+      "request_bytes": 17011,
+      "evidence_count": 4,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 16,
+        "examined_earlier_bytes": 528,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 374,
+        "query_bytes": 59
+      }
+    },
+    {
+      "case": "compacted_mother",
+      "request_bytes": 15049,
+      "evidence_count": 3,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 16,
+        "examined_earlier_bytes": 528,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 361,
+        "query_bytes": 63
+      }
+    },
+    {
+      "case": "explicit_uuid",
+      "request_bytes": 12226,
+      "evidence_count": 1,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 70,
+        "exact_selectors": 1,
+        "exact_query_bytes": 36,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 53
+      }
+    },
+    {
+      "case": "misleading_recent_sister",
+      "request_bytes": 18235,
+      "evidence_count": 4,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 8,
+        "examined_earlier_bytes": 399,
+        "earlier_messages": 2,
+        "earlier_bytes": 174,
+        "summary_bytes": 0,
+        "query_bytes": 88
+      }
+    },
+    {
+      "case": "mother_after_debugging",
+      "request_bytes": 15928,
+      "evidence_count": 3,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 7,
+        "examined_earlier_bytes": 299,
+        "earlier_messages": 2,
+        "earlier_bytes": 108,
+        "summary_bytes": 0,
+        "query_bytes": 84
+      }
+    },
+    {
+      "case": "mother_or_sister",
+      "request_bytes": 17749,
+      "evidence_count": 4,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 7,
+        "examined_earlier_bytes": 345,
+        "earlier_messages": 2,
+        "earlier_bytes": 154,
+        "summary_bytes": 0,
+        "query_bytes": 75
+      }
+    },
+    {
+      "case": "no_evidence",
+      "request_bytes": 9936,
+      "evidence_count": 0,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "empty",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "case": "opaque_alias",
+      "request_bytes": 12754,
+      "evidence_count": 1,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 40,
+        "exact_selectors": 1,
+        "exact_query_bytes": 6,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 23
+      }
+    },
+    {
+      "case": "scope_excluded_sister",
+      "request_bytes": 16080,
+      "evidence_count": 3,
+      "input": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 7,
+        "examined_earlier_bytes": 299,
+        "earlier_messages": 2,
+        "earlier_bytes": 108,
+        "summary_bytes": 0,
+        "query_bytes": 84
+      }
+    }
+  ]
+}

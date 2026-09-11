@@ -1,0 +1,31 @@
+{
+  "answers": [
+    "Based on the historical evidence from my records, your preferred lunch at that time was a chickpea sandwich. The original source event ID for this record is `05ced59a-6d7d-44bb-9cd1-79fffc869563`.\n\nGiven that this preference was recorded in the past and there have been no subsequent changes or overrides, it can still be treated as your current preference. However, if you've since changed your mind about your preferred lunch, please let me know so I can update my records accordingly."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "05ced59a-6d7d-44bb-9cd1-79fffc869563"
+  ],
+  "model_calls": 1,
+  "name": "historical_retired",
+  "question": "What lunch preference had I recorded at the time of that old record, and should it still be treated as my current preference? Include the original source event ID.",
+  "scripted_initial_searches": [
+    {
+      "id": "old-claim",
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "arguments": "{\"as_known_at\":\"2026-09-11T00:04:02.673826Z\",\"intent\":\"historical\",\"query\":\"chickpea\"}"
+      }
+    },
+    {
+      "id": "old-words",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"as_known_at\":\"2026-09-11T00:04:02.673826Z\",\"intent\":\"historical\",\"query\":\"chickpea\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 28352713500
+}

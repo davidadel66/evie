@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source": "/tmp/evie-memory-stage5/author-experiment-v4-assessments.py",
+  "preserved_file": "author-experiment-v4-assessments.py",
+  "sha256": "b7369ca09eea1d6583eedc68f55cbfbb30f40fc3f465fa0ca2af9ce4bd39724b",
+  "bytes": 19927,
+  "mtime_ns": 1789107608145297699,
+  "mode": 420,
+  "byte_time_mode_copy_verified": true,
+  "scope": "Mechanical serializer for /root/experiment_readiness explicit fresh manual v4 dev09\u2013dev16 judgments. No source/model output generated and no semantic decisions inferred by keywords. Final 48 judgment bytes and validation already retained in immutable runs/development-v4. This later supplement does not edit that preservation manifest or earlier repository references."
+}

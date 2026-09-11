@@ -1,0 +1,7 @@
+{
+  "verified_at_utc": "2026-09-11T00:12:31.261812+00:00",
+  "prompt_sha256": "18849b893839363b02ba8f6f9274acb1292778e333303efa5c3ef4811e3472ee",
+  "test_binary_sha256": "f86c1b58f2c7f59b567c053bbb018e0f2006fca1d1c77664c9f92f591fbd4185",
+  "recompiled_after_root_final_prompt_signal": true,
+  "same_as_pre_inference_freeze": true
+}

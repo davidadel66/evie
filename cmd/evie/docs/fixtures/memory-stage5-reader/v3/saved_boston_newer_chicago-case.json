@@ -1,0 +1,32 @@
+{
+  "answers": [
+    "Based on the saved records:\n\n- You currently live in Chicago, as explicitly stated in a recent update: \"An update: I now live in Chicago after moving from Boston.\" (Event ID: 166fe869-cb85-4024-bc58-4cf3ac8a1362).\n\n- There is an earlier record indicating that you previously lived in Boston, but this has been superseded by the more recent statement about living in Chicago.\n\nThe memory search did not find any other conflicting information. The latest update clearly indicates your current residence as Chicago."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "ff4c05fa-cd8b-446f-82b2-493d96538d6a",
+    "166fe869-cb85-4024-bc58-4cf3ac8a1362"
+  ],
+  "model_calls": 1,
+  "name": "saved_boston_newer_chicago",
+  "question": "Where do I live, and is there anything inconsistent in your saved memory? Attribute the saved record and the later statement, including both source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "saved-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "arguments": "{\"query\":\"Boston Chicago\",\"intent\":\"current\"}"
+      }
+    },
+    {
+      "id": "later-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Chicago\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 12261038750
+}

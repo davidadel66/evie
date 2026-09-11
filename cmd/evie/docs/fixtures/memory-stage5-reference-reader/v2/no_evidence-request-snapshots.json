@@ -1,0 +1,50 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "empty",
+        "current_bytes": 28,
+        "exact_selectors": 0,
+        "exact_query_bytes": 0,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      },
+      "version": "memory-retrieval-v2",
+      "status": "empty",
+      "evidence": []
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 9936,
+    "rough_token_estimate": 2484,
+    "request_sha256": "0e0621b37d462dfdb02220f37f5daa7a16ff5668d3db04dd0d9a64505340f5fb",
+    "retained_first_event_id": "105a3719-62ad-4a7f-8fe2-264000f380d7",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "105a3719-62ad-4a7f-8fe2-264000f380d7",
+    "retained_last_sequence": 1,
+    "message_count": 3,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 675,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

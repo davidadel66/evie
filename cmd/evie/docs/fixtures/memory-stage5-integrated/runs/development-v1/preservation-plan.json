@@ -1,0 +1,2438 @@
+{
+  "archives": {
+    "raw-diagnostics.tar.gz": {
+      "bytes": 1211126,
+      "members": {
+        "162-corrected-context-replay-v1/build-started.json": {
+          "bytes": 328,
+          "sha256": "10d843aa650c3fa481e0f5673c3bf164ccf987877218a0440b8916317de3378b",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/build-started.json"
+        },
+        "162-corrected-context-replay-v1/build.json": {
+          "bytes": 434,
+          "sha256": "bbc3559d64a0e6095d8571e65e9ecc90bd6d95b412cbb1df0ce1e2ac98a686b1",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/build.json"
+        },
+        "162-corrected-context-replay-v1/build.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/build.log"
+        },
+        "162-corrected-context-replay-v1/compiled-source-manifest.json": {
+          "bytes": 44270,
+          "sha256": "35920d3c0a0448478133796c4a0e7e0a0e91cafd41e7b230df892959d0a22b8e",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/compiled-source-manifest.json"
+        },
+        "162-corrected-context-replay-v1/compiled-source.tar.gz": {
+          "bytes": 1080354,
+          "sha256": "64a9a1c8e3e64a0730d14ff3b4146914f16db8fa893e9caccf3cefd43b174d9b",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/compiled-source.tar.gz"
+        },
+        "162-corrected-context-replay-v1/freeze.json": {
+          "bytes": 17516,
+          "sha256": "a3959adab058f5bf685415ae9ab97af69d88246af97de18ab390798467810390",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/freeze.json"
+        },
+        "162-corrected-context-replay-v1/input-manifest.json": {
+          "bytes": 5035,
+          "sha256": "a42d8273b1c6f642619ffe80eb13b8aaf4cc174e748bef80385f437acdb36802",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/input-manifest.json"
+        },
+        "162-corrected-context-replay-v1/replay.json": {
+          "bytes": 789,
+          "sha256": "6ad04e71b01ae4281adc406a0f82db175139a7b76dbd9608c91f1ff99c4a1038",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/replay.json"
+        },
+        "162-corrected-context-replay-v1/replay.log": {
+          "bytes": 487,
+          "sha256": "8d2f1b4bf851483dd2e5c852d68ed1b0c7e087ba29a16e45047e69543dff9c0c",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/replay.log"
+        },
+        "162-corrected-context-replay-v1/results/dev05_clear_reference-tool_only-local-summary.json": {
+          "bytes": 1309,
+          "sha256": "c1201d630e2e6f741a7e18e2b5dafc1cb2c9532c7517b2b9540fe9f2b54e8435",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/dev05_clear_reference-tool_only-local-summary.json"
+        },
+        "162-corrected-context-replay-v1/results/dev05_clear_reference-tool_only-local-traces.jsonl.gz": {
+          "bytes": 11847,
+          "sha256": "efeb09d7febf6531d02a115234cbdc5cc4a0f8a2ae8f3695a12a4426b8b07e48",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/dev05_clear_reference-tool_only-local-traces.jsonl.gz"
+        },
+        "162-corrected-context-replay-v1/results/integrated-local-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/integrated-local-context-profile.json"
+        },
+        "162-corrected-context-replay-v1/results/integrated-local-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/integrated-local-metadata-01-http.json"
+        },
+        "162-corrected-context-replay-v1/results/integrated-local-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/integrated-local-metadata-01-wire-response.raw"
+        },
+        "162-corrected-context-replay-v1/results/integrated-local-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/integrated-local-metadata-02-http.json"
+        },
+        "162-corrected-context-replay-v1/results/integrated-local-metadata-02-wire-response.raw": {
+          "bytes": 7140,
+          "sha256": "47e06ff9474333b4c738eac4613b9a7d78c256ca99fbeaff6d8d6c0c94bfd9d8",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/integrated-local-metadata-02-wire-response.raw"
+        },
+        "162-corrected-context-replay-v1/results/local-procedure.json": {
+          "bytes": 1459,
+          "sha256": "b01530957d02292950658d1bfbeb73f3fb895d3c2dbd76e376b2f3604ff9cbe0",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/results/local-procedure.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/diagnostic-procedure.json": {
+          "bytes": 589,
+          "sha256": "cb55880efa0bc41ef9bcb5fa3d4ec900a845bcc6df313a92bb9ed82fac0e69cf",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/diagnostic-procedure.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/endpoint-after.json": {
+          "bytes": 650,
+          "sha256": "ca541056c1e7e0ba4875f7a90e55e7bcb4def4a059873e13e1b01915adbe071d",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/endpoint-after.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/endpoint-before.json": {
+          "bytes": 111,
+          "sha256": "8a13a44afef492d1e0b58abdde4409ab8da228776bb23a9cb1f45c9193501426",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/endpoint-before.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/execution.json": {
+          "bytes": 569,
+          "sha256": "e38575390ce2e1f39d8aaf9693c0b37570f175e318d7b5ec99a10dc790cbf57e",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/execution.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/execution.log": {
+          "bytes": 397,
+          "sha256": "b56d8c2ac991640a6175cd299a05104806b8e81e45db3eadeca3457d4b024f16",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/execution.log"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/index-dev01_fresh_tea.json": {
+          "bytes": 340012,
+          "sha256": "a0a0b3bb4ec2bd68422fe7ba2527a40ae9b5c5c567d0bf8b2cd58e697b5598d3",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/index-dev01_fresh_tea.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-context-profile.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-01-http.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-01-wire-response.raw"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-02-http.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-02-wire-response.raw": {
+          "bytes": 7205,
+          "sha256": "93560b3fd5a37f5cdebe22735fcbb91880f0b3c4937fbb44b7db5eb45e6cf9af",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/first_observed/integrated-index-metadata-02-wire-response.raw"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/endpoint-after.json": {
+          "bytes": 650,
+          "sha256": "725449d7eea1a50a157edb8cafb96de031483bbc382cda82013995758bca7adb",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/endpoint-after.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/endpoint-before.json": {
+          "bytes": 650,
+          "sha256": "a0c26dd9203e30a05f54e894515f375a9d33e3efdaf1602851475fce1a2a4817",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/endpoint-before.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/execution.json": {
+          "bytes": 569,
+          "sha256": "8574f4cbfb64fdc5453e4ed2b5ab0eb616cd3c81fa07ca746cc25b4c884e318e",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/execution.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/execution.log": {
+          "bytes": 273,
+          "sha256": "ab90fcadd55be67529990fbd5fd675641ff31f91b6f2995e2f93c73c5833cef8",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/execution.log"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/index-dev01_fresh_tea.json": {
+          "bytes": 341215,
+          "sha256": "8c6bb960438f199554621d9d7ab0d7f554eed500c7c6ec8ce631c0917094413e",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/index-dev01_fresh_tea.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-context-profile.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-01-http.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-01-wire-response.raw"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-02-http.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-02-wire-response.raw": {
+          "bytes": 7205,
+          "sha256": "93560b3fd5a37f5cdebe22735fcbb91880f0b3c4937fbb44b7db5eb45e6cf9af",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/immediate_followup/integrated-index-metadata-02-wire-response.raw"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/input-integrity.json": {
+          "bytes": 66,
+          "sha256": "5a1d7873b142a1d57f5aafbcca3e75310bdeffb502015897ac633335c638bdda",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/input-integrity.json"
+        },
+        "166-dev01-cold-warm-diagnostic-v1/interpretation-and-limitations.json": {
+          "bytes": 1166,
+          "sha256": "af6237152da44a3c4a26ca9d697a8f7962071480b3e625ed932dd55183f27e4e",
+          "source": "/private/tmp/evie-memory-stage5/166-dev01-cold-warm-diagnostic-v1/interpretation-and-limitations.json"
+        },
+        "167-context-repro-v1/dev05_clear_reference-tool_only-local-summary.json": {
+          "bytes": 1285,
+          "sha256": "e163dd796bf7dfc8b18e9c620c0a64d42e7be23c3c19e4337a5f1fcf40dd4965",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/dev05_clear_reference-tool_only-local-summary.json"
+        },
+        "167-context-repro-v1/dev05_clear_reference-tool_only-local-traces.jsonl.gz": {
+          "bytes": 7381,
+          "sha256": "af7168933371592ffc071e49ae2074a945a56a5f51c051700960f40be1715cd3",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/dev05_clear_reference-tool_only-local-traces.jsonl.gz"
+        },
+        "167-context-repro-v1/integrated-local-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/integrated-local-context-profile.json"
+        },
+        "167-context-repro-v1/integrated-local-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/integrated-local-metadata-01-http.json"
+        },
+        "167-context-repro-v1/integrated-local-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/integrated-local-metadata-01-wire-response.raw"
+        },
+        "167-context-repro-v1/integrated-local-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/integrated-local-metadata-02-http.json"
+        },
+        "167-context-repro-v1/integrated-local-metadata-02-wire-response.raw": {
+          "bytes": 7202,
+          "sha256": "321dbc1b3df1cae2e0367667f473c3920ab8fc609ae67c7893b53f83a6baef8e",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/integrated-local-metadata-02-wire-response.raw"
+        },
+        "167-context-repro-v1/local-procedure.json": {
+          "bytes": 932,
+          "sha256": "952817b85c7d41d80d144bc58f1f947ca93e90b9a7bb34693f20ace4cdc76e28",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/local-procedure.json"
+        },
+        "167-context-repro-v1/replay.json": {
+          "bytes": 574,
+          "sha256": "44d29b3836c7a6f05df8baa910d7e16652dc17261cdfd47c909eb8d2ecd21bd0",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/replay.json"
+        },
+        "167-context-repro-v1/replay.log": {
+          "bytes": 687,
+          "sha256": "b3c9baa1fa38ada288e53a626a4c171cea85a9b842b8f6e4d90177eb1d29b706",
+          "source": "/private/tmp/evie-memory-stage5/167-context-repro-v1/replay.log"
+        }
+      },
+      "original_bytes": 1899304,
+      "sha256": "1b0a2533da239f89d910e288ebc4d44c5b787968db064b09eedade8e3090e19a"
+    },
+    "raw-index.tar.gz": {
+      "bytes": 664864,
+      "members": {
+        "integrated-development-v1-index/execution-freeze.json": {
+          "bytes": 234,
+          "sha256": "90058ecfe950e2b1b434f7a2c6d4467aca86c9e5fe26a19b41c7a0375c1eaf79",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/execution-freeze.json"
+        },
+        "integrated-development-v1-index/execution-started.json": {
+          "bytes": 373,
+          "sha256": "f1783f70f39c91c169bc2ba56d06bda6bf6f4bc794e4c3abc8b3f922b6ed7eca",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/execution-started.json"
+        },
+        "integrated-development-v1-index/execution.json": {
+          "bytes": 479,
+          "sha256": "99a031d8205b0fc45755b3e633d507b7ca73ee87bebc70141902a8e9eb3ed45b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/execution.json"
+        },
+        "integrated-development-v1-index/execution.log": {
+          "bytes": 7232,
+          "sha256": "f4fdef1bcf62343a7717a1bfae43ffa27b475ffee498327f28adf41defd939e1",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/execution.log"
+        },
+        "integrated-development-v1-index/index-dev01_fresh_tea.json": {
+          "bytes": 339988,
+          "sha256": "7eb695219864554dddee063e472e8b22ab80d9a6afa91a02c62a9d54649902b6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev01_fresh_tea.json"
+        },
+        "integrated-development-v1-index/index-dev02_fresh_desk.json": {
+          "bytes": 344446,
+          "sha256": "1b3028420d7022116832df1746eab2b4c9cb330475a0cff8f1bdadd5cc897e39",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev02_fresh_desk.json"
+        },
+        "integrated-development-v1-index/index-dev03_uncompiled_bike.json": {
+          "bytes": 301451,
+          "sha256": "3602455816a2f775b04d14a16cd6f2dd67a5ad6ff52e13a8510663897515968f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev03_uncompiled_bike.json"
+        },
+        "integrated-development-v1-index/index-dev04_uncompiled_plant.json": {
+          "bytes": 301160,
+          "sha256": "ccce5d0eee1d8a98004e7651cd48bd3134f55e2d0a237098e23eff35b715d918",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev04_uncompiled_plant.json"
+        },
+        "integrated-development-v1-index/index-dev05_clear_reference.json": {
+          "bytes": 234992,
+          "sha256": "00c6b469d3233e91b52a7901486377eea1a7e55a5963d69caeb78e4064883543",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev05_clear_reference.json"
+        },
+        "integrated-development-v1-index/index-dev06_ambiguous_reference.json": {
+          "bytes": 225295,
+          "sha256": "81898b6cf882062ee3c310203745fd254c1b1daeb2908520fdf70da347eeb833",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev06_ambiguous_reference.json"
+        },
+        "integrated-development-v1-index/index-dev07_compacted_clear.json": {
+          "bytes": 261082,
+          "sha256": "92fa493b6922d738779de310c9606e2c25ffc9bb5da3d9ce19803774f54f649b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev07_compacted_clear.json"
+        },
+        "integrated-development-v1-index/index-dev08_compacted_ambiguous.json": {
+          "bytes": 260563,
+          "sha256": "d73f9cd502f26e6ac956ca4918a82cd37f0d4bc76ea5690ef632ad3a21922442",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev08_compacted_ambiguous.json"
+        },
+        "integrated-development-v1-index/index-dev09_exact_alias.json": {
+          "bytes": 381995,
+          "sha256": "fe7a2e79d6873c6b15944938fff675a94fd51318c50eade6adcc198f041d810e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev09_exact_alias.json"
+        },
+        "integrated-development-v1-index/index-dev10_exact_entity_id.json": {
+          "bytes": 381517,
+          "sha256": "766b30b2f5e20f82c48ca1eb0400103319b92ba44f762e98eae812cffe0d076b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev10_exact_entity_id.json"
+        },
+        "integrated-development-v1-index/index-dev11_graph_bridge.json": {
+          "bytes": 223130,
+          "sha256": "3d347d5b2e63913074e579594b1f743ad6ec59933bae000ac1b2e0cff71206ce",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev11_graph_bridge.json"
+        },
+        "integrated-development-v1-index/index-dev12_dense_sleep.json": {
+          "bytes": 222233,
+          "sha256": "e37f0c38680372ad95cfecc6ccf9b75d409b50d64f84fb4687b1f057413396b5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev12_dense_sleep.json"
+        },
+        "integrated-development-v1-index/index-dev13_neighbor_clamp.json": {
+          "bytes": 329928,
+          "sha256": "415564a83a3f6eac7f224816d636ed43420b85a3dbfde31b62085fd208edbaad",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev13_neighbor_clamp.json"
+        },
+        "integrated-development-v1-index/index-dev14_neighbor_tentative.json": {
+          "bytes": 329069,
+          "sha256": "f112656284fdbedd342e5055f2823de917df3e6f966431b31b8ff9e0623a0859",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev14_neighbor_tentative.json"
+        },
+        "integrated-development-v1-index/index-dev15_historical_validity.json": {
+          "bytes": 219846,
+          "sha256": "e17bd0dbfddd29f11c42e80d64c3e847cd1d00150b13768ef15305c7600d2268",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev15_historical_validity.json"
+        },
+        "integrated-development-v1-index/index-dev16_retired_suppression.json": {
+          "bytes": 414095,
+          "sha256": "4f6d3e0cf29ee5d336e4ad8bfe5e87bda8ccf6adb4de3ce64d7e8b3234a091e9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev16_retired_suppression.json"
+        },
+        "integrated-development-v1-index/index-dev17_conflict_newer_owner.json": {
+          "bytes": 428717,
+          "sha256": "395410b13e31b67aa1ecaa29f432b088c67d965c38a2899270efb96fe814f30e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev17_conflict_newer_owner.json"
+        },
+        "integrated-development-v1-index/index-dev18_conflict_tentative_update.json": {
+          "bytes": 424436,
+          "sha256": "0e265e53517fe9d4da7c64598cc919e6586443518f6e51abd3d62ac20660c61f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev18_conflict_tentative_update.json"
+        },
+        "integrated-development-v1-index/index-dev19_quoted_other_person.json": {
+          "bytes": 299629,
+          "sha256": "7a7f6602a768b5b8ef1e334bee09911ad441eee0e21088d7dc580205c2b09787",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev19_quoted_other_person.json"
+        },
+        "integrated-development-v1-index/index-dev20_assistant_inference.json": {
+          "bytes": 301300,
+          "sha256": "182ca3f85afcf95b9b37229822b35a383e8793d3673c4ddc45c28a5a7bc7bb87",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev20_assistant_inference.json"
+        },
+        "integrated-development-v1-index/index-dev21_unanswerable.json": {
+          "bytes": 271402,
+          "sha256": "83ac4f1aa13c7439804835cdd94288c1d776120cc8b0774d1bdad6e7f830fc3a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev21_unanswerable.json"
+        },
+        "integrated-development-v1-index/index-dev22_memory_unavailable.json": {
+          "bytes": 216018,
+          "sha256": "33beee00f314d39390e370da5b137e26c23e35513b22f36735cf7b1b1b20d4df",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev22_memory_unavailable.json"
+        },
+        "integrated-development-v1-index/index-dev23_no_memory_needed.json": {
+          "bytes": 270390,
+          "sha256": "469071ae3c6ad973850ee4cc16c95bd899787f6709a93edd91504be2661636d8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev23_no_memory_needed.json"
+        },
+        "integrated-development-v1-index/index-dev24_scope_boundary.json": {
+          "bytes": 291190,
+          "sha256": "83bff100705507b39f7d513c2d30e7b88d75fb083af4f4263175ad61e3ac4415",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/index-dev24_scope_boundary.json"
+        },
+        "integrated-development-v1-index/input-integrity-after-run.json": {
+          "bytes": 24,
+          "sha256": "1ae748d5796cc995906ddf0fba5e5626f9c1c6ac79cec8fb465106e92254a77b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/input-integrity-after-run.json"
+        },
+        "integrated-development-v1-index/integrated-index-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/integrated-index-context-profile.json"
+        },
+        "integrated-development-v1-index/integrated-index-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/integrated-index-metadata-01-http.json"
+        },
+        "integrated-development-v1-index/integrated-index-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/integrated-index-metadata-01-wire-response.raw"
+        },
+        "integrated-development-v1-index/integrated-index-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/integrated-index-metadata-02-http.json"
+        },
+        "integrated-development-v1-index/integrated-index-metadata-02-wire-response.raw": {
+          "bytes": 7139,
+          "sha256": "8d70d3a43cc698ccf2eebc775ae8f028418ca131b1ec629e18b89dc4336db647",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index/integrated-index-metadata-02-wire-response.raw"
+        }
+      },
+      "original_bytes": 7291590,
+      "sha256": "0648a11a25db7dde5f684501c7b693c4d440a69833d64d766ff9c74fd06fa633"
+    },
+    "raw-local.tar.gz": {
+      "bytes": 5684774,
+      "members": {
+        "integrated-development-v1-local/dev01_fresh_tea-automatic-local-summary.json": {
+          "bytes": 2611,
+          "sha256": "cb0257fd9388e28ed3765a36b9c405bb6762287410f458aa892c96f08c1ecfd2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-automatic-local-traces.jsonl.gz": {
+          "bytes": 37702,
+          "sha256": "3b511904a01cfc6d08af039b878dca4736bfe66b1c6789d26654f9574bf4d0e7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-automatic_deeper-local-summary.json": {
+          "bytes": 2617,
+          "sha256": "56cbf146cdb99ca4f45efcd8283bfb2cc9d8c5a9f199e2fcc5f2064ff5e8a775",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 99523,
+          "sha256": "8161fee1f2232cd722f088557d57242066a5d5093c2661e6311dc7aed1f832dc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-no_recall-local-summary.json": {
+          "bytes": 2151,
+          "sha256": "9dfcde4dff9f4edc7eea3441d0eb4b17950d9924d39820d5c0b7f79ced26c360",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8264,
+          "sha256": "fc7092711ae0cda5b177f1296f995cad72133e0335edcbcb57355ea4c188fb80",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-oracle-local-summary.json": {
+          "bytes": 2424,
+          "sha256": "dd4899e3566e5ed3e28ce2211f2018ea7f0e7b507a34965564becdc1305bd2cd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-oracle-local-traces.jsonl.gz": {
+          "bytes": 13116,
+          "sha256": "553cdb21b9e1f066d091019bad94e639c1781beee0d3b6da26f29c41ef96e0c9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-recent_context-local-summary.json": {
+          "bytes": 2156,
+          "sha256": "dfda6d76b0cba6370aff3028fb810c59fa96d1dfa0e94f7ac5c3734328623fca",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8252,
+          "sha256": "aff9eed83ba05b63b2ce6582dd34552e6dd4e1a89b8949ce4dd94e16eed80fe0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-tool_only-local-summary.json": {
+          "bytes": 2565,
+          "sha256": "f33900c6122824438ae29398e88e67d340cbc2e4a3b2f2ceb561bb5b7cc772c0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev01_fresh_tea-tool_only-local-traces.jsonl.gz": {
+          "bytes": 105925,
+          "sha256": "eb1ca2547669d106ed4f08e37d578dccfe54d398e706053b368f946d453655af",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev01_fresh_tea-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-automatic-local-summary.json": {
+          "bytes": 2608,
+          "sha256": "b3024462dc6ca4bbbb70bc3d43304c4ed2d958d751d855356afa1b586b046a70",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-automatic-local-traces.jsonl.gz": {
+          "bytes": 38179,
+          "sha256": "3fb216f881c27b6f2c687c447cb2781babb352b395d58c926568e2692a3e87d5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-automatic_deeper-local-summary.json": {
+          "bytes": 2619,
+          "sha256": "526303e9839f08d843911045edc348693083bc118203750e93984e3e6df28882",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 157364,
+          "sha256": "8ab04a1d9c46cbe9d46ebaeb1b27afc371fa25aa2201f7dbd1bc35568001b050",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-no_recall-local-summary.json": {
+          "bytes": 2152,
+          "sha256": "49337267016e21a5c20d80bb5eebf9d077f01895da32b64a4438454d9070e84f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8232,
+          "sha256": "0863079834f58ff6abcb5f9a9420a2e8331b5dba5eebf46b1b93360dedbd6516",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-oracle-local-summary.json": {
+          "bytes": 2425,
+          "sha256": "9f6ea22117a4027778f85fa13311c57de0babfae77614290a8662eeb5d0043c7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-oracle-local-traces.jsonl.gz": {
+          "bytes": 13242,
+          "sha256": "619bb66d5744757c86bdfa02c6245e4986c91685ef7880e876dcdb0858f85d04",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-recent_context-local-summary.json": {
+          "bytes": 2157,
+          "sha256": "84d43ac1e3b6ba98a79dbfbf464c88bb44d961d0d8f348e0a98266442b043918",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8248,
+          "sha256": "e8cd9a58313e34fae7d4bd08fcacb88bd00b73cc612efbf51657fc71524a7147",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-tool_only-local-summary.json": {
+          "bytes": 2566,
+          "sha256": "96ef6e3cd31ba4ad5b71c0debad505fcb37f0da1e507e8592e93acf2cad3037b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev02_fresh_desk-tool_only-local-traces.jsonl.gz": {
+          "bytes": 106749,
+          "sha256": "c6c5dfa4da2bfed130c821ad60604318b35d4481cffcb6a3e35d9ad37231987e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev02_fresh_desk-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-automatic-local-summary.json": {
+          "bytes": 2617,
+          "sha256": "ff79d2ea1a91ac1179685fd85394f83490519e43b1ece8677634c8fa0284a158",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-automatic-local-traces.jsonl.gz": {
+          "bytes": 15832,
+          "sha256": "dca780d0716aad31f8549cb5aba732e5327a8071c6d78ddcfba5161b5b453c80",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-automatic_deeper-local-summary.json": {
+          "bytes": 2620,
+          "sha256": "b438ac6a5a96732042b64fd31f3a7d8a2e3dffd00b2e08985e38928faaaa628d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 93573,
+          "sha256": "327c57919ef9278575efcaaea92c73c9b4fd7b516248ec09a854cc50bc5c99e6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-no_recall-local-summary.json": {
+          "bytes": 2157,
+          "sha256": "9613783a42c3839ce636b5b1fd08bc4204add9ebc56f42aefb6a20def65e18b3",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8320,
+          "sha256": "698290d2645f23112a0a7aa7d11ecd64c67d9bd6792a7deb9e5129cc1e94bc1c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-oracle-local-summary.json": {
+          "bytes": 2384,
+          "sha256": "cbc9f107f582dce4448e017bbdb8870ceb372cb9351a9f797fa5a55cd64b5075",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-oracle-local-traces.jsonl.gz": {
+          "bytes": 12205,
+          "sha256": "960b4162252eb3a7322c238f787987b12f1ac818cf8b5c42edf8e03e782c23bd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-recent_context-local-summary.json": {
+          "bytes": 2162,
+          "sha256": "715efb817b235de50023cd34c36590f33980ab75c3717fc40dc9ef61d1a1e150",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8372,
+          "sha256": "a23a30e234d3f027cecedb7d1b358873bcc6ff15750d2bbccd3259219660c43a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-tool_only-local-summary.json": {
+          "bytes": 2571,
+          "sha256": "60329bc70bdb5ca6943c63135a6408d2c0b2d9886d6161fd84ec3605745e436d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev03_uncompiled_bike-tool_only-local-traces.jsonl.gz": {
+          "bytes": 87457,
+          "sha256": "38918f03b38ce6fcf982daeae87d8d2a8e009191b5078f3ce91ad1d58a05ccdc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev03_uncompiled_bike-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-automatic-local-summary.json": {
+          "bytes": 2618,
+          "sha256": "8d05526e2f2ca68959a24c0e7365b4ef501dd362e1f0acadbdcbdafe2fad0dbf",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-automatic-local-traces.jsonl.gz": {
+          "bytes": 15740,
+          "sha256": "ce5db13aaf031fbac1e392b49046d706ab96cfd6f0a4eb84a048dca057dd09c6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-automatic_deeper-local-summary.json": {
+          "bytes": 2620,
+          "sha256": "d8cb5564a21b809811dfef9afaaaa176f7d6cfa73c82f36a3b6f8c00cfb7a85a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 93782,
+          "sha256": "9c51b20884dd3e6dd22d9fd5d31b7c6bb2d06b8d65e3d04af4db37c9f4c4b010",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-no_recall-local-summary.json": {
+          "bytes": 2158,
+          "sha256": "517c8bfce644468964cf62171087963f8069a3de3f6b71299a7cb2cee8e21711",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8293,
+          "sha256": "8bbad5effaec4983ef183c4efe1c3ca1bfaf624d36a559b1b56e5126ef779dcc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-oracle-local-summary.json": {
+          "bytes": 2385,
+          "sha256": "a90f66c2019f95e95a35b653f5d47e2ee2de969f0b199e637372debd06c3c360",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-oracle-local-traces.jsonl.gz": {
+          "bytes": 12178,
+          "sha256": "288bf82cf365ea3559efb67959503d003e733796d2a4c929946a3a957547cd4f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-recent_context-local-summary.json": {
+          "bytes": 2163,
+          "sha256": "2d0f2cd55badd30833bd956427d9b7177f73aa268650d26834bd11fad2ebc31e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8383,
+          "sha256": "31cfcfa35d4c5697b5063b846f7a1e45088a4e6622a3d9d4023ec761b59c6c7c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-tool_only-local-summary.json": {
+          "bytes": 2569,
+          "sha256": "c9ddacaeba553df732837140a47f9783e81b076171286156266eda9dbd8eb3e5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev04_uncompiled_plant-tool_only-local-traces.jsonl.gz": {
+          "bytes": 85881,
+          "sha256": "9f4d88393b01d31efee719d2c9ec6b2f8b21824d110d3901ddf4c0ad0a95280c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev04_uncompiled_plant-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-automatic-local-summary.json": {
+          "bytes": 2617,
+          "sha256": "beb164a955ffde4c534f9b3dee1acb84eb47748427d20bf63d474ab487739793",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-automatic-local-traces.jsonl.gz": {
+          "bytes": 49200,
+          "sha256": "7bfe8364d0a4a138a8f844b9c80202c2b81251a1142b8be83e419af65567c54c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-automatic_deeper-local-summary.json": {
+          "bytes": 2621,
+          "sha256": "e5c6cf71f8e17828b2206267ae6a255082128c17ee58b1610c49b475d5f369ba",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 149965,
+          "sha256": "386065dae6192376492867a04e1cd123bf744ce5a2b7658558ac2782a4fa5737",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-no_recall-local-summary.json": {
+          "bytes": 2157,
+          "sha256": "da81241d3c253f49174cd5679812a7ed946b3a340a2a87be9cf34a190dc82201",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8256,
+          "sha256": "a4323c39c82338d393732e8c1d05d174946bd7fbb781357f53b33fb50047524f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-oracle-local-summary.json": {
+          "bytes": 2430,
+          "sha256": "518bc1cd2bd1db0a00e690a19ed290b24998d50694d876ca49da4ec14698bdd4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-oracle-local-traces.jsonl.gz": {
+          "bytes": 13547,
+          "sha256": "b83e4da669e7a2a7cd2a0c61ac0d97ca4899cb39651d69acf2a004705a2bb4b7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-recent_context-local-summary.json": {
+          "bytes": 2162,
+          "sha256": "15da4149fe78914668fd51a4c1e3885ff8d6b5542f7c40069380a94f3f621a4f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8647,
+          "sha256": "98ba98b3a7f9353856f5fdc257733363f576a59813e9a1ded4a88eebcbf6c093",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-tool_only-local-summary.json": {
+          "bytes": 2386,
+          "sha256": "ec34d96fe4ec4a8bcb351584a9ddb84fc88cd0f1cb62b8bd224964a08f1e6a32",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev05_clear_reference-tool_only-local-traces.jsonl.gz": {
+          "bytes": 59314,
+          "sha256": "c0f4e400b213d65269f592e37bd23d00ee92448374ea0e0b680f4eae274ed026",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev05_clear_reference-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-automatic-local-summary.json": {
+          "bytes": 2621,
+          "sha256": "3c6e5bf53515fbf3d00fdf4f6a0f3dd47b05dc4c67ff6dde43999d47c5587401",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-automatic-local-traces.jsonl.gz": {
+          "bytes": 47963,
+          "sha256": "6f771d76017a8f2d03cbfb39c5e726390fc74a5295aa603ba483491b594b9c4d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-automatic_deeper-local-summary.json": {
+          "bytes": 2629,
+          "sha256": "7cd9855b3737389171b80447703572b892edd44a73188e205885fa3121f9c262",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 142968,
+          "sha256": "33651f2fcb51b3440be31360f1a679c54aae554281e3dfb91155bdaf894ba564",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "f01e2240c807cbdade6cee41e216a9cf960d48ca7ed9eb73bb5ef337966a0863",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8299,
+          "sha256": "3f61f26995d04ebf2ef6a5b64c7299489326ddbfc05b3ded6d472d858de1edfd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-oracle-local-summary.json": {
+          "bytes": 2388,
+          "sha256": "d7632f7a84f569f59df5b6621687bff9bb4ccf9ffa70393052a635d13bc2497d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-oracle-local-traces.jsonl.gz": {
+          "bytes": 10531,
+          "sha256": "e00872ad124d9ddff207bcd3b889aab541760b54a69be7d3b966e9f236bcadd0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "3cca3119bbfae1e078891ec4a2269ce9a005ef18c4fdd6cdf78806409f0d5270",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8548,
+          "sha256": "750f3ab88b6e97ee47e55103c567d17760a3469cd4a030fcf7775054b9d77e69",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-tool_only-local-summary.json": {
+          "bytes": 2392,
+          "sha256": "0fdc6b5a6fb42be27f58c44b3c723b39529317e50241972b33ddfd8e9787240f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev06_ambiguous_reference-tool_only-local-traces.jsonl.gz": {
+          "bytes": 51778,
+          "sha256": "994399ba4cf7a26e31d4e86f065a0b681c2ca5eb8b5951d0ed19627da616dc50",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev06_ambiguous_reference-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-automatic-local-summary.json": {
+          "bytes": 2609,
+          "sha256": "927030363d78963109fa56b4a1cdadab0e7642932d5007e14d12c72e0b911820",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-automatic-local-traces.jsonl.gz": {
+          "bytes": 49973,
+          "sha256": "b4d43924fe9e1feaf6b89f0d307750286b697c70c1618cb61efca5a817273714",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-automatic_deeper-local-summary.json": {
+          "bytes": 2623,
+          "sha256": "1f589b9853079071eb8ee87ff43f3f11a3872fee22b53db7bbe04bfe9d14367a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 172570,
+          "sha256": "df3f8e2e960c21cf2deef7516119c72f4b63a9e33b77f4e9fb1f628cdd913761",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-no_recall-local-summary.json": {
+          "bytes": 2157,
+          "sha256": "049ae9434718dc8dbac383998d1ad86837128500ffc24aa12fe5ac781d3151f2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8254,
+          "sha256": "5c45df46a35955dffe55e687a6b0168fdfbb1619538bd0e8075490f61236d8f2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-oracle-local-summary.json": {
+          "bytes": 2430,
+          "sha256": "6860f067972fa69b41f78219377b4f67f2fec06f01e2bd2a13a24093b3b98731",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-oracle-local-traces.jsonl.gz": {
+          "bytes": 14080,
+          "sha256": "1362c803e6455da0b81889a42f81bebaf73481bc8b2afaa29129545215a34f6e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-recent_context-local-summary.json": {
+          "bytes": 2162,
+          "sha256": "e0a3ee69d3d438c226ecf607dad561e81e86c1cc85a3bc5f28aceba7aef32639",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8919,
+          "sha256": "7b0d728635f4a1bf81ed662783f7d50c8fd8637d3db41f3c463be64f4264facf",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-tool_only-local-summary.json": {
+          "bytes": 2388,
+          "sha256": "ba521916e85fae960c2d566b84b00575c7acdc19d2fb3143f618f1a7d4ad021a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev07_compacted_clear-tool_only-local-traces.jsonl.gz": {
+          "bytes": 74681,
+          "sha256": "9bb2964bbff27496595d3d8d3e427e3bafde64cdada6ded6330ce8cd989d4951",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev07_compacted_clear-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-automatic-local-summary.json": {
+          "bytes": 2621,
+          "sha256": "55e7bab6ae17ebeeff343ec51621b83b1539ba2fda76a9fb38a42e944ae5570e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-automatic-local-traces.jsonl.gz": {
+          "bytes": 49888,
+          "sha256": "6baaae9d2d1937968faa2268f4c22fceb423f0fad5d4a20576a70cd6be02fae6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-automatic_deeper-local-summary.json": {
+          "bytes": 2625,
+          "sha256": "ce03b7da753993c5028cb752c333b79a9223aaebe8ffff2f5f7a48411cc11abb",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 175206,
+          "sha256": "1cf798dacef0fc9ebf388712a6c3056e285a97aa1fdfc3c377827ee6449f57ff",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "bd34eddb92af83788b04b18f24888df14a6a8dbb53c886e316f49ea90b72f0f7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8307,
+          "sha256": "bf4a388ec381ac0834f91636380465c8c0811ce389eb4940b41e4a65211e5599",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-oracle-local-summary.json": {
+          "bytes": 2388,
+          "sha256": "6ed05eb279683c27a46f158de799d1e473830c1ed0bac0470f0fc1f6d791c32b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-oracle-local-traces.jsonl.gz": {
+          "bytes": 10844,
+          "sha256": "aa157c38559b2ff812d3588abaef516d58c1b80ec45be4a089c71362a0b23135",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "bb18b368482a5e125a86c3330dcc5bbeb4d053e472e81d125e7069c13f35d7e9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8922,
+          "sha256": "b1ca7687f16b67b8c6ce53205dd2dbb183ba4b4416276228c6c9ce06460f3632",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-tool_only-local-summary.json": {
+          "bytes": 2392,
+          "sha256": "bc74ded429fb8a5633b16f725da62ac22729ee8d36b4390322c504f5c98a568b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev08_compacted_ambiguous-tool_only-local-traces.jsonl.gz": {
+          "bytes": 71015,
+          "sha256": "cf61d68c17863944fcbfaee574f87ce3843a12a0f1238095cf60323ab98788de",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev08_compacted_ambiguous-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-automatic-local-summary.json": {
+          "bytes": 2605,
+          "sha256": "3269ed5b9d0ffd512744aa1a0114c3d48d88440dea9a9c2e2cc2d2647c82051d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-automatic-local-traces.jsonl.gz": {
+          "bytes": 112260,
+          "sha256": "2c4fa40dd7ff112cb3dea0b63c1fa761d4022e8913f1046ee0c6c3fcc7573baa",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-automatic_deeper-local-summary.json": {
+          "bytes": 2618,
+          "sha256": "0b135de8583fd540f30f928ebaece1fe2dbc69dcb5f43c0fa28dba6c09c5e409",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 202824,
+          "sha256": "512a83efac22a6a420b3f70df0aebb7bff6595c4dbebacecc85a92afc3ebbda3",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-no_recall-local-summary.json": {
+          "bytes": 2153,
+          "sha256": "cb71efb66f8e432ccbb975db2994e577f82e2ce9faf27da3959b4c0f0ff028c5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8263,
+          "sha256": "40809aea60632f5dc79c4a9c72b3ed817cb0573d41fc0d6d2c24c8e5cb659a38",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-oracle-local-summary.json": {
+          "bytes": 2436,
+          "sha256": "93969f62f9df9e7524e5612744c70a60ec2f1f32b5087da385a6cadc7b0090dc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-oracle-local-traces.jsonl.gz": {
+          "bytes": 35663,
+          "sha256": "0893b506c3e741f5f705b9bba1c5eb833eb8ed2a4a2d63e8c8de0bfd42a07183",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-recent_context-local-summary.json": {
+          "bytes": 2158,
+          "sha256": "67e4ac992b287d8286fffb52ef4d7d49685d953a087b1fcb5586d58991b293a6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8258,
+          "sha256": "fd92c1ec8b7f686e950ac2b87288d0ca28d398ab4086c9de35c3bc081d65ddee",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-tool_only-local-summary.json": {
+          "bytes": 2567,
+          "sha256": "1fd9b73c9f0a89f280e01b5087db7055c637d7fabc02c4b49c0750713a321189",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev09_exact_alias-tool_only-local-traces.jsonl.gz": {
+          "bytes": 123974,
+          "sha256": "a97f95208cecfdcd1b8c5910576454bacd7ec305a77b0c65b684f2f76d5edbf5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev09_exact_alias-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-automatic-local-summary.json": {
+          "bytes": 2609,
+          "sha256": "ad04872751855a39fbe172c3756f34741cacb2dd223471a568df094162f04cfa",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-automatic-local-traces.jsonl.gz": {
+          "bytes": 48444,
+          "sha256": "57c1d43a3dfe5ae68eff9fe0f9655acd6ba73a907821746ad894dd9b26834fb3",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-automatic_deeper-local-summary.json": {
+          "bytes": 2623,
+          "sha256": "d99163ac24188d95374a4cc6b7bfebc85a9269fb68da73ca94fe20309e98d9a5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 195301,
+          "sha256": "fa810b67ecf284c3d2ee6c6e6aadddd195fd633cab7bfcf519388e1a398e102a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "c7666e831f20c8e985fb30a061feeb1be85915b4e56b1873cc079379af0d592d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8332,
+          "sha256": "b43c0612bdbe1c6355eb0dc59bfd156798ab33153a5c70484537c7802209f68c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-oracle-local-summary.json": {
+          "bytes": 2430,
+          "sha256": "20ab04ed8c0e0152cd19cac17e03946aed93ec6d8529ff3cda66279e1f550a4d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-oracle-local-traces.jsonl.gz": {
+          "bytes": 34198,
+          "sha256": "e3e0a995ce88798aedc96fafda3c383da499bcbbe379685d4a3ebeb9e8f058cb",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-recent_context-local-summary.json": {
+          "bytes": 2162,
+          "sha256": "23a35fac01d02a6c567e00872ef810c8c29810adc236125aa8b829f240ea34ea",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8362,
+          "sha256": "dd2ff264a7ff3ea351dfb2741f81c39ced7af3f1f2d08663d79d9c2a4f27d890",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-tool_only-local-summary.json": {
+          "bytes": 2571,
+          "sha256": "01a07b953bd6b6b5c3e690b74124878439a524df161068b1a485bc137ee64fc8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev10_exact_entity_id-tool_only-local-traces.jsonl.gz": {
+          "bytes": 122296,
+          "sha256": "ab9e774930faa06b449a5a938848b7fd20fbdbbe2f9ae3761b6235d1c304e72e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev10_exact_entity_id-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-automatic-local-summary.json": {
+          "bytes": 2606,
+          "sha256": "ae5f9f5609d50c155ad1b085b2c3cc18b542cf475c992dadfa26835deed9468b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-automatic-local-traces.jsonl.gz": {
+          "bytes": 45059,
+          "sha256": "61629d02219fb953b2a06d549a6c8eae434990cfa49f032099e0c91396daeb88",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-automatic_deeper-local-summary.json": {
+          "bytes": 2616,
+          "sha256": "e795e14fa3b6faa52cd9450bc3b7a68dddbf74ee20cc713cd0e8b0d65603081d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 144975,
+          "sha256": "4af33b29448cea8246d8cab510c51bce8e00fead63bd00b5840bcf6a423bab33",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-no_recall-local-summary.json": {
+          "bytes": 2154,
+          "sha256": "ce8b19f9adde3f7e3bae9d5719e940ab8e9160ab3c82fef102391e66a027a2ee",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8279,
+          "sha256": "cb5da02f66486a506e16bcb53d046b683a24f0f8fb6ebe0f35c16a02bfe0d952",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-oracle-local-summary.json": {
+          "bytes": 2427,
+          "sha256": "6309af622549b093c311296c65f96c7e865b9726cf246c8177f2d9dc5f0f7394",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-oracle-local-traces.jsonl.gz": {
+          "bytes": 40799,
+          "sha256": "9a6877c8ba5c2f930e27f52efc221cae2f52e2b0a4af9b2e87bd1a9d348faa47",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-recent_context-local-summary.json": {
+          "bytes": 2159,
+          "sha256": "0166693b7e0d6d0da9b90e10f26931004881d03bf901f2e9fa73501ef0d01a40",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8277,
+          "sha256": "f5482859a1984ff5df64f8de2a810f29e285a850e61ed9cac884e1e4c4941bcd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-tool_only-local-summary.json": {
+          "bytes": 2385,
+          "sha256": "57187f244f7e499756901a2d3dc090adb1329c1200150672caa7354a1abf1f9e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev11_graph_bridge-tool_only-local-traces.jsonl.gz": {
+          "bytes": 48570,
+          "sha256": "b70b77f7ec5c6f5d590d1d1460939fb6e910afb41458e4ac7d31f87b3f20f83f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev11_graph_bridge-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-automatic-local-summary.json": {
+          "bytes": 2613,
+          "sha256": "20cd3fe4c56c3d453a43f3817e5928fffa9226df18fbd5feadca20839a67b7fa",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-automatic-local-traces.jsonl.gz": {
+          "bytes": 14071,
+          "sha256": "9d13ba463200e5a90276ebfad370050a0794cccc495793c17ee7038be2b88057",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-automatic_deeper-local-summary.json": {
+          "bytes": 2615,
+          "sha256": "5cd58bd67086e701e4f90afdb100420eb81a12e2010447841bff00d761341ae8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 65535,
+          "sha256": "bcfc41fd74225646023c6bd6aa17ca7ae1818e6759396ce1454daa2e7d530200",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-no_recall-local-summary.json": {
+          "bytes": 2153,
+          "sha256": "0823d7c45f7505fc47246dfee5205ec3a80ca9af432ef5984d0823fca1ee7f85",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8307,
+          "sha256": "17dacc797f52bfa5632f22b27567556fbb9e24276aac01d684a2b18ff7456838",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-oracle-local-summary.json": {
+          "bytes": 2380,
+          "sha256": "ab98d0addfbae1acd02211f05d21056d9cfe35de466c5ada37d20d60922bd400",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-oracle-local-traces.jsonl.gz": {
+          "bytes": 12215,
+          "sha256": "35b3fb7f6864e1c4a026cc543128bf400010b9257b76c7fc8c1a086d69e2b15d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-recent_context-local-summary.json": {
+          "bytes": 2158,
+          "sha256": "516efcd5890f44e8416f019e0409e73677608d9828dd6fb24e85181f68b9b98e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8324,
+          "sha256": "ac15f66b7d028fa7fa992209b062865ae32e688903f15e1c6ea6ae59c77978d2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-tool_only-local-summary.json": {
+          "bytes": 2424,
+          "sha256": "52bf097749f2f4b74eb53b2384b76c0dfae7cd96e03aee71a211ee921ce562bf",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev12_dense_sleep-tool_only-local-traces.jsonl.gz": {
+          "bytes": 73175,
+          "sha256": "1039968ffa3a3a992bae48ad01d24523511bbcb87fe360a1cb59d6d5bf573284",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev12_dense_sleep-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-automatic-local-summary.json": {
+          "bytes": 2616,
+          "sha256": "f5ee41f7627b1a7db5e8c3e096710bb8d67f941c40fdf7bf91b55217efc0adc6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-automatic-local-traces.jsonl.gz": {
+          "bytes": 36456,
+          "sha256": "fd6a6c83e1f01859770d43bd73aca335f685a3995787e1355172a05fe62ae64c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-automatic_deeper-local-summary.json": {
+          "bytes": 2623,
+          "sha256": "dd4f4056b914bd413204e043cb5225043b8be3db3bacf0798d3a3d0740af7197",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 92029,
+          "sha256": "a632ed0f9d82830a5fe9f628569472bdf8cf1d7a310c332f1b520b0b614d1655",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-no_recall-local-summary.json": {
+          "bytes": 2156,
+          "sha256": "40cf46289432d16b2c338ed3adee803c88cfa7934e30bcbfab83581ec27078b4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8371,
+          "sha256": "752a41855eb4b98ed39863631c086b9c664b69193822c86e5cfc82c927c8cd29",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-oracle-local-summary.json": {
+          "bytes": 2395,
+          "sha256": "00e9765ed179a894855afb3f1000bb6c4db74860bb99f6f5dd573a246917edcc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-oracle-local-traces.jsonl.gz": {
+          "bytes": 14056,
+          "sha256": "17cab32875361215e4afdfcd370f17c5f6298785cbc3565722d3c729670a814c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-recent_context-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "3bf99e0ff804505933396cf6c471226d7337348ce731d008ca3c8db8d777750e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8397,
+          "sha256": "a701522d70198bc9b8290abe9953e4cf02fd0d49a995915c263d81b3ea846606",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-tool_only-local-summary.json": {
+          "bytes": 2570,
+          "sha256": "37fb27942849c3986f4b6173c32be033efc60422e0b0c4209d5d9a450957f55f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev13_neighbor_clamp-tool_only-local-traces.jsonl.gz": {
+          "bytes": 85943,
+          "sha256": "bceb083437a3624746b0192beff5adc8f5c9f30c7c606a35641149e85186df95",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev13_neighbor_clamp-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-automatic-local-summary.json": {
+          "bytes": 2616,
+          "sha256": "8e36f115d4f2077e806e07b046b5397b8df8247c6d50ee042a48a29778bb7394",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-automatic-local-traces.jsonl.gz": {
+          "bytes": 35747,
+          "sha256": "bff91129961238f3353678e407e61d788ca8d8b8747181f0165981b5843baecd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-automatic_deeper-local-summary.json": {
+          "bytes": 2627,
+          "sha256": "919b628e9c1897c0a2e77591238aca49b5214b2c6598392afb8b8ac176ddcce7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 92023,
+          "sha256": "910445b4013bea7b3dd4568f5e95f474e9c1d6593c4a9c90c045726c33dbb40a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-no_recall-local-summary.json": {
+          "bytes": 2160,
+          "sha256": "9e84f458e2f12ce314ae0b14b1cb70e73f09594983e229b199eecf735b670e84",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8252,
+          "sha256": "29308b24cb2bca3066120cc7934d47d7fb477a14fd1726cb7ad0a9fda1b93425",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-oracle-local-summary.json": {
+          "bytes": 2394,
+          "sha256": "8514af62f3a0589aa6272001947e871e1fbff4a38524fb5dd374119f57fb8df2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-oracle-local-traces.jsonl.gz": {
+          "bytes": 13817,
+          "sha256": "ad42edecd41ea92bcf6f9fb6c9054c764cce8b2d5d22c4bfe53fead2f6984b60",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-recent_context-local-summary.json": {
+          "bytes": 2165,
+          "sha256": "daad469a032b09b147e5c5c4c9d91432c98ad0f1dfebde1919e01817138c2e76",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8300,
+          "sha256": "bed5342cc3b667ba87c3912f8da9a165e5d7ad7c05b181a7a384a027e5b2c567",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-tool_only-local-summary.json": {
+          "bytes": 2574,
+          "sha256": "da513778ab230057b2fd856a7306d226f37b943f0c1136d68f592eb7af1a0fe7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev14_neighbor_tentative-tool_only-local-traces.jsonl.gz": {
+          "bytes": 85428,
+          "sha256": "05201ffab1bfccbee22aaa889d7be632de422905ce5c2093faefdc93701e8fed",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev14_neighbor_tentative-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-automatic-local-summary.json": {
+          "bytes": 2617,
+          "sha256": "5db3530bc8a2edaf1b5da4ed5051b403e8ac186b1e7b892cf197a6a925806936",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-automatic-local-traces.jsonl.gz": {
+          "bytes": 41792,
+          "sha256": "b0fc8d86d57bee033dbdcaf68c4cdac92b45f8c2d9163f27e6f2dd72d0a5bd0b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-automatic_deeper-local-summary.json": {
+          "bytes": 2628,
+          "sha256": "2e12d11170aaf17a7ae56f779735e26fef4de895d4bf45638fc36872d72558ee",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 181778,
+          "sha256": "b90dc153838e746fdae5db07b771b7638407acdfa42e9caaae89b5ee176a831f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "9d55b0f1c1d159e68a8a15ddb483eb1f665d789cabaab6e5a701d66ce8232dee",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8398,
+          "sha256": "2f6f2f345da4435bd22e39e4814f54177fa130dfb7b64bd7e7a3029322dc2423",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-oracle-local-summary.json": {
+          "bytes": 2409,
+          "sha256": "90d42598cec0f479fd5e384ef02ef4522f6054567e55f19b00b3e0bc90e257aa",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-oracle-local-traces.jsonl.gz": {
+          "bytes": 13372,
+          "sha256": "73043d1eb5f1aff55ed2fdbe42a4d35cd83d2ea76016865034384101de0a43bb",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "123f0a5983d626a8dea43801ad4dbbc1bf70d3f0329896cd9db0e4515882cff8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8395,
+          "sha256": "cc2cfc65cb987355367c4d447e4c1eccb1a368592a1ecdfc7e4d2bdee8f3a87d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-tool_only-local-summary.json": {
+          "bytes": 2575,
+          "sha256": "73d238f67d25263858082715aa03efd234acce33b4976db03880c386d1c2d600",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev15_historical_validity-tool_only-local-traces.jsonl.gz": {
+          "bytes": 118683,
+          "sha256": "1118b133429396b526eba45c8d5bfaed68e06a179bc03067a455f19b2b09a7f0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev15_historical_validity-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-automatic-local-summary.json": {
+          "bytes": 2617,
+          "sha256": "cee0b0c2d962f1f79649e56ce5f35ea98862363c86c3429b4f44ee49944c73a6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-automatic-local-traces.jsonl.gz": {
+          "bytes": 44738,
+          "sha256": "3fefc843f98ad29c9171354cf77eba1b513716168cdf7f14419658041545aafc",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-automatic_deeper-local-summary.json": {
+          "bytes": 2628,
+          "sha256": "9bb4e6c202cf89a483b884631127aa4ea27ee11d9121573edcfab5ba4db434cb",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 199842,
+          "sha256": "d74b4460d46fe7e663182a9e1aad4a7ab436d2d5a2d54e290194a08099b08889",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "e6f635e43b2fb2057bb99de68e9b02f94b30206a4576a5c36f6d7aaddb7cb66d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8387,
+          "sha256": "80bfded18cb0506f6b53b6eeb2726340c09478809ab9d7a943ac310b77676de6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-oracle-local-summary.json": {
+          "bytes": 2438,
+          "sha256": "383df3da86a4b2ccb91cc1a7f1d6059213d7ff454309889538431145d1b91c32",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-oracle-local-traces.jsonl.gz": {
+          "bytes": 38227,
+          "sha256": "de52a4a2534d43085b00c727c5ee5fd5297651a1686a63b67249c580be7dc1a2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "cf9f24d00de51802a75c141d014d393c84d0497777ff4fa64e689c74e070327d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8374,
+          "sha256": "99f722304ad07d4c6e1ea1c75c2f10200310a97f293d9fb07462f53b28d34108",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-tool_only-local-summary.json": {
+          "bytes": 2575,
+          "sha256": "892b2871c67716e0de1040c58421887e50dc633333efb3040db1c48d66ed8d6d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev16_retired_suppression-tool_only-local-traces.jsonl.gz": {
+          "bytes": 184305,
+          "sha256": "f874742a6a6dd76d6fb6a3c2c16ad8cf98ecce6b426d785cd2ec49333398d4f5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev16_retired_suppression-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-automatic-local-summary.json": {
+          "bytes": 2622,
+          "sha256": "39a332db38e7b51deb9b3742c6081bc8fe94169f0527c7a932517005eee5e7e9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-automatic-local-traces.jsonl.gz": {
+          "bytes": 45496,
+          "sha256": "7c0f10abcc6b86344b4f83b5360ded4814ae72a9d518ab3a06cfc522d87e7be8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-automatic_deeper-local-summary.json": {
+          "bytes": 2630,
+          "sha256": "5c6ea1b2b63062a3182abf92dc9ebde7314b0ea4afb36767b34419a88beda2f5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 187254,
+          "sha256": "841b6717fd01a03d7ed3906770d0c5699b2ef75e8f45d6647757efcc3c61d06b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-no_recall-local-summary.json": {
+          "bytes": 2162,
+          "sha256": "30f7f51e507e6e2937752040fecea33c0b1659b74ffd6615ea59f2009be40c35",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8377,
+          "sha256": "81573b75b374c3d9cec40c28843a95d53e185a25b299695b66e61526f6e78444",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-oracle-local-summary.json": {
+          "bytes": 2435,
+          "sha256": "bfd171dc35b0d1646ad8b93b9e9ed8060106015145a91f80be38b45fc5e2e5fe",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-oracle-local-traces.jsonl.gz": {
+          "bytes": 41753,
+          "sha256": "020600023d863f5af6310f54cea8952ee494e56ceff2c2636cf63d038ac68813",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-recent_context-local-summary.json": {
+          "bytes": 2167,
+          "sha256": "50ba91e305f02c58a9f36f31570ff8dcda7fdc18e40b6e695e489d83475cd3ce",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8369,
+          "sha256": "3117f460441a2e77dad4839943d680c3984b9ac136b00f620780da9e1a89716e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-tool_only-local-summary.json": {
+          "bytes": 2577,
+          "sha256": "ae2a313073c042efd5f5c112791783df3936f72a1675dd34094c8ad2f149cd72",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev17_conflict_newer_owner-tool_only-local-traces.jsonl.gz": {
+          "bytes": 171678,
+          "sha256": "7f17d391195b183a2f1e4e7ecce9b6d9d998f9313083513fc754c3a2443f958b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev17_conflict_newer_owner-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-automatic-local-summary.json": {
+          "bytes": 2623,
+          "sha256": "b21b3c55d80b2d810f095e4a124c61d88335c0c59d830f05865003270d77130e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-automatic-local-traces.jsonl.gz": {
+          "bytes": 46455,
+          "sha256": "bb5f52867f906be4415adb039e2b01b5be79e9de8023cc925387f7cc629a889c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-automatic_deeper-local-summary.json": {
+          "bytes": 2634,
+          "sha256": "22b6dce7c94f6f3eb99ad460f2ed004457e76074e9382db6bd2e4d18ca21c035",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 186061,
+          "sha256": "c0cde1f02ed763f5214c600bb4a7a4c291156886f645d58d0dc6394192d7b378",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-no_recall-local-summary.json": {
+          "bytes": 2167,
+          "sha256": "fa40d52d2fc4b894ff5562b0068c198f9e9ae7bc79e256361449f3db2ccc551a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8317,
+          "sha256": "cb8ffa8c14b803d472851282e7c8175759b59de05de47cd58837dbb7136e5302",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-oracle-local-summary.json": {
+          "bytes": 2440,
+          "sha256": "edb7f8a72650db05db3cc3018436a2c53aa1ac780e2df4c1866216629e378e3f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-oracle-local-traces.jsonl.gz": {
+          "bytes": 41881,
+          "sha256": "ed448ba26b5edbb93a1df52f71caec0650f2a59b63ef3ae50b3bd263c7db74c4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-recent_context-local-summary.json": {
+          "bytes": 2172,
+          "sha256": "ce2383682fe862c8bdf8838e622540042629abe723f0910e1039deca445b3813",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8322,
+          "sha256": "33d0fe8ddc2a6c76ff0614b6f6262a1435c0d8e3ac5100950a05888810d65ed6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-tool_only-local-summary.json": {
+          "bytes": 2582,
+          "sha256": "7b5955d951d6a330dbb8d9933440f220b2baeccbf4af7adfaf659331106ac45c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev18_conflict_tentative_update-tool_only-local-traces.jsonl.gz": {
+          "bytes": 172017,
+          "sha256": "ec75c1e3ab7665386bbbda78d04824c6e1a8462aa4b8bf04d086717a1c814fd7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev18_conflict_tentative_update-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-automatic-local-summary.json": {
+          "bytes": 2621,
+          "sha256": "ae6cfffc528ebef7d002fa9b61d4503424befc12b658d21b0087907acbdad33c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-automatic-local-traces.jsonl.gz": {
+          "bytes": 14165,
+          "sha256": "4250f56edbc3d568389b226887f7cac528e88e76fea46591fc8a688e37311b9b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-automatic_deeper-local-summary.json": {
+          "bytes": 2628,
+          "sha256": "8a5acc78f3a2d39aa5f1d5c9dfa3d3886efe419515af40b4342d4daf65e8275b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 92430,
+          "sha256": "e11a92cbf7178a3a62424d5de82d36488d8df1121228956b0fbbfae7a6986ff7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "cf14a0d839fb18f1c3b4bc11a9604097edbc11d36846ed8155090061ebe33d08",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8328,
+          "sha256": "cf63df2292b67294db9f5df14d3d0816a065362489e657a11a8b8ba6651826ae",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-oracle-local-summary.json": {
+          "bytes": 2388,
+          "sha256": "d950f5b9894451950ade87bd09971cce368cb84b64327925415cd01a015799a8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-oracle-local-traces.jsonl.gz": {
+          "bytes": 12127,
+          "sha256": "2a539d52840b738c1d70fafb606abf0d52c0cdc2402e617749de439d18ab981a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "ff6811d08e0c5b33b1ff8cc7faa76f4b3c07d13f8178faefc0b131541a5ebc05",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8315,
+          "sha256": "5329600806bac1a6310ff84a66b9bdcdeacc843b8f8394b6d08dc16da60706d9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-tool_only-local-summary.json": {
+          "bytes": 2572,
+          "sha256": "088315714dc71ff76e6dae79f496ccee30bdbe3fc0ca22482e881c689821ac7f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev19_quoted_other_person-tool_only-local-traces.jsonl.gz": {
+          "bytes": 86144,
+          "sha256": "cfbe43d5b8c48d4c04a334c84c4a89720556e861303c1dee3bfe45abe4abf2ba",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev19_quoted_other_person-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-automatic-local-summary.json": {
+          "bytes": 2621,
+          "sha256": "f63ee8427a170215343387cefc777b8100bce7505bd46a3a707cb01383d6ce39",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-automatic-local-traces.jsonl.gz": {
+          "bytes": 15702,
+          "sha256": "36e27037120d7157d04b87780206fdce3069b7af5247dc71194145fb9f66293d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-automatic_deeper-local-summary.json": {
+          "bytes": 2628,
+          "sha256": "9fdb3efc17d885f7b1e23b75ea829c920d170dedfe958dedf9f708c51ddc75ca",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 82176,
+          "sha256": "3fb721285b80e099478f0d04c2c007b11b4496a6b4eff2191a024a849f19cbb5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-no_recall-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "0f572d32f1b77ffb0f79274f03dbc000f6b9e00d45d1cf38f972b1b6eef10b91",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8328,
+          "sha256": "584f87a49a826e1f4a54d93d6f9ee00e5c021f7eb02cef70a34c09866493f5c5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-oracle-local-summary.json": {
+          "bytes": 2388,
+          "sha256": "2b0e196d200753e0b8ef110fa084a9ebf2c674959fd8613334f9019f2e78398a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-oracle-local-traces.jsonl.gz": {
+          "bytes": 12141,
+          "sha256": "4e5a1cfa74afee0afc0f2b5215e255e6ce0be3ae05c63fc1b33561835b00c569",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-recent_context-local-summary.json": {
+          "bytes": 2166,
+          "sha256": "de1359d07cdc9c96a77822697bebbc38ef906f61b3922c603b6fc291ba0b98f7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8321,
+          "sha256": "d06a59b81ce99bb000e28cbefe02ae43d9770281f9a90484212cc101eec56b08",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-tool_only-local-summary.json": {
+          "bytes": 2575,
+          "sha256": "a9f1156f7fc313788adb5c226d606468fa766a2d32291c07c387e3b496622aa8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev20_assistant_inference-tool_only-local-traces.jsonl.gz": {
+          "bytes": 71348,
+          "sha256": "519fc6917f357cf10e597cab7cc373de4090b8304bf5fb1523679f9d7b452e6b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev20_assistant_inference-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-automatic-local-summary.json": {
+          "bytes": 2614,
+          "sha256": "a9219804dd61cf74835302fb100da5b001ac44bb9e9b6457211f5d2c3eb1c896",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-automatic-local-traces.jsonl.gz": {
+          "bytes": 10527,
+          "sha256": "42f520c633670dac0bad5da2e11a85a2648a1dba2b25da29d948d73664631307",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-automatic_deeper-local-summary.json": {
+          "bytes": 2609,
+          "sha256": "f09f3acce566e337413f90b126ef860ef7d7a62433a3aad8b6f5c95484e17f12",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 71721,
+          "sha256": "5036263aa853454e0dd95c5a1aa471503065a7fc30df796246f8507573f962b1",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-no_recall-local-summary.json": {
+          "bytes": 2154,
+          "sha256": "b7033de8de673c588b587f438a0c96882901d405e6d13365bbc2db0153158b20",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8243,
+          "sha256": "09cf51acf35b135c04b926b4cb170b8535d3a403c03a2ed14aabe7afcc5dffac",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-oracle-local-summary.json": {
+          "bytes": 2381,
+          "sha256": "b558e09e45dfe67e0f4aca778367cedc0364eac5fbf2e8b65895bc9d05c02be7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-oracle-local-traces.jsonl.gz": {
+          "bytes": 10183,
+          "sha256": "b1763308b1f6206b44a76b0a33e3bc3f7969b5185d160e8fb56a68c86aff3f0e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-recent_context-local-summary.json": {
+          "bytes": 2159,
+          "sha256": "ba708fa38f410aa257deabc0887057f7ab866070f57c47db2b2fa301c380b3ab",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8257,
+          "sha256": "efb5cd09c3ed548134837f8ddaa3463e6b945a546646266c6549f25cf1482e65",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-tool_only-local-summary.json": {
+          "bytes": 2568,
+          "sha256": "c89fc2e3f38838bd96ba16d5f4780613786edfd99c0ec3bc77fec2dd568eafc7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev21_unanswerable-tool_only-local-traces.jsonl.gz": {
+          "bytes": 66488,
+          "sha256": "323c5be19ed68108445689d8855ebe9d4363f436cd8545cb0d6b6db3f6736f63",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev21_unanswerable-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-automatic-local-summary.json": {
+          "bytes": 2160,
+          "sha256": "846539a2f40d00d6d561a07131df7c6112e95a54dd974c348f19efb7a2f130a6",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-automatic-local-traces.jsonl.gz": {
+          "bytes": 8965,
+          "sha256": "3a4708d3b2548e36aaf38ba882292f07fbeaafb3f6e627f79e178cd018a4ddf8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-automatic_deeper-local-summary.json": {
+          "bytes": 2167,
+          "sha256": "7c950c0df5aa21e9ae15fb712b0a314ad32e2c06eca4b236dffec90b2b77c88a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 41264,
+          "sha256": "0366003de7cba74c1cfdbb965ffe7a0b289a40d8804fc6a48ebe71302d56f3c8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-no_recall-local-summary.json": {
+          "bytes": 2160,
+          "sha256": "07846ce78138be60a048106d104f98b79da0f6c915deccb082d4f0c01179db8e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8254,
+          "sha256": "70de9fdb6d85eed17b115ecf3acf8832a910ffa11409e4f65a6c94a1d5764050",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-oracle-local-summary.json": {
+          "bytes": 2157,
+          "sha256": "12a7387148200fbf0a8d62e9775ea51998d3975b5ec2e4c05a638ecd1aac9992",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-oracle-local-traces.jsonl.gz": {
+          "bytes": 8974,
+          "sha256": "4356a40a17d6d70db6d7b257174004164d4a9792b50ea38b242be0184ed0f4a0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-recent_context-local-summary.json": {
+          "bytes": 2167,
+          "sha256": "9c8c83f06892332b19f8d52f5a09f0a6a83aa3b69983517ea5adef3a5b4cabca",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8321,
+          "sha256": "507e74b13acfc2ea9b0cc800be558166d97b221fa8d1109f9830767057c76305",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-tool_only-local-summary.json": {
+          "bytes": 2164,
+          "sha256": "efc2e264655d060583c04f72e71acb9abdeaff021c7cd6dd1bff299ac236602f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev22_memory_unavailable-tool_only-local-traces.jsonl.gz": {
+          "bytes": 29022,
+          "sha256": "57040095c141f8bd3b45c9ab555e12b02ea0abfc1ea4a52681379c5a07b9f3fe",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev22_memory_unavailable-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-automatic-local-summary.json": {
+          "bytes": 2618,
+          "sha256": "7afdea4c58dfb26b9221c3dc64c3a4d1279f062e4a73866f638a83bfe2caf154",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-automatic-local-traces.jsonl.gz": {
+          "bytes": 10524,
+          "sha256": "a9f767068ef043e11a39a24ab60ac34f1110b96ef7b109544412aaf86b9e177e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-automatic_deeper-local-summary.json": {
+          "bytes": 2620,
+          "sha256": "4b947785fedebb8c5d67c6eaed3d015b22136340f676db57375c00f1a809d227",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 71873,
+          "sha256": "8894cbe49d5743cb100042c0aca3e1fea8cb5c8d4e632c017095ca6a92da9660",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-no_recall-local-summary.json": {
+          "bytes": 2158,
+          "sha256": "ebb64629779e587d93b26fd53d1d8b789e3b6b76e9bc9f176d08c78617508778",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8202,
+          "sha256": "d0808b912f5703f62b5d7af715694ee41f201816ee1da0bdd62148eafa02d55c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-oracle-local-summary.json": {
+          "bytes": 2385,
+          "sha256": "16dc54542d9d53e4447750b8681e6ea677b903204eb19156bb973b286df4c6a4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-oracle-local-traces.jsonl.gz": {
+          "bytes": 10170,
+          "sha256": "9c1cc5c7704477535b468e0913f7c88c01f3a7a05242a71c57c39b54e05c467d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-recent_context-local-summary.json": {
+          "bytes": 2163,
+          "sha256": "9f7400b5fc65f1dd26ba5d0d45f7e699ee0def79d739100be9955f2da4b36416",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8264,
+          "sha256": "afb798829ac75247fc957b243e40445322224f0ffcdf8302aa08040c0bec188e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-tool_only-local-summary.json": {
+          "bytes": 2572,
+          "sha256": "575e8dc7823cd89b0424df9d8705b1bc3e985d26c2ba02c830e904bcac2433de",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev23_no_memory_needed-tool_only-local-traces.jsonl.gz": {
+          "bytes": 66703,
+          "sha256": "1bf3f61d7b39fb6083b041dcb93e5f4c4808316d3f804657f945782503849f7b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev23_no_memory_needed-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-automatic-local-summary.json": {
+          "bytes": 2612,
+          "sha256": "3a1ec0e83d81c08ab7f4c90412f86820a4bef5ab9f89c603c2e4dfb82a48b1e8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-automatic-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-automatic-local-traces.jsonl.gz": {
+          "bytes": 15260,
+          "sha256": "553e98d57fb933c8550630c427841d8057593c4e098e4de4b04043b2109bdc2a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-automatic-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-automatic_deeper-local-summary.json": {
+          "bytes": 2622,
+          "sha256": "1fd2f0c18734569f8b3eac489a5a4b86772b0ec8abd3c2b4f47862d2b152da24",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-automatic_deeper-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-automatic_deeper-local-traces.jsonl.gz": {
+          "bytes": 61124,
+          "sha256": "e5577e116a7cb8ca06f0e4d0d1cdf28c698300d36cf2437df2ded2513cb8bdf8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-automatic_deeper-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-no_recall-local-summary.json": {
+          "bytes": 2156,
+          "sha256": "88f020e4839902006e4b60973b93f8fe67fa034c59538d84e4360d9e11c9b0ca",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-no_recall-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-no_recall-local-traces.jsonl.gz": {
+          "bytes": 8292,
+          "sha256": "c5f7d8c37c4d4e56882e265af454368bd5f70104c56a84aced6920f08dec9e35",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-no_recall-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-oracle-local-summary.json": {
+          "bytes": 2429,
+          "sha256": "ec6a9fe3b7139710096034399bc74fa2998069829bf794801c000d26bd8be79a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-oracle-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-oracle-local-traces.jsonl.gz": {
+          "bytes": 13141,
+          "sha256": "6202f318f928f25e11052300741463cd178b34e99923f1e0c6b978227daf9408",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-oracle-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-recent_context-local-summary.json": {
+          "bytes": 2161,
+          "sha256": "5a52b52f5bfaa0ee4bac53a38e64e74b248f574a863d14b439ee767f97bc601b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-recent_context-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-recent_context-local-traces.jsonl.gz": {
+          "bytes": 8377,
+          "sha256": "ef1690a0a5a9aa40a67dfb84d7d1ece021bf3f688685a6d44c10ec1f4644d1d5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-recent_context-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-tool_only-local-summary.json": {
+          "bytes": 2570,
+          "sha256": "0dabecc5e63ee623b9f07e2b8d2b3fb5eb27c4f1fe3198f3d7b9f30d7f08ae88",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-tool_only-local-summary.json"
+        },
+        "integrated-development-v1-local/dev24_scope_boundary-tool_only-local-traces.jsonl.gz": {
+          "bytes": 49513,
+          "sha256": "670d4c32d9aacec3f4f326132ae4ebc3e000db37e42086fdc83e35754135e9d7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/dev24_scope_boundary-tool_only-local-traces.jsonl.gz"
+        },
+        "integrated-development-v1-local/execution-freeze.json": {
+          "bytes": 234,
+          "sha256": "91e71d7f707cea53c0c34c4e6de8e9277315d4ffd4fbef96da0fed034a7ba9d9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/execution-freeze.json"
+        },
+        "integrated-development-v1-local/execution-started.json": {
+          "bytes": 371,
+          "sha256": "e68985e6cdba0c54c4c075b44b46b0149ad99972751d4c2742af4ea3deb29915",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/execution-started.json"
+        },
+        "integrated-development-v1-local/execution.json": {
+          "bytes": 477,
+          "sha256": "e8ced7461896db166acf06f0e56d1716c9f0b3848a953b90041b7aa835446d74",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/execution.json"
+        },
+        "integrated-development-v1-local/execution.log": {
+          "bytes": 651372,
+          "sha256": "4392079c46f619797c19ed50892fc8917cf8febde0b235adcdbd9c7c54dad9b7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/execution.log"
+        },
+        "integrated-development-v1-local/input-integrity-after-run.json": {
+          "bytes": 24,
+          "sha256": "1ae748d5796cc995906ddf0fba5e5626f9c1c6ac79cec8fb465106e92254a77b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/input-integrity-after-run.json"
+        },
+        "integrated-development-v1-local/integrated-local-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/integrated-local-context-profile.json"
+        },
+        "integrated-development-v1-local/integrated-local-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/integrated-local-metadata-01-http.json"
+        },
+        "integrated-development-v1-local/integrated-local-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/integrated-local-metadata-01-wire-response.raw"
+        },
+        "integrated-development-v1-local/integrated-local-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/integrated-local-metadata-02-http.json"
+        },
+        "integrated-development-v1-local/integrated-local-metadata-02-wire-response.raw": {
+          "bytes": 7172,
+          "sha256": "666a5e8f84f7f93d66cbd9489fa8911d30f2b8951bd99f1d25ad5ebc15a46d54",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/integrated-local-metadata-02-wire-response.raw"
+        },
+        "integrated-development-v1-local/local-procedure.json": {
+          "bytes": 932,
+          "sha256": "952817b85c7d41d80d144bc58f1f947ca93e90b9a7bb34693f20ace4cdc76e28",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local/local-procedure.json"
+        }
+      },
+      "original_bytes": 7963664,
+      "sha256": "30817647443e2909a368583ed533ed7e2fdf869329f459c0ddb4c02cb1715e11"
+    },
+    "raw-operating.tar.gz": {
+      "bytes": 459668,
+      "members": {
+        "integrated-development-v1-operating/execution-freeze.json": {
+          "bytes": 238,
+          "sha256": "9e71b98b299dbe771853fa72a1d758fe24db80e283212fdd30268d0ed3754b7b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/execution-freeze.json"
+        },
+        "integrated-development-v1-operating/execution-started.json": {
+          "bytes": 377,
+          "sha256": "bd6ac402955979041e386893d36864807aa25f1061e3465fa6d627d284af4b11",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/execution-started.json"
+        },
+        "integrated-development-v1-operating/execution.json": {
+          "bytes": 483,
+          "sha256": "9ef63b080098f3801f8fdeaff8fadaf1f6c54e466049edfb7d98966283da1f0d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/execution.json"
+        },
+        "integrated-development-v1-operating/execution.log": {
+          "bytes": 10050,
+          "sha256": "a6337c6604e9c52acb196aaa2a6815b5bb33a3490732fdbc0edf122d4b6e1e0a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/execution.log"
+        },
+        "integrated-development-v1-operating/input-integrity-after-run.json": {
+          "bytes": 24,
+          "sha256": "1ae748d5796cc995906ddf0fba5e5626f9c1c6ac79cec8fb465106e92254a77b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/input-integrity-after-run.json"
+        },
+        "integrated-development-v1-operating/measurements/configuration.json": {
+          "bytes": 436,
+          "sha256": "f290fc44027898c280d20947e2c72442148e174c742da17c7ae1f59c51384764",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/measurements/configuration.json"
+        },
+        "integrated-development-v1-operating/measurements/report.json": {
+          "bytes": 1146,
+          "sha256": "1d06182aea43988403761cbdaf85745225d80a0a042d29d1e15376f7127da96b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/measurements/report.json"
+        },
+        "integrated-development-v1-operating/measurements/samples.ndjson": {
+          "bytes": 3657860,
+          "sha256": "ec75bea91fca502aa5e44572ddd8e8b3284cc1e948ca6c1e27f5ec783f4f8358",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating/measurements/samples.ndjson"
+        }
+      },
+      "original_bytes": 3670614,
+      "sha256": "7d3a2192ab9e069a10e3ac2c8ac4501344300b102caf23ed0125c0d2b9293517"
+    },
+    "raw-verification.tar.gz": {
+      "bytes": 117993,
+      "members": {
+        "162-corrected-context-replay.py": {
+          "bytes": 3048,
+          "sha256": "aabdf98d7a7bab7bfeed81c8ef862eb917422740915d2b398bd0dce79cb743d5",
+          "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay.py"
+        },
+        "167-ablation-green.log": {
+          "bytes": 55,
+          "sha256": "23be667945f96220737c9206250f3d44706dc6f6c36e4aabb753da6f6433cc13",
+          "source": "/private/tmp/evie-memory-stage5/167-ablation-green.log"
+        },
+        "167-ablation-red.log": {
+          "bytes": 268,
+          "sha256": "326b688e7f03f67fd0349aab7ed2f39a03fb051f3d6ecd1bd79d0e53c6869cf2",
+          "source": "/private/tmp/evie-memory-stage5/167-ablation-red.log"
+        },
+        "167-ablation-regression.log": {
+          "bytes": 55,
+          "sha256": "e12a40b688a09c737dda7a35f02a7e0a458cc990f8d3fc7e20736636b2b3ec8d",
+          "source": "/private/tmp/evie-memory-stage5/167-ablation-regression.log"
+        },
+        "167-index-compile.log": {
+          "bytes": 55,
+          "sha256": "521e6ca785ab7f46ec6bc83b40e17ec64d73c53d797e869a18d903d5da41014c",
+          "source": "/private/tmp/evie-memory-stage5/167-index-compile.log"
+        },
+        "167-index-historical-red.log": {
+          "bytes": 3080,
+          "sha256": "63ee444d1dd4ed297ee4889a7a26de2a777e8d31dddf2f5ee67af6a04257e7d6",
+          "source": "/private/tmp/evie-memory-stage5/167-index-historical-red.log"
+        },
+        "167-index-model-free-final.log": {
+          "bytes": 1112,
+          "sha256": "6ce2a63de48a1c7d3680e37ddb70f04f5658ae4c6e878fe9cd5551fb9e0db3ca",
+          "source": "/private/tmp/evie-memory-stage5/167-index-model-free-final.log"
+        },
+        "167-index-model-free-green.log": {
+          "bytes": 842,
+          "sha256": "4c208eabc4dc6511d9799a6c4ee3b463a73e5dc1f286e3b7e3c447f28525252c",
+          "source": "/private/tmp/evie-memory-stage5/167-index-model-free-green.log"
+        },
+        "167-index-model-free-tracer.log": {
+          "bytes": 980,
+          "sha256": "d7d44ad347ed55bf797a5f0bde810a3e526e15f53e7465e54debcb1a94fea2e8",
+          "source": "/private/tmp/evie-memory-stage5/167-index-model-free-tracer.log"
+        },
+        "167-index-unavailable-red.log": {
+          "bytes": 621,
+          "sha256": "0f5c64311a0c689da36df31f675c50b0a3a245ba8b24a3393d7532fb1fe40aba",
+          "source": "/private/tmp/evie-memory-stage5/167-index-unavailable-red.log"
+        },
+        "167-index-vet.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "source": "/private/tmp/evie-memory-stage5/167-index-vet.log"
+        },
+        "167-mapped-go-v1.command.json": {
+          "bytes": 17476,
+          "sha256": "c02a221f8bdebfe2da801d8e114928bc21c9137f81a508546ee5d943a777f8b0",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-go-v1.command.json"
+        },
+        "167-mapped-go-v1.log": {
+          "bytes": 219664,
+          "sha256": "ca28ed80f72c73548c23a34c2d8e972319790bdec3bb37ff6adb596c301aa6e9",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-go-v1.log"
+        },
+        "167-mapped-go-v1.results.json": {
+          "bytes": 715,
+          "sha256": "32eade1c14eff34f1aea1fc754134caf10157cd512870bfcc54f6f02b4ceafaf",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-go-v1.results.json"
+        },
+        "167-mapped-go-v1.started.json": {
+          "bytes": 17422,
+          "sha256": "26a3afcdac7326de4c10b4d6ad7a909b4e4d4de4813d87eae1d56d89e5b8a23e",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-go-v1.started.json"
+        },
+        "167-mapped-ui-command.json": {
+          "bytes": 452,
+          "sha256": "825a45c2f1555c199d7fa1df9631040d180a9c2fb227a6f0db465528d67c8998",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-ui-command.json"
+        },
+        "167-mapped-ui-results.json": {
+          "bytes": 9037,
+          "sha256": "32d28a8bb010376f6c16e0f02fa0d2f86a3731f53820135b33ae98d36542e082",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-ui-results.json"
+        },
+        "167-mapped-ui.log": {
+          "bytes": 74,
+          "sha256": "21d2ef399bebb871b8ecf2dcba83ab57de128bc5763c37cbfeb61a23e9b0e044",
+          "source": "/private/tmp/evie-memory-stage5/167-mapped-ui.log"
+        },
+        "167-resources-controls.log": {
+          "bytes": 998,
+          "sha256": "59935b4bdd64fd8d06bcbd3347a2f3454790c1eddc4a3bfc690115660df70ae5",
+          "source": "/private/tmp/evie-memory-stage5/167-resources-controls.log"
+        },
+        "167-resources-controls.py": {
+          "bytes": 12767,
+          "sha256": "f198d5ad1812b37e2a477d03827d72f947400c104a54cf36daf203997d7fe753",
+          "source": "/private/tmp/evie-memory-stage5/167-resources-controls.py"
+        },
+        "167-shared-probe-model-free.log": {
+          "bytes": 31258,
+          "sha256": "7c495cb82c29c53a743a8404e41c4debd469536898e8eeec791ba36d380fea35",
+          "source": "/private/tmp/evie-memory-stage5/167-shared-probe-model-free.log"
+        },
+        "167-verify-pre-pilot-v2.command.json": {
+          "bytes": 608,
+          "sha256": "537ea8648bd960e492d67f89e23f172d7e274258da168bdbfb0de6599bb5a747",
+          "source": "/private/tmp/evie-memory-stage5/167-verify-pre-pilot-v2.command.json"
+        },
+        "167-verify-pre-pilot-v2.log": {
+          "bytes": 28743,
+          "sha256": "3b0be2241efd86a94d6c064c72fc922e85e88151c906fdfea69a5fb80e6df913",
+          "source": "/private/tmp/evie-memory-stage5/167-verify-pre-pilot-v2.log"
+        },
+        "167-verify-pre-pilot.log": {
+          "bytes": 29079,
+          "sha256": "0a8ff8e39ae74a6e6eaac7c6886caae673fa43a572967f230f4414a4da5ea60f",
+          "source": "/private/tmp/evie-memory-stage5/167-verify-pre-pilot.log"
+        },
+        "analyze-format-sanity.py": {
+          "bytes": 4662,
+          "sha256": "592d2a3a73d42de52fd2e55627281febd73a2c29aa3b6c8d61fc5ea2271ac446",
+          "source": "/private/tmp/evie-memory-stage5/analyze-format-sanity.py"
+        },
+        "audit-source-sanity.py": {
+          "bytes": 5113,
+          "sha256": "e8a6f7c6194a9b8a968e0e9807e72d4cd6be90689f30175455c7f711972cf547",
+          "source": "/private/tmp/evie-memory-stage5/audit-source-sanity.py"
+        },
+        "integrated-development-v1-index-console.log": {
+          "bytes": 1154,
+          "sha256": "42d2d123ec543a62a6088ef8ba67d73a7a685bb914edc9b15248abe1d5905a26",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-index-console.log"
+        },
+        "integrated-development-v1-local-console.log": {
+          "bytes": 1154,
+          "sha256": "4c4371f46e4ce84d872ffbff435a9b9e6d03ed8d6c0010601ca2bc34a556a03e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-local-console.log"
+        },
+        "integrated-development-v1-operating-console.log": {
+          "bytes": 119,
+          "sha256": "c03c03e269321a2d5eeacb0bb6619b847d5e5ac0c7ccbcb2ce391c2575f20ca2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-operating-console.log"
+        },
+        "integrated-development-v1-partial-resource-audit-console.log": {
+          "bytes": 98,
+          "sha256": "aedbafcb87a216d04e53584348d300ddc188997f6defbc95df86ebb39e11bbe2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-partial-resource-audit-console.log"
+        },
+        "integrated-freeze-v1-command.json": {
+          "bytes": 2128,
+          "sha256": "05dd6a111b8bb1ecd30070b6ba2e45eef7eda119c5514e0682b337240002554e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-freeze-v1-command.json"
+        },
+        "integrated-freeze-v1-console.log": {
+          "bytes": 169,
+          "sha256": "7e3ebdd90a004f926f6d985dfefefcce400b9bafe48f8e3ca1fd644976423ff0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-freeze-v1-console.log"
+        },
+        "integrated-preflight-metadata-v1/execution.log": {
+          "bytes": 117,
+          "sha256": "91432a07d950aebdd558d34024ecde92aff3429bb29677d99395b2a386ec5f44",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/execution.log"
+        },
+        "integrated-preflight-metadata-v1/preflight-context-profile.json": {
+          "bytes": 328,
+          "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/preflight-context-profile.json"
+        },
+        "integrated-preflight-metadata-v1/preflight-metadata-01-http.json": {
+          "bytes": 143,
+          "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/preflight-metadata-01-http.json"
+        },
+        "integrated-preflight-metadata-v1/preflight-metadata-01-wire-response.raw": {
+          "bytes": 1603,
+          "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/preflight-metadata-01-wire-response.raw"
+        },
+        "integrated-preflight-metadata-v1/preflight-metadata-02-http.json": {
+          "bytes": 163,
+          "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/preflight-metadata-02-http.json"
+        },
+        "integrated-preflight-metadata-v1/preflight-metadata-02-wire-response.raw": {
+          "bytes": 7219,
+          "sha256": "8cdbeed08958a55c5bff2a5c0be298d1ef0f5c5aa7865b764ba9325b6785fab0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-preflight-metadata-v1/preflight-metadata-02-wire-response.raw"
+        },
+        "integrated-runner-work/go-packages.json": {
+          "bytes": 805939,
+          "sha256": "2e04da985eec2baadba0a697c2c2a6754e98698840b102345c58bea3dbd56ba9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-runner-work/go-packages.json"
+        },
+        "integrated-runner-work/source-paths.json": {
+          "bytes": 16960,
+          "sha256": "ed542d8b0537c2870707a840bd20484d7a48b153a8d89b29fb14c81d2573f5e3",
+          "source": "/private/tmp/evie-memory-stage5/integrated-runner-work/source-paths.json"
+        }
+      },
+      "original_bytes": 1225478,
+      "sha256": "34d18606e67ad158a9384f61ac5633e3eb3e7196435825086a7de0a805757bbc"
+    }
+  },
+  "excluded": [
+    {
+      "bytes": 24855378,
+      "reason": "compiled executable deliberately excluded; preserved source and build metadata remain",
+      "sha256": "fcb0e65893cc29136c842e22a8ef5e9d63d8ee1b48a27f07ea4dea3787275124",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/integrated.test"
+    },
+    {
+      "bytes": 24905682,
+      "reason": "corrected diagnostic executable excluded; its exact source archive is retained in raw-diagnostics.tar.gz",
+      "sha256": "9f8fb5decbdfbac906f2d457b96b14430c5f6df4f6c978fe4baa81e0253d5be5",
+      "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/integrated.test"
+    },
+    {
+      "reason": "already preserved losslessly in the frozen compiled-source.tar.gz",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/source"
+    },
+    {
+      "reason": "already preserved losslessly in the frozen prepared-inputs.tar.gz",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/inputs"
+    },
+    {
+      "reason": "corrected diagnostic source is already preserved in its compiled-source.tar.gz",
+      "source": "/private/tmp/evie-memory-stage5/162-corrected-context-replay-v1/source"
+    }
+  ],
+  "files": {
+    "frozen/assessment.md": {
+      "bytes": 12454,
+      "sha256": "8d18ea6e0736d2de931a871c0de7567106eb416c070ca41c6dbcce864a3e3909",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/assessment.md"
+    },
+    "frozen/audit_sources.py": {
+      "bytes": 20460,
+      "sha256": "c3a81a142faf04ff11cca21be2bfbfcfe530ac126afaefc492d7358891d5e77b",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/audit_sources.py"
+    },
+    "frozen/build-started.json": {
+      "bytes": 316,
+      "sha256": "d90aa2459fb37839ee81d7e6746863b4f6a1bc60bf307f48d2b3b7b2ee10477f",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/build-started.json"
+    },
+    "frozen/build.json": {
+      "bytes": 422,
+      "sha256": "bb5b14bd5b1c16134156bfd9a9ca5e63b81e7af06c6836264fea19d236bd302c",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/build.json"
+    },
+    "frozen/build.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/build.log"
+    },
+    "frozen/compiled-source-manifest.json": {
+      "bytes": 44033,
+      "sha256": "8dbc4016da1370934dea494e86ea1c14bb8454be39bfadbb3dced484a70b24b2",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/compiled-source-manifest.json"
+    },
+    "frozen/compiled-source.tar.gz": {
+      "bytes": 1077076,
+      "sha256": "3769619bd7745a8554ce2df2a4b5662fbd600c387671ee7d3e720430a4ff1890",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/compiled-source.tar.gz"
+    },
+    "frozen/freeze.json": {
+      "bytes": 17246,
+      "sha256": "ec6c2a6cc811f4d03ecf8e67f966fe3d74b7ae2ee423f93a5e9375d177f86e3b",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/freeze.json"
+    },
+    "frozen/gates.json": {
+      "bytes": 8998,
+      "sha256": "06aaf6f4bff1486a78cef71e88dffeec54ae529f23c322fd8ec5d1bc04c928fd",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/gates.json"
+    },
+    "frozen/grader.py": {
+      "bytes": 35271,
+      "sha256": "0881765cef5d7183d163df607bc7bfa5076930e06050080628037c7c9fec4765",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/grader.py"
+    },
+    "frozen/index.md": {
+      "bytes": 10228,
+      "sha256": "9072abed35538358cab75109d65572ffdb9810319c806401cbcdd81ff4526932",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/index.md"
+    },
+    "frozen/input-manifest.json": {
+      "bytes": 5035,
+      "sha256": "a42d8273b1c6f642619ffe80eb13b8aaf4cc174e748bef80385f437acdb36802",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/input-manifest.json"
+    },
+    "frozen/matrix.json": {
+      "bytes": 72596,
+      "sha256": "6a8be3ff523b854562326135e30a20b60723b83457de4bcd37bba5eb4a396229",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/matrix.json"
+    },
+    "frozen/operating.md": {
+      "bytes": 6273,
+      "sha256": "14dc0149cdfd3ee49dc2862c114f3a4ff10babbdfb01f51817ec1c6e258b1483",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/operating.md"
+    },
+    "frozen/preflight-execution-started.json": {
+      "bytes": 347,
+      "sha256": "6c9a8aee5f81ea0314036e8a6a45ddc2072b005eeb4a675b4cb416dbfcac1d74",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight-execution-started.json"
+    },
+    "frozen/preflight-execution.json": {
+      "bytes": 453,
+      "sha256": "e345c14828fbd8de6f516a155831e380ed41e2742077d8bbe89a7632cccf5be1",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight-execution.json"
+    },
+    "frozen/preflight-execution.log": {
+      "bytes": 117,
+      "sha256": "31d0ae980cbe32d062702d637c62c18b2a52bbcc786360a39a4e187bff28a394",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight-execution.log"
+    },
+    "frozen/preflight/preflight-context-profile.json": {
+      "bytes": 328,
+      "sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight/preflight-context-profile.json"
+    },
+    "frozen/preflight/preflight-metadata-01-http.json": {
+      "bytes": 143,
+      "sha256": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight/preflight-metadata-01-http.json"
+    },
+    "frozen/preflight/preflight-metadata-01-wire-response.raw": {
+      "bytes": 1603,
+      "sha256": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight/preflight-metadata-01-wire-response.raw"
+    },
+    "frozen/preflight/preflight-metadata-02-http.json": {
+      "bytes": 163,
+      "sha256": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight/preflight-metadata-02-http.json"
+    },
+    "frozen/preflight/preflight-metadata-02-wire-response.raw": {
+      "bytes": 7143,
+      "sha256": "2cd19917d07035b8c46c8d610544cb89b041c8870dce0dfa1774aeae19bbb5b2",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/preflight/preflight-metadata-02-wire-response.raw"
+    },
+    "frozen/prepare-execution-started.json": {
+      "bytes": 364,
+      "sha256": "70fb34e989bc3c3be1fecd2b8c8d768ee630464e2237ba2c1bcd709597dfe586",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/prepare-execution-started.json"
+    },
+    "frozen/prepare-execution.json": {
+      "bytes": 470,
+      "sha256": "9a1e4413a871708809fa0eec9f0710cc49c28e7ecb216c2da1aeea0f5be0fb3a",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/prepare-execution.json"
+    },
+    "frozen/prepare-execution.log": {
+      "bytes": 3597,
+      "sha256": "254c017b8ce6ce156075d7a44b9a313945f519e8952d29855808feea23c07e2f",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/prepare-execution.log"
+    },
+    "frozen/prepared-inputs.tar.gz": {
+      "bytes": 1628188,
+      "sha256": "0119edd7dec3d4e08b83bf5f39c8d306fef067ea2dbaa3d414f3b4991558feaa",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/prepared-inputs.tar.gz"
+    },
+    "frozen/procedure.md": {
+      "bytes": 6558,
+      "sha256": "7f6059f1f3b13a4c3e84b7e5374a40bb992bcc34b8f6f701745ec62c9e756919",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/procedure.md"
+    },
+    "frozen/resources.py": {
+      "bytes": 48074,
+      "sha256": "da140bf1963949af74c2b7404121329911077a20f353093091084860532c830a",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/resources.py"
+    },
+    "frozen/rubric.md": {
+      "bytes": 10745,
+      "sha256": "a64da1e7cf6219862c478c24dd8dd1172a4cec7073e55a2508cbf6e7e4bcc813",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/rubric.md"
+    },
+    "frozen/run.py": {
+      "bytes": 23474,
+      "sha256": "ed75b578b40c0bdbc3a4316c192f2f128d93c1e979e6d8f0f9f0974b1378327d",
+      "source": "/private/tmp/evie-memory-stage5/integrated-runner-v1.py"
+    },
+    "frozen/scorer.py": {
+      "bytes": 22039,
+      "sha256": "a3b60abc43c2013ea35b5bf7eefa39db83c59eb65b5cd075021676579d96e732",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/scorer.py"
+    },
+    "frozen/workload.json": {
+      "bytes": 70139,
+      "sha256": "2e1aff23f8426b45b6a1cc3301c769026ecb84cc55a9d4f03ba922eff333d562",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1/workload.json"
+    },
+    "preserve-integrated-v1.py": {
+      "bytes": 17397,
+      "sha256": "c131892fa3dcd12d406990118f2ba5a2f6eeb3b1992ffcec92015e5b6757a265",
+      "source": "/private/tmp/evie-memory-stage5/preserve-integrated-v1.py"
+    },
+    "reports/deterministic-v1.json": {
+      "bytes": 26272,
+      "sha256": "f301a484983445ad69ad8dc9d9593c8ead706ec00bfd2bc7374646d0b4187a63",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-deterministic.json"
+    },
+    "reports/partial-resource-audit-v1.json": {
+      "bytes": 757383,
+      "sha256": "c3716df646f304c7b97d5bd7d3c2649f124c64e619a9fd0172a8069f58d41c83",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v1-partial-resource-audit/report.json"
+    }
+  },
+  "freeze_sha256": "ec6c2a6cc811f4d03ecf8e67f966fe3d74b7ae2ee423f93a5e9375d177f86e3b",
+  "original_selected_bytes": 25986055,
+  "planned_file_count": 466,
+  "planned_payload_bytes": 12073830,
+  "reproduction": {
+    "binary_rebuild_attempted_by_preservation_tool": false,
+    "corrected_diagnostic_freeze_sha256": "a3959adab058f5bf685415ae9ab97af69d88246af97de18ab390798467810390",
+    "corrected_diagnostic_source_archive": "raw-diagnostics.tar.gz:162-corrected-context-replay-v1/compiled-source.tar.gz",
+    "go_version": "go version go1.26.3 darwin/arm64",
+    "input_archive": "frozen/prepared-inputs.tar.gz",
+    "input_manifest": "frozen/input-manifest.json",
+    "limits": [
+      "Compiled binary and model weights are not repository artifacts.",
+      "Exact original freezes retain their historical absolute paths; relocation requires a separate reproduction record, never editing the measured freeze.",
+      "The source archive covers the 391 declared Go compilation inputs; deterministic UI verification remains separately logged.",
+      "Fast reproduction contains one selected repetition, despite the original generic summary declaring twenty planned samples.",
+      "Failed-v1 runtime accounting fields are preserved exactly; missing or stale final receipts cannot establish final runtime totals.",
+      "No reader-quality output or held-out evaluation is represented by this failed local/index run."
+    ],
+    "model_and_context_metadata": "frozen/freeze.json",
+    "original_binary_path": "/private/tmp/evie-memory-stage5/integrated-development-v1/integrated.test",
+    "original_binary_sha256": "fcb0e65893cc29136c842e22a8ef5e9d63d8ee1b48a27f07ea4dea3787275124",
+    "original_build_command": [
+      "go",
+      "test",
+      "-c",
+      "./internal/agent",
+      "-o",
+      "/private/tmp/evie-memory-stage5/integrated-development-v1/integrated.test"
+    ],
+    "original_inputs_path": "/private/tmp/evie-memory-stage5/integrated-development-v1/inputs",
+    "original_paths_in_raw_metadata_remain_unchanged": true,
+    "original_source_root": "/private/tmp/evie-memory-stage5/integrated-development-v1/source",
+    "runner": "frozen/run.py",
+    "source_archive": "frozen/compiled-source.tar.gz",
+    "source_head_before_issue_fix_folding": "5e24de1472af45adccc54638d5de5783c7889f2d",
+    "source_manifest": "frozen/compiled-source-manifest.json"
+  },
+  "schema_version": 1,
+  "source_root": "/private/tmp/evie-memory-stage5",
+  "tool_sha256": "c131892fa3dcd12d406990118f2ba5a2f6eeb3b1992ffcec92015e5b6757a265"
+}

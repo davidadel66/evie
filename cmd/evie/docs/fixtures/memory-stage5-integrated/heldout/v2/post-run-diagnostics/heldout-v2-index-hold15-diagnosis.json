@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "diagnosed_at_utc": "2026-09-11T07:23:53.046327+00:00",
+  "assessor": {
+    "kind": "agent",
+    "identity": "/root/requirements"
+  },
+  "read_only": true,
+  "case_id": "hold15_archive_historical",
+  "freeze_path": "/tmp/evie-memory-stage5/integrated-heldout-v2/freeze.json",
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "index_artifact_path": "/tmp/evie-memory-stage5/integrated-heldout-v2-index/index-hold15_archive_historical.json",
+  "index_artifact_sha256": "1312e21726080e543dcff5275adc8c77ebadee05cab73228881e82b100f149c6",
+  "seed_path": "/private/tmp/evie-memory-stage5/integrated-heldout-v2/inputs/hold15_archive_historical/seed.json",
+  "seed_sha256": "8f0dfa1ccb6eb63b8e769de8b6d09364b6e150adcdaa8268b91af20e92befcde",
+  "classification": "contradictory corpus annotation under unconditional frozen text-boundary enforcement",
+  "production_retired_as_current_failure_observed": false,
+  "gold": {
+    "oracle_intent": "historical",
+    "oracle_valid_at": "2020-01-20T00:00:00Z",
+    "support_sets": [
+      [
+        "old_archive_pickup"
+      ]
+    ],
+    "acceptable_context_record_ids": [
+      "current_archive_pickup"
+    ],
+    "forbidden_current_record_ids": [
+      "old_archive_pickup"
+    ],
+    "forbidden_current_text": [
+      "Marlow boathouse"
+    ],
+    "expected_answer_components": [
+      "The historical pickup point on 2020-01-20 was the Marlow boathouse.",
+      "The accepted validity is the half-open interval from 2019-04-01T00:00:00Z to 2020-08-15T00:00:00Z, with the end excluded.",
+      "This historical Claim is currently retired.",
+      "The actual original observation/recording time comes from the supplied event metadata and must not be backdated to the fact's validity."
+    ],
+    "response_kind": "answer",
+    "require_source_event_citations": true,
+    "attribution": [
+      "The retired accepted Claim establishes the historical location at a known valid-world-time point."
+    ],
+    "reader_rules": [
+      "Supply the retired source only under explicit historical intent with exact current lifecycle labels and authorized source access. Both validity bounds must be known and contain the requested point. The current contextual pickup Claim cannot prove the historical location. Cite the retired Claim's original source event."
+    ]
+  },
+  "canonical_retired_source": {
+    "source_link_id": "3515020a-9052-4cf2-9175-a03ac90a3060",
+    "operation_id": "1c53e68d-e7bb-4d22-8c38-e1385734fbd2",
+    "event_id": "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd",
+    "session_id": "c2f1160f-eda8-48b1-afd6-67874ca8ad48",
+    "source_scope_key": "global",
+    "event_part": "content",
+    "locator_kind": "whole",
+    "locator_value": "",
+    "evidence_sha256": "sha256:9ff2915f009998ca3c624467738ba82acb7640d98e2392cec98556b9a415e564",
+    "actor": "owner",
+    "source_type": "user_message",
+    "authority": "owner_statement",
+    "observed_at": "2026-09-11T06:41:44.764350000Z",
+    "evidence": "My archive-box pickup point was the Marlow boathouse from 2019-04-01T00:00:00Z until 2020-08-15T00:00:00Z, excluding that ending instant.",
+    "eligibility": "eligible",
+    "create": false
+  },
+  "runs": {
+    "baseline": {
+      "turn_error": "integrated provider boundary failure; retained dispatch contains details",
+      "dispatch_count": 2,
+      "first_call": {
+        "call": 1,
+        "boundary_errors": null,
+        "evidence_count": 0
+      },
+      "failed_call": 2,
+      "failed_call_zero_based_index": 1,
+      "failed_request_sha256": "0775300f67cfa6d4d8e2878414a118ad15e86f4d8a6d8d2aba82f0fbd12ae4da",
+      "boundary_errors": [
+        "forbidden source text in complete encoded request"
+      ],
+      "matching_evidence": [
+        {
+          "id": "claim:6506292c-6396-4470-a370-7c57f5949b1f",
+          "kind": "accepted_memory",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2020-01-20T00:00:00Z",
+          "effective_valid_time": {
+            "from": "2019-04-01T00:00:00Z",
+            "to": "2020-08-15T00:00:00Z"
+          },
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        },
+        {
+          "id": "excerpt:97b2250e-c0f0-4e05-aeb7-8a62f65eafdd:0:137",
+          "kind": "conversation_excerpt",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2026-09-11T06:41:52.942445Z",
+          "effective_valid_time": null,
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        }
+      ],
+      "matching_string_message_indexes": [
+        1
+      ],
+      "matching_string_only_memory_projection": true,
+      "canonical_references_equal_baseline": true,
+      "accepted_revisions_unchanged": true,
+      "delivered_sources_match_current_inspection": true
+    },
+    "reopened": {
+      "turn_error": "integrated provider boundary failure; retained dispatch contains details",
+      "dispatch_count": 2,
+      "first_call": {
+        "call": 1,
+        "boundary_errors": null,
+        "evidence_count": 0
+      },
+      "failed_call": 2,
+      "failed_call_zero_based_index": 1,
+      "failed_request_sha256": "510548b92e6fbce8f19f54bd6eb2da4c1e4fecc3ed7680f61ceb4ea5f659d3db",
+      "boundary_errors": [
+        "forbidden source text in complete encoded request"
+      ],
+      "matching_evidence": [
+        {
+          "id": "claim:6506292c-6396-4470-a370-7c57f5949b1f",
+          "kind": "accepted_memory",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2020-01-20T00:00:00Z",
+          "effective_valid_time": {
+            "from": "2019-04-01T00:00:00Z",
+            "to": "2020-08-15T00:00:00Z"
+          },
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        },
+        {
+          "id": "excerpt:97b2250e-c0f0-4e05-aeb7-8a62f65eafdd:0:137",
+          "kind": "conversation_excerpt",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2026-09-11T06:41:53.020227Z",
+          "effective_valid_time": null,
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        }
+      ],
+      "matching_string_message_indexes": [
+        1
+      ],
+      "matching_string_only_memory_projection": true,
+      "canonical_references_equal_baseline": true,
+      "accepted_revisions_unchanged": true,
+      "delivered_sources_match_current_inspection": true
+    },
+    "rebuilt": {
+      "turn_error": "integrated provider boundary failure; retained dispatch contains details",
+      "dispatch_count": 2,
+      "first_call": {
+        "call": 1,
+        "boundary_errors": null,
+        "evidence_count": 0
+      },
+      "failed_call": 2,
+      "failed_call_zero_based_index": 1,
+      "failed_request_sha256": "6097165b55cdc045ab69494aa3a4b48ad037af6707ae0fad84f1da0480ffaf45",
+      "boundary_errors": [
+        "forbidden source text in complete encoded request"
+      ],
+      "matching_evidence": [
+        {
+          "id": "claim:6506292c-6396-4470-a370-7c57f5949b1f",
+          "kind": "accepted_memory",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2020-01-20T00:00:00Z",
+          "effective_valid_time": {
+            "from": "2019-04-01T00:00:00Z",
+            "to": "2020-08-15T00:00:00Z"
+          },
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        },
+        {
+          "id": "excerpt:97b2250e-c0f0-4e05-aeb7-8a62f65eafdd:0:137",
+          "kind": "conversation_excerpt",
+          "intent": "historical",
+          "status": "retired",
+          "current_status": "retired",
+          "valid_at": "2026-09-11T06:41:53.120496Z",
+          "effective_valid_time": null,
+          "source_event_ids": [
+            "97b2250e-c0f0-4e05-aeb7-8a62f65eafdd"
+          ],
+          "source_hashes_verified": true
+        }
+      ],
+      "matching_string_message_indexes": [
+        1
+      ],
+      "matching_string_only_memory_projection": true,
+      "canonical_references_equal_baseline": true,
+      "accepted_revisions_unchanged": true,
+      "delivered_sources_match_current_inspection": true
+    }
+  },
+  "retained_gate_status": {
+    "restart_agreement": false,
+    "rebuild_agreement": false,
+    "test_failed": true,
+    "failures": [
+      "baseline public turn failed: integrated provider boundary failure; retained dispatch contains details",
+      "restart changed canonical delivered source references or failed the public turn",
+      "rebuild changed canonical delivered source references or failed the public turn"
+    ]
+  },
+  "frozen_check": {
+    "go_path": "/private/tmp/evie-memory-stage5/integrated-development-v4/source/internal/agent/retrieval_integrated_evaluation_test.go",
+    "go_line": 313,
+    "go_behavior": "Every nonempty ForbiddenText substring is prohibited anywhere in the encoded request, independently of evidence intent. The later ForbiddenCurrent ID loop separately permits the exact historical source.",
+    "scorer_path": "/private/tmp/evie-memory-stage5/integrated-heldout-v2/scorer.py",
+    "scorer_lines": [
+      116,
+      118
+    ],
+    "scorer_behavior": "The same unconditional forbidden_current_text check precedes the historical exception for forbidden_current_record_ids."
+  },
+  "conclusion": "The gold answer and historical support require Marlow boathouse while the text annotation forbids those bytes everywhere. The retained original source is supplied only historically, correctly marked retired, with exact owner provenance and the requested point inside its known interval. Canonical refs match across variants, but the failed complete-turn boundary makes the declared restart/rebuild gates fail; these failures are not waived.",
+  "follow_up": "After preserving this assessment as failed, a separately authorized fresh assessment may clarify unconditional versus current-only text prohibitions and validate historical-required-text consistency before sealing. Do not edit, rescore, or substitute a corrected annotation in this locked assessment.",
+  "new_model_calls": 0,
+  "new_queries_or_probes": 0,
+  "production_or_frozen_input_changes": false
+}

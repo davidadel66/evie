@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "I can’t verify what you planted, how settled the plan was, or the original source event ID because memory retrieval is unavailable in this session.\n\nIf you provide the original conversation excerpt with its event metadata, I can distinguish confirmed planting from tentative plans and cite the exact source event ID."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 1662,
+    "output_tokens": 61,
+    "total_tokens": 1723,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1600,
+    "cache_write_input_tokens": 59
+  }
+}

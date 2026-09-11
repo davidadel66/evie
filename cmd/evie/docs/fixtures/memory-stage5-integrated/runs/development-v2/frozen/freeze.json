@@ -1,0 +1,353 @@
+{
+  "assessment_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/assessment.md",
+  "assessment_sha256": "12a4e508decbab33114ed16f469b8d6940dd237c1a2deeb5e4f746ebf499e9fc",
+  "auditor_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/audit_sources.py",
+  "auditor_sha256": "c3a81a142faf04ff11cca21be2bfbfcfe530ac126afaefc492d7358891d5e77b",
+  "binary_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/integrated.test",
+  "binary_sha256": "f80a23aeb1c060a851f19962b2373abec547322247f764f2d423f50e22a41797",
+  "compiled_source_archive_sha256": "51c0b7e6ba7e4075db8ab041413ff2e3cc24c7675db79d2fc97436f7d6950446",
+  "compiled_source_manifest_sha256": "35920d3c0a0448478133796c4a0e7e0a0e91cafd41e7b230df892959d0a22b8e",
+  "condition_order": "rotate six conditions by zero-based case index",
+  "configuration": {
+    "adopted_at_utc": "2026-09-11T02:59:51.461441+00:00",
+    "adopted_by": "Implementation owner under #167 authorization to set numerical development and release gates",
+    "adoption_required_before_generation": false,
+    "behavior_families": 12,
+    "comparison_operators": {
+      "agreement": "==",
+      "max": "<=",
+      "min": ">="
+    },
+    "conditions": [
+      "no_recall",
+      "recent_context",
+      "tool_only",
+      "automatic",
+      "automatic_deeper",
+      "oracle"
+    ],
+    "denominators": {
+      "complete_support_case_fraction": "Answerable cases whose final provider request contains an entire permitted gold support set divided by all answerable cases in the frozen selected workload.",
+      "family_semantic_pass_fraction": "Semantically passing cases divided by two within each named family; zero-support cases use clarification, abstention or general-task criteria instead of evidence recall.",
+      "index_cost": "Report per-case database source count and costs plus aggregate workload totals. Cases are isolated; 61 records across the workload must not be reported as one measured 61-record query index unless an additional combined benchmark is actually run.",
+      "local_latency_quantile": "20 fresh-reader repetitions per case and condition; report each condition and cold/warm policy separately. Repetitions do not increase the number of independent semantic cases.",
+      "micro_source_recall": "Distinct required source records supplied divided by the total required records in the frozen selected workload; first request, final request and turn union reported separately. Use each predeclared minimum sufficient support alternative; no-support cases add no denominator.",
+      "operating_tails": "20 repetitions per declared cancellation, lease-loss and deadline scenario. Compare every measured tail after signal or ownership loss with 1000 ms, and report nearest-rank p50/p95 plus maximum; no successful-only filtering.",
+      "original_event_citation_accuracy": "Correctly cited required support records divided by all required support records in the frozen selected workload. A missing required source citation receives zero. Invented citations separately violate the zero-fabrication boundary.",
+      "personal_proposition_grounding": "Grounded personal propositions divided by all personal propositions actually asserted. An empty proposition set is not a perfect grounding score and does not improve the aggregate.",
+      "reader_latency_quantile": "All 24 attempted cases per condition and repetition, nearest rank; retain timeouts and failures with their bound and status. No successful-only quantile can establish a passing gate.",
+      "supported_answer_component_recall": "Semantically supported expected personal answer components divided by all declared expected personal components for answerable cases in the frozen selected workload. Missing, contradicted and unsupported components receive zero; honest abstention cannot remove a component from the denominator.",
+      "unwanted_evidence_fraction": "Distinct delivered source records outside gold support and acceptable contextual records divided by all distinct delivered source records, pooled across all 24 cases. Deduplicate overlap and Claim/excerpt copies of one original source."
+    },
+    "development_reference_counts": {
+      "answerable_cases_per_condition_repetition": 19,
+      "expected_answer_components_per_condition_repetition": 37,
+      "required_source_records_per_condition_repetition": 27
+    },
+    "development_selector_examples": {
+      "clear_reference": [
+        "dev05_clear_reference",
+        "dev07_compacted_clear"
+      ],
+      "critical_semantic": [
+        "dev01_fresh_tea",
+        "dev03_uncompiled_bike",
+        "dev05_clear_reference",
+        "dev13_neighbor_clamp",
+        "dev14_neighbor_tentative",
+        "dev15_historical_validity",
+        "dev16_retired_suppression",
+        "dev17_conflict_newer_owner",
+        "dev18_conflict_tentative_update",
+        "dev19_quoted_other_person",
+        "dev20_assistant_inference",
+        "dev21_unanswerable",
+        "dev22_memory_unavailable",
+        "dev23_no_memory_needed",
+        "dev24_scope_boundary"
+      ],
+      "material_clarification": [
+        "dev06_ambiguous_reference",
+        "dev08_compacted_ambiguous"
+      ],
+      "original_required_demonstration_case_ids": [
+        "dev01_fresh_tea",
+        "dev03_uncompiled_bike",
+        "dev05_clear_reference",
+        "dev13_neighbor_clamp",
+        "dev15_historical_validity",
+        "dev16_retired_suppression",
+        "dev17_conflict_newer_owner",
+        "dev22_memory_unavailable"
+      ]
+    },
+    "hard_boundaries": {
+      "authority_or_speaker_violations_max": 0,
+      "deterministic_acceptance_pass_fraction": 1,
+      "fabricated_source_citations_max": 0,
+      "forbidden_provider_payload_occurrences_max": 0,
+      "rebuild_agreement": 1,
+      "request_receipt_hash_and_byte_agreement": 1,
+      "restart_agreement": 1,
+      "retired_as_current_assertions_max": 0,
+      "silent_conflict_resolutions_max": 0,
+      "source_locator_and_hash_agreement": 1
+    },
+    "limitations": "One real reader repetition per case/condition measures this declared workload; local timing repetitions do not establish independent answer-quality reliability.",
+    "operating_failures": {
+      "expected_status_mismatches_max": 0,
+      "failed_generators_reported_as_exhaustive_empty_max": 0,
+      "required_recovery_scenarios": [
+        "source_restriction",
+        "retirement",
+        "correction",
+        "lease_loss",
+        "index_rebuild",
+        "restart"
+      ],
+      "required_states": [
+        "success",
+        "empty",
+        "unavailable",
+        "partial",
+        "failed",
+        "cancelled",
+        "exhausted"
+      ],
+      "unauthorized_late_effects_max": 0
+    },
+    "partition": "development_and_fresh_heldout",
+    "proposal_sha256": "6366fbd8c478cb44f6bcfde692a6e7fe21d4dff4569faa61d411ecf7a020241e",
+    "quality": {
+      "complete_support_case_fraction_min": 0.8,
+      "each_family_semantic_pass_fraction_min": 0.5,
+      "final_source_micro_recall_min": 0.75,
+      "initial_source_micro_recall_min": 0.55,
+      "oracle_citation_accuracy_min": 0.95,
+      "oracle_grounding_min": 0.95,
+      "oracle_supported_answer_component_recall_min": 0.95,
+      "original_event_citation_accuracy_min": 0.95,
+      "personal_proposition_grounding_min": 0.95,
+      "required_role_selectors": [
+        {
+          "all_matching_cases_must_pass": true,
+          "gate_role": "material_clarification",
+          "minimum_selected_cases": 2,
+          "obligation": "A focused recipient clarification precedes any personal recommendation."
+        },
+        {
+          "all_matching_cases_must_pass": true,
+          "gate_role": "clear_reference",
+          "minimum_selected_cases": 2,
+          "obligation": "The clear reference resolves without unnecessary recipient clarification."
+        },
+        {
+          "all_matching_cases_must_pass": true,
+          "gate_role": "critical_semantic",
+          "minimum_selected_cases": 15,
+          "obligation": "All case-specific semantic and required demonstration criteria pass; aggregate quality cannot waive failure."
+        }
+      ],
+      "supported_answer_component_recall_min": 0.85,
+      "union_source_micro_recall_min": 0.85,
+      "unwanted_evidence_fraction_max": 0.35
+    },
+    "quality_condition": "automatic_deeper",
+    "reader_cases": 24,
+    "reader_repetitions_per_case_condition": 1,
+    "reader_turns": 144,
+    "resources": {
+      "cancellation_tail_ms_max": 1000,
+      "cumulative_kernel_work_ms_max": 3000,
+      "cumulative_memory_message_bytes_max": 36864,
+      "derived_index_database_and_wal_growth_bytes_max": 33554432,
+      "expansion_after_max": 2,
+      "expansion_before_max": 2,
+      "expansion_message_bytes_max": 800,
+      "expansion_messages_max": 5,
+      "held_evidence_items_max": 8,
+      "index_build_ms_max": 30000,
+      "index_coverage_required": "active",
+      "index_rebuild_ms_max": 30000,
+      "kernel_searches_per_turn_max": 8,
+      "local_initial_request_p95_ms_max": 1500,
+      "local_repetitions_per_case_condition": 20,
+      "local_retrieval_work_p95_ms_max": 3000,
+      "operating_repetitions": 20,
+      "output_reserve_tokens": 768,
+      "quantile_definition": "nearest_rank",
+      "reader_calls_per_turn_max": 6,
+      "reader_turn_deadline_ms": 120000,
+      "reader_whole_turn_p95_ms_max": 120000,
+      "refused_post_budget_attempts": "Report separately; SearchAttempts includes these refusals and is not the Kernel work count.",
+      "request_serialized_bytes_max": 98304,
+      "search_result_bytes_max": 12288,
+      "warm_incremental_worker_rss_growth_bytes_max": 536870912,
+      "working_tokens": 24576
+    },
+    "state": "adopted_before_any_integrated_reader_output",
+    "units": {
+      "attempts_items_calls_messages": "count",
+      "bytes": "bytes, with KiB=1024 bytes and MiB=1048576 bytes",
+      "occurrences_and_violations": "count",
+      "quality_and_agreement": "unitless fraction in [0,1]",
+      "time_ms": "elapsed monotonic milliseconds",
+      "tokens": "configured model token budget, separately reported from exact serialized byte measurements"
+    },
+    "version": 1
+  },
+  "endpoint": "http://127.0.0.1:11565",
+  "frozen_at_utc": "2026-09-11T04:26:38.186911+00:00",
+  "gates_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/gates.json",
+  "gates_sha256": "06aaf6f4bff1486a78cef71e88dffeec54ae529f23c322fd8ec5d1bc04c928fd",
+  "go_version": "go version go1.26.3 darwin/arm64",
+  "grader_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/grader.py",
+  "grader_sha256": "b6ac839a5c7709462b820f26868c1e6ab96ae3a5c849135be36fd691223040d8",
+  "hardware": {
+    "hw.memsize": "19327352832",
+    "hw.model": "Mac15,6",
+    "hw.physicalcpu": "11",
+    "logical_cpus": 11,
+    "machine": "arm64",
+    "platform": "macOS-15.7.8-arm64-arm-64bit-Mach-O"
+  },
+  "index_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/index.md",
+  "index_sha256": "7ae0e5ff042f6f979b9940ee8e5219b0feb41b881c5b3fcfe2a915ddde10e8ac",
+  "input_manifest_sha256": "1a0b6d6feaf5919e26bb87e56c586022a71b9c9d886f9e7e42fe72ffcf9d24df",
+  "inputs_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/inputs",
+  "matrix_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/matrix.json",
+  "matrix_sha256": "1ef2f25d040fb33e599c3b8b6554a2cabb4ffe97286beb77a1bca724b674c6c6",
+  "measurement_order": [
+    "index",
+    "local",
+    "operating",
+    "reader"
+  ],
+  "model": {
+    "blobs_sha256_bytes": {
+      "548455b7265836afeea130cfc8919fa3311af2a55b9fec3cbd04e811bb600ee8": 407,
+      "797b70c4edf85907fe0a49eb85811256f65fa0f7bf52166b147fd16be2be4662": 45949216,
+      "85011998c600549934d2b696d7f0cb5078192b56f6c954f6987bf9228870017e": 16,
+      "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4": 11357
+    },
+    "manifest": {
+      "config": {
+        "digest": "sha256:548455b7265836afeea130cfc8919fa3311af2a55b9fec3cbd04e811bb600ee8",
+        "mediaType": "application/vnd.docker.container.image.v1+json",
+        "size": 407
+      },
+      "layers": [
+        {
+          "digest": "sha256:797b70c4edf85907fe0a49eb85811256f65fa0f7bf52166b147fd16be2be4662",
+          "mediaType": "application/vnd.ollama.image.model",
+          "size": 45949216
+        },
+        {
+          "digest": "sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "mediaType": "application/vnd.ollama.image.license",
+          "size": 11357
+        },
+        {
+          "digest": "sha256:85011998c600549934d2b696d7f0cb5078192b56f6c954f6987bf9228870017e",
+          "mediaType": "application/vnd.ollama.image.params",
+          "size": 16
+        }
+      ],
+      "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+      "schemaVersion": 2
+    },
+    "manifest_sha256": "1b226e2802dbb772b5fc32a58f103ca1804ef7501331012de126ab22f67475ef",
+    "runtime": {
+      "version": "0.6.3"
+    },
+    "runtime_path": "/Applications/Ollama.app/Contents/Resources/ollama",
+    "runtime_sha256": "2794d30cf43308d6ce368d2827f09b2b6b2e804960e9f5768b3b603f1ad93a8f"
+  },
+  "operating_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/operating.md",
+  "operating_sha256": "14dc0149cdfd3ee49dc2862c114f3a4ff10babbdfb01f51817ec1c6e258b1483",
+  "partition": "development",
+  "prepared_inputs_archive_sha256": "49780997a68713f22ccae7ff18ddef9b8da1c12ad1e0c734ed403077e24d8dc4",
+  "procedure_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/procedure.md",
+  "procedure_sha256": "1f22b332a7f9414745619aaa21a118cd676b3befd5f978633dfdc98838214b0c",
+  "profile": {
+    "AdvertisedModel": "openai/gpt-6-astra",
+    "AdvertisedWindowTokens": 1050000,
+    "CanonicalModel": "openai/gpt-6-astra-20260903",
+    "ConfiguredModel": "openai/gpt-6-astra",
+    "EstimationMarginTokens": 4096,
+    "HardWindowTokens": 922768,
+    "OutputReserveTokens": 768,
+    "Source": "remote_metadata",
+    "WorkingTokens": 24576
+  },
+  "profile_sha256": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+  "provider": "actual production reader, low reasoning; model controls every non-oracle read from request one",
+  "resources_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/resources.py",
+  "resources_sha256": "c50ff894f848826e13e14094c5668e299c1cb646346892387f7f43c4417dea05",
+  "retrieval_configuration": {
+    "active_dense_raw_lexical_candidate_limit": 24,
+    "agent_read_deadline_ms": 750,
+    "automatic_planner": "bounded-reference-lexical-v2",
+    "changed_conflict_peers_per_held_claim": 8,
+    "compaction_continuity_bytes_max": 512,
+    "current_request_bytes_examined": 512,
+    "dense_candidates": 8,
+    "dense_chunk_bytes": 240,
+    "dense_chunk_overlap_bytes": 48,
+    "dense_dimensions": 384,
+    "dense_minimum_cosine": 0.25,
+    "dense_model": "all-minilm:22m",
+    "dense_query_deadline": "min(250ms, half remaining Store deadline)",
+    "dense_vector_encoding": "L2 normalized float32",
+    "dense_vector_scan_limit": 4096,
+    "earlier_owner_roots_examined": 16,
+    "earlier_root_bytes_max": 384,
+    "earlier_roots_selected": 2,
+    "embedding_context_tokens": 256,
+    "embedding_input_bytes_max": 1024,
+    "embedding_keep_alive": "30s",
+    "embedding_operation_deadline_ms": 10000,
+    "embedding_response_bytes_max": 1048576,
+    "embedding_threads": 4,
+    "embedding_truncate": false,
+    "exact_candidate_limit": 16,
+    "expansion_sequence_positions": 64,
+    "explicit_identity_selector_bytes_max": 128,
+    "explicit_identity_selectors_max": 2,
+    "graph_anchors": 4,
+    "graph_depth": 2,
+    "graph_paths_per_claim": 2,
+    "graph_width": 16,
+    "inactive_dense_raw_lexical_candidate_limit": 64,
+    "initial_result_bytes_per_kind": 6144,
+    "initial_results_per_kind": 2,
+    "lexical_candidate_limit": 24,
+    "maintenance_embedding_inputs_per_batch": 16,
+    "maintenance_rows_per_batch": 256,
+    "new_owner_suggestions_per_held_claim": 8,
+    "query_bytes_max": 1024,
+    "query_terms_max": 32,
+    "reader_guide": "memory-retrieval-v2",
+    "rrf_k": 60,
+    "semantic_authority": "canonical accepted state and exact original source policy; scores propose only",
+    "shared_candidate_limit": 64,
+    "store_query_deadline_ms": 500,
+    "temporal_candidate_limit": 8
+  },
+  "rubric_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/rubric.md",
+  "rubric_sha256": "a64da1e7cf6219862c478c24dd8dd1172a4cec7073e55a2508cbf6e7e4bcc813",
+  "runner_sha256": "ea109450903251f81a16da80754ebb986dfdbb5b96f6e28cd7b6a26b77a13933",
+  "scorer_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/scorer.py",
+  "scorer_sha256": "a3b60abc43c2013ea35b5bf7eefa39db83c59eb65b5cd075021676579d96e732",
+  "source_head_before_issue_fix_folding": "fbabb1fec70fdc8f1b338a5aba05d5343d774f9b",
+  "source_root": "/private/tmp/evie-memory-stage5/integrated-development-v2/source",
+  "version": "integrated-development-v2",
+  "worker_environment": {
+    "GODEBUG": "",
+    "GOGC": "100",
+    "GOMAXPROCS": "11",
+    "GOMEMLIMIT": "off"
+  },
+  "workload_path": "/private/tmp/evie-memory-stage5/integrated-development-v2/workload.json",
+  "workload_sha256": "2e1aff23f8426b45b6a1cc3301c769026ecb84cc55a9d4f03ba922eff333d562"
+}

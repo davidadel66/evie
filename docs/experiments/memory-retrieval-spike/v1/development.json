@@ -1,0 +1,450 @@
+[
+  {
+    "id": "development-00-paraphrase",
+    "family": "development-00",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "Which meals fit my vegan diet?",
+    "expected": [
+      "development-00/claim"
+    ],
+    "forbidden": [
+      "development-00-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-00-lexical_control",
+    "family": "development-00",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "animal products",
+    "expected": [
+      "development-00/claim"
+    ],
+    "forbidden": [
+      "development-00-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-01-paraphrase",
+    "family": "development-01",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "How do I commute to work without a car?",
+    "expected": [
+      "development-01/excerpt"
+    ],
+    "forbidden": [
+      "development-01-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-01-lexical_control",
+    "family": "development-01",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "bicycle office",
+    "expected": [
+      "development-01/excerpt"
+    ],
+    "forbidden": [
+      "development-01-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-02-paraphrase",
+    "family": "development-02",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "What hearing accommodation does my grandma need?",
+    "expected": [
+      "development-02/claim"
+    ],
+    "forbidden": [
+      "development-02-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-02-lexical_control",
+    "family": "development-02",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "grandmother voices",
+    "expected": [
+      "development-02/claim"
+    ],
+    "forbidden": [
+      "development-02-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-03-paraphrase",
+    "family": "development-03",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "Where did I leave the spare door key?",
+    "expected": [
+      "development-03/excerpt"
+    ],
+    "forbidden": [
+      "development-03-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-03-lexical_control",
+    "family": "development-03",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "keys ceramic",
+    "expected": [
+      "development-03/excerpt"
+    ],
+    "forbidden": [
+      "development-03-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-04-paraphrase",
+    "family": "development-04",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "What is my nighttime notification preference?",
+    "expected": [
+      "development-04/claim"
+    ],
+    "forbidden": [
+      "development-04-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-04-lexical_control",
+    "family": "development-04",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "phone alerts",
+    "expected": [
+      "development-04/claim"
+    ],
+    "forbidden": [
+      "development-04-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-05-paraphrase",
+    "family": "development-05",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "How are our documents protected against drive failure?",
+    "expected": [
+      "development-05/excerpt"
+    ],
+    "forbidden": [
+      "development-05-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-05-lexical_control",
+    "family": "development-05",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "spare disk",
+    "expected": [
+      "development-05/excerpt"
+    ],
+    "forbidden": [
+      "development-05-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-06-paraphrase",
+    "family": "development-06",
+    "scope": "general",
+    "kind": "accepted_memory",
+    "query": "Why do I need lactose-free food?",
+    "expected": [
+      "development-06/claim"
+    ],
+    "forbidden": [
+      "development-06-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-06-lexical_control",
+    "family": "development-06",
+    "scope": "general",
+    "kind": "accepted_memory",
+    "query": "dairy alternatives",
+    "expected": [
+      "development-06/claim"
+    ],
+    "forbidden": [
+      "development-06-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-07-paraphrase",
+    "family": "development-07",
+    "scope": "workspace",
+    "kind": "conversation_excerpt",
+    "query": "What was our idea for irrigating the garden sustainably?",
+    "expected": [
+      "development-07/excerpt"
+    ],
+    "forbidden": [
+      "development-07-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-07-lexical_control",
+    "family": "development-07",
+    "scope": "workspace",
+    "kind": "conversation_excerpt",
+    "query": "rainwater barrels",
+    "expected": [
+      "development-07/excerpt"
+    ],
+    "forbidden": [
+      "development-07-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-08-paraphrase",
+    "family": "development-08",
+    "scope": "project_a",
+    "kind": "accepted_memory",
+    "query": "How does road travel affect my young relative?",
+    "expected": [
+      "development-08/claim"
+    ],
+    "forbidden": [
+      "development-08-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-08-lexical_control",
+    "family": "development-08",
+    "scope": "project_a",
+    "kind": "accepted_memory",
+    "query": "nephew car",
+    "expected": [
+      "development-08/claim"
+    ],
+    "forbidden": [
+      "development-08-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-09-paraphrase",
+    "family": "development-09",
+    "scope": "project_b",
+    "kind": "conversation_excerpt",
+    "query": "How do I avoid financing charges on credit purchases?",
+    "expected": [
+      "development-09/excerpt"
+    ],
+    "forbidden": [
+      "development-09-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-09-lexical_control",
+    "family": "development-09",
+    "scope": "project_b",
+    "kind": "conversation_excerpt",
+    "query": "card balance",
+    "expected": [
+      "development-09/excerpt"
+    ],
+    "forbidden": [
+      "development-09-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-10-paraphrase",
+    "family": "development-10",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "What scares my pet during loud celebrations?",
+    "expected": [
+      "development-10/claim"
+    ],
+    "forbidden": [
+      "development-10-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-10-lexical_control",
+    "family": "development-10",
+    "scope": "global",
+    "kind": "accepted_memory",
+    "query": "dog fireworks",
+    "expected": [
+      "development-10/claim"
+    ],
+    "forbidden": [
+      "development-10-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-11-paraphrase",
+    "family": "development-11",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "When can I view the exhibits after normal business hours?",
+    "expected": [
+      "development-11/excerpt"
+    ],
+    "forbidden": [
+      "development-11-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-11-lexical_control",
+    "family": "development-11",
+    "scope": "general",
+    "kind": "conversation_excerpt",
+    "query": "museum Thursday",
+    "expected": [
+      "development-11/excerpt"
+    ],
+    "forbidden": [
+      "development-11-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-12-paraphrase",
+    "family": "development-12",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "How do I prevent pantry pests from reaching baking supplies?",
+    "expected": [
+      "development-12/claim"
+    ],
+    "forbidden": [
+      "development-12-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-12-lexical_control",
+    "family": "development-12",
+    "scope": "workspace",
+    "kind": "accepted_memory",
+    "query": "flour insects",
+    "expected": [
+      "development-12/claim"
+    ],
+    "forbidden": [
+      "development-12-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-13-paraphrase",
+    "family": "development-13",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "What approval is needed before software goes live?",
+    "expected": [
+      "development-13/excerpt"
+    ],
+    "forbidden": [
+      "development-13-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-13-lexical_control",
+    "family": "development-13",
+    "scope": "project_a",
+    "kind": "conversation_excerpt",
+    "query": "deployment authorize",
+    "expected": [
+      "development-13/excerpt"
+    ],
+    "forbidden": [
+      "development-13-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-14-paraphrase",
+    "family": "development-14",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "Why do I need accessible lodging on the ground floor?",
+    "expected": [
+      "development-14/claim"
+    ],
+    "forbidden": [
+      "development-14-forbidden/claim"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-14-lexical_control",
+    "family": "development-14",
+    "scope": "project_b",
+    "kind": "accepted_memory",
+    "query": "stairs ankle",
+    "expected": [
+      "development-14/claim"
+    ],
+    "forbidden": [
+      "development-14-forbidden/claim"
+    ],
+    "category": "lexical_control"
+  },
+  {
+    "id": "development-15-paraphrase",
+    "family": "development-15",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "What screen color do I use in the evening?",
+    "expected": [
+      "development-15/excerpt"
+    ],
+    "forbidden": [
+      "development-15-forbidden/excerpt"
+    ],
+    "category": "paraphrase"
+  },
+  {
+    "id": "development-15-lexical_control",
+    "family": "development-15",
+    "scope": "global",
+    "kind": "conversation_excerpt",
+    "query": "display amber",
+    "expected": [
+      "development-15/excerpt"
+    ],
+    "forbidden": [
+      "development-15-forbidden/excerpt"
+    ],
+    "category": "lexical_control"
+  }
+]

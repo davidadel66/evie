@@ -285,6 +285,7 @@ type ContextPlaceholderManifest struct {
 // conversational provider request. Content-bearing request fields deliberately
 // have no representation here.
 type ContextSnapshotPayload struct {
+	Memory                    *RetrievalReceipt                `json:"memory,omitempty"`
 	SchemaVersion             int                              `json:"schema_version"`
 	ComposerVersion           string                           `json:"composer_version"`
 	EstimatorVersion          string                           `json:"estimator_version"`

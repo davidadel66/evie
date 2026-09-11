@@ -279,16 +279,16 @@ func TestBatchRetainsPartialFailureAndAcceptedResultsAfterCancellation(t *testin
 	<-entered
 	<-accepted
 	<-accepted
-	// Wait through the public inspection seam until success is durably accepted.
+	// Wait through the public seam until both completed siblings are durable.
 	// The held child ensures cancellation still has unfinished work to stop.
 	var successID string
 	deadline := time.After(time.Second)
 	for successID == "" {
-		r, err := f.delegate(t, context.Background(), f.parent, requests[:1])
+		r, err := f.delegate(t, context.Background(), f.parent, requests[:2])
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(r) == 1 && r[0].Status == "succeeded" {
+		if len(r) == 2 && r[0].Status == "succeeded" && r[1].Status == "failed" {
 			successID = r[0].ExecutionID
 			break
 		}
@@ -775,7 +775,7 @@ func TestOldAndNewParentReceiptsReopenWithoutChangingDelegation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before.Receipt.Preset.Version = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
+	before.Receipt.Preset.Version = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
 	warnings := before.Receipt.Warnings[:0]
 	for _, w := range before.Receipt.Warnings {
 		if w.CapabilityID != delegation.CapabilityID {

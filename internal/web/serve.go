@@ -83,6 +83,7 @@ type Server struct {
 	receipts          ReceiptInspector
 	contextSessions   ContextSessionController
 	semanticMemory    agent.SemanticGraphMemory
+	memoryEvidence    MemoryEvidenceInspector
 	databaseInspector DatabaseInspector
 	candidateReview   CandidateReviewKernel
 	usageReader       UsageReader
@@ -137,6 +138,7 @@ func NewContextMemoryServer(
 ) *Server {
 	server := NewContextServer(session, manager, receipts, contextSessions)
 	server.semanticMemory = semanticMemory
+	server.memoryEvidence, _ = semanticMemory.(MemoryEvidenceInspector)
 	return server
 }
 
@@ -182,6 +184,9 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/memory/scopes", s.managementRoute(s.handleMemoryScopes))
 		mux.Handle("/api/memory/objects", s.managementRoute(s.handleMemoryObjects))
 		mux.Handle("/api/memory/inspect", s.managementRoute(s.handleMemoryInspect))
+	}
+	if s.memoryEvidence != nil {
+		mux.Handle("/api/memory/evidence", s.managementRoute(s.handleMemoryEvidence))
 	}
 	if s.databaseInspector != nil {
 		mux.Handle("/api/data/database/schema", s.managementRoute(s.handleDatabaseSchema))

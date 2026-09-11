@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/scorer.py",
+    "--freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+    "--results",
+    "/tmp/evie-memory-stage5/integrated-development-v4-reader",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-development-v4-evidence"
+  ],
+  "started_at_utc": "2026-09-11T06:10:36.071671+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

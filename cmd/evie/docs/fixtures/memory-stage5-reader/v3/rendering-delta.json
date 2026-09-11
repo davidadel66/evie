@@ -1,0 +1,8 @@
+{
+  "before": "memory-retrieval-v1: version, status, evidence",
+  "after": "memory-retrieval-v2: version, status, reading_guide when evidence exists, negative-only historical_only IDs for currently retired evidence, unchanged evidence array",
+  "reading_guide": "current_status:retired cannot establish a current fact, even with status:active at as_known_at. Each quoted span belongs only to the source entry containing it: cite that entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation.",
+  "projection": "Guide and labels follow current revalidation, are charged to the existing serialized projection budget, and are cleared when the evidence projection is withheld.",
+  "system_prompt": "Unchanged from v2; hash pinned in freeze.json.",
+  "scope": "Development attempt; no rubric, scenario, marker, or numerical reader configuration change."
+}

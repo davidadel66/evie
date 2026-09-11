@@ -1,0 +1,27 @@
+{
+  "source": "/tmp/evie-memory-stage5",
+  "files": {
+    "heldout-v2-final-gate-ledger.json": {
+      "sha256": "33e3e58d12067a93469af9d67e0025751bdc4765d037a95242c8fd35fe3fdbfe",
+      "bytes": 148807
+    },
+    "heldout-v2-final-gate-summary.md": {
+      "sha256": "913bf99cc567d567396888281cc33bbb592df757f110e7c5059944b392a2006c",
+      "bytes": 8524
+    },
+    "heldout-v2-index-hold15-diagnosis.json": {
+      "sha256": "b5332d2e09077e7f6e7e2213f3703037f8e77d574cd18d7c1f6e272492952ca9",
+      "bytes": 10725
+    },
+    "heldout-v2-index-hold15-diagnosis.md": {
+      "sha256": "893c7864dc76c69bfa24ab517b7f4d43b3f96128be83e81f1c522768dcb97442",
+      "bytes": 2020
+    },
+    "heldout-v2-local-index-operating-summary.json": {
+      "sha256": "71fb0c9e8e1cf3b41d6e77834fe6a093fda0aca22697c2b418e9f7a7014eaba8",
+      "bytes": 645105
+    }
+  },
+  "all_copy_hashes_verified": true,
+  "note": "Read-only post-run diagnoses and summaries; do not alter frozen reports or release status."
+}

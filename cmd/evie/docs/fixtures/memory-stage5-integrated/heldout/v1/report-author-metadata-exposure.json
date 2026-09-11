@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-11T06:24:57.679739+00:00",
+  "actual_read_at_utc": null,
+  "read_time_qualification": "The metadata read preceded this record; its exact time was not independently captured.",
+  "agent_identity": "/root/architecture",
+  "task": "#167 pilot report documentation update",
+  "metadata_path": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/curation-record.json",
+  "incidental_content": "One compound-literal/source-wording excerpt within static-validation metadata; literal content deliberately omitted from this record.",
+  "ordering": "Read after all 48 assigned V4 semantic judgments were final and after the complete V4 resource report passed.",
+  "workload_file_read": false,
+  "heldout_output_read": false,
+  "runtime_configuration_ranking_or_scoring_edits": false,
+  "corpus_edits": false,
+  "parent_notified": true,
+  "continuation": "Only the assigned #167 report edit; future assessment provenance instructions will use a sanitized metadata summary."
+}

@@ -1,0 +1,736 @@
+{
+  "metadata_simulation": "shutil.copyfile retains bytes while producing new file timestamps; no Git operation performed",
+  "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/runs/development-v4",
+  "copy": "/tmp/evie-memory-stage5/transport-metadata-copy-v4",
+  "transport_positive": {
+    "schema_version": 1,
+    "directory": "/private/tmp/evie-memory-stage5/transport-metadata-copy-v4",
+    "content_integrity_verified": true,
+    "freeze_sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+    "preservation_manifest_sha256": "34ae44a3477a2bc5ea8464dc9c0deb612318566f4f062b9a0fda7f29a78d0d1f",
+    "retained_files": 73,
+    "direct_original_files": 64,
+    "preservation_archive_members": 2041,
+    "source_archive_members": 394,
+    "input_archive_members": 48,
+    "repository_records_verified": 15,
+    "archived_original_times_and_modes_verified": true,
+    "direct_file_original_times_and_modes_claimed_preserved_by_git": false,
+    "direct_file_checkout_metadata_difference_count": 64,
+    "direct_file_checkout_metadata_differences": [
+      {
+        "path": "commands/integrated-development-v4-assessments-requirements-check.json",
+        "original_recorded": {
+          "mtime_ns": 1789107355358144791,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652090344773,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-assessments-requirements-manifest.json",
+        "original_recorded": {
+          "mtime_ns": 1789107383397891368,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091983681,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-assessments-requirements-notes.md",
+        "original_recorded": {
+          "mtime_ns": 1789107383398386285,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091043311,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-evidence-execution-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789107036072010612,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652085670338,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-evidence-execution.json",
+        "original_recorded": {
+          "mtime_ns": 1789107036735406583,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652088169617,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-evidence-execution.log",
+        "original_recorded": {
+          "mtime_ns": 1789107036072067404,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091185227,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-grade-execution-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789107665166750679,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652088663490,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-grade-execution.json",
+        "original_recorded": {
+          "mtime_ns": 1789107665319521166,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091686224,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-grade-execution.log",
+        "original_recorded": {
+          "mtime_ns": 1789107665315965495,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652092139139,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-index-command.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349581297579,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652086217877,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-index-console.log",
+        "original_recorded": {
+          "mtime_ns": 1789106360748836065,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652088872614,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-local-command.json",
+        "original_recorded": {
+          "mtime_ns": 1789106360757715400,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652088432116,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-local-console.log",
+        "original_recorded": {
+          "mtime_ns": 1789106460053419056,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652090572772,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-operating-command.json",
+        "original_recorded": {
+          "mtime_ns": 1789106460061714308,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652089385194,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-operating-console.log",
+        "original_recorded": {
+          "mtime_ns": 1789106506556233089,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652086705167,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-plan.json",
+        "original_recorded": {
+          "mtime_ns": 1789106341867239199,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091343059,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-reader-command.json",
+        "original_recorded": {
+          "mtime_ns": 1789106506566363698,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652092509595,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-reader-console.log",
+        "original_recorded": {
+          "mtime_ns": 1789107027216508404,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652087792078,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-resource-execution-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789107665319947083,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652087394663,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-resource-execution.json",
+        "original_recorded": {
+          "mtime_ns": 1789107668671127188,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652092346304,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-development-v4-resource-execution.log",
+        "original_recorded": {
+          "mtime_ns": 1789107668666096098,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652091536600,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-freeze-v4-command.json",
+        "original_recorded": {
+          "mtime_ns": 1789105832400641300,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652090818687,
+          "mode": 420
+        }
+      },
+      {
+        "path": "commands/integrated-freeze-v4-console.log",
+        "original_recorded": {
+          "mtime_ns": 1789106349559883867,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652089836817,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/__pycache__/grader.cpython-313.pyc",
+        "original_recorded": {
+          "mtime_ns": 1789107102943164773,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652099083311,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/assessment.md",
+        "original_recorded": {
+          "mtime_ns": 1789106342285861829,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652100513762,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/audit_sources.py",
+        "original_recorded": {
+          "mtime_ns": 1789106342285259329,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652095060582,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/build-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789106342287420121,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652095595538,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/build.json",
+        "original_recorded": {
+          "mtime_ns": 1789106344996149193,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652104774615,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/build.log",
+        "original_recorded": {
+          "mtime_ns": 1789106342287470496,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652107286144,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/compiled-source-manifest.json",
+        "original_recorded": {
+          "mtime_ns": 1789106342287030996,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652095381747,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/compiled-source.tar.gz",
+        "original_recorded": {
+          "mtime_ns": 1789106345153990810,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652103931203,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/freeze.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349549672739,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652104217743,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/gates.json",
+        "original_recorded": {
+          "mtime_ns": 1789106342283594370,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652101544132,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/grader.py",
+        "original_recorded": {
+          "mtime_ns": 1789106342285614704,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652094383544,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/index.md",
+        "original_recorded": {
+          "mtime_ns": 1789106342284638370,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652099976682,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/input-manifest.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349305216521,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652094738500,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/matrix.json",
+        "original_recorded": {
+          "mtime_ns": 1789106342284222370,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652100885635,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/model-state-after-preparation.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349287266559,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652101102009,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/model-state-before-preparation.json",
+        "original_recorded": {
+          "mtime_ns": 1789106346170571358,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652102039421,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/operating.md",
+        "original_recorded": {
+          "mtime_ns": 1789106342284094620,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652099459393,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight-execution-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789106345221694116,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652098216108,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight-execution.json",
+        "original_recorded": {
+          "mtime_ns": 1789106346153946938,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652099712891,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight-execution.log",
+        "original_recorded": {
+          "mtime_ns": 1789106346150707688,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652100223597,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight/preflight-context-profile.json",
+        "original_recorded": {
+          "mtime_ns": 1789106346150131646,
+          "mode": 384
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652105958068,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight/preflight-metadata-01-http.json",
+        "original_recorded": {
+          "mtime_ns": 1789106345715183721,
+          "mode": 384
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652106213983,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight/preflight-metadata-01-wire-response.raw",
+        "original_recorded": {
+          "mtime_ns": 1789106345717009888,
+          "mode": 384
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652106704231,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight/preflight-metadata-02-http.json",
+        "original_recorded": {
+          "mtime_ns": 1789106346147864562,
+          "mode": 384
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652105432654,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/preflight/preflight-metadata-02-wire-response.raw",
+        "original_recorded": {
+          "mtime_ns": 1789106346149500729,
+          "mode": 384
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652105716736,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/prepare-execution-started.json",
+        "original_recorded": {
+          "mtime_ns": 1789106346170913442,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652102276170,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/prepare-execution.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349280944016,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652105012031,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/prepare-execution.log",
+        "original_recorded": {
+          "mtime_ns": 1789106349277528973,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652093864380,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/prepared-inputs.tar.gz",
+        "original_recorded": {
+          "mtime_ns": 1789106349499669062,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652096923239,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/procedure.md",
+        "original_recorded": {
+          "mtime_ns": 1789106342286133287,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652102563085,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/resources.py",
+        "original_recorded": {
+          "mtime_ns": 1789106342286539579,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652101836047,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/rubric.md",
+        "original_recorded": {
+          "mtime_ns": 1789106342283855329,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652101322092,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/run.py",
+        "original_recorded": {
+          "mtime_ns": 1789106341912722250,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652093505007,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/scorer.py",
+        "original_recorded": {
+          "mtime_ns": 1789106342284953787,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652107174936,
+          "mode": 420
+        }
+      },
+      {
+        "path": "frozen/workload.json",
+        "original_recorded": {
+          "mtime_ns": 1789106342283466912,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652097823818,
+          "mode": 420
+        }
+      },
+      {
+        "path": "preserve-integrated-v4.py",
+        "original_recorded": {
+          "mtime_ns": 1789107159008958952,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652093062676,
+          "mode": 420
+        }
+      },
+      {
+        "path": "reports/assessment-manifest.json",
+        "original_recorded": {
+          "mtime_ns": 1789107665166295470,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652112832282,
+          "mode": 420
+        }
+      },
+      {
+        "path": "reports/deterministic.json",
+        "original_recorded": {
+          "mtime_ns": 1789106349581174496,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652113146739,
+          "mode": 420
+        }
+      },
+      {
+        "path": "reports/evidence-report.json",
+        "original_recorded": {
+          "mtime_ns": 1789107036673881671,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652112451159,
+          "mode": 420
+        }
+      },
+      {
+        "path": "reports/quality-report.json",
+        "original_recorded": {
+          "mtime_ns": 1789107665315753244,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652114762731,
+          "mode": 420
+        }
+      },
+      {
+        "path": "reports/resource-report.json",
+        "original_recorded": {
+          "mtime_ns": 1789107668665323764,
+          "mode": 420
+        },
+        "checkout_observed": {
+          "mtime_ns": 1789113652111546498,
+          "mode": 420
+        }
+      }
+    ],
+    "limitations": [
+      "Hash integrity is relative to retained manifests and repository identity; no signature or independent authenticity is claimed.",
+      "A fresh Git checkout preserves contents, not original direct-file mtimes or complete POSIX modes. Recorded originals remain in the plan and archive metadata.",
+      "No executable was rebuilt, model invoked, source tree extracted, or evaluation result reclassified. This is transport verification, not a new measurement or release gate."
+    ]
+  },
+  "strict_original_metadata_rejection": "preserved direct file time/mode differs: commands/integrated-development-v4-assessments-requirements-check.json",
+  "changed_content_rejection": "content differs from retention manifest: /private/tmp/evie-memory-stage5/transport-metadata-copy-v4/frozen/freeze.json",
+  "restored_bytes_transport_pass": true,
+  "script_sha256": "6766b659ab963096a6042b885b83bbd19b4c140cfafb3ec0203a43dfb0b8a2e9"
+}

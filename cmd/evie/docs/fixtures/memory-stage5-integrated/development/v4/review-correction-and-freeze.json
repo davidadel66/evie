@@ -1,0 +1,98 @@
+{
+  "recorded_at_utc": "2026-09-11T06:03:02.200967+00:00",
+  "reason": "Pre-held-out spec review identified a restored authorized Workspace conflict omitted by a Global held interpretation; correct #162 and freeze development v4 before release.",
+  "review": {
+    "standards_findings": 0,
+    "spec_findings": 1,
+    "worst_spec": "P2 authorized cross-scope conflict refresh",
+    "focused_recheck_findings": 0,
+    "reviewer": "Codex subagents review12_standards and review12_spec; no human review claimed"
+  },
+  "production_source_changes": [
+    {
+      "path": "internal/agent/retrieval_investigation_scope_refresh_test.go",
+      "before": null,
+      "after": "0898217b5b26d0f5760fc4745dd886f511aee66af4ae8951b2fbb4681e942b3e"
+    },
+    {
+      "path": "internal/eviedb/retrieval_refresh_validity.go",
+      "before": "78380c04f44b5e41c1f150951cf1eb29556d0d20a625efb572fbf0ea29991286",
+      "after": "fbb3f7060607443b9217163fdd8ee33879ddbf6b6f5a85e5a1257d094742b379"
+    }
+  ],
+  "owner_fold": {
+    "mapping": {
+      "5808c54d65b7292a17c53465071d4c6008febd15": "31334386b1e0f43b565d7c4a0b900435a7afab7e",
+      "b23a1099a9ae4f0ef94f08b73e3185ab5516406c": "c3d94283955e90df50c92c2174360ed6d8cffb18",
+      "0269e119e6ffb414a4b766efecf52800e1e08536": "52d00bf5aa40c6323321253b54e66bf153de7ccd"
+    },
+    "head": "52d00bf5aa40c6323321253b54e66bf153de7ccd",
+    "owner162": "31334386b1e0f43b565d7c4a0b900435a7afab7e",
+    "commit_count": 12,
+    "preserved_uncommitted_issue167_and_168": true
+  },
+  "frozen_at_utc": "2026-09-11T05:59:09.519646+00:00",
+  "freeze_sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+  "binary_sha256": "06ba5e56aecf5684f2209bd801074ea65ed032dc88181d07a4d016260532f072",
+  "compiled_source_inputs": 394,
+  "unchanged_numerical_gates": true,
+  "gates_sha256": "bf730615b47e3acb2f9fc12fe57a1dad88d19169ce46967716ec6fde144b1ea9",
+  "unchanged_development_questions": true,
+  "workload_sha256": "2e1aff23f8426b45b6a1cc3301c769026ecb84cc55a9d4f03ba922eff333d562",
+  "unchanged_semantic_and_evidence_scoring": true,
+  "runner_change": "Declare authorized-global-context-session-union-v1 in frozen retrieval metadata.",
+  "procedure_change": "Remove one extra EOF blank line from maintained text; frozen v3 original bytes remain retained.",
+  "matrix_change": "Retain all previous rows and add both public cross-scope regression functions: 91 Go functions and the same 14 required UI cases.",
+  "deterministic_checks": {
+    "verify_change": {
+      "command": [
+        "./scripts/verify-change.sh"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T05:58:38.579605+00:00",
+      "started_at_utc": "2026-09-11T05:57:07.473230+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    "go_matrix": {
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "./internal/agent",
+        "./internal/localembedding",
+        "./internal/web",
+        "-run",
+        "^(TestAutomaticMemoryEvidenceHTTPInspectsFirstOrdinaryRequest|TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch|TestAutomaticMemoryRecallDropsRetiredEvidenceBeforeContinuation|TestAutomaticMemoryRecallFailedSQLiteLookupDoesNotBecomeEmpty|TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable|TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch|TestAutomaticMemoryRecallScopeMatrixKeepsRawHistoryInItsArea|TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest|TestConversationEvidenceHTTPKeepsWorkspaceAttributionWithoutGlobalHistory|TestConversationExpansionCancellationHasNoLateEvidenceReceipt|TestConversationExpansionEvidenceHTTPInspectsAdditionalOriginalPositionsAfterRestart|TestConversationExpansionReportsBoundedSequenceGap|TestConversationExpansionReportsOmittedSecretNeighbor|TestConversationExpansionReportsRetiredNeighborInterval|TestConversationExpansionSharesSearchBudgetAndRejectsLargeWindows|TestConversationExpansionTurnExcludesCurrentRootFromEarlierCurrentSessionAnchor|TestConversationExpansionTurnOmitsRetiredNeighborRangeButKeepsUnrelatedUTF8Passage|TestConversationExpansionTurnOptOutWithholdsSourceReferencesFromCompleteRequest|TestConversationExpansionTurnRejectsForgedAndOutOfScopeAnchors|TestConversationExpansionTurnSubtractsOverlappingUTF8EvidenceAndDuplicateRequests|TestConversationSearchFindsUncompiledOriginalStatement|TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges|TestConversationSearchTurnScopeMatrixAndEarlierRoots|TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild|TestDenseBackfillRechecksConcurrentRetirementAndAcceptedAppend|TestDenseConfigurationUpgradeNeverServesAnObsoleteActiveGeneration|TestDenseConversationTurnKeepsExactContextAndExcludesIndexedLiveRoot|TestDenseConversationTurnRechecksRetiredUTF8RangeAndRevokedSource|TestDenseDisabledGenerationReconcilesAcceptedChangesBeforeReenable|TestDenseEndpointDeadlinePreservesEligibleLexicalEvidenceAsPartial|TestDenseGenerationRebuildReconcilesBeforeServingAndSurvivesRestart|TestDenseMemoryTurnKeepsContextAndCurrentSessionScopeMatrix|TestDenseSingleRowBackfillEventuallyServesCompleteTurn|TestDenseWrongManifestTurnPreservesLexicalEvidenceAndStopsEmbeddingInput|TestEmbedOptOutMakesNoRequestAndStopsAfterManifestVerification|TestEmbedPreservesCancellationAndAvoidsDispatchForCanceledCaller|TestEmbedPreservesDeadlineWhileReadingResponse|TestEmbedRejectsMalformedVectorsWithoutReturningPartialBatch|TestEmbedRejectsModelReplacementDuringInference|TestEmbedRejectsRedirectWithoutContactingItsDestination|TestEmbedRejectsUnselectedManifestBeforeSendingInput|TestEmbedUsesUnixSocketAndDoesNotContactConfiguredProxy|TestHistoricalConversationExpansionInheritsAnchorIntentAndKnowledgePin|TestHistoricalMemoryEvidenceHTTPRetainsOriginalStateAfterRestoration|TestHistoricalMemorySearchHonorsHalfOpenValidityAndExactKnowledgePins|TestHistoricalMemorySearchIncludesMarkedRetiredEvidenceWithoutRestoringAccess|TestHistoricalMemorySearchPreservesUnknownValidity|TestMemoryCorrectionBeforeDispatchPreservesOriginalReadPinAndFreshLifecycle|TestMemoryEvidenceHTTPReconstructsOriginalConflictsAndNewerRelationsAfterRestart|TestMemoryEvidenceHTTPRejectsAnotherSelectedConversation|TestMemoryInvestigationBoundsEvidenceToActualRequestHeadroom|TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations|TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet|TestMemoryInvestigationCancellationAndLeaseLossHaveNoLateEffects|TestMemoryInvestigationCannotDispatchPastBudgetWhenProviderContinues|TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings|TestMemoryInvestigationContextKeepsSmallerOriginalWhenFirstFindingCannotFit|TestMemoryInvestigationContextLimitsPreserveOriginalDiscussion|TestMemoryInvestigationDoesNotRefreshThroughRetiredAlias|TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches|TestMemoryInvestigationIgnoresRestoredConflictsOutsideAuthorizedScopes|TestMemoryInvestigationKeepsFailedSearchDistinctAfterLaterEmptySearch|TestMemoryInvestigationRefreshesCurrentQueryAfterSameTurnCorrection|TestMemoryInvestigationRefreshesLostClaimWithoutUndoingAnotherExplicitView|TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin|TestMemoryInvestigationRefreshesNewOwnerStatementWithoutAdvancingPinnedViews|TestMemoryInvestigationRefreshesRestoredConflictsAcrossAuthorizedScopes|TestMemoryInvestigationRefreshesRestoredConflictsWithoutAdvancingPinnedViews|TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting|TestMemoryReceiptHTTPAssociatesExactRequestsWithOriginalAnswerAfterRestart|TestMemoryReceiptHTTPDistinguishesPreparedAndInterruptedRequests|TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart|TestMemoryReceiptInspectionRejectsChangedOriginalProvenance|TestMemoryReceiptIsDurableBeforeEachProviderRequestIncludingInterruption|TestMemorySearchOptOutBeforeDispatchWithholdsSupplementalSources|TestMemorySearchOutcomesDistinguishIncompleteEmptyAndMalformed|TestMemorySearchRepeatedCallsShareTurnBudget|TestMemorySearchTurnFindsSourceBearingTwoHopRelationship|TestMemorySearchTurnGraphDoesNotReuseSupportFromDifferentTemporalRead|TestMemorySearchTurnGraphScopeMatrixKeepsGlobalAnchorInsideReaderBoundary|TestMemorySearchTurnGraphSupportRevalidatesBeforeDispatch|TestMemorySearchTurnKeepsPromotedSourceBoundaries|TestMemorySearchTurnScopeMatrix|TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting|TestMemorySearchWithholdsSecretBearingEvidence|TestModelMemoryRetrievalDefaultsToEnabledAndKeepsLegacyTurnResolution|TestNewRejectsRemoteNamedCredentialedAndNonRootEndpoints|TestOriginalMemoryReceiptRemainsInspectableAfterRetirementButNotSourceRevocation|TestReferenceRecallAliasOriginRestrictionDoesNotHideIndependentClaim|TestReferenceRecallSuppliesAcceptedAliasMappingAndRechecksLifecycle|TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSources)$",
+        "-count=1"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T05:58:50.788753+00:00",
+      "started_at_utc": "2026-09-11T05:58:38.580447+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    "ui_matrix": {
+      "command": [
+        "./node_modules/.bin/vitest",
+        "run",
+        "src/api/memoryEvidence.test.ts",
+        "src/artifacts/GraphEvidencePath.test.tsx",
+        "src/artifacts/MemoryEvidence.test.tsx",
+        "src/artifacts/MemoryEvidenceDense.test.tsx",
+        "src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+        "src/chat/MemoryActivity.test.tsx",
+        "src/chat/MemoryInvestigationActivity.test.tsx",
+        "--reporter=json",
+        "--outputFile=/tmp/evie-memory-stage5/integrated-development-v4-checks/ui-results.json"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T05:58:51.417349+00:00",
+      "started_at_utc": "2026-09-11T05:58:50.790951+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5/internal/web/ui"
+    }
+  },
+  "evaluation_status_at_recording": "index, local and operating exited0; real reader underway; quality/resource gates not yet assessed",
+  "heldout_status": "Independently authored corpus remains unopened by implementation/evaluation assessors; no canonical release preparation or reader output yet. Curation provenance retains its post-authoring inventory exposure qualification."
+}

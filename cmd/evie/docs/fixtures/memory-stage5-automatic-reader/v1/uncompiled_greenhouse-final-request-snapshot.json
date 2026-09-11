@@ -1,0 +1,72 @@
+{
+  "memory": {
+    "interpretation": {
+      "version": "bounded-conversation-lexical-v3",
+      "outcome": "success",
+      "current_bytes": 103,
+      "earlier_messages": 0,
+      "earlier_bytes": 0,
+      "summary_bytes": 0,
+      "query_bytes": 53
+    },
+    "version": "memory-retrieval-v2",
+    "status": "success",
+    "evidence": [
+      {
+        "intent": "current",
+        "valid_at_constrained": false,
+        "current_status": "active",
+        "id": "excerpt:c084dc7e-cd3f-40dd-b7f4-76d367b5ae55:0:92",
+        "kind": "conversation_excerpt",
+        "as_known_at": "2026-09-11T01:00:50.877504Z",
+        "valid_at": "2026-09-11T01:00:50.877504Z",
+        "scope_key": "global",
+        "status": "active",
+        "sources": [
+          {
+            "session_id": "f8143095-398a-434d-80cf-2381e0db407f",
+            "scope_key": "global",
+            "authority": "owner_statement",
+            "observed_at": "2026-09-11T01:00:50.867557Z",
+            "event_id": "c084dc7e-cd3f-40dd-b7f4-76d367b5ae55",
+            "event_part": "content",
+            "locator_kind": "utf8_byte_range",
+            "locator_value": "0:92",
+            "evidence_sha256": "25f822b3ea5a06eafee5bf458c3a6fbcf5ffb8c2461122d2ce3e58199734823e"
+          }
+        ],
+        "paths": [
+          "conversation_lexical"
+        ]
+      }
+    ]
+  },
+  "schema_version": 1,
+  "composer_version": "context-composer-v2",
+  "estimator_version": "canonical-provider-json-bytes-v2",
+  "iteration": 1,
+  "configured_model": "openai/gpt-6-astra",
+  "canonical_model": "openai/gpt-6-astra-20260903",
+  "advertised_model": "openai/gpt-6-astra",
+  "profile_source": "remote_metadata",
+  "advertised_window_tokens": 1050000,
+  "hard_window_tokens": 922768,
+  "working_ceiling_tokens": 24576,
+  "output_reserve_tokens": 768,
+  "estimation_margin_tokens": 4096,
+  "usable_input_bytes": 19712,
+  "serialized_bytes": 10238,
+  "rough_token_estimate": 2560,
+  "request_sha256": "d9f32b4eb4165e114135fdb109ccf72fcef7ea7f5f6eb76b33d526b3555044e8",
+  "retained_first_event_id": "8ecad65b-a618-4ccd-bc44-069f20dc1f2e",
+  "retained_first_sequence": 1,
+  "retained_last_event_id": "8ecad65b-a618-4ccd-bc44-069f20dc1f2e",
+  "retained_last_sequence": 1,
+  "message_count": 3,
+  "tool_schema_count": 2,
+  "system_message_bytes": 6706,
+  "summary_message_bytes": 0,
+  "history_message_bytes": 1695,
+  "tool_schema_bytes": 1609,
+  "request_settings_bytes": 225
+}

@@ -1,0 +1,84 @@
+{
+  "files": [
+    {
+      "bytes": 850,
+      "file": "demonstrations-started.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/demonstrations-started.json",
+      "sha256": "40e17031f77d8f53aa09a7e2001d478dc5ac4fcfbc09574b0376dab41f0774e7"
+    },
+    {
+      "bytes": 956,
+      "file": "demonstrations.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/demonstrations.json",
+      "sha256": "fab903a7d892379a0b81102258fb4539f24fa06aeace2fd512b670bc9495415a"
+    },
+    {
+      "bytes": 12490,
+      "file": "demonstrations.log",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/demonstrations.log",
+      "sha256": "11c5fd4b484b99bafa285823bee400945cf332e0a4371e2005cd95e2ab80ae37"
+    },
+    {
+      "bytes": 3983,
+      "file": "handoff-verification.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/handoff-verification.json",
+      "sha256": "4cb3528810a1c752207e3a85e260eb81824e5378c09d89c73946b52b5c4a5829"
+    },
+    {
+      "bytes": 9037,
+      "file": "ui-results.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/ui-results.json",
+      "sha256": "cf647e9e5c1cc9d5fb3b35f4c930d281a36bb32968fc2b4c0bf5fae1f44b2bd7"
+    },
+    {
+      "bytes": 649,
+      "file": "ui_demonstrations-started.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/ui_demonstrations-started.json",
+      "sha256": "18fd219da4702659a3dfc0ab6b1068f6dec9a161e33e433e6b270964bc0058a8"
+    },
+    {
+      "bytes": 755,
+      "file": "ui_demonstrations.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/ui_demonstrations.json",
+      "sha256": "aeb5e0bf8a89c5cca9ea9b49a25ebabc564a1a136eb8bb3db0bd142c7f938d47"
+    },
+    {
+      "bytes": 88,
+      "file": "ui_demonstrations.log",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/ui_demonstrations.log",
+      "sha256": "f636f4ee9d93978d31ff5a491b9b0737d5cdcd170d9b563da07763912839c673"
+    },
+    {
+      "bytes": 44404,
+      "file": "verified-source-manifest.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/verified-source-manifest.json",
+      "sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447"
+    },
+    {
+      "bytes": 182,
+      "file": "verify_change-started.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/verify_change-started.json",
+      "sha256": "eab8072bd77a1ea5f3d5adb216bfdfe0839df470c95f024fc0bcbaa25d65294a"
+    },
+    {
+      "bytes": 288,
+      "file": "verify_change.json",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/verify_change.json",
+      "sha256": "8fc820b1a21986833593d875baa6bfec6f313c9d00839bd7cd0848341bd34a44"
+    },
+    {
+      "bytes": 28741,
+      "file": "verify_change.log",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-checks/verify_change.log",
+      "sha256": "583b2414b3124a61121f7f087b46a4e170ab7b31cdb31112fc28a6812111f44c"
+    },
+    {
+      "bytes": 3850,
+      "file": "168-final-handoff-verify.py",
+      "original": "/tmp/evie-memory-stage5/168-final-handoff-verify.py",
+      "sha256": "1e7598091f0b9b300afb27f9c7b842d30a9c0a3b1600b005569c1f2dfe1c4302"
+    }
+  ],
+  "kind": "exact-copy final repository verification and automated demonstrations",
+  "version": 1
+}

@@ -1,0 +1,6233 @@
+[
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27582
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6487
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28690417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim",
+      "heldout-10/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 45198083
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23608
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2544
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 35418709
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23526
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2462
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25355334
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30985
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/excerpt",
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9868
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14404833
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      31159
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "heldout-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10042
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25343417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22756
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1669
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 20286625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22661
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1574
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9379000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25803
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29174875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28037
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6950
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 61730792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23742
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2679
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 34347416
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23660
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2597
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 27680208
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14848000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24469708
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      31250
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt",
+      "distractor-123/excerpt",
+      "distractor-283/excerpt",
+      "distractor-263/excerpt",
+      "distractor-278/excerpt",
+      "distractor-118/excerpt",
+      "distractor-103/excerpt",
+      "distractor-183/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10167
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25586792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22621
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1538
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 12447042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34377
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim",
+      "distractor-194/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13293
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 32026500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34426
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "heldout-04/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13342
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36818584
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23746
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 35557917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23664
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2600
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25782709
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29961
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8831
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14425375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30151
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-00/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9021
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26550708
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22632
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1553
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 19379042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22537
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1458
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8139084
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23649
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24705291
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25836
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim",
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4751
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 39632292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23713
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2646
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 39043292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23631
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 27184417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      21230
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": null,
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      122
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10056792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      22736
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1626
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 21453125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      27765
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt",
+      "distractor-172/excerpt",
+      "distractor-012/excerpt",
+      "distractor-252/excerpt",
+      "distractor-092/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6681
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24124166
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22640
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1556
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10412292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34242
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim",
+      "development-06-forbidden/claim",
+      "development-00-forbidden/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13138
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 35464916
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34433
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "development-14-forbidden/claim",
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13329
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 42542875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32582
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "distractor-188/claim",
+      "distractor-028/claim",
+      "distractor-060/claim",
+      "distractor-268/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11522
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 45667792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23615
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2555
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24505375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15717250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24339250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      25180
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt",
+      "distractor-059/excerpt",
+      "distractor-114/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4097
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23522708
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22625
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1542
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9999792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27588
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6493
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 30459541
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 40362625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23623
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2550
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 33021125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23541
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2468
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25018958
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30597
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9468
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14564250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30613
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9484
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25159125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22729
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1647
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 18614166
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22634
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1552
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10101334
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25822
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25929500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28003
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "heldout-00/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6897
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 43890333
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23745
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 39763917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23663
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2600
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 40449458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23789
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01-forbidden/excerpt",
+      "development-05-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2675
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9234500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23884
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2770
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22789458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22749
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1659
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 19648375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22654
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 7108917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34480
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13376
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 30213291
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34550
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13446
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36031375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32560
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "distractor-084/claim",
+      "distractor-244/claim",
+      "distractor-020/claim",
+      "distractor-180/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11497
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 45376959
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23668
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2605
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24874500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29935
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8809
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15435584
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29935
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8809
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22736750
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      30735
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt",
+      "distractor-085/excerpt",
+      "distractor-150/excerpt",
+      "distractor-245/excerpt",
+      "distractor-310/excerpt",
+      "distractor-090/excerpt",
+      "distractor-230/excerpt",
+      "distractor-165/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9649
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25147458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22550
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1464
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 0,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 7754416
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim",
+      "heldout-10/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 41518875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27588
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6493
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 27048917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23526
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2462
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25000958
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23608
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2544
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 37368625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      31175
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "heldout-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10058
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23853958
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30985
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/excerpt",
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9868
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15307625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22661
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1574
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 7930542
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22756
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1669
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 16596375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28037
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6950
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 50931500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25803
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29762458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23660
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2597
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 27589209
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23740
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2677
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36329833
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25728084
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15809833
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22621
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1538
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9033458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      31250
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt",
+      "distractor-123/excerpt",
+      "distractor-283/excerpt",
+      "distractor-263/excerpt",
+      "distractor-278/excerpt",
+      "distractor-118/excerpt",
+      "distractor-103/excerpt",
+      "distractor-183/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10167
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26903667
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34426
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "heldout-04/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13342
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38434875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34377
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim",
+      "distractor-194/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13293
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 31462458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23664
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2600
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26259417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23746
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 35547917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30151
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-00/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-15/excerpt",
+      "development-05/excerpt",
+      "heldout-15/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9021
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26289875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29961
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "development-15/excerpt",
+      "development-05/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8831
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14991917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22537
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1458
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10240958
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22632
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1553
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 16650375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25836
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim",
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4751
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 41911625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23649
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25743166
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23631
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25932083
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23713
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2646
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38921375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      22736
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1626
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 32566959
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      21230
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": null,
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      122
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 6939125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22640
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1556
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8387875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      27775
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt",
+      "distractor-172/excerpt",
+      "distractor-012/excerpt",
+      "distractor-252/excerpt",
+      "distractor-092/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6691
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24238209
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34409
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "development-14-forbidden/claim",
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13305
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 42394250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34242
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim",
+      "development-06-forbidden/claim",
+      "development-00-forbidden/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13138
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 34101333
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23615
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2555
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24806959
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32582
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "distractor-188/claim",
+      "distractor-028/claim",
+      "distractor-060/claim",
+      "distractor-268/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11522
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 45376250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23521917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 13518959
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22623
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1540
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 7806542
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      25174
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt",
+      "distractor-059/excerpt",
+      "distractor-114/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4091
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22022834
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 42224709
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27588
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6493
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 31500000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23541
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2468
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25023291
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23623
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2550
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 34510208
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30613
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9484
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24071542
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30613
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9484
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15506208
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22634
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1552
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9968292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22729
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1647
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22548334
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28003
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "heldout-00/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6897
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 42119083
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25822
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29399042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23663
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2600
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 30513625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23745
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38323666
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23884
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2770
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22919292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23789
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01-forbidden/excerpt",
+      "development-05-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2675
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10623625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22654
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 9721875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22749
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1659
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 21634708
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34562
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13458
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38176125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34480
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13376
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 34730500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23668
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2605
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 40375125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32550
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "distractor-084/claim",
+      "distractor-244/claim",
+      "distractor-020/claim",
+      "distractor-180/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11487
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 47426417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29919
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8793
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24109041
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29935
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8809
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 18750375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22550
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1464
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10618792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      30735
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt",
+      "distractor-085/excerpt",
+      "distractor-150/excerpt",
+      "distractor-245/excerpt",
+      "distractor-310/excerpt",
+      "distractor-090/excerpt",
+      "distractor-230/excerpt",
+      "distractor-165/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9649
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 1,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 30926208
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27588
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6493
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29970125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim",
+      "heldout-10/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 40640417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23606
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2542
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36332542
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-00-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23526
+    ],
+    "expected": [
+      "heldout-00/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2462
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29634792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30969
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/excerpt",
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9852
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 14700375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      31175
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt",
+      "development-06/excerpt",
+      "heldout-06/excerpt",
+      "distractor-316/excerpt",
+      "distractor-306/excerpt",
+      "distractor-296/excerpt",
+      "distractor-286/excerpt",
+      "distractor-276/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10058
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28890208
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22754
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1667
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 17610833
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-01-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22661
+    ],
+    "expected": [
+      "heldout-01/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1574
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 10354334
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25803
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28044000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28037
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-02/claim",
+      "heldout-02/claim",
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6950
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 45667250
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23742
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2679
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 35444041
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-02-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23660
+    ],
+    "expected": [
+      "heldout-02/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2597
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28254792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 16481667
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30569
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13/excerpt",
+      "development-07-forbidden/excerpt",
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt",
+      "heldout-02-forbidden/excerpt",
+      "development-04-forbidden/excerpt",
+      "development-08/excerpt",
+      "development-15-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9436
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25741458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      31250
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt",
+      "distractor-123/excerpt",
+      "distractor-283/excerpt",
+      "distractor-263/excerpt",
+      "distractor-278/excerpt",
+      "distractor-118/excerpt",
+      "distractor-103/excerpt",
+      "distractor-183/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      10167
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22815542
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-03-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22619
+    ],
+    "expected": [
+      "heldout-03/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-03/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1536
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 7348292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34377
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim",
+      "distractor-194/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13293
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28629500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34426
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "distractor-284/claim",
+      "heldout-04/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim",
+      "distractor-190/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13342
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 37786000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23746
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38876125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-04-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23662
+    ],
+    "expected": [
+      "heldout-04/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-04/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2598
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26824083
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29961
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "development-15/excerpt",
+      "development-05/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8831
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 12749083
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30151
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-00/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-15/excerpt",
+      "development-05/excerpt",
+      "heldout-15/excerpt",
+      "development-10/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9021
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 75112666
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22632
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1553
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 19445292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-05-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22537
+    ],
+    "expected": [
+      "heldout-05/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-05/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1458
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8732458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23649
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26911000
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25836
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim",
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4751
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 39513833
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23713
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2646
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 40872458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-06-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23631
+    ],
+    "expected": [
+      "heldout-06/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-06/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 29886875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      21230
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": null,
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      122
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8250291
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      22736
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1626
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23004500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      27775
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt",
+      "distractor-172/excerpt",
+      "distractor-012/excerpt",
+      "distractor-252/excerpt",
+      "distractor-092/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6691
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23587416
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-07-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22640
+    ],
+    "expected": [
+      "heldout-07/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-07/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1556
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8458292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34242
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim",
+      "development-06-forbidden/claim",
+      "development-00-forbidden/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      13138
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36269959
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34433
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "development-14-forbidden/claim",
+      "heldout-12-forbidden/claim",
+      "development-04-forbidden/claim",
+      "heldout-00-forbidden/claim",
+      "heldout-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13329
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 41186458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32582
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim",
+      "distractor-188/claim",
+      "distractor-028/claim",
+      "distractor-060/claim",
+      "distractor-268/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11522
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 46553416
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-08-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23615
+    ],
+    "expected": [
+      "heldout-08/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-08/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2555
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 36918292
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 16111917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30842
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-13-forbidden/excerpt",
+      "development-14/excerpt",
+      "heldout-08-forbidden/excerpt",
+      "development-08-forbidden/excerpt",
+      "heldout-14/excerpt",
+      "heldout-04/excerpt",
+      "development-04/excerpt",
+      "distractor-314/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      9711
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24429625
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      25180
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt",
+      "distractor-059/excerpt",
+      "distractor-114/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4097
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23903167
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-09-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22625
+    ],
+    "expected": [
+      "heldout-09/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-09/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1542
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8978916
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27588
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6493
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 31480042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      27670
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim",
+      "heldout-00/claim",
+      "development-00/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6575
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 44497125
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23623
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2550
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 37328584
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-10-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23541
+    ],
+    "expected": [
+      "heldout-10/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-10/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2468
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25921875
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30613
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9484
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15258416
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      30613
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt",
+      "distractor-311/excerpt",
+      "distractor-301/excerpt",
+      "distractor-291/excerpt",
+      "distractor-281/excerpt",
+      "distractor-271/excerpt",
+      "distractor-261/excerpt",
+      "distractor-251/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9484
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26483417
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22729
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1647
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28467333
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-11-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22634
+    ],
+    "expected": [
+      "heldout-11/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-11/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1552
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "general",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 15836584
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      25822
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      4716
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 26943375
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      28003
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim",
+      "heldout-00/claim",
+      "development-02/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      6897
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 44064458
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23745
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2682
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 38481500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-12-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23663
+    ],
+    "expected": [
+      "heldout-12/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-12/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2600
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "workspace",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 24094042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23789
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-01-forbidden/excerpt",
+      "development-05-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2675
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 11926500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      23880
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05-forbidden/excerpt",
+      "heldout-01-forbidden/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 0,
+    "memory_message_json_bytes": [
+      2766
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 22784500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22749
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1659
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 17559583
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-13-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22654
+    ],
+    "expected": [
+      "heldout-13/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-13/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1564
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_a",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8351167
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34480
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13376
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 30695042
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      34562
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "heldout-04/claim",
+      "distractor-284/claim",
+      "distractor-064/claim",
+      "distractor-000/claim",
+      "distractor-204/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      13458
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 39376041
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      32560
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim",
+      "distractor-084/claim",
+      "distractor-244/claim",
+      "distractor-020/claim",
+      "distractor-180/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      11497
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 47533500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-14-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      23668
+    ],
+    "expected": [
+      "heldout-14/claim"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-14/claim"
+    ],
+    "kind": "accepted_memory",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      2605
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "project_b",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 28404084
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29935
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8809
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 12272500
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-paraphrase",
+    "category": "paraphrase",
+    "complete_request_bytes": [
+      20574,
+      29935
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "development-05/excerpt",
+      "development-15/excerpt",
+      "heldout-15/excerpt",
+      "heldout-05/excerpt",
+      "heldout-10/excerpt",
+      "heldout-00/excerpt",
+      "development-00/excerpt",
+      "distractor-315/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      8809
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 23773917
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      30735
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt",
+      "distractor-085/excerpt",
+      "distractor-150/excerpt",
+      "distractor-245/excerpt",
+      "distractor-310/excerpt",
+      "distractor-090/excerpt",
+      "distractor-230/excerpt",
+      "distractor-165/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      9649
+    ],
+    "method": "hybrid",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 25303792
+  },
+  {
+    "accepted_revisions_unchanged": true,
+    "cap_violations": 0,
+    "case": "heldout-15-lexical_control",
+    "category": "lexical_control",
+    "complete_request_bytes": [
+      20574,
+      22550
+    ],
+    "expected": [
+      "heldout-15/excerpt"
+    ],
+    "forbidden_or_scope_count": 0,
+    "ids": [
+      "heldout-15/excerpt"
+    ],
+    "kind": "conversation_excerpt",
+    "matched": 1,
+    "memory_message_json_bytes": [
+      1464
+    ],
+    "method": "lexical",
+    "provider_calls": 2,
+    "repetition": 2,
+    "scope": "global",
+    "secret_evidence_count": 0,
+    "turn_failed": false,
+    "unmapped_evidence_count": 0,
+    "whole_turn_ns": 8583750
+  }
+]

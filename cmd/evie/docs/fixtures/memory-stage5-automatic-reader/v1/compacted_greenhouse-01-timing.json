@@ -1,0 +1,12 @@
+{
+  "elapsed_ns": 3805188916,
+  "error": "\u003cnil\u003e",
+  "usage": {
+    "input_tokens": 2338,
+    "output_tokens": 74,
+    "total_tokens": 2412,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cache_write_input_tokens": 2335
+  }
+}

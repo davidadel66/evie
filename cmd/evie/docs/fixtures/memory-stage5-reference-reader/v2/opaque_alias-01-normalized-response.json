@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Your mother Maya would likely enjoy a **jasmine tea gift set**—a good-quality jasmine tea paired with an elegant cup or small teapot. You’ve mentioned she’s fond of jasmine tea, so that’s a well-grounded choice."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 2644,
+    "output_tokens": 53,
+    "total_tokens": 2697,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 1594,
+    "cache_write_input_tokens": 1047
+  }
+}

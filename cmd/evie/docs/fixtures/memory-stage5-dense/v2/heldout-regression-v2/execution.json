@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/private/tmp/evie-stage5-dense-integration-v2.test",
+    "-test.run=^TestMemoryStage5DenseExperiment$",
+    "-test.v",
+    "-test.count=1",
+    "-test.timeout=20m"
+  ],
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T02:02:07.109252+00:00",
+  "freeze_sha256": "52d197e8e052ff7b06061a5d2b4dfab6f3d9287094f38f04b4ed7dd9118c87c4",
+  "started_at_utc": "2026-09-11T02:01:51.919515+00:00"
+}

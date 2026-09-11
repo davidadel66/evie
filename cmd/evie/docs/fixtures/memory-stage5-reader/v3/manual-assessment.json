@@ -1,0 +1,37 @@
+{
+  "version": "memory-stage5-reader-manual-assessment-v3",
+  "rubric": "../v1/README.md, unchanged and hash-pinned before model generation",
+  "assessor": "implementation agent, direct inspection of complete raw responses and source evidence; no model judge",
+  "overall_pass": false,
+  "cases": {
+    "historical_retired": {
+      "pass": true,
+      "old_preference_named": true,
+      "correct_original_source_event_cited": true,
+      "past_acceptance_distinguished_from_current_retirement": true,
+      "refrains_from_asserting_current_preference": true,
+      "no_invented_replacement_or_precise_original_date": true
+    },
+    "saved_boston_newer_chicago": {
+      "pass": false,
+      "both_places_exposed": true,
+      "accepted_record_and_later_statement_distinguished": false,
+      "discrepancy_expressed": false,
+      "both_sources_correctly_cited": false,
+      "does_not_claim_memory_was_corrected": false,
+      "finding": "Answer omits the Boston source, calls the still-active accepted Boston record superseded, and denies other conflicting information."
+    },
+    "tentative_quote_and_inference": {
+      "pass": false,
+      "owner_uncertainty_preserved": true,
+      "definite_plan_attributed_to_colleague": true,
+      "quote_cited_to_original_owner_source": true,
+      "owner_uncertain_plan_cited_to_original_owner_source": false,
+      "assistant_inference_distinguished_from_owner_quotation": false,
+      "both_original_source_events_cited": false,
+      "no_invented_source_event_id": false,
+      "no_invented_booking_itinerary_or_precise_date": true,
+      "finding": "Answer invents an event ID for the owner uncertainty quote, omits the real assistant source, and supplies unsupported causal attribution for the assistant inference."
+    }
+  }
+}

@@ -1,0 +1,1041 @@
+{
+  "archives": {
+    "curation-provenance.tar.gz": {
+      "bytes": 17290,
+      "members": {
+        "curation-record.json": {
+          "bytes": 12693,
+          "mode": 420,
+          "mtime_ns": 1789105849803053770,
+          "sha256": "0f13c3bbe224480fc45f0474a07c6d2570ee5913eac530819646b49936bbc5eb",
+          "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/curation-record.json"
+        },
+        "curation.md": {
+          "bytes": 5319,
+          "mode": 420,
+          "mtime_ns": 1789105849803173395,
+          "sha256": "3ec8b1354bc0ead24e7d8885aa3d61cbc649183cb6d7f2b93a68f97f4a3bc499",
+          "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/curation.md"
+        },
+        "report-author-metadata-exposure.json": {
+          "bytes": 1072,
+          "mode": 420,
+          "mtime_ns": 1789107897680000118,
+          "sha256": "0852caa6fad36d557642f195f0aa857653e58df5588daf1ffc44f47cc2fd6db1",
+          "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/report-author-metadata-exposure.json"
+        },
+        "workload.json": {
+          "bytes": 76407,
+          "mode": 420,
+          "mtime_ns": 1789105555955803531,
+          "sha256": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+          "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/workload.json"
+        }
+      },
+      "original_bytes": 95491,
+      "sha256": "211dbdd2c14c016b33c45e11fb33404bc7ac49caf8aad581e1b1e327d1932705"
+    },
+    "partial-prepared-inputs.tar.gz": {
+      "bytes": 1325218,
+      "members": {
+        "hold01_pattern_pages/seed.db": {
+          "bytes": 1429504,
+          "mode": 384,
+          "mtime_ns": 1789108427245309587,
+          "sha256": "9e737445cd78b804ccf772dedd0e1efed713f46f6455f14ab248cdec05c01733",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold01_pattern_pages/seed.db"
+        },
+        "hold01_pattern_pages/seed.json": {
+          "bytes": 11157,
+          "mode": 384,
+          "mtime_ns": 1789108427245564790,
+          "sha256": "f9b7fb4eed27eb87e814cc336a86b46dca2d459a1a615ad1d5690402646ec8fe",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold01_pattern_pages/seed.json"
+        },
+        "hold02_audiobook_cast/seed.db": {
+          "bytes": 1429504,
+          "mode": 384,
+          "mtime_ns": 1789108427355708652,
+          "sha256": "8d5ec2a9f4abd9c59b257c40e958ed06eff516e2eac25f01855c99776f7c33c9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold02_audiobook_cast/seed.db"
+        },
+        "hold02_audiobook_cast/seed.json": {
+          "bytes": 11342,
+          "mode": 384,
+          "mtime_ns": 1789108427355872107,
+          "sha256": "6f770286550b3e6d861e029e40b92f21be5637bd9d0632f9cbd791bcf170f31e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold02_audiobook_cast/seed.json"
+        },
+        "hold03_damp_dough/seed.db": {
+          "bytes": 1425408,
+          "mode": 384,
+          "mtime_ns": 1789108427450634476,
+          "sha256": "33d04b4dd66a2a48e7036aedb003eab5c684c85a9b55eb9ced8ff4126ee9532c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold03_damp_dough/seed.db"
+        },
+        "hold03_damp_dough/seed.json": {
+          "bytes": 12076,
+          "mode": 384,
+          "mtime_ns": 1789108427450810889,
+          "sha256": "ce7edebabc0e383684dea9ed1602cc726e7d7224f6b148268106b4dda104692a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold03_damp_dough/seed.json"
+        },
+        "hold04_projector_sound/seed.db": {
+          "bytes": 1425408,
+          "mode": 384,
+          "mtime_ns": 1789108427561194288,
+          "sha256": "af06bf3b35e214a781e58cc6db00e2522febe5b9ccb9e7f28fced1c5e4baaa9c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold04_projector_sound/seed.db"
+        },
+        "hold04_projector_sound/seed.json": {
+          "bytes": 12056,
+          "mode": 384,
+          "mtime_ns": 1789108427561403826,
+          "sha256": "11b40f91b96121097051b548cf9b1e6e4b3775cb5c9d297e7b271c2a265f3cd1",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold04_projector_sound/seed.json"
+        },
+        "hold05_choir_feedback/seed.db": {
+          "bytes": 1445888,
+          "mode": 384,
+          "mtime_ns": 1789108427719534506,
+          "sha256": "28f61b65985874f6cefeb51475ef6b0df74fdb9a88018fd7fcbe93e7a0fc0d7c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold05_choir_feedback/seed.db"
+        },
+        "hold05_choir_feedback/seed.json": {
+          "bytes": 18523,
+          "mode": 384,
+          "mtime_ns": 1789108427719767918,
+          "sha256": "f6c47bf2d624d0fc7dca5f756d477e9de1ff02347d6f7769070450b9faf2bbbb",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold05_choir_feedback/seed.json"
+        },
+        "hold06_onboarding_recipient/seed.db": {
+          "bytes": 1445888,
+          "mode": 384,
+          "mtime_ns": 1789108427875472104,
+          "sha256": "c66237ed3680e15b7b671c6f63090ceb0af417ff0e5f8dd9cd244540c146fb86",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold06_onboarding_recipient/seed.db"
+        },
+        "hold06_onboarding_recipient/seed.json": {
+          "bytes": 18256,
+          "mode": 384,
+          "mtime_ns": 1789108427875682350,
+          "sha256": "f28613d79c17e7730bc650ce0a4ad293be8062cf9da1aabad9b79dbfbac1296f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold06_onboarding_recipient/seed.json"
+        },
+        "hold09_darkroom_alias/seed.db": {
+          "bytes": 1433600,
+          "mode": 384,
+          "mtime_ns": 1789108428246457986,
+          "sha256": "9e6db943704e9978ba4145937f3db8b3838c979e640ee96774bc81749d71441d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold09_darkroom_alias/seed.db"
+        },
+        "hold09_darkroom_alias/seed.json": {
+          "bytes": 12399,
+          "mode": 384,
+          "mtime_ns": 1789108428246687315,
+          "sha256": "3761bbd16deb474171ebd4e473f957c875fa44c55892bfd875c898b31402dc5f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold09_darkroom_alias/seed.json"
+        },
+        "hold10_instrument_entity_id/seed.db": {
+          "bytes": 1433600,
+          "mode": 384,
+          "mtime_ns": 1789108428401989300,
+          "sha256": "55c8946af4726df7ad23e56a5c8cb569941e047e94ec7ca3ea5204d1cad3ad3a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold10_instrument_entity_id/seed.db"
+        },
+        "hold10_instrument_entity_id/seed.json": {
+          "bytes": 12226,
+          "mode": 384,
+          "mtime_ns": 1789108428402181005,
+          "sha256": "12a922acb4481b42978a2bd0c1bd3b409c090d9d505ae2a60ca0b83f8192b822",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold10_instrument_entity_id/seed.json"
+        },
+        "hold11_observatory_chain/seed.db": {
+          "bytes": 1441792,
+          "mode": 384,
+          "mtime_ns": 1789108428518376291,
+          "sha256": "f4675452a6ab4e1637310d4a3fad31c8ac1bd19c84156447c5cd45e5fd9e1b28",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold11_observatory_chain/seed.db"
+        },
+        "hold11_observatory_chain/seed.json": {
+          "bytes": 16906,
+          "mode": 384,
+          "mtime_ns": 1789108428518573912,
+          "sha256": "a59a426b26cafd7a65ff0895743a2538359b2e70d0873b078829baabefcd9a56",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold11_observatory_chain/seed.json"
+        },
+        "hold12_screen_free_errands/seed.db": {
+          "bytes": 1429504,
+          "mode": 384,
+          "mtime_ns": 1789108428622558519,
+          "sha256": "be5fe12f76faf17ce037847143766d22f07ed25698353d4b48d3cc14bbf53304",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold12_screen_free_errands/seed.db"
+        },
+        "hold12_screen_free_errands/seed.json": {
+          "bytes": 11140,
+          "mode": 384,
+          "mtime_ns": 1789108428623089134,
+          "sha256": "ba24e6ae8a0431c9fea7f699aa10ebd5b0133e457bd38c1b20aef4076cb461f7",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold12_screen_free_errands/seed.json"
+        },
+        "hold13_shadow_box_choice/seed.db": {
+          "bytes": 1425408,
+          "mode": 384,
+          "mtime_ns": 1789108428745388760,
+          "sha256": "2baf5858d4fddef07245cab815fcc72d0eaf3bed03ac6a48c48b956fe54b62e5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold13_shadow_box_choice/seed.db"
+        },
+        "hold13_shadow_box_choice/seed.json": {
+          "bytes": 14309,
+          "mode": 384,
+          "mtime_ns": 1789108428745566756,
+          "sha256": "202f054fe11d1fc2072688cf7b42d6ecea5ddddad641a72e5d3c90bdcf8f7379",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold13_shadow_box_choice/seed.json"
+        },
+        "hold14_divider_trial/seed.db": {
+          "bytes": 1417216,
+          "mode": 384,
+          "mtime_ns": 1789108428881049376,
+          "sha256": "d47dd758a88ad6934a7ab2816ee7a47c6fff22bd8506250ebed40bba4816e71b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold14_divider_trial/seed.db"
+        },
+        "hold14_divider_trial/seed.json": {
+          "bytes": 9749,
+          "mode": 384,
+          "mtime_ns": 1789108428881221206,
+          "sha256": "11ef21126671b94cd59a92c2e85b780e4ceebed307eb2879abd38ec9b177e98f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold14_divider_trial/seed.json"
+        },
+        "hold15_archive_historical/seed.db": {
+          "bytes": 1441792,
+          "mode": 384,
+          "mtime_ns": 1789108428987027319,
+          "sha256": "2cba956df402bfe5dcf936fc0de6f9aa594aebd2452a4a9f488b0d1f6220400c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold15_archive_historical/seed.db"
+        },
+        "hold15_archive_historical/seed.json": {
+          "bytes": 13388,
+          "mode": 384,
+          "mtime_ns": 1789108428987213524,
+          "sha256": "d98aa2707f8aed3fa38371eb2b84e6ac1ab18ae99e23f634413bcb186f15781b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold15_archive_historical/seed.json"
+        },
+        "hold16_print_returns_current/seed.db": {
+          "bytes": 1445888,
+          "mode": 384,
+          "mtime_ns": 1789108429103110691,
+          "sha256": "3338f187822600b7fde4016a4c00ef09a0b6c27078b70246333b024bc93344b3",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold16_print_returns_current/seed.db"
+        },
+        "hold16_print_returns_current/seed.json": {
+          "bytes": 17345,
+          "mode": 384,
+          "mtime_ns": 1789108429103331478,
+          "sha256": "629a49fd189ff493bb66ca241a2aa14417fd3c949069e6d87d503b4f13c845fa",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold16_print_returns_current/seed.json"
+        },
+        "hold17_volunteer_shift_conflict/seed.db": {
+          "bytes": 1433600,
+          "mode": 384,
+          "mtime_ns": 1789108429233004002,
+          "sha256": "c2130daa793fad4b79ab1c157a3b94d2ead1f4d00069c5c872dc1a2ad0213691",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold17_volunteer_shift_conflict/seed.db"
+        },
+        "hold17_volunteer_shift_conflict/seed.json": {
+          "bytes": 15481,
+          "mode": 384,
+          "mtime_ns": 1789108429233231248,
+          "sha256": "f29c0ea17e92a98dd3811c99fcbec7734f633c540fedb1c621371d60abeb1e26",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold17_volunteer_shift_conflict/seed.json"
+        },
+        "hold18_catering_pickup_conflict/seed.db": {
+          "bytes": 1433600,
+          "mode": 384,
+          "mtime_ns": 1789108429335492179,
+          "sha256": "3c9e8e4511ec88af6665e55235b00520addeeedbe461b4851f5da982446ace5b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold18_catering_pickup_conflict/seed.db"
+        },
+        "hold18_catering_pickup_conflict/seed.json": {
+          "bytes": 15552,
+          "mode": 384,
+          "mtime_ns": 1789108429335704009,
+          "sha256": "d0e0807d12662cdb4b70342ee510f3d7b5d32f225a0e0f77df0f830de57d1775",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold18_catering_pickup_conflict/seed.json"
+        },
+        "hold19_collar_reported_speech/seed.db": {
+          "bytes": 1425408,
+          "mode": 384,
+          "mtime_ns": 1789108429428862450,
+          "sha256": "1bcd436b97f30b8c24a9df837412a0c8a3de29b9cf8498cab16bb0bf98bc62f0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold19_collar_reported_speech/seed.db"
+        },
+        "hold19_collar_reported_speech/seed.json": {
+          "bytes": 12172,
+          "mode": 384,
+          "mtime_ns": 1789108429429068863,
+          "sha256": "f42e869ce1097ec6b20dbc4f0647b6b8a3d6b02d3045d3bdc94b0bdad5c8dbc8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold19_collar_reported_speech/seed.json"
+        },
+        "hold20_manual_flag_suggestion/seed.db": {
+          "bytes": 1417216,
+          "mode": 384,
+          "mtime_ns": 1789108429507837501,
+          "sha256": "70461bf8687d7239cad36463f98348bd2c29de0494a13aa3e7c0af0bdc5e79a5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold20_manual_flag_suggestion/seed.db"
+        },
+        "hold20_manual_flag_suggestion/seed.json": {
+          "bytes": 9558,
+          "mode": 384,
+          "mtime_ns": 1789108429507999789,
+          "sha256": "5a05268b1b3f8c347e37a1af74edfc04e0b3f4c7c032968b55e20b478959fe6e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold20_manual_flag_suggestion/seed.json"
+        },
+        "hold21_mount_serial_gap/seed.db": {
+          "bytes": 1417216,
+          "mode": 384,
+          "mtime_ns": 1789108429647232629,
+          "sha256": "3b8d3a91b753d2703754838c966b2ff1b7b0a9f6243337b1051644d7a451ecc8",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold21_mount_serial_gap/seed.db"
+        },
+        "hold21_mount_serial_gap/seed.json": {
+          "bytes": 6938,
+          "mode": 384,
+          "mtime_ns": 1789108429647411209,
+          "sha256": "2630c8033ab5f912c06d7ac26ade0573b6dc9ede0e258da94cd2beed14a5a53c",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold21_mount_serial_gap/seed.json"
+        },
+        "hold22_sculpture_unavailable/seed.db": {
+          "bytes": 1421312,
+          "mode": 384,
+          "mtime_ns": 1789108429729220912,
+          "sha256": "c3a7ea51b32c0514728e76bebb71b11220e7cc53c86529901cb506dd617cf254",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold22_sculpture_unavailable/seed.db"
+        },
+        "hold22_sculpture_unavailable/seed.json": {
+          "bytes": 6404,
+          "mode": 384,
+          "mtime_ns": 1789108429729380784,
+          "sha256": "ac918a14c7be1d00ed7d3869c0df40499944c7fe8e5071ffe254d1e744bed3ff",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold22_sculpture_unavailable/seed.json"
+        },
+        "hold23_active_voice_rewrite/seed.db": {
+          "bytes": 1421312,
+          "mode": 384,
+          "mtime_ns": 1789108429806317124,
+          "sha256": "0e6e09698c578f828dbf910e1007582ea0c26a048936178516ce718808c72f78",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold23_active_voice_rewrite/seed.db"
+        },
+        "hold23_active_voice_rewrite/seed.json": {
+          "bytes": 6341,
+          "mode": 384,
+          "mtime_ns": 1789108429806485787,
+          "sha256": "a6339a8d67f880c8d7449cbfe01f4e1c88da09c3f1ed208ffa24971d34712f42",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold23_active_voice_rewrite/seed.json"
+        },
+        "hold24_invoice_scope/seed.db": {
+          "bytes": 1433600,
+          "mode": 384,
+          "mtime_ns": 1789108429911304878,
+          "sha256": "72fe6e9551e6ccc025969e813749f85b302b83f5ec1685f333a06a53ddf03619",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold24_invoice_scope/seed.db"
+        },
+        "hold24_invoice_scope/seed.json": {
+          "bytes": 16557,
+          "mode": 384,
+          "mtime_ns": 1789108429911502541,
+          "sha256": "e3df987838d314cd0e663dd90cda89af31920bbd7bd5eb6a8adb8ee290fb09e9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/inputs/hold24_invoice_scope/seed.json"
+        }
+      },
+      "original_bytes": 31753539,
+      "sha256": "12faba861e18e0da1150ce95473e071763ca023f114fbab82c1a6cedfb859395"
+    },
+    "preparation-final-checks.tar.gz": {
+      "bytes": 61991,
+      "members": {
+        "168-seal-heldout-v1-command-prepared.json": {
+          "bytes": 849,
+          "mode": 420,
+          "mtime_ns": 1789106990760400912,
+          "sha256": "e88e75e33cf76ad1adcd2ec5785d9947481b40eb70d1666718200302feab125c",
+          "source": "/private/tmp/evie-memory-stage5/168-seal-heldout-v1-command-prepared.json"
+        },
+        "168-verify-heldout-v1-final.py": {
+          "bytes": 3261,
+          "mode": 420,
+          "mtime_ns": 1789108279993762744,
+          "sha256": "48ea47e41c7c4ee560a361d4cc89370d46743c54497bf26409f34afb79f4ffea",
+          "source": "/private/tmp/evie-memory-stage5/168-verify-heldout-v1-final.py"
+        },
+        "architecture-curation-metadata-exposure.json": {
+          "bytes": 1072,
+          "mode": 420,
+          "mtime_ns": 1789107897680000118,
+          "sha256": "0852caa6fad36d557642f195f0aa857653e58df5588daf1ffc44f47cc2fd6db1",
+          "source": "/private/tmp/evie-memory-stage5/architecture-curation-metadata-exposure.json"
+        },
+        "deterministic-pending-freeze.json": {
+          "bytes": 27494,
+          "mode": 420,
+          "mtime_ns": 1789108298045452540,
+          "sha256": "7789bb320c7bfc4bcebd50880ba6c131fe3640ccf2d219b0870a8ca878d0188a",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/deterministic-pending-freeze.json"
+        },
+        "go_matrix-started.json": {
+          "bytes": 6341,
+          "mode": 420,
+          "mtime_ns": 1789108285153875119,
+          "sha256": "4321478e9cc7e0835d7a469c39962d207b3798c3465286e6680be1037613b81e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/go_matrix-started.json"
+        },
+        "go_matrix.json": {
+          "bytes": 6447,
+          "mode": 420,
+          "mtime_ns": 1789108297385215105,
+          "sha256": "7eb59ede202d8940c1115b9342aeb665692c9d63e8fdfbfada3d6120f38aa0dd",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/go_matrix.json"
+        },
+        "go_matrix.log": {
+          "bytes": 235431,
+          "mode": 420,
+          "mtime_ns": 1789108297368135770,
+          "sha256": "20399eb1903c5912f996756a601864c3721c4407bd32ae98886c90787d82d848",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/go_matrix.log"
+        },
+        "integrated-heldout-v1-plan.json": {
+          "bytes": 1315,
+          "mode": 420,
+          "mtime_ns": 1789108421254712832,
+          "sha256": "1235557a47f705d0717b879163eebc0fba0fbff6936421a1fa677f6d145b37af",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-plan.json"
+        },
+        "integrated-heldout-v1-seal-execution-started.json": {
+          "bytes": 804,
+          "mode": 420,
+          "mtime_ns": 1789108421256177971,
+          "sha256": "184a30394b161735a1a91855acd05a2a330d3657375fc59ff750a361964f1742",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution-started.json"
+        },
+        "integrated-heldout-v1-seal-execution.json": {
+          "bytes": 910,
+          "mode": 420,
+          "mtime_ns": 1789108429929407984,
+          "sha256": "6771153751c276f596c886923a0107023478f1d45f7c56da05c01a943db25bb2",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution.json"
+        },
+        "integrated-heldout-v1-seal-execution.log": {
+          "bytes": 1209,
+          "mode": 420,
+          "mtime_ns": 1789108429919837837,
+          "sha256": "a933657fbb87de0bbc9bd9f91682d0afb4868f0fc334072939375bed21079833",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution.log"
+        },
+        "preserve-integrated-heldout-v1.py": {
+          "bytes": 38915,
+          "mode": 420,
+          "mtime_ns": 1789108778469379119,
+          "sha256": "160abdc203f7bf900396f5fb173e4f0d79043b3635db024d6326cdd0f353f1de",
+          "source": "/private/tmp/evie-memory-stage5/preserve-integrated-heldout-v1.py"
+        },
+        "run-integrated-heldout-v1.py": {
+          "bytes": 3414,
+          "mode": 420,
+          "mtime_ns": 1789108414160801245,
+          "sha256": "79217ccbcc123b0dd3822a6041b0f2f9fd5a32bfdbbe0ae89c65403a5d997dc1",
+          "source": "/private/tmp/evie-memory-stage5/run-integrated-heldout-v1.py"
+        },
+        "ui-results.json": {
+          "bytes": 9032,
+          "mode": 420,
+          "mtime_ns": 1789108297966176912,
+          "sha256": "913c9df398d5d5cd9f5c6db272e881699d7624dd8ec96d9342827d12ad891210",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/ui-results.json"
+        },
+        "ui_matrix-started.json": {
+          "bytes": 659,
+          "mode": 420,
+          "mtime_ns": 1789108297387673599,
+          "sha256": "acf544e2d9bf7f79d4cd417fca03c9d2f87dc8fdbb3993196cee3a02ded61426",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/ui_matrix-started.json"
+        },
+        "ui_matrix.json": {
+          "bytes": 765,
+          "mode": 420,
+          "mtime_ns": 1789108297993858291,
+          "sha256": "98b24494a953e0b3a514b4d68d4529e1dab6d75e9ff07837d79eb7eb0373cf9b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/ui_matrix.json"
+        },
+        "ui_matrix.log": {
+          "bytes": 98,
+          "mode": 420,
+          "mtime_ns": 1789108297966487656,
+          "sha256": "f7de21ccaf023d9f07cbb91e78e9bcdbd5e6d7767ac7c714e100adbd0122d0a1",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/ui_matrix.log"
+        },
+        "verified-source-manifest.json": {
+          "bytes": 44404,
+          "mode": 420,
+          "mtime_ns": 1789108280826003797,
+          "sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/verified-source-manifest.json"
+        },
+        "verify_change-started.json": {
+          "bytes": 182,
+          "mode": 420,
+          "mtime_ns": 1789108280826668034,
+          "sha256": "5627b19daa8fe221ca83e231538cc61b580ec904a2ac2e9de1e57eb48947a20e",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/verify_change-started.json"
+        },
+        "verify_change.json": {
+          "bytes": 288,
+          "mode": 420,
+          "mtime_ns": 1789108285153415628,
+          "sha256": "180064c55aabeacd1b0f48e37793ed445993ef6805450c4fc242ce6358079b6d",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/verify_change.json"
+        },
+        "verify_change.log": {
+          "bytes": 28744,
+          "mode": 420,
+          "mtime_ns": 1789108284735159748,
+          "sha256": "a6bf808d990400aae996dbbd8f88edd713f58424fdfa5017685512df575676b0",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-final-checks/verify_change.log"
+        }
+      },
+      "original_bytes": 411634,
+      "sha256": "e8061978df3c51baead44ffd137df628467d4e0bd090cc3bc86fe8717cca8429"
+    },
+    "superseded-v3-checks.tar.gz": {
+      "bytes": 48904,
+      "members": {
+        "168-verify-heldout-v1.py": {
+          "bytes": 3255,
+          "mode": 420,
+          "mtime_ns": 1789105441317473008,
+          "sha256": "ea40c99be8de7fd6b8726dfd80b8e0662029dd36769d86a818ae0ff82f74094b",
+          "source": "/private/tmp/evie-memory-stage5/168-verify-heldout-v1.py"
+        },
+        "deterministic-pending-freeze.json": {
+          "bytes": 26962,
+          "mode": 420,
+          "mtime_ns": 1789105456989825279,
+          "sha256": "96940f44a24cadb2c7b7003f1c05d357a65309f14a4e7221b137fc44a596a94f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/deterministic-pending-freeze.json"
+        },
+        "go_matrix-started.json": {
+          "bytes": 6198,
+          "mode": 420,
+          "mtime_ns": 1789105445799705580,
+          "sha256": "fc1b3238e4ea1f032c3ddf9ea001f466762b97ce1f7a635bf2419fc4e195d190",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/go_matrix-started.json"
+        },
+        "go_matrix.json": {
+          "bytes": 6304,
+          "mode": 420,
+          "mtime_ns": 1789105456365997147,
+          "sha256": "aabd934f80b77423f7a64d1f0d4ec36ff4560f316e197f2a36194dfcbd69e93f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/go_matrix.json"
+        },
+        "go_matrix.log": {
+          "bytes": 222556,
+          "mode": 420,
+          "mtime_ns": 1789105456349002102,
+          "sha256": "7858b7e1dce95468626d301105e60c18777cdff41c814a9eeec423f69b6ffe52",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/go_matrix.log"
+        },
+        "ui-results.json": {
+          "bytes": 9041,
+          "mode": 420,
+          "mtime_ns": 1789105456919087430,
+          "sha256": "0a85809ac166bca553e3e7e1a69f8a22b46c308a4689a4e78a1a8913fa9da33f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/ui-results.json"
+        },
+        "ui_matrix-started.json": {
+          "bytes": 653,
+          "mode": 420,
+          "mtime_ns": 1789105456367842272,
+          "sha256": "cc17dfc287506e02d8005ddbe3389d9892c3122e7379842cfa1e1c363df3b849",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/ui_matrix-started.json"
+        },
+        "ui_matrix.json": {
+          "bytes": 759,
+          "mode": 420,
+          "mtime_ns": 1789105456950393812,
+          "sha256": "81c64eb5d6d8b1015434efe234daa4c8b6975737d017d78554ed997e5adc4c6b",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/ui_matrix.json"
+        },
+        "ui_matrix.log": {
+          "bytes": 92,
+          "mode": 420,
+          "mtime_ns": 1789105456919314722,
+          "sha256": "6721d54623d1c19f027ab237ff5138bccc6dcea0bc0d3087536eb005d81fe141",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/ui_matrix.log"
+        },
+        "verified-source-manifest.json": {
+          "bytes": 44270,
+          "mode": 420,
+          "mtime_ns": 1789105442076181126,
+          "sha256": "e8840396686dca03a587b5a5d8a7b82cccfbc18cf3ee41f5d78e4eb40c897e40",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/verified-source-manifest.json"
+        },
+        "verify_change-started.json": {
+          "bytes": 182,
+          "mode": 420,
+          "mtime_ns": 1789105442077047960,
+          "sha256": "b5523f61a7653c1e14da04d4cfc6c249fdd5c028d54878bf47f385aeba86cee9",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/verify_change-started.json"
+        },
+        "verify_change.json": {
+          "bytes": 288,
+          "mode": 420,
+          "mtime_ns": 1789105445799182830,
+          "sha256": "8b3df82d52720a73fb6cb355af20b34461f646f87646be7f827896c7711cc05f",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/verify_change.json"
+        },
+        "verify_change.log": {
+          "bytes": 28744,
+          "mode": 420,
+          "mtime_ns": 1789105445411298290,
+          "sha256": "46112557ec862abddc2e4f40abb82dcc59bc4183c42bd8b4e91258c189dba8d5",
+          "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-checks/verify_change.log"
+        }
+      },
+      "original_bytes": 349304,
+      "sha256": "14c7c0eed3af1e16efc35d1c16ae4fee7125cd0dd95fe65f3849a9a4826988e6"
+    }
+  },
+  "excluded": [
+    {
+      "reason": "Exact V4 executable identity retained; executable excluded from source-only evidence archive",
+      "sha256": "06ba5e56aecf5684f2209bd801074ea65ed032dc88181d07a4d016260532f072",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test"
+    },
+    {
+      "reason": "Already retained in original compiled-source archive",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v4/source"
+    }
+  ],
+  "failed_setup": {
+    "counts_are_observed_files_not_completed_cases": true,
+    "failure_detail_source": "attempt/prepare-execution.log",
+    "index_local_operating_evaluations_started": false,
+    "meaning": "Canonical preparation failed before freeze.json. Partial input files are losslessly retained; they are not sealed evaluation inputs, measured retrieval results, or semantic assessments.",
+    "outer_seal": {
+      "execution_exception": null,
+      "exit_code": 1,
+      "finished_at_utc": "2026-09-11T06:33:49.929097+00:00",
+      "path": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution.json"
+    },
+    "partial_input_files": 44,
+    "partial_seed_database_files": 22,
+    "partial_seed_mapping_files": 22,
+    "preparation": {
+      "execution_exception": null,
+      "exit_code": 1,
+      "finished_at_utc": "2026-09-11T06:33:49.914379+00:00",
+      "path": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/prepare-execution.json"
+    },
+    "reader_generations": 0,
+    "release_ready": false,
+    "sealed": false
+  },
+  "files": {
+    "attempt/assessment.md": {
+      "bytes": 12949,
+      "mode": 420,
+      "mtime_ns": 1789108426788086546,
+      "sha256": "12a4e508decbab33114ed16f469b8d6940dd237c1a2deeb5e4f746ebf499e9fc",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/assessment.md"
+    },
+    "attempt/audit_sources.py": {
+      "bytes": 23118,
+      "mode": 420,
+      "mtime_ns": 1789108426787842551,
+      "sha256": "e64eab8a6b1c9b5acce956b366fb348fffac8b5f8c6c74a40fb669ab2fd319dc",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/audit_sources.py"
+    },
+    "attempt/compiled-source-manifest.json": {
+      "bytes": 44404,
+      "mode": 420,
+      "mtime_ns": 1789108426786594283,
+      "sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/compiled-source-manifest.json"
+    },
+    "attempt/compiled-source.tar.gz": {
+      "bytes": 1081832,
+      "mode": 420,
+      "mtime_ns": 1789108426786991692,
+      "sha256": "3b4e0cc90c9c82f2167b171672ffb05207f0a7ed3914c114400bef731445bec3",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/compiled-source.tar.gz"
+    },
+    "attempt/gates.json": {
+      "bytes": 9172,
+      "mode": 420,
+      "mtime_ns": 1789108426787128190,
+      "sha256": "bf730615b47e3acb2f9fc12fe57a1dad88d19169ce46967716ec6fde144b1ea9",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/gates.json"
+    },
+    "attempt/grader.py": {
+      "bytes": 36834,
+      "mode": 420,
+      "mtime_ns": 1789108426787948382,
+      "sha256": "b6ac839a5c7709462b820f26868c1e6ab96ae3a5c849135be36fd691223040d8",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/grader.py"
+    },
+    "attempt/index.md": {
+      "bytes": 11494,
+      "mode": 420,
+      "mtime_ns": 1789108426787619263,
+      "sha256": "7ae0e5ff042f6f979b9940ee8e5219b0feb41b881c5b3fcfe2a915ddde10e8ac",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/index.md"
+    },
+    "attempt/matrix.json": {
+      "bytes": 76745,
+      "mode": 420,
+      "mtime_ns": 1789108426787508516,
+      "sha256": "2682e2ec9abef2e281283cef187ced2fa833afda1abd6796ccc06ae945465717",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/matrix.json"
+    },
+    "attempt/model-state-before-preparation.json": {
+      "bytes": 101,
+      "mode": 420,
+      "mtime_ns": 1789108426795218366,
+      "sha256": "cbfe98fa038230cb29914aec1aec6be3a1020bd8cc56c86b6eeb69fa628e93c7",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/model-state-before-preparation.json"
+    },
+    "attempt/operating.md": {
+      "bytes": 6273,
+      "mode": 420,
+      "mtime_ns": 1789108426787376310,
+      "sha256": "14dc0149cdfd3ee49dc2862c114f3a4ff10babbdfb01f51817ec1c6e258b1483",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/operating.md"
+    },
+    "attempt/prepare-execution-started.json": {
+      "bytes": 364,
+      "mode": 420,
+      "mtime_ns": 1789108426795337572,
+      "sha256": "d09a9f7669ddbc0268a828fc5b2ac7fad15258272990aa5500587c59a8dd4e3a",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/prepare-execution-started.json"
+    },
+    "attempt/prepare-execution.json": {
+      "bytes": 470,
+      "mode": 420,
+      "mtime_ns": 1789108429914659688,
+      "sha256": "d1e8b6cc7aa56b40f26c414e2b1d7d11ae57a513a69a9895d0a50e78d3fd98a1",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/prepare-execution.json"
+    },
+    "attempt/prepare-execution.log": {
+      "bytes": 3899,
+      "mode": 420,
+      "mtime_ns": 1789108429913543251,
+      "sha256": "df713ae5a4b290b98637723a9b60356900331374545a22e80139c95426657fbd",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/prepare-execution.log"
+    },
+    "attempt/procedure.md": {
+      "bytes": 12376,
+      "mode": 420,
+      "mtime_ns": 1789108426788333666,
+      "sha256": "6e39d7b2f959b978db1d0373cf3e5873d03dc154877e91ca3854c8a8bc0a575f",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/procedure.md"
+    },
+    "attempt/resources.py": {
+      "bytes": 59179,
+      "mode": 420,
+      "mtime_ns": 1789108426788454872,
+      "sha256": "d6ebfce46beef5ac48c14b1dc22c9b3550d743091f2294326513c01fb8441a59",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/resources.py"
+    },
+    "attempt/rubric.md": {
+      "bytes": 10745,
+      "mode": 420,
+      "mtime_ns": 1789108426787242271,
+      "sha256": "a64da1e7cf6219862c478c24dd8dd1172a4cec7073e55a2508cbf6e7e4bcc813",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/rubric.md"
+    },
+    "attempt/run.py": {
+      "bytes": 27426,
+      "mode": 420,
+      "mtime_ns": 1789108426785780549,
+      "sha256": "8ffc814ba6a6cab42b02a7821e005fd66a6b523f1ccf4d97315c4ae725252a35",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/run.py"
+    },
+    "attempt/scorer.py": {
+      "bytes": 23001,
+      "mode": 420,
+      "mtime_ns": 1789108426787735636,
+      "sha256": "a6842713f3d05278f016403c19fa0ceb924fc067067f338c242698dcb207403c",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/scorer.py"
+    },
+    "attempt/workload.json": {
+      "bytes": 76407,
+      "mode": 420,
+      "mtime_ns": 1789108426786419453,
+      "sha256": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1/workload.json"
+    },
+    "commands/168-seal-heldout-v1-command-prepared.json": {
+      "bytes": 849,
+      "mode": 420,
+      "mtime_ns": 1789106990760400912,
+      "sha256": "e88e75e33cf76ad1adcd2ec5785d9947481b40eb70d1666718200302feab125c",
+      "source": "/private/tmp/evie-memory-stage5/168-seal-heldout-v1-command-prepared.json"
+    },
+    "commands/168-verify-heldout-v1-final.py": {
+      "bytes": 3261,
+      "mode": 420,
+      "mtime_ns": 1789108279993762744,
+      "sha256": "48ea47e41c7c4ee560a361d4cc89370d46743c54497bf26409f34afb79f4ffea",
+      "source": "/private/tmp/evie-memory-stage5/168-verify-heldout-v1-final.py"
+    },
+    "commands/integrated-heldout-v1-plan.json": {
+      "bytes": 1315,
+      "mode": 420,
+      "mtime_ns": 1789108421254712832,
+      "sha256": "1235557a47f705d0717b879163eebc0fba0fbff6936421a1fa677f6d145b37af",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-plan.json"
+    },
+    "commands/integrated-heldout-v1-seal-execution-started.json": {
+      "bytes": 804,
+      "mode": 420,
+      "mtime_ns": 1789108421256177971,
+      "sha256": "184a30394b161735a1a91855acd05a2a330d3657375fc59ff750a361964f1742",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution-started.json"
+    },
+    "commands/integrated-heldout-v1-seal-execution.json": {
+      "bytes": 910,
+      "mode": 420,
+      "mtime_ns": 1789108429929407984,
+      "sha256": "6771153751c276f596c886923a0107023478f1d45f7c56da05c01a943db25bb2",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution.json"
+    },
+    "commands/integrated-heldout-v1-seal-execution.log": {
+      "bytes": 1209,
+      "mode": 420,
+      "mtime_ns": 1789108429919837837,
+      "sha256": "a933657fbb87de0bbc9bd9f91682d0afb4868f0fc334072939375bed21079833",
+      "source": "/private/tmp/evie-memory-stage5/integrated-heldout-v1-seal-execution.log"
+    },
+    "commands/run-integrated-heldout-v1.py": {
+      "bytes": 3414,
+      "mode": 420,
+      "mtime_ns": 1789108414160801245,
+      "sha256": "79217ccbcc123b0dd3822a6041b0f2f9fd5a32bfdbbe0ae89c65403a5d997dc1",
+      "source": "/private/tmp/evie-memory-stage5/run-integrated-heldout-v1.py"
+    },
+    "preserve-integrated-heldout-v1.py": {
+      "bytes": 38915,
+      "mode": 420,
+      "mtime_ns": 1789108778469379119,
+      "sha256": "160abdc203f7bf900396f5fb173e4f0d79043b3635db024d6326cdd0f353f1de",
+      "source": "/private/tmp/evie-memory-stage5/preserve-integrated-heldout-v1.py"
+    },
+    "provenance/development-build.json": {
+      "bytes": 422,
+      "mode": 420,
+      "mtime_ns": 1789106344996149193,
+      "sha256": "40ec961e71c9f66a0cd669e258d87561af8a16eef88304cf404819c81385933c",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v4/build.json"
+    },
+    "provenance/development-freeze.json": {
+      "bytes": 17651,
+      "mode": 420,
+      "mtime_ns": 1789106349549672739,
+      "sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json"
+    },
+    "provenance/development-resource-report.json": {
+      "bytes": 1121004,
+      "mode": 420,
+      "mtime_ns": 1789107668665323764,
+      "sha256": "30a2e068ded9637dc38a3a9ec015d756c7c5338f8fd0267a85ba378fdcfd8e43",
+      "source": "/private/tmp/evie-memory-stage5/integrated-development-v4-resource/report.json"
+    }
+  },
+  "freeze_sha256": null,
+  "kind": "failed_setup_unsealed",
+  "original_selected_bytes": 35316511,
+  "planned_file_count": 112,
+  "planned_payload_bytes": 4159946,
+  "repository_reference_policy": "Prior v3/v4 apparatus references only; this preparation attempt produced no heldout freeze or assessment.",
+  "repository_references": {
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/adopted-gates.json": {
+      "bytes": 9172,
+      "mode": 420,
+      "mtime_ns": 1789103019578357715,
+      "sha256": "bf730615b47e3acb2f9fc12fe57a1dad88d19169ce46967716ec6fde144b1ea9",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/adopted-gates.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/audit-red-green-record.json": {
+      "bytes": 25377,
+      "mode": 420,
+      "mtime_ns": 1789102917989379487,
+      "sha256": "55036898156619a4216af766b5b4de9ff3f3a2802f0e36525919090e61a04c62",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/audit-red-green-record.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/audit_source_regressions.py": {
+      "bytes": 15884,
+      "mode": 420,
+      "mtime_ns": 1789102865273972982,
+      "sha256": "6264d36a946eda4231e2686482abfed4f5a644ed3a0d6ea9455a3a8cfca7393a",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/audit_source_regressions.py"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/evaluator-decisions.md": {
+      "bytes": 6933,
+      "mode": 420,
+      "mtime_ns": 1789102917935631806,
+      "sha256": "97d8ab2fe56025db630672b0c7922d620bd0eea5423ff86d9737e1a8e20f219e",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/evaluator-decisions.md"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/gate-description-correction.json": {
+      "bytes": 587,
+      "mode": 420,
+      "mtime_ns": 1789103019578521633,
+      "sha256": "36c6571791467eea4ba65495e733165765a36d4d118b408f2d7d9645146e05c1",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/gate-description-correction.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw-binding-red-green-record.json": {
+      "bytes": 9668,
+      "mode": 420,
+      "mtime_ns": 1789103406509937413,
+      "sha256": "8007290d4bd2b44b8fa0b7211f482b456a0de7be800743b45792edd95ff6844a",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw-binding-red-green-record.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw-binding-verification.md": {
+      "bytes": 3756,
+      "mode": 420,
+      "mtime_ns": 1789103406478663304,
+      "sha256": "9f4d0f56b5392a22cbd5690ff1f2f28c92b1b1ec4720de8692e598af8abeb3e5",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw-binding-verification.md"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw_binding_regressions.py": {
+      "bytes": 10114,
+      "mode": 420,
+      "mtime_ns": 1789103291521325553,
+      "sha256": "0081abe240146b1204f90a532cc6f0f90dcb7acdeac16cab3170362997ef8c60",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/raw_binding_regressions.py"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal-source-decisions.md": {
+      "bytes": 2881,
+      "mode": 420,
+      "mtime_ns": 1789103248818155693,
+      "sha256": "0e3f598f93a4121ccef9d23775298206824ccf56e3e87d38b44ccdce0d77c203",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal-source-decisions.md"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal-source-red-green-record.json": {
+      "bytes": 4437,
+      "mode": 420,
+      "mtime_ns": 1789103248891834133,
+      "sha256": "8e19d49c4612c32b2b261885838227b7e3b5744eeefcedc4465dd72c7cdb4a55",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal-source-red-green-record.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal_source_regressions.py": {
+      "bytes": 8362,
+      "mode": 420,
+      "mtime_ns": 1789103192680440060,
+      "sha256": "9a5327934efcfbf9e20dfc0fa6264bfd2211ad16aa28f0769b160e2332871abb",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal_source_regressions.py"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/staging-whitespace-checks.json": {
+      "bytes": 1109,
+      "mode": 420,
+      "mtime_ns": 1789105081010710913,
+      "sha256": "c5b395155a396c2821ae5180746bd8427433f79aa079c29ab3a88821ec126ebb",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/staging-whitespace-checks.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/assessment-authoring/author-experiment-v4-assessments.py": {
+      "bytes": 19927,
+      "mode": 420,
+      "mtime_ns": 1789107608145297699,
+      "sha256": "b7369ca09eea1d6583eedc68f55cbfbb30f40fc3f465fa0ca2af9ce4bd39724b",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/assessment-authoring/author-experiment-v4-assessments.py"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/assessment-authoring/preservation.json": {
+      "bytes": 736,
+      "mode": 420,
+      "mtime_ns": 1789108024242618521,
+      "sha256": "894031214fa4851e1f5b4c166d763e5bfee546f2b0b2b5359bd665ba6fcfcb40",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/assessment-authoring/preservation.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/164-165-preservation-staging-manifest.json": {
+      "bytes": 2048,
+      "mode": 420,
+      "mtime_ns": 1789107782335778916,
+      "sha256": "d36da2dd4c040b5ce3b9b659838af5f0429568111f1e510312f31aa352d8d885",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/164-165-preservation-staging-manifest.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/commit-ownership-pre-heldout-v4.json": {
+      "bytes": 31834,
+      "mode": 420,
+      "mtime_ns": 1789107749491879882,
+      "sha256": "aef9e2f58a4464b44d757eb081bc0dd3dfd1d9c53022cb3b125ef3ed6c9d1c65",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/commit-ownership-pre-heldout-v4.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/fold-source-preservation-owners.py": {
+      "bytes": 3569,
+      "mode": 420,
+      "mtime_ns": 1789108063494794212,
+      "sha256": "e2b32b073ce9e493ccbcf34ee9f814febfd1aaf944c6d56cef312e71dff06dc7",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/fold-source-preservation-owners.py"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/preservation.json": {
+      "bytes": 1351,
+      "mode": 420,
+      "mtime_ns": 1789108117517402103,
+      "sha256": "eeb8268e66f09f590981290f601f959c622cc73519ee9619042e4439460c3dce",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/preservation.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/reader-source-preservation-owner-manifest.json": {
+      "bytes": 7993,
+      "mode": 420,
+      "mtime_ns": 1789107927405862803,
+      "sha256": "3c83504e1e5a1c87c1743e4b2f4e4ed21ada21f3831208a5363dbbee388b2303",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/reader-source-preservation-owner-manifest.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/source-preservation-owner-fold.json": {
+      "bytes": 11486,
+      "mode": 420,
+      "mtime_ns": 1789108069520012093,
+      "sha256": "2ca40a6c55e31118f05599457cc372f04fe6ce50a09498d66be8a0f7d932d715",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/history-fold/source-preservation-owner-fold.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/operating-matrix.json": {
+      "bytes": 76745,
+      "mode": 420,
+      "mtime_ns": 1789106152354244390,
+      "sha256": "2682e2ec9abef2e281283cef187ced2fa833afda1abd6796ccc06ae945465717",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/operating-matrix.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/results-summary.json": {
+      "bytes": 16885,
+      "mode": 420,
+      "mtime_ns": 1789107745617481817,
+      "sha256": "ff0da2655e509d5615e09d604caa927a5c4b7c36b9c54357fcce5660c15964d5",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/results-summary.json"
+    },
+    "cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/review-correction-and-freeze.json": {
+      "bytes": 10603,
+      "mode": 420,
+      "mtime_ns": 1789106582202251218,
+      "sha256": "8c97ded17636908bc6eab68dd33acb55abc14f25749f57145ca783fac0e9a69e",
+      "source": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v4/review-correction-and-freeze.json"
+    }
+  },
+  "reproduction": {
+    "all_original_bytes_paths_and_timestamps_unchanged": true,
+    "binary_rebuild_attempted_by_preservation_tool": false,
+    "build": "provenance/development-build.json",
+    "development_freeze_sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+    "original_binary_path": "/private/tmp/evie-memory-stage5/integrated-development-v4/integrated.test",
+    "original_binary_sha256": "06ba5e56aecf5684f2209bd801074ea65ed032dc88181d07a4d016260532f072",
+    "original_source_root": "/private/tmp/evie-memory-stage5/integrated-development-v4/source",
+    "source_archive": "attempt/compiled-source.tar.gz",
+    "source_manifest": "attempt/compiled-source-manifest.json"
+  },
+  "schema_version": 3,
+  "source_root": "/private/tmp/evie-memory-stage5",
+  "superseded_checks": {
+    "archive": "superseded-v3-checks.tar.gz",
+    "reason": "Earlier V3-only checks are historical evidence and cannot certify release.",
+    "release_binding": false
+  },
+  "tool_sha256": "160abdc203f7bf900396f5fb173e4f0d79043b3635db024d6326cdd0f353f1de"
+}

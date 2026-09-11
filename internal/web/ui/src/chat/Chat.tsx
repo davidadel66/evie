@@ -5,6 +5,7 @@ import type { Item } from "../store/reducer";
 import { AssistantMessage, UserMessage } from "./Message";
 import { Activity } from "./Activity";
 import { activityTurns } from "./activityModel";
+import type { MemoryOpener } from "./MemoryActivity";
 
 type Props = {
   items: Item[];
@@ -12,6 +13,7 @@ type Props = {
   streaming: boolean;
   onAnswer: (reqId: string, approve: boolean) => void;
   onOpenFile?: (key: string, trigger: HTMLButtonElement) => void;
+  onOpenMemory?: MemoryOpener;
   historyLoading?: boolean;
   historyProblem?: string | null;
   hasOlder?: boolean;
@@ -19,7 +21,7 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onOpenFile, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenMemory, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const prependHeight = useRef<number | null>(null);
@@ -49,7 +51,7 @@ export function Chat({ items, queued, streaming, onAnswer, onOpenFile, historyLo
       {items.length === 0 && !historyLoading && !historyProblem && <Empty />}
       {activityTurns(items, streaming).map((group) => <Fragment key={group.key}>
         {group.user && <UserMessage text={group.user.text} />}
-        <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} />
+        <Activity group={group} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenMemory={onOpenMemory} />
         {group.answer.map((item) => <AssistantMessage key={item.key} text={item.text} streaming={false} discarded={item.discarded} />)}
       </Fragment>)}
       {queued.map((text, i) => (

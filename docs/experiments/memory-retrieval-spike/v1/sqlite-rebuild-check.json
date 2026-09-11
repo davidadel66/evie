@@ -1,0 +1,12 @@
+{
+  "version": "sqlite-vector-rebuild-v1",
+  "scope": "Post-comparison operational check only; no questions, ranking metrics, configuration tuning, or changed gates.",
+  "rows": 917,
+  "independent_reembedding_builds_byte_identical": true,
+  "rebuild_from_persisted_vectors_nanoseconds": 4843125,
+  "reopen_and_compare_all_rows_nanoseconds": 1358792,
+  "rebuild_reopen_byte_identical": true,
+  "rows_sha256": "96f708b495cb634431122bde4d12d020ade5adbf5d46c109439b29a0ca03f9d4",
+  "database_bytes": 1949696,
+  "limitation": "One supplemental rebuild sample. This is not crash injection, unique-memory accounting, or a query-latency benchmark."
+}

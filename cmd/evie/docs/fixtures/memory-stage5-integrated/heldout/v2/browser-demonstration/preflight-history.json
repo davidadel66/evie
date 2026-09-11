@@ -1,0 +1,33 @@
+{
+  "classification": "fixture setup and compilation checks, not production RED/GREEN or quality measurements",
+  "initial_compile": {
+    "result": "failed",
+    "cause": "new fixture omitted internal/web import",
+    "diagnostic": "undefined: web",
+    "raw_log_available": false,
+    "provenance": "recorded tool result before the named setup logs; summarized here without inventing a raw transcript"
+  },
+  "preflight-v1": {
+    "result": "failed",
+    "cause": "new fixture omitted required lifecycle idempotency_key",
+    "log": "logs/preflight-v1.log",
+    "all_partial_data_retained": true,
+    "exact_earlier_helper_snapshot_available": false
+  },
+  "preflight-v2": {
+    "result": "passed",
+    "test_seconds": 0.32,
+    "package_seconds": 0.662,
+    "log": "logs/preflight-v2.log",
+    "change": "fixture supplies public lifecycle idempotency key"
+  },
+  "preflight-v3": {
+    "result": "passed",
+    "test_seconds": 0.33,
+    "package_seconds": 0.657,
+    "log": "logs/preflight-v3.log",
+    "change": "assert both persisted unavailable receipts and add memory status metadata"
+  },
+  "production_changes": false,
+  "frozen_outputs_changed": false
+}

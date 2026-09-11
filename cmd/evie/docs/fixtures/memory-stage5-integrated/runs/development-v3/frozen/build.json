@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-c",
+    "./internal/agent",
+    "-o",
+    "/private/tmp/evie-memory-stage5/integrated-development-v3/integrated.test"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T05:10:50.461188+00:00",
+  "started_at_utc": "2026-09-11T05:10:47.069818+00:00",
+  "working_directory": "/private/tmp/evie-memory-stage5/integrated-development-v3/source"
+}

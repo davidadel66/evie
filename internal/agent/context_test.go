@@ -99,7 +99,9 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 }
 
 func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
+	// This fixture checks message ordering; leave room for the combined trusted
+	// Memory and Subagents instructions. Overflow has separate boundary tests.
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 12000, 12000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

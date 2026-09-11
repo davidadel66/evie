@@ -1,0 +1,25 @@
+{
+  "kind": "synthetic source-commit protocol controls; not measurements",
+  "records": [
+    {
+      "slice": "seal-source-red",
+      "sha256": "8fb499cdcab79efd9d68ff06362b533ffd9100b177b21235a9160d448614267f",
+      "transcript": "test_issue_subject_cannot_seal_changed_compiled_source (__main__.SealSourceRegressions.test_issue_subject_cannot_seal_changed_compiled_source) ... FAIL\n\n======================================================================\nFAIL: test_issue_subject_cannot_seal_changed_compiled_source (__main__.SealSourceRegressions.test_issue_subject_cannot_seal_changed_compiled_source)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/development/v3/seal_source_regressions.py\", line 87, in test_issue_subject_cannot_seal_changed_compiled_source\n    with self.assertRaisesRegex(RuntimeError, 'compiled source'):\n         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: RuntimeError not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.100s\n\nFAILED (failures=1)\n"
+    },
+    {
+      "slice": "seal-source-green",
+      "sha256": "7a5ea0296421e2fe4f2224b2d211c28542bface404ee14d8d832cd4dccfba787",
+      "transcript": "test_issue_subject_cannot_seal_changed_compiled_source (__main__.SealSourceRegressions.test_issue_subject_cannot_seal_changed_compiled_source) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.103s\n\nOK\n"
+    },
+    {
+      "slice": "seal-source-final-green",
+      "sha256": "13481c78e3f34b18064c4e41d410437bcd60c4ac0cdefb9b9ca0becd0367ad93",
+      "transcript": "test_commit_bytes_not_uncommitted_worktree_bytes_define_the_seal (__main__.SealSourceRegressions.test_commit_bytes_not_uncommitted_worktree_bytes_define_the_seal) ... ok\ntest_documentation_only_commit_can_seal_identical_compiled_inputs (__main__.SealSourceRegressions.test_documentation_only_commit_can_seal_identical_compiled_inputs) ... ok\ntest_empty_manifest_cannot_vacuously_prove_a_source_commit (__main__.SealSourceRegressions.test_empty_manifest_cannot_vacuously_prove_a_source_commit) ... ok\ntest_issue_subject_cannot_seal_changed_compiled_source (__main__.SealSourceRegressions.test_issue_subject_cannot_seal_changed_compiled_source) ... ok\ntest_later_head_movement_cannot_replace_the_verified_commit_reference (__main__.SealSourceRegressions.test_later_head_movement_cannot_replace_the_verified_commit_reference) ... ok\ntest_missing_frozen_embedded_input_rejects_before_preparation (__main__.SealSourceRegressions.test_missing_frozen_embedded_input_rejects_before_preparation) ... ok\ntest_module_and_embed_bytes_are_checked_as_well_as_go_source (__main__.SealSourceRegressions.test_module_and_embed_bytes_are_checked_as_well_as_go_source) ... ok\ntest_source_equality_does_not_replace_the_issue_commit_requirement (__main__.SealSourceRegressions.test_source_equality_does_not_replace_the_issue_commit_requirement) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.943s\n\nOK\n"
+    },
+    {
+      "slice": "seal-report-regression",
+      "sha256": "502b376cf9e4e03e6c101f4a46c0284f82f516efa0dcf2311a1c87d35eec40bd",
+      "transcript": "test_altered_bound_input_rejected (__main__.SealControls.test_altered_bound_input_rejected) ... ok\ntest_changed_frozen_auditor_rejected (__main__.SealControls.test_changed_frozen_auditor_rejected) ... ok\ntest_changed_report_recomputed_mismatch_rejected (__main__.SealControls.test_changed_report_recomputed_mismatch_rejected) ... ok\ntest_flag_only_report_rejected (__main__.SealControls.test_flag_only_report_rejected) ... ok\ntest_incomplete_gate_and_nonempty_failure_rejected (__main__.SealControls.test_incomplete_gate_and_nonempty_failure_rejected) ... ok\ntest_missing_measurement_mode_rejected (__main__.SealControls.test_missing_measurement_mode_rejected) ... ok\ntest_positive_complete_protocol_recomputes_exactly (__main__.SealControls.test_positive_complete_protocol_recomputes_exactly) ... ok\ntest_wrong_aggregator_identity_rejected (__main__.SealControls.test_wrong_aggregator_identity_rejected) ... ok\n\n----------------------------------------------------------------------\nRan 8 tests in 0.015s\n\nOK\n"
+    }
+  ]
+}

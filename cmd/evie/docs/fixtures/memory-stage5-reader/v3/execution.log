@@ -1,0 +1,11 @@
+=== RUN   TestMemoryStage5LocalReaderEvaluation
+=== RUN   TestMemoryStage5LocalReaderEvaluation/historical_retired
+=== RUN   TestMemoryStage5LocalReaderEvaluation/saved_boston_newer_chicago
+    retrieval_reader_evaluation_test.go:444: predeclared reader check failed: requested_source_event_ids_present; raw answer retained
+=== RUN   TestMemoryStage5LocalReaderEvaluation/tentative_quote_and_inference
+    retrieval_reader_evaluation_test.go:444: predeclared reader check failed: requested_source_event_ids_present; raw answer retained
+--- FAIL: TestMemoryStage5LocalReaderEvaluation (54.65s)
+    --- PASS: TestMemoryStage5LocalReaderEvaluation/historical_retired (29.20s)
+    --- FAIL: TestMemoryStage5LocalReaderEvaluation/saved_boston_newer_chicago (12.35s)
+    --- FAIL: TestMemoryStage5LocalReaderEvaluation/tentative_quote_and_inference (13.10s)
+FAIL

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Maya would likely enjoy a **jasmine tea gift set**—a tin of high-quality jasmine pearl tea paired with a lovely cup or an infuser.\n\nYou previously said, “My mother Maya is fond of jasmine tea,” so that’s the strongest starting point for her birthday present."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 3081,
+    "output_tokens": 62,
+    "total_tokens": 3143,
+    "reasoning_output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cache_write_input_tokens": 3078
+  }
+}

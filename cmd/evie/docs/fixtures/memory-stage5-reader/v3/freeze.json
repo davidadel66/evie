@@ -1,0 +1,37 @@
+{
+  "version": "memory-stage5-reader-development-v3",
+  "frozen_at_utc": "2026-09-11T00:17:46.412218+00:00",
+  "git_parent": "51a401e1a4e75e71acc34930b236a662ffa87c5a",
+  "test_sha256": "b4d582bb0ad75def47ad269a58550055a1118c596358155e398fe9174714eb6e",
+  "rubric_sha256": "928e8efbe702c8c91413c619cc630814d2ab5a47c7c81d80c0f846b04a68ef15",
+  "metadata_sha256": "507dc0b6816ee74905922d46f1140b532635918f8d7e93d529873b99d1a178da",
+  "model": "qwen2.5:7b-instruct-q4_K_M",
+  "model_manifest_sha256": "845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+  "model_layer_sha256": "2bada8a7450677000f678be90653b85d364de7db25eb5ea54136ada5f3933730",
+  "runtime": "Ollama 0.6.3",
+  "parameters": {
+    "num_ctx": 32768,
+    "working_tokens": 24576,
+    "num_predict": 768,
+    "seed": 0,
+    "temperature": 0,
+    "num_thread": 4,
+    "keep_alive": "30s",
+    "stream": false,
+    "max_model_calls": 3,
+    "per_call_deadline_seconds": 120
+  },
+  "seam": "complete real SQLite Session.Send; initial searches scripted; real model answers and any later searches",
+  "scenarios": [
+    "historical_retired",
+    "saved_boston_newer_chicago",
+    "tentative_quote_and_inference"
+  ],
+  "quality_judgment": "fixed text markers plus predeclared manual source/authority/uncertainty rubric; no model judge",
+  "clock_policy": "real persisted event/operation timestamps; historical read cutoff equals accepted transaction time before retirement; no invented Valid Time",
+  "partition": "#159 development only; separate from #167/#168 heldout",
+  "preflight_revision": "Same v1 cases, harness, model, settings, text checks and manual rubric. Production memory-retrieval-v2 JSON adds a compact reading guide and negative-only historical_only IDs after current eligibility revalidation. System prompt unchanged from v2.",
+  "rubric_source": "../v1/README.md",
+  "production_prompt_sha256": "18849b893839363b02ba8f6f9274acb1292778e333303efa5c3ef4811e3472ee",
+  "production_retrieval_sha256": "ad0cb5961bf4a371dba7d6bb8f090d1a912a661f08b440c09e483cc292934878"
+}

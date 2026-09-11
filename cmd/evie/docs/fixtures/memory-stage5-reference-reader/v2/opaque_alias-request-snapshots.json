@@ -1,0 +1,101 @@
+[
+  {
+    "memory": {
+      "interpretation": {
+        "version": "bounded-reference-lexical-v2",
+        "outcome": "success",
+        "current_bytes": 40,
+        "exact_selectors": 1,
+        "exact_query_bytes": 6,
+        "examined_earlier_messages": 0,
+        "examined_earlier_bytes": 0,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 23
+      },
+      "version": "memory-retrieval-v2",
+      "status": "success",
+      "evidence": [
+        {
+          "identity_matches": [
+            {
+              "kind": "alias",
+              "entity_id": "25fa8e93-46cc-4745-8634-32a67939d541",
+              "alias_id": "2d766f57-3149-411b-8e03-c31141d08d83",
+              "source": {
+                "source_link_id": "0db1b2bc-2a1f-4570-8b81-0a9e9b5c9e10",
+                "session_id": "afecb476-5810-4978-83a5-a3f2ba6acad9",
+                "scope_key": "global",
+                "authority": "owner_statement",
+                "observed_at": "2026-09-11T01:32:55.105553000Z",
+                "event_id": "594e3141-6372-4b97-ab65-7ca57a129573",
+                "event_part": "content",
+                "locator_kind": "whole",
+                "locator_value": "",
+                "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+              }
+            }
+          ],
+          "intent": "current",
+          "valid_at_constrained": false,
+          "current_status": "active",
+          "id": "claim:90a42bfc-3ef4-4980-b431-8ae076618885",
+          "kind": "accepted_memory",
+          "claim_id": "90a42bfc-3ef4-4980-b431-8ae076618885",
+          "claim_operation_id": "1b302be0-bbcd-4b58-97ad-318c42f4d08b",
+          "as_known_at": "2026-09-11T01:32:55.112841Z",
+          "valid_at": "2026-09-11T01:32:55.112841Z",
+          "scope_key": "global",
+          "status": "active",
+          "sources": [
+            {
+              "source_link_id": "0db1b2bc-2a1f-4570-8b81-0a9e9b5c9e10",
+              "session_id": "afecb476-5810-4978-83a5-a3f2ba6acad9",
+              "scope_key": "global",
+              "authority": "owner_statement",
+              "observed_at": "2026-09-11T01:32:55.105553000Z",
+              "event_id": "594e3141-6372-4b97-ab65-7ca57a129573",
+              "event_part": "content",
+              "locator_kind": "whole",
+              "locator_value": "",
+              "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77"
+            }
+          ],
+          "paths": [
+            "exact_or_alias",
+            "lexical"
+          ]
+        }
+      ]
+    },
+    "schema_version": 1,
+    "composer_version": "context-composer-v2",
+    "estimator_version": "canonical-provider-json-bytes-v2",
+    "iteration": 1,
+    "configured_model": "openai/gpt-6-astra",
+    "canonical_model": "openai/gpt-6-astra-20260903",
+    "advertised_model": "openai/gpt-6-astra",
+    "profile_source": "remote_metadata",
+    "advertised_window_tokens": 1050000,
+    "hard_window_tokens": 922768,
+    "working_ceiling_tokens": 24576,
+    "output_reserve_tokens": 768,
+    "estimation_margin_tokens": 4096,
+    "usable_input_bytes": 19712,
+    "serialized_bytes": 12754,
+    "rough_token_estimate": 3189,
+    "request_sha256": "bafd047a3a60d686f8ee7e6460d3bf0db078a86a63cc3c479cd32d1d2336f2fc",
+    "retained_first_event_id": "1bac06b2-2ee7-40c4-a5b1-2e125316a3d8",
+    "retained_first_sequence": 1,
+    "retained_last_event_id": "1bac06b2-2ee7-40c4-a5b1-2e125316a3d8",
+    "retained_last_sequence": 1,
+    "message_count": 3,
+    "tool_schema_count": 3,
+    "system_message_bytes": 6706,
+    "summary_message_bytes": 0,
+    "history_message_bytes": 3493,
+    "tool_schema_bytes": 2327,
+    "request_settings_bytes": 225
+  }
+]

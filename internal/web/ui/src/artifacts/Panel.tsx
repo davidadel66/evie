@@ -5,10 +5,12 @@ import { Cross, Database, FileIcon, Folder, Layers } from "../ui/Icon";
 import { Diff } from "../chat/Diff";
 import { FilePath, FileViewer } from "./FileViewer";
 import type { FileInspection as InspectedFile } from "./fileInspection";
+import { MemoryEvidence } from "./MemoryEvidence";
 
 export type InspectorTarget =
   | { kind: "file"; file: InspectedFile }
   | { kind: "memory"; detail: SemanticObjectInspection }
+  | { kind: "memory-evidence"; sessionId: string; snapshotId: string }
   | { kind: "workspace"; workspace: Workspace }
   | { kind: "scope"; scope: ContextScope }
   | { kind: "file-diff"; path: string; oldText: string; newText: string; isNew: boolean; state: string }
@@ -52,6 +54,7 @@ export function Panel({ target, focused, onClose }: Props) {
       <div className={target.kind === "file" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto"}>
         {target.kind === "file" && <FileViewer key={target.file.key} file={target.file} />}
         {target.kind === "memory" && <MemoryInspection detail={target.detail} />}
+        {target.kind === "memory-evidence" && <MemoryEvidence key={`${target.sessionId}:${target.snapshotId}`} sessionId={target.sessionId} snapshotId={target.snapshotId} />}
         {target.kind === "workspace" && <WorkspaceInspection workspace={target.workspace} />}
         {target.kind === "scope" && <ScopeInspection scope={target.scope} />}
         {target.kind === "file-diff" && <FileInspection target={target} />}
@@ -203,7 +206,7 @@ function MetaLine({ children }: { children: React.ReactNode }) {
 }
 
 function TargetIcon({ target }: { target: InspectorTarget }) {
-  if (target.kind === "memory" || target.kind === "data") return <Database size={13} />;
+  if (target.kind === "memory" || target.kind === "memory-evidence" || target.kind === "data") return <Database size={13} />;
   if (target.kind === "workspace" || target.kind === "scope") return <Folder size={13} />;
   return <FileIcon size={13} />;
 }
@@ -211,6 +214,7 @@ function TargetIcon({ target }: { target: InspectorTarget }) {
 function targetTitle(target: InspectorTarget) {
   if (target.kind === "file") return target.file.path.split("/").filter(Boolean).pop() ?? target.file.path;
   if (target.kind === "memory") return memoryTitle(target.detail);
+  if (target.kind === "memory-evidence") return "Original memory evidence";
   if (target.kind === "workspace") return target.workspace.displayName;
   if (target.kind === "scope") return target.scope.displayName;
   if (target.kind === "file-diff") return target.path;

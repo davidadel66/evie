@@ -1,0 +1,327 @@
+{
+  "answers": [
+    "Do you mean Maya, your mother, or Nora, your sister?"
+  ],
+  "error": "\u003cnil\u003e",
+  "forbidden_source_ids": null,
+  "model_calls": 1,
+  "name": "mother_or_sister",
+  "original_preferences": [
+    {
+      "schema_version": 1,
+      "kind": "remember_entity_claim",
+      "operation_id": "d3ca9dfb-32dc-4b49-adea-dc1e4531aab6",
+      "idempotency_key": "idem:v1:987f1b18-a178-4507-b158-78652cf24fa7",
+      "actor": "owner",
+      "session_id": "6a3201ee-345f-410f-80ba-10d0d4052680",
+      "scope": {
+        "scope_id": "2aae10c4-54cb-4aa7-8658-033b7a6b0d9e",
+        "scope_key": "global",
+        "revision": 0
+      },
+      "scopes": [
+        {
+          "scope_id": "2aae10c4-54cb-4aa7-8658-033b7a6b0d9e",
+          "scope_key": "global",
+          "revision": 0
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 0
+        }
+      ],
+      "predicate": {
+        "predicate_id": "dc154e97-0340-4a8b-90ff-93f58498f36d",
+        "token": "prefers",
+        "version": 1,
+        "label": "prefers",
+        "object_constraint": "entity",
+        "cardinality": "many",
+        "create": true
+      },
+      "entities": [
+        {
+          "entity_id": "c76f675b-3b20-4681-ab95-2278ce31f226",
+          "scope_key": "global",
+          "canonical_name": "owner",
+          "entity_type": "person",
+          "anchor_kind": "owner",
+          "create": true
+        },
+        {
+          "entity_id": "e580d86e-25eb-4fec-9bc6-400cb1936d35",
+          "scope_key": "global",
+          "canonical_name": "Evie",
+          "entity_type": "agent",
+          "anchor_kind": "evie",
+          "create": true
+        },
+        {
+          "entity_id": "d7d601a4-f93a-4f25-998b-8c06a7fc401a",
+          "scope_key": "global",
+          "canonical_name": "Maya",
+          "entity_type": "person",
+          "anchor_kind": "",
+          "create": true
+        },
+        {
+          "entity_id": "d90c3f2d-6120-4473-9368-214863548cec",
+          "scope_key": "global",
+          "canonical_name": "jasmine tea",
+          "entity_type": "gift",
+          "anchor_kind": "",
+          "create": true
+        }
+      ],
+      "aliases": [
+        {
+          "alias_id": "93b90341-abb9-4da8-b666-e834096786a1",
+          "entity_id": "d7d601a4-f93a-4f25-998b-8c06a7fc401a",
+          "scope_key": "global",
+          "value": "MOM-27",
+          "normalized_value": "mom-27",
+          "source_event_id": "e23a393e-5644-4304-a8c4-c430b6f2541f",
+          "create": true
+        },
+        {
+          "alias_id": "9388c7f5-5333-4f59-b3ac-02feaee5dd0f",
+          "entity_id": "d90c3f2d-6120-4473-9368-214863548cec",
+          "scope_key": "global",
+          "value": "jasmine tea",
+          "normalized_value": "jasmine tea",
+          "source_event_id": "e23a393e-5644-4304-a8c4-c430b6f2541f",
+          "create": true
+        }
+      ],
+      "claim": {
+        "claim_id": "15fbe8bf-efce-4279-9454-725e2df082f3",
+        "scope_key": "global",
+        "subject_entity_id": "d7d601a4-f93a-4f25-998b-8c06a7fc401a",
+        "predicate_id": "dc154e97-0340-4a8b-90ff-93f58498f36d",
+        "predicate_token": "prefers",
+        "predicate_version": 1,
+        "object_entity_id": "d90c3f2d-6120-4473-9368-214863548cec",
+        "polarity": "affirmed",
+        "valid_time": {
+          "from": null,
+          "to": null
+        },
+        "create": true
+      },
+      "source": {
+        "source_link_id": "ff1fbb0a-0313-4ce0-b396-bcdc2849728f",
+        "operation_id": "d3ca9dfb-32dc-4b49-adea-dc1e4531aab6",
+        "event_id": "e23a393e-5644-4304-a8c4-c430b6f2541f",
+        "session_id": "6a3201ee-345f-410f-80ba-10d0d4052680",
+        "source_scope_key": "global",
+        "event_part": "content",
+        "locator_kind": "whole",
+        "locator_value": "",
+        "evidence_sha256": "sha256:ec1288af9d0d58ea7e51afbca4aea57fe9f15361180949c4d79281c4cc574e77",
+        "actor": "owner",
+        "source_type": "user_message",
+        "authority": "owner_statement",
+        "observed_at": "2026-09-11T01:23:52.793667000Z",
+        "evidence": "My mother Maya is fond of jasmine tea.",
+        "eligibility": "eligible",
+        "create": true
+      },
+      "resulting_revision": 1,
+      "resulting_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "request": {
+        "IdempotencyKey": "idem:v1:987f1b18-a178-4507-b158-78652cf24fa7",
+        "SourceEventID": "e23a393e-5644-4304-a8c4-c430b6f2541f",
+        "Predicate": "prefers",
+        "PredicateLabel": "prefers",
+        "PredicateCardinality": "many",
+        "Polarity": "affirmed",
+        "ValidTime": {
+          "from": null,
+          "to": null
+        },
+        "Subject": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "Maya",
+          "EntityType": "person",
+          "Alias": "MOM-27"
+        },
+        "Object": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "jasmine tea",
+          "EntityType": "gift",
+          "Alias": "jasmine tea"
+        },
+        "UseSessionScope": false
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "remember_entity_claim",
+      "operation_id": "3e943966-3cfe-4f4a-99bf-9788acf9d026",
+      "idempotency_key": "idem:v1:cb79df53-db8a-4843-b885-1e66ff570696",
+      "actor": "owner",
+      "session_id": "aca2dbb1-657d-4b67-826f-01073e780647",
+      "scope": {
+        "scope_id": "2aae10c4-54cb-4aa7-8658-033b7a6b0d9e",
+        "scope_key": "global",
+        "revision": 1
+      },
+      "scopes": [
+        {
+          "scope_id": "2aae10c4-54cb-4aa7-8658-033b7a6b0d9e",
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "prior_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 1
+        }
+      ],
+      "predicate": {
+        "predicate_id": "dc154e97-0340-4a8b-90ff-93f58498f36d",
+        "token": "prefers",
+        "version": 1,
+        "label": "prefers",
+        "object_constraint": "entity",
+        "cardinality": "many",
+        "create": false
+      },
+      "entities": [
+        {
+          "entity_id": "c76f675b-3b20-4681-ab95-2278ce31f226",
+          "scope_key": "global",
+          "canonical_name": "owner",
+          "entity_type": "person",
+          "anchor_kind": "owner",
+          "create": false
+        },
+        {
+          "entity_id": "e580d86e-25eb-4fec-9bc6-400cb1936d35",
+          "scope_key": "global",
+          "canonical_name": "Evie",
+          "entity_type": "agent",
+          "anchor_kind": "evie",
+          "create": false
+        },
+        {
+          "entity_id": "f52eddec-f8d6-4b5d-addb-aaedc8c39bbc",
+          "scope_key": "global",
+          "canonical_name": "Nora",
+          "entity_type": "person",
+          "anchor_kind": "",
+          "create": true
+        },
+        {
+          "entity_id": "4b338ec0-8014-4602-ac24-474b75ceb856",
+          "scope_key": "global",
+          "canonical_name": "ceramic bowl",
+          "entity_type": "gift",
+          "anchor_kind": "",
+          "create": true
+        }
+      ],
+      "aliases": [
+        {
+          "alias_id": "2b579a53-dc15-46e7-a420-bd25354d0f72",
+          "entity_id": "f52eddec-f8d6-4b5d-addb-aaedc8c39bbc",
+          "scope_key": "global",
+          "value": "SIS-42",
+          "normalized_value": "sis-42",
+          "source_event_id": "a1347e9a-51a4-4bd1-8462-8e11defa2b01",
+          "create": true
+        },
+        {
+          "alias_id": "15bb0ade-a038-4bef-84b2-7899e8ac68df",
+          "entity_id": "4b338ec0-8014-4602-ac24-474b75ceb856",
+          "scope_key": "global",
+          "value": "ceramic bowl",
+          "normalized_value": "ceramic bowl",
+          "source_event_id": "a1347e9a-51a4-4bd1-8462-8e11defa2b01",
+          "create": true
+        }
+      ],
+      "claim": {
+        "claim_id": "a77198ea-5050-495e-a056-53d62e38ddf2",
+        "scope_key": "global",
+        "subject_entity_id": "f52eddec-f8d6-4b5d-addb-aaedc8c39bbc",
+        "predicate_id": "dc154e97-0340-4a8b-90ff-93f58498f36d",
+        "predicate_token": "prefers",
+        "predicate_version": 1,
+        "object_entity_id": "4b338ec0-8014-4602-ac24-474b75ceb856",
+        "polarity": "affirmed",
+        "valid_time": {
+          "from": null,
+          "to": null
+        },
+        "create": true
+      },
+      "source": {
+        "source_link_id": "4893f276-114c-4c97-b627-b753b5167c40",
+        "operation_id": "3e943966-3cfe-4f4a-99bf-9788acf9d026",
+        "event_id": "a1347e9a-51a4-4bd1-8462-8e11defa2b01",
+        "session_id": "aca2dbb1-657d-4b67-826f-01073e780647",
+        "source_scope_key": "global",
+        "event_part": "content",
+        "locator_kind": "whole",
+        "locator_value": "",
+        "evidence_sha256": "sha256:b05e0f936ed4ba10377d57858185684fb4c15565f6901a00143ff5c57f229248",
+        "actor": "owner",
+        "source_type": "user_message",
+        "authority": "owner_statement",
+        "observed_at": "2026-09-11T01:23:52.797907000Z",
+        "evidence": "My sister Nora is fond of ceramic bowl.",
+        "eligibility": "eligible",
+        "create": true
+      },
+      "resulting_revision": 2,
+      "resulting_revisions": [
+        {
+          "scope_key": "global",
+          "revision": 2
+        }
+      ],
+      "request": {
+        "IdempotencyKey": "idem:v1:cb79df53-db8a-4843-b885-1e66ff570696",
+        "SourceEventID": "a1347e9a-51a4-4bd1-8462-8e11defa2b01",
+        "Predicate": "prefers",
+        "PredicateLabel": "prefers",
+        "PredicateCardinality": "many",
+        "Polarity": "affirmed",
+        "ValidTime": {
+          "from": null,
+          "to": null
+        },
+        "Subject": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "Nora",
+          "EntityType": "person",
+          "Alias": "SIS-42"
+        },
+        "Object": {
+          "EntityID": "",
+          "Create": true,
+          "CanonicalName": "ceramic bowl",
+          "EntityType": "gift",
+          "Alias": "ceramic bowl"
+        },
+        "UseSessionScope": false
+      }
+    }
+  ],
+  "question": "What present would she like?",
+  "scripted_initial_searches": false,
+  "setup": {},
+  "whole_turn_elapsed_ns": 2025631541
+}

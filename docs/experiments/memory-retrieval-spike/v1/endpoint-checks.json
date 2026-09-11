@@ -1,0 +1,106 @@
+{
+  "version": "memory-retrieval-endpoint-probes-v1",
+  "checks": [
+    {
+      "check": "reject_endpoint",
+      "endpoint": "http://192.0.2.1:11434",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "https://127.0.0.1:11434",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "http://localhost:11434",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "http://127.0.0.1.example.com",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "http://user:pass@127.0.0.1",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "http://127.0.0.1/path",
+      "passed": true
+    },
+    {
+      "check": "reject_endpoint",
+      "endpoint": "unix:relative.sock",
+      "passed": true
+    },
+    {
+      "check": "literal_loopback_success",
+      "passed": true
+    },
+    {
+      "check": "redirect",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "wrong_dimension",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "wrong_count",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "zero",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "nonfinite",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "wrong_model",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "malformed_json",
+      "requests": 1,
+      "redirect_destination_requests": 0,
+      "passed": true
+    },
+    {
+      "check": "deadline",
+      "elapsed_ns": 27087708,
+      "passed": true
+    },
+    {
+      "check": "caller_cancellation",
+      "elapsed_ns": 81041,
+      "passed": true
+    },
+    {
+      "check": "unix_socket_success",
+      "passed": true
+    },
+    {
+      "check": "closed_endpoint_no_fallback",
+      "fallback_requests": 0,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

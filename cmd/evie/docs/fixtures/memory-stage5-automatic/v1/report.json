@@ -1,0 +1,550 @@
+{
+  "fixture": "one accepted dinner preference, one uncompiled greenhouse statement, twenty accepted and twenty conversation distractors; thirty sequential fresh chats in the same area",
+  "index_refresh_ns": 17834875,
+  "model_quality": "not measured; scripted provider",
+  "samples": [
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 4263833,
+      "complete_request_bytes": 22893,
+      "serialized_memory_message_bytes": 2335,
+      "evidence_count": 1,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 0,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 5957375,
+      "complete_request_bytes": 23937,
+      "serialized_memory_message_bytes": 3379,
+      "evidence_count": 2,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 1,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 5205000,
+      "complete_request_bytes": 24890,
+      "serialized_memory_message_bytes": 4332,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 5344125,
+      "complete_request_bytes": 24890,
+      "serialized_memory_message_bytes": 4332,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 5756958,
+      "complete_request_bytes": 24884,
+      "serialized_memory_message_bytes": 4326,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 5974792,
+      "complete_request_bytes": 24890,
+      "serialized_memory_message_bytes": 4332,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 6045584,
+      "complete_request_bytes": 24888,
+      "serialized_memory_message_bytes": 4330,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 6059583,
+      "complete_request_bytes": 24890,
+      "serialized_memory_message_bytes": 4332,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 6343375,
+      "complete_request_bytes": 24888,
+      "serialized_memory_message_bytes": 4330,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "Suggest dinner for me.",
+      "whole_turn_ns": 6110667,
+      "complete_request_bytes": 24890,
+      "serialized_memory_message_bytes": 4332,
+      "evidence_count": 3,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 22,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 6
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 2714583,
+      "complete_request_bytes": 22052,
+      "serialized_memory_message_bytes": 1486,
+      "evidence_count": 1,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 0,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3600666,
+      "complete_request_bytes": 23021,
+      "serialized_memory_message_bytes": 2455,
+      "evidence_count": 2,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 1,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3242709,
+      "complete_request_bytes": 22937,
+      "serialized_memory_message_bytes": 2371,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3764875,
+      "complete_request_bytes": 22935,
+      "serialized_memory_message_bytes": 2369,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3680750,
+      "complete_request_bytes": 22935,
+      "serialized_memory_message_bytes": 2369,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3527250,
+      "complete_request_bytes": 22936,
+      "serialized_memory_message_bytes": 2370,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3602000,
+      "complete_request_bytes": 22936,
+      "serialized_memory_message_bytes": 2370,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3860416,
+      "complete_request_bytes": 22937,
+      "serialized_memory_message_bytes": 2371,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3833833,
+      "complete_request_bytes": 22937,
+      "serialized_memory_message_bytes": 2371,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What was the greenhouse trial?",
+      "whole_turn_ns": 3402292,
+      "complete_request_bytes": 22937,
+      "serialized_memory_message_bytes": 2371,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 30,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 16
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 2168875,
+      "complete_request_bytes": 20689,
+      "serialized_memory_message_bytes": 122,
+      "evidence_count": 0,
+      "exact_original_target_found": true,
+      "non_target_evidence_count": 0,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "empty",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 2702125,
+      "complete_request_bytes": 21971,
+      "serialized_memory_message_bytes": 1404,
+      "evidence_count": 1,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 1,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3569500,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3384875,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3294375,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3349292,
+      "complete_request_bytes": 22941,
+      "serialized_memory_message_bytes": 2374,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3532417,
+      "complete_request_bytes": 22941,
+      "serialized_memory_message_bytes": 2374,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3290833,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3736250,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    },
+    {
+      "query": "What is the molybdenum coating?",
+      "whole_turn_ns": 3616875,
+      "complete_request_bytes": 22942,
+      "serialized_memory_message_bytes": 2375,
+      "evidence_count": 2,
+      "exact_original_target_found": false,
+      "non_target_evidence_count": 2,
+      "interpretation": {
+        "version": "bounded-conversation-lexical-v1",
+        "outcome": "success",
+        "current_bytes": 31,
+        "earlier_messages": 0,
+        "earlier_bytes": 0,
+        "summary_bytes": 0,
+        "query_bytes": 18
+      }
+    }
+  ],
+  "target_or_empty_cases": 13,
+  "total_cases": 30,
+  "version": "automatic-development-v1"
+}

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-json",
+    "./internal/agent",
+    "./internal/web",
+    "-run",
+    "^(TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest|TestConversationSearchFindsUncompiledOriginalStatement|TestReferenceRecallKeepsEarlierRecipientAcrossUnrelatedTopicRoots|TestConversationExpansionResolvesTentativePronounFromOriginalNeighbors|TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting|TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges|TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart|TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable)$",
+    "-count=1"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T07:07:13.030723+00:00",
+  "started_at_utc": "2026-09-11T07:07:10.629779+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

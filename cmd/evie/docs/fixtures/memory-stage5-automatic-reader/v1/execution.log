@@ -1,0 +1,11 @@
+=== RUN   TestMemoryStage5AutomaticReaderEvaluation
+=== RUN   TestMemoryStage5AutomaticReaderEvaluation/vegetarian_dinner
+=== RUN   TestMemoryStage5AutomaticReaderEvaluation/uncompiled_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvaluation/unavailable_greenhouse
+=== RUN   TestMemoryStage5AutomaticReaderEvaluation/compacted_greenhouse
+--- PASS: TestMemoryStage5AutomaticReaderEvaluation (16.69s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvaluation/vegetarian_dinner (3.11s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvaluation/uncompiled_greenhouse (2.93s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvaluation/unavailable_greenhouse (6.40s)
+    --- PASS: TestMemoryStage5AutomaticReaderEvaluation/compacted_greenhouse (3.98s)
+PASS

@@ -1,0 +1,53 @@
+=== RUN   TestMemoryStage5IntegratedPrepare
+=== RUN   TestMemoryStage5IntegratedPrepare/hold01_pattern_pages
+=== RUN   TestMemoryStage5IntegratedPrepare/hold02_audiobook_cast
+=== RUN   TestMemoryStage5IntegratedPrepare/hold03_damp_dough
+=== RUN   TestMemoryStage5IntegratedPrepare/hold04_projector_sound
+=== RUN   TestMemoryStage5IntegratedPrepare/hold05_choir_feedback
+=== RUN   TestMemoryStage5IntegratedPrepare/hold06_onboarding_recipient
+=== RUN   TestMemoryStage5IntegratedPrepare/hold07_handover_continuity
+    retrieval_integrated_fixture_test.go:505: agent: nothing eligible for compaction
+=== RUN   TestMemoryStage5IntegratedPrepare/hold08_volunteer_pickup
+    retrieval_integrated_fixture_test.go:505: agent: nothing eligible for compaction
+=== RUN   TestMemoryStage5IntegratedPrepare/hold09_darkroom_alias
+=== RUN   TestMemoryStage5IntegratedPrepare/hold10_instrument_entity_id
+=== RUN   TestMemoryStage5IntegratedPrepare/hold11_observatory_chain
+=== RUN   TestMemoryStage5IntegratedPrepare/hold12_screen_free_errands
+=== RUN   TestMemoryStage5IntegratedPrepare/hold13_shadow_box_choice
+=== RUN   TestMemoryStage5IntegratedPrepare/hold14_divider_trial
+=== RUN   TestMemoryStage5IntegratedPrepare/hold15_archive_historical
+=== RUN   TestMemoryStage5IntegratedPrepare/hold16_print_returns_current
+=== RUN   TestMemoryStage5IntegratedPrepare/hold17_volunteer_shift_conflict
+=== RUN   TestMemoryStage5IntegratedPrepare/hold18_catering_pickup_conflict
+=== RUN   TestMemoryStage5IntegratedPrepare/hold19_collar_reported_speech
+=== RUN   TestMemoryStage5IntegratedPrepare/hold20_manual_flag_suggestion
+=== RUN   TestMemoryStage5IntegratedPrepare/hold21_mount_serial_gap
+=== RUN   TestMemoryStage5IntegratedPrepare/hold22_sculpture_unavailable
+=== RUN   TestMemoryStage5IntegratedPrepare/hold23_active_voice_rewrite
+=== RUN   TestMemoryStage5IntegratedPrepare/hold24_invoice_scope
+--- FAIL: TestMemoryStage5IntegratedPrepare (3.11s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold01_pattern_pages (0.44s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold02_audiobook_cast (0.11s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold03_damp_dough (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold04_projector_sound (0.11s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold05_choir_feedback (0.16s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold06_onboarding_recipient (0.16s)
+    --- FAIL: TestMemoryStage5IntegratedPrepare/hold07_handover_continuity (0.13s)
+    --- FAIL: TestMemoryStage5IntegratedPrepare/hold08_volunteer_pickup (0.11s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold09_darkroom_alias (0.13s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold10_instrument_entity_id (0.16s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold11_observatory_chain (0.12s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold12_screen_free_errands (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold13_shadow_box_choice (0.12s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold14_divider_trial (0.14s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold15_archive_historical (0.11s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold16_print_returns_current (0.12s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold17_volunteer_shift_conflict (0.13s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold18_catering_pickup_conflict (0.10s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold19_collar_reported_speech (0.09s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold20_manual_flag_suggestion (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold21_mount_serial_gap (0.14s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold22_sculpture_unavailable (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold23_active_voice_rewrite (0.08s)
+    --- PASS: TestMemoryStage5IntegratedPrepare/hold24_invoice_scope (0.11s)
+FAIL

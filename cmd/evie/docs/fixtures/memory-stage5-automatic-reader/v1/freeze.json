@@ -1,0 +1,92 @@
+{
+  "version": "memory-stage5-automatic-production-reader-development-v1",
+  "frozen_at_utc": "2026-09-11T01:00:31.179998+00:00",
+  "base_export": "implementation owner /tmp/evie-stage5-160-verify, #160 staged implementation with bounded-conversation-lexical-v3 and no #166 work",
+  "branch_head_at_freeze": "e5fa0877f8e1dd75a365ec3267d27c65c38cd6d9",
+  "fixture_files_sha256": {
+    "agent_test.go": "5a182dabec4ec0aeca5a01e5b37464b2562848ce2c612de8b4ff4dc1d0fc3690",
+    "automatic_compaction_test.go": "b35c0996841e49b5bf530ef97c64fd5898247693f0d44ec70476d8a17f339887",
+    "compaction_test.go": "595cd9b685789ef4e40a3971fdad12f723b8280302c52da5abcf3e644a9f2b30",
+    "context_test.go": "a463386a35b1af4323f504dc97b9b0b9b1cb7f759e6b24ced0d86f3590e5e4be",
+    "foreground_measurement_test.go": "cebd8795a8e7e4b9c9ba736b06b5b12288a89a3feb988ea5c82dab394ed6cfc6",
+    "history_test.go": "3dee5a20cc6fe0331dbd808c155136681273d7b016c512f0d2c3c728e0f3b1ab",
+    "memory_plugin_test.go": "8ce0f817343b0db140e1665b75fbe6916bfd7bcf549f8094ef0a50d25dcb5582",
+    "responses_test.go": "777cf48b80168cad222905ce9a083d2b641d15ed1cb17dfb9bca33d804dbb227",
+    "retrieval_acceptance_test.go": "6344371ba49b7133e959d39ad9cf0ee7d9fd2813cf818610a782b8e1af856db2",
+    "retrieval_automatic_acceptance_test.go": "0391c39253b1f8d82f20b5e014a185553bd0268e9737097ae81518f912d71a7a",
+    "retrieval_automatic_measurement_test.go": "7d6239625758ec0928ae62e3bd73022147b60c9a697aeabff2049c44415ddede",
+    "retrieval_automatic_reader_evaluation_test.go": "93754c064d32bc3386695787ef2ec51425409ce851737eb9278c5f8853f48aae",
+    "retrieval_conflict_acceptance_test.go": "9a8185167315f4ab518e0e2aecdb24f695fda5d58cac6cc1e1c7c48e1c5c3ca7",
+    "retrieval_conversation_acceptance_test.go": "f9cd0bf1177c1ca498cfd712b5773897e3980c7d21601f161d8c0ebab5635dde",
+    "retrieval_conversation_scope_acceptance_test.go": "678fb8fa0b63cfee7d9a1fad7e689aa0dabe32a37b5ad63b7a873f69cca4b15b",
+    "retrieval_expansion_acceptance_test.go": "8221fabe788c833c11af64b42946345a0637f6653c0efb0c6ba20250fc8bb9f3",
+    "retrieval_expansion_boundary_test.go": "7bfb893febc3d6faaa25aa96ff8d5d614dc6fa6580ec23040b4e64bedc8f7ab1",
+    "retrieval_expansion_coverage_test.go": "21ae02fc7a84010f61b0c22a98d747600612351f40fbada74c24c7608b77a120",
+    "retrieval_expansion_limits_test.go": "40f8f37376d80150cd6b648ebf4b7e5b5dcda12dd8a889f742307a6011312fb2",
+    "retrieval_expansion_measurement_test.go": "cf4f2b5614311cbad4b04c02a080aeed6c7817cc40b0df581eb86cce9d0e209f",
+    "retrieval_graph_acceptance_test.go": "7b9b0345af89a1609d21218908aa7dfce4c9304f72821ad147873d4c67277518",
+    "retrieval_graph_experiment_test.go": "d237705e7c5880f500bac97960d08c26bb3af9eb548a31080c9b13dc959bf91b",
+    "retrieval_historical_acceptance_test.go": "29f968adb362a1056641773bd296a2f60ab31048d955c56102b0762919917649",
+    "retrieval_historical_expansion_test.go": "6fa089383193a9c7cafd2150944cd9093ba7f3e51353601d003a9b0b508d4fc1",
+    "retrieval_measurement_test.go": "483522be959dbe22fe657a5e3a280d3600ed839004aa3c3ea6fe80c7fd840b47",
+    "retrieval_production_reader_evaluation_test.go": "99e8526b03a5fe24545c0bf96445a8551863719ee2cc648f124f7051dfd22035",
+    "retrieval_reader_evaluation_test.go": "b4d582bb0ad75def47ad269a58550055a1118c596358155e398fe9174714eb6e",
+    "retrieval_receipt_acceptance_test.go": "86eea47a29e8dfc5259fb3c1c352dafb626dcc9c189bf093b070d995fbbc8d7c",
+    "retrieval_retirement_acceptance_test.go": "a4f8a783b7cf8963af690f808865dbcc50c350b9a1ce498913f33d89aba0fdcb",
+    "retrieval_scope_acceptance_test.go": "82833d5f00a53472d1fd4953cf7bc06d6512d5875f9f0f8bf8dd7caf0b798684",
+    "retrieval_temporal_acceptance_test.go": "0b50c3c460f0e5095c139e586b579fe72c46afe949b9c486528c2a7a6868d190",
+    "semantic_memory_test.go": "555d98ef459d8e35a50bb5042c18984be182316f3c21d32a2977d09707392e2b",
+    "standard_preset_test.go": "36317da2bce890a8b060fd2fd2ed8e4d3d829575da24cd7f21d15d669641bf61",
+    "tool_results_test.go": "3d43bd93d0fcbd7d33964491ceef2e3d27887afcd55e1f67a74e2836ab1f4c35",
+    "turn_owner_integration_test.go": "742355a8d1d3ff28f180b7b2bdf07cc6cf8c7cc2f8b199f023fef977db575260",
+    "turn_ownership_test.go": "61a5cd7ef54e0361dc786748ac20eb23c767d9cb6ee7942545ce17b743cafd84",
+    "web_plugin_test.go": "71ec7623c8b44aa499574ae85c791add703f2af01b95e89d121b86948ccd3bfc"
+  },
+  "rubric_sha256": "a0543273159fc5e88290dc41a233e851532943fd3691700cdd45cb39491cb5c4",
+  "profile": {
+    "ConfiguredModel": "openai/gpt-6-astra",
+    "AdvertisedModel": "openai/gpt-6-astra",
+    "CanonicalModel": "openai/gpt-6-astra-20260903",
+    "AdvertisedWindowTokens": 1050000,
+    "HardWindowTokens": 922768,
+    "WorkingTokens": 24576,
+    "OutputReserveTokens": 768,
+    "EstimationMarginTokens": 4096,
+    "Source": "remote_metadata"
+  },
+  "model": "openai/gpt-6-astra",
+  "parameters": {
+    "max_output_tokens": 768,
+    "reasoning": {
+      "effort": "low",
+      "summary": "concise"
+    },
+    "stream": true,
+    "store": false,
+    "provider": {
+      "require_parameters": true
+    },
+    "temperature": "omitted; normal production encoding",
+    "seed": "omitted; normal production encoding",
+    "max_model_calls_per_case": 3,
+    "per_call_deadline_seconds": 120
+  },
+  "scenarios": [
+    "vegetarian_dinner",
+    "uncompiled_greenhouse",
+    "unavailable_greenhouse",
+    "compacted_greenhouse"
+  ],
+  "initial_searches": "production automatic recall, not scripted",
+  "compaction": "fourth case uses public Session.Compact with scripted compactor; no compactor model quality claim",
+  "partition": "#160 development only, not #167/#168 heldout",
+  "quality_judgment": "fixed text markers plus predeclared manual exact-source/grounding/uncertainty rubric, no model judge",
+  "metadata_files_sha256": {
+    "automatic-preflight-metadata-02-wire-response.raw": "5bd206b0cca3c75418e04cb2d504c3afc9f31c1bb671df077ab3bcf01cffff42",
+    "automatic-preflight-context-profile.json": "496bb43f39a804eed7007f1246348ac5a698ac6b91a512ffe98cb988026cabf5",
+    "automatic-preflight-metadata-01-wire-response.raw": "0cc9e071b04480aca13d292a6dbc2183ae58b9ce3ea4ffa387b678a695360bc5",
+    "automatic-preflight-metadata-02-http.json": "0f6cb8021e099289d3a3edbcd07cc96fb862171e8c3ee924ee03778f6713aea4",
+    "automatic-preflight-metadata-01-http.json": "c92ae5e2614d4c8ff1b3f14fd0a1492ca5b1cbef20d94f711c2e9399ed02b306"
+  },
+  "preflight_failure": "original compacted case failed before freeze; original source was displaced by checksum noise. Failure, source, binary hash and production hashes retained; identical case passes after announced planner v3 fix."
+}

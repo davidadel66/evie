@@ -1,0 +1,359 @@
+package agent
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/tools"
+)
+
+var automaticReaderCaseNames = []string{"vegetarian_dinner", "uncompiled_greenhouse", "unavailable_greenhouse", "compacted_greenhouse"}
+
+type automaticReaderCase struct {
+	name, question string
+	reader         memory.Session
+	required       []memory.EventID
+	allowed        []memory.EventID
+	forbidden      []memory.EventID
+	claim          memory.SemanticID
+	optOut         bool
+	compaction     memory.EventID
+	setup          map[string]any
+}
+
+func prepareAutomaticReaderCase(t *testing.T, f *retrievalFixture, name string) automaticReaderCase {
+	t.Helper()
+	test := automaticReaderCase{name: name, reader: f.global()}
+	if name == "vegetarian_dinner" {
+		preference := readerRemember(t, f, f.global(), "dinner_preference", "Remember that I prefer vegetarian dinners.", "vegetarian dinners")
+		test.question = "Suggest dinner for me."
+		test.required, test.allowed, test.claim = []memory.EventID{preference.Source.EventID}, []memory.EventID{preference.Source.EventID}, preference.ClaimID
+		return test
+	}
+	original := f.converse(f.global(), "I planted saffron crocuses in the greenhouse. It is still an experiment, not a harvest plan.")
+	f.converse(f.global(), "I maintain a bicycle chain on Tuesdays.")
+	test.question = "What did I plant in the greenhouse, and how settled was the plan? Include the original source event ID."
+	test.required, test.allowed = []memory.EventID{original.ID}, []memory.EventID{original.ID}
+	switch name {
+	case "uncompiled_greenhouse":
+	case "unavailable_greenhouse":
+		test.optOut = true
+		test.required, test.allowed, test.forbidden = nil, nil, []memory.EventID{original.ID}
+	case "compacted_greenhouse":
+		// The first root supplies only a topic cue, not the remembered fact.
+		// Twenty later roots exceed the planner's earlier-root window. A public
+		// accepted compaction carries that cue into subsequent interpretation.
+		topic := f.converse(test.reader, "Let us revisit the greenhouse experiment later.")
+		for i := 0; i < 20; i++ {
+			f.converse(test.reader, fmt.Sprintf("Debug checksum routine number %02d.", i+1))
+		}
+		summary := strings.Replace(validCompactionSummary(), "kept", "Greenhouse experiment is the owner topic to revisit; original details need retrieval.", 1)
+		compactor := &fakeClient{steps: []step{assistantStep(summary, nil)}}
+		holder := memory.LeaseHolderID("automatic-reader-compaction")
+		session := NewWithCompactorAndToolset(nil, compactor, testContextProfile("test-model"), f.store.BindHistory(test.reader.ID, holder), test.reader.ScopeContext(), f.store.BindTurnOwner(test.reader.ID, holder), tools.NewToolset(nil), WithAutomaticMemoryRecall(false))
+		compacted, err := session.Compact(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(compactor.reqs) != 1 {
+			t.Fatal("continuity setup must use one public compaction request")
+		}
+		test.question = "What was it again? Include its original source event ID."
+		test.allowed = append(test.allowed, topic.ID)
+		test.compaction = compacted.CompactionEventID
+		test.setup = map[string]any{"compaction_event_id": compacted.CompactionEventID, "summary": summary, "scripted_compactor_requests": compactor.reqs, "later_noise_roots": 20, "topic_cue_source_event_id": topic.ID, "compactor_quality_evaluated": false}
+	default:
+		t.Fatal("unknown automatic reader case")
+	}
+	return test
+}
+
+func checkAutomaticReaderEvidence(t *testing.T, test automaticReaderCase, request openrouter.ChatRequest) {
+	t.Helper()
+	var supplied struct {
+		Status   string                     `json:"status"`
+		Evidence []memory.RetrievalEvidence `json:"evidence"`
+	}
+	data := retrievalData(t, request)
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(data, "EVIE_MEMORY_DATA\n")), &supplied); err != nil {
+		t.Fatal(err)
+	}
+	placed := false
+	for i, message := range request.Messages {
+		if message.Content == data && i+1 < len(request.Messages) {
+			next := request.Messages[i+1]
+			placed = next.Role == "user" && next.Content == test.question
+		}
+	}
+	if !placed {
+		t.Fatal("automatic evidence must immediately precede the actual current user message")
+	}
+	if test.optOut {
+		if supplied.Status != memory.RetrievalUnavailable || len(supplied.Evidence) != 0 {
+			t.Fatal("opt-out must supply unavailable without evidence")
+		}
+		wire, err := openrouter.RequestBytes(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range test.forbidden {
+			if strings.Contains(string(wire), string(id)) {
+				t.Fatal("opt-out request contains a withheld source ID")
+			}
+		}
+		if strings.Contains(string(wire), "saffron") || strings.Contains(string(wire), "crocuses") {
+			t.Fatal("opt-out request contains withheld original wording")
+		}
+		return
+	}
+	if supplied.Status != memory.RetrievalSuccess {
+		t.Fatalf("automatic reader requires successful complete evidence, got %s", supplied.Status)
+	}
+	allowed, found := map[memory.EventID]bool{}, map[memory.EventID]bool{}
+	for _, id := range test.allowed {
+		allowed[id] = true
+	}
+	claim, original := false, false
+	for _, evidence := range supplied.Evidence {
+		if evidence.CurrentStatus != memory.SemanticStatusActive || evidence.Intent != memory.RetrievalCurrent {
+			t.Fatal("automatic current reader received wrong lifecycle/intent")
+		}
+		if test.claim != "" && evidence.ClaimID == test.claim {
+			claim = evidence.Kind == memory.RetrievalAcceptedMemory && strings.Contains(evidence.Text, "vegetarian")
+		}
+		if test.claim == "" && evidence.Kind != memory.RetrievalConversationExcerpt {
+			t.Fatal("uncompiled evidence became accepted memory")
+		}
+		for _, source := range evidence.Sources {
+			if !allowed[source.EventID] {
+				t.Fatalf("unexpected source supplied to automatic reader: %s", source.EventID)
+			}
+			if source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
+				t.Fatal("original owner evidence lost its actor/authority")
+			}
+			found[source.EventID] = true
+			if test.claim == "" && source.EventID == test.required[0] {
+				original = strings.Contains(source.Evidence, "saffron crocuses") && strings.Contains(source.Evidence, "still an experiment, not a harvest plan")
+			}
+		}
+	}
+	for _, id := range test.required {
+		if !found[id] {
+			t.Fatalf("required source absent on automatic provider dispatch: %s", id)
+		}
+	}
+	if (test.claim != "" && !claim) || (test.claim == "" && !original) {
+		t.Fatal("automatic first-request evidence lacks the required Claim or precise original wording")
+	}
+}
+
+type automaticReaderClient struct {
+	t        *testing.T
+	test     automaticReaderCase
+	provider *openrouter.Client
+	capture  *productionReaderCapture
+	requests []openrouter.ChatRequest
+	answers  []string
+}
+
+func (c *automaticReaderClient) ChatStream(ctx context.Context, request openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	c.requests = append(c.requests, request)
+	checkAutomaticReaderEvidence(c.t, c.test, request)
+	if len(c.requests) > 3 {
+		return openrouter.ChatResponse{}, errors.New("automatic reader exceeded three model-call bound")
+	}
+	if c.provider == nil {
+		return assistantStep("Automatic first-request evidence verified; no model quality claim.", nil).res, nil
+	}
+	stem := fmt.Sprintf("%s-%02d", c.test.name, len(c.requests))
+	c.capture.stem = stem
+	productionReaderWrite(c.t, c.capture.directory, stem+"-composed-request.json", request)
+	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+	started := time.Now()
+	response, err := c.provider.ChatStream(ctx, request, handlers)
+	productionReaderWrite(c.t, c.capture.directory, stem+"-timing.json", map[string]any{"elapsed_ns": time.Since(started).Nanoseconds(), "usage": response.Usage, "error": fmt.Sprint(err)})
+	if err != nil {
+		return response, err
+	}
+	productionReaderWrite(c.t, c.capture.directory, stem+"-normalized-response.json", response)
+	if len(response.Choices) != 1 {
+		return openrouter.ChatResponse{}, errors.New("unexpected automatic reader choice count")
+	}
+	for _, call := range response.Choices[0].Message.ToolCalls {
+		if call.Function.Name != "memory_search" && call.Function.Name != "memory_search_conversations" {
+			return openrouter.ChatResponse{}, errors.New("automatic reader requested unavailable capability")
+		}
+	}
+	c.answers = append(c.answers, response.Choices[0].Message.Content)
+	return response, nil
+}
+
+func TestMemoryStage5AutomaticReaderEvidenceContract(t *testing.T) {
+	runAutomaticReaderCases(t, false)
+}
+
+func TestMemoryStage5AutomaticReaderPreflight(t *testing.T) {
+	if os.Getenv("EVIE_RUN_AUTOMATIC_READER_PREFLIGHT") != "1" {
+		t.Skip("automatic reader metadata discovery is opt-in")
+	}
+	productionReaderSetup(t, "automatic-preflight")
+}
+
+func TestMemoryStage5AutomaticReaderEvaluation(t *testing.T) {
+	if os.Getenv("EVIE_RUN_AUTOMATIC_READER_EVAL") != "1" {
+		t.Skip("actual automatic production reader evaluation is opt-in")
+	}
+	runAutomaticReaderCases(t, true)
+}
+
+func runAutomaticReaderCases(t *testing.T, model bool) {
+	var provider *openrouter.Client
+	var capture *productionReaderCapture
+	profile, err := openrouter.NewExplicitContextProfile(DefaultModel, 32768, 24576, 768)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := os.Getenv("EVIE_MEMORY_READER_ARTIFACTS")
+	if model {
+		raw, err := os.ReadFile(filepath.Join(directory, "freeze.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var freeze struct {
+			FixtureFiles map[string]string                    `json:"fixture_files_sha256"`
+			Profile      openrouter.ContextProfileDiagnostics `json:"profile"`
+		}
+		if err = json.Unmarshal(raw, &freeze); err != nil {
+			t.Fatal(err)
+		}
+		if freeze.FixtureFiles["retrieval_automatic_reader_evaluation_test.go"] == "" {
+			t.Fatal("automatic reader fixture not pinned")
+		}
+		for name, want := range freeze.FixtureFiles {
+			source, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			digest := sha256.Sum256(source)
+			if hex.EncodeToString(digest[:]) != want {
+				t.Fatal("frozen automatic reader fixture changed")
+			}
+		}
+		provider, profile, capture = productionReaderSetup(t, "automatic-evaluation")
+		if profile.Diagnostics() != freeze.Profile {
+			t.Fatal("automatic reader model/profile changed since freeze")
+		}
+	}
+	for _, name := range automaticReaderCaseNames {
+		t.Run(name, func(t *testing.T) {
+			f := newRetrievalFixture(t)
+			test := prepareAutomaticReaderCase(t, f, name)
+			f.refresh()
+			before, err := f.store.InspectClaims(context.Background(), test.reader.ScopeContext(), memory.ClaimQuery{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var definitions []tools.Tool
+			for _, capability := range plugins.NewMemory(f.store).ToolCapabilities() {
+				if capability.Tool.Schema.Function.Name == "memory_search" || capability.Tool.Schema.Function.Name == "memory_search_conversations" {
+					definitions = append(definitions, capability.Tool)
+				}
+			}
+			if test.optOut {
+				t.Setenv("EVIE_REMOTE_MEMORY", "off")
+			}
+			client := &automaticReaderClient{t: t, test: test, provider: provider, capture: capture}
+			holder := memory.LeaseHolderID("automatic-model-reader-" + string(test.reader.ID))
+			session := NewWithToolset(client, profile, f.store.BindHistory(test.reader.ID, holder), test.reader.ScopeContext(), f.store.BindTurnOwner(test.reader.ID, holder), tools.NewToolset(definitions))
+			started := time.Now()
+			err = session.Send(context.Background(), test.question, &recorder{}, nil)
+			if model {
+				productionReaderWrite(t, directory, name+"-case.json", map[string]any{"name": name, "question": test.question, "required_source_ids": test.required, "allowed_source_ids": test.allowed, "withheld_source_ids": test.forbidden, "whole_turn_elapsed_ns": time.Since(started).Nanoseconds(), "model_calls": len(client.requests), "answers": client.answers, "error": fmt.Sprint(err), "setup": test.setup, "scripted_initial_searches": false})
+				productionReaderWrite(t, directory, name+"-all-composed-requests.json", client.requests)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := f.store.InspectClaims(context.Background(), test.reader.ScopeContext(), memory.ClaimQuery{})
+			if err != nil || !reflect.DeepEqual(before.ScopeRevisions, after.ScopeRevisions) || len(before.Claims) != len(after.Claims) {
+				t.Fatalf("automatic reader changed accepted memory: %v", err)
+			}
+			events, err := f.store.LoadEvents(context.Background(), test.reader.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var latest memory.ContextSnapshotPayload
+			for _, event := range events {
+				if strings.Contains(event.Content, "EVIE_MEMORY_DATA") {
+					t.Fatal("automatic evidence was persisted as a new conversation episode")
+				}
+				if event.Type == memory.EventContextSnapshot {
+					if err := json.Unmarshal(event.Payload, &latest); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if latest.Memory == nil || latest.Memory.Interpretation == nil {
+				t.Fatal("automatic request lacks its retained evidence and interpretation receipt")
+			}
+			if test.compaction != "" && (latest.ActiveCompactionEventID != test.compaction || latest.Memory.Interpretation.SummaryBytes == 0) {
+				t.Fatal("automatic reader did not retain and use accepted compaction continuity")
+			}
+			if model {
+				productionReaderWrite(t, directory, name+"-final-request-snapshot.json", latest)
+				if len(client.answers) == 0 {
+					t.Fatal("automatic reader produced no answer")
+				}
+				checks := automaticReaderAnswerChecks(test, client.answers[len(client.answers)-1])
+				productionReaderWrite(t, directory, name+"-automated-checks.json", checks)
+				for check, passed := range checks {
+					if !passed {
+						t.Errorf("predeclared automatic reader check failed: %s; raw answer retained", check)
+					}
+				}
+			}
+		})
+	}
+}
+
+func automaticReaderAnswerChecks(test automaticReaderCase, answer string) map[string]bool {
+	lower := strings.ToLower(answer)
+	has := func(words ...string) bool {
+		for _, word := range words {
+			if strings.Contains(lower, word) {
+				return true
+			}
+		}
+		return false
+	}
+	checks := map[string]bool{"nonempty_answer": strings.TrimSpace(answer) != ""}
+	switch test.name {
+	case "vegetarian_dinner":
+		checks["vegetarian_constraint_expressed"] = has("vegetarian", "plant-based", "meat-free")
+		checks["does_not_claim_new_save"] = !has("i saved", "i've saved", "i have saved")
+	case "uncompiled_greenhouse", "compacted_greenhouse":
+		checks["original_crop_named"] = has("saffron crocuses")
+		checks["experimental_status_preserved"] = has("experiment", "not a harvest", "tentative")
+		checks["original_event_cited"] = strings.Contains(answer, string(test.required[0]))
+		checks["no_claim_of_new_acceptance"] = !has("i saved", "i've saved", "i have saved")
+	case "unavailable_greenhouse":
+		checks["unavailability_or_insufficient_support_expressed"] = has("unavailable", "can't access", "cannot access", "don't have access", "not available", "don't have enough", "can't retrieve", "cannot retrieve")
+		checks["withheld_fact_not_invented"] = !has("saffron", "crocus")
+		checks["no_false_successful_absence"] = !has("you never told", "you haven't told", "you have not told", "nothing was recorded")
+	}
+	return checks
+}

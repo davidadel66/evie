@@ -1,0 +1,77 @@
+{
+  "all_pass": true,
+  "commands": [
+    {
+      "command": [
+        "./scripts/verify-change.sh"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "finished_at_utc": "2026-09-11T07:07:10.628872+00:00",
+      "log_sha256": "583b2414b3124a61121f7f087b46a4e170ab7b31cdb31112fc28a6812111f44c",
+      "started_at_utc": "2026-09-11T07:06:37.245944+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "./internal/agent",
+        "./internal/web",
+        "-run",
+        "^(TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest|TestConversationSearchFindsUncompiledOriginalStatement|TestReferenceRecallKeepsEarlierRecipientAcrossUnrelatedTopicRoots|TestConversationExpansionResolvesTentativePronounFromOriginalNeighbors|TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting|TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges|TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart|TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable)$",
+        "-count=1"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "failed_or_skipped": [],
+      "finished_at_utc": "2026-09-11T07:07:13.030723+00:00",
+      "log_sha256": "11c5fd4b484b99bafa285823bee400945cf332e0a4371e2005cd95e2ab80ae37",
+      "missing_passes": [],
+      "required_tests": [
+        "TestAutomaticMemoryRecallSuppliesPreferenceOnFirstRequest",
+        "TestConversationSearchFindsUncompiledOriginalStatement",
+        "TestReferenceRecallKeepsEarlierRecipientAcrossUnrelatedTopicRoots",
+        "TestConversationExpansionResolvesTentativePronounFromOriginalNeighbors",
+        "TestMemorySearchTurnSuppliesConflictingClaimsAndNewerOwnerStatementWithoutOverwriting",
+        "TestConversationSearchRetirementSubtractsSharedAndOverlappingUTF8Ranges",
+        "TestMemoryReceiptHTTPKeepsOriginalVersionsThroughCorrectionRetirementRestrictionAndRestart",
+        "TestAutomaticMemoryRecallFindsUncompiledFactAndKeepsNoMatchDistinctFromUnavailable"
+      ],
+      "started_at_utc": "2026-09-11T07:07:10.629779+00:00",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+    },
+    {
+      "command": [
+        "./node_modules/.bin/vitest",
+        "run",
+        "src/api/memoryEvidence.test.ts",
+        "src/artifacts/GraphEvidencePath.test.tsx",
+        "src/artifacts/MemoryEvidence.test.tsx",
+        "src/artifacts/MemoryEvidenceDense.test.tsx",
+        "src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+        "src/chat/MemoryActivity.test.tsx",
+        "src/chat/MemoryInvestigationActivity.test.tsx",
+        "--reporter=json",
+        "--outputFile=/tmp/evie-memory-stage5/168-final-handoff-checks/ui-results.json"
+      ],
+      "execution_exception": null,
+      "exit_code": 0,
+      "failed_tests": 0,
+      "finished_at_utc": "2026-09-11T07:07:13.659358+00:00",
+      "log_sha256": "f636f4ee9d93978d31ff5a491b9b0737d5cdcd170d9b563da07763912839c673",
+      "missing_passes": [],
+      "passed_tests": 23,
+      "pending_tests": 0,
+      "required_assertions": 14,
+      "started_at_utc": "2026-09-11T07:07:13.031441+00:00",
+      "structured_results_sha256": "cf647e9e5c1cc9d5fb3b35f4c930d281a36bb32968fc2b4c0bf5fae1f44b2bd7",
+      "working_directory": "/Users/davidboktor/code/evie-memory-stage-5/internal/web/ui"
+    }
+  ],
+  "compiled_inputs_unchanged": true,
+  "compiled_source_manifest_sha256": "1c65712b69a6c54e531eb753be7bb0d054c4ef28b89bbc21651ad990f1614447",
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "note": "Final repository verification and eight deterministic public-turn/HTTP demonstrations. UI component checks are identified as automated; no manual browser demonstration is claimed. Earlier frozen matrix checks remain independently retained."
+}

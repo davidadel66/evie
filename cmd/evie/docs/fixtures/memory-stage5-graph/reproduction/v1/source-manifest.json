@@ -1,0 +1,1844 @@
+{
+  "schema_version": 1,
+  "issue": 164,
+  "version": "v1",
+  "recorded_at_utc": "2026-09-11T06:20:42.568881+00:00",
+  "immutable_freeze_path": "cmd/evie/docs/fixtures/memory-stage5-graph/v1/freeze.json",
+  "immutable_freeze_sha256": "eb40af78942ee2dfbd32aed24243d50f921cc66b948b0b26ccc3cc2453cc5e29",
+  "original_baseline_revision": "a594ba22ad2d8e05fbfc02f8aef7e4b09312e868",
+  "frozen_file_count": 300,
+  "recovered_frozen_file_count": 296,
+  "frozen_source_complete": false,
+  "original_source_rebuild_possible_from_preserved_inputs": false,
+  "archive": "recovered-source-subset.tar.gz",
+  "archive_sha256": "247b48adb515144355aa351b77da3fc358c19864c573d5be4459a8be3ae35e9c",
+  "archive_reextraction_all_hashes_verified": true,
+  "files": {
+    "internal/agent/agent.go": {
+      "sha256": "b0b529f07105aa2fff132b142d2dd98ace2bab9798d41760a10f097481d9d814",
+      "source": "/private/tmp/evie-stage5-dense-integration-v1-source/internal/agent/agent.go",
+      "bytes": 16626,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/agent_test.go": {
+      "sha256": "5a182dabec4ec0aeca5a01e5b37464b2562848ce2c612de8b4ff4dc1d0fc3690",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/agent_test.go",
+      "bytes": 58498,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/automatic_compaction.go": {
+      "sha256": "6f31bef57574f938e6989169d1ef8a4e71f7a18bb7291c98aee3967e2cb8ece5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/automatic_compaction.go",
+      "bytes": 8263,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/automatic_compaction_test.go": {
+      "sha256": "b35c0996841e49b5bf530ef97c64fd5898247693f0d44ec70476d8a17f339887",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/automatic_compaction_test.go",
+      "bytes": 24124,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/compaction.go": {
+      "sha256": "2a1cd8bdeea1ceebce010320dc139a11c83f6c214f3942a3455f6673afd25799",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/compaction.go",
+      "bytes": 21847,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/compaction_test.go": {
+      "sha256": "595cd9b685789ef4e40a3971fdad12f723b8280302c52da5abcf3e644a9f2b30",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/compaction_test.go",
+      "bytes": 41355,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/context.go": {
+      "sha256": "ca90d7025a2523173f80702c8658c49f948220a66795e1636b17ab13a03ca130",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/context.go",
+      "bytes": 26929,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/context_test.go": {
+      "sha256": "a463386a35b1af4323f504dc97b9b0b9b1cb7f759e6b24ced0d86f3590e5e4be",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/context_test.go",
+      "bytes": 24222,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/foreground_measurement.go": {
+      "sha256": "3d27af57606d2155f465d582f1a2eb7981ea2380383d7986b2963551ec230b83",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/foreground_measurement.go",
+      "bytes": 2856,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/foreground_measurement_test.go": {
+      "sha256": "cebd8795a8e7e4b9c9ba736b06b5b12288a89a3feb988ea5c82dab394ed6cfc6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/foreground_measurement_test.go",
+      "bytes": 4233,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/history.go": {
+      "sha256": "056f0969cf58db0720c8c367192df2b475036d71baba491158bcf65dd182b9a6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/history.go",
+      "bytes": 8845,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/history_test.go": {
+      "sha256": "3dee5a20cc6fe0331dbd808c155136681273d7b016c512f0d2c3c728e0f3b1ab",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/history_test.go",
+      "bytes": 6886,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/memory_plugin_test.go": {
+      "sha256": "8ce0f817343b0db140e1665b75fbe6916bfd7bcf549f8094ef0a50d25dcb5582",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/memory_plugin_test.go",
+      "bytes": 6778,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/ownership.go": {
+      "sha256": "9bd8b8334a873995e069299f29651fabf5049a2f85e1c3326011597aead93f34",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/ownership.go",
+      "bytes": 8899,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/prompt.go": {
+      "sha256": "18849b893839363b02ba8f6f9274acb1292778e333303efa5c3ef4811e3472ee",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/prompt.go",
+      "bytes": 6856,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/responses_test.go": {
+      "sha256": "777cf48b80168cad222905ce9a083d2b641d15ed1cb17dfb9bca33d804dbb227",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/responses_test.go",
+      "bytes": 9224,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval.go": {
+      "sha256": "f191f8d563ba7cec4e559fd97b47150a3a4809db457778b9b46d2675f0db466b",
+      "source": "/private/tmp/evie-stage5-161-baseline/internal/agent/retrieval.go",
+      "bytes": 9422,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_acceptance_test.go": {
+      "sha256": "6344371ba49b7133e959d39ad9cf0ee7d9fd2813cf818610a782b8e1af856db2",
+      "source": "/private/tmp/evie-stage5-dense-integration-v1-source/internal/agent/retrieval_acceptance_test.go",
+      "bytes": 15405,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_conflict_acceptance_test.go": {
+      "sha256": "9a8185167315f4ab518e0e2aecdb24f695fda5d58cac6cc1e1c7c48e1c5c3ca7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_conflict_acceptance_test.go",
+      "bytes": 7391,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_conversation_acceptance_test.go": {
+      "sha256": "f9cd0bf1177c1ca498cfd712b5773897e3980c7d21601f161d8c0ebab5635dde",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_conversation_acceptance_test.go",
+      "bytes": 4833,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_conversation_scope_acceptance_test.go": {
+      "sha256": "678fb8fa0b63cfee7d9a1fad7e689aa0dabe32a37b5ad63b7a873f69cca4b15b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_conversation_scope_acceptance_test.go",
+      "bytes": 5606,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_expansion_acceptance_test.go": {
+      "sha256": "8221fabe788c833c11af64b42946345a0637f6653c0efb0c6ba20250fc8bb9f3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_expansion_acceptance_test.go",
+      "bytes": 3326,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_expansion_boundary_test.go": {
+      "sha256": "7bfb893febc3d6faaa25aa96ff8d5d614dc6fa6580ec23040b4e64bedc8f7ab1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_expansion_boundary_test.go",
+      "bytes": 18186,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_expansion_coverage_test.go": {
+      "sha256": "21ae02fc7a84010f61b0c22a98d747600612351f40fbada74c24c7608b77a120",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_expansion_coverage_test.go",
+      "bytes": 5717,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_expansion_limits_test.go": {
+      "sha256": "40f8f37376d80150cd6b648ebf4b7e5b5dcda12dd8a889f742307a6011312fb2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_expansion_limits_test.go",
+      "bytes": 3450,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_expansion_measurement_test.go": {
+      "sha256": "cf4f2b5614311cbad4b04c02a080aeed6c7817cc40b0df581eb86cce9d0e209f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_expansion_measurement_test.go",
+      "bytes": 3055,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_graph_experiment_test.go": {
+      "sha256": "d237705e7c5880f500bac97960d08c26bb3af9eb548a31080c9b13dc959bf91b",
+      "source": "/private/tmp/evie-stage5-dense-integration-v1-source/internal/agent/retrieval_graph_experiment_test.go",
+      "bytes": 5114,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_historical_acceptance_test.go": {
+      "sha256": "0d43ce51bca5c4c2e3a75b38dea5a76346341eb86315bf15a335d7aba8429574",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_historical_acceptance_test.go",
+      "bytes": 4946,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_historical_expansion_test.go": {
+      "sha256": "6fa089383193a9c7cafd2150944cd9093ba7f3e51353601d003a9b0b508d4fc1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_historical_expansion_test.go",
+      "bytes": 7127,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_measurement_test.go": {
+      "sha256": "483522be959dbe22fe657a5e3a280d3600ed839004aa3c3ea6fe80c7fd840b47",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_measurement_test.go",
+      "bytes": 10575,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_production_reader_evaluation_test.go": {
+      "sha256": "99e8526b03a5fe24545c0bf96445a8551863719ee2cc648f124f7051dfd22035",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_production_reader_evaluation_test.go",
+      "bytes": 11111,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_reader_evaluation_test.go": {
+      "sha256": "b4d582bb0ad75def47ad269a58550055a1118c596358155e398fe9174714eb6e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_reader_evaluation_test.go",
+      "bytes": 20005,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_receipt_acceptance_test.go": {
+      "sha256": "86eea47a29e8dfc5259fb3c1c352dafb626dcc9c189bf093b070d995fbbc8d7c",
+      "source": "/private/tmp/evie-stage5-dense-integration-v1-source/internal/agent/retrieval_receipt_acceptance_test.go",
+      "bytes": 7106,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_retirement_acceptance_test.go": {
+      "sha256": "a4f8a783b7cf8963af690f808865dbcc50c350b9a1ce498913f33d89aba0fdcb",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_retirement_acceptance_test.go",
+      "bytes": 8692,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_scope_acceptance_test.go": {
+      "sha256": "82833d5f00a53472d1fd4953cf7bc06d6512d5875f9f0f8bf8dd7caf0b798684",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_scope_acceptance_test.go",
+      "bytes": 8211,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/retrieval_temporal_acceptance_test.go": {
+      "sha256": "0b50c3c460f0e5095c139e586b579fe72c46afe949b9c486528c2a7a6868d190",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/retrieval_temporal_acceptance_test.go",
+      "bytes": 3672,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/semantic_memory.go": {
+      "sha256": "8ae400953c283a11758500d6e0c211ee97adfc1e1a4b15dd63e775812c3f2c11",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/semantic_memory.go",
+      "bytes": 21568,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/semantic_memory_test.go": {
+      "sha256": "555d98ef459d8e35a50bb5042c18984be182316f3c21d32a2977d09707392e2b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/semantic_memory_test.go",
+      "bytes": 11194,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/standard_preset_test.go": {
+      "sha256": "36317da2bce890a8b060fd2fd2ed8e4d3d829575da24cd7f21d15d669641bf61",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/standard_preset_test.go",
+      "bytes": 34500,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/tool_results.go": {
+      "sha256": "f02593890bdb7ddd4c798fbbbcef0d9a28c5e1a0c802a99e8d15944303e95799",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/tool_results.go",
+      "bytes": 6080,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/tool_results_test.go": {
+      "sha256": "3d43bd93d0fcbd7d33964491ceef2e3d27887afcd55e1f67a74e2836ab1f4c35",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/tool_results_test.go",
+      "bytes": 4067,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/turn.go": {
+      "sha256": "f1d83add8f2dd4cfbd6031a08ef97e3fd86b654f2491dbd41dbc2255f1042d52",
+      "source": "/private/tmp/evie-stage5-161-baseline/internal/agent/turn.go",
+      "bytes": 23244,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/turn_owner_integration_test.go": {
+      "sha256": "742355a8d1d3ff28f180b7b2bdf07cc6cf8c7cc2f8b199f023fef977db575260",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/turn_owner_integration_test.go",
+      "bytes": 10596,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/turn_ownership_test.go": {
+      "sha256": "61a5cd7ef54e0361dc786748ac20eb23c767d9cb6ee7942545ce17b743cafd84",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/turn_ownership_test.go",
+      "bytes": 86143,
+      "frozen_hash_verified": true
+    },
+    "internal/agent/web_plugin_test.go": {
+      "sha256": "71ec7623c8b44aa499574ae85c791add703f2af01b95e89d121b86948ccd3bfc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/agent/web_plugin_test.go",
+      "bytes": 2714,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_destination.go": {
+      "sha256": "804ae43c1eddab98ac1f468085f8e5bdc59b47bc5ca4a9f61d1a87b0b988e818",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_destination.go",
+      "bytes": 4076,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_apply.go": {
+      "sha256": "0c68ea7d6be7b3198674a093c4c40c53048e5006f4ec1350f3fb723ce218bd5e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_apply.go",
+      "bytes": 23665,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_authority.go": {
+      "sha256": "f7afed415aa4399d3430f57fb48c4020c60ede6af41c5bace9a4bd546ec68fa9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_authority.go",
+      "bytes": 4931,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch.go": {
+      "sha256": "90d63346577c90691d3567fca0c813556065d46d67a3bb31acd945269ef23341",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch.go",
+      "bytes": 23078,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch_boundary_test.go": {
+      "sha256": "c5ae5e8270c6a82a4821a203065d618ba0e27e39a4fa011e7ea029c1e98ebc33",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch_boundary_test.go",
+      "bytes": 13752,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch_corruption_test.go": {
+      "sha256": "7931810d24b9c1f18d0446b394e8ac887721353889966ca13b7c609deb63b47d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch_corruption_test.go",
+      "bytes": 5095,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch_read_error_test.go": {
+      "sha256": "e55f986d67b075a7bd6cb948cd6c7a90e227b1a88195d81143ec042bb58cb01c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch_read_error_test.go",
+      "bytes": 10492,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch_record_bound_test.go": {
+      "sha256": "a60de4d46100fdeda0aee50c94e9110976f70621995c7e3134eb90e1199d7334",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch_record_bound_test.go",
+      "bytes": 8318,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_batch_test.go": {
+      "sha256": "1fd5a42994ab7af29047ffc475ce644569dd0d3b861c6316dfbeaffa33d1b8f5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_batch_test.go",
+      "bytes": 22001,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_clock_encoding_test.go": {
+      "sha256": "960c82fb971bfe860987eb5b0db71fdb909ea01a36742bfb7bee9ef1c58517aa",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_clock_encoding_test.go",
+      "bytes": 2370,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_compound.go": {
+      "sha256": "fd3587479ace2b3bfc2b1a4b4afda187bc30cccaac29db8db0f65d6f14e20b2a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_compound.go",
+      "bytes": 29084,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_correction_schema.go": {
+      "sha256": "fa8b1792e966252d13af8fce06fe77f4f6ac804b679ef06cfd6e71ea35961b05",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_correction_schema.go",
+      "bytes": 7366,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_correction_schema_test.go": {
+      "sha256": "6a2d2998a3e9d5067f35a803abda797dabca79de2419642674f0f8d9a7584fe3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_correction_schema_test.go",
+      "bytes": 22180,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_edit.go": {
+      "sha256": "55cacb7bdb3f330b57640402a1bc1b716d5601d506beee30ca349e1ec9370b18",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_edit.go",
+      "bytes": 9881,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_edit_lineage_test.go": {
+      "sha256": "32c6c1b027e4290fbe7257dcf0c1d63d2b277d8a82a333e4cb24c5a084476f43",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_edit_lineage_test.go",
+      "bytes": 11339,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_edit_race_test.go": {
+      "sha256": "170890121402a67a1a01c5b28e6b55528bf4173f96875c2e023dd5a8fcbbdf20",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_edit_race_test.go",
+      "bytes": 7651,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_encoding.go": {
+      "sha256": "158ab47670d0cf5422b5bd4a92ed2f96fa1a72f27624e6c86dd45fc9351405cd",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_encoding.go",
+      "bytes": 3827,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_encoding_test.go": {
+      "sha256": "ead30169944168287ed9f125ddcc7f9ff5d4f79147ce96aae30f383c70598b67",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_encoding_test.go",
+      "bytes": 1801,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_history.go": {
+      "sha256": "7ffa169ed8bd21e720d36f58456e327b5968f9d54018efffb80c0885f74be714",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_history.go",
+      "bytes": 6483,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_history_test.go": {
+      "sha256": "fb4774f5f80225cf2c1e11a9c3eafb1b469140477a5f0651c05da12a2b7842ed",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_history_test.go",
+      "bytes": 10290,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_identity.go": {
+      "sha256": "7fb049a61a3075eea19a3511a60542893e6caff210f3df3e4eb65f822f412ada",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_identity.go",
+      "bytes": 15696,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_identity_effect.go": {
+      "sha256": "bd1cfad7efccd192f6b386cb679206561e1f990c06b0371f7aa96d9f26733676",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_identity_effect.go",
+      "bytes": 12912,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_identity_encoding_test.go": {
+      "sha256": "3af4aed7c14d8cc89cc9a738f7ea19b3eb35be577f80b1d5e230ac8e01050232",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_identity_encoding_test.go",
+      "bytes": 1765,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_identity_test.go": {
+      "sha256": "72c0e73824d5d74579296771ef7c8276f6d716f209779b24760a13b7ba52f89d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_identity_test.go",
+      "bytes": 26261,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_inspection.go": {
+      "sha256": "fb121ba7fb7ca082f40b96d2e88cf81fa79147e353e548caec057edf6d806d30",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_inspection.go",
+      "bytes": 10346,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_prepare.go": {
+      "sha256": "610dc9783824be7ed44f68d335e2d3905a986de2bf655a703d6db3b8d401660e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_prepare.go",
+      "bytes": 13496,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_promotion_test.go": {
+      "sha256": "a9d852707bd914de9834a1edcfb4d933f2de579ef9f21783e283506814b9c248",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_promotion_test.go",
+      "bytes": 6279,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_provenance.go": {
+      "sha256": "6a2bcb39d0065720e4311955331c7f665b642b5eda2b517cd96ad6127f539a01",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_provenance.go",
+      "bytes": 7179,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_public_test.go": {
+      "sha256": "d8a69b3bf4623f66487e80d0e4252b83585587951d20952a378c6c21412d456d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_public_test.go",
+      "bytes": 22036,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_replay.go": {
+      "sha256": "9db3aaae8d80e35aca2f7b6880375c4e628c4b57cbffc852efddb920a853a0a3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_replay.go",
+      "bytes": 2279,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_resolution_test.go": {
+      "sha256": "03e797b0f75d164f28ef77f6a5889ad11681a9c5599735ba3dd3e907d9b06c7b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_resolution_test.go",
+      "bytes": 3796,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_schema.go": {
+      "sha256": "bcb13ab2ccdea0574ac849027e04eac34888f54361a9d72e4930826c89fb778c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_schema.go",
+      "bytes": 5741,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_scopes.go": {
+      "sha256": "61f4a1895b69817bb3299723e21a7f10b9719f32b1b615347c2186f527851813",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_scopes.go",
+      "bytes": 6064,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_sources.go": {
+      "sha256": "d85bb9e59a0577168ff07e36b96f5d747908848517eca0db2979a8b722302043",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_sources.go",
+      "bytes": 5209,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_temporal.go": {
+      "sha256": "10ba3322e4110ef83a639b06beb4af21d692309b7643d4bafb2a78736216cb7e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_temporal.go",
+      "bytes": 11361,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_temporal_effect.go": {
+      "sha256": "df1df1d681560022ae638232e927f822c12e75dd6ee554dec458120a40c6711a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_temporal_effect.go",
+      "bytes": 9229,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_temporal_encoding_test.go": {
+      "sha256": "3a88f51944bb5ccb6a100b6267bd842641e82c5334bc416165ddfe60d1df64c0",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_temporal_encoding_test.go",
+      "bytes": 1866,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/candidate_review_temporal_test.go": {
+      "sha256": "a82221375f5f7d59a3498fbcf198ce72ea3e04446a5aa52ddb8346fbcdbefc6c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/candidate_review_temporal_test.go",
+      "bytes": 22125,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compaction_acceptance_test.go": {
+      "sha256": "651b0ebf4c90ec62c15aa231d67c6e6052556bff66b191d7b7d4cd048aa0784e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compaction_acceptance_test.go",
+      "bytes": 27363,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_activation.go": {
+      "sha256": "4189769f57e2b3bad8107d21509f5c0ccf8e46f7609556ba2df79e6b6caac15c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_activation.go",
+      "bytes": 14255,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_activation_interval_test.go": {
+      "sha256": "2a9a5b9486da95e82bd3c48f54461bba01817bd63a94058ca720100b63695568",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_activation_interval_test.go",
+      "bytes": 6641,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_activation_schema.go": {
+      "sha256": "6bfeecd2bc04cd293af5de15f3837818fdd077443b335b594587b0ac3b7aa31d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_activation_schema.go",
+      "bytes": 4366,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_activation_status_test.go": {
+      "sha256": "15d72a206a9651b50ec23b214d8e6ad073e65c960b0a551e5d6500222241a685",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_activation_status_test.go",
+      "bytes": 3221,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_activation_test.go": {
+      "sha256": "d63d0a442f8c705a71661152c846a25ff46b2c046a9d296921c5cf66a39ad4a1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_activation_test.go",
+      "bytes": 21485,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_adoption_bound_test.go": {
+      "sha256": "909a7f4d098ad7197332613f56ae8a131d1cecce17847dab24aaec299e552e37",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_adoption_bound_test.go",
+      "bytes": 4060,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_ancestry.go": {
+      "sha256": "db73a3cebd8e8c5e6d053b8f998cb2dc32f6d74e97368f17b5a5673e6965a80e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_ancestry.go",
+      "bytes": 1580,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics.go": {
+      "sha256": "47b18780c3f1d7d3bd94112b8dd88ec51aa60ae51cdc8e4675b7ad23e230b988",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics.go",
+      "bytes": 10867,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_measurement.go": {
+      "sha256": "a618ab79cfad39071e291ce16e8f3c938305a4fd70545ab807845a031e1e9afa",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_measurement.go",
+      "bytes": 4092,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_navigation.go": {
+      "sha256": "e8cefd234cbc63b490ec2607dadd585d2d2bee8c1d2f8371685217da91d52c89",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_navigation.go",
+      "bytes": 3823,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_public_test.go": {
+      "sha256": "457a7e22018d9c8ad6a9489746f1294df7a80dd77544c8ac7ec506f393c1fb50",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_public_test.go",
+      "bytes": 2806,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_schema.go": {
+      "sha256": "78da85436890d0b6a5b6f6266b3ec09648ab83131f37d76e6341f929fd6111ec",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_schema.go",
+      "bytes": 11052,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_test.go": {
+      "sha256": "8c288379af117d2064fe8de5bd8667d41d776fc3b57174f12fd719943d0583f2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_test.go",
+      "bytes": 19121,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_diagnostics_views.go": {
+      "sha256": "3bf75c2e653d6f8a73a4c08ddf4174ff798ac7a089dbdcc4e5f2b5b7adbdf33b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_diagnostics_views.go",
+      "bytes": 16572,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_generation_race_test.go": {
+      "sha256": "08cfdde2b3a8e2becbccc1222337496080dc351f2a5f3a99e56635b9543f69ad",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_generation_race_test.go",
+      "bytes": 2200,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history.go": {
+      "sha256": "7192daa80250f98914e19040001b9896e109195f50c1ec22f37623945d3256ad",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history.go",
+      "bytes": 14371,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_bound_test.go": {
+      "sha256": "ef4c0c9991eb57940708517fd00f73750586aa9f03937823f594a89edad0c3b9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_bound_test.go",
+      "bytes": 7298,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_inspection.go": {
+      "sha256": "c9ddbe0db056463974441974379d53de3d3ac6427fae01d240896c664302b098",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_inspection.go",
+      "bytes": 5682,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_public_test.go": {
+      "sha256": "07f23f8c52c9f724c37e1cfa4d28f275a12f3c59bf2f902b6ee10c4bc4ed1a5d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_public_test.go",
+      "bytes": 3885,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_reconciliation.go": {
+      "sha256": "32d6464fb95d6a2fbcba40b7ca08102d5d6db3734d7d54fa87d2f413d1fa42b3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_reconciliation.go",
+      "bytes": 11886,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_resume.go": {
+      "sha256": "0267309eaa98a3cf74c3c753c5dc0bbac5133c2f65df716002c679ae42fa0796",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_resume.go",
+      "bytes": 2751,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_schema.go": {
+      "sha256": "b02140f0fda53f2f379c5d879d4094750426fd5d53570ba4c59840f8f3910b18",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_schema.go",
+      "bytes": 7929,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_test.go": {
+      "sha256": "9f78e3376404d3d9332b6574a8a0b463312bb95f8a6fd2444efb6ba9ddfa97ec",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_test.go",
+      "bytes": 24520,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_history_unavailable_test.go": {
+      "sha256": "8280f3118b128102c34882aa7670fd5cb1a3d6df037a04bdf47f2a8d5d9aa3ca",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_history_unavailable_test.go",
+      "bytes": 10025,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_identity.go": {
+      "sha256": "83de8c1f4546cc0605fef55d7690c38cb21292f3c2ba131c92bd0dc87f2ac4e1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_identity.go",
+      "bytes": 7964,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_inspection.go": {
+      "sha256": "c33134f2632cf25b924f3285863e60d692909fa3007fbc19a7e2e595d3fe6af9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_inspection.go",
+      "bytes": 5498,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_intervals.go": {
+      "sha256": "5c124cecb5a03c978f95e4b5221279e639ca26a674e94f518e55fbbe44e522da",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_intervals.go",
+      "bytes": 2563,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_intervals_test.go": {
+      "sha256": "ef4571bae46e058b69f3af8a786e8e9f8ae3316326b7a50f1b3aa391d7a194a8",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_intervals_test.go",
+      "bytes": 2222,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_public_test.go": {
+      "sha256": "49885ad39781acc926611d13de352aa07a258d7f2acea99bbe5f46cb995d0356",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_public_test.go",
+      "bytes": 30596,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_reconciliation.go": {
+      "sha256": "ef963c69eb7f02ac642e643a45e8083148bfeaa9992d649a0289151be6d603c6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_reconciliation.go",
+      "bytes": 12325,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_reconciliation_bound_test.go": {
+      "sha256": "6949fae3e8134f21f420c8b0d723c12a8f19b5281eaa1a6c83839f4193a09226",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_reconciliation_bound_test.go",
+      "bytes": 5424,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence.go": {
+      "sha256": "5f74365253c09b6f8f30b6ded4fd62b1d7fe06be8ac8c3a16d98c8be3beceb3c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence.go",
+      "bytes": 10807,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_budget_test.go": {
+      "sha256": "533120f0b6abd3b911034272b20910db7ea0ada8833fa00f3699b178304cd02d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_budget_test.go",
+      "bytes": 3864,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_encoding.go": {
+      "sha256": "438e3991b6b885d838fd061d85b299b355213a4296d2b4be500627261f32812d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_encoding.go",
+      "bytes": 4276,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_encoding_test.go": {
+      "sha256": "6715cf9b42102fd9f316956e66dda253e159be8c3987cec7cd7dcea8a1d83c50",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_encoding_test.go",
+      "bytes": 8910,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_inspection.go": {
+      "sha256": "3922ab29b23d5cd88cea376b7716056e70726be5574c303fa0f141bc9ca8c351",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_inspection.go",
+      "bytes": 3530,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_public_test.go": {
+      "sha256": "36487c9c622052cac3563d313d459fc1e7cb205ebcee7a374bb80eb615948928",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_public_test.go",
+      "bytes": 26987,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_schema.go": {
+      "sha256": "13f987b9f1cf75e6aefb6e40200bc7e3c22ed06dfa3c08a2b0b4832098b68e03",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_schema.go",
+      "bytes": 4661,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_recurrence_storage_test.go": {
+      "sha256": "2de644e79523241bd7b835c8861c1a3e86d806cae1dcf63b24d9e5e667b6e176",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_recurrence_storage_test.go",
+      "bytes": 6737,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_schema.go": {
+      "sha256": "42cccff6ae69ff3460f90460b656cc9d4f3f984a84425ef396b1e97324476ce5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_schema.go",
+      "bytes": 5572,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_source.go": {
+      "sha256": "b9f261334299358ebedf0378975b43cf35b9e83ff8f7d5b177e6ed15d393b66f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_source.go",
+      "bytes": 19003,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_status_projection.go": {
+      "sha256": "8f37753b5faa25a1ca7bf096a3ab7c9b9f254c3745aabfe1fc26c43f22f94857",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_status_projection.go",
+      "bytes": 11989,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_status_projection_test.go": {
+      "sha256": "a6aade7e167c822cb4f78b27dd88f543bad432bec32d9a513c6f3c636c0d4c66",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_status_projection_test.go",
+      "bytes": 17621,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_temporal.go": {
+      "sha256": "e1d40ba45dcc569cc2bf01938a42887b717410000d80d3883aba2f994a7ad65f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_temporal.go",
+      "bytes": 4563,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_temporal_test.go": {
+      "sha256": "2e98f9b46fb389f016c6c91dcf4ed25b579edbd95e666cb7641dc8cbaa845f30",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_temporal_test.go",
+      "bytes": 4790,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_tool_observation.go": {
+      "sha256": "ea5cae91fe3a7c0bc3c17fc5b47d9176b1d4073bcf2f6e96bd9ffded12d0a540",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_tool_observation.go",
+      "bytes": 13027,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_tool_observation_bound_test.go": {
+      "sha256": "c9601716425af60baf5195ba96e22923bf962c41268117d7a34db175760f89c5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_tool_observation_bound_test.go",
+      "bytes": 3921,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_tool_observation_error_test.go": {
+      "sha256": "6050c93f3f8caafe503e4b3f05b4e28c6ea98bc441cd730ec898b744808e5af9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_tool_observation_error_test.go",
+      "bytes": 8685,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_tool_observation_test.go": {
+      "sha256": "0ba05b9a45b46dec669014bc80d56ea59572b63363c17133d0aed2afb40591b2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_tool_observation_test.go",
+      "bytes": 28319,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_validation.go": {
+      "sha256": "30bac0bba8cb912242a298c9a343be98f5bc23e9177cf1ba9b062b19e708ec12",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_validation.go",
+      "bytes": 10629,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_work.go": {
+      "sha256": "fa7a554582ef6d3db0bfbdf069d48e5994699985fed7c918ee54631ca8095f0a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_work.go",
+      "bytes": 27647,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_work_test.go": {
+      "sha256": "85990301ffc5176973edafa6591da5d8441528799f6eb8ac9a2a0c2bbe7f8c44",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_work_test.go",
+      "bytes": 9634,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker.go": {
+      "sha256": "2356d0820b3f4601396a0f76f34c95b30629b8ef6b81f7a5de87b34f8d81e4e3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker.go",
+      "bytes": 31468,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker_crash_test.go": {
+      "sha256": "51c014d6f3da5b985d5abc99051805a575fd725d223fc9eef44ebd7ae6b60738",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker_crash_test.go",
+      "bytes": 14339,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker_http_test.go": {
+      "sha256": "5bbea2a1fef46c24253db2e38d738b962210bf740a84a1ecc088d5eab55f0de4",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker_http_test.go",
+      "bytes": 6782,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker_inspection.go": {
+      "sha256": "dabcc06a8df06b75996a79e720ac27c5b5a4de584b8168d996729399563ff3ef",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker_inspection.go",
+      "bytes": 4022,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker_public_test.go": {
+      "sha256": "c25965f38623792ad44494df45e75709ee0e2a7025528899133e5cdac99d30e6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker_public_test.go",
+      "bytes": 5576,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/compiler_worker_test.go": {
+      "sha256": "a5e7fe854c4bbf45316579b81c37e0b4806192ec3c7ae1998e7f07ffaeb5cb3f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/compiler_worker_test.go",
+      "bytes": 22605,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/composition_receipts.go": {
+      "sha256": "d9319ef543849d3338fe8d168a444131596164b119d1f80d83487120f4d1f1bf",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/composition_receipts.go",
+      "bytes": 8921,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/composition_receipts_test.go": {
+      "sha256": "419ecb063ec9ee6f3e1d4e548f1fe41539653cb71fda4beac23b9b46d9a167eb",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/composition_receipts_test.go",
+      "bytes": 20008,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/database_browser.go": {
+      "sha256": "f26c8231fed09bd411b7c16560e7d45efd077a9be647fd128072dc9cc10f16d9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/database_browser.go",
+      "bytes": 12054,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/database_browser_test.go": {
+      "sha256": "4f1ed922cf85f312a4246e639133a634a119e6e1085859fcbde0a3d614c8aeaa",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/database_browser_test.go",
+      "bytes": 567,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/db.go": {
+      "sha256": "075360c21cd63cabeb58cfccae6a42e58eeb14a0cb6af75d37e48d4abbf254a6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/db.go",
+      "bytes": 57517,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/db_test.go": {
+      "sha256": "cc5cafc00e90af345fd22cade2254400bf886b188b5e9f7ddfbb292e87b57b02",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/db_test.go",
+      "bytes": 24752,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/events.go": {
+      "sha256": "183aec44dcda3c889b9059ab8a4771506eb41f73e26dd7e897c31958230d29b3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/events.go",
+      "bytes": 27120,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/events_public_test.go": {
+      "sha256": "00c981ba1da4a06fb4c4673e0899465cbaf528a68d0883c773540f966b0ba40d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/events_public_test.go",
+      "bytes": 7906,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/events_test.go": {
+      "sha256": "ce78b94c52144a63f72dbb012df062f3aca30e84c92ee40885aa67b614523320",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/events_test.go",
+      "bytes": 24823,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/history.go": {
+      "sha256": "a57654bd16f475296b0b58b6d44aeb071804348e909f0b732a471a649812a2b0",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/history.go",
+      "bytes": 1012,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/history_test.go": {
+      "sha256": "529db1e4ab50e757b0651d47a4ba7fd44e6426e930ca85058bc484067a19eb62",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/history_test.go",
+      "bytes": 4140,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/immediate_tx.go": {
+      "sha256": "b2f21ffbf0751d8033ae26d99800291686dc455c7784b12af4696e73c438d30e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/immediate_tx.go",
+      "bytes": 3056,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/immediate_tx_test.go": {
+      "sha256": "c39f79ae5ce795f488cb5e10f2b501df6fe26b4839caeda1e4a58990b4a50dd7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/immediate_tx_test.go",
+      "bytes": 9054,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/memory_destination_public_test.go": {
+      "sha256": "eeaff203041ecb4983a9ff80a1ba9268401390c720722279872399079198f4a9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/memory_destination_public_test.go",
+      "bytes": 16619,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/plugin_configuration.go": {
+      "sha256": "45effc996569f9990d4891d16c96ddd542adc9231472c61df67c6e5bb7e69267",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/plugin_configuration.go",
+      "bytes": 2973,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/plugin_configuration_test.go": {
+      "sha256": "97163136e8e52e4880863e68ccfcd17199444627eb4d6551c2a757d62c4b15f2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/plugin_configuration_test.go",
+      "bytes": 4611,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/projects.go": {
+      "sha256": "166469618ef8c560bba7007d34ffa760ad8a7aae4d29184af420c2c7955a185d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/projects.go",
+      "bytes": 5026,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/projects_test.go": {
+      "sha256": "c69fbd18e7483bf599d0b108d854b2c9eb06091dc8989903c9b35fd03b647fcb",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/projects_test.go",
+      "bytes": 5838,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/responses_acceptance_test.go": {
+      "sha256": "14a9c6fa6018bd676326967f78896d8e9ec05853dc5cf94bd212e2f5b7953fa4",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/responses_acceptance_test.go",
+      "bytes": 6033,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval.go": {
+      "sha256": "bcfdc80e6a7949ff09ad09f5c626c27f307811db9950df2f82c938983f39c692",
+      "source": "/private/tmp/evie-stage5-164-verify/internal/eviedb/retrieval.go",
+      "bytes": 15015,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_conflict.go": {
+      "sha256": "29bad8565d987e6fcb8be8f72a5440ab339a083c724cd1e8a4b6d1c8b10e6032",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_conflict.go",
+      "bytes": 9897,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_conversation.go": {
+      "sha256": "2ff7c84d080d0e4954e8c2c8ce2e0323722eaa04a89641249f05428e15f99a9a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_conversation.go",
+      "bytes": 13401,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_conversation_index.go": {
+      "sha256": "5a5ba83f8a7f491e6c7e9c0f4bf1eb49f35e87e5317aea438bd1b3e80dcb112b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_conversation_index.go",
+      "bytes": 8263,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_expansion.go": {
+      "sha256": "67cea21d8779c27cf81e538e5d92f0b8a0bfb77e46fadf953d724109ccfaa89a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_expansion.go",
+      "bytes": 9131,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_index.go": {
+      "sha256": "b74577461108fda7d2e581a151b0806b804f699542794d442a1311c21d0deb62",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_index.go",
+      "bytes": 8954,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_inspection.go": {
+      "sha256": "9db418af799a28862d3ff6fd092e56a631286550f1c49657c438bce38a479ab7",
+      "source": "/private/tmp/evie-stage5-164-verify/internal/eviedb/retrieval_inspection.go",
+      "bytes": 4762,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/retrieval_temporal.go": {
+      "sha256": "bfd636255293c36200a55bea99890c9e8b7687fdab97482872fba36bdbf6c1ba",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/retrieval_temporal.go",
+      "bytes": 4833,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic.go": {
+      "sha256": "04ff0c0a88b9c20d22692a422af6aed2a693d7feb0d39875d311cefca43130ee",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic.go",
+      "bytes": 86126,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_conflicts.go": {
+      "sha256": "8bea446edad8b28247da407c8f3f0a6d6ae2a08e13ebf4b068f17710fe5ada04",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_conflicts.go",
+      "bytes": 5697,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_correction.go": {
+      "sha256": "0155b9ed61e129efcad5f9fa95319b260df2328dd6fe258d59c498c6668961e8",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_correction.go",
+      "bytes": 54702,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_correction_test.go": {
+      "sha256": "15ff5a5dd26415a96ce3c46b802e481cedfc95bfc9f4bdee379bf56e271654d2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_correction_test.go",
+      "bytes": 35813,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_destination.go": {
+      "sha256": "1e36b7b71e821d91ce03e569534b5b56b98c30ecb04b39d8948446b9d7e9fe90",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_destination.go",
+      "bytes": 1418,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_encoding.go": {
+      "sha256": "47458ce3da0416f1f9e8323b70b5e449d2f7b6ce019021605a0c7f3ffcf9dd65",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_encoding.go",
+      "bytes": 16067,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_encoding_fixture_test.go": {
+      "sha256": "f1bc68117ccc961500080618f986c83066a268090cd17b665d5741d52b974dae",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_encoding_fixture_test.go",
+      "bytes": 24580,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_entity.go": {
+      "sha256": "1f027a344fab26883868e8db9a4ca8decae6ee7ccaeff6c9928c563e9a12c5ca",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_entity.go",
+      "bytes": 47727,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_entity_public_test.go": {
+      "sha256": "e6fb3752175a43020f527875d8fc82310130665c5733eb2177e51e15db0c9bea",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_entity_public_test.go",
+      "bytes": 26326,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_evaluation_test.go": {
+      "sha256": "df40e441b612967fd984b183f550c23ea034b68bbeb86408c172c0701ca57470",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_evaluation_test.go",
+      "bytes": 76114,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_graph.go": {
+      "sha256": "8404532ab795c1eb1a83cdbdbd369002dd26a87573f106bc8280e62c561f46fa",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_graph.go",
+      "bytes": 42450,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_graph_test.go": {
+      "sha256": "3777bea9925f28c6b571fa63b4672162176729840b87948437df831c19756333",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_graph_test.go",
+      "bytes": 38146,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_lifecycle.go": {
+      "sha256": "949ec49fef4aa241f6e30dde917fda88dc57914878fc9ba0db77dba6b606cdb4",
+      "source": "/private/tmp/evie-stage5-dense-integration-v1-source/internal/eviedb/semantic_lifecycle.go",
+      "bytes": 54120,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_lifecycle_test.go": {
+      "sha256": "1b94d946dc3839c69535d8eb62a38212f8b2aac447c38d1d99afcfe15bc36b81",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_lifecycle_test.go",
+      "bytes": 51703,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_predicate_public_test.go": {
+      "sha256": "e00f6f847ac7c9c063e45d970734d19e8685ef496d3355650fa8d047d6e9ca3a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_predicate_public_test.go",
+      "bytes": 24573,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_process_race_test.go": {
+      "sha256": "c4bd6323eafdf3ba610218fbf6f439c40b7d2ffc1ea481bf9ddf37c781e34fbd",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_process_race_test.go",
+      "bytes": 19736,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_promotion.go": {
+      "sha256": "2fb2eca9be8ce07561a830d268100f7650cc59d564395779402ea65d28519dd6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_promotion.go",
+      "bytes": 37840,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_public_test.go": {
+      "sha256": "04f97f8cc08764624029cbee87ac3e9c557924c97589dd45a061b1a63e9a6ea6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_public_test.go",
+      "bytes": 14752,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_replay.go": {
+      "sha256": "d71f98ed3f3cdb5cca68f3b9233c4379c658148ef0b5aed58d0fa30a570f47d5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_replay.go",
+      "bytes": 61700,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_replay_test.go": {
+      "sha256": "96fc2ca4abb0e706bd8a0974c6dbbdd8f2e1d1edf6cbd8c53ae513cdb8bc4d18",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_replay_test.go",
+      "bytes": 32102,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_scope.go": {
+      "sha256": "f3174dc4bf5c3fff95b3306b9b917ca4580d8bf95a133b180ee4136eff09dc99",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_scope.go",
+      "bytes": 3064,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_scope_containment_acceptance_test.go": {
+      "sha256": "911705b1c684a30329ac2737ef90462c0024c20ba3567d5119dbc94d96d7cfa1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_scope_containment_acceptance_test.go",
+      "bytes": 21959,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_scope_test.go": {
+      "sha256": "f4edd330108c89c2dc8332fd515d1735b6db8ba066e7cbb891c0b741e51adda7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_scope_test.go",
+      "bytes": 43230,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/semantic_test.go": {
+      "sha256": "3482a1c122268f676aea5536cddb0a188528d37bb60bc558015c33f0267a95da",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/semantic_test.go",
+      "bytes": 31535,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/session_titles.go": {
+      "sha256": "3ccb84a4331c67e883b50469f8bb5560592271be62a7b2ca44cceb5a4a7874f2",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/session_titles.go",
+      "bytes": 3628,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/session_titles_test.go": {
+      "sha256": "13c9465a462ae8f889d95751b26a1fe033fa75cb7e00c068cc25faa29bb0dfaf",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/session_titles_test.go",
+      "bytes": 12780,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sessions.go": {
+      "sha256": "11053360bae8da465bc944b0b96824b658dce09eecd1890a69d861ccf4e9882c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sessions.go",
+      "bytes": 21077,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sessions_delegated.go": {
+      "sha256": "331a6ecd6f94e7a3850c21891113c454fb0258979c5ffb06c0a17fc3cfdd9935",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sessions_delegated.go",
+      "bytes": 3016,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sessions_listing_test.go": {
+      "sha256": "efb0625ee3e689eb7e7d45cc14fb61599c4f3875951c950a9d98eb62d40a8925",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sessions_listing_test.go",
+      "bytes": 3416,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sessions_test.go": {
+      "sha256": "108df08fbba409113502e17a028105d345de2665d733937ba5ddc1506eeb86e3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sessions_test.go",
+      "bytes": 6808,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sqlite_startup.go": {
+      "sha256": "174506c0aa3aa6e121d50f5897895ed813248383bbba7f90b75738d8d0806f60",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sqlite_startup.go",
+      "bytes": 1591,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/sqlite_startup_test.go": {
+      "sha256": "620a0da46e352356be2abb50e6b64851ad6c10de568e6d8f09a78faf96c884cc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/sqlite_startup_test.go",
+      "bytes": 8033,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/stage4_process_conformance_test.go": {
+      "sha256": "bf80c6528ebb21ad16d30d8022098265c26997cd6c0df23f0c424878ab2bea51",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/stage4_process_conformance_test.go",
+      "bytes": 22687,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/store.go": {
+      "sha256": "652f67cf357df5807fd5a1339753ce5441564880b15de838502a4bf6f1cae16d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/store.go",
+      "bytes": 1082,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/task_idempotency.go": {
+      "sha256": "214e953f665063afa87155699b1db9c96bd5c93dcef805a9a6db03d84b9ed61e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/task_idempotency.go",
+      "bytes": 8578,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks.go": {
+      "sha256": "8a79469602c565fd42a8a75a42f6e20faa5c495ff887d381501aa6cac99ccc83",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks.go",
+      "bytes": 45170,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_claims.go": {
+      "sha256": "06417a8ba2a9427b349d931aaf2e675921276938a4d3b5b2ed2358026975efb4",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_claims.go",
+      "bytes": 29745,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_claims_test.go": {
+      "sha256": "abd1c106537eb0a1a1707d979a3629803046c6641e03413f917c027a8fd335bc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_claims_test.go",
+      "bytes": 31488,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_grants.go": {
+      "sha256": "b704b5a477cad21b19e76e7d847c243b9fc8d60315b8bff7c9b13f63f9f8dbd7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_grants.go",
+      "bytes": 9435,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_grants_test.go": {
+      "sha256": "b266720976aade37d0c533c04ff4c1f0cac03bf8ba3707a2be25fff41d3f7c3b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_grants_test.go",
+      "bytes": 24626,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_idempotency_test.go": {
+      "sha256": "3539260b22b433cb3c1360a7314ec4de12fd0714dfcf1dc0d676d1aef0572702",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_idempotency_test.go",
+      "bytes": 17851,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_import.go": {
+      "sha256": "85b9dd8bf0d02e8d9e7e575a7ab2c5af940746067ef8f23963e53f9b9ad8643c",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_import.go",
+      "bytes": 11399,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_import_test.go": {
+      "sha256": "dbd169917137657ca4645378c06ebddb19580b35364ca9981c3e204e80313bd8",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_import_test.go",
+      "bytes": 17709,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_lifecycle_test.go": {
+      "sha256": "5d8eff3a4b030b3f6e3ad2b6dce54b219e6c8e051071046ec02650a330386bf0",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_lifecycle_test.go",
+      "bytes": 13806,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_scope.go": {
+      "sha256": "041c92a080365c8e4505506776dd122a7cb28f585a18009984a6b017dff774b3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_scope.go",
+      "bytes": 12013,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_scope_test.go": {
+      "sha256": "7e22ca14ae475f0e45e426bc2c963382b8e86061d583b2841eba78a13f4887e9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_scope_test.go",
+      "bytes": 14197,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_test.go": {
+      "sha256": "a8e814c5ad159482b68b9e6011751e59ad7f07dd2c0504c67921eecd0f6b4eda",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_test.go",
+      "bytes": 5779,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_tree.go": {
+      "sha256": "c6917c4d0e6b9c3f5a04fffe40e06cbad988290ffe53662b47b7d0314ebf3a50",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_tree.go",
+      "bytes": 18306,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/tasks_tree_test.go": {
+      "sha256": "139d4d2314e67f7f61e9684416971f95427a85297941dba007dcb555da2526da",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/tasks_tree_test.go",
+      "bytes": 28851,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/turn_leases.go": {
+      "sha256": "8afefe0fd34e222b9140c0998b3c99134e81ee2ef13cce684f61b8e411fad20f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/turn_leases.go",
+      "bytes": 13145,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/turn_leases_test.go": {
+      "sha256": "38eaa270b6c3ae59cbbc69811f3ca06b99c9749cee22ba790fc73cb075b4f1bd",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/turn_leases_test.go",
+      "bytes": 23068,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/turn_owner.go": {
+      "sha256": "99faa180c5f973dc3f418258327374331c807c4c46524e451878859d4837a060",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/turn_owner.go",
+      "bytes": 3048,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/usage.go": {
+      "sha256": "a77c651a59796591ee9b159b1059833a657d9f91903a24fa4c9fe9aa653fe51d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/usage.go",
+      "bytes": 2827,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/usage_test.go": {
+      "sha256": "5627e54397f304ee863aa9fe03927e98c482c3c1e0b003242f69344eadc0bdfd",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/usage_test.go",
+      "bytes": 2714,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/workspaces.go": {
+      "sha256": "88c1103229c0044bb835b8fe7a2f372946ed3fe1061ef666ba962b13528a5c65",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/workspaces.go",
+      "bytes": 4406,
+      "frozen_hash_verified": true
+    },
+    "internal/eviedb/workspaces_test.go": {
+      "sha256": "c4ae88bfd31cb3f5f3c9ee89728e610e60b3e53ac4c040faae98febf2063e09d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/eviedb/workspaces_test.go",
+      "bytes": 8908,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/candidate_batch.go": {
+      "sha256": "51f59eaedd58cd2d6e69f09e44a4a1b16585c8e965791d2dbdafd793f63f1e0b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/candidate_batch.go",
+      "bytes": 4927,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/candidate_identity.go": {
+      "sha256": "b0e8fbebf6b167b63f675efd639f7668087a01cb2b6e41e98b74137739ff4301",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/candidate_identity.go",
+      "bytes": 3288,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/candidate_review.go": {
+      "sha256": "2a3eeb0fd33bec827ed232001fee5b41c9168c770e7aef56e584a9716678b049",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/candidate_review.go",
+      "bytes": 5483,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/candidate_review_scopes.go": {
+      "sha256": "70853df581ca4f30ac25fb423180e8f1f4f2f70c6cc37e5421fd3a775de308fc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/candidate_review_scopes.go",
+      "bytes": 607,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/candidate_temporal.go": {
+      "sha256": "707b0121aa0aea2428853ecbc57119f737aefacd2bad00aca4d43ec3208529eb",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/candidate_temporal.go",
+      "bytes": 3022,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler.go": {
+      "sha256": "30a1e0ff8830f6b7bcc3fefffde8ccad60e8b9d7e8c86997973a8e1a2f0f028e",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler.go",
+      "bytes": 6603,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_activation.go": {
+      "sha256": "096e737528215a3abfd5f210022252351f41d803b11bdb19f0076b5f79d104fb",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_activation.go",
+      "bytes": 2466,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_contract.go": {
+      "sha256": "110b3150e92ed3709b34881ce0ed3e3ea7610ceb0e8aedd027b1a1b9058ad97d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_contract.go",
+      "bytes": 7409,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_diagnostics.go": {
+      "sha256": "0b69224a8190e9bd25ad3b8c6ddf497bfcc2c5c11b1a78263eec55807d21fbac",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_diagnostics.go",
+      "bytes": 5986,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_history.go": {
+      "sha256": "f0edb9402fb50d3e2bed682d080a7003aa5ec119d39609aec710a228d4c575ff",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_history.go",
+      "bytes": 2674,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_observation.go": {
+      "sha256": "bd5ca5ec09ef3771e40f1acc9aea01086d2524c831d8b532bee57411d17d84c1",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_observation.go",
+      "bytes": 988,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_recurrence.go": {
+      "sha256": "7c99d842e66481347dbe425d6069aca8f140782951b4240da406f64fa228d453",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_recurrence.go",
+      "bytes": 1285,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/compiler_status.go": {
+      "sha256": "fec3e352456ab9d567a535304be4ad830a2d385268dad74955edf2535fe87e08",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/compiler_status.go",
+      "bytes": 1282,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/destination.go": {
+      "sha256": "2e5f70dae5b0586cd8e401773b22621b6b5b90c1faae1d63dfa699352069981a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/destination.go",
+      "bytes": 1412,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/destination_test.go": {
+      "sha256": "ab49b3011d4721f79c5ee2c8782a999957f5aa56f72e00546269a865c0306c56",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/destination_test.go",
+      "bytes": 935,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/event.go": {
+      "sha256": "08cd596d7d80de37ed0e971a66835268614e871c99e050cefe21ec7cdbe90bc4",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/event.go",
+      "bytes": 20336,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/event_test.go": {
+      "sha256": "386a64dccfb4c40e01b6ac99aa230ce0e2197c27f31a627e26bbb9834a7e305a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/event_test.go",
+      "bytes": 10073,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/lease.go": {
+      "sha256": "70d42dabddcc8f10e6324a01822b7afe742a9cda1270067625fb91f1849c8a2b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/lease.go",
+      "bytes": 604,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/retrieval.go": {
+      "sha256": "117dde3be30ba598c4f3620592d4e9331bfabf32efc6370961a1a5db5eff1c00",
+      "source": "/private/tmp/evie-stage5-164-verify/internal/memory/retrieval.go",
+      "bytes": 7223,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/retrieval_outcome.go": {
+      "sha256": "d1b2e33fbdeeef0f0a001b124ec2de71fe0d8e3d185c8547130497cb4c3e3a34",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/retrieval_outcome.go",
+      "bytes": 935,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/retrieval_receipt.go": {
+      "sha256": "b0fc51763f874c9fddf69c35d06fbc1281c9abfc42f75de51c3693c5f4b93295",
+      "source": "/private/tmp/evie-stage5-161-baseline/internal/memory/retrieval_receipt.go",
+      "bytes": 1030,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/retrieval_render.go": {
+      "sha256": "0a131a9924740a53dc3f403512266e3194ca2194ac3f1d954e0b5a92392d8bf6",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/retrieval_render.go",
+      "bytes": 880,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/scope.go": {
+      "sha256": "b09ab23dd8fa70ed15ef28c4eaf5f942dcb34fff70573ce1e7cdca2aecc0f76b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/scope.go",
+      "bytes": 3264,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/scope_instructions.go": {
+      "sha256": "fabed4b11ecfce1734374c8a815f9826450d7aa38840761e3ac042b78a7fa5cc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/scope_instructions.go",
+      "bytes": 2619,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/scope_test.go": {
+      "sha256": "d231e4841b64bad5058994b48f45b66958ad29442b6f577c8886c84d9a79e106",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/scope_test.go",
+      "bytes": 1328,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/semantic.go": {
+      "sha256": "87b634c6d6b3a33f0e5c48b6a7224e681dea757daa0a24465bf57bba76ebda9b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/semantic.go",
+      "bytes": 31636,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/title.go": {
+      "sha256": "31ac1189a3132d67c41abce18cf7be6249d5c23bfe6a79c7cd653588b84594b5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/title.go",
+      "bytes": 2363,
+      "frozen_hash_verified": true
+    },
+    "internal/memory/title_test.go": {
+      "sha256": "0c2f7d5d7c4918f9d5c1fb2239c50c64eda610ee23eabe9756f9a36418b29376",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/memory/title_test.go",
+      "bytes": 2865,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/finance.go": {
+      "sha256": "489cc445a4b2579d5dee6773d7c9860e7b436b306a1b4c23f3bfae8c135bfd45",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/finance.go",
+      "bytes": 1569,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/finance_test.go": {
+      "sha256": "ac11533589567a222e022bdb9d45b35f43a1aefed8d71df2b4d0950eb8617088",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/finance_test.go",
+      "bytes": 10458,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/lifecycle_test.go": {
+      "sha256": "8cc121b11bb4b568db4ff185fcd138ae9b24656f7ed9917be4e53634fe77d5a5",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/lifecycle_test.go",
+      "bytes": 47923,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/management_test.go": {
+      "sha256": "9ed00a709e0459afbc36e00f0dca977084eb5ff73e201a685100f269b4001d3b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/management_test.go",
+      "bytes": 46032,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/manager.go": {
+      "sha256": "5a2b3cb87610b1529d12d9ac3ce81a14d3861a38d156e601c4d643005ff25759",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/manager.go",
+      "bytes": 53551,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/manager_test.go": {
+      "sha256": "9ad57881207e7cf1829995bcc7bc228004d5ce397a76c365eed98b49021ba56a",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/manager_test.go",
+      "bytes": 9644,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/memory.go": {
+      "sha256": "2616eb121fd8bc60fd1e53a3025864651373c517eb0e8d3c1b64c8d6f102c0f0",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/memory.go",
+      "bytes": 43025,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/memory_retrieval.go": {
+      "sha256": "16ca904dab6b12630c93e5e7a8d94e41b6dcea1dc529bb52d0e17cc4ce23b7d9",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/memory_retrieval.go",
+      "bytes": 4524,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/memory_test.go": {
+      "sha256": "0d97b1fdae09c74d775f94d1882fe5b034189a817c4fd4eba557f9f4f29bce9b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/memory_test.go",
+      "bytes": 39065,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/preset.go": {
+      "sha256": "dbf1c0bd1fa5eed5b0ba44132dc5eece91089c2baba54ff30b825aa893943ca4",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/preset.go",
+      "bytes": 36211,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/preset_test.go": {
+      "sha256": "f16bf4d97a2f8691784060ba985d96166441ff277f7b5eae8debc934322d1cc3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/preset_test.go",
+      "bytes": 38626,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/todo.go": {
+      "sha256": "cc3b3ec3ce390e25fad37ceae6b74b25e7500f56dff75f6034db32deb1fdd25f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/todo.go",
+      "bytes": 24522,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/todo_arguments.go": {
+      "sha256": "8cf3f21555ca824c0d38a3e3c7ac72124466cb1623ee183af7b6a93a68d44125",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/todo_arguments.go",
+      "bytes": 6509,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/todo_durable_test.go": {
+      "sha256": "86109ce4360ac23d7ea6911d67ea38d8d7f6f37324737bdf5bd2f86824bd7f31",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/todo_durable_test.go",
+      "bytes": 24404,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/todo_test.go": {
+      "sha256": "353244edaf850633d226f1410d0d2b7453c8fb9ab1b1f9ce444c0741536a11a7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/todo_test.go",
+      "bytes": 18786,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/web.go": {
+      "sha256": "0c8f8d177c3f4f2d1efd3b6180ef0bdabb0c90efde5fb9896796b05cd383e0c0",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/web.go",
+      "bytes": 1174,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/web_test.go": {
+      "sha256": "62b3656efa79f17e550f19d308a62376acc203d07d6ac44fe04a202635c00548",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/web_test.go",
+      "bytes": 1256,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/youtube.go": {
+      "sha256": "ae32bbe6f0949a89f09f6608ed69fbc113b9cdd2be0228f920c93f42976f43ed",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/youtube.go",
+      "bytes": 1407,
+      "frozen_hash_verified": true
+    },
+    "internal/plugins/youtube_test.go": {
+      "sha256": "e52c807a23aa6a6aab730604263437fa24bfc586945571d79b573a405d7c3130",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/plugins/youtube_test.go",
+      "bytes": 5707,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/bash.go": {
+      "sha256": "2049c7af31792b3adae539dd5c8cb72f9cb65a80a849bbfc1fa26249bb4167b7",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/bash.go",
+      "bytes": 10398,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/bash_test.go": {
+      "sha256": "6b5de2be53f9a6b67e3502dc93dff976489c02c0611dec25830c6ccf4e38597f",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/bash_test.go",
+      "bytes": 8077,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/compiler_fence_test.go": {
+      "sha256": "2f342b2cce2a54c51e98bc4f85eeba9c889ba18550f649def8229b7c35e1847d",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/compiler_fence_test.go",
+      "bytes": 1127,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/cron.go": {
+      "sha256": "c3c0f3298e937680caebde315772d935234b3f03ab916106c294151246e5e5ea",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/cron.go",
+      "bytes": 25899,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/cron_test.go": {
+      "sha256": "bfe925337ace54a74ec45c5d686443e2e3c10bee940bb31f92db6d1922331444",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/cron_test.go",
+      "bytes": 46901,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/db.go": {
+      "sha256": "4ae0054fbe042d2aeb7a6514c36bde6ea3f95c863a431971331c715ef90a9a87",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/db.go",
+      "bytes": 17959,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/file.go": {
+      "sha256": "3d551b4b20f829a4bad2d795f90e5f2a35ea15669969a508a7869275da7d1e46",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/file.go",
+      "bytes": 17219,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/file_test.go": {
+      "sha256": "b570b8e8b1c46ad0655dfd9f54c0a849b13f1d071c0a23800aa53ca5c8b87f31",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/file_test.go",
+      "bytes": 16461,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/finance.go": {
+      "sha256": "98d8b7c5495bede226539826f3c5e3a254d89c5107328bb7942d42fce3166f9b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/finance.go",
+      "bytes": 4477,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/finance_test.go": {
+      "sha256": "e4c373d7e75e3555c9c8f16ea9e098696d5f948397d7567ff4d27674692cc146",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/finance_test.go",
+      "bytes": 3885,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/memory_fence_test.go": {
+      "sha256": "ecd88d31800d8d97207b18018278381de1e89d688327cd345042b8474730a7fc",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/memory_fence_test.go",
+      "bytes": 4300,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/registry.go": {
+      "sha256": "97553306bd3c886376f83d01828bfda8b670e06effaab3423a8a455b30496749",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/registry.go",
+      "bytes": 16538,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/registry_test.go": {
+      "sha256": "48427677cae201caf6bd1f74d42599b3629235810ebd23c65237cc0bf92089be",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/registry_test.go",
+      "bytes": 20596,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/shellsnapshot.go": {
+      "sha256": "fe27090624d3587b29e7beaa007a12d935b968f06ac1fa5bddc93da4743f4c27",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/shellsnapshot.go",
+      "bytes": 8161,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/shellsnapshot_test.go": {
+      "sha256": "e82d2c427e4adb6035040bb019a15ee85cd5d6116796233c26c4d91af389e0db",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/shellsnapshot_test.go",
+      "bytes": 8844,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/time.go": {
+      "sha256": "e7a6acf4f951aec1fbfffbec5cf96c47196ef561ab16045268273378469e6f26",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/time.go",
+      "bytes": 789,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/todo.go": {
+      "sha256": "cd94faa7867c48c84143982ef76c1a7fa8e906fa094dd3e3aaced8b2582b3ca3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/todo.go",
+      "bytes": 15330,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/todo_test.go": {
+      "sha256": "d30a3ed0d8c74243443a0825548091fc4d980395be5ef99e2cff62f8006b145b",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/todo_test.go",
+      "bytes": 2847,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/webfetch.go": {
+      "sha256": "2b699d486aeff7e800048885f0ed72953d148c95a272c7a68ce4e7107c3f1a26",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/webfetch.go",
+      "bytes": 18921,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/webfetch_test.go": {
+      "sha256": "8ee53e080bd404a5a0186499f64947a78a67e3aa0f6cd43ca0e4690d58fa7780",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/webfetch_test.go",
+      "bytes": 36378,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/websearch.go": {
+      "sha256": "4b4370f278321626b221d47e6371e0905acadb05263e0a9b74fa78339ba46ace",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/websearch.go",
+      "bytes": 8016,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/websearch_test.go": {
+      "sha256": "7a104d846d9ec2d5062c70222942421f764ade189302d3df427629182bd21910",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/websearch_test.go",
+      "bytes": 19362,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/youtube.go": {
+      "sha256": "11583778c1175321b18fe0a417ae7d77e2ceb360bbc92cb3cc08afc957b85402",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/youtube.go",
+      "bytes": 8524,
+      "frozen_hash_verified": true
+    },
+    "internal/tools/youtube_test.go": {
+      "sha256": "5070756b3618f40b3580ff39c2739d101bf38204fa49be1eaf8430a50ff96fa3",
+      "source": "/private/tmp/evie-memory-stage5-reader-v4-4ec5429/internal/tools/youtube_test.go",
+      "bytes": 26515,
+      "frozen_hash_verified": true
+    }
+  },
+  "missing_frozen_files": {
+    "internal/agent/retrieval_automatic.go": "36bf0443692aa3d1d6302ee6f45589a7509dc279d85f3e7407fde7a090ff3f78",
+    "internal/agent/retrieval_automatic_acceptance_test.go": "b99a628b11dd7001cc1a49f41d13d371d7f7400e0963aedb6c8af5804997d7dc",
+    "internal/agent/retrieval_graph_acceptance_test.go": "152fa9a501e39a72ab0804f06d3fd8773d4d5fea2c67b60627ed9daa7ef694c0",
+    "internal/eviedb/retrieval_graph.go": "7568d136fa17d7b35e54071f8e0f5cf83b21d8b3d61ed90d3a66689456110a55"
+  },
+  "supplementary_files": {
+    "go.mod": {
+      "git_revision": "a594ba22ad2d8e05fbfc02f8aef7e4b09312e868",
+      "sha256": "e052d1b811a50613f04cfa32ad0fbf254baff83bead3bf7cf3555eb7e487079e",
+      "bytes": 696,
+      "frozen_hash_verified": false,
+      "reason": "Original frozen baseline dependency file; the graph freeze did not record a dependency-file hash."
+    },
+    "go.sum": {
+      "git_revision": "a594ba22ad2d8e05fbfc02f8aef7e4b09312e868",
+      "sha256": "c129db23cd6bb43dca28d2539528893fd1c4d57782bc4f5c5756378112f255fb",
+      "bytes": 71403,
+      "frozen_hash_verified": false,
+      "reason": "Original frozen baseline dependency file; the graph freeze did not record a dependency-file hash."
+    }
+  },
+  "original_frozen_binary_sha256": "d95f46a90fd0031128e5d7eb2866b5052809034b1a95521f54d2abf1f0c44afc",
+  "locally_retained_binary_sha256": "d95f46a90fd0031128e5d7eb2866b5052809034b1a95521f54d2abf1f0c44afc",
+  "original_binary_hash_matches": true,
+  "searched_source_roots": "Retained /private/tmp/evie-* source directories with go.mod, current dedicated worktree, reachable/reflog target blobs, and exact four target paths across all 273 locally available Git commit trees. No held-out workload or result was read.",
+  "all_local_commit_search": {
+    "commands": [
+      "git cat-file --batch-all-objects --batch-check=%(objectname) %(objecttype)",
+      "git ls-tree -r <each local commit> -- <four named Go paths>",
+      "git cat-file blob <each distinct target blob>"
+    ],
+    "commit_count": 273,
+    "distinct_target_blobs": 8
+  },
+  "limitations": [
+    "This is explicitly an incomplete preserved source subset, not a claim of reproducible original compilation.",
+    "The frozen experiment captured disabled draft automatic-recall code that differs from the separately verified issue #164 implementation commit. Missing exact draft bytes were not fabricated or replaced with later source.",
+    "The original graph source manifest covered five internal packages and did not identify all transitive dependencies by hash. go.mod/go.sum supplied here are from its named original baseline, not retroactively frozen inputs.",
+    "The original measured binary hash still agrees with its locally retained executable; that does not recover missing source or establish that a rebuilt binary is identical."
+  ],
+  "new_build_or_measurement_performed": false,
+  "independent_unreachable_blob_lookup": {
+    "agent": "/root/experiment_readiness",
+    "reported_blob_count": 694,
+    "reported_total_bytes": 49576332,
+    "matching_automatic_draft_hashes": 0,
+    "result_path": "/tmp/evie-memory-stage5/reader-source-unreachable-lookup.json",
+    "scope": "Independent read-only source recovery; no additional original source recovered."
+  }
+}

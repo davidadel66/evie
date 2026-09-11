@@ -1,0 +1,31 @@
+{
+  "answers": [
+    "At the time of that record, your preferred lunch was **a chickpea sandwich**. Your original statement was: “Remember that my preferred lunch is a chickpea sandwich.”\n\nIt **should not be treated as your current preference**: the record is now retired. It establishes what you recorded then, not what you prefer today.\n\n**Original source:** owner message, event ID `1ff00684-d380-4f82-b911-af2d9e3d27f3`."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "1ff00684-d380-4f82-b911-af2d9e3d27f3"
+  ],
+  "model_calls": 1,
+  "name": "historical_retired",
+  "question": "What lunch preference had I recorded at the time of that old record, and should it still be treated as my current preference? Include the original source event ID.",
+  "scripted_initial_searches": [
+    {
+      "id": "old-claim",
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "arguments": "{\"as_known_at\":\"2026-09-11T00:29:02.431579Z\",\"intent\":\"historical\",\"query\":\"chickpea\"}"
+      }
+    },
+    {
+      "id": "old-words",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"as_known_at\":\"2026-09-11T00:29:02.431579Z\",\"intent\":\"historical\",\"query\":\"chickpea\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 3081962959
+}

@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "partition": "heldout",
+  "corpus_version": 1,
+  "curator": {
+    "kind": "agent",
+    "identity": "/root/heldout_curator",
+    "role": "separate fresh held-out workload curator",
+    "human_review": false
+  },
+  "initial_context": {
+    "fresh_no_development_history": true,
+    "description": "The curator received the bounded curation task, repository instructions, environment, and allowed frozen protocol/schema paths. No development reader conversation, workload, retrieval trace, prior component held-out content, or release output was in that initial context.",
+    "initial_verified_implementation_commit_reported_by_parent": "0269e119e6ffb414a4b766efecf52800e1e08536",
+    "initial_frozen_protocol_directory": "/private/tmp/evie-memory-stage5/integrated-development-v3"
+  },
+  "accessed_allowed_files": [
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/AGENTS.md",
+      "sha256": "6c8b8af10fea512ee9094569647017918dd1f2ea419c235ffc068a8718327c09"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/CONTEXT.md",
+      "sha256": "320b133ce00e8c103435aba980a4b7713e3c3c91acaa870bd302c376c3e3c35e"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/active/memory-stage-5-retrieval.spec.md",
+      "sha256": "0790aa3039f523269a69be11e7b1927550a897e763e1e07f1205c10a20595ea3"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/active/memory-stage-5-retrieval.decisions.md",
+      "sha256": "b83127cc1de71fe66561af4b1af753cbb7c94f28c3e831944d3336941a34a122"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/active/session-history-and-memory-scope.spec.md",
+      "sha256": "6537d1ff26c3c5d70c18a52421fa43e88481f03ee24d650d87f4fc69d56ec134"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/docs/adr/0052-use-canonical-semantic-identities-and-values.md",
+      "sha256": "721110cc659558edca81918a2532d1e7b258c246564cae0f792c52518a7a2f9e"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/docs/adr/0059-pin-exact-memory-reads-to-scope-revisions.md",
+      "sha256": "64e5a18d8646f8e446d8f6d7abdcd59c78ad4fb38a168102f885f7d7926e5b4a"
+    },
+    {
+      "path": "/Users/davidboktor/code/evie-memory-stage-5/docs/adr/0066-allow-conversation-recall-within-one-context-scope.md",
+      "sha256": "6b447e19ef247567625dbfc13bbe164587fa8aab926a1eed9202f7ba949c73f9"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/procedure.md",
+      "sha256": "d7ece9ead65581d86fbf5619d134e381f57978748413616669545270ac30ce72"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/rubric.md",
+      "sha256": "a64da1e7cf6219862c478c24dd8dd1172a4cec7073e55a2508cbf6e7e4bcc813"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/assessment.md",
+      "sha256": "12a4e508decbab33114ed16f469b8d6940dd237c1a2deeb5e4f746ebf499e9fc"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/gates.json",
+      "sha256": "bf730615b47e3acb2f9fc12fe57a1dad88d19169ce46967716ec6fde144b1ea9"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/matrix.json",
+      "sha256": "1ef2f25d040fb33e599c3b8b6554a2cabb4ffe97286beb77a1bca724b674c6c6"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/source/internal/agent/retrieval_integrated_fixture_test.go",
+      "sha256": "270674cd227ffd644e5834dbfbe9e0ddc5bbf55537af368e1f4b7a72560d3906"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/source/internal/agent/retrieval_integrated_evaluation_test.go",
+      "sha256": "451121b167d417e41c610a37c44eae86ec617bfde95f32f445d8314a4a590ff3"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5/integrated-development-v3/source/internal/memory/semantic.go",
+      "sha256": "87b634c6d6b3a33f0e5c48b6a7224e681dea757daa0a24465bf57bba76ebda9b"
+    }
+  ],
+  "reading_notes": [
+    "The rubric and gates contain development illustrative text and selector examples. Only abstract behavioral obligations, role requirements, and schema rules were used; no source or answer strings were copied or transformed into cases.",
+    "Some combined command output was truncated. Relevant source/schema, rubric, specification, time, identity, scope, assessment and gate passages were subsequently read in bounded calls. Matrix access included its structural metadata and available operating assertions; no mapped test outputs were opened.",
+    "An early repository filename inventory included names of reference-reader fixture files. No such file contents were opened or used.",
+    "Parent confirmed only the closed response_kind vocabulary (answer, clarify, abstain, general) and normal memory_mode spelling (available), without development case content."
+  ],
+  "restrictions": {
+    "development_workload_opened": false,
+    "development_reader_answers_opened": false,
+    "development_retrieval_traces_opened": false,
+    "prior_component_heldout_contents_opened": false,
+    "release_outputs_opened": false,
+    "reader_or_compactor_models_called": false,
+    "embeddings_called": false,
+    "retrieval_performance_measured": false,
+    "production_code_edited": false,
+    "git_commit_or_index_mutations": false,
+    "cases_selected_from_measured_success": false,
+    "cases_renamed_or_paraphrased_from_development": false
+  },
+  "incidental_exposure": {
+    "tool": "collaboration.list_agents",
+    "purpose": "Check whether a slot was available for an independent static review after all 24 cases were authored.",
+    "ordering": "The entire workload was written once at its recorded filesystem last-write time. After authoring, list_agents unexpectedly returned a completed implementation-review finding. The first workload SHA256 was measured after that exposure; no pre-exposure hash is claimed. No workload byte was changed after the exposure.",
+    "returned_agent": "/root/review12_spec",
+    "returned_finding_text": "[P2] Refresh conflicts across every authorized scope. retrieval_refresh_validity.go:31 restricts changed peers to prior.ScopeKey, whereas initial conflict discovery searches Global, context, and current-session scopes. A Workspace turn holding Global owner/live_in=Boston can therefore miss a restored conflicting Workspace owner/live_in=Chicago Claim or Source Link. Both share the global owner identity; Boston remains eligible, and restoration wording need not trigger the conversation-text heuristic. The continuation silently retains only Boston. The review cited #162 refresh obligations and #159 contradictory active Claims, recommended a bounded authorized-scope check preserving knowledge/historical pins and a complete-turn regression, and reported one P2 finding with no other confirmed spec findings. The inventory also stated that integrated v3 development gates passed, release readiness remained pending, and its review had not run tests/models or inspected fresh held-out material.",
+    "protocol_excluded_evidence_exposed": false,
+    "parent_notified": true,
+    "parent_disposition": "The root noted that this implementation-review inventory is outside the frozen protocol's prohibited reader answers/traces and held-out outputs, retained the qualification, and instructed the curator to preserve the authored bytes and avoid further inventories.",
+    "effect_on_corpus": "None. No case, source, question, label, selection, or scoring rule was changed in response."
+  },
+  "creation_and_authoring_seal": {
+    "workload_path": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v1/workload.json",
+    "workload_last_write_utc": "2026-09-11T05:45:55.955804+00:00",
+    "sealed_at_utc": "2026-09-11T05:50:49.798621+00:00",
+    "workload_sha256": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+    "workload_bytes": 76407,
+    "pre_exposure_hash_measured": false,
+    "corpus_write_count": 1,
+    "content_revisions_after_initial_write": 0
+  },
+  "static_validation": {
+    "validation": "pass",
+    "workload_sha256": "f487649e46249ab1f461f2c4b8551c12a5b6ff319461856d2d733ef9420a3cdd",
+    "bytes": 76407,
+    "family_counts": {
+      "fresh_accepted_preference": 2,
+      "uncompiled_original_statement": 2,
+      "cross_topic_reference": 2,
+      "compacted_continuity": 2,
+      "exact_identity": 2,
+      "graph_and_dense_paraphrase": 2,
+      "bounded_neighbor_investigation": 2,
+      "historical_and_retired": 2,
+      "conflicting_claims_and_newer_statement": 2,
+      "speaker_quote_and_tentative_attribution": 2,
+      "unanswerable_and_unavailable": 2,
+      "scope_and_no_memory_needed": 2
+    },
+    "gate_role_counts": {
+      "critical_semantic": 15,
+      "clear_reference": 2,
+      "material_clarification": 2
+    },
+    "checks": {
+      "manually_checked_compound_literal_paraphrases": 1,
+      "cases": 24,
+      "source_records": 51,
+      "required_support_records": 28,
+      "answerable_cases": 19,
+      "personal_answer_components": 36,
+      "source_and_scope_consistency_checks": 24,
+      "accepted_entity_alias_origins": 14,
+      "entity_id_placeholders": 1,
+      "explicit_assistant_pairs": 3,
+      "historical_known_half_open_intervals": 1
+    },
+    "manual_source_consistency": "Reviewed each component against the declared original wording, accepted entity associations, scope and lifecycle, attribution, and relevant current discussion. Compound accepted literals retain the same meaning as their original source; no source inference is treated as an accepted identity or a memory write.",
+    "attempts": [
+      {
+        "command": "python3 /private/tmp/evie-memory-stage5-validate-heldout.py",
+        "exit_code": 1,
+        "reason": "The first custom static validator overrequired literal object strings to occur verbatim in originals. pattern_format uses the semantically identical compound value A3 sheets with seam allowances included; its original says A3 sheets with the seam allowances already included. This was a validator limitation, not a schema or source error.",
+        "corpus_changed": false
+      },
+      {
+        "command": "python3 /private/tmp/evie-memory-stage5-validate-heldout.py",
+        "exit_code": 0,
+        "reason": "Changed only the static validator to explicitly inspect and document that equivalent compound literal. All declared schema, reference, scope, source, identity, speaker, interval and role checks passed.",
+        "corpus_changed": false
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0,
+        "reason": "Documentation-only local whitespace check; new untracked files also receive a direct UTF-8/newline/trailing-space check.",
+        "corpus_changed": false
+      }
+    ]
+  },
+  "private_static_artifacts": [
+    {
+      "path": "/private/tmp/evie-memory-stage5-author-heldout.py",
+      "sha256": "16a870eadead96cbf046ed5310d148257a577ab299dd7aaad262035d9f6c3c3f"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5-validate-heldout.py",
+      "sha256": "8260c1aa3c431737ebe0ea4081132919689be1eb78c8cfeab138405cf9c7031c"
+    },
+    {
+      "path": "/private/tmp/evie-memory-stage5-heldout-static-validation.json",
+      "sha256": "767684045feab88a8e4e9976550880c49bcea23eb135d7d9edba546b61a33e41"
+    }
+  ],
+  "pending_root_obligations": [
+    "Mandatory canonical preparation with the exact frozen executable; preserve any setup failure.",
+    "Seal the canonical inputs independently before any release reader output, under the development-verified configuration.",
+    "Run the unchanged release sequence, deterministic boundary matrix, repository verification, semantic assessment and final readiness aggregation."
+  ],
+  "skipped_by_curator": [
+    {
+      "check": "Canonical fixture preparation and schema decoding in the exact frozen Go executable",
+      "reason": "Explicitly assigned to root; the curator was authorized only for static validation."
+    },
+    {
+      "check": "Model, embedding, retrieval, reader quality and resource evaluation",
+      "reason": "Forbidden during independent curation; root performs the frozen release procedure later."
+    },
+    {
+      "check": "./scripts/verify-change.sh",
+      "reason": "No code or CI changes; repository documentation-only rule permits git diff --check locally. Root owns required release repository verification."
+    }
+  ],
+  "release_ready": false,
+  "publication": "Private local curation only; no commit, push, PR, or external publication performed."
+}

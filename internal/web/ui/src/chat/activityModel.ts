@@ -49,7 +49,7 @@ export function activityTurns(items: Item[], streaming: boolean): ActivityGroup[
 }
 
 export function needsAttention(item: Item): boolean {
-  return item.kind === "notice" || (item.kind === "assistant" && !!item.discarded) ||
+  return item.kind === "memory" || item.kind === "notice" || (item.kind === "assistant" && !!item.discarded) ||
     (item.kind === "tool" && (!!item.isErr || item.approval?.state === "pending" || item.approval?.state === "declined" || item.approval?.state === "expired"));
 }
 

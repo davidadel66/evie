@@ -112,16 +112,27 @@ func messagesFromEventsWithContinuation(events []memory.Event, continuation map[
 			}
 
 			var toolCalls []openrouter.ToolCall
+			responseItems := continuation[event.ID]
 			for _, call := range payload.ToolCalls {
 				if call.ID == "" || call.Name == "" {
 					return nil, fmt.Errorf("assistant event %q contains an incomplete tool call", event.ID)
+				}
+				arguments := call.Arguments
+				if call.Name == "memory_expand_conversation" {
+					// Source references are resolved from the current request's
+					// revalidated evidence, never replayed through durable tool
+					// arguments. Keep the original event intact for inspection.
+					arguments = `{"evidence_id":"[source reference recorded in request receipt]"}`
+					// Native continuation items contain the original arguments;
+					// canonical replay is required to honor the same boundary.
+					responseItems = nil
 				}
 				toolCalls = append(toolCalls, openrouter.ToolCall{
 					ID:   call.ID,
 					Type: "function",
 					Function: openrouter.FunctionCall{
 						Name:      call.Name,
-						Arguments: call.Arguments,
+						Arguments: arguments,
 					},
 				})
 			}
@@ -131,7 +142,7 @@ func messagesFromEventsWithContinuation(events []memory.Event, continuation map[
 				Content:       event.Content,
 				ToolCalls:     toolCalls,
 				TextParts:     textParts,
-				ResponseItems: continuation[event.ID],
+				ResponseItems: responseItems,
 			})
 
 		case memory.EventToolSucceeded,

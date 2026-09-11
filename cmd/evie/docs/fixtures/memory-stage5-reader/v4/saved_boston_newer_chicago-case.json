@@ -1,0 +1,32 @@
+{
+  "answers": [
+    "You live in **Chicago**, according to your later direct statement. **Yes—your saved memory is inconsistent with that update:** it still lists Boston.\n\n- **Saved record: Boston.** Source: **owner**, event `11f364e6-3e54-49ab-8d0f-98c3dd777d3f`: “Remember that I live in Boston.”\n- **Later statement: Chicago.** Source: **owner**, event `dac32e81-8703-4598-aaf0-812870630b62`: “An update: I now live in Chicago after moving from Boston.”\n\nThe Boston record remains active, while the Chicago update appears as conversation evidence rather than an updated accepted memory. I haven’t changed the saved record."
+  ],
+  "error": "\u003cnil\u003e",
+  "expected_source_ids": [
+    "11f364e6-3e54-49ab-8d0f-98c3dd777d3f",
+    "dac32e81-8703-4598-aaf0-812870630b62"
+  ],
+  "model_calls": 1,
+  "name": "saved_boston_newer_chicago",
+  "question": "Where do I live, and is there anything inconsistent in your saved memory? Attribute the saved record and the later statement, including both source event IDs.",
+  "scripted_initial_searches": [
+    {
+      "id": "saved-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search",
+        "arguments": "{\"query\":\"Boston Chicago\",\"intent\":\"current\"}"
+      }
+    },
+    {
+      "id": "later-city",
+      "type": "function",
+      "function": {
+        "name": "memory_search_conversations",
+        "arguments": "{\"query\":\"Chicago\",\"intent\":\"current\"}"
+      }
+    }
+  ],
+  "whole_turn_elapsed_ns": 4550924209
+}

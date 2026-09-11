@@ -1,0 +1,30 @@
+{
+  "corpus_sha256": "22cd641595f6aa9791f212db4f9ce95a745edbd68444a073d106b5bc3b52582b",
+  "declared_at_utc": "2026-09-11T06:41:37.164190+00:00",
+  "development_freeze_sha256": "57a810541c66dbdc3ef09749b6ac786e360e0ab4c02473d529a9cf8f7c011a3f",
+  "failure_policy": "No retry, warmup, replacement or retuning. Preserve every first attempt. Continue independent local and operating diagnostics after an execution failure; if prerequisites fail, retain the withheld-reader reason and all planned denominator failures. No failing gate may be waived.",
+  "measurement_order": [
+    "index",
+    "local",
+    "operating",
+    "reader"
+  ],
+  "seal_command": [
+    "python3",
+    "-B",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/run.py",
+    "seal-release",
+    "--development-freeze",
+    "/private/tmp/evie-memory-stage5/integrated-development-v4/freeze.json",
+    "--development-report",
+    "/tmp/evie-memory-stage5/integrated-development-v4-resource/report.json",
+    "--repository",
+    "/Users/davidboktor/code/evie-memory-stage-5",
+    "--workload",
+    "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/heldout/v2/workload.json",
+    "--output",
+    "/tmp/evie-memory-stage5/integrated-heldout-v2",
+    "--version",
+    "integrated-heldout-v2"
+  ]
+}

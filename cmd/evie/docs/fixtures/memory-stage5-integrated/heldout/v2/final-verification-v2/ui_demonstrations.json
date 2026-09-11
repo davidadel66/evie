@@ -1,0 +1,20 @@
+{
+  "command": [
+    "./node_modules/.bin/vitest",
+    "run",
+    "src/api/memoryEvidence.test.ts",
+    "src/artifacts/GraphEvidencePath.test.tsx",
+    "src/artifacts/MemoryEvidence.test.tsx",
+    "src/artifacts/MemoryEvidenceDense.test.tsx",
+    "src/artifacts/MemoryEvidenceInvestigation.test.tsx",
+    "src/chat/MemoryActivity.test.tsx",
+    "src/chat/MemoryInvestigationActivity.test.tsx",
+    "--reporter=json",
+    "--outputFile=/tmp/evie-memory-stage5/168-final-handoff-checks-v2/ui-results.json"
+  ],
+  "execution_exception": null,
+  "exit_code": 0,
+  "finished_at_utc": "2026-09-11T07:56:18.508125+00:00",
+  "started_at_utc": "2026-09-11T07:56:17.856589+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5/internal/web/ui"
+}

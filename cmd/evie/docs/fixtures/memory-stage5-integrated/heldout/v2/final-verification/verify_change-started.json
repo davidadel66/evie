@@ -1,0 +1,7 @@
+{
+  "command": [
+    "./scripts/verify-change.sh"
+  ],
+  "started_at_utc": "2026-09-11T07:06:37.245944+00:00",
+  "working_directory": "/Users/davidboktor/code/evie-memory-stage-5"
+}

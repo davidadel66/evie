@@ -1,0 +1,22 @@
+{
+  "archived_original_times_and_modes_verified": true,
+  "content_integrity_verified": true,
+  "direct_file_checkout_metadata_difference_count": 0,
+  "direct_file_checkout_metadata_differences": [],
+  "direct_file_original_times_and_modes_claimed_preserved_by_git": false,
+  "direct_original_files": 69,
+  "directory": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-integrated/runs/heldout-v2",
+  "freeze_sha256": "c6d6a2c8627580963fb7f2edb341173bd34487e09c80a3e9a9813f0fef169ed2",
+  "input_archive_members": 48,
+  "limitations": [
+    "Hash integrity is relative to retained manifests and repository identity; no signature or independent authenticity is claimed.",
+    "A fresh Git checkout preserves contents, not original direct-file mtimes or complete POSIX modes. Recorded originals remain in the plan and archive metadata.",
+    "No executable was rebuilt, model invoked, source tree extracted, or evaluation result reclassified. This is transport verification, not a new measurement or release gate."
+  ],
+  "preservation_archive_members": 2369,
+  "preservation_manifest_sha256": "5650cce5b2b8377baac258042504b2a1c7d0c823bec282bfc7528fda564e62f1",
+  "repository_records_verified": 23,
+  "retained_files": 81,
+  "schema_version": 1,
+  "source_archive_members": 394
+}

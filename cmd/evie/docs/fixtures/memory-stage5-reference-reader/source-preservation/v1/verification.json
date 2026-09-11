@@ -1,0 +1,23 @@
+{
+  "directory": "/Users/davidboktor/code/evie-memory-stage-5/cmd/evie/docs/fixtures/memory-stage5-reference-reader/source-preservation/v1",
+  "source_archives": [
+    {
+      "label": "memory-stage5-reference-reader-v1",
+      "source_files_verified": 218,
+      "declared_inventory_entries_matched_to_original_freeze": 676,
+      "archive_sha256": "e273699a0aee1b4083961c3aa85c965d6a8b594f7a3def302f6ef1c035dac720",
+      "archive_bytes": 595571,
+      "complete": true
+    },
+    {
+      "label": "memory-stage5-reference-reader-v2",
+      "source_files_verified": 222,
+      "declared_inventory_entries_matched_to_original_freeze": 680,
+      "archive_sha256": "fc85a8cf5b91a50edf93577b653d70c6c561a6a679dcd7a441271843e78e417f",
+      "archive_bytes": 600803,
+      "complete": true
+    }
+  ],
+  "verified": true,
+  "no_build_or_model_calls": true
+}
