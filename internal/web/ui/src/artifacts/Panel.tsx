@@ -13,7 +13,7 @@ export type InspectorTarget =
   | { kind: "file"; file: InspectedFile }
   | { kind: "tool"; tool: ToolItem }
   | { kind: "memory"; detail: SemanticObjectInspection }
-  | { kind: "memory-evidence"; sessionId: string; snapshotId: string }
+  | { kind: "memory-evidence"; sessionId: string; snapshotId: string; memoryTools?: ToolItem[] }
   | { kind: "workspace"; workspace: Workspace }
   | { kind: "scope"; scope: ContextScope }
   | { kind: "file-diff"; path: string; oldText: string; newText: string; isNew: boolean; state: string }
@@ -58,7 +58,7 @@ export function Panel({ target, focused, onClose }: Props) {
         {target.kind === "file" && <FileViewer key={target.file.key} file={target.file} />}
         {target.kind === "tool" && <ToolInspection key={target.tool.key} tool={target.tool} />}
         {target.kind === "memory" && <MemoryInspection detail={target.detail} />}
-        {target.kind === "memory-evidence" && <MemoryEvidence key={`${target.sessionId}:${target.snapshotId}`} sessionId={target.sessionId} snapshotId={target.snapshotId} />}
+        {target.kind === "memory-evidence" && <MemoryEvidence key={`${target.sessionId}:${target.snapshotId}`} sessionId={target.sessionId} snapshotId={target.snapshotId} memoryTools={target.memoryTools} />}
         {target.kind === "workspace" && <WorkspaceInspection workspace={target.workspace} />}
         {target.kind === "scope" && <ScopeInspection scope={target.scope} />}
         {target.kind === "file-diff" && <FileInspection target={target} />}
@@ -220,7 +220,7 @@ function targetTitle(target: InspectorTarget) {
   if (target.kind === "tool") return "Tool activity";
   if (target.kind === "file") return target.file.path.split("/").filter(Boolean).pop() ?? target.file.path;
   if (target.kind === "memory") return memoryTitle(target.detail);
-  if (target.kind === "memory-evidence") return "Original memory evidence";
+  if (target.kind === "memory-evidence") return "Memory inspection";
   if (target.kind === "workspace") return target.workspace.displayName;
   if (target.kind === "scope") return target.scope.displayName;
   if (target.kind === "file-diff") return target.path;

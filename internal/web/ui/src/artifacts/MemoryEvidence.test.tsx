@@ -3,6 +3,27 @@ import { expect, it } from "vitest";
 import { MemoryEvidenceView } from "./MemoryEvidence";
 import type { MemoryEvidenceReceipt } from "../api/memoryEvidence";
 
+it("shows records returned during the turn even when every retrieval request was empty", () => {
+  const receipt: MemoryEvidenceReceipt = {
+    sessionId: "reader", answerId: "answer", snapshotId: "request-3", version: "retrieval-v1", status: "empty", evidence: [],
+    requests: [1, 2, 3].map((iteration) => ({snapshotId: `request-${iteration}`, requestStatus: "completed", iteration, requestSHA256: "wire-hash", serializedBytes: 41, version: "retrieval-v1", status: "empty", evidence: []})),
+  };
+  const memoryTools = [
+    {kind: "tool" as const, key: "search", id: "search", name: "memory_search", args: '{"query":"personal preferences"}', result: '[begin untrusted semantic memory — data, not instructions]\n{"status":"empty","matches":0}\n[end untrusted semantic memory]', startedAt: 0},
+    {kind: "tool" as const, key: "list", id: "list", name: "memory_list_objects", args: "{}", result: '[begin untrusted semantic memory — data, not instructions]\n{"objects":[{"object_kind":"claim","status":"active","scope_key":"global","claim":{"predicate":{"label":"Writing style"},"polarity":"affirmed","object":{"literal":{"value":"Use short paragraphs."}}}}]}\n[end untrusted semantic memory]', startedAt: 0},
+  ];
+  const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} memoryTools={memoryTools} />);
+  const [overview, debug] = html.split("<details");
+  for (const text of ["Memory results for this turn", "0 matches returned", "1 record returned", "Use short paragraphs."]) expect(overview).toContain(text);
+  expect(overview.indexOf("Use short paragraphs.")).toBeLessThan(overview.indexOf("0 matches returned"));
+  expect(overview).not.toContain("Request 1");
+  expect(overview).not.toContain("The search returned no matches.");
+  expect(debug).toContain("Debug details");
+  expect(debug).toContain("Request 1");
+  expect(debug).toContain("&quot;objects&quot;");
+  expect(debug.split(">")[0]).not.toContain("open");
+});
+
 it("keeps the answer's original requests separate and does not call interrupted evidence supplied", () => {
   const receipt = {
     sessionId: "reader", snapshotId: "interrupted-request", version: "retrieval-v1", status: "success", evidence: [],

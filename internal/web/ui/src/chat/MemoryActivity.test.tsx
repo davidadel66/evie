@@ -4,6 +4,16 @@ import { MemoryActivity } from "./MemoryActivity";
 import { appendUser, reduce } from "../store/reducer";
 import { Chat } from "./Chat";
 
+it("keeps one routine receipt while working and gives an empty retrieval an honest label", () => {
+  let items = appendUser([], "Look up my preferences.");
+  items = reduce(items, {type: "turn_started", id: "root", status: "working"});
+  for (const snapshotId of ["first", "second", "third"]) items = reduce(items, {type: "memory_activity", snapshotId, status: "empty", acceptedCount: 0, excerptCount: 0});
+  const html = renderToStaticMarkup(<Chat items={items} queued={[]} streaming onAnswer={() => undefined} onOpenMemory={() => undefined} />);
+  expect(html.match(/No matches/g)).toHaveLength(1);
+  expect(html).toContain("Memory retrieval");
+  expect(html).not.toContain("Accepted memory");
+});
+
 it("keeps only the latest routine receipt in collapsed chat while preserving earlier warnings", () => {
   let items = appendUser([], "Check my saved preferences.");
   items = reduce(items, {type: "turn_started", id: "root", status: "working"});

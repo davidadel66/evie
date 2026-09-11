@@ -46,8 +46,19 @@
   and result state from the transcript. Later actions do not replace selection;
   session or workbench navigation clears it. Keyboard opening, closing, and
   focus restoration apply to generic tool inspection as well as files.
-- Collapsed activity shows the latest routine memory receipt while retaining
+- Both open and collapsed activity show the latest routine memory receipt while retaining
   earlier warnings, interrupted requests, historical or retired evidence, and
-  conflicts. Expanded activity and source inspection preserve access to the
-  original receipts and request sequence. This is presentation grouping only;
+  conflicts. Source inspection preserves access to the original receipts and
+  request sequence under Debug details. This is presentation grouping only;
   evidence identity, status, scope, attribution, and current access do not change.
+
+- David's follow-up requires readable memory results, not just tool metadata.
+  Known recorded memory envelopes are decoded only for display; the raw strings
+  stay unchanged. Values, polarity, scope, recorded status, paging and search
+  outcomes appear before Debug details in both the tool inspector and a separate
+  same-turn results area in memory inspection.
+- Tool result history and retrieval receipts are distinct. The selected
+  session/snapshot identifies the turn whose tool results are shown, while the
+  source-inspection API still controls original evidence and current access.
+  Empty retrieval does not imply an empty direct listing. Neither result
+  rendering nor request association asserts that an answer cited a source.

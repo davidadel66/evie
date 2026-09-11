@@ -1,5 +1,6 @@
 import type { ActivityTurn } from "../store/events";
 import type { Item } from "../store/reducer";
+import { readMemoryToolResult } from "../artifacts/memoryToolResult";
 
 export type ToolItem = Extract<Item, { kind: "tool" }>;
 type Assistant = Extract<Item, { kind: "assistant" }>;
@@ -49,6 +50,10 @@ export function activityTurns(items: Item[], streaming: boolean): ActivityGroup[
 }
 
 export function needsAttention(item: Item): boolean {
+  if (item.kind === "tool") {
+    const result = readMemoryToolResult(item);
+    if (result?.kind === "search" && (result.truncated || (result.status !== "success" && result.status !== "empty"))) return true;
+  }
   if (item.kind === "memory") {
     const memory = item.memory;
     return (memory.status !== "success" && memory.status !== "empty") || memory.requestStatus === "interrupted" ||
@@ -69,7 +74,9 @@ const actions: Record<string, { kind: ActionKind; action: string; done: string; 
   edit_db: {kind: "edit", action: "Edit data", done: "Edited data", subject: ["query", "sql"]},
   memory_search: {kind: "memory", action: "Search memory", done: "Searched memory", subject: ["query"]},
   memory_list_objects: {kind: "memory", action: "List memory records", done: "Listed memory records", subject: []},
-  memory_get_object: {kind: "memory", action: "Read memory record", done: "Read memory record", subject: []},
+  memory_inspect_object: {kind: "memory", action: "Read memory record", done: "Read memory record", subject: []},
+  memory_query_claims: {kind: "memory", action: "Query memory claims", done: "Queried memory claims", subject: []},
+  memory_traverse: {kind: "memory", action: "Follow memory links", done: "Followed memory links", subject: []},
   memory_search_conversations: {kind: "memory", action: "Search conversations", done: "Searched conversations", subject: ["query"]},
   memory_expand_conversation: {kind: "memory", action: "Read conversation context", done: "Read conversation context", subject: []},
 };
@@ -87,11 +94,15 @@ export function toolLabel(tool: ToolItem) {
     }
   } catch { /* Exact malformed arguments remain available in details. */ }
   if (spec.subject[0] === "path") subject = subject.split("/").filter(Boolean).pop() ?? subject;
+  const memoryResult = readMemoryToolResult(tool);
+  const searchProblem = memoryResult?.kind === "search" && memoryResult.status !== "success" && memoryResult.status !== "empty"
+    ? ({partial: "partially completed", failed: "failed", unavailable: "unavailable", cancelled: "cancelled", exhausted: "budget exhausted"} as Record<string, string>)[memoryResult.status] ?? "outcome unknown" : undefined;
   let label: string;
   if (tool.approval?.state === "declined") label = `${spec.action} declined`;
   else if (tool.approval?.state === "expired") label = `${spec.action} approval expired`;
   else if (tool.approval?.state === "pending" && tool.result === undefined) label = `${spec.action} awaiting approval`;
   else if (tool.isErr) label = `${spec.action} failed`;
+  else if (searchProblem) label = `${spec.action} ${searchProblem}`;
   else if (tool.result === undefined) label = `${spec.action} requested`;
   else label = spec.kind === "tool" ? `${spec.done} completed` : spec.done;
   return {label, subject, kind: spec.kind};

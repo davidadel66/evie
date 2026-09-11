@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { inspectMemoryEvidence, type MemoryEvidenceReceipt } from "../api/memoryEvidence";
 import { GraphEvidencePath } from "./GraphEvidencePath";
 import { memoryEvidenceAnchor } from "./memoryEvidenceAnchor";
+import { toolLabel, type ToolItem } from "../chat/activityModel";
+import { ToolResultSummary } from "./ToolResultSummary";
+import { ToolDebugDetails } from "./ToolInspection";
+import { readMemoryToolResult } from "./memoryToolResult";
 
-export function MemoryEvidence({ sessionId, snapshotId }: { sessionId: string; snapshotId: string }) {
+export function MemoryEvidence({ sessionId, snapshotId, memoryTools = [] }: { sessionId: string; snapshotId: string; memoryTools?: ToolItem[] }) {
   const [receipt, setReceipt] = useState<MemoryEvidenceReceipt>();
   const [problem, setProblem] = useState<string>();
   const [attempt, setAttempt] = useState(0);
@@ -16,29 +20,53 @@ export function MemoryEvidence({ sessionId, snapshotId }: { sessionId: string; s
     });
     return () => controller.abort();
   }, [sessionId, snapshotId, attempt]);
-  if (problem) return <div className="p-5"><p role="alert" className="text-amber-ink text-xs">{problem}</p><button type="button" className="text-teal mt-3 text-xs underline" onClick={() => setAttempt((value) => value + 1)}>Retry source inspection</button></div>;
+  if (problem) return <div className="p-5"><MemoryTurnResults tools={memoryTools} /><p role="alert" className="text-amber-ink text-xs">{problem}</p><button type="button" className="text-teal mt-3 text-xs underline" onClick={() => setAttempt((value) => value + 1)}>Retry source inspection</button></div>;
   if (!receipt) return <p className="text-muted-text p-5 text-xs">Loading original evidence…</p>;
-  return <MemoryEvidenceView receipt={receipt} />;
+  return <MemoryEvidenceView receipt={receipt} memoryTools={memoryTools} />;
 }
 
-export function MemoryEvidenceView({ receipt }: { receipt: MemoryEvidenceReceipt }) {
+export function MemoryEvidenceView({ receipt, memoryTools = [] }: { receipt: MemoryEvidenceReceipt; memoryTools?: ToolItem[] }) {
   const [selectedId, setSelectedId] = useState(receipt.snapshotId);
   const selected = receipt.requests?.find((request) => request.snapshotId === selectedId) ?? receipt.requests?.find((request) => request.snapshotId === receipt.snapshotId);
   const displayed = selected ? { ...receipt, ...selected } : receipt;
   return <div className="p-5">
-    <h2 className="text-body text-sm font-medium">{receipt.answerId ? "Answer sources" : "Request sources"}</h2>
-    {(receipt.requests?.length ?? 0) > 0 && <nav aria-label="Original provider requests" className="mt-3 flex flex-wrap gap-2">
+    <MemoryTurnResults tools={memoryTools} />
+    <h2 className="text-body text-sm font-medium">Retrieved sources</h2>
+    <RequestEvidenceView receipt={displayed} requestStatus={selected?.requestStatus} />
+    {((receipt.requests?.length ?? 0) > 0 || memoryTools.length > 0) && <details className="border-hair text-muted-text mt-5 border-t pt-4 text-xs">
+      <summary className="cursor-pointer">Debug details</summary>
+      <nav aria-label="Original provider requests" className="mt-3 flex flex-wrap gap-2">
       {receipt.requests?.map((request, index) => <button key={request.snapshotId} type="button" aria-pressed={request.snapshotId === selected?.snapshotId}
         className="border-hair text-muted-text aria-pressed:text-teal cursor-pointer rounded border px-2 py-1 text-xs" onClick={() => setSelectedId(request.snapshotId)}>
         Request {request.iteration || index + 1} · {requestLabel(request.requestStatus)}
       </button>)}
-    </nav>}
-    <RequestEvidenceView receipt={displayed} requestStatus={selected?.requestStatus} />
-    {selected && <details className="text-muted-text mt-5 break-all text-[11px] leading-5">
-      <summary className="cursor-pointer">Original request reference</summary>
+      </nav>
+    {selected && <div className="text-muted-text mt-5 break-all text-[11px] leading-5">
+      <p>Original request reference</p>
       <p>{selected.snapshotId}<br />{selected.responseId && <>Response: {selected.responseId}<br /></>}{selected.requestSHA256}<br />{selected.serializedBytes} bytes · {selected.version || "No memory retrieval"}</p>
+    </div>}
+    {memoryTools.length > 0 && <div className="border-hair mt-5 space-y-5 border-t pt-4">
+      <h3 className="text-body text-xs">Recorded tool logs for this turn</h3>
+      {memoryTools.map((tool) => <ToolDebugDetails key={tool.key} tool={tool} />)}
+    </div>}
     </details>}
   </div>;
+}
+
+function MemoryTurnResults({tools}: {tools: ToolItem[]}) {
+  if (!tools.length) return null;
+  const ordered = tools.map((tool) => {
+    const result = readMemoryToolResult(tool);
+    return {tool, hasRecords: result?.kind === "records" && result.records.length > 0};
+  }).sort((a, b) => Number(b.hasRecords) - Number(a.hasRecords));
+  return <section aria-label="Memory results for this turn" className="border-hair mb-6 space-y-5 border-b pb-6">
+    <h2 className="text-body text-sm font-medium">Memory results for this turn</h2>
+    {ordered.map(({tool}) => <div key={tool.key} className="space-y-2">
+      <p className="text-muted-text text-xs">{toolLabel(tool).label}</p>
+      {toolLabel(tool).subject && <p className="text-muted-text text-xs break-words">{toolLabel(tool).subject}</p>}
+      <ToolResultSummary tool={tool} />
+    </div>)}
+  </section>;
 }
 
 function requestLabel(status: string) {
@@ -46,6 +74,10 @@ function requestLabel(status: string) {
 }
 
 function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEvidenceReceipt; requestStatus?: string }) {
+  if (requestStatus === "completed" && receipt.evidence.length === 0) {
+    const outcome = ({failed: "Retrieval failed for this request.", unavailable: "Retrieval was unavailable for this request.", partial: "Retrieval partially completed without recorded sources.", cancelled: "Retrieval was cancelled for this request.", exhausted: "The retrieval budget was exhausted for this request."} as Record<string, string>)[receipt.status];
+    return <p className="text-muted-text mt-3 text-xs leading-5">{outcome ?? "No retrieval sources were recorded for this request."}</p>;
+  }
   const heading = requestStatus === "completed" ? "Supplied to model" : requestStatus === "interrupted" ? "Request interrupted" : requestStatus === "prepared" ? "Prepared for request" : "Recorded request evidence";
   const explanation = requestStatus === "completed" ? "Evidence included with a completed request. This does not establish that the answer cited or used each source."
     : requestStatus === "interrupted" ? "This saved request did not produce a committed response. Provider delivery and source use are unconfirmed."
@@ -53,7 +85,7 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
   return <div className="mt-4">
     <h3 className="text-body text-sm font-medium">{heading}</h3>
     <p className="text-muted-text mt-2 text-xs leading-5">{explanation}</p>
-    {receipt.evidence.length === 0 && <p className="text-muted-text mt-4 text-xs">{receipt.status === "empty" ? "The search returned no matches." : "No evidence is recorded for this request."}</p>}
+    {receipt.evidence.length === 0 && <p className="text-muted-text mt-4 text-xs">No retrieval sources were recorded for this request. This does not describe records returned separately by memory tools.</p>}
     {receipt.evidence.map((item) => <section key={item.reference.id} id={memoryEvidenceAnchor(item.reference.id)} className="border-hair mt-5 border-t pt-4">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <h3 className="text-teal">{item.reference.kind === "conversation_excerpt" ? "Conversation excerpt" : "Accepted memory"}</h3>

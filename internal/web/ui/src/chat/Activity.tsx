@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { toolFilePath } from "../artifacts/fileInspection";
+import { readMemoryToolResult } from "../artifacts/memoryToolResult";
 import type { Item } from "../store/reducer";
 import { ChevronDown, Database, FileIcon, Wrench } from "../ui/Icon";
 import { ApprovalCard } from "./ApprovalCard";
@@ -22,6 +23,7 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
   const pending = group.activity.some((item) => item.kind === "tool" && item.approval?.state === "pending" && item.result === undefined);
   const open = manual ?? group.active;
   const latestMemory = [...group.activity].reverse().find((item) => item.kind === "memory");
+  const visibleActivity = group.activity.filter((item) => item.kind !== "memory" || item === latestMemory || needsAttention(item));
   const elapsed = elapsedLabel(group.turn?.startedAt, group.active ? now : group.turn?.finishedAt);
   const complete = group.turn?.status === "complete" || (!group.turn && group.answer.length > 0);
   const label = pending ? "Waiting for approval" : group.active ? "Working…" : complete ? "Worked" : "Work incomplete";
@@ -36,7 +38,7 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
         <span className={open ? "rotate-180" : ""}><ChevronDown size={13} /></span>
       </button>
       <div id={bodyID} hidden={!open} className="border-hair mt-3 space-y-4 border-t pt-4">
-        {open && <ActivityItems items={group.activity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
+        {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
       {!open && <div className="space-y-3"><ActivityItems items={group.activity.filter((item) => item === latestMemory || needsAttention(item))} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} /></div>}
@@ -48,7 +50,7 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
 function ActivityItems({items, active, onAnswer, onOpenFile, onOpenTool, onOpenMemory}: {items: Item[]; active: boolean; onAnswer: Props["onAnswer"]; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener}) {
   const rows: (Item | ToolItem[])[] = [];
   for (const item of items) {
-    if (item.kind === "tool" && !needsAttention(item)) {
+    if (item.kind === "tool" && !item.name.startsWith("memory_") && !needsAttention(item)) {
       const previous = rows[rows.length - 1];
       if (Array.isArray(previous)) previous.push(item);
       else rows.push([item]);
@@ -95,6 +97,9 @@ function ToolRow({ tool, active, onAnswer, onInspect, onOpenFile, onOpenTool }: 
   const fileButton = path && onOpenFile;
   const pending = tool.approval?.state === "pending" && tool.result === undefined;
   const displayLabel = !active && tool.result === undefined && !tool.approval ? "No result recorded" : label;
+  const result = readMemoryToolResult(tool);
+  const returned = result?.kind === "records" ? `${result.records.length} ${result.records.length === 1 ? "record" : "records"} returned`
+    : result?.kind === "search" ? `${result.matches} ${result.matches === 1 ? "match" : "matches"} returned` : "";
   if (fileButton) return <div className="min-w-0">
     <button type="button" title={path} aria-label={`Open ${path}`} onClick={(event) => { onInspect?.(); onOpenFile(tool.key, event.currentTarget); }} className={`activity-summary flex w-full min-w-0 cursor-pointer items-center gap-3 py-1 text-left text-[13px] ${needsAttention(tool) ? "text-amber-ink" : "text-muted-text hover:text-body"}`}>
       <ActionIcon kind={kind} />
@@ -104,11 +109,12 @@ function ToolRow({ tool, active, onAnswer, onInspect, onOpenFile, onOpenTool }: 
     {pending && <div className="mt-3"><ApprovalCard tool={tool} onAnswer={onAnswer} compact /></div>}
   </div>;
   return <div className="min-w-0">
-    <button type="button" disabled={!onOpenTool} aria-label={`Inspect ${displayLabel}${subject ? `: ${subject}` : ""}`} onClick={(event) => { onInspect?.(); onOpenTool?.(tool.key, event.currentTarget); }}
+    <button type="button" disabled={!onOpenTool} aria-label={`Inspect ${displayLabel}${subject ? `: ${subject}` : ""}${returned ? `, ${returned}` : ""}`} onClick={(event) => { onInspect?.(); onOpenTool?.(tool.key, event.currentTarget); }}
       className={`activity-summary focus-visible:outline-teal flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-sm py-1 text-left text-[13px] focus-visible:outline-2 focus-visible:outline-offset-2 ${needsAttention(tool) ? "text-amber-ink" : "text-muted-text hover:text-body"}`}>
       <ActionIcon kind={kind} />
       <span className="min-w-0 max-w-[65%] break-words">{displayLabel}</span>
       {subject && <span className="min-w-0 flex-1 truncate" title={subject}>· {subject}</span>}
+      {returned && <span className="text-muted-text ml-auto shrink-0 text-xs">{returned}</span>}
       <span className="text-teal ml-auto shrink-0 text-xs">Inspect</span>
     </button>
     {pending && <div className="mt-3"><ApprovalCard tool={tool} onAnswer={onAnswer} /></div>}

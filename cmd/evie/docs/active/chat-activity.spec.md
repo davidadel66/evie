@@ -191,10 +191,10 @@ approved action without a recorded result never claims successful execution.
 The existing file viewer keeps its breadcrumb and source presentation,
 File/Changes controls, recorded-content boundaries, and concise qualifiers.
 
-Collapsed activity shows the latest routine memory receipt. Earlier receipts
-with warnings, interrupted requests, historical or retired evidence, or
-conflicts remain visible. Expanded activity retains the individual receipts,
-and the source inspector retains the full original request sequence. Accepted
+Both collapsed and expanded activity show the latest routine memory receipt.
+Earlier receipts with warnings, interrupted requests, historical or retired
+evidence, or conflicts remain visible. The source inspector retains the full
+original request sequence under Debug details. Accepted
 memory and Conversation excerpt labels, recorded-versus-supplied status, source
 availability, and original-versus-current evidence state remain explicit.
 
@@ -223,3 +223,61 @@ Verification on September 11, 2026:
 To demonstrate: expand a completed turn's Worked row, select a tool's Inspect
 action, then open Debug details. Close the inspector or press Escape to return
 to chat. The memory badge opens the original sources and request sequence.
+
+
+### Useful memory results — September 11, 2026
+
+David reported that hiding raw payloads left the inspector showing an empty
+source receipt even when a memory listing returned saved preferences. The
+inspector must show useful recorded results before diagnostic details:
+
+- Memory record listings, exact Claim queries, traversals, and inspections show
+  readable values, subject/predicate, scope, and recorded lifecycle state.
+  Preserve denied polarity and entity-valued Claims; mark additional pages.
+  Use the final recorded lifecycle entry for exact Claim queries. When an
+  inspection records only an entity reference, explicitly qualify its missing
+  name and keep the exact identifier in Debug details.
+- Search actions show their returned count and partial, failed, unavailable,
+  cancelled, exhausted, or truncated outcome. Zero search matches do not mean
+  that no saved records exist. Plain-text tool results and errors get bounded
+  readable previews; unsupported structured output retains an explicit summary
+  limitation and its exact debug payload.
+- Opening a memory badge also shows **Memory results for this turn**, derived
+  from the selected snapshot's own session and turn. These are recorded tool
+  results, distinct from request-specific retrieval evidence. Later tool results
+  must not be attributed to an earlier provider request or called answer citations.
+- Retrieval evidence still comes from the authorized source-inspection API.
+  Current source access, historical/retired/conflict state, and original versus
+  current evidence remain explicit. Recorded tool results never replace an
+  unavailable source in that API's evidence list.
+- Request selection, IDs, hashes, and exact tool logs sit under **Debug details**.
+  Both open and collapsed chat keep one routine receipt plus important warnings;
+  individual memory actions show returned counts and remain directly inspectable.
+  A receipt containing no accepted memory is labeled Memory retrieval.
+
+The disposable browser fixture includes **09 Listed preferences after empty
+search**: a real SQLite turn with a scripted provider, one empty search, two
+listed preferences, and three empty retrieval receipts. Its assertions run
+against reopened history before the browser server starts. Demonstrate by
+opening that turn's memory badge: both preference values must appear without
+opening Debug details; the raw listing and request sequence remain inside it.
+
+Correction verification on September 11, 2026:
+
+- `./internal/web/ui/node_modules/.bin/vitest run --root internal/web/ui` passed:
+  48 files, 286 tests. New regression cases cover readable record values,
+  recorded lifecycle and validity, missing entity names, negative Claims,
+  failures, paging, and session/turn association.
+- `./scripts/verify-change.sh` passed: full Go tests/vet, UI lint/build, and
+  staged/unstaged whitespace checks. Existing warnings remain: five Fast Refresh
+  export warnings and Vite chunks larger than 500 kB. No required check skipped.
+- The opt-in `TestStage5BrowserFixture` passed with real SQLite and a scripted
+  provider. Desktop and 390 px browser checks confirmed both listed preferences
+  appear before empty-search information, request navigation preserves distinct
+  turn results, exact logs stay behind closed Debug details, and individual
+  actions show counts. Mobile keyboard containment, Escape focus restoration,
+  bounded log scrolling, and no page overflow were verified. No browser warnings
+  or errors were recorded; the personal server was not changed.
+- Standards and Spec reviews have no remaining actionable findings. Query
+  lifecycle and entity-reference display gaps found during review were fixed
+  with failing-then-passing regression tests before handoff.

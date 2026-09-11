@@ -8,7 +8,7 @@ import type {
 import { MemoryPresentationProvider } from "./memory/presentation";
 import { Panel, type InspectorTarget } from "./artifacts/Panel";
 import { inspectToolFile } from "./artifacts/fileInspection";
-import { selectedToolInspection, type ToolSelection } from "./artifacts/toolSelection";
+import { selectedToolInspection, selectedMemoryTools, type ToolSelection } from "./artifacts/toolSelection";
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
@@ -62,7 +62,11 @@ export default function App() {
   const selectedInspection = selectedTool ? inspectToolFile(selectedTool) : null;
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
-  const visibleOverride = inspectorOverride?.kind === "memory-evidence" && inspectorOverride.sessionId !== contextSessions.snapshot?.activeSession?.id ? undefined : inspectorOverride;
+  const visibleOverride = inspectorOverride?.kind === "memory-evidence"
+    ? inspectorOverride.sessionId === contextSessions.snapshot?.activeSession?.id
+      ? {...inspectorOverride, memoryTools: selectedMemoryTools(inspectorOverride, contextSessions.snapshot?.activeSession?.id, items)}
+      : undefined
+    : inspectorOverride;
   const inspectorTarget: InspectorTarget = selectedInspection
     ? {kind: "file", file: selectedInspection}
     : selectedTool ? {kind: "tool", tool: selectedTool}
