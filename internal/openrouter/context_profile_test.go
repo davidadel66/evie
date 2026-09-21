@@ -15,6 +15,40 @@ import (
 
 const testBuiltinModel = "moonshotai/kimi-k3"
 
+func TestDeepSeekContextDiscoveryAcceptsAdvertisedAlias(t *testing.T) {
+	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
+	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "")
+	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "")
+	for _, endpointID := range []string{"deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4.1-flash-20260910", "other/model"} {
+		t.Run(endpointID, func(t *testing.T) {
+			client, _ := contextProfileClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v1/model/deepseek/deepseek-v4.1-flash":
+					_, _ = w.Write([]byte(`{"data":{"id":"deepseek/deepseek-v4.1-flash","canonical_slug":"deepseek/deepseek-v4.1-flash-20260910","context_length":1048576}}`))
+				case "/api/v1/models/deepseek/deepseek-v4.1-flash-20260910/endpoints":
+					_, _ = w.Write([]byte(`{"data":{"id":"` + endpointID + `","endpoints":[{"context_length":1000000,"max_completion_tokens":393216,"status":0,"supported_parameters":["max_tokens","tools","tool_choice","reasoning"]}]}}`))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			profile, err := client.ResolveContextProfile(context.Background(), "deepseek/deepseek-v4.1-flash")
+			if endpointID == "other/model" {
+				if err == nil || !strings.Contains(err.Error(), "does not match") {
+					t.Fatalf("mismatched endpoint identity: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			diagnostics := profile.Diagnostics()
+			if diagnostics.ConfiguredModel != "deepseek/deepseek-v4.1-flash" || diagnostics.CanonicalModel != "deepseek/deepseek-v4.1-flash-20260910" || diagnostics.HardWindowTokens != 1000000 || diagnostics.Source != ContextProfileRemoteMetadata {
+				t.Fatalf("context diagnostics=%+v", diagnostics)
+			}
+		})
+	}
+}
+
 func TestAstraContextDiscoveryAcceptsVerifiedAliasAndResponsesRoutes(t *testing.T) {
 	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
 	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "")

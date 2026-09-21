@@ -21,7 +21,7 @@ import (
 	"github.com/davidadel66/evie/internal/tools"
 )
 
-const DefaultModel = openrouter.AstraModel
+const DefaultModel = "deepseek/deepseek-v4.1-flash"
 
 var ErrBusy = errors.New("agent: a turn is already in progress")
 
@@ -36,6 +36,7 @@ func (e sessionUnavailableError) Unwrap() []error {
 }
 
 type Session struct {
+	directory                tools.Directory
 	workerInstructions       string
 	automaticRecallDisabled  bool
 	modelMemoryReadsDisabled bool

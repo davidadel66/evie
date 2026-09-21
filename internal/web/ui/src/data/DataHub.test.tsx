@@ -27,3 +27,10 @@ it("selects Usage without mounting other Data sources", () => {
   expect(html).not.toContain("schema-only");
   expect(html).not.toContain("memory-only");
 });
+
+it("selects Spending inside Data without mounting the other sources", () => {
+  const html = renderToStaticMarkup(<DataHubView source="spending" onSource={() => undefined} database={<div>schema-only</div>} memory={<div>memory-only</div>} usage={<div>usage-only</div>} spending={<div>daily-net-flow</div>} />);
+  expect(html).toContain("Spending");
+  expect(html).toContain("daily-net-flow");
+  for (const hidden of ["schema-only", "memory-only", "usage-only"]) expect(html).not.toContain(hidden);
+});

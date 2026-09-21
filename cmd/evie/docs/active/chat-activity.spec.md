@@ -1,5 +1,10 @@
 # Chat activity timeline
 
+The shared tabbed inspector extension is specified in
+[workspace-local-folder.spec.md](workspace-local-folder.spec.md). Live disk files
+and Git comparisons use separate tabs; the recorded-evidence rules below remain
+binding for file/tool/memory inspections opened from conversation activity.
+
 Status: implemented and verified. Origin: David's request to replace raw tool cards with
 the compact activity presentation in his Codex screenshot.
 

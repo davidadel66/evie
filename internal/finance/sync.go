@@ -45,6 +45,10 @@ type SyncResult struct {
 
 var runSyncItem = syncOneItem
 
+// All in-process callers share the gate, so a web refresh and an agent sync
+// cannot read and later commit competing versions of the same bank cursor.
+var syncGate = make(chan struct{}, 1)
+
 // Sync pulls new transactions for every linked bank and returns the
 // results as data — it prints nothing; rendering belongs to the caller.
 // One bank failing is recorded in its BankSync.Err and doesn't stop the
@@ -54,6 +58,15 @@ var runSyncItem = syncOneItem
 // from the last committed cursor before being recorded as that bank's
 // error.
 func Sync(ctx context.Context, db *sql.DB) (*SyncResult, error) {
+	select {
+	case syncGate <- struct{}{}:
+		defer func() { <-syncGate }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	client, err := plaidClient()
 	if err != nil {
 		return nil, err

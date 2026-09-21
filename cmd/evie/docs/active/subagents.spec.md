@@ -125,6 +125,15 @@ allowances produce an explicit refusal rather than a change of scope.
   unchanged; accessing the new capability requires a newly composed session.
   Registration is compiled into Evie and follows existing enablement,
   dependency, version, startup, and shutdown conventions.
+- **Parent delegation guidance.** The parent's system instructions encourage
+  bounded delegation for independent progress, focused investigation, or a fresh
+  assessment when it is likely to improve quality or save time. Assignments must
+  fit the available delegation tool, worker capabilities, and current scope.
+  The parent supplies a clear objective, relevant authorized context, boundaries,
+  and expected result; it verifies findings and owns integration. Independent
+  review may follow implementation sequentially. Trivial or tightly coupled
+  steps stay in the parent. This guidance does not add worker capabilities or
+  appear in the child's pinned instructions.
 - **Capability and scope ceilings.** Admission verifies that the child
   composition is permitted by the parent's pinned capabilities, inherited
   Context Scope, and current applicable access restrictions. Required research

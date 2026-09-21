@@ -1,12 +1,14 @@
 # GPT-6 Astra through OpenRouter
 
 Status: implemented and verified; migration approved by David on 2026-09-10.
+Default superseded by `deepseek/deepseek-v4.1-flash` at David's request on
+2026-09-18; this contract still applies to explicit `EVIE_MODEL=openai/gpt-6-astra`.
 Decisions: [gpt-6-astra.decisions.md](gpt-6-astra.decisions.md).
 Origin and rollout evidence: [migration plan](../../../../docs/gpt-6-astra-migration-plan.md).
 
 ## Outcome
 
-Evie conversations and compaction use `openai/gpt-6-astra` through OpenRouter's
+When explicitly selected, Evie conversations and compaction use `openai/gpt-6-astra` through OpenRouter's
 stateless Responses endpoint. Existing OpenRouter credentials, durable history,
 tool authorization, cancellation, memory scope, and usage reporting continue to
 work. Explicit `EVIE_MODEL=moonshotai/kimi-k3` remains a manual rollback using

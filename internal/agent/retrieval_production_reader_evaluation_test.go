@@ -128,9 +128,8 @@ func productionReaderSetup(t *testing.T, phase string) (*openrouter.Client, open
 	if !filepath.IsAbs(directory) {
 		t.Fatal("absolute reader artifact directory required")
 	}
-	if DefaultModel != "openai/gpt-6-astra" {
-		t.Fatal("production reader model changed")
-	}
+	// Preserve the model and Responses protocol of the recorded Stage 5
+	// evaluation independently of the current conversational default.
 	t.Setenv("EVIE_CONTEXT_WINDOW_TOKENS", "")
 	t.Setenv("EVIE_CONTEXT_WORKING_TOKENS", "24576")
 	t.Setenv("EVIE_CONTEXT_OUTPUT_RESERVE_TOKENS", "768")
@@ -145,7 +144,7 @@ func productionReaderSetup(t *testing.T, phase string) (*openrouter.Client, open
 	if err != nil {
 		t.Fatal("production reader credential unavailable")
 	}
-	profile, err := client.ResolveContextProfile(context.Background(), DefaultModel)
+	profile, err := client.ResolveContextProfile(context.Background(), openrouter.AstraModel)
 	if err != nil {
 		t.Fatalf("production profile discovery failed: %v", err)
 	}

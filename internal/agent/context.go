@@ -14,6 +14,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/repoinstructions"
 )
 
 const (
@@ -68,19 +69,21 @@ func (CanonicalRequestEstimator) Estimate(request openrouter.ChatRequest) (Reque
 }
 
 type ContextComposeInput struct {
-	WorkerInstructions string
-	MemoryData         string
-	MemoryReceipt      *memory.RetrievalReceipt
-	Profile            openrouter.ContextProfile
-	Summary            *ContextSummary
-	Events             []memory.Event
-	ActiveRootID       memory.EventID
-	TriggerEventID     memory.EventID
-	Iteration          int
-	Tools              []openrouter.Tool
-	Reasoning          *openrouter.ReasoningConfig
-	WorkingContext     string
-	Continuation       map[memory.EventID][]json.RawMessage
+	RepositoryInstructions       string
+	RepositoryInstructionsTurnID memory.EventID
+	WorkerInstructions           string
+	MemoryData                   string
+	MemoryReceipt                *memory.RetrievalReceipt
+	Profile                      openrouter.ContextProfile
+	Summary                      *ContextSummary
+	Events                       []memory.Event
+	ActiveRootID                 memory.EventID
+	TriggerEventID               memory.EventID
+	Iteration                    int
+	Tools                        []openrouter.Tool
+	Reasoning                    *openrouter.ReasoningConfig
+	WorkingContext               string
+	Continuation                 map[memory.EventID][]json.RawMessage
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -234,6 +237,9 @@ func (c *ContextComposer) projectAtStart(
 		if input.WorkingContext != "" {
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.WorkingContext})
 		}
+		if input.RepositoryInstructions != "" {
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.RepositoryInstructions})
+		}
 		messages = append(messages, projection.conversation...)
 		projection.request = openrouter.ChatRequest{
 			Model:     profile.ConfiguredModel,
@@ -312,42 +318,43 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		canonicalModel = profile.ConfiguredModel
 	}
 	systemBytes, summaryBytes, historyBytes, toolBytes, settingsBytes, err := contextByteBreakdown(
-		projection.request, len(projection.conversation), input.WorkingContext != "", input.Summary != nil,
+		projection.request, len(projection.conversation), input.Summary != nil,
 	)
 	if err != nil {
 		return ComposedContext{}, err
 	}
 	snapshot := memory.ContextSnapshotPayload{
-		Memory:                 input.MemoryReceipt,
-		SchemaVersion:          memory.ContextSnapshotSchemaVersion,
-		ComposerVersion:        ContextComposerVersion,
-		EstimatorVersion:       c.estimator.Version(),
-		Iteration:              input.Iteration,
-		ConfiguredModel:        profile.ConfiguredModel,
-		CanonicalModel:         canonicalModel,
-		AdvertisedModel:        profile.AdvertisedModel,
-		ProfileSource:          string(profile.Source),
-		AdvertisedWindowTokens: profile.AdvertisedWindowTokens,
-		HardWindowTokens:       profile.HardWindowTokens,
-		WorkingCeilingTokens:   profile.WorkingTokens,
-		OutputReserveTokens:    profile.OutputReserveTokens,
-		EstimationMarginTokens: profile.EstimationMarginTokens,
-		UsableInputBytes:       usable,
-		SerializedBytes:        projection.estimate.SerializedBytes,
-		RoughTokenEstimate:     projection.estimate.RoughTokens,
-		RequestSHA256:          projection.estimate.RequestSHA256,
-		RetainedFirstEventID:   first.ID,
-		RetainedFirstSequence:  first.Sequence,
-		RetainedLastEventID:    trigger.ID,
-		RetainedLastSequence:   trigger.Sequence,
-		MessageCount:           len(projection.request.Messages),
-		ToolSchemaCount:        len(projection.request.Tools),
-		SystemMessageBytes:     systemBytes,
-		SummaryMessageBytes:    summaryBytes,
-		HistoryMessageBytes:    historyBytes,
-		ToolSchemaBytes:        toolBytes,
-		RequestSettingsBytes:   settingsBytes,
-		Placeholders:           toolResultPlaceholderManifests(projection.selectedOriginal, projection.selectedProjected),
+		Memory:                       input.MemoryReceipt,
+		RepositoryInstructionsTurnID: input.RepositoryInstructionsTurnID,
+		SchemaVersion:                memory.ContextSnapshotSchemaVersion,
+		ComposerVersion:              ContextComposerVersion,
+		EstimatorVersion:             c.estimator.Version(),
+		Iteration:                    input.Iteration,
+		ConfiguredModel:              profile.ConfiguredModel,
+		CanonicalModel:               canonicalModel,
+		AdvertisedModel:              profile.AdvertisedModel,
+		ProfileSource:                string(profile.Source),
+		AdvertisedWindowTokens:       profile.AdvertisedWindowTokens,
+		HardWindowTokens:             profile.HardWindowTokens,
+		WorkingCeilingTokens:         profile.WorkingTokens,
+		OutputReserveTokens:          profile.OutputReserveTokens,
+		EstimationMarginTokens:       profile.EstimationMarginTokens,
+		UsableInputBytes:             usable,
+		SerializedBytes:              projection.estimate.SerializedBytes,
+		RoughTokenEstimate:           projection.estimate.RoughTokens,
+		RequestSHA256:                projection.estimate.RequestSHA256,
+		RetainedFirstEventID:         first.ID,
+		RetainedFirstSequence:        first.Sequence,
+		RetainedLastEventID:          trigger.ID,
+		RetainedLastSequence:         trigger.Sequence,
+		MessageCount:                 len(projection.request.Messages),
+		ToolSchemaCount:              len(projection.request.Tools),
+		SystemMessageBytes:           systemBytes,
+		SummaryMessageBytes:          summaryBytes,
+		HistoryMessageBytes:          historyBytes,
+		ToolSchemaBytes:              toolBytes,
+		RequestSettingsBytes:         settingsBytes,
+		Placeholders:                 toolResultPlaceholderManifests(projection.selectedOriginal, projection.selectedProjected),
 	}
 	if input.Summary != nil {
 		snapshot.ActiveCompactionEventID = input.Summary.CompactionEventID
@@ -427,8 +434,22 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 			return ContextDiagnostics{}, fmt.Errorf("load working context: %w", err)
 		}
 	}
+	repository := ""
+	if provider, ok := s.history.(interface {
+		PreviewRepositoryInstructions(context.Context) (memory.RepositoryInstructionSnapshot, error)
+	}); ok && s.workerInstructions == "" {
+		snapshot, loadErr := provider.PreviewRepositoryInstructions(ctx)
+		if loadErr != nil {
+			return ContextDiagnostics{}, loadErr
+		}
+		if snapshot.Status == "error" {
+			return ContextDiagnostics{}, errors.New(snapshot.Detail)
+		}
+		repository = repoinstructions.Render(snapshot)
+	}
 	composed, err := s.composer.Compose(ContextComposeInput{
-		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
+		RepositoryInstructions: repository,
+		Profile:                s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
 		Tools: s.modelToolset().Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 	})
@@ -546,7 +567,6 @@ func cloneReasoning(reasoning *openrouter.ReasoningConfig) *openrouter.Reasoning
 func contextByteBreakdown(
 	request openrouter.ChatRequest,
 	historyMessages int,
-	hasWorkingContext bool,
 	hasSummary bool,
 ) (int64, int64, int64, int64, int64, error) {
 	if openrouter.UsesResponses(request.Model) {
@@ -602,8 +622,8 @@ func contextByteBreakdown(
 		toolBytes = int64(len(tools))
 	}
 	historyBytes := int64(len(history))
-	if hasWorkingContext {
-		working, err := json.Marshal(request.Messages[nextSystem])
+	for _, message := range request.Messages[nextSystem : len(request.Messages)-historyMessages] {
+		working, err := json.Marshal(message)
 		if err != nil {
 			return 0, 0, 0, 0, 0, err
 		}

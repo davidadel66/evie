@@ -25,12 +25,14 @@ type (
 		UpdatedAt     time.Time `json:"updatedAt"`
 	}
 	Workspace struct {
-		ID                WorkspaceID         `json:"id"`
-		DisplayName       string              `json:"displayName"`
-		State             WorkspaceState      `json:"state"`
-		CurrentRevisionID WorkspaceRevisionID `json:"currentRevisionId"`
-		CreatedAt         time.Time           `json:"createdAt"`
-		UpdatedAt         time.Time           `json:"updatedAt"`
+		Instructions      RepositoryInstructionSettings `json:"instructions"`
+		Folder            WorkspaceFolder               `json:"folder"`
+		ID                WorkspaceID                   `json:"id"`
+		DisplayName       string                        `json:"displayName"`
+		State             WorkspaceState                `json:"state"`
+		CurrentRevisionID WorkspaceRevisionID           `json:"currentRevisionId"`
+		CreatedAt         time.Time                     `json:"createdAt"`
+		UpdatedAt         time.Time                     `json:"updatedAt"`
 	}
 	Session struct {
 		ID                        SessionID           `json:"id"`
@@ -58,6 +60,13 @@ type (
 		ParentSessionID   SessionID
 	}
 )
+
+// WorkspaceFolder is an operational working location, not a memory scope or
+// a change to a session's pinned Workspace configuration.
+type WorkspaceFolder struct {
+	Path     string `json:"path"`
+	Revision int64  `json:"revision"`
+}
 
 func (s Session) ScopeContext() ScopeContext {
 	return ScopeContext{

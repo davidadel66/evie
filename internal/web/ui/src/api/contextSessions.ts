@@ -1,4 +1,6 @@
 export type Workspace = {
+  instructions?: {enabled:boolean;revision:number};
+	 folder?: { path: string; revision: number };
   id: string;
   displayName: string;
   state: "active" | "archived";

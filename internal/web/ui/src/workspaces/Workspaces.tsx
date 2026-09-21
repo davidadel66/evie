@@ -6,6 +6,7 @@ import type {
   Workspace,
 } from "../api/contextSessions";
 import { Folder, MessageSquare, Plus } from "../ui/Icon";
+import { FolderSettings } from "../folder/FolderSettings";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -150,12 +151,18 @@ export function WorkspaceHome({
   busy,
   onNewChat,
   onResume,
+  onFolderChanged,
+  onOpenFiles,
+  instructions,
 }: {
   workspace: Workspace;
   sessions: StoredSession[];
   busy: boolean;
   onNewChat: () => void;
   onResume: (session: StoredSession) => void;
+  onFolderChanged?: () => Promise<void>;
+  onOpenFiles?: () => void;
+  instructions?: React.ReactNode;
 }) {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
@@ -173,6 +180,8 @@ export function WorkspaceHome({
           )}
         </header>
 
+        {instructions}
+        <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="text-body text-sm font-semibold">Conversations</h2>

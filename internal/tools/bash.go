@@ -149,7 +149,13 @@ func runBash(parent context.Context, args string) (string, error) {
 		}
 	}
 
-	dir, err := startDir(params.Cwd)
+	var dir string
+	var err error
+	if directory := invocationDirectory(parent); directory != nil {
+		dir, err = directory.Start(params.Cwd)
+	} else {
+		dir, err = startDir(params.Cwd)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -214,7 +220,11 @@ func runBash(parent context.Context, args string) (string, error) {
 		return "", parent.Err()
 	}
 
-	rememberCwd(pwdPath)
+	if directory := invocationDirectory(parent); directory != nil {
+		directory.remember(pwdPath)
+	} else {
+		rememberCwd(pwdPath)
+	}
 
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("command timed out after %s and was killed. Partial output:\n%s", timeout, out)

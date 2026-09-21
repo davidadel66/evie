@@ -1,5 +1,14 @@
 # GPT-6 Astra decisions
 
+- **2026-09-18 — default to DeepSeek V4.1 Flash through OpenRouter.**
+  David requested `deepseek/deepseek-v4.1-flash` in place of Astra. Conversations
+  and compaction use the existing Chat Completions path and its current settings.
+  Explicit `EVIE_MODEL=openai/gpt-6-astra` keeps the Astra-specific contract below.
+  Context discovery accepts the advertised ID or canonical slug for every model;
+  both identities come from the focused model metadata, and unrelated endpoint
+  identities still fail. Historical Stage 5 live reader evaluations remain pinned
+  to Astra so prior evidence is not silently relabeled as DeepSeek validation.
+
 - **2026-09-10 — retain OpenRouter and use its stateless Responses endpoint.**
   David selected OpenRouter and approved implementing the migration after the
   API comparison. The verified configured alias is `openai/gpt-6-astra`;

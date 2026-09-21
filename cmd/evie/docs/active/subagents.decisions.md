@@ -1,5 +1,15 @@
 # Subagents implementation decisions
 
+## 2026-09-11 — Capability-aware parent delegation guidance
+
+The owner approved general delegation guidance in the parent's system prompt:
+use bounded delegation when independent progress, focused investigation, or
+fresh eyes can improve quality or save time, without requiring an explicit
+request for subagents. The parent provides the assignment context and checks
+and integrates the result. Coding and review are conditional on available worker
+capabilities; the existing web-only research preset and its pinned instructions
+remain unchanged. Independent review need not run concurrently with implementation.
+
 ## 2026-09-10 — Parallel foreground work and orchestrator-owned Task Trees
 
 Source: the owner's implementation request explicitly amends the original spec

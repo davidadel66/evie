@@ -81,9 +81,13 @@ func New(client Client, model string) *Session
 func (s *Session) Send(input string, ev Events, approve func(name, args string) bool, extra ...tools.Tool) error
 ```
 
-Model string: default lives in `internal/agent` (`openai/gpt-6-astra` as of the
-[2026-09-10 migration](gpt-6-astra.spec.md)),
-overridable via `EVIE_MODEL`. main.go stops hardcoding it.
+Model string: default lives in `internal/agent` (`deepseek/deepseek-v4.1-flash`
+as requested on 2026-09-18), overridable via `EVIE_MODEL`. DeepSeek uses the
+existing OpenRouter Chat Completions transport and reasoning/compaction settings.
+Context discovery accepts either the advertised model ID or canonical slug in
+endpoint metadata, rejecting unrelated identities. Explicit
+`EVIE_MODEL=openai/gpt-6-astra` retains the [Astra Responses contract](gpt-6-astra.spec.md).
+main.go stops hardcoding the default.
 
 Event order within a turn is deterministic and sequential. `AssistantDone`
 contains the authoritative committed content and fires exactly once after every

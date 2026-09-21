@@ -40,7 +40,8 @@ func memoryInvestigationContext(t *testing.T, earlier, constraint string, wantCl
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := openrouter.NewExplicitContextProfile(openrouter.AstraModel, 1_000_000, 24_576, 768)
+	// Leave room for the parent instructions while forcing partial evidence delivery.
+	profile, err := openrouter.NewExplicitContextProfile(openrouter.AstraModel, 1_000_000, 25_600, 768)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func memoryInvestigationContext(t *testing.T, earlier, constraint string, wantCl
 		}
 		// These are the declared profile's conservative byte budget and the
 		// existing cumulative memory bound, independent of admission internals.
-		if len(wire) > 19_712 || snapshots[i].SerializedBytes != int64(len(wire)) || snapshots[i].RequestSHA256 != memory.CompilerHash(wire) {
+		if len(wire) > 20_736 || snapshots[i].SerializedBytes != int64(len(wire)) || snapshots[i].RequestSHA256 != memory.CompilerHash(wire) {
 			t.Fatalf("request %d escaped the actual profile or its snapshot: bytes=%d snapshot=%+v", i, len(wire), snapshots[i])
 		}
 		questionPresent, discussionPresent := false, earlier == ""

@@ -201,8 +201,7 @@ func (c *Client) discoverContextProfile(
 	); err != nil {
 		return ContextProfile{}, fmt.Errorf("look up model endpoints: %w", err)
 	}
-	if endpointsResponse.Data.ID != modelData.CanonicalSlug &&
-		!(UsesResponses(model) && endpointsResponse.Data.ID == modelData.ID) {
+	if endpointsResponse.Data.ID != modelData.CanonicalSlug && endpointsResponse.Data.ID != modelData.ID {
 		return ContextProfile{}, fmt.Errorf(
 			"endpoint model identity %q does not match canonical model %q",
 			endpointsResponse.Data.ID,

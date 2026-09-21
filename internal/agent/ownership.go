@@ -93,6 +93,7 @@ const (
 	causeAssistantPersistence
 	causeStorage
 	causeContextOverflow
+	causeRepositoryInstructions
 )
 
 type terminalCause struct {

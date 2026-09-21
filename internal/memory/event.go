@@ -45,6 +45,7 @@ const (
 	ClassificationCallerCancelled         TurnClassification = "caller_cancelled"
 	ClassificationCallerDeadlineExceeded  TurnClassification = "caller_deadline_exceeded"
 	ClassificationContextOverflow         TurnClassification = "context_overflow"
+	ClassificationRepositoryInstructions  TurnClassification = "repository_instructions_unavailable"
 )
 
 type TurnStage string
@@ -82,12 +83,16 @@ func (p TurnTerminalPayload) Validate(eventType EventType) error {
 	default:
 		return fmt.Errorf("invalid terminal lifecycle stage %q", p.Stage)
 	}
+	if p.Classification == ClassificationRepositoryInstructions && p.Stage != StageContextCompose {
+		return fmt.Errorf("repository instructions cannot use lifecycle stage %q", p.Stage)
+	}
 
 	switch eventType {
 	case EventTurnFailed:
 		if p.Classification != ClassificationProviderError &&
 			p.Classification != ClassificationProviderResponseInvalid &&
-			p.Classification != ClassificationContextOverflow {
+			p.Classification != ClassificationContextOverflow &&
+			p.Classification != ClassificationRepositoryInstructions {
 			return fmt.Errorf("invalid failed-turn classification %q", p.Classification)
 		}
 	case EventTurnInterrupted:
@@ -120,6 +125,8 @@ func (p TurnTerminalPayload) SafeContent() string {
 		return "The caller deadline was exceeded."
 	case ClassificationContextOverflow:
 		return "The turn could not fit within the configured model context."
+	case ClassificationRepositoryInstructions:
+		return "Repository instructions could not be prepared for this turn."
 	default:
 		return ""
 	}
@@ -285,38 +292,39 @@ type ContextPlaceholderManifest struct {
 // conversational provider request. Content-bearing request fields deliberately
 // have no representation here.
 type ContextSnapshotPayload struct {
-	Memory                    *RetrievalReceipt                `json:"memory,omitempty"`
-	SchemaVersion             int                              `json:"schema_version"`
-	ComposerVersion           string                           `json:"composer_version"`
-	EstimatorVersion          string                           `json:"estimator_version"`
-	Iteration                 int                              `json:"iteration"`
-	ConfiguredModel           string                           `json:"configured_model"`
-	CanonicalModel            string                           `json:"canonical_model"`
-	AdvertisedModel           string                           `json:"advertised_model,omitempty"`
-	ProfileSource             string                           `json:"profile_source"`
-	AdvertisedWindowTokens    int64                            `json:"advertised_window_tokens,omitempty"`
-	HardWindowTokens          int64                            `json:"hard_window_tokens"`
-	WorkingCeilingTokens      int64                            `json:"working_ceiling_tokens"`
-	OutputReserveTokens       int64                            `json:"output_reserve_tokens"`
-	EstimationMarginTokens    int64                            `json:"estimation_margin_tokens"`
-	UsableInputBytes          int64                            `json:"usable_input_bytes"`
-	SerializedBytes           int64                            `json:"serialized_bytes"`
-	RoughTokenEstimate        int64                            `json:"rough_token_estimate"`
-	RequestSHA256             string                           `json:"request_sha256"`
-	RetainedFirstEventID      EventID                          `json:"retained_first_event_id"`
-	RetainedFirstSequence     int64                            `json:"retained_first_sequence"`
-	RetainedLastEventID       EventID                          `json:"retained_last_event_id"`
-	RetainedLastSequence      int64                            `json:"retained_last_sequence"`
-	ActiveCompactionEventID   EventID                          `json:"active_compaction_event_id,omitempty"`
-	CompactionFailureCategory ContextCompactionFailureCategory `json:"compaction_failure_category,omitempty"`
-	MessageCount              int                              `json:"message_count"`
-	ToolSchemaCount           int                              `json:"tool_schema_count"`
-	SystemMessageBytes        int64                            `json:"system_message_bytes"`
-	SummaryMessageBytes       int64                            `json:"summary_message_bytes"`
-	HistoryMessageBytes       int64                            `json:"history_message_bytes"`
-	ToolSchemaBytes           int64                            `json:"tool_schema_bytes"`
-	RequestSettingsBytes      int64                            `json:"request_settings_bytes"`
-	Placeholders              []ContextPlaceholderManifest     `json:"placeholders,omitempty"`
+	RepositoryInstructionsTurnID EventID                          `json:"repository_instructions_turn_id,omitempty"`
+	Memory                       *RetrievalReceipt                `json:"memory,omitempty"`
+	SchemaVersion                int                              `json:"schema_version"`
+	ComposerVersion              string                           `json:"composer_version"`
+	EstimatorVersion             string                           `json:"estimator_version"`
+	Iteration                    int                              `json:"iteration"`
+	ConfiguredModel              string                           `json:"configured_model"`
+	CanonicalModel               string                           `json:"canonical_model"`
+	AdvertisedModel              string                           `json:"advertised_model,omitempty"`
+	ProfileSource                string                           `json:"profile_source"`
+	AdvertisedWindowTokens       int64                            `json:"advertised_window_tokens,omitempty"`
+	HardWindowTokens             int64                            `json:"hard_window_tokens"`
+	WorkingCeilingTokens         int64                            `json:"working_ceiling_tokens"`
+	OutputReserveTokens          int64                            `json:"output_reserve_tokens"`
+	EstimationMarginTokens       int64                            `json:"estimation_margin_tokens"`
+	UsableInputBytes             int64                            `json:"usable_input_bytes"`
+	SerializedBytes              int64                            `json:"serialized_bytes"`
+	RoughTokenEstimate           int64                            `json:"rough_token_estimate"`
+	RequestSHA256                string                           `json:"request_sha256"`
+	RetainedFirstEventID         EventID                          `json:"retained_first_event_id"`
+	RetainedFirstSequence        int64                            `json:"retained_first_sequence"`
+	RetainedLastEventID          EventID                          `json:"retained_last_event_id"`
+	RetainedLastSequence         int64                            `json:"retained_last_sequence"`
+	ActiveCompactionEventID      EventID                          `json:"active_compaction_event_id,omitempty"`
+	CompactionFailureCategory    ContextCompactionFailureCategory `json:"compaction_failure_category,omitempty"`
+	MessageCount                 int                              `json:"message_count"`
+	ToolSchemaCount              int                              `json:"tool_schema_count"`
+	SystemMessageBytes           int64                            `json:"system_message_bytes"`
+	SummaryMessageBytes          int64                            `json:"summary_message_bytes"`
+	HistoryMessageBytes          int64                            `json:"history_message_bytes"`
+	ToolSchemaBytes              int64                            `json:"tool_schema_bytes"`
+	RequestSettingsBytes         int64                            `json:"request_settings_bytes"`
+	Placeholders                 []ContextPlaceholderManifest     `json:"placeholders,omitempty"`
 }
 
 func (p ContextSnapshotPayload) Validate() error {

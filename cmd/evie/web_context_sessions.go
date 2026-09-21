@@ -51,6 +51,14 @@ func (c *webContextSessionController) RegisterWorkspace(ctx context.Context, dis
 	return c.store.RegisterWorkspace(ctx, displayName)
 }
 
+func (c *webContextSessionController) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (memory.WorkspaceFolder, error) {
+	return c.store.WorkspaceFolder(ctx, id)
+}
+
+func (c *webContextSessionController) SetWorkspaceFolder(ctx context.Context, id memory.WorkspaceID, revision int64, path string) (memory.WorkspaceFolder, error) {
+	return c.store.SetWorkspaceFolder(ctx, id, revision, path)
+}
+
 func (c *webContextSessionController) SelectSession(
 	ctx context.Context,
 	selection web.ContextSessionSelection,
@@ -111,4 +119,14 @@ func (c *webContextSessionController) SelectSession(
 		return web.OpenedContextSession{}, err
 	}
 	return web.OpenedContextSession{Session: session, Agent: openedAgent}, nil
+}
+
+func (c *webContextSessionController) PreviewRepositoryInstructions(ctx context.Context, id memory.WorkspaceID) (memory.RepositoryInstructionSnapshot, error) {
+	return c.store.PreviewRepositoryInstructions(ctx, id)
+}
+func (c *webContextSessionController) SetRepositoryInstructionSettings(ctx context.Context, id memory.WorkspaceID, revision int64, enabled bool) (memory.RepositoryInstructionSettings, error) {
+	return c.store.SetRepositoryInstructionSettings(ctx, id, revision, enabled)
+}
+func (c *webContextSessionController) RepositoryInstructionSnapshot(ctx context.Context, session memory.SessionID, turn memory.EventID) (memory.RepositoryInstructionSnapshot, error) {
+	return c.store.RepositoryInstructionSnapshot(ctx, session, turn)
 }

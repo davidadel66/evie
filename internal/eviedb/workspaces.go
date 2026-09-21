@@ -26,6 +26,7 @@ func (s *Store) RegisterWorkspace(ctx context.Context, displayName string) (memo
 	displayName = memory.WorkspaceDisplayLabel(displayName, now)
 	workspace := memory.Workspace{
 		ID:                memory.WorkspaceID(id.String()),
+		Instructions:      memory.RepositoryInstructionSettings{Enabled: true},
 		DisplayName:       displayName,
 		State:             memory.WorkspaceActive,
 		CurrentRevisionID: memory.WorkspaceRevisionID(revisionID.String()),
@@ -40,6 +41,11 @@ func (s *Store) RegisterWorkspace(ctx context.Context, displayName string) (memo
 		workspace.CreatedAt.Format(time.RFC3339Nano), workspace.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
 		return memory.Workspace{}, fmt.Errorf("insert Workspace: %w", err)
 	}
+	settings, err := s.RepositoryInstructionSettings(ctx, workspace.ID)
+	if err != nil {
+		return memory.Workspace{}, err
+	}
+	workspace.Instructions = settings
 	return workspace, nil
 }
 
@@ -65,6 +71,23 @@ func (s *Store) ListWorkspaces(ctx context.Context, includeArchived bool) ([]mem
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read Workspaces: %w", err)
 	}
+	// Close the cursor before additional reads: tests and embedded hosts may
+	// deliberately use one SQLite connection.
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range workspaces {
+		folder, err := s.WorkspaceFolder(ctx, workspaces[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		workspaces[i].Folder = folder
+		settings, err := s.RepositoryInstructionSettings(ctx, workspaces[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		workspaces[i].Instructions = settings
+	}
 	return workspaces, nil
 }
 
@@ -81,6 +104,11 @@ func (s *Store) RenameWorkspace(ctx context.Context, id memory.WorkspaceID, disp
 	if err != nil {
 		return memory.Workspace{}, fmt.Errorf("rename Workspace: %w", err)
 	}
+	settings, err := s.RepositoryInstructionSettings(ctx, workspace.ID)
+	if err != nil {
+		return memory.Workspace{}, err
+	}
+	workspace.Instructions = settings
 	return workspace, nil
 }
 
@@ -96,6 +124,11 @@ func (s *Store) ArchiveWorkspace(ctx context.Context, id memory.WorkspaceID) (me
 	if err != nil {
 		return memory.Workspace{}, fmt.Errorf("archive Workspace: %w", err)
 	}
+	settings, err := s.RepositoryInstructionSettings(ctx, workspace.ID)
+	if err != nil {
+		return memory.Workspace{}, err
+	}
+	workspace.Instructions = settings
 	return workspace, nil
 }
 

@@ -6,7 +6,9 @@ import type {
   Workspace,
 } from "./api/contextSessions";
 import { MemoryPresentationProvider } from "./memory/presentation";
-import { Panel, type InspectorTarget } from "./artifacts/Panel";
+import type { InspectorTarget } from "./artifacts/Panel";
+import { InstructionBadge } from "./folder/Instructions";
+import { InspectorPane } from "./artifacts/InspectorPane";
 import { inspectToolFile } from "./artifacts/fileInspection";
 import { selectedToolInspection, selectedMemoryTools, type ToolSelection } from "./artifacts/toolSelection";
 import { Chat } from "./chat/Chat";
@@ -47,6 +49,8 @@ export default function App() {
     try { return localStorage.getItem(sidebarStorageKey) === "true"; } catch { return false; }
   });
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectionRequest, setInspectionRequest] = useState(0);
+  const [filesRequest, setFilesRequest] = useState(0);
   const [inspectorFocused, setInspectorFocused] = useState(false);
   const [inspectorOverride, setInspectorOverride] = useState<InspectorTarget>();
   const [selectedAction, setSelectedAction] = useState<ToolSelection>();
@@ -58,11 +62,17 @@ export default function App() {
   const activeWorkspace = activeView.kind === "workspace"
     ? contextSessions.snapshot?.workspaces.find((workspace) => workspace.id === activeView.workspaceId)
     : undefined;
+  const scopeWorkspace=contextSessions.snapshot?.workspaces.find(workspace=>workspace.id===contextSessions.snapshot?.activeScope?.workspaceId);
+  const openInstructions=(workspace:Workspace,trigger:HTMLButtonElement,turnId?:string)=>{
+    fileTrigger.current=trigger;activityTrigger.current=null;
+    setSelectedAction(undefined);setInspectorOverride({kind:"repository-instructions",workspaceId:workspace.id,folderRevision:workspace.folder?.revision??0,settingsRevision:workspace.instructions?.revision??0,sessionId:turnId?contextSessions.snapshot?.activeSession?.id:undefined,turnId});
+    setInspectionRequest(value=>value+1);setInspectorOpen(true);setInspectorFocused(false);setMobileNavOpen(false);
+  };
   const selectedTool = selectedToolInspection(selectedAction, contextSessions.snapshot?.activeSession?.id, items);
   const selectedInspection = selectedTool ? inspectToolFile(selectedTool) : null;
   const latestFileDiff = [...items].reverse().find((item) => item.kind === "tool" && item.approval?.preview);
   const latestFile = latestFileDiff?.kind === "tool" ? inspectToolFile(latestFileDiff) : null;
-  const visibleOverride = inspectorOverride?.kind === "memory-evidence"
+  const visibleOverride = inspectorOverride?.kind==="repository-instructions"&&inspectorOverride.turnId&&inspectorOverride.sessionId!==contextSessions.snapshot?.activeSession?.id?undefined:inspectorOverride?.kind === "memory-evidence"
     ? inspectorOverride.sessionId === contextSessions.snapshot?.activeSession?.id
       ? {...inspectorOverride, memoryTools: selectedMemoryTools(inspectorOverride, contextSessions.snapshot?.activeSession?.id, items)}
       : undefined
@@ -82,7 +92,7 @@ export default function App() {
   useEffect(() => {
     if (!inspectorOpen || (!selectedAction && inspectorOverride?.kind !== "memory-evidence")) return;
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || (event.target instanceof Element && event.target.closest("[data-terminal]"))) return;
       event.preventDefault();
       setInspectorOpen(false);
       setInspectorFocused(false);
@@ -97,6 +107,7 @@ export default function App() {
     if (!sessionId) return;
     fileTrigger.current = trigger;
     activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
+    setInspectionRequest(value => value + 1);
     setSelectedAction({sessionId, key});
     setInspectorOverride(undefined);
     setInspectorOpen(true);
@@ -220,6 +231,7 @@ export default function App() {
       {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={closeNavigation} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
       <Sidebar
         snapshot={contextSessions.snapshot}
+        instructions={scopeWorkspace&&<InstructionBadge workspace={scopeWorkspace} refresh={status} onOpen={trigger=>openInstructions(scopeWorkspace,trigger)}/>}
         destination={sidebarDestination(activeView)}
         busy={contextSessions.busy || status === "streaming"}
         mobileOpen={mobileNavOpen}
@@ -263,19 +275,20 @@ export default function App() {
         {contextSessions.problem && activeView.kind !== "workspaces" && <div role="alert" className="border-danger-hair bg-danger-bg text-danger-ink border-b px-5 py-3 text-sm">{contextSessions.problem}</div>}
         {problem && <Banner message={problem} onDismiss={dismissProblem} />}
 
-        <div className="relative flex min-h-0 flex-1">
+        <div className="@container/workbench relative flex min-h-0 flex-1">
           {!inspectorFocused && (
             <div className="flex min-w-0 flex-1 flex-col">
               {activeView.kind === "chat" && (
                 contextSessions.snapshot?.activeScope ? (
                   <>
-                    <Chat key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
+                    <Chat onOpenInstructions={scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
                       if (!sessionId) return;
                       fileTrigger.current = trigger;
                       activityTrigger.current = trigger.closest('section[aria-label="Turn activity"]')?.querySelector<HTMLButtonElement>('button[aria-controls]') ?? null;
                       setSelectedAction(undefined);
                       setInspectorOverride({kind: "memory-evidence", sessionId, snapshotId});
+                      setInspectionRequest(value => value + 1);
                       setInspectorOpen(true);
                       setInspectorFocused(false);
                     }} historyLoading={historyLoading} historyProblem={historyProblem} hasOlder={hasOlder} onOlder={loadOlder} onRetry={retryHistory} />
@@ -328,6 +341,9 @@ export default function App() {
               {activeView.kind === "workspace" && activeWorkspace && (
                 <WorkspaceHome
                   workspace={activeWorkspace}
+                  instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}
+                  onFolderChanged={contextSessions.refresh}
+                  onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
                   sessions={workspaceSessions}
                   busy={contextSessions.busy || status === "streaming"}
                   onNewChat={() => void startWorkspaceChat(activeWorkspace)}
@@ -340,13 +356,22 @@ export default function App() {
             </div>
           )}
 
-          {inspectorOpen && (
-            <Panel
-              target={inspectorTarget}
-              focused={inspectorFocused}
-              onClose={closeInspector}
-            />
-          )}
+          <InspectorPane
+            items={items}
+            target={selectedAction || visibleOverride ? inspectorTarget : undefined}
+            requestVersion={inspectionRequest}
+            filesRequest={filesRequest}
+            workspace={activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId)}
+            sessionId={contextSessions.snapshot?.activeSession?.id}
+            visible={inspectorOpen}
+            focused={inspectorFocused}
+            onClose={closeInspector}
+            onManageFolder={() => {
+              const workspace = activeWorkspace ?? contextSessions.snapshot?.workspaces.find(workspace => workspace.id === contextSessions.snapshot?.activeScope?.workspaceId);
+              if (workspace) openWorkspace(workspace); else openView({id: "workspaces", kind: "workspaces"});
+              setInspectorOpen(false); setInspectorFocused(false);
+            }}
+          />
         </div>
       </div>
     </div></MemoryPresentationProvider>

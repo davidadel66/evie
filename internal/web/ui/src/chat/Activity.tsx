@@ -9,9 +9,9 @@ import { MemoryActivity, type MemoryOpener } from "./MemoryActivity";
 import { elapsedLabel, needsAttention, toolBatchLabel, toolLabel, type ActivityGroup, type ToolItem } from "./activityModel";
 
 type FileOpener = (key: string, trigger: HTMLButtonElement) => void;
-type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener };
+type Props = { group: ActivityGroup; onAnswer: (id: string, approve: boolean) => void; onOpenFile?: FileOpener; onOpenTool?: FileOpener; onOpenMemory?: MemoryOpener; onOpenInstructions?: (turnId:string,trigger:HTMLButtonElement)=>void };
 
-export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory }: Props) {
+export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions }: Props) {
   const [manual, setManual] = useState<boolean | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const bodyID = useId();
@@ -37,6 +37,7 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
         <span>{label}{elapsed && `${complete && !pending ? " for" : " ·"} ${elapsed}`}</span>
         <span className={open ? "rotate-180" : ""}><ChevronDown size={13} /></span>
       </button>
+      {onOpenInstructions&&group.turn?.id&&<button type="button" aria-label="Inspect instructions for this turn" onClick={event=>onOpenInstructions(group.turn!.id,event.currentTarget)} className="text-muted-text hover:text-teal mt-1 flex items-center gap-1.5 text-[11px]"><FileIcon size={12}/>Repository instructions</button>}
       <div id={bodyID} hidden={!open} className="border-hair mt-3 space-y-4 border-t pt-4">
         {open && <ActivityItems items={visibleActivity} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} />}
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}

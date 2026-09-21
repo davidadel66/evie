@@ -107,3 +107,5 @@ export const Layers = svg(
   </>,
   1.6,
 );
+
+export const TerminalIcon = svg(<path d="M4 6l6 6-6 6M13 18h7" />);

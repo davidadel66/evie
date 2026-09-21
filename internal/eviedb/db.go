@@ -1162,6 +1162,14 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("upgrade Workspace Context Scope: %w", err)
 	}
+	if err := ensureWorkspaceFolders(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade Workspace folders: %w", err)
+	}
+	if err := ensureRepositoryInstructions(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := ensureSubagentSchema(ctx, db); err != nil {
 		db.Close()
 		return nil, err

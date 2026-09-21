@@ -1,3 +1,5 @@
+import { InstructionsView } from "../folder/Instructions";
+import type { InstructionTarget } from "../api/repositoryInstructions";
 import { useEffect, useRef } from "react";
 import type { ContextScope, Workspace } from "../api/contextSessions";
 import type { SemanticObjectInspection } from "../api/memory";
@@ -8,8 +10,10 @@ import { Diff } from "../chat/Diff";
 import { FilePath, FileViewer } from "./FileViewer";
 import type { FileInspection as InspectedFile } from "./fileInspection";
 import { MemoryEvidence } from "./MemoryEvidence";
+import { targetTitle, memoryTitle, claimObject } from "./inspectorTitle";
 
 export type InspectorTarget =
+ | ({kind:"repository-instructions"} & InstructionTarget)
   | { kind: "file"; file: InspectedFile }
   | { kind: "tool"; tool: ToolItem }
   | { kind: "memory"; detail: SemanticObjectInspection }
@@ -55,18 +59,25 @@ export function Panel({ target, focused, onClose }: Props) {
       </header>
 
       <div className={target.kind === "file" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto"}>
+        <InspectorContent target={target} />
+      </div>
+    </aside>
+  );
+}
+
+export function InspectorContent({target}: {target: InspectorTarget}) {
+  return <>
         {target.kind === "file" && <FileViewer key={target.file.key} file={target.file} />}
         {target.kind === "tool" && <ToolInspection key={target.tool.key} tool={target.tool} />}
         {target.kind === "memory" && <MemoryInspection detail={target.detail} />}
         {target.kind === "memory-evidence" && <MemoryEvidence key={`${target.sessionId}:${target.snapshotId}`} sessionId={target.sessionId} snapshotId={target.snapshotId} memoryTools={target.memoryTools} />}
+        {target.kind === "repository-instructions" && <InstructionsView target={target}/>}
         {target.kind === "workspace" && <WorkspaceInspection workspace={target.workspace} />}
         {target.kind === "scope" && <ScopeInspection scope={target.scope} />}
         {target.kind === "file-diff" && <FileInspection target={target} />}
         {target.kind === "data" && <DataInspection />}
         {target.kind === "empty" && <EmptyInspection />}
-      </div>
-    </aside>
-  );
+  </>;
 }
 
 function FileInspection({ target }: { target: Extract<InspectorTarget, { kind: "file-diff" }> }) {
@@ -216,28 +227,7 @@ function TargetIcon({ target }: { target: InspectorTarget }) {
   return <FileIcon size={13} />;
 }
 
-function targetTitle(target: InspectorTarget) {
-  if (target.kind === "tool") return "Tool activity";
-  if (target.kind === "file") return target.file.path.split("/").filter(Boolean).pop() ?? target.file.path;
-  if (target.kind === "memory") return memoryTitle(target.detail);
-  if (target.kind === "memory-evidence") return "Memory inspection";
-  if (target.kind === "workspace") return target.workspace.displayName;
-  if (target.kind === "scope") return target.scope.displayName;
-  if (target.kind === "file-diff") return target.path;
-  if (target.kind === "data") return "Data";
-  return "Inspector";
-}
 
-function memoryTitle(detail: SemanticObjectInspection) {
-  if (detail.entity) return detail.entity.canonical_name;
-  if (detail.claim) return `${detail.claim.predicate.label}: ${claimObject(detail.claim)}`;
-  return `${detail.object_kind} ${detail.object_id}`;
-}
-
-function claimObject(claim: NonNullable<SemanticObjectInspection["claim"]>) {
-  if (claim.object.entity_id) return claim.object.entity_id;
-  return claim.object.literal?.value ?? "Unknown";
-}
 
 function formatTime(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "Open";

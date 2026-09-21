@@ -102,6 +102,12 @@ func TestSelectedGlobalAndRelocatedProjectSessionsResumeStoredScopeAndOrderedHis
 				t.Fatalf("resumed request profile model=%q max_tokens=%d", request.Model, request.MaxTokens)
 			}
 			messages := client.requests[0].Messages
+			if tt.name == "project" {
+				if len(messages) < 2 || !strings.Contains(messages[1].Content, selected.ProjectRootSnapshot) || strings.Contains(messages[1].Content, newRoot) {
+					t.Fatalf("working context lost the pinned project root: %+v", messages)
+				}
+				messages = append(messages[:1:1], messages[2:]...)
+			}
 			wantRoles := []string{"system", "user", "assistant", "user", "user"}
 			wantContent := []string{"", "earlier", "old answer", "unfinished tools", "after restart"}
 			if len(messages) != len(wantRoles) {

@@ -57,7 +57,7 @@ export function useContextSessions() {
     [runSelection],
   );
 
-  return { snapshot, busy, problem, select, register };
+  return { snapshot, busy, problem, select, register, refresh };
 }
 
 export function applyOpenedSession(

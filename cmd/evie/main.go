@@ -17,6 +17,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
+	"github.com/davidadel66/evie/internal/finance"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
@@ -254,6 +255,7 @@ func main() {
 			log.Fatalf("usage configuration: %v", err)
 		}
 		usageReader := usage.NewService(runtimeCtx, kernelStore, usage.CodexBinary(), codexHomes)
+		spendingService := finance.NewSpendingService()
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)
@@ -261,7 +263,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), usageReader))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), usageReader), spendingService))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -300,7 +302,7 @@ func main() {
 			), nil
 		})
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader), spendingService))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

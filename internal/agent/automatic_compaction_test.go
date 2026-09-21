@@ -274,7 +274,8 @@ func TestSendMapsTerminalAutomaticCompactionFailureBeforeConversation(t *testing
 }
 
 func TestSendAttemptsAutomaticCompactionAgainOnPostToolIteration(t *testing.T) {
-	history := &fakeHistory{events: automaticPressureHistory(175_000)}
+	// Leave room for the parent instructions so only the tool result triggers compaction.
+	history := &fakeHistory{events: automaticPressureHistory(170_000)}
 	compactor := &fakeClient{steps: []step{{res: openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{
 		Role: "assistant", Content: validCompactionSummary(),
 	}}}}}}}

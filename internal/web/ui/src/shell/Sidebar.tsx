@@ -12,6 +12,7 @@ export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${s
 
 type Props = {
   snapshot?: ContextSessionSnapshot;
+  instructions?: React.ReactNode;
   destination: SidebarDestination;
   busy: boolean;
   mobileOpen: boolean;
@@ -29,6 +30,7 @@ type Props = {
 
 export function Sidebar({
   snapshot,
+  instructions,
   destination,
   busy,
   mobileOpen,
@@ -138,6 +140,7 @@ export function Sidebar({
           </div>
           <TextSizeMenu value={textSize} onChange={onTextSize} placement="top" />
         </div>
+        {instructions}
       </div>
     </aside>
   );

@@ -45,6 +45,7 @@ func ServeContextManaged(
 }
 
 func serveServer(server *Server) error {
+	defer server.Close()
 	addr, err := listenAddr()
 	if err != nil {
 		return err
@@ -87,6 +88,10 @@ type Server struct {
 	databaseInspector DatabaseInspector
 	candidateReview   CandidateReviewKernel
 	usageReader       UsageReader
+	spendingService   SpendingService
+	terminalMu        sync.Mutex
+	terminals         map[string]*terminalEntry
+	terminalsClosed   bool
 
 	mu      sync.Mutex
 	pending map[string]chan bool
@@ -104,8 +109,9 @@ type ReceiptInspector interface {
 // arbitrates.
 func NewServer(session *agent.Session) *Server {
 	return &Server{
-		session: session,
-		pending: make(map[string]chan bool),
+		session:   session,
+		pending:   make(map[string]chan bool),
+		terminals: make(map[string]*terminalEntry),
 	}
 }
 
@@ -195,7 +201,16 @@ func (s *Server) Handler() http.Handler {
 	if s.usageReader != nil {
 		mux.Handle("/api/data/usage/summary", s.managementRoute(s.handleUsage))
 	}
+	if s.spendingService != nil {
+		mux.Handle("/api/data/spending/summary", s.managementRoute(s.handleSpendingSummary))
+		mux.Handle("/api/data/spending/transactions", s.managementRoute(s.handleSpendingTransactions))
+		mux.Handle("/api/data/spending/cash-flow", s.managementRoute(s.handleSpendingCashFlow))
+		mux.Handle("/api/data/spending/refresh", s.managementRoute(s.handleSpendingRefresh))
+	}
 	s.registerCandidateReviewRoutes(mux)
+	s.registerFolderRoutes(mux)
+	s.registerRepositoryInstructionRoutes(mux)
+	s.registerTerminalRoutes(mux)
 	mux.Handle("/", s.staticHandler())
 	return mux
 }

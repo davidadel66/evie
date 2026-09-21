@@ -10,6 +10,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/repoinstructions"
 	"github.com/davidadel66/evie/internal/task"
 	"github.com/davidadel66/evie/internal/tools"
 	"github.com/google/uuid"
@@ -149,6 +150,37 @@ func (s *Session) runOwnedTurn(
 	iteration := 0
 	recall := s.newRetrievalTurn()
 	modelTools := s.modelToolset()
+	workingFolder := s.scope.ProjectRoot
+	if provider, ok := s.history.(interface {
+		WorkingDirectory(context.Context) (string, error)
+	}); ok && s.workerInstructions == "" {
+		var err error
+		workingFolder, err = provider.WorkingDirectory(coordinator.ctx)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("load working folder: %w", err))
+		}
+	}
+	s.directory.SetRoot(workingFolder)
+	coordinator.setStage(memory.StageContextCompose)
+	var repository memory.RepositoryInstructionSnapshot
+	if provider, ok := s.history.(interface {
+		RepositoryInstructions(context.Context, memory.TurnLease, memory.EventID) (memory.RepositoryInstructionSnapshot, error)
+	}); ok && s.workerInstructions == "" {
+		var err error
+		repository, err = provider.RepositoryInstructions(coordinator.ctx, lease, rootTurnID)
+		if err != nil {
+			if errors.Is(err, memory.ErrRepositoryInstructionsChanged) {
+				return s.classifyRepositoryInstructionError(coordinator, err)
+			}
+			return s.classifyLocalError(coordinator, err)
+		}
+		if repository.WorkspaceID != "" && repository.Folder.Path != workingFolder {
+			return s.classifyRepositoryInstructionError(coordinator, errors.New("Workspace folder changed while preparing instructions; try again"))
+		}
+		if repository.Status == "error" {
+			return s.classifyRepositoryInstructionError(coordinator, fmt.Errorf("repository instructions: %s", repository.Detail))
+		}
+	}
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
@@ -184,9 +216,13 @@ func (s *Session) runOwnedTurn(
 		if iteration == 1 && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
+		if workingFolder != "" {
+			workingContext += fmt.Sprintf("\nLocal working folder: %q. Relative file paths and shell commands start in this session's working directory.\n", workingFolder)
+		}
 		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
+			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
@@ -535,7 +571,8 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
-				Scope: s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID, SearchMemory: recall.searchForTool(call.ID),
+				Directory: &s.directory,
+				Scope:     s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID, SearchMemory: recall.searchForTool(call.ID),
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),
@@ -643,6 +680,14 @@ func (s *Session) observeTurnContext(coordinator *turnCoordinator) error {
 	return nil
 }
 
+func (s *Session) classifyRepositoryInstructionError(coordinator *turnCoordinator, err error) error {
+	if cause := s.observeTurnContext(coordinator); cause != nil {
+		return cause
+	}
+	coordinator.selectCause(causeRepositoryInstructions, err, 0)
+	return err
+}
+
 func (s *Session) classifyLocalError(coordinator *turnCoordinator, err error) error {
 	if cause := coordinator.result(); cause.kind != causeNone {
 		return cause.err
@@ -706,7 +751,7 @@ func validateAssistantResponse(msg openrouter.Message) error {
 func causeHasDurableTerminal(kind causeKind) bool {
 	return kind == causeProviderError || kind == causeProviderInvalid ||
 		kind == causeCallerCancelled || kind == causeCallerDeadline ||
-		kind == causeContextOverflow
+		kind == causeContextOverflow || kind == causeRepositoryInstructions
 }
 
 func (s *Session) appendTerminal(
@@ -738,6 +783,9 @@ func (s *Session) appendTerminal(
 	case causeContextOverflow:
 		input.Type = memory.EventTurnFailed
 		payload.Classification = memory.ClassificationContextOverflow
+	case causeRepositoryInstructions:
+		input.Type = memory.EventTurnFailed
+		payload.Classification = memory.ClassificationRepositoryInstructions
 	default:
 		return nil
 	}

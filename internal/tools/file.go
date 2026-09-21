@@ -43,6 +43,10 @@ var deniedFiles = []string{
 
 var lineNumRe = regexp.MustCompile(`^[ \t]*\d+\t`)
 
+// ValidateFileAccess shares the existing file-tool exclusions with the owner's
+// local file browser. Root containment is enforced separately by os.Root.
+func ValidateFileAccess(path string) error { _, err := resolvePath(path); return err }
+
 func applyEdit(content, oldString, newString string) (string, int, error) {
 	if oldString == "" {
 		return "", 0, errors.New("oldString_string must not be empty")
@@ -239,7 +243,7 @@ func readFile(ctx context.Context, args string) (string, error) {
 		return "", fmt.Errorf("parse arguments: %w", err)
 	}
 
-	abs, err := resolvePath(params.Path)
+	abs, err := resolveToolPath(ctx, params.Path)
 	if err != nil {
 		return "", err
 	}
@@ -408,7 +412,7 @@ func prepareEditFileTool(ctx context.Context, args string) (PreparedTool, error)
 	if err := ctx.Err(); err != nil {
 		return PreparedTool{}, err
 	}
-	edit, err := prepareFileEdit(args)
+	edit, err := prepareFileEditContext(ctx, args)
 	if err != nil {
 		return PreparedTool{}, err
 	}
@@ -427,7 +431,7 @@ func prepareEditFileTool(ctx context.Context, args string) (PreparedTool, error)
 // an error rather than a partial write, and those error strings are the
 // model's only feedback — they are written to be acted on, not just read.
 func editFile(ctx context.Context, args string) (string, error) {
-	edit, err := prepareFileEdit(args)
+	edit, err := prepareFileEditContext(ctx, args)
 	if err != nil {
 		return "", err
 	}
@@ -447,6 +451,10 @@ func executePreparedFileEdit(ctx context.Context, edit preparedFileEdit) (string
 // Keeping one preparation path prevents the UI from approving bytes produced
 // by subtly different validation or line-number stripping logic.
 func prepareFileEdit(args string) (preparedFileEdit, error) {
+	return prepareFileEditContext(context.Background(), args)
+}
+
+func prepareFileEditContext(ctx context.Context, args string) (preparedFileEdit, error) {
 	var params struct {
 		Path      string `json:"path"`
 		OldString string `json:"old_string"`
@@ -456,7 +464,7 @@ func prepareFileEdit(args string) (preparedFileEdit, error) {
 		return preparedFileEdit{}, fmt.Errorf("parse arguments: %w", err)
 	}
 
-	abs, err := resolvePath(params.Path)
+	abs, err := resolveToolPath(ctx, params.Path)
 	if err != nil {
 		return preparedFileEdit{}, err
 	}

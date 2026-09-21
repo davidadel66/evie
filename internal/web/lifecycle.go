@@ -25,6 +25,7 @@ func turnLifecycleContext(request *http.Request) context.Context {
 // long-lived runtime. Cancellation stops accepting requests and interrupts
 // provider/tool work before waiting for bounded HTTP cleanup.
 func ServeWithContext(ctx context.Context, server *Server) error {
+	defer server.Close()
 	if ctx.Err() != nil {
 		return nil
 	}

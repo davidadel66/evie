@@ -42,7 +42,8 @@ func TestCanonicalRequestEstimatorAccountsForCompleteStreamingRequest(t *testing
 }
 
 func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
+	// Fit the parent instructions and active turn, but not the older 2500-byte turn.
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 13000, 13000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +71,7 @@ func TestContextComposerUsesLegalRootTurnCutsAndProtectsActiveTurn(t *testing.T)
 }
 
 func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T) {
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 11000, 11000, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	profile := testContextProfile("test/model")
 	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
 		Profile: profile,
 		Summary: &ContextSummary{
@@ -99,12 +97,8 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 }
 
 func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
-	// This fixture checks message ordering; leave room for the combined trusted
-	// Memory and Subagents instructions. Overflow has separate boundary tests.
-	profile, err := openrouter.NewExplicitContextProfile("test/model", 12000, 12000, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// This fixture checks message ordering. Overflow has separate boundary tests.
+	profile := testContextProfile("test/model")
 	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
 		Profile:        profile,
 		Summary:        &ContextSummary{CompactionEventID: "compaction-1", Content: "prior summary"},

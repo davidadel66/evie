@@ -41,7 +41,7 @@ func TestDelegatedConversationUsesPinnedRoleAndOwnAssignment(t *testing.T) {
 		t.Fatalf("requests: %d", len(client.reqs))
 	}
 	req := client.reqs[0]
-	if !strings.Contains(req.Messages[0].Content, plugins.ResearchInstructions) || strings.Contains(req.Messages[0].Content, "You are the primary agent") {
+	if req.Messages[0].Role != "system" || req.Messages[0].Content != plugins.ResearchInstructions {
 		t.Fatalf("incorrect trusted worker role: %s", req.Messages[0].Content)
 	}
 	if len(req.Messages) != 2 || !strings.Contains(req.Messages[1].Content, "sentinel") {

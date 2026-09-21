@@ -1,6 +1,11 @@
 ## Problem Statement
 
 Evie currently understands global sessions and filesystem-project sessions.
+
+The optional local working-folder extension is specified in
+[workspace-local-folder.spec.md](workspace-local-folder.spec.md). It preserves
+Workspace memory scope and pinned configuration while independently persisting
+the folder used by existing conversations on their next turn.
 That model works for coding, but an ongoing area such as Cairo's Kitchen is not
 a repository and should not be flattened into global memory or one chat. It has
 its own knowledge, approved workflows, external accounts, business resources,
