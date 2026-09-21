@@ -1,4 +1,6 @@
 export type Workspace = {
+  defaultPresetId?: string;
+  allowedPresetIds?: string[];
   instructions?: {enabled:boolean;revision:number};
 	 folder?: { path: string; revision: number };
   id: string;
@@ -45,6 +47,7 @@ export type ContextSessionSnapshot = {
   workspaces: Workspace[];
   projects: Project[];
   sessions: StoredSession[];
+  archivedSessions?: StoredSession[];
   activeSession?: StoredSession;
   activeScope?: ContextScope;
 };
@@ -57,11 +60,12 @@ export type ContextSessionSelection =
 
 export type OpenedContextSession = { session: StoredSession; scope: ContextScope };
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
+async function postJSON<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const value = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(value.error ?? `Request failed (${response.status})`);
@@ -72,8 +76,29 @@ export function listContextSessions(): Promise<ContextSessionSnapshot> {
   return postJSON("/api/context-sessions/list", {});
 }
 
-export function registerWorkspace(displayName: string): Promise<Workspace> {
-  return postJSON("/api/workspaces/register", { displayName });
+export type WorkspaceCreation = {
+  displayName: string;
+  presetId?: string;
+  folderPath?: string;
+  createFolder?: boolean;
+};
+
+export function registerWorkspace(options: WorkspaceCreation): Promise<Workspace> {
+  return postJSON("/api/workspaces/register", options);
+}
+
+export type ChosenWorkspaceFolder = { path: string; cancelled: boolean };
+
+export function chooseWorkspaceFolder(signal?: AbortSignal): Promise<ChosenWorkspaceFolder> {
+  return postJSON("/api/workspaces/choose-folder", {}, signal);
+}
+
+export function archiveSession(sessionId: string): Promise<{session: StoredSession}> {
+  return postJSON("/api/context-sessions/archive", { sessionId });
+}
+
+export function restoreSession(sessionId: string): Promise<{session: StoredSession}> {
+  return postJSON("/api/context-sessions/restore", { sessionId });
 }
 
 export function selectContextSession(selection: ContextSessionSelection): Promise<OpenedContextSession> {

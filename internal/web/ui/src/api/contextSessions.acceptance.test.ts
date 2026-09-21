@@ -47,7 +47,7 @@ describe("Workspace frontend path", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const workspace = await registerWorkspace("Cairo's Kitchen");
+    const workspace = await registerWorkspace({ displayName: "Cairo's Kitchen" });
     const entered = await selectContextSession({
       workspaceId: workspace.id,
       workspaceRevision: workspace.currentRevisionId,

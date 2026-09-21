@@ -1,12 +1,9 @@
 import type {
-  ContextScope,
   ContextSessionSnapshot,
   StoredSession,
   Workspace,
 } from "../api/contextSessions";
-import { Database, Folder, MessageSquare, Plus, Sidebar as SidebarIcon } from "../ui/Icon";
-import { TextSizeMenu } from "../ui/TextSizeMenu";
-import type { ChatTextSize } from "../ui/textSize";
+import { Archive, Database, Folder, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
 
 export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${string}`;
 
@@ -17,8 +14,9 @@ type Props = {
   busy: boolean;
   mobileOpen: boolean;
   collapsed?: boolean;
-  textSize: ChatTextSize;
-  onTextSize: (value: ChatTextSize) => void;
+  onSettings: () => void;
+  onCreateWorkspace: () => void;
+  onArchive: (session: StoredSession) => void;
   onCloseMobile: () => void;
   onNewChat: () => void;
   onData: () => void;
@@ -35,8 +33,9 @@ export function Sidebar({
   busy,
   mobileOpen,
   collapsed = false,
-  textSize,
-  onTextSize,
+  onSettings,
+  onCreateWorkspace,
+  onArchive,
   onCloseMobile,
   onNewChat,
   onData,
@@ -95,7 +94,8 @@ export function Sidebar({
             type="button"
             title="Create workspace"
             aria-label="Create workspace"
-            onClick={onWorkspaces}
+            onClick={onCreateWorkspace}
+            disabled={busy}
             className="text-faint hover:text-body focus-visible:ring-teal rounded p-1 focus-visible:ring-1 focus-visible:outline-none"
           >
             <Plus size={13} />
@@ -105,7 +105,7 @@ export function Sidebar({
         {snapshot?.workspaces.length === 0 && (
           <button
             type="button"
-            onClick={onWorkspaces}
+            onClick={onCreateWorkspace}
             className="text-fainter hover:text-muted-text w-full rounded-[7px] px-2 py-2 text-left text-xs"
           >
             Create your first workspace
@@ -116,30 +116,20 @@ export function Sidebar({
           <WorkspaceNav
             key={workspace.id}
             workspace={workspace}
-            sessions={snapshot.sessions.filter((session) => session.workspaceId === workspace.id)}
+            sessions={snapshot.sessions.filter((session) => session.workspaceId === workspace.id && session.status === "active")}
             active={destination === `workspace:${workspace.id}`}
             activeSessionId={snapshot.activeSession?.id}
             busy={busy}
             onWorkspace={onWorkspace}
             onNewChat={onNewWorkspaceChat}
             onSession={onSession}
+            onArchive={onArchive}
           />
         ))}
       </nav>
 
-      <div className="border-hair flex-none border-t px-3 py-3">
-        <div className="flex items-center gap-2">
-          <ScopeMark scope={snapshot?.activeScope} />
-          <div className="min-w-0 flex-1">
-            <div className="text-body truncate text-xs font-medium">
-              {snapshot?.activeScope?.displayName ?? "No scope selected"}
-            </div>
-            <div className="text-fainter mt-px text-[10.5px]">
-              {snapshot?.activeScope ? `${scopeLabel(snapshot.activeScope)} scope` : "Choose a workspace to begin"}
-            </div>
-          </div>
-          <TextSizeMenu value={textSize} onChange={onTextSize} placement="top" />
-        </div>
+      <div className="border-hair flex-none border-t px-2 py-2">
+        <SidebarButton active={false} icon={<Settings size={15} />} label="Settings" onClick={onSettings} />
         {instructions}
       </div>
     </aside>
@@ -155,6 +145,7 @@ function WorkspaceNav({
   onWorkspace,
   onNewChat,
   onSession,
+  onArchive,
 }: {
   workspace: Workspace;
   sessions: StoredSession[];
@@ -164,6 +155,7 @@ function WorkspaceNav({
   onWorkspace: (workspace: Workspace) => void;
   onNewChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
+  onArchive: (session: StoredSession) => void;
 }) {
   return (
     <div className="mb-1">
@@ -183,16 +175,27 @@ function WorkspaceNav({
       </button>
       </div>
       {sessions.slice(0, 5).map((session) => (
-        <button
-          type="button"
-          disabled={busy}
-          key={session.id}
-          onClick={() => onSession(session)}
-          className={`${activeSessionId === session.id ? "text-teal" : "text-faint hover:text-body"} flex w-full items-center gap-2 rounded-[6px] py-[6px] pr-2 pl-7 text-left disabled:opacity-50`}
-        >
-          <MessageSquare size={12} />
-          <span className="truncate text-[11.5px]">{session.title.trim() || "Untitled session"}</span>
-        </button>
+        <div key={session.id} className="group flex items-center rounded-[6px] hover:bg-hover focus-within:bg-hover">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onSession(session)}
+            className={`${activeSessionId === session.id ? "text-teal" : "text-muted-text hover:text-body"} focus-visible:ring-teal flex min-w-0 flex-1 items-center gap-2 rounded-[6px] py-[7px] pr-1 pl-7 text-left focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50`}
+          >
+            <MessageSquare size={12} />
+            <span className="truncate text-[11.5px]">{session.title.trim() || "Untitled session"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onArchive(session)}
+            aria-label={`Archive ${session.title.trim() || "Untitled session"}`}
+            title="Archive session"
+            className="text-faint hover:text-body focus-visible:ring-teal mr-1 rounded p-1.5 opacity-100 focus-visible:ring-1 focus-visible:outline-none disabled:opacity-30 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+          >
+            <Archive size={13} />
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -223,22 +226,4 @@ function SidebarButton({
       <span className="text-[13px] font-medium">{label}</span>
     </button>
   );
-}
-
-function ScopeMark({ scope }: { scope?: ContextScope }) {
-  return (
-    <span className={`${scope ? "border-teal-hair bg-teal-deep text-teal-hover" : "border-hair-strong text-ghost"} flex h-7 w-7 flex-none items-center justify-center rounded-[7px] border`}>
-      {scope?.kind === "workspace" ? <Folder size={13} /> : scope?.kind === "project" ? <LayersMark /> : <MessageSquare size={13} />}
-    </span>
-  );
-}
-
-function LayersMark() {
-  return <span className="font-mono text-[10px]">P</span>;
-}
-
-function scopeLabel(scope: ContextScope) {
-  if (scope.kind === "workspace") return "Workspace";
-  if (scope.kind === "project") return "Project";
-  return "Unscoped";
 }

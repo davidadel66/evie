@@ -4,6 +4,8 @@ import type {
   ContextSessionSelection,
   Project,
   Workspace,
+  WorkspaceCreation,
+  StoredSession,
 } from "./api/contextSessions";
 import { MemoryPresentationProvider } from "./memory/presentation";
 import type { InspectorTarget } from "./artifacts/Panel";
@@ -26,6 +28,9 @@ import {
   type ChatTextSize,
 } from "./ui/textSize";
 import { WorkspaceHome, Workspaces } from "./workspaces/Workspaces";
+import { CreateWorkspaceDialog } from "./workspaces/CreateWorkspaceDialog";
+import { SettingsDialog } from "./shell/SettingsDialog";
+import { resolveChatFont, type ChatFont } from "./ui/chatFont";
 
 export type WorkbenchView =
   | { id: "chat"; kind: "chat" }
@@ -44,6 +49,11 @@ export default function App() {
   const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
   const [draft, setDraft] = useState("");
   const [textSize, setTextSize] = useState<ChatTextSize>(loadChatTextSize);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [chatFont, setChatFont] = useState<ChatFont>(() => {
+    try { return resolveChatFont(localStorage.getItem("evie.chatFont")); } catch { return "default"; }
+  });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem(sidebarStorageKey) === "true"; } catch { return false; }
@@ -92,6 +102,7 @@ export default function App() {
   useEffect(() => {
     if (!inspectorOpen || (!selectedAction && inspectorOverride?.kind !== "memory-evidence")) return;
     const onEscape = (event: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       if (event.key !== "Escape" || (event.target instanceof Element && event.target.closest("[data-terminal]"))) return;
       event.preventDefault();
       setInspectorOpen(false);
@@ -120,6 +131,7 @@ export default function App() {
   useEffect(() => {
     if (!pendingId || activeView.kind !== "chat") return;
     const onKey = (event: KeyboardEvent) => {
+      if (document.querySelector("dialog[open]")) return;
       const element = event.target as HTMLElement | null;
       if (element?.tagName === "TEXTAREA" || element?.tagName === "INPUT" || element?.closest('[aria-label="Inspector"]')) return;
       const key = event.key.toLowerCase();
@@ -137,6 +149,10 @@ export default function App() {
       // The in-memory setting still works in locked-down browser contexts.
     }
   }, [textSize]);
+
+  useEffect(() => {
+    try { localStorage.setItem("evie.chatFont", chatFont); } catch { /* In-memory preference still works. */ }
+  }, [chatFont]);
 
   useEffect(() => {
     try { localStorage.setItem(sidebarStorageKey, String(sidebarCollapsed)); } catch { /* In-memory preference still works. */ }
@@ -207,15 +223,23 @@ export default function App() {
     else openView({ id: "workspaces", kind: "workspaces" });
   };
 
-  const registerWorkspace = async (name: string) => {
+  const registerWorkspace = async (options: WorkspaceCreation) => {
+    await contextSessions.register(options);
+    setCreateWorkspaceOpen(false);
+  };
+
+  const archiveSession = async (session: StoredSession) => {
     try {
-      await contextSessions.register(name);
-      setDraft("");
-      setActiveViewId("chat");
-      setInspectorOverride(undefined);
-      setSelectedAction(undefined);
+      await contextSessions.setArchived(session.id, true);
+      if (contextSessions.snapshot?.activeSession?.id === session.id) {
+        setDraft("");
+        setInspectorOverride(undefined);
+        setSelectedAction(undefined);
+        setInspectorOpen(false);
+        setInspectorFocused(false);
+      }
     } catch {
-      // useContextSessions owns the actionable error message.
+      // The session remains visible and the store displays the server error.
     }
   };
 
@@ -227,7 +251,7 @@ export default function App() {
   );
 
   return (
-    <MemoryPresentationProvider snapshot={contextSessions.snapshot}><div data-chat-size={textSize} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
+    <MemoryPresentationProvider snapshot={contextSessions.snapshot}><div data-chat-size={textSize} data-chat-font={chatFont} className="bg-app text-ink flex h-screen overflow-hidden text-[13px]">
       {mobileNavOpen && <button type="button" aria-label="Close navigation overlay" onClick={closeNavigation} className="absolute inset-0 z-30 bg-black/55 md:hidden" />}
       <Sidebar
         snapshot={contextSessions.snapshot}
@@ -236,8 +260,9 @@ export default function App() {
         busy={contextSessions.busy || status === "streaming"}
         mobileOpen={mobileNavOpen}
         collapsed={sidebarCollapsed}
-        textSize={textSize}
-        onTextSize={setTextSize}
+        onSettings={() => setSettingsOpen(true)}
+        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+        onArchive={session => void archiveSession(session)}
         onCloseMobile={closeNavigation}
         onNewChat={startNewChat}
         onData={() => openView({ id: "data", kind: "data" })}
@@ -330,7 +355,7 @@ export default function App() {
                   snapshot={contextSessions.snapshot}
                   busy={contextSessions.busy || status === "streaming"}
                   problem={contextSessions.problem}
-                  onRegister={(name) => void registerWorkspace(name)}
+                  onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                   onOpenWorkspace={openWorkspace}
                   onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
                   onNewProjectChat={(project) => void startProjectChat(project)}
@@ -374,6 +399,8 @@ export default function App() {
           />
         </div>
       </div>
+      {createWorkspaceOpen && <CreateWorkspaceDialog onClose={() => setCreateWorkspaceOpen(false)} onCreate={registerWorkspace} />}
+      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || status === "streaming"} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} />}
     </div></MemoryPresentationProvider>
   );
 }

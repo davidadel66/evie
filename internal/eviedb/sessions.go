@@ -123,6 +123,16 @@ func (s *Store) GetActiveSessionForChooser(
 // re-sorting. Activity is the parsed timestamp attached to the greatest accepted
 // sequence, with creation time as the empty-history fallback.
 func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing, error) {
+	return s.listSessions(ctx, memory.SessionActive)
+}
+
+// ListArchivedSessions returns owner conversations retained for restoration.
+// Delegated sessions have their own lifecycle and are never restorable chats.
+func (s *Store) ListArchivedSessions(ctx context.Context) ([]memory.SessionListing, error) {
+	return s.listSessions(ctx, memory.SessionClosed)
+}
+
+func (s *Store) listSessions(ctx context.Context, status memory.SessionStatus) ([]memory.SessionListing, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT sessions.id, sessions.workspace_id, sessions.workspace_revision_snapshot,
 		       sessions.project_id, sessions.project_root_snapshot,
@@ -136,10 +146,10 @@ func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing
 		           LIMIT 1
 		       )
 		FROM sessions
-		WHERE sessions.status = ?
-	`, memory.SessionActive)
+		WHERE sessions.status = ? AND (? = 'active' OR sessions.parent_session_id IS NULL)
+	`, status, status)
 	if err != nil {
-		return nil, fmt.Errorf("query active sessions: %w", err)
+		return nil, fmt.Errorf("query sessions: %w", err)
 	}
 	defer rows.Close()
 
@@ -160,7 +170,7 @@ func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing
 		listings = append(listings, memory.SessionListing{Session: session, ActivityAt: activityAt})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read active sessions: %w", err)
+		return nil, fmt.Errorf("read sessions: %w", err)
 	}
 	sort.Slice(listings, func(i, j int) bool {
 		if !listings[i].ActivityAt.Equal(listings[j].ActivityAt) {
@@ -310,6 +320,14 @@ func (s *Store) createWorkspaceSession(
 		}
 		session.WorkspaceID = memory.WorkspaceID(storedWorkspaceID)
 		session.WorkspaceRevisionSnapshot = memory.WorkspaceRevisionID(storedRevisionID)
+		var allowed bool
+		if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_preset_revisions p, json_each(p.allowed_preset_ids) allowed
+ WHERE p.workspace_id=? AND p.revision_id=? AND allowed.value=?)`, storedWorkspaceID, storedRevisionID, receipt.Preset.ID).Scan(&allowed); err != nil {
+			return fmt.Errorf("validate Workspace Agent Preset: %w", err)
+		}
+		if !allowed {
+			return ErrWorkspacePresetNotAllowed
+		}
 		if err := insertCompositionReceipt(ctx, conn, session.ID, encodedReceipt, now); err != nil {
 			return fmt.Errorf("insert Workspace session Composition Receipt: %w", err)
 		}

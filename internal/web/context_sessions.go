@@ -42,6 +42,7 @@ type ContextSessionSnapshot struct {
 	Workspaces       []memory.Workspace      `json:"workspaces"`
 	Projects         []memory.Project        `json:"projects"`
 	Sessions         []memory.SessionListing `json:"sessions"`
+	ArchivedSessions []memory.SessionListing `json:"archivedSessions"`
 	ActiveSession    *memory.Session         `json:"activeSession,omitempty"`
 	ActiveScope      *ContextScopeDescriptor `json:"activeScope,omitempty"`
 }
@@ -80,6 +81,9 @@ func (s *Server) handleContextSessionList(w http.ResponseWriter, r *http.Request
 	if snapshot.Sessions == nil {
 		snapshot.Sessions = []memory.SessionListing{}
 	}
+	if snapshot.ArchivedSessions == nil {
+		snapshot.ArchivedSessions = []memory.SessionListing{}
+	}
 	s.sessionMu.RLock()
 	active := s.activeSession
 	s.sessionMu.RUnlock()
@@ -89,25 +93,6 @@ func (s *Server) handleContextSessionList(w http.ResponseWriter, r *http.Request
 		snapshot.ActiveScope = &descriptor
 	}
 	writeJSON(w, http.StatusOK, snapshot)
-}
-
-func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		DisplayName string `json:"displayName"`
-	}
-	if status, err := decodeManagementJSON(w, r, &request); err != nil || strings.TrimSpace(request.DisplayName) == "" {
-		if err == nil {
-			status = http.StatusBadRequest
-		}
-		jsonError(w, status, "body must be one JSON object with a nonblank displayName field")
-		return
-	}
-	workspace, err := s.contextSessions.RegisterWorkspace(r.Context(), request.DisplayName)
-	if err != nil {
-		managementJSONError(w, http.StatusUnprocessableEntity, "workspace_registration_failed", "Workspace could not be registered")
-		return
-	}
-	writeJSON(w, http.StatusCreated, workspace)
 }
 
 func (s *Server) handleContextSessionSelect(w http.ResponseWriter, r *http.Request) {

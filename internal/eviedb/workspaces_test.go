@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func TestWorkspaceRegistryPersistsStableIdentityAcrossRenameAndReopen(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed) != 1 || listed[0] != renamed {
+	if len(listed) != 1 || !reflect.DeepEqual(listed[0], renamed) {
 		t.Fatalf("reopened workspaces=%+v, want %+v", listed, renamed)
 	}
 }

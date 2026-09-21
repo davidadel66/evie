@@ -121,6 +121,11 @@ body {
   --chat-text-size: 17px;
 }
 
+[data-chat-font="default"] { --chat-font: var(--font-sans); }
+[data-chat-font="system"] { --chat-font: system-ui, sans-serif; }
+[data-chat-font="serif"] { --chat-font: Georgia, serif; }
+.evie-markdown, .evie-user-message { font-family: var(--chat-font, var(--font-sans)); }
+
 /* Streamdown owns parsing and streaming behavior; Evie owns presentation.
    Keep every markdown override behind this boundary so its broad element
    selectors cannot restyle tool cards or the surrounding shell. */

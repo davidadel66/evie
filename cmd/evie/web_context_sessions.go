@@ -44,11 +44,23 @@ func (c *webContextSessionController) Snapshot(ctx context.Context) (web.Context
 	if err != nil {
 		return web.ContextSessionSnapshot{}, err
 	}
-	return web.ContextSessionSnapshot{Workspaces: workspaces, Projects: projects, Sessions: sessions}, nil
+	archived, err := c.store.ListArchivedSessions(ctx)
+	if err != nil {
+		return web.ContextSessionSnapshot{}, err
+	}
+	return web.ContextSessionSnapshot{Workspaces: workspaces, Projects: projects, Sessions: sessions, ArchivedSessions: archived}, nil
+}
+
+func (c *webContextSessionController) ArchiveSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
+	return c.store.ArchiveSession(ctx, id)
+}
+
+func (c *webContextSessionController) RestoreSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
+	return c.store.RestoreSession(ctx, id)
 }
 
 func (c *webContextSessionController) RegisterWorkspace(ctx context.Context, displayName string) (memory.Workspace, error) {
-	return c.store.RegisterWorkspace(ctx, displayName)
+	return c.RegisterWorkspaceWithOptions(ctx, eviedb.WorkspaceRegistration{DisplayName: displayName})
 }
 
 func (c *webContextSessionController) WorkspaceFolder(ctx context.Context, id memory.WorkspaceID) (memory.WorkspaceFolder, error) {
@@ -88,7 +100,12 @@ func (c *webContextSessionController) SelectSession(
 			}
 		}
 	case selection.WorkspaceID != "":
-		if err = resolveStandard(); err == nil {
+		var presetID string
+		presetID, err = c.store.WorkspaceDefaultPreset(ctx, selection.WorkspaceID, selection.WorkspaceRevision)
+		if err == nil {
+			standard, err = c.manager.ResolvePresetContext(ctx, plugins.PresetID(presetID))
+		}
+		if err == nil {
 			session, err = c.store.CreateWorkspaceSessionForChooserWithComposition(
 				ctx, selection.WorkspaceID, selection.WorkspaceRevision, standard.Receipt,
 			)

@@ -5,7 +5,7 @@ import type { Workspace } from "../api/contextSessions";
 
 const workspace: Workspace = {id: "one", displayName: "Cairo", state: "active", currentRevisionId: "revision-2", createdAt: "", updatedAt: ""};
 function render(workspaces: Workspace[], busy = false, collapsed = false) {
-  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: []}} destination="chat" busy={busy} collapsed={collapsed} mobileOpen={false} textSize="default" onTextSize={() => {}} onCloseMobile={() => {}} onNewChat={() => {}} onData={() => {}} onWorkspaces={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
+  return renderToStaticMarkup(<Sidebar snapshot={{workspaces, projects: [], sessions: [], archivedSessions: []}} destination="chat" busy={busy} collapsed={collapsed} mobileOpen={false} onSettings={() => {}} onCreateWorkspace={() => {}} onArchive={() => {}} onCloseMobile={() => {}} onNewChat={() => {}} onData={() => {}} onWorkspaces={() => {}} onWorkspace={() => {}} onNewWorkspaceChat={() => {}} onSession={() => {}} />);
 }
 
 describe("workspace session shortcuts", () => {
@@ -14,6 +14,9 @@ describe("workspace session shortcuts", () => {
     expect(html).toContain('aria-label="New session in Cairo"');
     expect(html).toContain('aria-label="New session in Personal"');
     expect(html).toContain('aria-label="Create workspace"');
+    expect(html).toContain("Settings");
+    expect(html).not.toContain("No scope selected");
+    expect(html).not.toContain("Choose a workspace to begin");
     expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>)[\s\S])*<button/);
     expect(html).not.toContain('disabled=""');
   });

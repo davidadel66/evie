@@ -40,6 +40,7 @@ type storedSessionSelection struct {
 type receiptBoundREPLStore struct {
 	*eviedb.Store
 	composition      plugins.ResolvedComposition
+	resolvePreset    func(context.Context, plugins.PresetID) (plugins.ResolvedComposition, error)
 	createdSessionID memory.SessionID
 }
 
@@ -78,11 +79,26 @@ func (s *receiptBoundREPLStore) CreateWorkspaceSessionForChooser(
 	workspaceID memory.WorkspaceID,
 	revisionID memory.WorkspaceRevisionID,
 ) (memory.Session, error) {
+	presetID, err := s.Store.WorkspaceDefaultPreset(ctx, workspaceID, revisionID)
+	if err != nil {
+		return memory.Session{}, err
+	}
+	selected := s.composition
+	if selected.Receipt.Preset.ID != presetID {
+		if s.resolvePreset == nil {
+			return memory.Session{}, fmt.Errorf("Workspace Agent Preset %q is unavailable", presetID)
+		}
+		selected, err = s.resolvePreset(ctx, plugins.PresetID(presetID))
+		if err != nil {
+			return memory.Session{}, err
+		}
+	}
 	session, err := s.Store.CreateWorkspaceSessionForChooserWithComposition(
-		ctx, workspaceID, revisionID, s.composition.Receipt,
+		ctx, workspaceID, revisionID, selected.Receipt,
 	)
 	if err == nil {
 		s.createdSessionID = session.ID
+		s.composition = selected
 	}
 	return session, err
 }

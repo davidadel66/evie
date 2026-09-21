@@ -235,7 +235,7 @@ func main() {
 		}
 		scanner := bufio.NewScanner(os.Stdin)
 		session := newSession(runtimeCtx, func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
-			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved}
+			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved, resolvePreset: pluginManager.ResolvePresetContext}
 			selected, err := selectREPLSession(
 				runtimeCtx, boundStore,
 				launchDir, scanner, os.Stdout,

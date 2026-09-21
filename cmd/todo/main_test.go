@@ -338,11 +338,15 @@ func TestTodoCLISharesScopeClaimsAndStoreWithPlugin(t *testing.T) {
 		t.Fatalf("first result update exit=%d stdout=%s stderr=%s", exit, firstResult, stderr)
 	}
 
-	workspaceA, err := store.RegisterWorkspace(context.Background(), "Workspace A")
+	workspaceA, err := store.RegisterWorkspaceWithOptions(context.Background(), eviedb.WorkspaceRegistration{
+		DisplayName: "Workspace A", PresetID: todoTestReceipt().Preset.ID,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspaceB, err := store.RegisterWorkspace(context.Background(), "Workspace B")
+	workspaceB, err := store.RegisterWorkspaceWithOptions(context.Background(), eviedb.WorkspaceRegistration{
+		DisplayName: "Workspace B", PresetID: todoTestReceipt().Preset.ID,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

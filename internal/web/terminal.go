@@ -201,9 +201,10 @@ func (s *Server) stopWorkspaceTerminals(id memory.WorkspaceID) {
 	}
 }
 
-// Close drains terminals owned by direct Handler users as well as production
-// listeners. Closing a pane's output stream also closes its individual shell.
+// Close drains native pickers and terminals owned by direct Handler users as
+// well as production listeners.
 func (s *Server) Close() {
+	s.closeFolderPicker()
 	s.terminalMu.Lock()
 	s.terminalsClosed = true
 	entries := make([]*terminalEntry, 0, len(s.terminals))

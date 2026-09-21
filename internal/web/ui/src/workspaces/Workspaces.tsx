@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type {
   ContextSessionSnapshot,
   Project,
@@ -12,7 +11,7 @@ type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
   busy: boolean;
   problem: string | null;
-  onRegister: (name: string) => void;
+  onCreateWorkspace: () => void;
   onOpenWorkspace: (workspace: Workspace) => void;
   onNewWorkspaceChat: (workspace: Workspace) => void;
   onNewProjectChat: (project: Project) => void;
@@ -24,14 +23,13 @@ export function Workspaces({
   snapshot,
   busy,
   problem,
-  onRegister,
+  onCreateWorkspace,
   onOpenWorkspace,
   onNewWorkspaceChat,
   onNewProjectChat,
   onResume,
   onNewUnscopedChat,
 }: DirectoryProps) {
-  const [name, setName] = useState("");
   return (
     <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
       <div className="mx-auto max-w-[920px]">
@@ -42,31 +40,17 @@ export function Workspaces({
           </p>
         </header>
 
-        <form
-          className="border-hair mt-7 flex max-w-[620px] gap-2 border-b pb-7"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const value = name.trim();
-            if (!value) return;
-            onRegister(value);
-            setName("");
-          }}
-        >
-          <input
-            aria-label="Workspace name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Name a new workspace"
-            className="border-hair-input bg-card text-ink placeholder:text-fainter focus:border-teal-hair min-w-0 flex-1 rounded-[8px] border px-3 py-2 focus:outline-none"
-          />
+        <div className="border-hair mt-7 flex max-w-[620px] border-b pb-7">
           <button
-            type="submit"
-            disabled={busy || !name.trim()}
-            className="bg-teal text-primary-foreground focus-visible:ring-teal rounded-[8px] px-4 py-2 text-xs font-semibold disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none"
+            type="button"
+            onClick={onCreateWorkspace}
+            disabled={busy}
+            className="bg-teal text-primary-foreground focus-visible:ring-teal flex items-center gap-2 rounded-[8px] px-4 py-2 text-xs font-semibold disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none"
           >
+            <Plus size={13} />
             Create workspace
           </button>
-        </form>
+        </div>
 
         {problem && <p role="alert" className="text-danger mt-4 text-xs">{problem}</p>}
         {!snapshot && <p className="text-faint mt-8">Loading workspaces…</p>}

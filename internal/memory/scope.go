@@ -25,6 +25,8 @@ type (
 		UpdatedAt     time.Time `json:"updatedAt"`
 	}
 	Workspace struct {
+		DefaultPresetID   string                        `json:"defaultPresetId"`
+		AllowedPresetIDs  []string                      `json:"allowedPresetIds"`
 		Instructions      RepositoryInstructionSettings `json:"instructions"`
 		Folder            WorkspaceFolder               `json:"folder"`
 		ID                WorkspaceID                   `json:"id"`

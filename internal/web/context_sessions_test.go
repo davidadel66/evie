@@ -72,7 +72,7 @@ func TestContextSessionHTTPEncodesEmptyCollectionsAsArrays(t *testing.T) {
 	if listed.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
 	}
-	for _, collection := range []string{"workspaces", "projects", "sessions"} {
+	for _, collection := range []string{"workspaces", "projects", "sessions", "archivedSessions"} {
 		want := `"` + collection + `":[]`
 		if !strings.Contains(listed.Body.String(), want) {
 			t.Errorf("list body=%s, want %s", listed.Body.String(), want)

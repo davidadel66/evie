@@ -27,7 +27,7 @@ describe("Workspaces", () => {
         snapshot={{ workspaces: [workspace], projects: [], sessions: [session] }}
         busy={false}
         problem={null}
-        onRegister={() => undefined}
+        onCreateWorkspace={() => undefined}
         onOpenWorkspace={() => undefined}
         onNewWorkspaceChat={() => undefined}
         onNewProjectChat={() => undefined}
@@ -39,6 +39,8 @@ describe("Workspaces", () => {
     expect(html).toContain("Cairo&#x27;s Kitchen");
     expect(html).toContain("Dinner prep");
     expect(html).toContain("Create workspace");
+    expect(html).not.toContain("<form");
+    expect(html).not.toContain("Workspace name");
   });
 
   it("shows a workspace home with its own chat list", () => {

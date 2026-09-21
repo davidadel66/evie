@@ -78,6 +78,9 @@ func TestWebContextControllerCreatesAndResumesPinnedWorkspaceCompositionAcrossRe
 	if !reflect.DeepEqual(receipt, createdCompositions[0].Receipt) || receipt.Preset.ID != string(plugins.StandardPresetID) {
 		t.Fatalf("stored receipt=%+v composition=%+v", receipt, createdCompositions[0].Receipt)
 	}
+	if _, err := controller.ArchiveSession(context.Background(), opened.Session.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +103,17 @@ func TestWebContextControllerCreatesAndResumesPinnedWorkspaceCompositionAcrossRe
 			store.BindTurnOwner(session.ID, holder), composition.Toolset,
 		), nil
 	})
+	archivedSnapshot, err := controller.Snapshot(context.Background())
+	if err != nil || len(archivedSnapshot.Sessions) != 0 || len(archivedSnapshot.ArchivedSessions) != 1 ||
+		archivedSnapshot.ArchivedSessions[0].ID != opened.Session.ID {
+		t.Fatalf("archived snapshot=%+v err=%v", archivedSnapshot, err)
+	}
+	if _, err := controller.SelectSession(context.Background(), web.ContextSessionSelection{SessionID: opened.Session.ID}); !errors.Is(err, eviedb.ErrSessionNotActive) {
+		t.Fatalf("archived selection error=%v", err)
+	}
+	if _, err := controller.RestoreSession(context.Background(), opened.Session.ID); err != nil {
+		t.Fatal(err)
+	}
 	resumed, err := controller.SelectSession(context.Background(), web.ContextSessionSelection{SessionID: opened.Session.ID})
 	if err != nil {
 		t.Fatal(err)

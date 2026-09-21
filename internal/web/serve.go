@@ -93,6 +93,12 @@ type Server struct {
 	terminals         map[string]*terminalEntry
 	terminalsClosed   bool
 
+	folderPickerMu     sync.Mutex
+	folderPicker       func(context.Context) (workspaceFolderChoice, error)
+	folderPickerCancel context.CancelFunc
+	folderPickerDone   chan struct{}
+	folderPickerClosed bool
+
 	mu      sync.Mutex
 	pending map[string]chan bool
 }
@@ -184,7 +190,12 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
 		mux.Handle("/api/context-sessions/history", s.managementRoute(s.handleContextSessionHistory))
 		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
+		if _, ok := s.contextSessions.(contextSessionArchiveController); ok {
+			mux.Handle("/api/context-sessions/archive", s.managementRoute(s.handleContextSessionArchive))
+			mux.Handle("/api/context-sessions/restore", s.managementRoute(s.handleContextSessionRestore))
+		}
 		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
+		mux.Handle("/api/workspaces/choose-folder", s.managementRoute(s.handleWorkspaceChooseFolder))
 	}
 	if s.semanticMemory != nil {
 		mux.Handle("/api/memory/scopes", s.managementRoute(s.handleMemoryScopes))

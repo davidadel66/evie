@@ -3,17 +3,41 @@ package eviedb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/google/uuid"
 )
 
 var ErrWorkspaceNotFound = errors.New("eviedb: workspace not found")
+var ErrWorkspaceCreationUncertain = errors.New("Workspace creation could not be confirmed; refresh Workspaces before trying again")
 
 func (s *Store) RegisterWorkspace(ctx context.Context, displayName string) (memory.Workspace, error) {
+	return s.RegisterWorkspaceWithOptions(ctx, WorkspaceRegistration{DisplayName: displayName})
+}
+
+// WorkspaceRegistration is an owner-selected initial configuration. Preset
+// availability is validated by the runtime before persistence.
+type WorkspaceRegistration struct {
+	DisplayName  string `json:"displayName"`
+	PresetID     string `json:"presetId,omitempty"`
+	FolderPath   string `json:"folderPath,omitempty"`
+	CreateFolder bool   `json:"createFolder,omitempty"`
+}
+
+func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options WorkspaceRegistration) (memory.Workspace, error) {
+	presetID := strings.TrimSpace(options.PresetID)
+	if presetID == "" {
+		presetID = "standard"
+	}
+	if !composition.ValidIdentity(presetID) {
+		return memory.Workspace{}, errors.New("invalid Agent Preset ID")
+	}
 	id, err := uuid.NewRandom()
 	if err != nil {
 		return memory.Workspace{}, fmt.Errorf("generate Workspace ID: %w", err)
@@ -23,29 +47,67 @@ func (s *Store) RegisterWorkspace(ctx context.Context, displayName string) (memo
 		return memory.Workspace{}, fmt.Errorf("generate initial Workspace revision ID: %w", err)
 	}
 	now := s.now().UTC()
-	displayName = memory.WorkspaceDisplayLabel(displayName, now)
 	workspace := memory.Workspace{
 		ID:                memory.WorkspaceID(id.String()),
 		Instructions:      memory.RepositoryInstructionSettings{Enabled: true},
-		DisplayName:       displayName,
+		DisplayName:       memory.WorkspaceDisplayLabel(options.DisplayName, now),
+		DefaultPresetID:   presetID,
+		AllowedPresetIDs:  []string{presetID},
 		State:             memory.WorkspaceActive,
 		CurrentRevisionID: memory.WorkspaceRevisionID(revisionID.String()),
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	if _, err := s.db.ExecContext(ctx, `
+	folder, cleanup, err := prepareWorkspaceFolder(options.FolderPath, options.CreateFolder)
+	if err != nil {
+		return memory.Workspace{}, err
+	}
+	retainFolder := false
+	defer func() { cleanup(retainFolder) }()
+	workspace.Folder = folder
+	allowed, err := json.Marshal(workspace.AllowedPresetIDs)
+	if err != nil {
+		return memory.Workspace{}, err
+	}
+	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		if _, err := conn.ExecContext(ctx, `
 		INSERT INTO workspaces (
 			id, display_name, lifecycle_state, current_revision_id, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?)
 	`, workspace.ID, workspace.DisplayName, workspace.State, workspace.CurrentRevisionID,
-		workspace.CreatedAt.Format(time.RFC3339Nano), workspace.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
-		return memory.Workspace{}, fmt.Errorf("insert Workspace: %w", err)
-	}
-	settings, err := s.RepositoryInstructionSettings(ctx, workspace.ID)
+			workspace.CreatedAt.Format(time.RFC3339Nano), workspace.UpdatedAt.Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("insert Workspace: %w", err)
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_preset_revisions(workspace_id,revision_id,default_preset_id,allowed_preset_ids)
+ VALUES(?,?,?,?)`, workspace.ID, workspace.CurrentRevisionID, presetID, string(allowed)); err != nil {
+			return fmt.Errorf("insert Workspace Agent Preset: %w", err)
+		}
+		if folder.Path != "" {
+			if _, err := conn.ExecContext(ctx, `INSERT INTO workspace_folder_revisions(workspace_id,revision,path,recorded_at)
+ VALUES(?,1,?,?)`, workspace.ID, folder.Path, now.Format(time.RFC3339Nano)); err != nil {
+				return fmt.Errorf("insert Workspace folder: %w", err)
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		return memory.Workspace{}, err
+		// COMMIT or connection close can report an error after the transaction
+		// lands. Only remove our directory when a fresh read proves no Workspace
+		// exists; cancellation must not prevent this bounded reconciliation.
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		var persisted bool
+		readErr := s.db.QueryRowContext(readCtx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=?)`, workspace.ID).Scan(&persisted)
+		if readErr != nil {
+			retainFolder = true
+			return memory.Workspace{}, errors.Join(ErrWorkspaceCreationUncertain, err, readErr)
+		}
+		if !persisted {
+			return memory.Workspace{}, err
+		}
 	}
-	workspace.Instructions = settings
+	// Both a clean commit and a confirmed commit return the original result.
+	retainFolder = true
 	return workspace, nil
 }
 
@@ -87,6 +149,9 @@ func (s *Store) ListWorkspaces(ctx context.Context, includeArchived bool) ([]mem
 			return nil, err
 		}
 		workspaces[i].Instructions = settings
+		if err := s.loadWorkspacePresets(ctx, &workspaces[i]); err != nil {
+			return nil, err
+		}
 	}
 	return workspaces, nil
 }
@@ -109,6 +174,9 @@ func (s *Store) RenameWorkspace(ctx context.Context, id memory.WorkspaceID, disp
 		return memory.Workspace{}, err
 	}
 	workspace.Instructions = settings
+	if err := s.loadWorkspacePresets(ctx, &workspace); err != nil {
+		return memory.Workspace{}, err
+	}
 	return workspace, nil
 }
 
@@ -129,6 +197,9 @@ func (s *Store) ArchiveWorkspace(ctx context.Context, id memory.WorkspaceID) (me
 		return memory.Workspace{}, err
 	}
 	workspace.Instructions = settings
+	if err := s.loadWorkspacePresets(ctx, &workspace); err != nil {
+		return memory.Workspace{}, err
+	}
 	return workspace, nil
 }
 
