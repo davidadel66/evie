@@ -151,7 +151,9 @@ func (s *Store) authorizeSubagentParent(ctx context.Context, conn *sql.Conn, p d
 	}
 
 	if p.Scope.WorkspaceID != "" {
-		return errors.New("Workspace delegation requires reviewed research Agent Preset allowances (Workspace prerequisite #71)")
+		if err := authorizeWorkspaceResearch(ctx, conn, p.Scope); err != nil {
+			return err
+		}
 	}
 	if err := fenceTurnLeaseWrite(ctx, conn, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
 		return err
@@ -270,6 +272,15 @@ func (s *Store) InspectSubagent(ctx context.Context, p delegation.Parent, id str
 		}
 		if err = validateSessionScope(ctx, conn, p.Scope); err != nil {
 			return err
+		}
+		if p.Scope.WorkspaceID != "" {
+			var active bool
+			if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=? AND lifecycle_state='active')`, p.Scope.WorkspaceID).Scan(&active); err != nil {
+				return err
+			}
+			if !active || p.Scope.WorkspaceID != a.Parent.Scope.WorkspaceID || p.Scope.WorkspaceRevision != a.Parent.Scope.WorkspaceRevision {
+				return delegation.ErrAuthority
+			}
 		}
 		if p.Scope.ProjectID != "" {
 			var archived bool

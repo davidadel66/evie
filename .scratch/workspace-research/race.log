@@ -1,0 +1,6 @@
+ok  	github.com/davidadel66/evie/internal/subagents	11.312s
+ok  	github.com/davidadel66/evie/internal/tools	1.765s
+ok  	github.com/davidadel66/evie/internal/eviedb	2.877s
+ok  	github.com/davidadel66/evie/internal/openrouter	1.201s
+ok  	github.com/davidadel66/evie/internal/plugins	1.749s
+ok  	github.com/davidadel66/evie/internal/web	2.099s

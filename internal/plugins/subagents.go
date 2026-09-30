@@ -53,7 +53,7 @@ func (s Subagents) ToolCapabilities() []ToolCapability {
 		if err := decoder.Decode(&extra); err != io.EOF {
 			return "", errors.New("invalid delegation arguments")
 		}
-		results, err := s.supervisor.Delegate(ctx, delegation.Parent{Scope: inv.Scope, Lease: inv.Lease, SourceEventID: inv.SourceEventID, IntentEventID: inv.IntentEventID}, request.Assignments)
+		results, err := s.supervisor.Delegate(ctx, delegation.Parent{Profile: &inv.Profile, Scope: inv.Scope, Lease: inv.Lease, SourceEventID: inv.SourceEventID, IntentEventID: inv.IntentEventID}, request.Assignments)
 		if err != nil {
 			return "", err
 		}

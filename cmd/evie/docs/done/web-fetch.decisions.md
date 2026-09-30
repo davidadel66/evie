@@ -1,5 +1,11 @@
 # web-fetch — decisions
 
+September 29 extension: new Web 1.1 compositions use bounded section/excerpt
+reading under [Workspace research](../active/workspace-research.spec.md).
+Frozen Web 1.0 receipts, including children delegated by those parents, retain
+the original schema and execution contract with recorded compatibility evidence.
+The original shipping record below describes that legacy contract.
+
 Shipped 2026-08-03. `web_fetch` in `internal/tools/webfetch.go`, tests in
 `internal/tools/webfetch_test.go`. Built via autopilot: spec-reviewed
 spec, spec-derived failing tests from an independent agent, staged

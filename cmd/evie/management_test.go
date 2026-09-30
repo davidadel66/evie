@@ -343,7 +343,7 @@ func TestCLIAndRunningWebManagerConvergeThroughSQLiteOnEachRequest(t *testing.T)
 	}
 	list := httptest.NewRecorder()
 	handler.ServeHTTP(list, request("/api/plugins/list", `{}`))
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"id":"web","version":"1.0.0","enabled":false`) {
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"id":"web","version":"1.1.0","enabled":false`) {
 		t.Fatalf("running web list did not observe CLI disable: status=%d body=%s", list.Code, list.Body.String())
 	}
 	if _, err := runningWeb.ResolvePreset(plugins.StandardPresetID); err == nil {

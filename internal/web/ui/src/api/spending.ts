@@ -54,16 +54,40 @@ export type CashFlowReport = CashFlowQuery & {
   pendingTransactions: number; undatedTransactions: number;
 };
 
-async function spendingRequest<T>(action: "summary" | "refresh" | "transactions" | "cash-flow", body: object, signal?: AbortSignal): Promise<T> {
+export type DayTransaction = Omit<SpendingTransaction, "entries"> & {
+  revision: string;
+  entries: (SpendingEntry & { id: string })[];
+};
+export type SpendingDayQuery = { date: string; offset: number; pageSize: number };
+export type SpendingDayPage = SpendingDayQuery & {
+  total: number; hasMore: boolean; categories: string[];
+  summary: SpendingDay; transactions: DayTransaction[];
+};
+export type SpendingCategoryUpdate = {
+  transactionId: string; entryId: string | null; category: string; revision: string;
+};
+
+export class SpendingCategoryError extends Error {
+  readonly conflict: boolean;
+  constructor(message: string, conflict: boolean) { super(message); this.conflict = conflict; }
+}
+
+async function spendingRequest<T>(action: "summary" | "refresh" | "transactions" | "cash-flow" | "day" | "category", body: object, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/data/spending/${action}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body), signal,
   });
   if (!response.ok) {
+    if (action === "category") {
+      if (response.status === 409) throw new SpendingCategoryError("This transaction changed. Reload before editing.", true);
+      if (response.status === 400) throw new SpendingCategoryError("Choose an available category and try again.", false);
+      throw new SpendingCategoryError("Category could not be saved. Reload to check its current value.", false);
+    }
     if (response.status === 409) throw new Error("A bank refresh is already running.");
     if (action === "refresh") throw new Error("Banks could not be refreshed.");
     if (action === "transactions") throw new Error("Transactions could not be loaded.");
     if (action === "cash-flow") throw new Error("Cash flow could not be loaded.");
+    if (action === "day") throw new Error("Day transactions could not be loaded.");
     throw new Error("Spending could not be loaded.");
   }
   return response.json();
@@ -83,4 +107,12 @@ export function inspectSpendingTransactions(query: SpendingTransactionsQuery, si
 
 export function inspectCashFlow(query: CashFlowQuery, signal?: AbortSignal): Promise<CashFlowReport> {
   return spendingRequest<CashFlowReport>("cash-flow", query, signal);
+}
+
+export function inspectSpendingDay(query: SpendingDayQuery, signal?: AbortSignal): Promise<SpendingDayPage> {
+  return spendingRequest<SpendingDayPage>("day", query, signal);
+}
+
+export function updateSpendingCategory(query: SpendingCategoryUpdate): Promise<DayTransaction> {
+  return spendingRequest<DayTransaction>("category", query);
 }

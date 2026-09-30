@@ -57,6 +57,7 @@ export type Session = {
   status: Status;
   /** Messages sent mid-turn, fired in order once the turn ends. */
   queue: string[];
+  clearQueue: () => void;
   /** Banner text when status is "error"; null otherwise. */
   problem: string | null;
   send: (text: string) => void;
@@ -70,7 +71,7 @@ export type Session = {
   retryHistory: () => void;
 };
 
-export function useSession(sessionId?: string): Session {
+export function useSession(sessionId?: string, model?: string): Session {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyProblem, setHistoryProblem] = useState<string | null>(null);
   const [before, setBefore] = useState<string>();
@@ -174,6 +175,7 @@ export function useSession(sessionId?: string): Session {
         },
         ctl.signal,
         sessionId,
+        model,
       )
         .then(() => {
           if (ctl.signal.aborted) return;
@@ -189,7 +191,7 @@ export function useSession(sessionId?: string): Session {
           setStatus("error");
         });
     },
-    [enqueue, flush, status, historyLoading, historyProblem, sessionId],
+    [enqueue, flush, status, historyLoading, historyProblem, sessionId, model],
   );
 
   const answer = useCallback((reqId: string, approve: boolean) => {
@@ -271,7 +273,7 @@ export function useSession(sessionId?: string): Session {
     send(next);
   }, [status, queue, send, sessionId]);
 
-  return { items: historySession.current === sessionId ? items : [], status, queue, problem, send, answer, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
+  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

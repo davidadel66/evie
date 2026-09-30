@@ -232,14 +232,14 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 		tools.TodoScopedListTool(), tools.TodoFocusedAddTool(), tools.TodoTreeGetTool(), tools.TodoClaimedUpdateTool(),
 		tools.TodoDecomposeTool(), tools.TodoClaimTool(), tools.TodoReleaseTool(),
 	}
-	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools(tools.WebTools()).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
+	wantSchemas := tools.KernelToolset().WithTools(tools.FinanceTools()).WithTools([]tools.Tool{tools.WebExcerptTool(), tools.WebTools()[1]}).WithTools(tools.YouTubeTools()).WithTools(wantTodo).Schemas()
 	if !reflect.DeepEqual(resumed.Toolset.Schemas(), wantSchemas) {
 		t.Fatalf("resumed schemas = %#v, want exact standard schemas %#v", resumed.Toolset.Schemas(), wantSchemas)
 	}
 	wantProviders := []plugins.ProviderReceipt{
 		{ID: "finance", ImplementationVersion: "1.0.0"},
 		{ID: "todo", ImplementationVersion: "1.7.0"},
-		{ID: "web", ImplementationVersion: "1.0.0"},
+		{ID: "web", ImplementationVersion: "1.1.0"},
 		{ID: "youtube", ImplementationVersion: "1.0.0"},
 	}
 	if !reflect.DeepEqual(receipt.Providers, wantProviders) {
@@ -247,7 +247,7 @@ func TestStandardPresetReceiptReopensIntoExactScriptedAgentSchemas(t *testing.T)
 	}
 	wantCapabilities := []string{
 		"finance.sync@1.0.0", "finance.rules@1.0.0", "finance.categorize@1.0.0",
-		"web.fetch@1.0.0", "web.search@1.0.0",
+		"web.fetch@1.1.0", "web.search@1.0.0",
 		"youtube.transcript@1.0.0", "youtube.scrape_channel@1.0.0",
 		"todo.list@1.3.0", "todo.add@1.4.0", "todo.get@1.1.0", "todo.update@1.3.0", "todo.decompose@1.0.0",
 		"todo.claim@1.0.0", "todo.release@1.0.0",
@@ -868,7 +868,7 @@ func standardManager(t *testing.T, taskService task.Service) *plugins.Manager {
 	todo := plugins.NewTodo(taskService)
 	manager, err := plugins.NewManager(
 		tools.KernelToolset(),
-		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities},
+		deterministicToolPlugin{manifest: web.Manifest(), capabilities: webCapabilities, resumable: web.ResumableToolCapabilities},
 		deterministicToolPlugin{manifest: finance.Manifest(), capabilities: financeCapabilities},
 		deterministicToolPlugin{manifest: youtube.Manifest(), capabilities: youtubeCapabilities},
 		todo,
@@ -887,6 +887,7 @@ func standardManager(t *testing.T, taskService task.Service) *plugins.Manager {
 type deterministicToolPlugin struct {
 	manifest     plugins.Manifest
 	capabilities []plugins.ToolCapability
+	resumable    func(string) []plugins.ToolCapability
 }
 
 func (p deterministicToolPlugin) Manifest() plugins.Manifest { return p.manifest }
@@ -897,4 +898,16 @@ func (deterministicToolPlugin) Stop(context.Context) error { return nil }
 
 func (p deterministicToolPlugin) ToolCapabilities() []plugins.ToolCapability {
 	return append([]plugins.ToolCapability(nil), p.capabilities...)
+}
+
+func (p deterministicToolPlugin) ResumableToolCapabilities(version string) []plugins.ToolCapability {
+	if p.resumable == nil {
+		return p.ToolCapabilities()
+	}
+	capabilities := p.resumable(version)
+	for i := range capabilities {
+		id := capabilities[i].ID
+		capabilities[i].Tool.Execute = func(context.Context, string) (string, error) { return "deterministic " + string(id) + " result", nil }
+	}
+	return capabilities
 }

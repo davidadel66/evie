@@ -84,7 +84,7 @@ func TestAutomaticCompactionSelectsWholePrefixToSixtyPercent(t *testing.T) {
 	}
 }
 
-func TestAutomaticCompactionHasNoLegalCutForActiveTurnPressure(t *testing.T) {
+func TestAutomaticCompactionKeepsFittingActiveTurnUnderPressure(t *testing.T) {
 	profile := automaticTestProfile(t, 100_000)
 	events := []memory.Event{{
 		ID: "active", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser,
@@ -93,8 +93,38 @@ func TestAutomaticCompactionHasNoLegalCutForActiveTurnPressure(t *testing.T) {
 	_, required, err := selectAutomaticCompaction(ContextComposeInput{
 		Profile: profile, Events: events, ActiveRootID: "active", TriggerEventID: "active", Iteration: 1,
 	}, NewContextComposer(CanonicalRequestEstimator{}))
-	if !required || !errors.Is(err, ErrNoLegalAutomaticCompaction) {
+	if required || err != nil {
 		t.Fatalf("required=%v error=%v", required, err)
+	}
+}
+
+func TestAutomaticCompactionNoLegalCutRespectsUsableBoundary(t *testing.T) {
+	profile := automaticTestProfile(t, 100_000)
+	composer := NewContextComposer(CanonicalRequestEstimator{})
+	for _, extra := range []int64{-1, 0, 1} {
+		t.Run(fmt.Sprintf("usable%+d", extra), func(t *testing.T) {
+			input := ContextComposeInput{
+				Profile: profile, ActiveRootID: "active", TriggerEventID: "active", Iteration: 1,
+				Events: []memory.Event{{ID: "active", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "x"}},
+			}
+			prepared, err := composer.prepare(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			projection, err := composer.projectAtStart(input, prepared, prepared.start)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input.Events[0].Content += strings.Repeat("x", int(prepared.usable-projection.estimate.SerializedBytes+extra))
+			_, required, err := selectAutomaticCompaction(input, composer)
+			if extra > 0 {
+				if !required || !errors.Is(err, ErrNoLegalAutomaticCompaction) {
+					t.Fatalf("required=%v error=%v", required, err)
+				}
+			} else if required || err != nil {
+				t.Fatalf("required=%v error=%v", required, err)
+			}
+		})
 	}
 }
 
@@ -311,6 +341,75 @@ func TestSendAttemptsAutomaticCompactionAgainOnPostToolIteration(t *testing.T) {
 	}
 }
 
+func TestSendContinuesAfterLargeToolGroupWhenNoCompactionTargetFits(t *testing.T) {
+	history := &fakeHistory{events: automaticPressureHistory(60_000)}
+	compactor := &fakeClient{}
+	conversation := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("page-1", "first_page", `{}`), toolCall("page-2", "second_page", `{}`)),
+		assistantStep("done", nil),
+	}}
+	first := echoTool("first_page", false, nil)
+	first.Execute = func(context.Context, string) (string, error) { return strings.Repeat("a", 102_000), nil }
+	second := echoTool("second_page", false, nil)
+	second.Execute = func(context.Context, string) (string, error) { return strings.Repeat("b", 77_800), nil }
+	profile, err := openrouter.NewExplicitContextProfile("test/model", 1_000_000, 262_144, 16_384)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := NewWithCompactor(conversation, compactor, profile, history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	if err := session.Send(context.Background(), "read both pages", &recorder{}, nil, first, second); err != nil {
+		t.Fatal(err)
+	}
+	if len(conversation.reqs) != 2 || len(compactor.reqs) != 0 {
+		t.Fatalf("conversation requests=%d compactor requests=%d", len(conversation.reqs), len(compactor.reqs))
+	}
+	var snapshots []memory.ContextSnapshotPayload
+	var durableResultBytes []int
+	for _, event := range history.allEvents() {
+		switch event.Type {
+		case memory.EventContextSnapshot:
+			var snapshot memory.ContextSnapshotPayload
+			if err := json.Unmarshal(event.Payload, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			snapshots = append(snapshots, snapshot)
+		case memory.EventToolSucceeded:
+			durableResultBytes = append(durableResultBytes, len(event.Content))
+		case memory.EventContextCompacted, memory.EventTurnFailed:
+			t.Fatalf("unexpected event: %s", event.Type)
+		}
+	}
+	if len(snapshots) != 2 || fmt.Sprint(durableResultBytes) != "[102000 77800]" {
+		t.Fatalf("snapshots=%d durable result bytes=%v", len(snapshots), durableResultBytes)
+	}
+	for i, snapshot := range snapshots {
+		if snapshot.RetainedFirstEventID != "turn-1" || snapshot.ActiveCompactionEventID != "" || snapshot.CompactionFailureCategory != "" {
+			t.Fatalf("iteration %d changed history frontier or recorded a compactor failure", i+1)
+		}
+		estimate, err := (CanonicalRequestEstimator{}).Estimate(conversation.reqs[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if estimate.RequestSHA256 != snapshot.RequestSHA256 || estimate.SerializedBytes > snapshot.UsableInputBytes {
+			t.Fatalf("iteration %d request does not match its safe snapshot", i+1)
+		}
+		pressured := automaticCompactionRequired(snapshot.SerializedBytes, snapshot.WorkingCeilingTokens)
+		if pressured != (i == 1) {
+			t.Fatalf("iteration %d pressure=%v bytes=%d", i+1, pressured, snapshot.SerializedBytes)
+		}
+	}
+	var toolResults int
+	for _, message := range conversation.reqs[1].Messages {
+		if message.Role == "tool" {
+			toolResults++
+		}
+	}
+	if toolResults != 2 || len(snapshots[1].Placeholders) == 0 {
+		t.Fatalf("projected tool results=%d placeholders=%d", toolResults, len(snapshots[1].Placeholders))
+	}
+}
+
 func TestSendAttemptsAutomaticCompactionOnceOnEachRepeatedPostToolIteration(t *testing.T) {
 	history := &fakeHistory{events: automaticPressureHistory(190_000)}
 	compactor := &fakeClient{steps: []step{
@@ -524,7 +623,7 @@ func TestSendNoLegalAutomaticCutRecordsSafeContextOverflow(t *testing.T) {
 	conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
 	session := NewWithCompactor(conversation, conversation, automaticTestProfile(t, 100_000), history,
 		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
-	err := session.Send(context.Background(), strings.Repeat("x", 81_000), &recorder{}, nil)
+	err := session.Send(context.Background(), strings.Repeat("x", 96_000), &recorder{}, nil)
 	if !errors.Is(err, ErrContextOverflow) || len(conversation.reqs) != 0 {
 		t.Fatalf("Send error=%v conversation requests=%d", err, len(conversation.reqs))
 	}

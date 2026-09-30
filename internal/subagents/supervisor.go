@@ -18,9 +18,10 @@ import (
 )
 
 type Composition struct {
-	Receipt      composition.Receipt
-	Toolset      tools.Toolset
-	Instructions string
+	Receipt                  composition.Receipt
+	Toolset                  tools.Toolset
+	Instructions             string
+	CompatibilityResolutions []composition.CompatibilityResolution
 }
 type Resolver func(context.Context, *composition.Receipt) (Composition, error)
 type Supervisor struct {
@@ -104,6 +105,9 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	s.active[call] = cancel
 	client, profile, resolve := s.client, s.profile, s.resolve
 	s.mu.Unlock()
+	if parent.Profile != nil && parent.Profile.Model() != "" {
+		profile = *parent.Profile
+	}
 	defer func() {
 		s.mu.Lock()
 		delete(s.active, call)
@@ -113,6 +117,18 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 		s.mu.Unlock()
 	}()
 	resolved, err := resolve(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	parentReceipt, err := s.store.GetCompositionReceipt(ctx, parent.Scope.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	childReceipt, err := researchReceipt(resolved.Receipt, parentReceipt)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err = resolve(ctx, &childReceipt)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +250,11 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	if err != nil {
 		return s.finish(a.ID, "failed", "composition_unavailable")
 	}
+	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
+		return s.finish(a.ID, "failed", "composition_unavailable")
+	}
 	limited := &boundedClient{client: client, policy: a.Policy, authorize: func(ctx context.Context) error { return s.store.AuthorizeSubagent(ctx, a.ID) }}
-	profile, err = profile.WithOutputLimit(int64(a.Policy.OutputTokens))
+	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), int64(a.Policy.OutputTokens))
 	if err != nil {
 		return s.finish(a.ID, "failed", "invalid_model_policy")
 	}

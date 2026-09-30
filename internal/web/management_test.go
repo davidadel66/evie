@@ -257,7 +257,7 @@ func TestRunningHTTPManagerRefreshesExternalSQLiteChangesAndPublishesItsOwn(t *t
 	handler := NewManagedServer(nil, managerB, storeB).Handler()
 	list := httptest.NewRecorder()
 	handler.ServeHTTP(list, managementRequest("/api/plugins/list", `{}`))
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"id":"web","version":"1.0.0","enabled":false`) {
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"id":"web","version":"1.1.0","enabled":false`) {
 		t.Fatalf("running web list did not refresh CLI change: status=%d body=%s", list.Code, list.Body.String())
 	}
 	enable := httptest.NewRecorder()

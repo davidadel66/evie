@@ -491,6 +491,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     )
 );
 
+CREATE TABLE IF NOT EXISTS session_model_settings (
+    session_id TEXT PRIMARY KEY NOT NULL REFERENCES sessions(id),
+    model_id TEXT NOT NULL CHECK (length(trim(model_id)) > 0),
+    revision INTEGER NOT NULL CHECK (revision > 0)
+);
 CREATE INDEX IF NOT EXISTS sessions_project_id_idx ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS sessions_parent_session_id_idx ON sessions(parent_session_id);
 

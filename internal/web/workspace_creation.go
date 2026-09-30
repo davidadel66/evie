@@ -27,7 +27,7 @@ func (s *Server) handleWorkspaceRegister(w http.ResponseWriter, r *http.Request)
 	var err error
 	if controller, ok := s.contextSessions.(workspaceCreationController); ok {
 		workspace, err = controller.RegisterWorkspaceWithOptions(r.Context(), request)
-	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder {
+	} else if request.PresetID == "" && request.FolderPath == "" && !request.CreateFolder && !request.AllowResearchDelegation {
 		workspace, err = s.contextSessions.RegisterWorkspace(r.Context(), request.DisplayName)
 	} else {
 		managementJSONError(w, http.StatusUnprocessableEntity, "workspace_options_unavailable", "Workspace creation options are unavailable")

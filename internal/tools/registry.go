@@ -166,6 +166,7 @@ type PreparedTool struct {
 // It is deliberately absent from model arguments: a Capability can use the
 // current scope, source event, and live turn fence but cannot choose them.
 type InvocationContext struct {
+	Profile       openrouter.ContextProfile
 	Directory     *Directory
 	IntentEventID memory.EventID
 	SearchMemory  func(context.Context, memory.RetrievalQuery) (memory.RetrievalResult, error)

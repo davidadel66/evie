@@ -6,6 +6,7 @@ import type {
 } from "../api/contextSessions";
 import { Folder, MessageSquare, Plus } from "../ui/Icon";
 import { FolderSettings } from "../folder/FolderSettings";
+import { WorkspaceResearchSettings } from "./WorkspaceResearchSettings";
 
 type DirectoryProps = {
   snapshot?: ContextSessionSnapshot;
@@ -136,6 +137,7 @@ export function WorkspaceHome({
   onNewChat,
   onResume,
   onFolderChanged,
+  onResearchChanged,
   onOpenFiles,
   instructions,
 }: {
@@ -145,6 +147,7 @@ export function WorkspaceHome({
   onNewChat: () => void;
   onResume: (session: StoredSession) => void;
   onFolderChanged?: () => Promise<void>;
+  onResearchChanged?: () => Promise<void>;
   onOpenFiles?: () => void;
   instructions?: React.ReactNode;
 }) {
@@ -165,6 +168,7 @@ export function WorkspaceHome({
         </header>
 
         {instructions}
+        <WorkspaceResearchSettings key={workspace.id} workspace={workspace} onChanged={onResearchChanged} />
         <FolderSettings key={`${workspace.id}:${workspace.folder?.revision ?? 0}`} workspace={workspace} busy={busy} onChanged={onFolderChanged} onOpen={onOpenFiles} />
         <section className="mt-8">
           <div className="mb-4 flex items-baseline justify-between">

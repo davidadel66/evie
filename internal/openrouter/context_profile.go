@@ -103,6 +103,7 @@ func NewExplicitContextProfile(
 }
 
 type contextProfileConfig struct {
+	adaptive     bool
 	hardOverride int64
 	working      int64
 	output       int64
@@ -130,6 +131,10 @@ type endpointMetadataResponse struct {
 }
 
 func (c *Client) ResolveContextProfile(ctx context.Context, model string) (ContextProfile, error) {
+	return c.resolveContextProfile(ctx, model, false)
+}
+
+func (c *Client) resolveContextProfile(ctx context.Context, model string, adaptive bool) (ContextProfile, error) {
 	if err := ctx.Err(); err != nil {
 		return ContextProfile{}, err
 	}
@@ -146,6 +151,7 @@ func (c *Client) ResolveContextProfile(ctx context.Context, model string) (Conte
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, c.contextDiscoveryTimeout)
 	defer cancel()
+	config.adaptive = adaptive && strings.TrimSpace(os.Getenv("EVIE_CONTEXT_WORKING_TOKENS")) == ""
 	profile, discoveryErr := c.discoverContextProfile(discoveryCtx, model, config)
 	if discoveryErr == nil {
 		return profile, nil
@@ -212,6 +218,9 @@ func (c *Client) discoverContextProfile(
 	if err != nil {
 		return ContextProfile{}, err
 	}
+	if config.adaptive {
+		config.working = min(config.working, hardWindow)
+	}
 	return newContextProfile(ContextProfileDiagnostics{
 		ConfiguredModel:        model,
 		AdvertisedModel:        modelData.ID,
@@ -275,6 +284,10 @@ func containsParameter(parameters []string, want string) bool {
 }
 
 func (c *Client) getContextMetadata(ctx context.Context, path string, destination any) error {
+	return c.getMetadata(ctx, path, destination, maxContextMetadataBody)
+}
+
+func (c *Client) getMetadata(ctx context.Context, path string, destination any, limit int64) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.apiBaseURL, "/")+path, nil)
 	if err != nil {
 		return err
@@ -286,14 +299,14 @@ func (c *Client) getContextMetadata(ctx context.Context, path string, destinatio
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxContextMetadataBody))
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, limit))
 		return fmt.Errorf("metadata API returned status %d", response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxContextMetadataBody+1))
+	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		return fmt.Errorf("read metadata: %w", err)
 	}
-	if len(body) > maxContextMetadataBody {
+	if int64(len(body)) > limit {
 		return errors.New("metadata response exceeds size limit")
 	}
 	if err := json.Unmarshal(body, destination); err != nil {

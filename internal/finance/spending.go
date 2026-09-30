@@ -56,19 +56,21 @@ type SpendingRefresh struct {
 // refresh action. Its success timestamp lasts only for this server lifetime;
 // inspecting a report never claims to have contacted a bank.
 type SpendingService struct {
-	mu          sync.Mutex
-	refreshing  bool
-	refreshedAt *time.Time
-	openRead    func(context.Context) (*sql.DB, error)
-	openWrite   func(context.Context) (*sql.DB, error)
-	syncBanks   func(context.Context, *sql.DB) (*SyncResult, error)
-	now         func() time.Time
-	timeout     time.Duration
+	mu                     sync.Mutex
+	refreshing             bool
+	refreshedAt            *time.Time
+	openRead               func(context.Context) (*sql.DB, error)
+	openWrite              func(context.Context) (*sql.DB, error)
+	openEdit               func(context.Context) (*sql.DB, error)
+	syncBanks              func(context.Context, *sql.DB) (*SyncResult, error)
+	now                    func() time.Time
+	timeout                time.Duration
+	accountProviderFactory func() (spendingAccountProvider, error)
 }
 
 func NewSpendingService() *SpendingService {
 	return &SpendingService{
-		openRead: openSpendingReadOnly, openWrite: OpenDBContext, syncBanks: Sync,
+		openRead: openSpendingReadOnly, openWrite: OpenDBContext, openEdit: openSpendingExisting, syncBanks: Sync,
 		now: time.Now, timeout: 2 * time.Minute,
 	}
 }

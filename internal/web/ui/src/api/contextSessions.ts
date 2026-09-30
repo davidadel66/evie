@@ -77,11 +77,16 @@ export function listContextSessions(): Promise<ContextSessionSnapshot> {
 }
 
 export type WorkspaceCreation = {
+	allowResearchDelegation?: boolean;
   displayName: string;
   presetId?: string;
   folderPath?: string;
   createFolder?: boolean;
 };
+
+export function setWorkspaceResearch(workspaceId: string, revision: string, enabled: boolean): Promise<Workspace> {
+  return postJSON("/api/workspaces/research", {workspaceId, revision, enabled});
+}
 
 export function registerWorkspace(options: WorkspaceCreation): Promise<Workspace> {
   return postJSON("/api/workspaces/register", options);

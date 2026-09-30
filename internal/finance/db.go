@@ -157,7 +157,7 @@ func openDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	if _, err := db.ExecContext(ctx, schema+spendingAccountsSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create schema: %w", err)
 	}

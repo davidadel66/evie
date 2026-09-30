@@ -85,7 +85,7 @@ func setup(t *testing.T, policy delegation.Policy) *fixture {
 		} else {
 			r, err = f.manager.ResumeCompositionContext(ctx, *receipt)
 		}
-		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions}, err
+		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: r.CompatibilityResolutions}, err
 	})
 	resolved, err := f.manager.ResolvePreset(plugins.StandardPresetID)
 	if err != nil {
@@ -183,7 +183,7 @@ func configure(t *testing.T, f *fixture, client agent.Client) {
 		} else {
 			r, err = f.manager.ResumeCompositionContext(ctx, *receipt)
 		}
-		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions}, err
+		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: r.CompatibilityResolutions}, err
 	})
 }
 func TestForegroundBatchActuallyOverlapsWithinConfiguredCapacity(t *testing.T) {
@@ -391,6 +391,10 @@ func (e *eventSink) ResponseDiscarded(agent.DiscardReason, string) {}
 
 func TestComposedParentDelegatesThroughPluginAndReceivesIsolatedEvidence(t *testing.T) {
 	f := setup(t, delegation.DefaultPolicy())
+	selected, err := openrouter.NewExplicitContextProfile("selected/parent-model", 300000, 200000, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	resolved, err := f.manager.ResolvePreset(plugins.StandardPresetID)
 	if err != nil {
@@ -402,6 +406,9 @@ func TestComposedParentDelegatesThroughPluginAndReceivesIsolatedEvidence(t *test
 	}
 	var parentCalls, childCalls atomic.Int32
 	client := clientFunc(func(_ context.Context, r openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+		if r.Model != selected.Model() {
+			return openrouter.ChatResponse{}, fmt.Errorf("invoking model lost: %s", r.Model)
+		}
 		isParent := false
 		for _, tool := range r.Tools {
 			if tool.Function.Name == delegation.ToolName {
@@ -443,7 +450,7 @@ func TestComposedParentDelegatesThroughPluginAndReceivesIsolatedEvidence(t *test
 	})
 	configure(t, f, client)
 	sink := &eventSink{}
-	parent := agent.NewWithToolset(client, f.profile, f.store.BindHistory(stored.ID, "composed"), stored.ScopeContext(), f.store.BindTurnOwner(stored.ID, "composed"), resolved.Toolset)
+	parent := agent.NewWithToolset(client, selected, f.store.BindHistory(stored.ID, "composed"), stored.ScopeContext(), f.store.BindTurnOwner(stored.ID, "composed"), resolved.Toolset)
 	if err = parent.Send(ctx, "parent-private-sentinel", sink, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -883,7 +890,7 @@ func TestProviderFailuresRemainDistinctAndSafeAcrossBatchRetry(t *testing.T) {
 func TestChildComposedContextOverflowIsAPolicyFailure(t *testing.T) {
 	f := setup(t, delegation.DefaultPolicy())
 	var err error
-	f.profile, err = openrouter.NewExplicitContextProfile("test-model", 8192, 4300, 128)
+	f.profile, err = openrouter.NewExplicitContextProfile("test-model", 4300, 4300, 128)
 	if err != nil {
 		t.Fatal(err)
 	}

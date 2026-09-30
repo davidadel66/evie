@@ -48,8 +48,9 @@ type ContextSessionSnapshot struct {
 }
 
 type OpenedContextSession struct {
-	Session memory.Session
-	Agent   *agent.Session
+	Session       memory.Session
+	Agent         *agent.Session
+	ModelRevision int64
 }
 
 type ContextSessionController interface {
@@ -144,6 +145,7 @@ func (s *Server) handleContextSessionSelect(w http.ResponseWriter, r *http.Reque
 	s.sessionMu.Lock()
 	s.session = opened.Agent
 	s.activeSession = opened.Session
+	s.modelRevision = opened.ModelRevision
 	s.sessionMu.Unlock()
 	writeJSON(w, http.StatusOK, struct {
 		Session memory.Session         `json:"session"`

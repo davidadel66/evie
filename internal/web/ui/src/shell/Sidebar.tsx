@@ -18,9 +18,7 @@ type Props = {
   onCreateWorkspace: () => void;
   onArchive: (session: StoredSession) => void;
   onCloseMobile: () => void;
-  onNewChat: () => void;
   onData: () => void;
-  onWorkspaces: () => void;
   onWorkspace: (workspace: Workspace) => void;
   onNewWorkspaceChat: (workspace: Workspace) => void;
   onSession: (session: StoredSession) => void;
@@ -37,9 +35,7 @@ export function Sidebar({
   onCreateWorkspace,
   onArchive,
   onCloseMobile,
-  onNewChat,
   onData,
-  onWorkspaces,
   onWorkspace,
   onNewWorkspaceChat,
   onSession,
@@ -68,23 +64,10 @@ export function Sidebar({
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-5">
         <SidebarButton
-          active={destination === "chat"}
-          icon={<Plus size={15} />}
-          label="New chat"
-          disabled={busy}
-          onClick={onNewChat}
-        />
-        <SidebarButton
           active={destination === "data"}
           icon={<Database size={15} />}
           label="Data"
           onClick={onData}
-        />
-        <SidebarButton
-          active={destination === "workspaces"}
-          icon={<Folder size={15} />}
-          label="Workspaces"
-          onClick={onWorkspaces}
         />
 
         <div className="mt-7 mb-2 flex items-center px-2">

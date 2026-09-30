@@ -24,10 +24,11 @@ func (s *Store) RegisterWorkspace(ctx context.Context, displayName string) (memo
 // WorkspaceRegistration is an owner-selected initial configuration. Preset
 // availability is validated by the runtime before persistence.
 type WorkspaceRegistration struct {
-	DisplayName  string `json:"displayName"`
-	PresetID     string `json:"presetId,omitempty"`
-	FolderPath   string `json:"folderPath,omitempty"`
-	CreateFolder bool   `json:"createFolder,omitempty"`
+	DisplayName             string `json:"displayName"`
+	PresetID                string `json:"presetId,omitempty"`
+	FolderPath              string `json:"folderPath,omitempty"`
+	CreateFolder            bool   `json:"createFolder,omitempty"`
+	AllowResearchDelegation bool   `json:"allowResearchDelegation,omitempty"`
 }
 
 func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options WorkspaceRegistration) (memory.Workspace, error) {
@@ -37,6 +38,9 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 	}
 	if !composition.ValidIdentity(presetID) {
 		return memory.Workspace{}, errors.New("invalid Agent Preset ID")
+	}
+	if options.AllowResearchDelegation && presetID != "standard" {
+		return memory.Workspace{}, ErrWorkspaceResearchPreset
 	}
 	id, err := uuid.NewRandom()
 	if err != nil {
@@ -65,6 +69,9 @@ func (s *Store) RegisterWorkspaceWithOptions(ctx context.Context, options Worksp
 	retainFolder := false
 	defer func() { cleanup(retainFolder) }()
 	workspace.Folder = folder
+	if options.AllowResearchDelegation {
+		workspace.AllowedPresetIDs = append(workspace.AllowedPresetIDs, "research")
+	}
 	allowed, err := json.Marshal(workspace.AllowedPresetIDs)
 	if err != nil {
 		return memory.Workspace{}, err

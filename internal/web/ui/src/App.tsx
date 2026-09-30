@@ -1,3 +1,5 @@
+import { ModelSelector } from "./chat/ModelSelector";
+import { useChatModels } from "./store/useChatModels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ContextScope,
@@ -17,7 +19,6 @@ import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
 import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
-import { selectionForScope } from "./shell/scopeSelection";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
 import { Banner } from "./ui/Banner";
@@ -44,7 +45,8 @@ const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 
 export default function App() {
   const contextSessions = useContextSessions();
-  const { items, status, queue, problem, send, answer, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id);
+  const chatModels = useChatModels(contextSessions.snapshot?.activeSession?.id);
+  const { items, status, queue, clearQueue, problem, send, answer, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
   const [views, setViews] = useState<WorkbenchView[]>(initialViews);
   const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
   const [draft, setDraft] = useState("");
@@ -212,17 +214,6 @@ export default function App() {
 
   const startProjectChat = (project: Project) => selectSession({ projectId: project.id });
 
-  const startNewChat = () => {
-    const scope = contextSessions.snapshot?.activeScope;
-    if (!scope) {
-      openView({ id: "workspaces", kind: "workspaces" });
-      return;
-    }
-    const selection = selectionForScope(scope);
-    if (selection) void selectSession(selection);
-    else openView({ id: "workspaces", kind: "workspaces" });
-  };
-
   const registerWorkspace = async (options: WorkspaceCreation) => {
     await contextSessions.register(options);
     setCreateWorkspaceOpen(false);
@@ -264,9 +255,7 @@ export default function App() {
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onArchive={session => void archiveSession(session)}
         onCloseMobile={closeNavigation}
-        onNewChat={startNewChat}
         onData={() => openView({ id: "data", kind: "data" })}
-        onWorkspaces={() => openView({ id: "workspaces", kind: "workspaces" })}
         onWorkspace={openWorkspace}
         onNewWorkspaceChat={(workspace) => void startWorkspaceChat(workspace)}
         onSession={(session) => void selectSession({ sessionId: session.id })}
@@ -321,8 +310,16 @@ export default function App() {
                       value={draft}
                       onChange={setDraft}
                       streaming={status === "streaming"}
-                      disabled={contextSessions.busy || historyLoading || !!historyProblem}
+                      disabled={contextSessions.busy || historyLoading || !!historyProblem || chatModels.saving || !chatModels.catalog}
+                      modelSelector={<><ModelSelector models={chatModels.catalog?.models ?? []} value={chatModels.catalog?.model} loading={chatModels.loading} saving={chatModels.saving} problem={chatModels.problem ?? (problem?.startsWith("Chat model changed") ? problem : undefined)} disabled={contextSessions.busy || status === "streaming" || queue.length > 0} onChange={model => { void chatModels.select(model); }} onRetry={() => {
+                        const sessionId = contextSessions.snapshot?.activeSession?.id;
+                        if (sessionId) void contextSessions.select({sessionId}).then(() => { chatModels.refresh(); dismissProblem(); }).catch(() => {});
+                      }} />{status === "error" && queue.length > 0 && <button type="button" className="text-muted-text mt-2 text-xs underline" onClick={() => {
+                        setDraft([...queue, draft].filter(Boolean).join("\n\n"));
+                        clearQueue();
+                      }}>Return queued messages to draft</button>}</>}
                       onSend={() => {
+                        if (chatModels.saving || !chatModels.catalog) return;
                         send(draft);
                         setDraft("");
                       }}
@@ -368,6 +365,7 @@ export default function App() {
                   workspace={activeWorkspace}
                   instructions={<InstructionBadge workspace={activeWorkspace} onOpen={trigger=>openInstructions(activeWorkspace,trigger)}/>}
                   onFolderChanged={contextSessions.refresh}
+                  onResearchChanged={contextSessions.refresh}
                   onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
                   sessions={workspaceSessions}
                   busy={contextSessions.busy || status === "streaming"}

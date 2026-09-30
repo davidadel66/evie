@@ -9,6 +9,10 @@ export function monthLabel(month: string): string {
   return new Date(`${month}-01T12:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+export function dayLabel(date: string): string {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 export function calendarWeeks(month: string): (string | null)[][] {
   const [year, number] = month.split("-").map(Number);
   const start = new Date(`${month}-01T12:00:00Z`).getUTCDay();

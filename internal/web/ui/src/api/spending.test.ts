@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { inspectCashFlow, inspectSpending, inspectSpendingTransactions, refreshSpending } from "./spending";
+import { inspectCashFlow, inspectSpending, inspectSpendingDay, inspectSpendingTransactions, refreshSpending, SpendingCategoryError, updateSpendingCategory } from "./spending";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -51,5 +51,30 @@ describe("Spending API", () => {
     expect(await inspectCashFlow(query, controller.signal)).toEqual(report);
     expect(fetchMock).toHaveBeenCalledWith("/api/data/spending/cash-flow", expect.objectContaining({ method: "POST", body: JSON.stringify(query), signal: controller.signal }));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads an exact day and sends explicit category edits with opaque revisions and exact entry ids", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const query = { date: "2026-09-21", offset: 50, pageSize: 50 };
+    await inspectSpendingDay(query, controller.signal);
+    const change = { transactionId: "transaction", entryId: "900719925474099301", category: "Groceries", revision: "saved-state-hash" };
+    await updateSpendingCategory(change);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/data/spending/day", expect.objectContaining({ method: "POST", body: JSON.stringify(query), signal: controller.signal }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/data/spending/category", expect.objectContaining({ method: "POST", body: JSON.stringify(change) }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes stale category writes from a bank refresh and hides private errors", async () => {
+    const query = { transactionId: "transaction", entryId: null, category: "Groceries", revision: "saved-state-hash" };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("private-token", { status: 409 })));
+    await expect(updateSpendingCategory(query)).rejects.toMatchObject({ conflict: true, message: "This transaction changed. Reload before editing." });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("private-token", { status: 400 })));
+    await expect(updateSpendingCategory(query)).rejects.toBeInstanceOf(SpendingCategoryError);
+    await expect(updateSpendingCategory(query)).rejects.toThrow("Choose an available category");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("private-token", { status: 500 })));
+    await expect(updateSpendingCategory(query)).rejects.toThrow("Category could not be saved");
+    await expect(inspectSpendingDay({ date: "2026-09-21", offset: 0, pageSize: 50 })).rejects.toThrow("Day transactions could not be loaded");
   });
 });

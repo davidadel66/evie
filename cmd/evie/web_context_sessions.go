@@ -8,6 +8,7 @@ import (
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
 	"github.com/davidadel66/evie/internal/web"
 )
@@ -18,9 +19,14 @@ type webContextCompositionManager interface {
 }
 
 type webContextSessionController struct {
-	store    *eviedb.Store
-	manager  webContextCompositionManager
-	newAgent func(memory.Session, plugins.ResolvedComposition) (*agent.Session, error)
+	modelClient interface {
+		ListChatModels(context.Context) ([]openrouter.Model, error)
+	}
+	defaultModel  string
+	newModelAgent func(context.Context, memory.Session, plugins.ResolvedComposition, string, int64) (*agent.Session, error)
+	store         *eviedb.Store
+	manager       webContextCompositionManager
+	newAgent      func(memory.Session, plugins.ResolvedComposition) (*agent.Session, error)
 }
 
 func newWebContextSessionController(
@@ -75,6 +81,10 @@ func (c *webContextSessionController) SelectSession(
 	ctx context.Context,
 	selection web.ContextSessionSelection,
 ) (web.OpenedContextSession, error) {
+	return c.selectSession(ctx, selection, "")
+}
+
+func (c *webContextSessionController) selectSession(ctx context.Context, selection web.ContextSessionSelection, modelOverride string) (web.OpenedContextSession, error) {
 	var (
 		session  memory.Session
 		standard plugins.ResolvedComposition
@@ -131,11 +141,31 @@ func (c *webContextSessionController) SelectSession(
 	if err != nil {
 		return web.OpenedContextSession{}, fmt.Errorf("compose selected session: %w", err)
 	}
-	openedAgent, err := c.newAgent(session, bound.Resolved)
+	setting, err := c.store.SessionModel(ctx, session.ID)
 	if err != nil {
 		return web.OpenedContextSession{}, err
 	}
-	return web.OpenedContextSession{Session: session, Agent: openedAgent}, nil
+	var openedAgent *agent.Session
+	if c.newModelAgent != nil {
+		model := setting.Model
+		if model == "" {
+			model = c.defaultModel
+		}
+		if modelOverride != "" {
+			model = modelOverride
+		}
+		revision := setting.Revision
+		if modelOverride != "" {
+			revision++
+		}
+		openedAgent, err = c.newModelAgent(ctx, session, bound.Resolved, model, revision)
+	} else {
+		openedAgent, err = c.newAgent(session, bound.Resolved)
+	}
+	if err != nil {
+		return web.OpenedContextSession{}, err
+	}
+	return web.OpenedContextSession{Session: session, Agent: openedAgent, ModelRevision: setting.Revision}, nil
 }
 
 func (c *webContextSessionController) PreviewRepositoryInstructions(ctx context.Context, id memory.WorkspaceID) (memory.RepositoryInstructionSnapshot, error) {
@@ -146,4 +176,38 @@ func (c *webContextSessionController) SetRepositoryInstructionSettings(ctx conte
 }
 func (c *webContextSessionController) RepositoryInstructionSnapshot(ctx context.Context, session memory.SessionID, turn memory.EventID) (memory.RepositoryInstructionSnapshot, error) {
 	return c.store.RepositoryInstructionSnapshot(ctx, session, turn)
+}
+
+func (c *webContextSessionController) ListChatModels(ctx context.Context) ([]openrouter.Model, error) {
+	if c.modelClient == nil {
+		return nil, errors.New("model catalog unavailable")
+	}
+	return c.modelClient.ListChatModels(ctx)
+}
+
+func (c *webContextSessionController) SelectModel(ctx context.Context, id memory.SessionID, revision int64, model string) (web.OpenedContextSession, error) {
+	models, err := c.ListChatModels(ctx)
+	if err != nil {
+		return web.OpenedContextSession{}, err
+	}
+	found := false
+	for _, candidate := range models {
+		if candidate.ID == model {
+			found = true
+			break
+		}
+	}
+	if !found || c.newModelAgent == nil {
+		return web.OpenedContextSession{}, errors.New("model is not available")
+	}
+	opened, err := c.selectSession(ctx, web.ContextSessionSelection{SessionID: id}, model)
+	if err != nil {
+		return web.OpenedContextSession{}, err
+	}
+	setting, err := c.store.SetSessionModel(ctx, id, revision, model)
+	if err != nil {
+		return web.OpenedContextSession{}, err
+	}
+	opened.ModelRevision = setting.Revision
+	return opened, nil
 }

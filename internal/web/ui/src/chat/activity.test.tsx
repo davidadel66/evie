@@ -48,6 +48,28 @@ describe("activity transcript", () => {
     expect(html).toContain("for 4s");
     expect(html).not.toContain("Hi.");
   });
+
+  it("shows a recorded failure without advising another reload", () => {
+    const turn = {id: "u", startedAt: 1000, finishedAt: 5000, status: "incomplete"} as const;
+    const items: Item[] = [
+      {kind: "user", key: "u", text: "read pages", turn},
+      {kind: "notice", key: "failure", text: "This turn did not complete.", tone: "warning", turn},
+    ];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} />);
+    expect(html).toContain("Work incomplete");
+    expect(html).toContain("This turn did not complete.");
+    expect(html).not.toContain("Reload to check the saved conversation.");
+    expect(html).toContain('aria-expanded="false"');
+  });
+
+  it("keeps reload advice when no terminal evidence was recorded", () => {
+    const turn = {id: "u", startedAt: 1000, status: "incomplete"} as const;
+    const items: Item[] = [{kind: "user", key: "u", text: "read pages", turn}];
+    const html = renderToStaticMarkup(<Activity group={activityTurns(items, false)[0]} onAnswer={() => {}} />);
+    expect(html).toContain("Work incomplete");
+    expect(html).toContain("Reload to check the saved conversation.");
+  });
+
   it("reconciles streamed text into progress and a final answer in one stable turn", () => {
     let items = appendUser([], "inspect plugins");
     items = reduce(items, { type: "turn_started", id: "root", startedAt: 1000, status: "working" });

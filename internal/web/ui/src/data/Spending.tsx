@@ -4,6 +4,8 @@ import { calendarDate } from "../api/usage";
 import { calendarWeeks, flowColor, formatFlow, monthLabel, shiftMonth } from "./spendingPresentation";
 import { SpendingTransactions } from "./SpendingTransactions";
 import { CashFlow } from "./CashFlow";
+import { SpendingDayDialog } from "./SpendingDayDialog";
+import { SpendingAccounts } from "./SpendingAccounts";
 
 export function Spending() {
   const [month, setMonth] = useState(() => calendarDate(new Date()).slice(0, 7));
@@ -53,21 +55,23 @@ export function Spending() {
 
   return <SpendingView month={month} report={report?.year === year ? report : undefined} loading={loading}
     refreshing={refreshing} problem={problem || refreshProblem} revision={revision}
-    onMonth={setMonth} onRefresh={refresh} onRetry={() => setRevision((value) => value + 1)} />;
+    onMonth={setMonth} onRefresh={refresh} onRetry={() => setRevision((value) => value + 1)} onSaved={() => setRevision((value) => value + 1)} />;
 }
 
 type Props = {
   month: string; report?: SpendingReport; loading: boolean; refreshing: boolean;
   problem?: string; today?: string; revision?: number;
   onMonth: (month: string) => void; onRefresh: () => void; onRetry: () => void;
+  onSaved?: () => void;
 };
 const control = "border-hair-strong bg-card text-body focus-visible:ring-teal rounded-md border px-3 py-2 text-xs focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:opacity-40";
 
-export function SpendingView({ month, report, loading, refreshing, problem, today = calendarDate(new Date()), revision = 0, onMonth, onRefresh, onRetry }: Props) {
+export function SpendingView({ month, report, loading, refreshing, problem, today = calendarDate(new Date()), revision = 0, onMonth, onRefresh, onRetry, onSaved = () => undefined }: Props) {
   const [view, setView] = useState<"overview" | "transactions">("overview");
   const previous = shiftMonth(month, -1), next = shiftMonth(month, 1);
   const days = report?.days.filter((day) => day.date.startsWith(`${month}-`)) ?? [];
   return <section aria-label="Spending" className="min-h-0 min-w-0 flex-1 overflow-y-auto p-5 sm:p-7">
+    <SpendingAccounts onLinked={onSaved} />
     <div className="border-hair flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b">
       <nav aria-label="Spending views" className="flex self-stretch">
         {(["overview", "transactions"] as const).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)} className={`${view === item ? "border-teal text-ink" : "border-transparent text-muted-text hover:text-body"} focus-visible:ring-teal border-b px-3 py-3 text-xs focus-visible:ring-2 focus-visible:outline-none`}>{item === "overview" ? "Overview" : "Transactions"}</button>)}
@@ -94,7 +98,7 @@ export function SpendingView({ month, report, loading, refreshing, problem, toda
         </div>
         {days.length === 0 && <p role="status" className="text-muted-text mt-4 text-xs">No posted transactions.</p>}
         {loading && <p role="status" className="text-muted-text mt-3 text-xs">Updating…</p>}
-        <FlowCalendar key={month} month={month} days={days} today={today} />
+        <FlowCalendar key={month} month={month} days={days} today={today} onSaved={onSaved} />
       </>)}
     </>}
   </section>;
@@ -104,15 +108,12 @@ function Chevron({ direction }: { direction: "left" | "right" }) {
   return <svg aria-hidden="true" width="14" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d={direction === "left" ? "M10 3 5 8l5 5" : "m6 3 5 5-5 5"} /></svg>;
 }
 
-function FlowCalendar({ month, days, today }: { month: string; days: SpendingDay[]; today: string }) {
+function FlowCalendar({ month, days, today, onSaved }: { month: string; days: SpendingDay[]; today: string; onSaved: () => void }) {
   const [selected, setSelected] = useState<string>();
   const byDate = new Map(days.map((day) => [day.date, day]));
-  const selectedDay = selected ? byDate.get(selected) : undefined;
   const maximum = days.filter((day) => day.date <= today).reduce((max, day) => { const n = BigInt(day.netCents); const abs = n < 0n ? -n : n; return abs > max ? abs : max; }, 0n);
   return <>
-    {selectedDay && <div role="status" aria-live="polite" className="text-muted-text mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
-      <span className="text-body font-medium">{selectedDay.date}</span><span>Net <b className="text-ink font-normal">{formatFlow(selectedDay.netCents)}</b></span><span>In {formatFlow(selectedDay.inflowCents, false)}</span><span>Out {formatFlow(selectedDay.outflowCents, false)}</span><span>{selectedDay.transactions} {selectedDay.transactions === 1 ? "transaction" : "transactions"}</span>
-    </div>}
+    {selected && <SpendingDayDialog key={selected} date={selected} onClose={() => setSelected(undefined)} onSaved={onSaved} />}
     <div className="mt-4 max-w-full overflow-x-auto pb-2" tabIndex={0} role="region" aria-label="Monthly net flow calendar; scroll horizontally on small screens">
       <table className="w-full min-w-[560px] table-fixed border-separate border-spacing-1 text-[11px] tabular-nums">
         <caption className="sr-only">Daily net flow for {monthLabel(month)}. Positive amounts are net inflows; negative amounts are net outflows.</caption>
@@ -124,7 +125,7 @@ function FlowCalendar({ month, days, today }: { month: string; days: SpendingDay
           const description = day ? `${date}: net ${formatFlow(day.netCents)}; money in ${formatFlow(day.inflowCents, false)}; money out ${formatFlow(day.outflowCents, false)}; ${day.transactions} ${day.transactions === 1 ? "transaction" : "transactions"}` : `${date}: ${future ? "future date" : "no recorded transactions"}`;
           const content = <><span className={`${date === today ? "text-teal font-semibold" : "text-muted-text"} block text-[11px]`} aria-current={date === today ? "date" : undefined}>{Number(date.slice(8))}</span><span className="text-ink mt-3 block overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium">{day ? formatFlow(day.netCents) : future ? "\u00a0" : "—"}</span></>;
           return <td key={column} className={`${future ? "bg-card/40" : "bg-card"} h-[76px] rounded-md align-top`} style={day ? { backgroundColor: flowColor(day.netCents, maximum) } : undefined}>
-            {day ? <button type="button" title={description} aria-label={description} aria-pressed={selected === date} onClick={() => setSelected(date)} onFocus={() => setSelected(date)} className="focus-visible:ring-teal block h-full w-full cursor-pointer rounded-md p-2 text-left focus-visible:ring-2 focus-visible:outline-none">{content}</button> : <div className="p-2" aria-label={description}>{content}</div>}
+            {!future ? <button type="button" title={description} aria-label={description} aria-haspopup="dialog" onClick={() => setSelected(date)} className="focus-visible:ring-teal block h-full w-full cursor-pointer rounded-md p-2 text-left focus-visible:ring-2 focus-visible:outline-none">{content}</button> : <div className="p-2" aria-label={description}>{content}</div>}
           </td>;
         })}</tr>)}</tbody>
       </table>

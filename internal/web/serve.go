@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
 )
@@ -79,6 +80,7 @@ type Server struct {
 	session           *agent.Session
 	activeSession     memory.Session
 	activeTurns       int
+	modelRevision     int64
 	selectingSession  bool
 	manager           *plugins.Manager
 	receipts          ReceiptInspector
@@ -187,6 +189,10 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/sessions/inspect", s.managementRoute(s.handleSessionInspect))
 	}
 	if s.contextSessions != nil {
+		if _, ok := s.contextSessions.(ModelController); ok {
+			mux.Handle("/api/models/list", s.managementRoute(s.handleModelList))
+			mux.Handle("/api/models/select", s.managementRoute(s.handleModelSelect))
+		}
 		mux.Handle("/api/context-sessions/list", s.managementRoute(s.handleContextSessionList))
 		mux.Handle("/api/context-sessions/history", s.managementRoute(s.handleContextSessionHistory))
 		mux.Handle("/api/context-sessions/select", s.managementRoute(s.handleContextSessionSelect))
@@ -195,6 +201,9 @@ func (s *Server) Handler() http.Handler {
 			mux.Handle("/api/context-sessions/restore", s.managementRoute(s.handleContextSessionRestore))
 		}
 		mux.Handle("/api/workspaces/register", s.managementRoute(s.handleWorkspaceRegister))
+		if _, ok := s.contextSessions.(workspaceResearchController); ok {
+			mux.Handle("/api/workspaces/research", s.managementRoute(s.handleWorkspaceResearch))
+		}
 		mux.Handle("/api/workspaces/choose-folder", s.managementRoute(s.handleWorkspaceChooseFolder))
 	}
 	if s.semanticMemory != nil {
@@ -216,8 +225,11 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/api/data/spending/summary", s.managementRoute(s.handleSpendingSummary))
 		mux.Handle("/api/data/spending/transactions", s.managementRoute(s.handleSpendingTransactions))
 		mux.Handle("/api/data/spending/cash-flow", s.managementRoute(s.handleSpendingCashFlow))
+		mux.Handle("/api/data/spending/day", s.managementRoute(s.handleSpendingDay))
+		mux.Handle("/api/data/spending/category", s.managementRoute(s.handleSpendingCategory))
 		mux.Handle("/api/data/spending/refresh", s.managementRoute(s.handleSpendingRefresh))
 	}
+	s.registerSpendingAccountRoutes(mux)
 	s.registerCandidateReviewRoutes(mux)
 	s.registerFolderRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
@@ -286,6 +298,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Message   string           `json:"message"`
 		SessionID memory.SessionID `json:"sessionId"`
+		Model     string           `json:"model"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "body must be JSON with a message field")
@@ -304,6 +317,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := s.session
+	if session != nil && req.Model != "" && req.Model != session.ContextProfile().ConfiguredModel {
+		s.sessionMu.Unlock()
+		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
+		return
+	}
 	if session != nil {
 		s.activeTurns++
 	}
@@ -327,6 +345,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(turnLifecycleContext(r))
 	sendErr := session.Send(measurementCtx, req.Message, ev, s.approver(r.Context(), ev))
 
+	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && !ev.wrote {
+		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
+		return
+	}
 	if (errors.Is(sendErr, agent.ErrBusy) || errors.Is(sendErr, agent.ErrLeaseConflict)) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")
 		return

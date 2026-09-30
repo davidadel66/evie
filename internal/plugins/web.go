@@ -11,8 +11,9 @@ const (
 	WebFetchCapabilityID  CapabilityID = "web.fetch"
 	WebSearchCapabilityID CapabilityID = "web.search"
 
-	webImplementationVersion = "1.0.0"
+	webImplementationVersion = "1.1.0"
 	webContractVersion       = "1.0.0"
+	webFetchContractVersion  = "1.1.0"
 )
 
 type Web struct{}
@@ -31,16 +32,31 @@ func (Web) Manifest() Manifest {
 			Minimum: KernelAPIVersion, MaximumExclusive: "2.0.0",
 		},
 		Capabilities: []CapabilityContract{
-			{ID: WebFetchCapabilityID, Version: webContractVersion},
+			{ID: WebFetchCapabilityID, Version: webFetchContractVersion},
 			{ID: WebSearchCapabilityID, Version: webContractVersion},
 		},
+		ResumableFrom: []ImplementationCompatibility{{ImplementationVersion: "1.0.0", Capabilities: []CapabilityCompatibility{
+			{ID: WebFetchCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.WebTools()[0].Schema)},
+			{ID: WebSearchCapabilityID, ContractVersion: "1.0.0", SchemaSHA256: schemaHash(tools.WebTools()[1].Schema)},
+		}}},
 	}
 }
 
 func (Web) ToolCapabilities() []ToolCapability {
 	webTools := tools.WebTools()
 	return []ToolCapability{
-		{ID: WebFetchCapabilityID, ContractVersion: webContractVersion, Tool: webTools[0]},
+		{ID: WebFetchCapabilityID, ContractVersion: webFetchContractVersion, Tool: tools.WebExcerptTool()},
 		{ID: WebSearchCapabilityID, ContractVersion: webContractVersion, Tool: webTools[1]},
+	}
+}
+
+func (Web) ResumableToolCapabilities(version string) []ToolCapability {
+	if version != "1.0.0" {
+		return nil
+	}
+	legacy := tools.WebTools()
+	return []ToolCapability{
+		{ID: WebFetchCapabilityID, ContractVersion: webContractVersion, Tool: legacy[0]},
+		{ID: WebSearchCapabilityID, ContractVersion: webContractVersion, Tool: legacy[1]},
 	}
 }

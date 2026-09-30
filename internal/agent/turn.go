@@ -571,6 +571,7 @@ func (s *Session) runOwnedTurn(
 				return s.observeTurnContext(coordinator)
 			}
 			invocationCtx := tools.WithInvocationContext(coordinator.ctx, tools.InvocationContext{
+				Profile:   s.profile,
 				Directory: &s.directory,
 				Scope:     s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID, SearchMemory: recall.searchForTool(call.ID),
 			})

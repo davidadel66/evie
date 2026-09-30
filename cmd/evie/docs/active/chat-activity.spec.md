@@ -23,6 +23,8 @@ the compact activity presentation in his Codex screenshot.
 - Turn identity, final/progress classification and successful elapsed time
   survive reload and pagination using existing durable events. Missing terminal
   evidence is shown as incomplete. Historical durations are never invented.
+  Recorded failures and interruptions retain their incomplete label and warning;
+  reload advice appears only while terminal evidence is missing.
 - Queued messages, session selection, authorization and approval previews keep
   their current behavior. Model instructions request brief progress for
   substantial work, without narrating every tool call.

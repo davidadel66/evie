@@ -43,7 +43,7 @@ export function Activity({ group, onAnswer, onOpenFile, onOpenTool, onOpenMemory
         {open && group.activity.length === 0 && <p className="text-muted-text text-xs">{group.active ? "Waiting for a response…" : "No additional activity to show."}</p>}
       </div>
       {!open && <div className="space-y-3"><ActivityItems items={group.activity.filter((item) => item === latestMemory || needsAttention(item))} active={group.active} onAnswer={onAnswer} onOpenFile={onOpenFile} onOpenTool={onOpenTool} onOpenMemory={onOpenMemory} /></div>}
-      {!group.active && !complete && <p className="text-amber-ink mt-2 text-xs">Completion wasn’t recorded here. Reload to check the saved conversation.</p>}
+      {!group.active && !complete && !group.turn?.finishedAt && <p className="text-amber-ink mt-2 text-xs">Completion wasn’t recorded here. Reload to check the saved conversation.</p>}
     </section>
   );
 }

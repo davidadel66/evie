@@ -94,12 +94,25 @@ func (s *Store) AcquireTurnLease(
 	holderID memory.LeaseHolderID,
 	duration time.Duration,
 ) (memory.TurnLease, error) {
+	return s.acquireTurnLease(ctx, sessionID, holderID, duration, nil)
+}
+
+func (s *Store) acquireTurnLease(ctx context.Context, sessionID memory.SessionID, holderID memory.LeaseHolderID, duration time.Duration, modelRevision *int64) (memory.TurnLease, error) {
 	var lease memory.TurnLease
 	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		now := s.now()
 		nowText, _, expiresText, err := turnLeaseWindow(sessionID, holderID, now, duration)
 		if err != nil {
 			return err
+		}
+		if modelRevision != nil {
+			var current int64
+			if err := conn.QueryRowContext(ctx, `SELECT COALESCE((SELECT revision FROM session_model_settings WHERE session_id = ?), 0)`, sessionID).Scan(&current); err != nil {
+				return err
+			}
+			if current != *modelRevision {
+				return ErrSessionModelChanged
+			}
 		}
 		if _, err := releaseInactiveTaskClaimsForSession(ctx, conn, sessionID, now.UTC()); err != nil {
 			return err

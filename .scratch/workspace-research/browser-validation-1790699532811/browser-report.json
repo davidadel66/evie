@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "synthetic": true,
+  "cases": [
+    "Creation defaults off; explicit opt-in persists; preset switching clears opt-in; creation preserves active chat",
+    "Research checkbox works with keyboard and focus remains inside creation modal",
+    "Settings enable advances Workspace revision; new chat pins it and old chat retains its original revision",
+    "Disable and re-enable persist across reload without rewriting existing chat snapshots",
+    "Stale edits fail closed, retain displayed state, and Refresh permissions loads current state before retry",
+    "Successful permission save remains confirmed when list refresh fails; explicit refresh recovers",
+    "Workspace research settings fit 390px without horizontal overflow and retain keyboard focus"
+  ],
+  "pageErrors": [],
+  "boundaries": [
+    "Temporary fixture database and synthetic content only; no installed Evie server or provider requests.",
+    "Browser checks permission management and immutable session revision display/API bindings; worker admission, cancellation, and persistent revocation enforcement are covered by separate deterministic Go checks."
+  ],
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  }
+}

@@ -175,13 +175,13 @@ func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err er
 			return matched, unmatched, fmt.Errorf("insert category %q: %w", category, err)
 		}
 
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO budget_entries (transaction_id, category, amount_cents, source)
-			VALUES (?, ?, ?, ?)
-			`, c.id, category, c.amountCents, source); err != nil {
+		inserted, err := insertCategorizedCandidate(ctx, tx, c, category, source)
+		if err != nil {
 			return matched, unmatched, fmt.Errorf("insert budget entry: %w", err)
 		}
-		matched++
+		if inserted {
+			matched++
+		}
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -192,4 +192,23 @@ func Categorize(ctx context.Context, db *sql.DB) (matched, unmatched int, err er
 	}
 
 	return matched, unmatched, nil
+}
+
+// Candidate discovery precedes the write transaction. Recheck its inputs and
+// the entry-existence fence in the INSERT so a human edit or intervening sync
+// cannot be followed by a duplicate entry or an allocation of a stale amount.
+func insertCategorizedCandidate(ctx context.Context, tx *sql.Tx, c candidate, category, source string) (bool, error) {
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO budget_entries(transaction_id,category,amount_cents,source)
+		SELECT t.transaction_id,?,t.amount_cents,? FROM transactions t
+		WHERE t.transaction_id=? AND t.pending=0 AND t.amount_cents=?
+		  AND COALESCE(t.merchant_name,'')=? AND COALESCE(t.category,'')=?
+		  AND COALESCE(t.category_source,'rule')=?
+		  AND NOT EXISTS(SELECT 1 FROM budget_entries e WHERE e.transaction_id=t.transaction_id)`,
+		category, source, c.id, c.amountCents, c.merchant, c.category, c.source)
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	return count == 1, err
 }

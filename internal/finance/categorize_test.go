@@ -200,3 +200,70 @@ func TestApplySyncPageRemovalSparesOtherEntries(t *testing.T) {
 		t.Errorf("%d entries for the surviving transaction, want 1 — removal must not touch other entries", n)
 	}
 }
+
+func TestCategorizeCandidateRechecksInterveningHumanEntry(t *testing.T) {
+	s, db := spendingDayFixture(t)
+	// This is the candidate captured before the owner's category save, as in
+	// Categorize's discovery phase. Its later insert must recheck that fence.
+	stale := candidate{id: "c-unclassified", merchant: "Merchant", amountCents: 500, category: "Legacy", source: "agent"}
+	row := inspectDayRow(t, s, stale.id)
+	if _, err := s.UpdateSpendingCategory(context.Background(), SpendingCategoryUpdate{TransactionID: row.ID, Category: "Home", Revision: row.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	inserted, err := insertCategorizedCandidate(context.Background(), tx, stale, "Food", "rule")
+	if err != nil || inserted {
+		t.Fatalf("stale categorizer inserted after human edit: %v, %v", inserted, err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	saved := inspectDayRow(t, s, row.ID)
+	if len(saved.Entries) != 1 || saved.Entries[0].Category != "Home" || saved.Entries[0].Source != "human" {
+		t.Fatalf("human entry changed: %+v", saved)
+	}
+}
+
+func TestCategorizeCandidateRechecksInterveningSync(t *testing.T) {
+	for _, changed := range []string{
+		`UPDATE transactions SET amount_cents=900 WHERE transaction_id='txn'`,
+		`UPDATE transactions SET pending=1 WHERE transaction_id='txn'`,
+		`UPDATE transactions SET merchant_name='Other merchant' WHERE transaction_id='txn'`,
+		`UPDATE transactions SET category='Home' WHERE transaction_id='txn'`,
+		`UPDATE transactions SET category_source='human' WHERE transaction_id='txn'`,
+		`DELETE FROM transactions WHERE transaction_id='txn'`,
+	} {
+		t.Run(changed, func(t *testing.T) {
+			db := newTestDB(t)
+			insertItem(t, db, "item-1")
+			insertRule(t, db, "Merchant", "Food")
+			insertSpendingTxn(t, db, "txn", "2026-09-20", 500, 0)
+			if _, err := db.Exec(`UPDATE transactions SET merchant_name='Merchant' WHERE transaction_id='txn'`); err != nil {
+				t.Fatal(err)
+			}
+			stale := candidate{id: "txn", merchant: "Merchant", amountCents: 500, source: "rule"}
+			if _, err := db.Exec(changed); err != nil {
+				t.Fatal(err)
+			}
+			tx, err := db.BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			inserted, err := insertCategorizedCandidate(context.Background(), tx, stale, "Food", "rule")
+			if err != nil || inserted {
+				t.Fatalf("stale categorizer inserted after sync: %v, %v", inserted, err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if entryCount(t, db, "txn") != 0 {
+				t.Fatal("stale category entry survived")
+			}
+		})
+	}
+}

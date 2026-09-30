@@ -1,0 +1,23 @@
+{
+  "status": "failed",
+  "synthetic": true,
+  "cases": [
+    "Creation defaults off; explicit opt-in persists; preset switching clears opt-in; creation preserves active chat",
+    "Research checkbox works with keyboard and focus remains inside creation modal",
+    "Settings enable advances Workspace revision; new chat pins it and old chat retains its original revision"
+  ],
+  "pageErrors": [],
+  "boundaries": [
+    "Temporary fixture database and synthetic content only; no installed Evie server or provider requests.",
+    "Browser checks permission management and immutable session revision display/API bindings; worker admission, cancellation, and persistent revocation enforcement are covered by separate deterministic Go checks."
+  ],
+  "failure": {
+    "name": "Error",
+    "message": "locator.setChecked: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for getByRole('checkbox', { name: 'Allow research delegation', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <input checked type=\"checkbox\" class=\"accent-teal\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n",
+    "stack": "locator.setChecked: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for getByRole('checkbox', { name: 'Allow research delegation', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <input checked type=\"checkbox\" class=\"accent-teal\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n\n    at toggle (/Users/davidboktor/code/evie/.scratch/workspace-research/verify-workspace-ui.cjs:96:24)\n    at /Users/davidboktor/code/evie/.scratch/workspace-research/verify-workspace-ui.cjs:137:26"
+  },
+  "fixtureExit": {
+    "code": 0,
+    "signal": null
+  }
+}

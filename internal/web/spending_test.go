@@ -19,6 +19,8 @@ type spendingServiceStub struct {
 	inspect      func(context.Context, int) (finance.SpendingReport, error)
 	transactions func(context.Context, finance.SpendingTransactionsQuery) (finance.SpendingTransactionsReport, error)
 	cashFlow     func(context.Context, finance.SpendingCashFlowQuery) (finance.SpendingCashFlowReport, error)
+	day          func(context.Context, finance.SpendingDayQuery) (finance.SpendingDayReport, error)
+	category     func(context.Context, finance.SpendingCategoryUpdate) (finance.SpendingDayTransaction, error)
 	refresh      func(context.Context) (finance.SpendingRefresh, error)
 }
 
@@ -36,6 +38,14 @@ func (stub *spendingServiceStub) InspectSpendingTransactions(ctx context.Context
 
 func (stub *spendingServiceStub) InspectSpendingCashFlow(ctx context.Context, query finance.SpendingCashFlowQuery) (finance.SpendingCashFlowReport, error) {
 	return stub.cashFlow(ctx, query)
+}
+
+func (stub *spendingServiceStub) InspectSpendingDay(ctx context.Context, query finance.SpendingDayQuery) (finance.SpendingDayReport, error) {
+	return stub.day(ctx, query)
+}
+
+func (stub *spendingServiceStub) UpdateSpendingCategory(ctx context.Context, query finance.SpendingCategoryUpdate) (finance.SpendingDayTransaction, error) {
+	return stub.category(ctx, query)
 }
 
 func TestSpendingHTTPValidatesBeforeAccessingFinance(t *testing.T) {

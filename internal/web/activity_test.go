@@ -68,3 +68,27 @@ func TestActivitySSEUsesSamePublicPartsAsReplay(t *testing.T) {
 		t.Fatalf("payload=%+v", payload)
 	}
 }
+
+func TestActivityReplayPreservesRecordedFailureEvidence(t *testing.T) {
+	for _, terminalType := range []memory.EventType{memory.EventTurnFailed, memory.EventTurnInterrupted} {
+		t.Run(string(terminalType), func(t *testing.T) {
+			start := time.Unix(100, 0)
+			finish := start.Add(4 * time.Second)
+			items, err := projectHistory([]memory.Event{
+				{ID: "u", Type: memory.EventUserMessage, Content: "read pages", RecordedAt: start},
+				{ID: "terminal", ParentID: "u", Type: terminalType, RecordedAt: finish},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(items) != 2 || items[1].Kind != "notice" || items[1].Tone != "warning" || items[1].Text != "This turn did not complete." {
+				t.Fatalf("items=%+v", items)
+			}
+			for _, item := range items {
+				if item.Turn == nil || item.Turn.Status != "incomplete" || item.Turn.FinishedAt != finish.UnixMilli() {
+					t.Fatalf("missing recorded failure metadata: %+v", item.Turn)
+				}
+			}
+		})
+	}
+}

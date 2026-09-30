@@ -25,7 +25,8 @@ func automaticCompactionRequired(serializedBytes, workingCeiling int64) bool {
 // selectAutomaticCompaction first measures the complete projected request at
 // the active summary frontier. Under pressure it selects the smallest legal
 // contiguous prefix whose replacement by a maximum-sized summary leaves the
-// canonical request at or below the target.
+// canonical request at or below the target. If no such prefix exists, an
+// unchanged projection within the usable input budget can still proceed.
 func selectAutomaticCompaction(
 	input ContextComposeInput,
 	composer *ContextComposer,
@@ -104,6 +105,12 @@ func selectAutomaticCompaction(
 			CoveredLast:   covered[len(covered)-1].events[len(covered[len(covered)-1].events)-1],
 			FirstRetained: compactionTurns[retainedIndex].events[0],
 		}, true, nil
+	}
+	// Pressure and the preferred compaction target are not hard input limits.
+	// Keep the full projected history when it fits, even if the active turn or
+	// maximum summary size makes the target unreachable.
+	if projection.estimate.SerializedBytes <= prepared.usable {
+		return compactionPlan{}, false, nil
 	}
 	return compactionPlan{}, true, ErrNoLegalAutomaticCompaction
 }

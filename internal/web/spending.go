@@ -17,6 +17,8 @@ type SpendingService interface {
 	InspectSpending(context.Context, int) (finance.SpendingReport, error)
 	InspectSpendingTransactions(context.Context, finance.SpendingTransactionsQuery) (finance.SpendingTransactionsReport, error)
 	InspectSpendingCashFlow(context.Context, finance.SpendingCashFlowQuery) (finance.SpendingCashFlowReport, error)
+	InspectSpendingDay(context.Context, finance.SpendingDayQuery) (finance.SpendingDayReport, error)
+	UpdateSpendingCategory(context.Context, finance.SpendingCategoryUpdate) (finance.SpendingDayTransaction, error)
 	RefreshSpending(context.Context) (finance.SpendingRefresh, error)
 }
 
@@ -102,6 +104,48 @@ func (s *Server) handleSpendingRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (s *Server) handleSpendingDay(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var query finance.SpendingDayQuery
+	if status, err := decodeManagementJSON(w, r, &query); err != nil {
+		managementJSONError(w, status, "invalid_spending_day_query", "body must be one valid spending day query")
+		return
+	}
+	query, err := finance.ValidateSpendingDayQuery(query)
+	if err != nil {
+		spendingJSONError(w, err, false)
+		return
+	}
+	report, err := s.spendingService.InspectSpendingDay(r.Context(), query)
+	if err != nil {
+		spendingJSONError(w, err, false)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleSpendingCategory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var query finance.SpendingCategoryUpdate
+	if status, err := decodeManagementJSON(w, r, &query); err != nil {
+		managementJSONError(w, status, "invalid_spending_category_query", "body must be one valid category update")
+		return
+	}
+	query, err := finance.ValidateSpendingCategoryUpdate(query)
+	if err != nil {
+		spendingJSONError(w, err, false)
+		return
+	}
+	transaction, err := s.spendingService.UpdateSpendingCategory(r.Context(), query)
+	if err != nil {
+		// Retain typed validation/conflict/context errors while giving unexpected
+		// failures the safe category-save message instead of a read error.
+		spendingJSONError(w, errors.Join(finance.ErrSpendingCategoryUnavailable, err), false)
+		return
+	}
+	writeJSON(w, http.StatusOK, transaction)
+}
+
 func spendingJSONError(w http.ResponseWriter, err error, refresh bool) {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
@@ -116,6 +160,14 @@ func spendingJSONError(w http.ResponseWriter, err error, refresh bool) {
 		managementJSONError(w, http.StatusBadRequest, "invalid_spending_transactions_query", "choose a valid month, classification filter, and page of up to 100 transactions")
 	case errors.Is(err, finance.ErrSpendingCashFlowQuery):
 		managementJSONError(w, http.StatusBadRequest, "invalid_spending_cash_flow_query", "choose a month within the history range and a valid cutoff date")
+	case errors.Is(err, finance.ErrSpendingDayQuery):
+		managementJSONError(w, http.StatusBadRequest, "invalid_spending_day_query", "choose a valid date and page of up to 100 transactions")
+	case errors.Is(err, finance.ErrSpendingCategoryQuery):
+		managementJSONError(w, http.StatusBadRequest, "invalid_spending_category_query", "choose a saved category and a valid transaction revision")
+	case errors.Is(err, finance.ErrSpendingCategoryConflict):
+		managementJSONError(w, http.StatusConflict, "spending_category_conflict", "transaction changed; reload it before saving")
+	case errors.Is(err, finance.ErrSpendingCategoryUnavailable):
+		managementJSONError(w, http.StatusUnprocessableEntity, "spending_category_unavailable", "category could not be saved; reload the transaction and try again")
 	case refresh:
 		managementJSONError(w, http.StatusUnprocessableEntity, "spending_refresh_unavailable", "transactions could not be refreshed; try again")
 	default:

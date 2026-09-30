@@ -2,110 +2,112 @@ package finance
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
-
-	"github.com/plaid/plaid-go/v43/plaid"
 )
 
-// waitForPublicToken polls the hosted Link session every 3 seconds (up to
-// ~5 minutes) until the user finishes linking in their browser, then
-// returns the public token from the session results. Interactive by
-// nature: it prints progress and debug output while it waits.
-func waitForPublicToken(ctx context.Context, client *plaid.APIClient, linkToken string) (string, error) {
-	fmt.Println("Waiting for you to finish linking in the browser...")
-	for attempt := 0; attempt < 100; attempt++ {
-		req := plaid.NewLinkTokenGetRequest(linkToken)
-		resp, _, err := client.PlaidApi.LinkTokenGet(ctx).LinkTokenGetRequest(*req).Execute()
-		b, err := json.MarshalIndent(resp.GetLinkSessions(), "", " ")
-		if err != nil {
-			return "", fmt.Errorf("link token get: %w", err)
-		}
-		fmt.Printf("[debug] sessions: %s\n", string(b))
-		for _, s := range resp.GetLinkSessions() {
-			if exit, ok := s.GetExitOk(); ok {
-				perr := exit.GetError()
-				fmt.Printf("[debug] EXIT code=%s message=%s\n",
-					perr.GetErrorCode(), perr.GetErrorMessage())
-			}
-			results, ok := s.GetResultsOk()
-			if !ok {
-				continue
-			}
-			for _, item := range results.GetItemAddResults() {
-				if pt := item.GetPublicToken(); pt != "" {
-					return pt, nil
-				}
-			}
-		}
-		time.Sleep(3 * time.Second)
-	}
-	return "", fmt.Errorf("timed out waiting for link to complete")
+type accountLinkService interface {
+	InspectAccounts(context.Context) (SpendingAccountsReport, error)
+	StartAccountLink(context.Context) (SpendingAccountLink, error)
+	CompleteAccountLink(context.Context, string) (SpendingAccountLinkResult, error)
+	CancelAccountLink(context.Context, string) error
 }
 
-// Link runs the full hosted Plaid Link flow: create a link token, hand the
-// user a browser URL, wait for them to finish, exchange the public token
-// for an access token, and save the item. Saving is an upsert on item_id —
-// re-linking the same bank refreshes the access token but keeps the
-// existing sync cursor, so we don't re-pull every transaction. This is the
-// one human-interactive flow in the package; it prints to stdout.
+// Link runs or resumes the shared durable Hosted Link flow. A new initial Link
+// can create a separate Item for an already connected bank; it is not a repair
+// flow. Only the hosted URL and safe status messages are printed.
 func Link() error {
-	client, err := plaidClient()
-	if err != nil {
-		return err
-	}
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithTimeout(signalCtx, 35*time.Minute)
+	defer cancel()
+	return linkWithService(ctx, NewSpendingService(), os.Stdout, 3*time.Second)
+}
 
-	ctx := context.Background()
-	req := plaid.NewLinkTokenCreateRequest(
-		"finance",
-		"en",
-		[]plaid.CountryCode{plaid.COUNTRYCODE_US},
-	)
-	req.SetUser(*plaid.NewLinkTokenCreateRequestUser("david"))
-	req.SetProducts([]plaid.Products{plaid.PRODUCTS_TRANSACTIONS})
-	req.SetHostedLink(*plaid.NewLinkTokenCreateHostedLink())
-
-	resp, _, err := client.PlaidApi.LinkTokenCreate(ctx).LinkTokenCreateRequest(*req).Execute()
-	if err != nil {
-		if plaidErr, ok := err.(plaid.GenericOpenAPIError); ok {
-			fmt.Println("plaid error body:", string(plaidErr.Body()))
+func linkWithService(ctx context.Context, service accountLinkService, output io.Writer, pollInterval time.Duration) error {
+	var link SpendingAccountLink
+	interrupted := func() error {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			if link.ID != "" {
+				cleanupCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				defer stop()
+				// A concurrent exchange may already have saved the connection.
+				// Never describe cancellation of this wait as provider rollback.
+				_ = service.CancelAccountLink(cleanupCtx, link.ID)
+			}
+			return fmt.Errorf("bank connection interrupted; check saved accounts before starting again: %w", ctx.Err())
 		}
-		return fmt.Errorf("link token create: %w", err)
+		return fmt.Errorf("stopped waiting for bank connection; run finance link to resume: %w", ctx.Err())
 	}
-	fmt.Println("Open this in your browser to link your bank:")
-	fmt.Println(resp.GetHostedLinkUrl())
-
-	publicToken, err := waitForPublicToken(ctx, client, resp.GetLinkToken())
+	if ctx.Err() != nil {
+		return interrupted()
+	}
+	var err error
+	link, err = service.StartAccountLink(ctx)
+	if errors.Is(err, ErrSpendingLinkInProgress) {
+		// An expired hosted URL may still have an unconsumed completion result.
+		// Resolve that saved flow before asking Plaid for another one.
+		report, inspectErr := service.InspectAccounts(ctx)
+		if inspectErr == nil && report.PendingLink != nil {
+			link, err = *report.PendingLink, nil
+		}
+	}
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			return interrupted()
+		}
+		if errors.Is(err, ErrSpendingLinkInProgress) {
+			return ErrSpendingLinkInProgress
+		}
+		return ErrSpendingLinkUnavailable
 	}
-
-	exchReq := plaid.NewItemPublicTokenExchangeRequest(publicToken)
-	exchResp, _, err := client.PlaidApi.ItemPublicTokenExchange(ctx).ItemPublicTokenExchangeRequest(*exchReq).Execute()
-	if err != nil {
-		return fmt.Errorf("exchange: %w", err)
+	if link.ExpiresAt.After(time.Now()) {
+		if _, err := fmt.Fprintf(output, "Open this in your browser to link your bank:\n%s\nWaiting for the connection to finish...\n", link.HostedURL); err != nil {
+			return errors.New("could not write bank connection instructions")
+		}
+	} else if _, err := fmt.Fprintln(output, "Checking a saved bank connection..."); err != nil {
+		return errors.New("could not write bank connection status")
 	}
-	itemID := exchResp.GetItemId()
-	accessToken := exchResp.GetAccessToken()
-
-	db, err := OpenDB()
-	if err != nil {
-		return err
+	for {
+		if ctx.Err() != nil {
+			return interrupted()
+		}
+		result, err := service.CompleteAccountLink(ctx, link.ID)
+		if err != nil && !errors.Is(err, ErrSpendingLinkInProgress) {
+			if ctx.Err() != nil {
+				return interrupted()
+			}
+			return ErrSpendingLinkUnavailable
+		}
+		if err == nil {
+			switch result.Status {
+			case "linked":
+				if _, err := fmt.Fprintln(output, "Linked! Bank connection saved."); err != nil {
+					return errors.New("bank connection saved, but its status could not be printed")
+				}
+				return nil
+			case "expired":
+				return errors.New("bank connection expired; run finance link to start again")
+			case "cancelled":
+				return errors.New("bank connection was cancelled")
+			case "failed":
+				return errors.New("bank connection could not be completed; check saved accounts before trying again")
+			case "pending":
+			default:
+				return ErrSpendingLinkUnavailable
+			}
+		}
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return interrupted()
+		case <-timer.C:
+		}
 	}
-	defer db.Close()
-
-	_, err = db.Exec(`
-		INSERT INTO items (item_id, access_token, cursor, linked_at)
-		VALUES (?, ?, '', ?)
-		ON CONFLICT(item_id) DO UPDATE SET
-			access_token = excluded.access_token,
-			linked_at    = excluded.linked_at`,
-		itemID, accessToken, time.Now().Format(time.RFC3339))
-	if err != nil {
-		return fmt.Errorf("save item: %w", err)
-	}
-
-	fmt.Printf("Linked! Saved item %s to ~/.finance/finance.db\n", itemID)
-	return nil
 }

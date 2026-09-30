@@ -123,7 +123,7 @@ func (s *Session) Send(
 	lease, err := s.owner.Acquire(ctx, s.timing.leaseDuration)
 	if err != nil {
 		if s.owner.IsConflict(err) {
-			return fmt.Errorf("%w: %v", ErrLeaseConflict, err)
+			return fmt.Errorf("%w: %w", ErrLeaseConflict, err)
 		}
 		if s.owner.IsSessionInactive(err) {
 			return sessionUnavailableError{cause: err}

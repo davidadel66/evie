@@ -20,9 +20,12 @@ below.
 
 David approved a Codex-like three-pane workbench adapted to Evie's domain:
 
-- The left sidebar owns `New chat`, `Data`, and `Workspaces`, then lists durable
-  Workspaces with their recent sessions nested underneath. It always shows the
-  active immutable Context Scope at the bottom.
+- The left sidebar shows `Data`, followed by one Workspaces section with durable
+  Workspaces and their recent sessions nested underneath. David's 2026-09-21
+  simplification removes the redundant top-level New chat and Workspaces buttons;
+  creation stays on the workspace and section plus controls. The same day's
+  [workspace setup and archive change](../done/workspace-setup-and-session-archive.spec.md)
+  replaces the old scope footer with Settings for appearance and archived sessions.
 - The center owns a closable tab strip. Chat is a persistent tab; Data, the
   Workspace directory, and individual Workspace homes open beside it. A
   Workspace home is not a chat and may list or start multiple scoped sessions.

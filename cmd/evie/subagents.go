@@ -52,7 +52,7 @@ func configureSubagentRuntime(supervisor *subagents.Supervisor, manager *plugins
 		} else {
 			resolved, err = manager.ResumeCompositionContext(ctx, *receipt)
 		}
-		return subagents.Composition{Receipt: resolved.Receipt, Toolset: resolved.Toolset, Instructions: plugins.ResearchInstructions}, err
+		return subagents.Composition{Receipt: resolved.Receipt, Toolset: resolved.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: resolved.CompatibilityResolutions}, err
 	})
 }
 

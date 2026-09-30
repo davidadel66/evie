@@ -2,6 +2,7 @@ import type { WorkspaceCreation } from "../api/contextSessions";
 import type { PresetInspection } from "../api/management";
 
 export type WorkspaceDraft = {
+	allowResearchDelegation?: boolean;
   name: string;
   presetId: string;
   folderPath: string;
@@ -14,6 +15,11 @@ export function workspaceCreation(draft: WorkspaceDraft, presets: PresetInspecti
     throw new Error("Choose an available agent preset.");
   }
   const options: WorkspaceCreation = { displayName, presetId: draft.presetId };
+  if (draft.allowResearchDelegation) {
+    if (draft.presetId !== "standard") throw new Error("Research delegation requires the Standard preset.");
+    if (!presets.some(preset => preset.id === "research" && preset.valid)) throw new Error("The Research preset must be available to allow delegation.");
+    options.allowResearchDelegation = true;
+  }
   if (draft.folderPath) {
     const folderPath = draft.folderPath;
     if (!folderPath.startsWith("/") || folderPath.includes("\0")) {

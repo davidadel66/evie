@@ -13,7 +13,7 @@ parallel foreground outcome. The local amendment is in
 | #171 | `internal/eviedb/compiler_source.go`, owner-source queries and compiler reconciliation | Live and historical compiler admission reject delegated lineage; owner-evidence preparation rejects it too. |
 | #172 | `internal/delegation/types.go`, `internal/eviedb/subagents.go`, `internal/subagents/supervisor.go` | One durable attempt, child and receipt per parent/key; committed invocation and exact arguments authorize admission. |
 | #173/#174 | `internal/eviedb/subagent_execution.go`, `turn_leases.go` | Parent plus child fencing, bounded cleanup, accepted-answer arbitration, recovery without execution. |
-| #175 | `internal/plugins/subagents.go`, `cmd/evie/subagents.go`, `main.go` | Optional compiled Plugin, shared CLI/web supervisor, current disable and shutdown, explicit Workspace refusal. |
+| #175 | `internal/plugins/subagents.go`, `cmd/evie/subagents.go`, `main.go` | Optional compiled Plugin, shared CLI/web supervisor, current disable and shutdown, explicit Workspace permission checks. |
 | Parallel foreground and Task Tree amendment | `internal/subagents/supervisor_test.go` | Actual overlap and shared capacity, ordered partial results, duplicate waiting, explicit orchestrator claims and Task completion. |
 
 The Plugin provides `delegate_research` with an `assignments` array. Each member
@@ -53,7 +53,7 @@ go run ./cmd/evie serve
 ```
 
 Subagents is installed but disabled by default. Enabling it affects newly
-composed eligible Global/project conversations; existing receipts are unchanged.
+composed eligible conversations; existing receipts are unchanged.
 Start a new conversation and request: “Research two independent aspects of this
 question in parallel. Use a separate research assignment and stable key for each,
 then compare their evidence.” Observe the normal delegation tool call and result,
@@ -71,8 +71,11 @@ Cancel an in-progress parent turn or disable the Plugin to stop unfinished work:
 go run ./cmd/evie plugins disable subagents
 ```
 
-A Workspace conversation refuses delegation until reviewed research-preset
-allowances are available from the separate Workspace prerequisite (#71).
+For a Standard Workspace, also enable **Allow research delegation** in its
+settings (or during creation), then start a new chat. Disabling this permission
+stops active research; enabling it again applies only to new chats. See
+[Workspace research](workspace-research.spec.md) for the reviewed allowance,
+revocation, model-budget, and excerpt contracts.
 
 Operator environment settings (all must be finite and positive):
 
@@ -84,7 +87,7 @@ Operator environment settings (all must be finite and positive):
 | `DEADLINE` | `2m` foreground deadline |
 | `MODEL_CALLS` | 8 per child, shared with compaction |
 | `ASSIGNMENT_BYTES` | 8192 objective/context bytes |
-| `REQUEST_BYTES` | 65536 serialized model-request/response bytes |
+| `REQUEST_BYTES` | 1048576 serialized model-request/response bytes (1 MiB), subject to the invoking model's route-safe context limit |
 | `RESULT_BYTES` | 2048 serialized result bytes per child, minimum 512 |
 | `OUTPUT_TOKENS` | 1024 per model call |
 

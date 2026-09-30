@@ -97,7 +97,7 @@ export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => vo
 
         <div>
           <label htmlFor={presetId} className="text-body mb-2 block text-xs font-medium">Agent preset</label>
-          <select id={presetId} aria-describedby={presetHelpId} value={draft.presetId} disabled={loading || Boolean(loadProblem) || saving} onChange={(event) => update({ presetId: event.target.value })} className={input}>
+          <select id={presetId} aria-describedby={presetHelpId} value={draft.presetId} disabled={loading || Boolean(loadProblem) || saving} onChange={(event) => update({ presetId: event.target.value, allowResearchDelegation: false })} className={input}>
             {!presets.some((preset) => preset.id === "standard") && <option value="standard">Standard{loading ? " — loading…" : " — unavailable"}</option>}
             {presets.map((preset) => <option key={preset.id} value={preset.id} disabled={!preset.valid}>{presetLabel(preset.id)}{preset.valid ? "" : " — unavailable"}</option>)}
           </select>
@@ -106,6 +106,10 @@ export function CreateWorkspaceDialog({ onClose, onCreate }: { onClose: () => vo
           </p>
           {loadProblem && <div className="mt-2 text-xs leading-5"><p role="alert" className="text-danger-ink max-h-24 overflow-y-auto break-words">{loadProblem}</p><button type="button" onClick={() => setRetry((value) => value + 1)} className="text-body focus-visible:ring-teal mt-1 rounded underline underline-offset-2 focus-visible:ring-2 focus-visible:outline-none">Retry</button></div>}
           {!loading && !loadProblem && <PresetDiagnostics preset={selectedPreset} />}
+          {draft.presetId === "standard" && <div className="mt-4">
+            <label className="text-body flex items-center gap-2 text-xs"><input type="checkbox" className="accent-teal" checked={draft.allowResearchDelegation ?? false} disabled={saving || loading || !presets.some(preset => preset.id === "research" && preset.valid)} onChange={event => update({allowResearchDelegation: event.target.checked})} />Allow research delegation</label>
+            <p className="text-muted-text mt-1 pl-5 text-xs leading-5">Let eligible chats send web research to separate workers. Workers receive only the assignment and selected context.</p>
+          </div>}
         </div>
 
         <fieldset disabled={saving || pickingFolder}>

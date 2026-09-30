@@ -286,21 +286,23 @@ func main() {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
 		configureSubagentRuntime(supervisor, pluginManager, client, profile)
-		controller := newWebContextSessionController(kernelStore, pluginManager, func(
-			session memory.Session,
-			composition plugins.ResolvedComposition,
-		) (*agent.Session, error) {
+		controller := newWebContextSessionController(kernelStore, pluginManager, nil)
+		controller.modelClient, controller.defaultModel = client, model
+		controller.newModelAgent = func(ctx context.Context, session memory.Session, composition plugins.ResolvedComposition, selected string, revision int64) (*agent.Session, error) {
+			if err := agent.ValidateModelConfiguration(selected); err != nil {
+				return nil, err
+			}
+			selectedProfile, err := client.ResolveChatContextProfile(ctx, selected)
+			if err != nil {
+				return nil, err
+			}
 			holderUUID, err := uuid.NewRandom()
 			if err != nil {
 				return nil, err
 			}
 			holderID := memory.LeaseHolderID(holderUUID.String())
-			return agent.NewWithToolset(
-				client, profile,
-				kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(),
-				kernelStore.BindTurnOwner(session.ID, holderID), composition.Toolset,
-			), nil
-		})
+			return agent.NewWithToolset(client, selectedProfile, kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(), kernelStore.BindTurnOwnerWithModelRevision(session.ID, holderID, revision), composition.Toolset), nil
+		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
 		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader), spendingService))
 		stopMemory()

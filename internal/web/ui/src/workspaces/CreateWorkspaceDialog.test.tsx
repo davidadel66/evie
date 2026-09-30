@@ -13,6 +13,10 @@ const research: PresetInspection = { ...standard, id: "research" };
 const draft: WorkspaceDraft = { name: "  Interview prep  ", presetId: "standard", folderPath: "" };
 
 describe("workspace creation", () => {
+	 it("requires explicit research permission with the Standard preset", () => {
+	   expect(workspaceCreation({...draft, allowResearchDelegation: true}, [standard, research])).toMatchObject({allowResearchDelegation: true, presetId: "standard"});
+	   expect(() => workspaceCreation({...draft, presetId: "research", allowResearchDelegation: true}, [standard, research])).toThrow("Standard");
+	 });
   it("uses the full standard preset by default without requiring a folder", () => {
     expect(workspaceCreation(draft, [standard, research])).toEqual({ displayName: "Interview prep", presetId: "standard" });
   });

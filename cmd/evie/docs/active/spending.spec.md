@@ -7,7 +7,8 @@ from existing bank connections, and use two separate views: Overview for plots
 and Transactions for bank records and their saved classification states. This
 extends the initial daily-flow view requested on 2026-09-19 with the owner's
 2026-09-20 requests for month navigation, a separate transaction view, and
-Monarch-inspired monthly cash-flow and category charts.
+  Monarch-inspired monthly cash-flow and category charts, then the 2026-09-21
+  request for daily transaction popups with editable categories.
 
 ## Overview and month navigation
 
@@ -27,8 +28,9 @@ Monarch-inspired monthly cash-flow and category charts.
   credit-card payments, regardless of classification. Pending transactions
   are excluded. No internal-transfer detection or exclusion is inferred.
 - Color separates net inflows from net outflows, with stronger color for larger
-  magnitude. Exact values remain readable without color. Selecting or focusing
-  an amount reveals its date, inflow, outflow, and transaction count.
+  magnitude. Exact values remain readable without color. Date buttons retain
+  exact flow details in their accessible label and tooltip; clicking a past or
+  current date opens its transaction popup. Focus alone does not open it.
 - Missing recorded days use a dash; an actual balanced day shows 0.00. Future
   dates are blank, and impossible dates do not appear. Missing dates are not
   proof of complete bank coverage. Invalid transaction dates are excluded.
@@ -96,6 +98,36 @@ Monarch-inspired monthly cash-flow and category charts.
   runs rules, accepts proposals, or calls a model. Reload saved records reads
   changes made elsewhere. Fetch latest syncs bank records only.
 
+## Daily popup and category edits
+
+- Clicking any non-future calendar day opens a native modal dialog with the
+  selected date, its posted transaction count and net flow, and a bounded page
+  of transactions. Pending rows are excluded to match the calendar. Each row
+  shows merchant/statement description, exact signed amount, and saved categories.
+  Empty days are explicit; pagination covers busy days without truncation.
+- Category labels open an inline selector with the configured `categories`
+  vocabulary and explicit Save/Cancel controls. `excluded` is an ordinary option
+  if configured. There is no category creation, clearing, rule creation, or
+  propagation to other transactions in this flow.
+- Editing an existing allocation changes only its category and source (`human`).
+  IDs, signed amounts, tags, other splits, and source fields on unchanged entries
+  are preserved. Inconsistent split amounts remain visible and are not silently
+  repaired or merged. For a posted transaction without entries, choosing a
+  category creates one full-amount human entry. Raw bank fields stay unchanged.
+- Each row carries an opaque revision over its raw transaction and complete
+  ordered allocation state. The mutation rereads and compares under a SQLite
+  writer transaction before modifying data; stale, removed, or pending rows
+  conflict rather than overwriting later changes. Category IDs/names must exist.
+  The rule categorizer also rechecks eligibility at insertion, so a previously
+  collected candidate cannot create a duplicate after an owner classification.
+- Successful edits replace the saved row and refresh Overview's category charts
+  and the next Transactions read. Other unsaved row edits remain intact. An
+  ambiguous save failure offers Reload to check the canonical saved value.
+- The dialog traps focus, closes through its close button, Escape, or backdrop,
+  and restores focus to the day button. Closing, reloading, paging, and further
+  edits are disabled while a save is pending; a dismissed request is not treated
+  as proof a write was cancelled. Desktop columns become stacked rows on mobile.
+
 ## Refresh, reads, and boundaries
 
 - Reads use the existing canonical finance database without creating it or
@@ -117,6 +149,12 @@ Monarch-inspired monthly cash-flow and category charts.
   twelve months (clamped at year 0001), and requires selection within that window.
   History, selected totals, and categories come from one read snapshot. Amounts
   aggregate with arbitrary-precision integer cents and serialize as strings.
+- Day inspection and category mutations use these same management guards,
+  strict bounded JSON, no-store responses, cancellation, and generic errors.
+  Dates and pagination are validated before access. Mutation accepts only a
+  transaction ID, optional entry ID, configured category, and revision; callers
+  cannot supply amounts, source, tags, SQL, or a database path. Existing-only
+  writable access does not create missing finance storage or run schema setup.
 - Typed rows may expose their transaction IDs, bank descriptions, and saved
   allocations to the owner; account IDs, item IDs, credentials, and raw
   database/provider errors are excluded.
@@ -134,9 +172,13 @@ Last successful fetch time is specific to this server lifetime and is not a
 claim about a bank's own freshness. Reads or partial failures do not advance it.
 Standalone finance CLI processes are outside the in-process sync gate.
 
-No bank linking UI, credential changes, classification mutations, model-proposal
-lifecycle, categorization engine changes, inferred transfer exclusion, budgets,
-database migrations, new production dependencies, or scheduled sync.
+Bank linking and cached account inventory are now covered by the owner's
+2026-09-21 follow-up in
+[Connected accounts and simplified navigation](spending-accounts-and-navigation.spec.md).
+That follow-up adds local account/link-session tables on explicit actions. Other
+credential changes, model-proposal lifecycle, categorization engine changes,
+inferred transfer exclusion, budgets, new production dependencies, and scheduled
+sync remain outside this spending-view contract.
 
 ## Verification and demonstration
 
@@ -151,8 +193,9 @@ with synthetic API fixtures. Live bank calls are not required for this UI change
 
 Manual demonstration: open Data > Spending. Use the month arrows in Overview,
 or select a monthly bar to update totals, category bars, and the daily calendar.
-Use Show all in a category panel, select a daily amount, then switch to
-Transactions and Needs classification.
+Use Show all in a category panel, click a daily amount to inspect its transactions,
+then select a category label, choose another configured category, and Save.
+Close the popup, then switch to Transactions and Needs classification.
 Both views retain the selected month. Use This month to return to today’s month,
 and Fetch latest to pull the latest available bank updates.
 
@@ -162,6 +205,8 @@ boundary, and `internal/web/ui/src/data/Spending.tsx` plus
 `SpendingTransactions.tsx` for the views and request lifecycle.
 Monthly-chart entry points are `internal/finance/spending_cash_flow.go`,
 `internal/web/ui/src/data/CashFlow.tsx`, and `cashFlowPresentation.ts`.
+Daily inspection and editing enter through `internal/finance/spending_day.go`
+and `internal/web/ui/src/data/SpendingDayDialog.tsx`.
 
 ## Verification record (2026-09-20, monthly follow-up)
 
@@ -214,3 +259,31 @@ finance behavior changed; only visible copy and toolbar spacing changed.
 - No live provider calls or saved financial record changes were made during
   verification. Live bank connectivity/freshness and unrelated opt-in browser
   fixtures remain untested; they are not required by this read-only chart change.
+
+## Verification record (2026-09-21, daily popup and editing)
+
+- `./scripts/verify-change.sh` passed on the final code: Go tests and vet,
+  UI lint/build, and whitespace checks. The existing Fast Refresh export warnings
+  in `Icon.tsx` and `memory/presentation.tsx`, and Vite bundle-size warning remain.
+  Full output: `/tmp/evie-day-popup-browser-20260921/verify.log`.
+- From `internal/web/ui`, `npx vitest run` passed all 330 tests in 56 files.
+- `go test ./internal/finance` and `go test -race ./internal/finance` passed,
+  covering exact day totals, pagination, existing-only storage, durable edits,
+  split/refund/tag preservation, stale snapshots, concurrent writers, rollback,
+  and the categorizer's recheck after human decisions or bank changes.
+- `go test ./internal/web -run 'TestSpendingHTTP' -count=1` and
+  `go test -race ./internal/web -run 'TestSpendingHTTP' -count=1` passed. Guard,
+  strict-body, date/page, revision, entry ownership, cancellation, and safe-error
+  cases include proof invalid requests never invoke a finance mutation.
+- `node /tmp/evie-day-popup-browser-20260921/check.cjs` passed using the production
+  UI and synthetic reads/writes: date popup, exact descriptions/amounts, splits,
+  pagination, explicit Save/Cancel, other row draft preservation, chart reload,
+  stale edit rejection, pending-save dismissal prevention, lost-response recovery,
+  empty dates, stale reads, modal focus/restore, and mobile containment.
+  Desktop and 390-by-844 screenshots were inspected.
+- Focused review found and verified fixes for category accessible names and
+  focus restoration after saving, cancellation, reload, and pagination.
+- Browser saves used synthetic fixtures; finance writes used temporary test
+  databases. No real transaction categories or bank data were changed for tests.
+  Live provider calls and unrelated opt-in Go browser fixtures were not run,
+  because this change reads local records and saves owner category decisions.

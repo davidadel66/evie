@@ -2,7 +2,7 @@
 // responds so a message can join the queue, but a Context Scope transition
 // disables it until the server and displayed scope agree.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowUp } from "../ui/Icon";
 
 type Props = {
@@ -11,9 +11,10 @@ type Props = {
   onSend: () => void;
   streaming: boolean;
   disabled?: boolean;
+  modelSelector?: ReactNode;
 };
 
-export function Composer({ value, onChange, onSend, streaming, disabled = false }: Props) {
+export function Composer({ value, onChange, onSend, streaming, disabled = false, modelSelector }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   // Grow with the content instead of scrolling inside one row. Reset to auto
@@ -47,7 +48,7 @@ export function Composer({ value, onChange, onSend, streaming, disabled = false 
               onSend();
             }
           }}
-          placeholder={disabled ? "Switching Context Scope…" : streaming ? "Queue a message…" : "Message Evie…"}
+          placeholder={disabled ? "Updating chat…" : streaming ? "Queue a message…" : "Message Evie…"}
           className="text-ink placeholder:text-fainter flex-1 resize-none border-none bg-transparent py-1 font-sans text-[length:var(--chat-text-size)] leading-[1.5]"
         />
         <div
@@ -60,6 +61,7 @@ export function Composer({ value, onChange, onSend, streaming, disabled = false 
           <ArrowUp size={14} stroke="#0a0c0d" />
         </div>
       </div>
+      {modelSelector}
     </div>
   );
 }

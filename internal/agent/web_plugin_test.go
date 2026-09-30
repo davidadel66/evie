@@ -75,7 +75,7 @@ func TestWebPluginScriptedConversationRoundTrips(t *testing.T) {
 			if len(client.reqs) != 2 {
 				t.Fatalf("provider requests = %d, want 2", len(client.reqs))
 			}
-			wantSchemas := tools.NewToolset(tools.WebTools()).Schemas()
+			wantSchemas := tools.NewToolset([]tools.Tool{tools.WebExcerptTool(), tools.WebTools()[1]}).Schemas()
 			for i, request := range client.reqs {
 				if !reflect.DeepEqual(request.Tools, wantSchemas) {
 					t.Fatalf("request %d schemas = %#v, want Web schemas %#v", i, request.Tools, wantSchemas)

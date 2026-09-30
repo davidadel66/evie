@@ -11,6 +11,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/composition"
 	"github.com/davidadel66/evie/internal/memory"
+	"github.com/davidadel66/evie/internal/openrouter"
 )
 
 const CapabilityID = "subagents.research"
@@ -41,7 +42,7 @@ type Policy struct {
 }
 
 func DefaultPolicy() Policy {
-	return Policy{PerParent: 2, Runtime: 4, MaxBatch: 8, Deadline: 2 * time.Minute, ModelCalls: 8, AssignmentBytes: 8192, RequestBytes: 65536, ResultBytes: 2048, OutputTokens: 1024}
+	return Policy{PerParent: 2, Runtime: 4, MaxBatch: 8, Deadline: 2 * time.Minute, ModelCalls: 8, AssignmentBytes: 8192, RequestBytes: 1 << 20, ResultBytes: 2048, OutputTokens: 1024}
 }
 func (p Policy) Validate() error {
 	if p.PerParent <= 0 || p.Runtime <= 0 || p.MaxBatch <= 0 || p.Deadline <= 0 || p.ModelCalls <= 0 || p.AssignmentBytes <= 0 || p.RequestBytes <= 0 || p.ResultBytes < 512 || p.OutputTokens <= 0 {
@@ -75,6 +76,9 @@ func Digest(v any) string {
 }
 
 type Parent struct {
+	// Invocation-only resolved profile. Recovery never restarts workers;
+	// accepted child context snapshots record the model and effective limits.
+	Profile       *openrouter.ContextProfile `json:"-"`
 	Scope         memory.ScopeContext
 	Lease         memory.TurnLease
 	SourceEventID memory.EventID

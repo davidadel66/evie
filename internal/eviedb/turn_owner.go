@@ -12,9 +12,10 @@ import (
 // SessionTurnOwner binds immutable harness-owned session and holder identity.
 // The model and tool arguments never receive either value.
 type SessionTurnOwner struct {
-	store     *Store
-	sessionID memory.SessionID
-	holderID  memory.LeaseHolderID
+	store         *Store
+	sessionID     memory.SessionID
+	holderID      memory.LeaseHolderID
+	modelRevision *int64
 }
 
 func (s *Store) BindTurnOwner(
@@ -24,8 +25,16 @@ func (s *Store) BindTurnOwner(
 	return &SessionTurnOwner{store: s, sessionID: sessionID, holderID: holderID}
 }
 
+// BindTurnOwnerWithModelRevision rejects a runtime superseded by another server
+// before it can append a message or call the provider.
+func (s *Store) BindTurnOwnerWithModelRevision(sessionID memory.SessionID, holderID memory.LeaseHolderID, revision int64) *SessionTurnOwner {
+	owner := s.BindTurnOwner(sessionID, holderID)
+	owner.modelRevision = &revision
+	return owner
+}
+
 func (o *SessionTurnOwner) Acquire(ctx context.Context, duration time.Duration) (memory.TurnLease, error) {
-	lease, err := o.store.AcquireTurnLease(ctx, o.sessionID, o.holderID, duration)
+	lease, err := o.store.acquireTurnLease(ctx, o.sessionID, o.holderID, duration, o.modelRevision)
 	if err != nil {
 		return memory.TurnLease{}, err
 	}
@@ -86,7 +95,7 @@ func validateBoundTurnLease(
 }
 
 func (*SessionTurnOwner) IsConflict(err error) bool {
-	return errors.Is(err, ErrTurnLeaseHeld)
+	return errors.Is(err, ErrTurnLeaseHeld) || errors.Is(err, ErrSessionModelChanged)
 }
 
 func (*SessionTurnOwner) IsSessionInactive(err error) bool {

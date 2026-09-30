@@ -25,7 +25,15 @@ func ensureWorkspacePresets(ctx context.Context, db *sql.DB) error {
  CREATE TRIGGER IF NOT EXISTS workspace_preset_revisions_no_update BEFORE UPDATE ON workspace_preset_revisions
  BEGIN SELECT RAISE(ABORT,'Workspace preset revisions are immutable'); END;
  CREATE TRIGGER IF NOT EXISTS workspace_preset_revisions_no_delete BEFORE DELETE ON workspace_preset_revisions
- BEGIN SELECT RAISE(ABORT,'Workspace preset revisions are immutable'); END;`)
+ BEGIN SELECT RAISE(ABORT,'Workspace preset revisions are immutable'); END;
+ CREATE TABLE IF NOT EXISTS workspace_preset_revocations (
+ workspace_id TEXT NOT NULL, revision_id TEXT NOT NULL, preset_id TEXT NOT NULL,
+ revoked_at TEXT NOT NULL, PRIMARY KEY(workspace_id,revision_id,preset_id),
+ FOREIGN KEY(workspace_id,revision_id) REFERENCES workspace_preset_revisions(workspace_id,revision_id));
+ CREATE TRIGGER IF NOT EXISTS workspace_preset_revocations_no_update BEFORE UPDATE ON workspace_preset_revocations
+ BEGIN SELECT RAISE(ABORT,'Workspace preset revocations are immutable'); END;
+ CREATE TRIGGER IF NOT EXISTS workspace_preset_revocations_no_delete BEFORE DELETE ON workspace_preset_revocations
+ BEGIN SELECT RAISE(ABORT,'Workspace preset revocations are immutable'); END;`)
 	return err
 }
 

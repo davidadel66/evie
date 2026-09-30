@@ -299,12 +299,27 @@
   `summary_persistence_failed`. Otherwise transport and response failures use
   the existing safe `provider_error` or `provider_response_invalid` terminal
   evidence at `context_compaction`; no legal cut uses `context_overflow` at
-  `context_compose`. Cancellation before the summary append retains the prior
-  generation at `context_compaction`; a committed summary remains active and
-  moves the cancellation boundary to `context_compose`. Snapshots, generation
+  `context_compose` only when the unchanged projection exceeds the usable input
+  budget (corrected by the 2026-09-29 decision below). Cancellation before the
+  summary append retains the prior generation at `context_compaction`; a
+  committed summary remains active and moves the cancellation boundary to
+  `context_compose`. Snapshots, generation
   and failure counts, byte estimates, headroom, and placeholder manifests are
   the Stage 2 tuning evidence; retries, exact tokenization, summary-call usage,
   retrieval, caches, and later memory systems remain deferred.
+
+- **2026-09-29 - an unreachable automatic compaction target does not reject a fitting request.**
+  A reported research turn stopped after large tool results even though its
+  complete bounded projection still fit the usable input budget. The 80 percent
+  pressure threshold and 60 percent compaction target are planning preferences;
+  the route-safe usable input budget remains the admission limit. If no legal
+  prefix reaches the compaction target, continue with the unchanged projected
+  request when it fits, without calling the compactor, advancing the retained
+  frontier, or recording a summary-provider failure. If it does not fit, retain
+  the existing `context_overflow` terminal at `context_compose`. Active-root
+  protection, tool-group bounds, output reserve, and estimation margin remain
+  unchanged. Verify the usable-byte boundary and a post-tool iteration that
+  retains all prior turns and both results in a large atomic tool group.
 
 - **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
   Every manual compaction first reconstructs the complete accepted chain from
@@ -421,6 +436,15 @@
   provenance, and fallback/staleness warnings. Invalid durable history or
   snapshot data makes the command visibly fail rather than silently falling
   back.
+
+- **2026-09-29 - owner-selected models for web foreground chats.**
+  David requested a provider-grouped model dropdown. The
+  [chat model selection contract](chat-model-selection.spec.md) supersedes the
+  startup-only and no-session-override clauses below for web foreground chats.
+  Save a revision-bound model preference per chat and resolve a fresh immutable
+  profile before switching its runtime between turns. The default working
+  ceiling can shrink to that model's route-safe window; explicit limits remain
+  strict. CLI and delegated worker configuration retain their existing rules.
 
 - **2026-08-30 - one startup-resolved profile bounds every conversational request.**
   Each process resolves one immutable context profile before opening or resuming

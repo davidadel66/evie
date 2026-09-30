@@ -55,7 +55,9 @@ itself and never changes completion. Incidental assignments need no Task.
    abandoned unfinished work interrupted without model calls or fabricated events.
 6. **#175 — rollout:** compiled optional Plugin is available only to newly
    composed eligible CLI/web parents. Disable reaches active workers. Workspace
-   admission explicitly refuses until reviewed preset allowances (#71) exist.
+   admission requires reviewed preset allowances. The September 29
+   [Workspace research slice](workspace-research.spec.md) supplies explicit
+   Standard Workspace opt-in, pinned revisions, and immediate durable revocation.
 7. **Additional parallel foreground outcome (not in original tickets):** a
    bounded batch actually overlaps independent children. Deterministic provider
    gates prove overlap and capacity at multiple configured limits. Results follow

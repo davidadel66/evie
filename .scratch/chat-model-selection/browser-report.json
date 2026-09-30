@@ -1,0 +1,13 @@
+{
+  "cases": [
+    "Accessible selector grouped by provider",
+    "Selection preserves draft and survives reload",
+    "Failed selection retains current model and draft",
+    "Selector is disabled during a reply; chosen model can send",
+    "Cross-tab stale send is rejected and Retry loads current model",
+    "Parked queue returns to draft and recovers from model conflict without losing text",
+    "Selector fits a 390px viewport"
+  ],
+  "pageErrors": [],
+  "status": "passed"
+}
