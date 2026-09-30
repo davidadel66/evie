@@ -67,17 +67,7 @@ Before changing a feature, read its task, specification, and decision record.
 If they conflict in a way that affects behavior, security, persistence, or a
 public interface, report the conflict instead of choosing silently.
 
-## Repository map
-
-- `cmd/evie/`: CLI, REPL, cron entry points, and Evie feature documents
-- `cmd/finance/`, `cmd/todo/`, `cmd/ytscribe/`: supporting commands
-- `internal/agent/`: conversation loop and agent-owned interfaces
-- `internal/eviedb/`: SQLite setup and persistence implementations
-- `internal/openrouter/`: OpenRouter transport
-- `internal/tools/`: tool registry, execution, approvals, and safety fences
-- `internal/web/`: HTTP server and approval flow
-- `internal/web/ui/`: React and Vite frontend
-- `docs/`: cross-cutting designs, decisions, and learning material
+## Package boundaries
 
 Interfaces should normally be owned by the package that consumes them.
 
