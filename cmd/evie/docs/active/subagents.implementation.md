@@ -46,9 +46,11 @@ most one deadline after admission; if it never starts it ends
 stopping or disabling the Subagents Plugin) ends them `cancelled`/`shutdown`;
 lost parent authority ends them `interrupted`/`authority_ended`. One tool call
 can therefore wait up to two deadlines when children queue. Since 2026-10-01 a
-child that wraps up at 90% of its time or token budget, or at the step limit,
-ends `partial`/`time_budget`, `token_budget` or `step_limit` with its report;
-a wrap-up response that still requests tools ends `failed`/`wrap_up_failed`.
+child that wraps up at 90% of its time, token or context budget, or at the
+step limit, ends `partial`/`time_budget`, `token_budget`, `context_budget` or
+`step_limit` with its report; a wrap-up that produces no report (the response
+still requests tools, or even its smallest request cannot fit) ends
+`failed`/`wrap_up_failed`.
 
 Parent authority is proved by the intent's position in the current parent turn
 rather than by walking event ancestry, so it holds at any turn depth. Checks that
@@ -244,8 +246,10 @@ Stage 8 of the 2026-09-30 harness review (G1, G2, G3, G6); the binding record is
 the 2026-10-01 entry in [subagents.decisions.md](subagents.decisions.md).
 
 Review entry points: `internal/subagents/budget.go` (token meter, wrap-up
-signal, budget brief), `internal/agent/step_limit.go` (`WithWrapUp`, the only
-agent-loop change), `internal/eviedb/subagent_result.go` (sources, summary,
+signal, budget brief), `internal/agent/wrap_up.go` (`WithWrapUp`, context
+measurement and fitting of the wrap-up request; `turn.go` only calls it at the
+step-limit decision and records its placeholders),
+`internal/eviedb/subagent_result.go` (sources, summary,
 bounding, report paging, durable wrap-up mark), `finishSubagent` in
 `subagent_execution.go`, the per-turn count and `partial` migration in
 `subagents.go`, and `read_subagent_report` in `internal/plugins/subagents.go`.
@@ -261,7 +265,9 @@ Regression tests: `internal/subagents/budget_results_test.go` (step-limit,
 injected-clock and reported-token wrap-ups returning `partial` with findings;
 unreported usage counted conservatively; a wrap-up that still requests tools;
 fetched, cited and unverified sources; long reports paged only for their own
-parent; the 17th child of a parent turn), `TestFailedChildReportsMeasuredUsageAsIncomplete`,
+parent; the 17th child of a parent turn; context pressure wrapping up with
+excerpts or markers, and an unfittable wrap-up failing with its fetched
+sources), `TestFailedChildReportsMeasuredUsageAsIncomplete`,
 `internal/eviedb/subagent_budget_test.go` (pre-amendment table and records
 load, recover and render unchanged), `internal/agent/wrap_up_test.go` and
 `cmd/evie/subagents_test.go`.
@@ -277,6 +283,8 @@ Verification passed:
 Known limits: the time budget is checked before each model call, so a step in
 flight at 90% can consume the remaining 10% and end at the hard deadline
 without a report (its fetched sources are still listed). A one-turn child has
-no closed turns to compact; it relies on projection of older tool results, and
-a context overflow still fails it as `policy_limit`. Live model and Web
-execution was not exercised.
+no closed turns to compact, so context is a wrap-up budget: at 90% of its usable
+request budget the wrap-up request is fitted by shortening tool results, and it
+fails (`wrap_up_failed`, sources listed) only when assistant messages, the
+assignment and instructions alone overflow. Live model and Web execution was
+not exercised.

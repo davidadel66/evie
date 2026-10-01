@@ -41,10 +41,10 @@ func TestWrapUpSignalRequestsTheFinalToolFreeResponse(t *testing.T) {
 				t.Fatal(err)
 			}
 			const notice = "Evie harness notice: wrap up now (test)."
-			var asked [][2]int
-			signal := func(step, limit int) (string, bool) {
-				asked = append(asked, [2]int{step, limit})
-				if step >= tc.wrapAt || step >= limit {
+			var asked []WrapUpState
+			signal := func(state WrapUpState) (string, bool) {
+				asked = append(asked, state)
+				if state.Step >= tc.wrapAt || state.Step >= state.StepLimit {
 					return notice, true
 				}
 				return "", false
@@ -58,7 +58,9 @@ func TestWrapUpSignalRequestsTheFinalToolFreeResponse(t *testing.T) {
 				t.Fatalf("requests=%+v", client.reqs)
 			}
 			last := client.reqs[0].Messages[len(client.reqs[0].Messages)-1]
-			if last.Role != "user" || last.Content != notice || len(asked) != 1 || asked[0][0] != 1 {
+			// The signal sees the measured request and its budget.
+			if last.Role != "user" || last.Content != notice || len(asked) != 1 || asked[0].Step != 1 ||
+				asked[0].RequestBytes <= 0 || asked[0].RequestBytes > asked[0].UsableBytes {
 				t.Fatalf("final message=%+v asked=%v", last, asked)
 			}
 			events, err := store.LoadEvents(ctx, child.ID)

@@ -415,3 +415,149 @@ func TestSeventeenthChildInParentTurnIsRefused(t *testing.T) {
 		t.Fatalf("next turn: %+v %v", r, err)
 	}
 }
+
+// pageWeb serves every fetched URL as a page of the given size, in the
+// excerpt contract's JSON shape.
+type pageWeb struct {
+	plugins.Web
+	size int
+}
+
+func (w pageWeb) ToolCapabilities() []plugins.ToolCapability {
+	capabilities := evidenceWeb{}.ToolCapabilities()
+	for i := range capabilities {
+		if capabilities[i].Tool.Schema.Function.Name == "web_fetch" {
+			capabilities[i].Tool.Execute = func(_ context.Context, args string) (string, error) {
+				var request struct {
+					URL string `json:"url"`
+				}
+				if err := json.Unmarshal([]byte(args), &request); err != nil {
+					return "", err
+				}
+				page := strings.Repeat("page-sentinel ", w.size/len("page-sentinel "))
+				b, err := json.Marshal(map[string]any{"url": request.URL, "sha256": strings.Repeat("b", 64), "total_bytes": len(page), "start": 0, "end": len(page), "complete": true, "content": page})
+				return string(b), err
+			}
+		}
+	}
+	return capabilities
+}
+
+// G1: a one-turn child has no closed turns to compact, so its context is a
+// budget too. Pages that push the next request over it trigger the same
+// tool-free wrap-up, with older tool results projected so the request fits.
+func TestContextPressureWrapsUpAsPartialWithFindings(t *testing.T) {
+	p := delegation.DefaultPolicy()
+	p.RequestBytes = 64 * 1024
+	f := setupFixture(t, p, nil, pageWeb{size: 36 * 1024})
+	client := &recordingClient{next: func(n int, r openrouter.ChatRequest) (openrouter.ChatResponse, error) {
+		if r.ToolChoice == "none" {
+			return response(report("Both pages agree: https://pages.example/1 and https://pages.example/2")), nil
+		}
+		return toolResponse(fmt.Sprint(n), "web_fetch", fmt.Sprintf(`{"url":"https://pages.example/%d"}`, n), nil), nil
+	}}
+	configure(t, f, client)
+	r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "pages", Objective: "read long pages"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := client.recorded()
+	if len(requests) != 3 || requests[1].ToolChoice != "" || !isWrapUpRequest(requests[2]) || !strings.Contains(lastMessage(requests[2]), "context budget") {
+		t.Fatalf("context wrap-up requests: %d", len(requests))
+	}
+	final, err := openrouter.RequestBytes(requests[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(final) > p.RequestBytes || strings.Count(string(final), "page-sentinel") > 1000 {
+		t.Fatalf("wrap-up request was not fitted: %d bytes", len(final))
+	}
+	got := r[0]
+	want := []delegation.Source{{URL: "https://pages.example/1", Fetched: true, Cited: true}, {URL: "https://pages.example/2", Fetched: true, Cited: true}}
+	if got.Status != "partial" || got.Reason != "context_budget" || !strings.Contains(got.Summary, "Both pages agree") || fmt.Sprint(got.Sources) != fmt.Sprint(want) {
+		t.Fatalf("context wrap-up outcome: %+v", got)
+	}
+	// The wrap-up's durable snapshot names both shortened pages against their
+	// stored content; the store rejects a manifest that does not match.
+	events, err := f.store.LoadEvents(context.Background(), got.ChildSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot memory.ContextSnapshotPayload
+	for _, event := range events {
+		if event.Type == memory.EventContextSnapshot {
+			if err = json.Unmarshal(event.Payload, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if len(snapshot.Placeholders) != 2 || snapshot.SerializedBytes > snapshot.UsableInputBytes {
+		t.Fatalf("wrap-up snapshot: placeholders=%+v bytes=%d usable=%d", snapshot.Placeholders, snapshot.SerializedBytes, snapshot.UsableInputBytes)
+	}
+}
+
+// G1: when even the smallest wrap-up request cannot fit (here, an assistant
+// tool call whose own arguments fill the budget), the child fails without a
+// report but still lists the pages it fetched.
+func TestUnfittableWrapUpFailsWithFetchedSources(t *testing.T) {
+	p := delegation.DefaultPolicy()
+	p.RequestBytes = 64 * 1024
+	f := setupFixture(t, p, nil, pageWeb{size: 2048})
+	client := &recordingClient{next: func(n int, r openrouter.ChatRequest) (openrouter.ChatResponse, error) {
+		switch {
+		case r.ToolChoice == "none":
+			return response(report("unreachable")), nil
+		case n == 1:
+			return toolResponse("1", "web_fetch", `{"url":"https://pages.example/1"}`, nil), nil
+		}
+		args, _ := json.Marshal(map[string]string{"url": "https://pages.example/2", "query": strings.Repeat("q", 60*1024)})
+		return toolResponse("2", "web_fetch", string(args), nil), nil
+	}}
+	configure(t, f, client)
+	r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "unfittable", Objective: "research"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r[0]
+	if len(client.recorded()) != 2 || got.Status != "failed" || got.Reason != "wrap_up_failed" || got.Summary != "" || len(got.Sources) != 2 || !got.Sources[0].Fetched ||
+		!strings.Contains(strings.Join(got.Limitations, "\n"), "No report") {
+		t.Fatalf("unfittable wrap-up: calls=%d %+v", len(client.recorded()), got)
+	}
+}
+
+// G1: when head-and-tail excerpts are still too large, the wrap-up replaces
+// tool results with one-line markers and still fits.
+func TestContextWrapUpFallsBackToResultMarkers(t *testing.T) {
+	p := delegation.DefaultPolicy()
+	p.RequestBytes = 64 * 1024
+	f := setupFixture(t, p, nil, pageWeb{size: 6 * 1024})
+	client := &recordingClient{next: func(n int, r openrouter.ChatRequest) (openrouter.ChatResponse, error) {
+		if r.ToolChoice == "none" {
+			return response(report("Marker-bounded findings https://pages.example/0")), nil
+		}
+		calls := make([]openrouter.ToolCall, 48)
+		for i := range calls {
+			calls[i] = openrouter.ToolCall{ID: fmt.Sprintf("fetch-%d", i), Type: "function", Function: openrouter.FunctionCall{Name: "web_fetch", Arguments: fmt.Sprintf(`{"url":"https://pages.example/%d"}`, i)}}
+		}
+		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", ToolCalls: calls}}}}, nil
+	}}
+	configure(t, f, client)
+	r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "markers", Objective: "read many pages"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := client.recorded()
+	if len(requests) != 2 || !isWrapUpRequest(requests[1]) {
+		t.Fatalf("marker wrap-up requests: %d", len(requests))
+	}
+	final, err := openrouter.RequestBytes(requests[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(final) > p.RequestBytes || !strings.Contains(string(final), "tool result omitted to fit the final report") {
+		t.Fatalf("wrap-up request not reduced to markers: %d bytes", len(final))
+	}
+	if r[0].Status != "partial" || r[0].Reason != "context_budget" || len(r[0].Sources) != 24 || !r[0].Sources[0].Cited {
+		t.Fatalf("marker wrap-up outcome: %+v", r[0])
+	}
+}

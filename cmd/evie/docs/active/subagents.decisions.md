@@ -33,7 +33,8 @@ research slice's "no ... larger parent-result cap".
   the attempt (`wrap_up`), and that call is sent with `tool_choice: "none"`
   and a trailing harness notice asking for the report now. A text answer
   settles the attempt as the new terminal state `partial` with reason
-  `time_budget`, `token_budget` or `step_limit`; the durable mark makes a
+  `time_budget`, `token_budget`, `step_limit` or `context_budget` (below);
+  the durable mark makes a
   report accepted before a crash recover as `partial` too. If the wrap-up
   response still asks for tools, nothing is committed and the attempt is
   `failed`/`wrap_up_failed` (formerly a step-limit child was
@@ -85,6 +86,24 @@ research slice's "no ... larger parent-result cap".
   rewritten and cannot execute. Operators setting the retired
   `EVIE_SUBAGENTS_MODEL_CALLS` or `EVIE_SUBAGENTS_OUTPUT_TOKENS` get a startup
   error naming the replacement.
+
+- **Context budget.** A child runs one turn, so automatic compaction, which
+  removes only whole earlier turns, never applies to it; its older tool
+  results are projected under pressure as in the primary chat. Context is
+  therefore a third wrap-up trigger, reason `context_budget`: from the second
+  response on, when the next request, measured after that projection and
+  before the wrap-up notice, would reach 90% of the child's usable request
+  budget, which includes requests that would exceed it. The wrap-up request is
+  then fitted to the budget: if it does not fit as projected, every tool
+  result over the 4 KiB projection threshold is reduced to its usual
+  head-and-tail excerpt, and if that still does not fit, every tool result to
+  a one-line marker. Both forms name the event, its original size and hash,
+  and the request's context snapshot records each reduction against durable
+  content. Assistant messages, the assignment and instructions are never
+  shortened. Only when even the marker form cannot fit does the attempt fail,
+  as `failed`/`wrap_up_failed`, still listing the pages it fetched. A first
+  request that cannot fit at all has no work to wrap up and stays
+  `failed`/`policy_limit`.
 
 Continuing a partial child (G10) is harness review Stage 9; until then a new key
 starts a fresh attempt.

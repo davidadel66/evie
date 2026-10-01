@@ -265,9 +265,10 @@ func utf8Prefix(value string, n int) string {
 }
 
 var wrapUpPhrases = map[string]string{
-	delegation.WrapUpTime:   "90% of its time budget",
-	delegation.WrapUpTokens: "90% of its token budget",
-	delegation.WrapUpSteps:  "its model-response limit",
+	delegation.WrapUpTime:    "90% of its time budget",
+	delegation.WrapUpTokens:  "90% of its token budget",
+	delegation.WrapUpSteps:   "its model-response limit",
+	delegation.WrapUpContext: "90% of its context budget",
 }
 
 // buildSubagentResult fills the inline result from the child's final report

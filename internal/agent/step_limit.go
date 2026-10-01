@@ -39,34 +39,6 @@ func ValidateTurnConfiguration() error {
 	return err
 }
 
-// WrapUpSignal lets a delegated worker's supervisor end a turn early through
-// the step limit's final tool-free response. It is consulted before every
-// model response with the response's step and the turn's step limit; when it
-// reports wrapUp, that response is requested with tool_choice "none" and the
-// returned notice as its trailing harness message. At the step limit its
-// notice also replaces the default one. A wrap-up response that still asks
-// for tools ends the turn exactly like the step limit.
-type WrapUpSignal func(step, limit int) (notice string, wrapUp bool)
-
-// WithWrapUp installs a wrap-up signal on a session.
-func WithWrapUp(signal WrapUpSignal) SessionOption {
-	return func(session *Session) { session.wrapUp = signal }
-}
-
-// finalStepNotice reports whether this response is the turn's last and the
-// harness notice that asks for the answer.
-func (s *Session) finalStepNotice(step int) (string, bool) {
-	if s.wrapUp != nil {
-		if notice, wrapUp := s.wrapUp(step, s.stepLimit); wrapUp && notice != "" {
-			return notice, true
-		}
-	}
-	if step >= s.stepLimit {
-		return stepLimitNote(s.stepLimit), true
-	}
-	return "", false
-}
-
 // stepLimitNote is the harness instruction sent as the last message of the
 // final tool-free request.
 func stepLimitNote(limit int) string {

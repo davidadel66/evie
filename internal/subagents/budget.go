@@ -95,17 +95,21 @@ func countedTokens(u *openrouter.TokenUsage, requestBytes, responseBytes int) in
 // wrapUp is the child's agent.WrapUpSignal. The first time a budget runs
 // low it records which one, durably, so an accepted report settles as
 // partial even through recovery; the decision then holds for the turn.
-func (b *budget) wrapUp(step, limit int) (string, bool) {
+// Context pressure counts only after the first response: an assignment that
+// cannot fit at all has no work to wrap up and fails as a policy limit.
+func (b *budget) wrapUp(state agent.WrapUpState) (string, bool) {
 	b.mu.Lock()
 	reason := b.reason
 	if reason == "" {
 		switch {
-		case step >= limit:
+		case state.Step >= state.StepLimit:
 			reason = delegation.WrapUpSteps
 		case b.now().Sub(b.started)*100 >= b.policy.Deadline*delegation.WrapUpPercent:
 			reason = delegation.WrapUpTime
 		case b.tokens*100 >= b.policy.TokenBudget*delegation.WrapUpPercent:
 			reason = delegation.WrapUpTokens
+		case state.Step > 1 && state.UsableBytes > 0 && state.RequestBytes*100 >= state.UsableBytes*delegation.WrapUpPercent:
+			reason = delegation.WrapUpContext
 		default:
 			b.mu.Unlock()
 			return "", false
@@ -127,9 +131,10 @@ func (b *budget) wrapUpReason() string {
 }
 
 var wrapUpCauses = map[string]string{
-	delegation.WrapUpTime:   "used 90% of its time budget",
-	delegation.WrapUpTokens: "used 90% of its token budget",
-	delegation.WrapUpSteps:  "reached its model-response limit",
+	delegation.WrapUpTime:    "used 90% of its time budget",
+	delegation.WrapUpTokens:  "used 90% of its token budget",
+	delegation.WrapUpSteps:   "reached its model-response limit",
+	delegation.WrapUpContext: "used 90% of its context budget (older tool results may be shortened in this request)",
 }
 
 // reportFormat is the report the orchestrator receives: the Summary section
@@ -147,6 +152,6 @@ func wrapUpNotice(reason string) string {
 // assignmentBrief states the child's budget and report format up front.
 func assignmentBrief(p delegation.Policy) string {
 	return fmt.Sprintf("Budget set by Evie's harness: about %s of wall-clock time and %d model tokens (input plus output) for this assignment. "+
-		"When %d%% of either is used, or at the harness's model-response limit, tools are withdrawn and you get one final response to write your report from what you have, so pace your searching and reading.\n\n"+
+		"When %d%% of either is used, when your context is nearly full, or at the harness's model-response limit, tools are withdrawn and you get one final response to write your report from what you have, so pace your searching and reading.\n\n"+
 		"Write your final report in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, reportFormat)
 }

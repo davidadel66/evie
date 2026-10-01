@@ -231,9 +231,11 @@ allowances produce an explicit refusal rather than a change of scope.
   model's normal output reserve and compacts or projects its own context like
   the primary chat, and the turn step limit remains its runaway guard. The
   child is told its time and token budget and its report format with the
-  assignment. When it has used 90% of its time or tokens, or reaches the step
-  limit, its next model call is a single tool-free wrap-up call asking for the
-  report now; once the token budget is spent no other call starts. Invalid or
+  assignment. When it has used 90% of its time or tokens, when its next
+  request would reach 90% of its usable request budget, or when it reaches the
+  step limit, its next model call is a single tool-free wrap-up call asking
+  for the report now, fitted to the context budget by shortening tool results;
+  once the token budget is spent no other call starts. Invalid or
   unbounded policy configuration rejects admission. Pin the effective policy
   for diagnostics; the model cannot raise these limits. Reuse the parent's
   resolved model/provider configuration while respecting the child's narrower

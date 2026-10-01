@@ -37,14 +37,18 @@ const (
 	WrapUpTime   = "time_budget"
 	WrapUpTokens = "token_budget"
 	WrapUpSteps  = "step_limit"
+	// WrapUpContext is a child whose next request, after tool-result
+	// projection, would use WrapUpPercent of its usable request budget.
+	WrapUpContext = "context_budget"
 
-	// ReasonWrapUpFailed is a failed attempt whose wrap-up response still
-	// requested tools, so no report was committed.
+	// ReasonWrapUpFailed is a failed attempt whose wrap-up produced no
+	// report: the response still requested tools, or even the smallest
+	// wrap-up request could not fit the context budget.
 	ReasonWrapUpFailed = "wrap_up_failed"
 )
 
-// WrapUpPercent is the share of the time or token budget after which the
-// child's next model call is its tool-free wrap-up.
+// WrapUpPercent is the share of the time, token or context budget after which
+// the child's next model call is its tool-free wrap-up.
 const WrapUpPercent = 90
 
 type Assignment struct {

@@ -204,10 +204,6 @@ func (s *Session) runOwnedTurn(
 		if !retrying {
 			iteration++
 		}
-		// The last permitted model response is requested without tools, so
-		// a runaway tool loop ends with an answer from what the turn has. A
-		// worker's wrap-up signal can make an earlier response the last.
-		finalStepNote, finalStep := s.finalStepNotice(iteration)
 
 		events, err := s.history.Events(coordinator.ctx)
 		if err == nil {
@@ -245,9 +241,36 @@ func (s *Session) runOwnedTurn(
 			Continuation: continuation, RejectedRequestBytes: rejectedRequestBytes,
 		}
 		rejectedRequestBytes = 0
+		// The last permitted model response is requested without tools, so
+		// a runaway tool loop ends with an answer from what the turn has. A
+		// worker's wrap-up signal can make an earlier response the last, and
+		// that request is fitted to the worker's context budget.
+		finalStepNote, finalStep, err := s.finalStepNotice(iteration, composeInput)
+		if err != nil {
+			return s.classifyLocalError(coordinator, err)
+		}
+		var wrapUpOriginal []memory.Event
+		fitWrapUp := func() error {
+			if !finalStep || s.wrapUp == nil {
+				return nil
+			}
+			original := composeInput.Events
+			fitted, reduced, err := s.fitWrapUpRequest(composeInput)
+			if err != nil {
+				return err
+			}
+			composeInput, wrapUpOriginal = fitted, nil
+			if reduced {
+				wrapUpOriginal = original
+			}
+			return nil
+		}
 		if finalStep {
 			composeInput.ToolChoice = "none"
 			composeInput.FinalStepNote = finalStepNote
+			if err := fitWrapUp(); err != nil {
+				return s.classifyLocalError(coordinator, err)
+			}
 		}
 		composeInput, err = recall.fitContext(composeInput, s.composer)
 		if err != nil {
@@ -290,6 +313,9 @@ func (s *Session) runOwnedTurn(
 					events = append(events, compacted)
 					composeInput.Summary = summary
 					composeInput.Events = events
+					if err := fitWrapUp(); err != nil {
+						return s.classifyLocalError(coordinator, err)
+					}
 					if err := s.observeTurnContext(coordinator); err != nil {
 						return err
 					}
@@ -351,6 +377,9 @@ func (s *Session) runOwnedTurn(
 			overflow := fmt.Errorf("%w: accepted automatic summary did not preserve its retained frontier", ErrContextOverflow)
 			coordinator.selectCause(causeContextOverflow, overflow, 0)
 			return overflow
+		}
+		if wrapUpOriginal != nil {
+			composed.Snapshot.Placeholders = wrapUpPlaceholders(wrapUpOriginal, composeInput.Events, composed.Snapshot)
 		}
 		composed.Snapshot.CompactionFailureCategory = failureCategory
 		recall.recordAccounting(composed.Snapshot.Memory)
