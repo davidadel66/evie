@@ -127,8 +127,11 @@ in budgets, relevance heuristics, and result contracts.
 
 ## Plan
 
-**Progress:** stages 1, 7, 11 merged (2026-10-01). Stage 11's baseline is in
-`cmd/evie/docs/active/memory-scale-eval.md`; stages 12–13 re-record it.
+**Progress:** stages 1, 2, 7, 11, 12 merged (2026-10-01). Stage 11's
+baseline is in `cmd/evie/docs/active/memory-scale-eval.md`; later memory
+stages re-record it. L2's malformed-argument check was dropped: David kept
+the 2026-08-23 decision that argument syntax stays a model-visible tool
+error (truncated arguments are rejected via `finish_reason`).
 
 Each stage is one reviewable change: focused tests for every fixed issue
 (failing first), `gofmt`, then `./scripts/verify-change.sh`. A stage that
