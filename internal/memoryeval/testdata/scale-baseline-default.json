@@ -1,0 +1,1440 @@
+{
+  "report_version": 1,
+  "corpus_version": "memory-scale-replay-v1",
+  "corpus_sha256": "sha256:42418e619bc7af0ac589313587e2eb5e2de0970b2deb2ab65ea03ce61ac950f3",
+  "options": {
+    "tier": "default",
+    "seed": 20261001,
+    "global_sessions": 96,
+    "project_sessions": 18,
+    "min_exchanges": 3,
+    "max_exchanges": 9,
+    "dense_targets": 0
+  },
+  "corpus": {
+    "sessions": 171,
+    "global_sessions": 117,
+    "project_sessions": 54,
+    "owner_messages": 1142,
+    "assistant_messages": 1127,
+    "low_content_owner_messages": 198,
+    "private_messages": 106,
+    "needles": 14,
+    "accepted_claims": 15,
+    "corrections": 2,
+    "retirements": 2,
+    "areas": 4,
+    "topics": 24,
+    "probes": 80
+  },
+  "paths": {
+    "automatic": {
+      "probes": 36,
+      "probes_with_items": 35,
+      "probes_with_unwanted": 17,
+      "items": 81,
+      "required_items": 21,
+      "tolerated_items": 30,
+      "unwanted_items": 30,
+      "unwanted_private_items": 4,
+      "unwanted_same_session_items": 7,
+      "required_total": 25,
+      "required_found": 21,
+      "precision": 0.6296,
+      "unwanted_rate": 0.3704,
+      "recall": 0.84
+    },
+    "memory_search": {
+      "probes": 22,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 0,
+      "items": 15,
+      "required_items": 11,
+      "tolerated_items": 4,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 11,
+      "required_found": 11,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    "memory_search_conversations": {
+      "probes": 22,
+      "probes_with_items": 19,
+      "probes_with_unwanted": 3,
+      "items": 97,
+      "required_items": 10,
+      "tolerated_items": 77,
+      "unwanted_items": 10,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 12,
+      "required_found": 10,
+      "precision": 0.8969,
+      "unwanted_rate": 0.1031,
+      "recall": 0.8333
+    }
+  },
+  "families": [
+    {
+      "path": "automatic",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 11,
+      "probes_with_unwanted": 3,
+      "items": 24,
+      "required_items": 11,
+      "tolerated_items": 9,
+      "unwanted_items": 4,
+      "unwanted_private_items": 2,
+      "unwanted_same_session_items": 0,
+      "required_total": 11,
+      "required_found": 11,
+      "precision": 0.8333,
+      "unwanted_rate": 0.1667,
+      "recall": 1
+    },
+    {
+      "path": "automatic",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 1,
+      "probes_with_unwanted": 0,
+      "items": 2,
+      "required_items": 0,
+      "tolerated_items": 2,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 2,
+      "required_found": 0,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 0
+    },
+    {
+      "path": "automatic",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 1,
+      "items": 27,
+      "required_items": 9,
+      "tolerated_items": 16,
+      "unwanted_items": 2,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 9,
+      "precision": 0.9259,
+      "unwanted_rate": 0.0741,
+      "recall": 0.9
+    },
+    {
+      "path": "automatic",
+      "family": "follow_up",
+      "probes": 2,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 2,
+      "items": 4,
+      "required_items": 1,
+      "tolerated_items": 1,
+      "unwanted_items": 2,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 2,
+      "required_total": 2,
+      "required_found": 1,
+      "precision": 0.5,
+      "unwanted_rate": 0.5,
+      "recall": 0.5
+    },
+    {
+      "path": "automatic",
+      "family": "low_content",
+      "probes": 6,
+      "probes_with_items": 6,
+      "probes_with_unwanted": 6,
+      "items": 13,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 13,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 5,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0,
+      "unwanted_rate": 1,
+      "recall": null
+    },
+    {
+      "path": "automatic",
+      "family": "privacy",
+      "probes": 3,
+      "probes_with_items": 3,
+      "probes_with_unwanted": 2,
+      "items": 5,
+      "required_items": 0,
+      "tolerated_items": 2,
+      "unwanted_items": 3,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0.4,
+      "unwanted_rate": 0.6,
+      "recall": null
+    },
+    {
+      "path": "automatic",
+      "family": "unrelated",
+      "probes": 3,
+      "probes_with_items": 3,
+      "probes_with_unwanted": 3,
+      "items": 6,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 6,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0,
+      "unwanted_rate": 1,
+      "recall": null
+    },
+    {
+      "path": "memory_search",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 0,
+      "items": 4,
+      "required_items": 1,
+      "tolerated_items": 3,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 1,
+      "required_found": 1,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 11,
+      "probes_with_unwanted": 2,
+      "items": 67,
+      "required_items": 10,
+      "tolerated_items": 53,
+      "unwanted_items": 4,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 10,
+      "precision": 0.9403,
+      "unwanted_rate": 0.0597,
+      "recall": 1
+    },
+    {
+      "path": "memory_search",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": null,
+      "unwanted_rate": null,
+      "recall": null
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 2,
+      "required_found": 0,
+      "precision": null,
+      "unwanted_rate": null,
+      "recall": 0
+    },
+    {
+      "path": "memory_search",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 7,
+      "probes_with_unwanted": 0,
+      "items": 11,
+      "required_items": 10,
+      "tolerated_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 10,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 8,
+      "probes_with_unwanted": 1,
+      "items": 30,
+      "required_items": 0,
+      "tolerated_items": 24,
+      "unwanted_items": 6,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0.8,
+      "unwanted_rate": 0.2,
+      "recall": null
+    }
+  ],
+  "stale": {
+    "checks": 18,
+    "misses": 14,
+    "control_checks": 10,
+    "control_failures": 0,
+    "outcomes": [
+      {
+        "probe_id": "auto.work",
+        "path": "automatic",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.birthday",
+        "path": "automatic",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.parking",
+        "path": "automatic",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.parking",
+        "path": "automatic",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "contradiction_different_wording",
+        "issue": "M3",
+        "outcome": "only_first",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.gym",
+        "path": "automatic",
+        "scenario": "contradiction_same_wording_control",
+        "issue": "M3",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.dentist",
+        "path": "automatic",
+        "scenario": "predicate_label_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.bank",
+        "path": "automatic",
+        "scenario": "predicate_cardinality_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.barber",
+        "path": "automatic",
+        "scenario": "same_predicate_conflict_control",
+        "issue": "M4",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.work",
+        "path": "memory_search",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.work",
+        "path": "memory_search_conversations",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.birthday",
+        "path": "memory_search",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.birthday",
+        "path": "memory_search_conversations",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.parking",
+        "path": "memory_search",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.parking",
+        "path": "memory_search",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.parking",
+        "path": "memory_search_conversations",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search_conversations.parking",
+        "path": "memory_search_conversations",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "contradiction_different_wording",
+        "issue": "M3",
+        "outcome": "only_first",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.gym",
+        "path": "memory_search",
+        "scenario": "contradiction_same_wording_control",
+        "issue": "M3",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.dentist",
+        "path": "memory_search",
+        "scenario": "predicate_label_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.bank",
+        "path": "memory_search",
+        "scenario": "predicate_cardinality_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.barber",
+        "path": "memory_search",
+        "scenario": "same_predicate_conflict_control",
+        "issue": "M4",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      }
+    ]
+  },
+  "scope_leaks": 0,
+  "unmapped_items": 0,
+  "targets": [
+    {
+      "id": "M1.low_content_injects_nothing_unrelated",
+      "issue": "M1",
+      "description": "low-content follow-ups such as \"thanks!\" inject no unwanted items",
+      "met": false,
+      "observed": "13 unwanted of 13 injected items across 6 probes"
+    },
+    {
+      "id": "M1.privacy_injects_no_private_item",
+      "issue": "M1",
+      "description": "unrelated requests sharing a word with private history inject no private item",
+      "met": false,
+      "observed": "1 private items across 3 probes"
+    },
+    {
+      "id": "M2.corrected_source_not_current",
+      "issue": "M2",
+      "description": "after a correction the old source is not delivered as an unqualified current statement",
+      "met": false,
+      "observed": "4 misses of 6 checks"
+    },
+    {
+      "id": "M2.retired_restatement_flagged",
+      "issue": "M2",
+      "description": "a retired fact restated without a source link, before or after retirement, is not delivered as unflagged current evidence",
+      "met": false,
+      "observed": "4 misses of 6 checks"
+    },
+    {
+      "id": "M3.different_wording_detected",
+      "issue": "M3",
+      "description": "a later owner statement with different wording is linked to the saved claim it contradicts",
+      "met": false,
+      "observed": "2 misses of 2 checks"
+    },
+    {
+      "id": "M4.drift_conflicts_warned",
+      "issue": "M4",
+      "description": "predicate label or cardinality drift still produces a conflict warning",
+      "met": false,
+      "observed": "4 misses of 4 checks"
+    }
+  ],
+  "probes": [
+    {
+      "id": "auto.dinner",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.dinner=required",
+        "m.0252=unwanted",
+        "m.0572=unwanted"
+      ]
+    },
+    {
+      "id": "auto.greenhouse",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.greenhouse.a=tolerated",
+        "n.greenhouse=required"
+      ]
+    },
+    {
+      "id": "auto.mother",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.birthday.fixed=tolerated",
+        "m.0169=tolerated",
+        "n.mother=required"
+      ]
+    },
+    {
+      "id": "auto.tyres",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.pressure(private)=unwanted",
+        "n.tyres=required"
+      ]
+    },
+    {
+      "id": "auto.pace",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0712=tolerated",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "auto.lisbon",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.lisbon.a=tolerated",
+        "n.lisbon=required"
+      ]
+    },
+    {
+      "id": "auto.cashew",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0531=tolerated",
+        "n.cashew=required"
+      ]
+    },
+    {
+      "id": "auto.vet",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0550=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "auto.ferritin",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0645(private)=unwanted",
+        "n.ferritin(private)=required"
+      ]
+    },
+    {
+      "id": "auto.flaky",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0951=tolerated",
+        "n.flaky=required"
+      ]
+    },
+    {
+      "id": "auto.revolut",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.revolut.a=tolerated",
+        "n.revolut=required"
+      ]
+    },
+    {
+      "id": "auto.pup",
+      "family": "paraphrase",
+      "path": "automatic",
+      "status": "empty",
+      "items": [],
+      "required_missing": [
+        "n.vet"
+      ]
+    },
+    {
+      "id": "auto.jog",
+      "family": "paraphrase",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0688=tolerated",
+        "m.0712=tolerated"
+      ],
+      "required_missing": [
+        "n.pace"
+      ]
+    },
+    {
+      "id": "auto.work",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.c.employer.new=tolerated",
+        "m.c.employer=tolerated"
+      ],
+      "required_missing": [
+        "c.employer.new"
+      ]
+    },
+    {
+      "id": "auto.birthday",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.birthday.fixed=required",
+        "m.0169=tolerated",
+        "m.c.birthday=tolerated"
+      ]
+    },
+    {
+      "id": "auto.parking",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.parking.casual=tolerated",
+        "m.retire.parking=tolerated"
+      ]
+    },
+    {
+      "id": "auto.coffee",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.coffee.restated=tolerated",
+        "m.retire.coffee.a=tolerated"
+      ]
+    },
+    {
+      "id": "auto.home_city",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.home=required",
+        "m.0760.a=unwanted",
+        "m.0761.a=unwanted"
+      ]
+    },
+    {
+      "id": "auto.gym",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.gym=required",
+        "m.c.gym=tolerated",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "auto.dentist",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.dentist.drift=required",
+        "c.dentist=required",
+        "m.c.dentist.drift=tolerated",
+        "m.c.dentist=tolerated"
+      ]
+    },
+    {
+      "id": "auto.bank",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.bank.drift=required",
+        "c.bank=required",
+        "m.c.bank.drift=tolerated",
+        "m.c.bank=tolerated"
+      ]
+    },
+    {
+      "id": "auto.barber",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.barber.second=required",
+        "c.barber=required",
+        "m.c.barber.second=tolerated",
+        "m.c.barber=tolerated"
+      ]
+    },
+    {
+      "id": "auto.follow.basil",
+      "family": "follow_up",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0393=tolerated",
+        "session:user_message.0=unwanted"
+      ],
+      "required_missing": [
+        "n.basil"
+      ]
+    },
+    {
+      "id": "auto.follow.dates",
+      "family": "follow_up",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.lisbon=required",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.thanks",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0393=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.ok",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0666=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.sounds_good",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0200=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.perfect",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.birthday.fixed=unwanted",
+        "m.0169=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.project",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0932=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.fresh",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0741=unwanted",
+        "m.0757=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.ci",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0002=unwanted",
+        "m.0710=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.orm",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "n.sam(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.project",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0847=tolerated",
+        "m.0945=tolerated"
+      ]
+    },
+    {
+      "id": "auto.unrelated.math",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0733.a=unwanted",
+        "m.0734.a=unwanted"
+      ]
+    },
+    {
+      "id": "auto.unrelated.translate",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0690=unwanted",
+        "n.pressure.a(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.unrelated.haiku",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0100=unwanted",
+        "m.0590=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.dinner",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.dinner=required",
+        "m.0697=tolerated",
+        "m.0760=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.dinner",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0015=tolerated",
+        "m.0099=tolerated",
+        "m.0250=unwanted",
+        "m.0252=unwanted",
+        "m.0506=tolerated",
+        "m.0572=unwanted",
+        "m.0631=tolerated",
+        "m.0760=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.greenhouse",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.greenhouse",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "n.greenhouse.a=tolerated",
+        "n.greenhouse=required"
+      ]
+    },
+    {
+      "id": "memory_search.mother",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.birthday.fixed=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.mother",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0024.a=tolerated",
+        "m.0169=tolerated",
+        "m.0767.a=tolerated",
+        "m.0767=tolerated",
+        "m.0769.a=tolerated",
+        "m.0775=tolerated",
+        "m.c.birthday=tolerated",
+        "n.mother=required"
+      ]
+    },
+    {
+      "id": "memory_search.tyres",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.tyres",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "n.pressure(private)=unwanted",
+        "n.tyres=required"
+      ]
+    },
+    {
+      "id": "memory_search.pace",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.pace",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0002=tolerated",
+        "m.0012=tolerated",
+        "m.0198=tolerated",
+        "m.0226=tolerated",
+        "m.0687=tolerated",
+        "m.0710=tolerated",
+        "m.0712=tolerated",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "memory_search.lisbon",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.lisbon",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0170=tolerated",
+        "m.0173=tolerated",
+        "m.0220=tolerated",
+        "m.0455=tolerated",
+        "m.0481=tolerated",
+        "m.0748=tolerated",
+        "n.lisbon.a=tolerated",
+        "n.lisbon=required"
+      ]
+    },
+    {
+      "id": "memory_search.cashew",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.cashew",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0032=tolerated",
+        "m.0080=tolerated",
+        "m.0098=tolerated",
+        "m.0435=tolerated",
+        "m.0531=tolerated",
+        "n.cashew=required"
+      ]
+    },
+    {
+      "id": "memory_search.vet",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.vet",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0242=tolerated",
+        "m.0243=tolerated",
+        "m.0420=tolerated",
+        "m.0478=tolerated",
+        "m.0517=tolerated",
+        "m.0550=tolerated",
+        "m.0552=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "memory_search.ferritin",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.ferritin",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "n.ferritin(private)=required"
+      ]
+    },
+    {
+      "id": "memory_search.flaky",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.flaky",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0843=tolerated",
+        "m.0846=tolerated",
+        "m.0907=tolerated",
+        "m.0911=tolerated",
+        "m.0914=tolerated",
+        "m.0951=tolerated",
+        "m.0960=tolerated",
+        "n.flaky=required"
+      ]
+    },
+    {
+      "id": "memory_search.revolut",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.revolut",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.1214=tolerated",
+        "m.1221=tolerated",
+        "m.1224=tolerated",
+        "m.1239=tolerated",
+        "m.1248=tolerated",
+        "m.1256=tolerated",
+        "n.revolut.a=tolerated",
+        "n.revolut=required"
+      ]
+    },
+    {
+      "id": "memory_search.pup",
+      "family": "paraphrase",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.pup",
+      "family": "paraphrase",
+      "path": "memory_search_conversations",
+      "status": "empty",
+      "items": [],
+      "required_missing": [
+        "n.vet"
+      ]
+    },
+    {
+      "id": "memory_search.jog",
+      "family": "paraphrase",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.jog",
+      "family": "paraphrase",
+      "path": "memory_search_conversations",
+      "status": "empty",
+      "items": [],
+      "required_missing": [
+        "n.pace"
+      ]
+    },
+    {
+      "id": "memory_search.work",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.employer.new=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.work",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0005=unwanted",
+        "m.0532=unwanted",
+        "m.0652=unwanted",
+        "m.0679=unwanted",
+        "m.0688=unwanted",
+        "m.0708=unwanted",
+        "m.c.employer.new=tolerated",
+        "m.c.employer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.birthday",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.birthday.fixed=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.birthday",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0024.a=tolerated",
+        "m.0169=tolerated",
+        "m.0767.a=tolerated",
+        "m.0768.a=tolerated",
+        "m.0769.a=tolerated",
+        "m.0774=tolerated",
+        "m.c.birthday.fixed=tolerated",
+        "m.c.birthday=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.parking",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.parking",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.parking.casual=tolerated",
+        "m.retire.parking.a=tolerated",
+        "m.retire.parking=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.coffee",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.coffee",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.coffee.restated=tolerated",
+        "m.retire.coffee.a=tolerated",
+        "m.retire.coffee=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.home_city",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.home=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.home_city",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search.gym",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.gym=required",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.gym",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.gym=tolerated",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.dentist",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.dentist.drift=required",
+        "c.dentist=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.dentist",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.dentist.drift=tolerated",
+        "m.c.dentist=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.bank",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.bank.drift=required",
+        "c.bank=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.bank",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.bank.drift=tolerated",
+        "m.c.bank=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.barber",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.barber.second=required",
+        "c.barber=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.barber",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.barber.second=tolerated",
+        "m.c.barber=tolerated"
+      ]
+    }
+  ]
+}

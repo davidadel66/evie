@@ -1,0 +1,1758 @@
+{
+  "report_version": 1,
+  "corpus_version": "memory-scale-replay-v1",
+  "corpus_sha256": "sha256:a9b417cd8b2f0bcb5d089a7dff96963d069694317cc9fbb02ee57031c5299856",
+  "options": {
+    "tier": "large",
+    "seed": 20261001,
+    "global_sessions": 400,
+    "project_sessions": 24,
+    "min_exchanges": 4,
+    "max_exchanges": 9,
+    "dense_targets": 24
+  },
+  "corpus": {
+    "sessions": 493,
+    "global_sessions": 421,
+    "project_sessions": 72,
+    "owner_messages": 3832,
+    "assistant_messages": 3817,
+    "low_content_owner_messages": 712,
+    "private_messages": 450,
+    "needles": 14,
+    "accepted_claims": 15,
+    "corrections": 2,
+    "retirements": 2,
+    "areas": 4,
+    "topics": 25,
+    "probes": 104
+  },
+  "paths": {
+    "automatic": {
+      "probes": 36,
+      "probes_with_items": 36,
+      "probes_with_unwanted": 16,
+      "items": 85,
+      "required_items": 22,
+      "tolerated_items": 33,
+      "unwanted_items": 30,
+      "unwanted_private_items": 4,
+      "unwanted_same_session_items": 6,
+      "required_total": 25,
+      "required_found": 22,
+      "precision": 0.6471,
+      "unwanted_rate": 0.3529,
+      "recall": 0.88
+    },
+    "memory_search": {
+      "probes": 22,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 1,
+      "items": 17,
+      "required_items": 11,
+      "tolerated_items": 5,
+      "unwanted_items": 1,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 11,
+      "required_found": 11,
+      "precision": 0.9412,
+      "unwanted_rate": 0.0588,
+      "recall": 1
+    },
+    "memory_search_conversations": {
+      "probes": 46,
+      "probes_with_items": 45,
+      "probes_with_unwanted": 5,
+      "items": 166,
+      "required_items": 29,
+      "tolerated_items": 117,
+      "unwanted_items": 20,
+      "unwanted_private_items": 3,
+      "unwanted_same_session_items": 0,
+      "required_total": 36,
+      "required_found": 29,
+      "precision": 0.8795,
+      "unwanted_rate": 0.1205,
+      "recall": 0.8056
+    }
+  },
+  "families": [
+    {
+      "path": "automatic",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 11,
+      "probes_with_unwanted": 2,
+      "items": 25,
+      "required_items": 11,
+      "tolerated_items": 12,
+      "unwanted_items": 2,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 11,
+      "required_found": 11,
+      "precision": 0.92,
+      "unwanted_rate": 0.08,
+      "recall": 1
+    },
+    {
+      "path": "automatic",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 0,
+      "items": 4,
+      "required_items": 2,
+      "tolerated_items": 2,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 2,
+      "required_found": 2,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "automatic",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 1,
+      "items": 27,
+      "required_items": 9,
+      "tolerated_items": 16,
+      "unwanted_items": 2,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 9,
+      "precision": 0.9259,
+      "unwanted_rate": 0.0741,
+      "recall": 0.9
+    },
+    {
+      "path": "automatic",
+      "family": "follow_up",
+      "probes": 2,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 2,
+      "items": 4,
+      "required_items": 0,
+      "tolerated_items": 1,
+      "unwanted_items": 3,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 2,
+      "required_total": 2,
+      "required_found": 0,
+      "precision": 0.25,
+      "unwanted_rate": 0.75,
+      "recall": 0
+    },
+    {
+      "path": "automatic",
+      "family": "low_content",
+      "probes": 6,
+      "probes_with_items": 6,
+      "probes_with_unwanted": 6,
+      "items": 14,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 14,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 4,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0,
+      "unwanted_rate": 1,
+      "recall": null
+    },
+    {
+      "path": "automatic",
+      "family": "privacy",
+      "probes": 3,
+      "probes_with_items": 3,
+      "probes_with_unwanted": 2,
+      "items": 5,
+      "required_items": 0,
+      "tolerated_items": 2,
+      "unwanted_items": 3,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0.4,
+      "unwanted_rate": 0.6,
+      "recall": null
+    },
+    {
+      "path": "automatic",
+      "family": "unrelated",
+      "probes": 3,
+      "probes_with_items": 3,
+      "probes_with_unwanted": 3,
+      "items": 6,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 6,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0,
+      "unwanted_rate": 1,
+      "recall": null
+    },
+    {
+      "path": "memory_search",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 1,
+      "items": 5,
+      "required_items": 1,
+      "tolerated_items": 3,
+      "unwanted_items": 1,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 1,
+      "required_found": 1,
+      "precision": 0.8,
+      "unwanted_rate": 0.2,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "relevant",
+      "probes": 11,
+      "probes_with_items": 11,
+      "probes_with_unwanted": 3,
+      "items": 69,
+      "required_items": 10,
+      "tolerated_items": 52,
+      "unwanted_items": 7,
+      "unwanted_private_items": 3,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 10,
+      "precision": 0.8986,
+      "unwanted_rate": 0.1014,
+      "recall": 1
+    },
+    {
+      "path": "memory_search",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
+      "required_items": 0,
+      "tolerated_items": 0,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": null,
+      "unwanted_rate": null,
+      "recall": null
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "paraphrase",
+      "probes": 2,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 1,
+      "items": 16,
+      "required_items": 2,
+      "tolerated_items": 7,
+      "unwanted_items": 7,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 2,
+      "required_found": 2,
+      "precision": 0.5625,
+      "unwanted_rate": 0.4375,
+      "recall": 1
+    },
+    {
+      "path": "memory_search",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 7,
+      "probes_with_unwanted": 0,
+      "items": 12,
+      "required_items": 10,
+      "tolerated_items": 2,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 10,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "stale",
+      "probes": 9,
+      "probes_with_items": 8,
+      "probes_with_unwanted": 1,
+      "items": 30,
+      "required_items": 0,
+      "tolerated_items": 24,
+      "unwanted_items": 6,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 0,
+      "required_found": 0,
+      "precision": 0.8,
+      "unwanted_rate": 0.2,
+      "recall": null
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "dense_coverage",
+      "probes": 24,
+      "probes_with_items": 24,
+      "probes_with_unwanted": 0,
+      "items": 51,
+      "required_items": 17,
+      "tolerated_items": 34,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 24,
+      "required_found": 17,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 0.7083
+    }
+  ],
+  "stale": {
+    "checks": 18,
+    "misses": 13,
+    "control_checks": 10,
+    "control_failures": 0,
+    "outcomes": [
+      {
+        "probe_id": "auto.work",
+        "path": "automatic",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.birthday",
+        "path": "automatic",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.parking",
+        "path": "automatic",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.parking",
+        "path": "automatic",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "contradiction_different_wording",
+        "issue": "M3",
+        "outcome": "only_first",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.gym",
+        "path": "automatic",
+        "scenario": "contradiction_same_wording_control",
+        "issue": "M3",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.dentist",
+        "path": "automatic",
+        "scenario": "predicate_label_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.bank",
+        "path": "automatic",
+        "scenario": "predicate_cardinality_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "auto.barber",
+        "path": "automatic",
+        "scenario": "same_predicate_conflict_control",
+        "issue": "M4",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.work",
+        "path": "memory_search",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.work",
+        "path": "memory_search_conversations",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.birthday",
+        "path": "memory_search",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.birthday",
+        "path": "memory_search_conversations",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.parking",
+        "path": "memory_search",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.parking",
+        "path": "memory_search",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.parking",
+        "path": "memory_search_conversations",
+        "scenario": "retired_unlinked_repeat",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search_conversations.parking",
+        "path": "memory_search_conversations",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "stale_as_current",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "retired_source_control",
+        "issue": "M2",
+        "control": true,
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "contradiction_different_wording",
+        "issue": "M3",
+        "outcome": "only_first",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.gym",
+        "path": "memory_search",
+        "scenario": "contradiction_same_wording_control",
+        "issue": "M3",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.dentist",
+        "path": "memory_search",
+        "scenario": "predicate_label_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.bank",
+        "path": "memory_search",
+        "scenario": "predicate_cardinality_drift",
+        "issue": "M4",
+        "outcome": "both_unlinked",
+        "miss": true
+      },
+      {
+        "probe_id": "memory_search.barber",
+        "path": "memory_search",
+        "scenario": "same_predicate_conflict_control",
+        "issue": "M4",
+        "control": true,
+        "outcome": "linked",
+        "miss": false
+      }
+    ]
+  },
+  "scope_leaks": 0,
+  "unmapped_items": 0,
+  "dense": {
+    "vectors_in_global_scope": 6429,
+    "scan_limit": 4096,
+    "reachable_fraction": 0.6371,
+    "targets": 24,
+    "targets_found": 17,
+    "targets_reachable": 17,
+    "reachable_targets_found": 17,
+    "unreachable_targets_found": 0,
+    "partial_outcomes": 24
+  },
+  "targets": [
+    {
+      "id": "M1.low_content_injects_nothing_unrelated",
+      "issue": "M1",
+      "description": "low-content follow-ups such as \"thanks!\" inject no unwanted items",
+      "met": false,
+      "observed": "14 unwanted of 14 injected items across 6 probes"
+    },
+    {
+      "id": "M1.privacy_injects_no_private_item",
+      "issue": "M1",
+      "description": "unrelated requests sharing a word with private history inject no private item",
+      "met": false,
+      "observed": "1 private items across 3 probes"
+    },
+    {
+      "id": "M2.corrected_source_not_current",
+      "issue": "M2",
+      "description": "after a correction the old source is not delivered as an unqualified current statement",
+      "met": false,
+      "observed": "3 misses of 6 checks"
+    },
+    {
+      "id": "M2.retired_restatement_flagged",
+      "issue": "M2",
+      "description": "a retired fact restated without a source link, before or after retirement, is not delivered as unflagged current evidence",
+      "met": false,
+      "observed": "4 misses of 6 checks"
+    },
+    {
+      "id": "M3.different_wording_detected",
+      "issue": "M3",
+      "description": "a later owner statement with different wording is linked to the saved claim it contradicts",
+      "met": false,
+      "observed": "2 misses of 2 checks"
+    },
+    {
+      "id": "M4.drift_conflicts_warned",
+      "issue": "M4",
+      "description": "predicate label or cardinality drift still produces a conflict warning",
+      "met": false,
+      "observed": "4 misses of 4 checks"
+    },
+    {
+      "id": "M7.dense_covers_all_vectors",
+      "issue": "M7",
+      "description": "dense recall finds targets anywhere in the vector table",
+      "met": false,
+      "observed": "17 of 24 targets found; 4096 of 6429 vectors inside the scan bound; 0 unreachable targets found"
+    }
+  ],
+  "probes": [
+    {
+      "id": "auto.dinner",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.dinner=required",
+        "m.3454=tolerated",
+        "m.3487=tolerated"
+      ]
+    },
+    {
+      "id": "auto.greenhouse",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "n.greenhouse.a=tolerated",
+        "n.greenhouse=required"
+      ]
+    },
+    {
+      "id": "auto.mother",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.birthday.fixed=tolerated",
+        "m.0079=tolerated",
+        "m.2516=tolerated",
+        "n.mother=required"
+      ]
+    },
+    {
+      "id": "auto.tyres",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.0533=tolerated",
+        "n.tyres=required"
+      ]
+    },
+    {
+      "id": "auto.pace",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3244=tolerated",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "auto.lisbon",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.1705=tolerated",
+        "n.lisbon=required"
+      ]
+    },
+    {
+      "id": "auto.cashew",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3401=unwanted",
+        "n.cashew=required"
+      ]
+    },
+    {
+      "id": "auto.vet",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2447=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "auto.ferritin",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3531.a(private)=unwanted",
+        "n.ferritin(private)=required"
+      ]
+    },
+    {
+      "id": "auto.flaky",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3731.a=tolerated",
+        "n.flaky=required"
+      ]
+    },
+    {
+      "id": "auto.revolut",
+      "family": "relevant",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "n.revolut.a=tolerated",
+        "n.revolut=required"
+      ]
+    },
+    {
+      "id": "auto.pup",
+      "family": "paraphrase",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2447=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "auto.jog",
+      "family": "paraphrase",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2819=tolerated",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "auto.work",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.c.employer.new=tolerated",
+        "m.c.employer=tolerated"
+      ],
+      "required_missing": [
+        "c.employer.new"
+      ]
+    },
+    {
+      "id": "auto.birthday",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.birthday.fixed=required",
+        "m.1786=tolerated",
+        "m.2516=tolerated"
+      ]
+    },
+    {
+      "id": "auto.parking",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.parking.casual=tolerated",
+        "m.retire.parking=tolerated"
+      ]
+    },
+    {
+      "id": "auto.coffee",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.coffee.restated=tolerated",
+        "m.retire.coffee.a=tolerated"
+      ]
+    },
+    {
+      "id": "auto.home_city",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.home=required",
+        "m.0821(private)=unwanted",
+        "m.3489.a=unwanted"
+      ]
+    },
+    {
+      "id": "auto.gym",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.gym=required",
+        "m.c.gym=tolerated",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "auto.dentist",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.dentist.drift=required",
+        "c.dentist=required",
+        "m.c.dentist.drift=tolerated",
+        "m.c.dentist=tolerated"
+      ]
+    },
+    {
+      "id": "auto.bank",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.bank.drift=required",
+        "c.bank=required",
+        "m.c.bank.drift=tolerated",
+        "m.c.bank=tolerated"
+      ]
+    },
+    {
+      "id": "auto.barber",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.barber.second=required",
+        "c.barber=required",
+        "m.c.barber.second=tolerated",
+        "m.c.barber=tolerated"
+      ]
+    },
+    {
+      "id": "auto.follow.basil",
+      "family": "follow_up",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.0192=tolerated",
+        "session:user_message.0=unwanted"
+      ],
+      "required_missing": [
+        "n.basil"
+      ]
+    },
+    {
+      "id": "auto.follow.dates",
+      "family": "follow_up",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.1315=unwanted",
+        "session:user_message.0=unwanted"
+      ],
+      "required_missing": [
+        "n.lisbon"
+      ]
+    },
+    {
+      "id": "auto.low.thanks",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.0337=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.ok",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3282=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.sounds_good",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2349=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.perfect",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.birthday.fixed=unwanted",
+        "m.1786=unwanted",
+        "m.2516=unwanted",
+        "session:user_message.0=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.project",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3696=unwanted",
+        "m.3777=unwanted"
+      ]
+    },
+    {
+      "id": "auto.low.fresh",
+      "family": "low_content",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2811=unwanted",
+        "m.3508=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.ci",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3052=unwanted",
+        "m.3124=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.orm",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "n.sam(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.project",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3707=tolerated",
+        "m.3772=tolerated"
+      ]
+    },
+    {
+      "id": "auto.unrelated.math",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.1305.a=unwanted",
+        "m.3510.a=unwanted"
+      ]
+    },
+    {
+      "id": "auto.unrelated.translate",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.2808=unwanted",
+        "n.pressure.a(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.unrelated.haiku",
+      "family": "unrelated",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.1109=unwanted",
+        "m.3195=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.dinner",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.dinner=required",
+        "m.3487=tolerated",
+        "m.3514=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.dinner",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0717=unwanted",
+        "m.0844=tolerated",
+        "m.1276=unwanted",
+        "m.3065=unwanted",
+        "m.3326=unwanted",
+        "m.3345=tolerated",
+        "m.3454=tolerated",
+        "m.3487=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.greenhouse",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.greenhouse",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "n.greenhouse.a=tolerated",
+        "n.greenhouse=required"
+      ]
+    },
+    {
+      "id": "memory_search.mother",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.birthday.fixed=tolerated",
+        "m.2516=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.mother",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0079=tolerated",
+        "m.0813=tolerated",
+        "m.2006=tolerated",
+        "m.2655=tolerated",
+        "m.3058.a=tolerated",
+        "m.3059=tolerated",
+        "m.3080=tolerated",
+        "n.mother=required"
+      ]
+    },
+    {
+      "id": "memory_search.tyres",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.tyres",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "n.pressure(private)=unwanted",
+        "n.tyres=required"
+      ]
+    },
+    {
+      "id": "memory_search.pace",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.pace",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.2256=tolerated",
+        "m.2670=tolerated",
+        "m.2787=tolerated",
+        "m.2899=tolerated",
+        "m.3052=tolerated",
+        "m.3124=tolerated",
+        "m.3244=tolerated",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "memory_search.lisbon",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.lisbon",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0656=tolerated",
+        "m.1176=tolerated",
+        "m.3177=tolerated",
+        "m.3335=tolerated",
+        "m.3504=tolerated",
+        "m.3509=tolerated",
+        "n.lisbon.a=tolerated",
+        "n.lisbon=required"
+      ]
+    },
+    {
+      "id": "memory_search.cashew",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.cashew",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0497=tolerated",
+        "m.1369=tolerated",
+        "m.1436=tolerated",
+        "m.1898=tolerated",
+        "m.2165=tolerated",
+        "m.3164=tolerated",
+        "m.3489=tolerated",
+        "n.cashew=required"
+      ]
+    },
+    {
+      "id": "memory_search.vet",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.vet",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0130(private)=unwanted",
+        "m.0893(private)=unwanted",
+        "m.2447=tolerated",
+        "m.3094=tolerated",
+        "m.3206=tolerated",
+        "m.3391=tolerated",
+        "m.3392=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "memory_search.ferritin",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.ferritin",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "n.ferritin(private)=required"
+      ]
+    },
+    {
+      "id": "memory_search.flaky",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.flaky",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.3597=tolerated",
+        "m.3613.a=tolerated",
+        "m.3689.a=tolerated",
+        "m.3731.a=tolerated",
+        "m.3751=tolerated",
+        "m.3760=tolerated",
+        "m.3768=tolerated",
+        "n.flaky=required"
+      ]
+    },
+    {
+      "id": "memory_search.revolut",
+      "family": "relevant",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.revolut",
+      "family": "relevant",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.4071=tolerated",
+        "m.4097=tolerated",
+        "m.4198=tolerated",
+        "m.4224=tolerated",
+        "m.4233=tolerated",
+        "m.4235=tolerated",
+        "n.revolut.a=tolerated",
+        "n.revolut=required"
+      ]
+    },
+    {
+      "id": "memory_search.pup",
+      "family": "paraphrase",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.pup",
+      "family": "paraphrase",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0563=tolerated",
+        "m.0579=tolerated",
+        "m.0635=tolerated",
+        "m.2447=tolerated",
+        "m.2715=tolerated",
+        "m.2716=tolerated",
+        "m.2751=tolerated",
+        "n.vet=required"
+      ]
+    },
+    {
+      "id": "memory_search.jog",
+      "family": "paraphrase",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.jog",
+      "family": "paraphrase",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0990.a=unwanted",
+        "m.1495.a=unwanted",
+        "m.2929=unwanted",
+        "m.2950.a=unwanted",
+        "m.2972=unwanted",
+        "m.3018=unwanted",
+        "m.3306=unwanted",
+        "n.pace=required"
+      ]
+    },
+    {
+      "id": "memory_search.work",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.employer.new=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.work",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.18.a=unwanted",
+        "d.target.19.a=unwanted",
+        "d.target.20.a=unwanted",
+        "d.target.21.a=unwanted",
+        "d.target.22.a=unwanted",
+        "d.target.23.a=unwanted",
+        "m.c.employer.new=tolerated",
+        "m.c.employer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.birthday",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.birthday.fixed=required",
+        "m.2516=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.birthday",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.0079=tolerated",
+        "m.1630=tolerated",
+        "m.1757=tolerated",
+        "m.1786=tolerated",
+        "m.2006=tolerated",
+        "m.2516=tolerated",
+        "m.c.birthday.fixed=tolerated",
+        "m.c.birthday=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.parking",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.parking",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.parking.casual=tolerated",
+        "m.retire.parking.a=tolerated",
+        "m.retire.parking=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.coffee",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.coffee",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.coffee.restated=tolerated",
+        "m.retire.coffee.a=tolerated",
+        "m.retire.coffee=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.home_city",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.home=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.home_city",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": []
+    },
+    {
+      "id": "memory_search.gym",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.gym=required",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.gym",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.c.gym=tolerated",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.dentist",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.dentist.drift=required",
+        "c.dentist=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.dentist",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.c.dentist.drift=tolerated",
+        "m.c.dentist=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.bank",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.bank.drift=required",
+        "c.bank=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.bank",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.c.bank.drift=tolerated",
+        "m.c.bank=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.barber",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.barber.second=required",
+        "c.barber=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.barber",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.c.barber.second=tolerated",
+        "m.c.barber=tolerated"
+      ]
+    },
+    {
+      "id": "dense.00",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.00=required",
+        "d.target.08=tolerated",
+        "d.target.16=tolerated"
+      ]
+    },
+    {
+      "id": "dense.01",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.09=tolerated",
+        "d.target.17=tolerated"
+      ],
+      "required_missing": [
+        "d.target.01"
+      ]
+    },
+    {
+      "id": "dense.02",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.02=required",
+        "d.target.18=tolerated"
+      ]
+    },
+    {
+      "id": "dense.03",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.03=required",
+        "d.target.19=tolerated"
+      ]
+    },
+    {
+      "id": "dense.04",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.04=required",
+        "d.target.12=tolerated",
+        "d.target.20=tolerated"
+      ]
+    },
+    {
+      "id": "dense.05",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.21=tolerated"
+      ],
+      "required_missing": [
+        "d.target.05"
+      ]
+    },
+    {
+      "id": "dense.06",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.06=required",
+        "d.target.22=tolerated"
+      ]
+    },
+    {
+      "id": "dense.07",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.07=required",
+        "d.target.15=tolerated"
+      ]
+    },
+    {
+      "id": "dense.08",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.00=tolerated",
+        "d.target.08=required",
+        "d.target.16=tolerated"
+      ]
+    },
+    {
+      "id": "dense.09",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.09=required",
+        "d.target.17=tolerated"
+      ]
+    },
+    {
+      "id": "dense.10",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.02=tolerated",
+        "d.target.18=tolerated"
+      ],
+      "required_missing": [
+        "d.target.10"
+      ]
+    },
+    {
+      "id": "dense.11",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.03=tolerated",
+        "d.target.19=tolerated"
+      ],
+      "required_missing": [
+        "d.target.11"
+      ]
+    },
+    {
+      "id": "dense.12",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.04=tolerated",
+        "d.target.12=required",
+        "d.target.20=tolerated"
+      ]
+    },
+    {
+      "id": "dense.13",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.21=tolerated"
+      ],
+      "required_missing": [
+        "d.target.13"
+      ]
+    },
+    {
+      "id": "dense.14",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.06=tolerated",
+        "d.target.22=tolerated"
+      ],
+      "required_missing": [
+        "d.target.14"
+      ]
+    },
+    {
+      "id": "dense.15",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.07=tolerated",
+        "d.target.15=required"
+      ]
+    },
+    {
+      "id": "dense.16",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.00=tolerated",
+        "d.target.08=tolerated",
+        "d.target.16=required"
+      ]
+    },
+    {
+      "id": "dense.17",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.09=tolerated",
+        "d.target.17=required"
+      ]
+    },
+    {
+      "id": "dense.18",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.02=tolerated",
+        "d.target.18=required"
+      ]
+    },
+    {
+      "id": "dense.19",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.03=tolerated",
+        "d.target.19=required"
+      ]
+    },
+    {
+      "id": "dense.20",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.04=tolerated",
+        "d.target.12=tolerated",
+        "d.target.20=required"
+      ]
+    },
+    {
+      "id": "dense.21",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.21=required"
+      ]
+    },
+    {
+      "id": "dense.22",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.06=tolerated",
+        "d.target.22=required"
+      ]
+    },
+    {
+      "id": "dense.23",
+      "family": "dense_coverage",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "d.target.07=tolerated",
+        "d.target.15=tolerated"
+      ],
+      "required_missing": [
+        "d.target.23"
+      ]
+    }
+  ]
+}
