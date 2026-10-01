@@ -89,10 +89,16 @@ you only learn the size after the command ran. One such call doesn't just
 waste tokens, it ends the session.
 
 Over the cap, evie returns the first 30k characters plus
-`[output trimmed: … full output saved to /tmp/evie-output-<pid>.txt]`.
+`[output trimmed: … full output saved to <tmp>/evie-output-<random>.txt]`.
 The model reads the rest with `head`, `tail`, or `grep` — which it has,
 because it has a shell. Note the file will usually exceed `read_file`'s
 100KB limit, which is why the note names shell tools instead.
+
+Amended 2026-10-01 (harness review T5–T7): only the cap is held in memory
+while the command runs; the rest streams to a spill file unique to each
+call, so two oversized commands can't overwrite each other. The cut lands
+on a UTF-8 boundary. Spill files older than 24 hours are removed when a new
+one is created.
 
 ## Timeouts: 2 minutes default, 10 minutes maximum
 

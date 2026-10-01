@@ -48,6 +48,11 @@ deliberately ignored: `EvalSymlinks` only works on paths that already
 exist, and "nothing to follow" is the normal case for a path being
 written.
 
+Amended 2026-10-01 (harness review T4): when the path's last component is a
+symlink, `edit_file` edits the resolved target and leaves the link in place.
+Renaming the temp file over the link itself would replace the link with a
+regular file and leave the real target unchanged.
+
 ## Atomic write — no fsync
 
 `writeFileAtomic` writes a temp file in the target's own directory and
