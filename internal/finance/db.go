@@ -153,7 +153,7 @@ func openDBAtContext(ctx context.Context, path string) (*sql.DB, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}

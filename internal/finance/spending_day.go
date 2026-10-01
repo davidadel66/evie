@@ -109,7 +109,7 @@ func openSpendingExisting(ctx context.Context) (*sql.DB, error) {
 		return nil, err
 	}
 	uri := url.URL{Scheme: "file", Path: filepath.Join(home, ".finance", "finance.db")}
-	uri.RawQuery = "mode=rw&_pragma=foreign_keys(1)"
+	uri.RawQuery = "mode=rw&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", uri.String())
 	if err != nil {
 		return nil, err
