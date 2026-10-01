@@ -58,6 +58,7 @@ export const FileIcon = svg(
 );
 
 export const ArrowUp = svg(<path d="M12 19V5M5 12l7-7 7 7" />, 2.2);
+export const StopSquare = svg(<rect x="6" y="6" width="12" height="12" rx="2" />, 2.2);
 
 export const Plus = svg(<path d="M12 5v14M5 12h14" />, 1.8);
 

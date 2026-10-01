@@ -1,5 +1,28 @@
 # serve — decisions
 
+- **2026-10-01 — the owner stops web turns explicitly and compacts from the browser.**
+  Harness review Stage 5 (L1 cancel, C1 web `/compact`). Each web turn runs
+  on its own cancellable child of the runtime context, registered by
+  conversation for exactly the life of its `Send`. `POST /api/cancel` with
+  that conversation's ID cancels it with an owner-stop cause; no new agent
+  seam is needed because the agent already turns caller cancellation into
+  durable `turn_interrupted` evidence, cancelled tool contexts, expired
+  approvals, and a released lease. The stream reports a stop that ended the
+  turn cleanly as `error` with code `turn_stopped` and the message
+  `Turn stopped.`; runtime shutdown, other failures, and a stop joined with
+  a terminal-evidence or lease-release failure keep the ordinary error
+  message. Browser disconnect still never cancels (the 2026-08-23 decision
+  stands). A conversation with a running turn refuses a second chat request
+  before it starts, so a later request can never replace the running turn's
+  stop control. `POST /api/compact` calls `Session.Compact`, the REPL's
+  manual compaction, unchanged; it is refused while a web turn runs in that
+  conversation and counts as active work so selection and model changes
+  wait. Only stable codes and the compaction classification reach the
+  browser. In the composer, Stop appears while a turn streams and returns
+  queued messages to the draft (stop means stop); exact `/compact` runs the
+  command, `/compact args` gets a local usage line, and `//compact` stays
+  message text, matching the REPL. Esc-to-rewind remains out of scope.
+
 - **2026-09-06 — Usage joins Data and the sidebar uses `evie.`.**
   David approved [usage.spec.md](usage.spec.md): a typed owner usage read view
   with explicit source coverage, and the lowercase wordmark with teal period

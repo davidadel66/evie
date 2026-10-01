@@ -5,7 +5,7 @@
 // card resolving into the compact tool row — so the approval lives on the tool
 // item it gates.
 
-import type { ActivityTurn, DiscardReason, FilePreview, PublicPart, ServerEvent } from "./events";
+import { isOwnerStop, type ActivityTurn, type DiscardReason, type FilePreview, type PublicPart, type ServerEvent } from "./events";
 import type { MemoryActivityData } from "../api/memoryEvidence";
 
 export type ApprovalState = "pending" | "approved" | "declined" | "expired";
@@ -94,6 +94,10 @@ export function reduce(
   let turn = current;
   if (current && ev.type === "assistant_done" && ev.terminal) {
     turn = { ...current, status: "complete", finishedAt: ev.finishedAt };
+  } else if (current && isOwnerStop(ev) && current.status === "working") {
+    // The server recorded the interruption before reporting it, so the turn
+    // has a known end; only an unexplained ending asks for a reload.
+    turn = { ...current, status: "incomplete", finishedAt: now() };
   } else if (current && (ev.type === "error" || ev.type === "turn_done") && current.status === "working") {
     turn = { ...current, status: "incomplete" };
   }
@@ -297,13 +301,16 @@ function reduceEvent(items: Item[], ev: Exclude<ServerEvent, { type: "turn_start
         return it;
       });
 
-    case "error":
-      return items.map((item) => {
+    case "error": {
+      const closed = items.map((item): Item => {
         if (item.kind === "assistant") return { ...item, streaming: false, phase: item.phase ?? "commentary" };
         if (item.kind === "reasoning") return { ...item, streaming: false };
         if (item.kind === "tool" && item.approval?.state === "pending") return { ...item, approval: { ...item.approval, state: "expired" } };
         return item;
       });
+      if (!isOwnerStop(ev)) return closed;
+      return [...closed, { kind: "notice", key: nextKey("n"), tone: "warning", text: "You stopped this turn." }];
+    }
   }
 }
 

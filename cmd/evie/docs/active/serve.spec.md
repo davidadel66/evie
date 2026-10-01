@@ -152,9 +152,36 @@ by the provider's tool-call id; the client reducer needs no other message ids.
       the disconnect case is produced by the serve-side approver wrapper
       returning false plus serve substituting the message — simplest coherent
       mechanism wins, but the two texts must differ.
-- [x] Client disconnect mid-turn: the turn runs to completion server-side
-      (ChatStream has no cancellation — out of scope); pending approvals
-      decline as above; events after disconnect are dropped.
+- [x] Client disconnect mid-turn: the turn runs to completion server-side;
+      pending approvals decline as above; events after disconnect are
+      dropped. Disconnect is never a cancel — only `/api/cancel` is.
+- [x] `POST /api/cancel` `{"sessionId": string}` (harness review Stage 5,
+      2026-10-01) stops the named conversation's running web turn by
+      cancelling that turn's own context, which the agent ends through its
+      caller-cancel path: durable `turn_interrupted` (`caller_cancelled`) at
+      the stage it reached, running tools cancelled through their context,
+      a pending approval expired, the lease released, and the session usable
+      for the next turn. The chat stream then ends with `error`
+      `{"message":"Turn stopped.","code":"turn_stopped"}` and `turn_done`.
+      `202 {"status":"stopping"}` when a turn was running (repeat stops while
+      it unwinds are accepted again); `409 {"code":"no_active_turn"}` when
+      that conversation has none, including any other conversation's ID.
+      A second chat request for a conversation with a running turn is
+      refused with the existing 409 before it starts.
+- [x] `POST /api/compact` `{"sessionId": string}` runs the agent's manual
+      compaction (`Session.Compact`, the REPL's `/compact`) for the active
+      conversation. `200 {"outcome":"compacted","eventId"}` or
+      `200 {"outcome":"nothing_to_compact"}`; `409` with code
+      `turn_in_progress` while a web turn runs there, `session_busy` when the
+      agent lock or durable lease is held, `session_unavailable` for a
+      closed session, `context_session_changed` for a different or missing
+      conversation; a failed compaction returns
+      `compaction_failed` with only its classification (`provider_error` or
+      `provider_response_invalid` as 502, `context_overflow` as 422,
+      `local_failure` as 500). While it runs, session and model changes wait
+      as they do for a turn. Both routes are POST-only behind the same
+      guard (405 for other methods, 403 for a wrong content type or foreign
+      origin/host), with a strict one-object JSON body.
 
 ### SSE event vocabulary (server → client)
 
@@ -176,7 +203,7 @@ follows the Events contract in Part 1.
 | `board_end`        | `{"id"}`                                |
 | `critic_note`      | `{"boardId", "note"}`                   |
 | `response_discarded` | `{"reason", "message"}`              |
-| `error`            | `{"message": string}`                   |
+| `error`            | `{"message": string, "code"?: "turn_stopped"}` |
 | `turn_done`        | `{}`                                    |
 
 `response_discarded.reason` is one of `provider_error`,
@@ -356,7 +383,9 @@ approvals). Visual components are covered by the e2e demo instead.
 - Multi-agent orchestration UI (the 100s-of-agents dashboard). v1 is one
   session; the perf patterns (coalescing, block-memoized markdown) are the
   groundwork.
-- Stop/cancel mid-turn (needs context plumbed through ChatStream).
+- ~~Stop/cancel mid-turn~~ — shipped 2026-10-01 as `/api/cancel` (Part 2).
+  Esc-to-rewind (scrubbing the user message back into the composer) stays
+  out of scope.
 - Auth. Loopback only, enforced; revisit before any non-loopback bind.
 - Context trimming, token accounting, model switching UI.
 - Mobile layout polish.

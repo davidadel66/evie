@@ -46,7 +46,10 @@ const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 export default function App() {
   const contextSessions = useContextSessions();
   const chatModels = useChatModels(contextSessions.snapshot?.activeSession?.id);
-  const { items, status, queue, clearQueue, problem, send, answer, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
+  const { items, status, queue, clearQueue, problem, send, answer, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
+  // A running compaction holds the conversation like a turn: the server
+  // refuses session and model changes until it finishes.
+  const working = status === "streaming" || compacting;
   const [views, setViews] = useState<WorkbenchView[]>(initialViews);
   const [activeViewId, setActiveViewId] = useState<WorkbenchView["id"]>("chat");
   const [draft, setDraft] = useState("");
@@ -248,7 +251,7 @@ export default function App() {
         snapshot={contextSessions.snapshot}
         instructions={scopeWorkspace&&<InstructionBadge workspace={scopeWorkspace} refresh={status} onOpen={trigger=>openInstructions(scopeWorkspace,trigger)}/>}
         destination={sidebarDestination(activeView)}
-        busy={contextSessions.busy || status === "streaming"}
+        busy={contextSessions.busy || working}
         mobileOpen={mobileNavOpen}
         collapsed={sidebarCollapsed}
         onSettings={() => setSettingsOpen(true)}
@@ -311,7 +314,7 @@ export default function App() {
                       onChange={setDraft}
                       streaming={status === "streaming"}
                       disabled={contextSessions.busy || historyLoading || !!historyProblem || chatModels.saving || !chatModels.catalog}
-                      modelSelector={<><ModelSelector models={chatModels.catalog?.models ?? []} value={chatModels.catalog?.model} loading={chatModels.loading} saving={chatModels.saving} problem={chatModels.problem ?? (problem?.startsWith("Chat model changed") ? problem : undefined)} disabled={contextSessions.busy || status === "streaming" || queue.length > 0} onChange={model => { void chatModels.select(model); }} onRetry={() => {
+                      modelSelector={<><ModelSelector models={chatModels.catalog?.models ?? []} value={chatModels.catalog?.model} loading={chatModels.loading} saving={chatModels.saving} problem={chatModels.problem ?? (problem?.startsWith("Chat model changed") ? problem : undefined)} disabled={contextSessions.busy || working || queue.length > 0} onChange={model => { void chatModels.select(model); }} onRetry={() => {
                         const sessionId = contextSessions.snapshot?.activeSession?.id;
                         if (sessionId) void contextSessions.select({sessionId}).then(() => { chatModels.refresh(); dismissProblem(); }).catch(() => {});
                       }} />{status === "error" && queue.length > 0 && <button type="button" className="text-muted-text mt-2 text-xs underline" onClick={() => {
@@ -320,9 +323,19 @@ export default function App() {
                       }}>Return queued messages to draft</button>}</>}
                       onSend={() => {
                         if (chatModels.saving || !chatModels.catalog) return;
-                        send(draft);
-                        setDraft("");
+                        if (send(draft)) setDraft("");
                       }}
+                      onStop={() => {
+                        // Stop means stop: queued messages return to the draft
+                        // instead of firing once the turn ends.
+                        if (queue.length > 0) {
+                          setDraft([...queue, draft].filter(Boolean).join("\n\n"));
+                          clearQueue();
+                        }
+                        stop();
+                      }}
+                      stopping={stopping}
+                      notice={notice}
                     />
                   </>
                 ) : (
@@ -350,7 +363,7 @@ export default function App() {
               {activeView.kind === "workspaces" && (
                 <Workspaces
                   snapshot={contextSessions.snapshot}
-                  busy={contextSessions.busy || status === "streaming"}
+                  busy={contextSessions.busy || working}
                   problem={contextSessions.problem}
                   onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
                   onOpenWorkspace={openWorkspace}
@@ -368,7 +381,7 @@ export default function App() {
                   onResearchChanged={contextSessions.refresh}
                   onOpenFiles={() => {setFilesRequest(value => value + 1); setSelectedAction(undefined); setInspectorOverride(undefined); setInspectorOpen(true);}}
                   sessions={workspaceSessions}
-                  busy={contextSessions.busy || status === "streaming"}
+                  busy={contextSessions.busy || working}
                   onNewChat={() => void startWorkspaceChat(activeWorkspace)}
                   onResume={(session) => void selectSession({ sessionId: session.id })}
                 />
@@ -398,7 +411,7 @@ export default function App() {
         </div>
       </div>
       {createWorkspaceOpen && <CreateWorkspaceDialog onClose={() => setCreateWorkspaceOpen(false)} onCreate={registerWorkspace} />}
-      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || status === "streaming"} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} />}
+      {settingsOpen && <SettingsDialog snapshot={contextSessions.snapshot} problem={contextSessions.problem} onRefresh={contextSessions.refresh} busy={contextSessions.busy || working} textSize={textSize} onTextSize={setTextSize} font={chatFont} onFont={setChatFont} onClose={() => setSettingsOpen(false)} onRestore={session => contextSessions.setArchived(session.id, false)} />}
     </div></MemoryPresentationProvider>
   );
 }

@@ -322,6 +322,29 @@ describe("reduce", () => {
     expect(after).toEqual(before.map((item) => ({...item, streaming: false, phase: "commentary"})));
   });
 
+  it("records an owner stop as a finished, incomplete turn with a notice", () => {
+    const start = reduce(appendUser([], "write a long essay"), { type: "turn_started", id: "turn-1", startedAt: 500, status: "working" });
+    const items = fold([
+      { type: "tool_call", id: "c1", name: "edit_file", args: "{}" },
+      { type: "approval_request", id: "ap1", name: "edit_file", args: "{}" },
+      { type: "error", message: "Turn stopped.", code: "turn_stopped" },
+      { type: "turn_done" },
+    ], start, () => 4000);
+    expect(items.map((item) => item.kind)).toEqual(["user", "tool", "notice"]);
+    expect(items[1]).toMatchObject({ approval: { state: "expired" } });
+    expect(items[2]).toMatchObject({ kind: "notice", tone: "warning", text: "You stopped this turn." });
+    for (const item of items) {
+      expect(item.turn).toEqual({ id: "turn-1", startedAt: 500, status: "incomplete", finishedAt: 4000 });
+    }
+  });
+
+  it("keeps an ordinary error's turn unfinished and without a stop notice", () => {
+    const start = reduce(appendUser([], "hi"), { type: "turn_started", id: "turn-1", startedAt: 500, status: "working" });
+    const items = fold([{ type: "error", message: "provider down" }, { type: "turn_done" }], start, () => 4000);
+    expect(items.map((item) => item.kind)).toEqual(["user"]);
+    expect(items[0].turn).toEqual({ id: "turn-1", startedAt: 500, status: "incomplete" });
+  });
+
   it("does not mutate its input", () => {
     const before = fold([{ type: "delta", text: "hi" }]);
     const snapshot = structuredClone(before);

@@ -45,7 +45,8 @@ export type ServerEvent =
       preview?: FilePreview;
     }
   | { type: "response_discarded"; reason: DiscardReason; message: string }
-  | { type: "error"; message: string }
+  /** code "turn_stopped" marks a turn the owner stopped through /api/cancel. */
+  | { type: "error"; message: string; code?: string }
   | { type: "turn_done" };
 
 /** Event names we handle. Anything else on the wire is ignored on purpose:
@@ -68,6 +69,12 @@ const KNOWN = new Set([
 
 /** parseEvent turns one raw SSE block into a typed event, or null if the name
  *  is unknown or the payload isn't the JSON object we expect. */
+/** isOwnerStop reports the error event of a turn the owner stopped: the
+ *  owner's own action, not a failure for the banner. */
+export function isOwnerStop(ev: ServerEvent): boolean {
+  return ev.type === "error" && ev.code === "turn_stopped";
+}
+
 export function parseEvent(name: string, data: string): ServerEvent | null {
   if (!KNOWN.has(name)) return null;
   let payload: unknown;

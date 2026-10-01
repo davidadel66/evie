@@ -1,12 +1,14 @@
 // Everything stateful the reducer can't be: React state, the delta buffer, and
-// the two request paths. Components read `items`/`status` and call
-// `send`/`answer`; nothing else in the app touches the API.
+// the request paths. Components read `items`/`status` and call
+// `send`/`answer`/`stop`; nothing else in the app touches the chat API.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readHistory } from "../api/history";
 import { answerApproval } from "../api/approve";
 import { ApiError, StreamTruncated, streamChat } from "../api/stream";
-import type { ServerEvent } from "./events";
+import { cancelTurn, compactSession, compactionNotice, type ComposerNotice } from "../api/turnControls";
+import { composerCommand } from "../chat/composerCommand";
+import { isOwnerStop, type ServerEvent } from "./events";
 import { appendUser, reduce, setApprovalState, type Item } from "./reducer";
 
 export type Status = "idle" | "streaming" | "error";
@@ -60,8 +62,17 @@ export type Session = {
   clearQueue: () => void;
   /** Banner text when status is "error"; null otherwise. */
   problem: string | null;
-  send: (text: string) => void;
+  /** Sends a message or runs a composer command. False leaves the draft in
+   *  place: nothing was sent, queued, or started. */
+  send: (text: string) => boolean;
   answer: (reqId: string, approve: boolean) => void;
+  /** Asks the server to stop the running turn; its stream reports the end. */
+  stop: () => void;
+  stopping: boolean;
+  /** A `/compact` request is running; messages queue until it finishes. */
+  compacting: boolean;
+  /** The latest composer command's result. */
+  notice: ComposerNotice | null;
   dismissProblem: () => void;
   reset: () => void;
   historyLoading: boolean;
@@ -84,6 +95,9 @@ export function useSession(sessionId?: string, model?: string): Session {
   const [status, setStatus] = useState<Status>("idle");
   const [queue, setQueue] = useState<string[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [compacting, setCompacting] = useState(false);
+  const [notice, setNotice] = useState<ComposerNotice | null>(null);
 
   // Events pool here between flushes. A ref, not state: appending must not
   // render, and the timer reads whatever has landed by the time it fires.
@@ -145,22 +159,47 @@ export function useSession(sessionId?: string, model?: string): Session {
     };
   }, []);
 
+  // Manual compaction shares the turn's session lock server-side, so it is
+  // refused while a turn streams rather than queued behind it.
+  const compact = useCallback((): boolean => {
+    if (status === "streaming") {
+      setNotice({ tone: "warning", text: "Finish or stop the current turn before compacting." });
+      return false;
+    }
+    if (compacting) return false;
+    const generation = epoch.current;
+    setCompacting(true);
+    setNotice({ tone: "info", text: "Compacting context…" });
+    compactSession(sessionId)
+      .then((outcome) => { if (generation === epoch.current) setNotice(compactionNotice(outcome)); })
+      .catch((err: unknown) => { if (generation === epoch.current) setNotice({ tone: "warning", text: describe(err) }); })
+      .finally(() => { if (generation === epoch.current) setCompacting(false); });
+    return true;
+  }, [status, compacting, sessionId]);
+
   const send = useCallback(
-    (text: string) => {
+    (text: string): boolean => {
       const message = text.trim();
-      if (message === "" || !historyReady.current || historyLoading || historyProblem || historySession.current !== sessionId) return;
+      if (message === "" || !historyReady.current || historyLoading || historyProblem || historySession.current !== sessionId) return false;
+      const command = composerCommand(message);
+      if (command?.kind === "usage") {
+        setNotice({ tone: "warning", text: command.message });
+        return false;
+      }
+      if (command?.kind === "compact") return compact();
       // A turn holds the session lock server-side (a second Send is a 409),
       // so mid-turn messages pool here instead. A queued message is NOT in
       // items — the transcript must never claim the server saw something it
       // hasn't.
-      if (status === "streaming") {
+      if (status === "streaming" || compacting) {
         setQueue((q) => [...q, message]);
-        return;
+        return true;
       }
 
       setItems((prev) => appendUser(prev, message));
       setStatus("streaming");
       setProblem(null);
+      setNotice(null);
 
       const ctl = new AbortController();
       abortRef.current = ctl;
@@ -170,7 +209,8 @@ export function useSession(sessionId?: string, model?: string): Session {
         (ev) => {
           if (ctl.signal.aborted) return;
           // Keep the banner and stop activity if the server reports an error.
-          if (ev.type === "error") setProblem(ev.message);
+          // A stop David asked for is his own action, shown in the transcript.
+          if (ev.type === "error" && !isOwnerStop(ev)) setProblem(ev.message);
           enqueue(ev);
         },
         ctl.signal,
@@ -179,20 +219,42 @@ export function useSession(sessionId?: string, model?: string): Session {
       )
         .then(() => {
           if (ctl.signal.aborted) return;
+          setStopping(false);
           // A turn that reported an error still completed; keep the banner but
           // let David type again.
           setStatus((s) => (s === "error" ? s : "idle"));
         })
         .catch((err: unknown) => {
           if (ctl.signal.aborted) return;
+          setStopping(false);
           flush(false);
           setItems((prev) => reduce(prev, { type: "error", message: describe(err) }));
           setProblem(describe(err));
           setStatus("error");
         });
+      return true;
     },
-    [enqueue, flush, status, historyLoading, historyProblem, sessionId, model],
+    [enqueue, flush, compact, status, compacting, historyLoading, historyProblem, sessionId, model],
   );
+
+  // Stopping is a request: the turn keeps streaming until the server records
+  // the interruption and ends the stream, which returns the UI to idle.
+  const stop = useCallback(() => {
+    if (status !== "streaming" || stopping) return;
+    const generation = epoch.current;
+    setStopping(true);
+    cancelTurn(sessionId)
+      .then((result) => {
+        // "idle": the turn ended before the request arrived; its stream is
+        // already finishing on its own.
+        if (generation === epoch.current && result === "idle") setStopping(false);
+      })
+      .catch((err: unknown) => {
+        if (generation !== epoch.current) return;
+        setStopping(false);
+        setProblem(describe(err));
+      });
+  }, [status, stopping, sessionId]);
 
   const answer = useCallback((reqId: string, approve: boolean) => {
     const generation = epoch.current;
@@ -228,6 +290,9 @@ export function useSession(sessionId?: string, model?: string): Session {
     setItems([]);
     setQueue([]);
     setProblem(null);
+    setStopping(false);
+    setCompacting(false);
+    setNotice(null);
     setStatus("idle");
   }, []);
 
@@ -265,15 +330,16 @@ export function useSession(sessionId?: string, model?: string): Session {
 
   // Drain the queue: a finished turn fires the next waiting message. Only
   // "idle" drains — after an error the queue parks until David sends
-  // something manually, rather than firing into a broken stream.
+  // something manually, rather than firing into a broken stream. A running
+  // compaction holds the queue the same way a turn does.
   useEffect(() => {
-    if (status !== "idle" || queue.length === 0 || !historyReady.current || historySession.current !== sessionId) return;
+    if (status !== "idle" || compacting || queue.length === 0 || !historyReady.current || historySession.current !== sessionId) return;
     const [next, ...rest] = queue;
     setQueue(rest);
     send(next);
-  }, [status, queue, send, sessionId]);
+  }, [status, compacting, queue, send, sessionId]);
 
-  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
+  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

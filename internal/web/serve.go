@@ -103,6 +103,10 @@ type Server struct {
 
 	mu      sync.Mutex
 	pending map[string]chan bool
+
+	// turns holds the stop control of each running web turn, keyed by its
+	// conversation. Guarded by sessionMu.
+	turns map[memory.SessionID]*webTurn
 }
 
 // ReceiptInspector is the read-only, Kernel-owned session audit boundary.
@@ -120,6 +124,7 @@ func NewServer(session *agent.Session) *Server {
 		session:   session,
 		pending:   make(map[string]chan bool),
 		terminals: make(map[string]*terminalEntry),
+		turns:     make(map[memory.SessionID]*webTurn),
 	}
 }
 
@@ -179,6 +184,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/chat", s.guard(s.handleChat))
 	mux.HandleFunc("POST /api/approve", s.guard(s.handleApprove))
+	mux.Handle("/api/cancel", s.managementRoute(s.handleCancel))
+	mux.Handle("/api/compact", s.managementRoute(s.handleCompact))
 	if s.manager != nil {
 		mux.Handle("/api/plugins/list", s.managementRoute(s.handlePluginList))
 		mux.Handle("/api/plugins/lifecycle", s.managementRoute(s.handlePluginLifecycle))
@@ -322,7 +329,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
 		return
 	}
+	turnKey := s.activeSession.ID
+	turnCtx, stopTurn := context.WithCancelCause(turnLifecycleContext(r))
+	defer stopTurn(nil)
+	turn := &webTurn{stop: stopTurn}
 	if session != nil {
+		if !s.beginWebTurn(turnKey, turn) {
+			s.sessionMu.Unlock()
+			jsonError(w, http.StatusConflict, "a turn is already in progress")
+			return
+		}
 		s.activeTurns++
 	}
 	s.sessionMu.Unlock()
@@ -331,6 +347,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() {
+		s.finishWebTurn(turnKey, turn)
 		s.sessionMu.Lock()
 		s.activeTurns--
 		s.sessionMu.Unlock()
@@ -342,8 +359,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(turnLifecycleContext(r))
+	measurementCtx, finalizeMeasurement := agent.BeginResponseMeasurement(turnCtx)
 	sendErr := session.Send(measurementCtx, req.Message, ev, s.approver(r.Context(), ev))
+	s.finishWebTurn(turnKey, turn)
 
 	if errors.Is(sendErr, eviedb.ErrSessionModelChanged) && !ev.wrote {
 		jsonError(w, http.StatusConflict, "Chat model changed; refresh before sending")
@@ -353,7 +371,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusConflict, "a turn is already in progress")
 		return
 	}
-	if sendErr != nil {
+	if stoppedByOwner(turnCtx, sendErr) {
+		ev.TurnStopped()
+	} else if sendErr != nil {
 		ev.Error(sendErr.Error())
 	}
 	outputErr := ev.TurnDone()

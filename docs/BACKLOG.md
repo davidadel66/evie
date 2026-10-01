@@ -25,12 +25,12 @@ Details live in active plans/specs and completed feature records.
   runtime, agent profiles (`build`/`plan`/subagents), durable sessions,
   verification, recovery, and deferred extensions are mapped under
   `cmd/evie/docs/research/opencode-backlog/README.md`
-- escape/cancel turns (web) — Esc×1 while thinking = scrub the user msg from
+- escape-to-rewind (web) — Esc×1 while thinking = scrub the user msg from
   s.messages + restore prompt to composer; Esc×2 (or Esc after content/tools
-  start) = plain cancel. Needs: ctx plumbed Send→ChatStream, POST /api/cancel
-  (disconnect ≠ cancel is deliberate), Session rollback of the lone user
-  message. Harness capabilities in internal/agent, UX web-only. Deferred
-  2026-08-08 for bigger fish.
+  start) = plain cancel. Plain cancel shipped 2026-10-01 as the composer Stop
+  button over POST /api/cancel (disconnect ≠ cancel still deliberate); what
+  remains needs Session rollback of the lone user message (harness capability
+  in internal/agent, UX web-only). Deferred 2026-08-08 for bigger fish.
 - web frontend (`evie serve`) — rich output door (images/diffs/diagrams); decided over desktop/TUI, see decisions.md
 - subagents — evie spawns scoped sub-conversations; design session when long tasks clog one context
 - dynamic tool loading — deferred schemas (researched, design in task notes); trigger ~20 tools

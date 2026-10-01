@@ -111,6 +111,33 @@ David approved [usage.spec.md](usage.spec.md). Usage now joins the Data source
 switcher. The sidebar brand is `evie.` in tight lowercase lettering with a teal
 period, superseding the original E badge and uppercase wordmark.
 
+## Turn controls amendment (2026-10-01)
+
+Harness review Stage 5 adds two composer controls over the
+[serve](serve.spec.md) `/api/cancel` and `/api/compact` routes:
+
+- **Stop.** While a turn streams, a keyboard-accessible `Stop` button sits
+  beside send. It posts the displayed conversation's ID and shows
+  `Stopping…` until the stream ends; the UI returns to idle when the server
+  reports the interruption (`error` code `turn_stopped`, then `turn_done`).
+  The stop is not a banner: the turn's activity reads as incomplete with a
+  known end, pending approvals expire, partial text keeps its discarded
+  warning, and a `You stopped this turn.` notice joins the transcript.
+  Queued messages return to the draft instead of firing. A stop that finds
+  no running turn is ignored; any other refusal uses the banner.
+- **`/compact`.** Exact `/compact` (trimmed) in the composer runs manual
+  compaction instead of sending a message. Arguments get a local
+  `Usage: /compact` line and keep the draft; `//compact` and `/compactor`
+  are ordinary messages. While a turn streams it is refused locally. While
+  it runs, new messages queue and session/model changes are disabled. One
+  status line below the composer reports `Context compacted.`, `Nothing
+  eligible for compaction yet.`, a refusal, or `Compaction failed
+  (<category>). The conversation is unchanged.` It clears on the next sent
+  message or session change. Compaction changes no transcript items.
+
+No new dependencies. Tests cover the wire clients, command parsing, the
+stop reducer rule and the composer controls.
+
 ## What the design specifies
 
 Dark desktop app, 13px base, IBM Plex Sans / IBM Plex Mono / Caveat (whiteboard
@@ -274,6 +301,9 @@ Reducer rules (each one gets a test):
   `expired`. A discarded assistant or warning remains discarded and unchanged.
 - `error` → status becomes `error` with the message; the item list is untouched
   (banner surface, per the design).
+- `error` with code `turn_stopped` → no banner; streaming items close, pending
+  approvals expire, the turn becomes `incomplete` with a client-side finish
+  time, and a `You stopped this turn.` warning notice is appended.
 
 `useSession` owns everything stateful the reducer can't: **deltas accumulate in
 a ref and flush on a single shared ~50ms timer** (never `setState` per token —

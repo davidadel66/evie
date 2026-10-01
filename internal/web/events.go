@@ -119,7 +119,7 @@ func (e *sseEvents) ResponseDiscarded(reason agent.DiscardReason, message string
 	}{reason, message})
 }
 
-// The three below aren't part of agent.Events — they're the server's own
+// The four below aren't part of agent.Events — they're the server's own
 // vocabulary around a turn (see serve.spec.md).
 
 func (e *sseEvents) ApprovalRequest(id, name, args string, preview *tools.FileChangePreview) {
@@ -135,6 +135,16 @@ func (e *sseEvents) Error(message string) {
 	e.emit("error", struct {
 		Message string `json:"message"`
 	}{message})
+}
+
+// TurnStopped reports a turn the owner stopped through /api/cancel. It is an
+// error event, so any client still ends the turn, with a stable code that lets
+// the browser present the owner's own action instead of a failure banner.
+func (e *sseEvents) TurnStopped() {
+	e.emit("error", struct {
+		Message string `json:"message"`
+		Code    string `json:"code"`
+	}{"Turn stopped.", "turn_stopped"})
 }
 
 func (e *sseEvents) TurnDone() error {
