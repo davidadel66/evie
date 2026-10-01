@@ -60,6 +60,9 @@ function Pending({ tool, onAnswer, compact }: Props) {
           {view.statement}
         </pre>
       )}
+      {!compact && !preview && view.shape === "json" && view.evieProposed && (
+        <p className="text-amber-ink px-[14px] pt-3 text-sm">Evie’s proposal: this value is not in your message. Approving saves it as Evie-proposed, not as something you said.</p>
+      )}
       {!compact && !preview && view.shape === "json" && (
         <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.json}

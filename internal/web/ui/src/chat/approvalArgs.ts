@@ -6,7 +6,7 @@ export type ApprovalView =
   | { shape: "memory"; subject: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string }
   | { shape: "diff"; subject: string; oldText: string; newText: string }
   | { shape: "statement"; subject: string; statement: string }
-  | { shape: "json"; subject: string; json: string };
+  | { shape: "json"; subject: string; json: string; evieProposed?: boolean };
 
 export function readApprovalArgs(name: string, args: string, ownerName = "You"): ApprovalView {
   const parsed = parseObject(args);
@@ -28,6 +28,11 @@ export function readApprovalArgs(name: string, args: string, ownerName = "You"):
     const evieProposed = str(source?.authority) === "evie_proposed";
     const identities = Array.isArray(parsed.identities) ? parsed.identities.map(object).filter((identity) => identity !== null).map(identityLine) : [];
     if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args) };
+  }
+
+  if (name === "memory_correct_claim" && parsed) {
+    // A replacement value not in the owner's words is Evie-proposed (M5).
+    return { shape: "json", subject: "", json: pretty(args), evieProposed: str(object(parsed.source)?.authority) === "evie_proposed" };
   }
 
   if (name === "edit_file" && parsed) {

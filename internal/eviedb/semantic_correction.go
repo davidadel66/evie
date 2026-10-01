@@ -2,7 +2,6 @@ package eviedb
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -282,9 +281,11 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 			return memory.CorrectClaimProposal{}, errors.New("global semantic scope is not registered")
 		}
 	}
-	if _, err := loadEntityByID(ctx, s.db, request.Replacement.SubjectEntityID, targetKey, targetKey); err != nil {
+	replacementSubject, err := loadEntityByID(ctx, s.db, request.Replacement.SubjectEntityID, targetKey, targetKey)
+	if err != nil {
 		return memory.CorrectClaimProposal{}, fmt.Errorf("resolve replacement subject: %w", err)
 	}
+	replacementEntities := []entityWithAlias{{entity: replacementSubject}}
 	predicate := memory.SemanticPredicate{}
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT predicate_id, token, version, label, object_constraint, cardinality
@@ -297,9 +298,11 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 		if predicate.ObjectConstraint != memory.ConstraintEntity {
 			return memory.CorrectClaimProposal{}, errors.New("replacement object violates its Predicate constraint")
 		}
-		if _, err := loadEntityByID(ctx, s.db, request.Replacement.Object.EntityID, targetKey, targetKey); err != nil {
+		replacementObject, err := loadEntityByID(ctx, s.db, request.Replacement.Object.EntityID, targetKey, targetKey)
+		if err != nil {
 			return memory.CorrectClaimProposal{}, fmt.Errorf("resolve replacement object: %w", err)
 		}
+		replacementEntities = append(replacementEntities, entityWithAlias{entity: replacementObject})
 	} else if predicate.ObjectConstraint != memory.PredicateObjectConstraint(request.Replacement.Object.Literal.Kind) {
 		return memory.CorrectClaimProposal{}, errors.New("replacement literal violates its Predicate constraint")
 	}
@@ -313,6 +316,14 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 	if err != nil {
 		return memory.CorrectClaimProposal{}, err
 	}
+	// The replacement value binds to the owner's words exactly as a remembered
+	// value does (harness review M5).
+	needs, err := claimBindingNeeds(ctx, s.db, source.Evidence, predicate.Token, predicate.Label, request.Replacement.Object.Literal,
+		[]string{"global", targetKey}, replacementEntities...)
+	if err != nil {
+		return memory.CorrectClaimProposal{}, err
+	}
+	bindOwnerSource(source.Evidence, needs).apply(&source)
 	operationID, err := newSemanticID()
 	if err != nil {
 		return memory.CorrectClaimProposal{}, err
@@ -406,10 +417,7 @@ func validateCorrectClaimProposal(proposal memory.CorrectClaimProposal) error {
 			return errors.New("correction proposal transition changed")
 		}
 	}
-	if proposal.Source.EventID != request.SourceEventID || proposal.Source.Actor != memory.SemanticActorOwner ||
-		proposal.Source.SourceType != memory.SourceTypeUserMessage || proposal.Source.Authority != memory.AuthorityOwnerStatement ||
-		proposal.Source.EventPart != memory.EvidenceContent || proposal.Source.LocatorKind != memory.LocatorWhole ||
-		proposal.Source.LocatorValue != "" || proposal.Source.Eligibility != memory.EligibilityEligible || !proposal.Source.Create ||
+	if proposal.Source.EventID != request.SourceEventID || validateRememberSourceShape(proposal.Source) != nil || !proposal.Source.Create ||
 		proposal.Source.OperationID != proposal.OperationID {
 		return errors.New("correction proposal source is invalid")
 	}
@@ -427,11 +435,9 @@ func validateCorrectionSource(ctx context.Context, writer turnLeaseWriteExecutor
 	`, proposal.Source.EventID).Scan(&sessionID, &eventType, &role, &content, &recordedAt); err != nil {
 		return err
 	}
-	digest := sha256.Sum256([]byte(content))
 	observed, err := time.Parse(time.RFC3339Nano, recordedAt)
 	if err != nil || sessionID != string(proposal.SessionID) || eventType != string(memory.EventUserMessage) ||
-		role != string(memory.RoleUser) || proposal.Source.Evidence != content ||
-		proposal.Source.EvidenceSHA256 != fmt.Sprintf("sha256:%x", digest) ||
+		role != string(memory.RoleUser) || verifyRememberSourceEvidence(proposal.Source, content) != nil ||
 		proposal.Source.ObservedAt != formatSemanticTime(observed) || proposal.Source.ScopeKey != proposal.Scope.Key {
 		return errors.New("correction source evidence changed")
 	}
@@ -970,6 +976,9 @@ func (s *Store) inspectClaimsInScope(
 		for index := range sources {
 			if _, allowed := allowedSourceScopes[sources[index].ScopeKey]; !allowed {
 				sources[index].Evidence = ""
+			}
+			if err := narrowForeignWholeSource(ctx, queryer, &sources[index], claim, readerFromAllowedSet(allowedSourceScopes)); err != nil {
+				return result, false, err
 			}
 		}
 		inspection := memory.ClaimInspection{

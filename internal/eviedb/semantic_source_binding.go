@@ -1,6 +1,7 @@
 package eviedb
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -464,4 +465,81 @@ func verifyRememberSourceEvidence(source memory.SemanticSource, content string) 
 		}
 	}
 	return nil
+}
+
+// sourceReader is the Context Scope and session a source is rendered for.
+type sourceReader struct{ context, session string }
+
+func readerFromScope(scope memory.ScopeContext) sourceReader {
+	return sourceReader{context: scopeKeyForContext(scope), session: "session:" + string(scope.SessionID)}
+}
+
+// readerFromAllowed recovers the reader from its exact allowed read scopes:
+// global, at most one Workspace or project, and its session.
+func readerFromAllowed(allowed []string) sourceReader {
+	reader := sourceReader{context: "global"}
+	for _, key := range allowed {
+		switch {
+		case strings.HasPrefix(key, "session:"):
+			reader.session = key
+		case key != "global":
+			reader.context = key
+		}
+	}
+	return reader
+}
+
+func readerFromAllowedSet(allowed map[string]struct{}) sourceReader {
+	keys := make([]string, 0, len(allowed))
+	for key := range allowed {
+		keys = append(keys, key)
+	}
+	return readerFromAllowed(keys)
+}
+
+// wholeSourceNeedsNarrowing reports a whole-message owner statement shown
+// outside the Context Scope it was said in. Remember operations accepted
+// before Stage 14 cite the whole message this way.
+func wholeSourceNeedsNarrowing(source memory.SemanticSource, reader sourceReader) bool {
+	return source.Evidence != "" && source.LocatorKind == memory.LocatorWhole && source.Authority == memory.AuthorityOwnerStatement &&
+		source.SourceType == memory.SourceTypeUserMessage && source.ScopeKey != reader.context && source.ScopeKey != reader.session
+}
+
+// narrowForeignWholeSource renders a whole-message owner Source read from
+// another Context Scope as only the sentence holding its Claim's value, found
+// with the same rules as owner-span binding; with no such sentence it renders
+// no text. The Source's locator, hash and authority are unchanged: this is
+// read-time rendering, not a rewrite of accepted history (harness review M5).
+// Readers in the Source's own scope keep the whole message.
+func narrowForeignWholeSource(ctx context.Context, q semanticInspectionQueryer, source *memory.SemanticSource, claim memory.SemanticClaim, reader sourceReader) error {
+	if !wholeSourceNeedsNarrowing(*source, reader) {
+		return nil
+	}
+	needs, err := claimValueNeeds(ctx, q, source.Evidence, claim)
+	if err != nil {
+		return err
+	}
+	binding := bindOwnerSource(source.Evidence, needs)
+	source.Evidence = ""
+	if binding.authority == memory.AuthorityOwnerStatement {
+		source.Evidence = binding.evidence
+	}
+	return nil
+}
+
+// narrowForeignWholeSourceLink is narrowForeignWholeSource for a Source Link
+// inspected on its own.
+func narrowForeignWholeSourceLink(ctx context.Context, q semanticInspectionQueryer, source *memory.SemanticSource, reader sourceReader) error {
+	if !wholeSourceNeedsNarrowing(*source, reader) {
+		return nil
+	}
+	var claimID memory.SemanticID
+	if err := q.QueryRowContext(ctx, `SELECT claim_id FROM semantic_source_links WHERE source_link_id = ?`, source.ID).Scan(&claimID); err != nil {
+		return err
+	}
+	claim, err := loadSemanticClaim(ctx, q, claimID)
+	if err != nil {
+		return err
+	}
+	return narrowForeignWholeSource(ctx, q, source, claim, reader)
 }

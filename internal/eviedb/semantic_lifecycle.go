@@ -1128,6 +1128,11 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 			return result, err
 		}
 		redactSourceInspections(result.Sources, allowedScopes)
+		for index := range result.Sources {
+			if err := narrowForeignWholeSource(ctx, query, &result.Sources[index].Source, claim, readerFromScope(scope)); err != nil {
+				return result, err
+			}
+		}
 		if result.Status == memory.SemanticStatusActive {
 			supported := false
 			for _, source := range result.Sources {
@@ -1163,6 +1168,9 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 		result.Source = &source
 		if _, allowed := allowedScopes[source.ScopeKey]; !allowed {
 			result.Source.Evidence = ""
+		}
+		if err := narrowForeignWholeSourceLink(ctx, query, result.Source, readerFromScope(scope)); err != nil {
+			return result, err
 		}
 	case memory.SemanticObjectGraphLink:
 		link, err := loadGraphLink(ctx, query, id)

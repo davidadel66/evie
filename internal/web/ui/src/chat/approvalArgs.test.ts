@@ -63,6 +63,12 @@ it("says when a proposed memory is not in the owner's words", () => {
   expect(owned).toMatchObject({ evieProposed: false, evidence: "My favorite color is teal." });
 });
 
+it("says when a proposed correction is not in the owner's words", () => {
+  const args = (authority: string) => JSON.stringify({ kind: "correct_claim", replacement_claim: { object: { literal: { kind: "text", value: "Acme Offshore" } } }, source: { authority, evidence: authority === "evie_proposed" ? "" : "Correction: my payee is Acme Offshore." } });
+  expect(readApprovalArgs("memory_correct_claim", args("evie_proposed"))).toMatchObject({ shape: "json", evieProposed: true });
+  expect(readApprovalArgs("memory_correct_claim", args("owner_statement"))).toMatchObject({ shape: "json", evieProposed: false });
+});
+
 it("lists the Entities an entity memory reuses or creates", () => {
   const view = readApprovalArgs("memory_remember_entity", JSON.stringify({
     scope: { scope_key: "global" }, predicate: { label: "loves" }, claim: { subject_entity_id: "s", object_entity_id: "o" },

@@ -366,7 +366,14 @@ message that contains it (whole content when that is the entire message); a
 value the message does not contain is `evie_proposed`, quotes nothing, and is
 labelled on the approval card; sources render only their span; retirement
 suppresses only the span; reused and same-named Entities are named on the
-card and ambiguous names are marked in recall.
+card and ambiguous names are marked in recall. A follow-up commit applies the
+same binding to `memory_correct_claim` replacement values, and at read time
+narrows a pre-Stage-14 whole-message Global source shown in a Workspace or
+project session to the sentence holding its value (or no text), without
+rewriting history. The scale numbers below were re-run after both commits
+and are unchanged; the corpus's two corrections are single sentences that
+state their replacement ("Correction: my sister's birthday is June 13, not
+June 3."), so they are cited exactly as before.
 
 **Regression check.** Both tiers were run on the Stage 13 code and on this
 change with the committed corpus v2 and report v3 baselines. Both reports are
@@ -408,14 +415,25 @@ span-bound memory keeps the message's other sentence recallable; retiring an
 Evie-proposed memory neither hides nor labels its request; promotion keeps
 the Evie-proposed label; Alias reuse, stable-ID reuse and a new same-named
 Entity are shown for approval; and two Entities named Sarah are marked and
-told apart in recall while a unique name is not. The matching rules have
-table tests in `internal/eviedb/semantic_source_binding_test.go`.
+told apart in recall while a unique name is not. Corrections are covered
+there too: a multi-sentence correction cites its one sentence, a replacement
+absent from the request is Evie-proposed and replays, and a model correction
+after "Read this article and update my payee if needed." reaches the card as
+Evie-proposed with no quote. `internal/eviedb/semantic_legacy_source_test.go`
+accepts pre-Stage-14 whole-message Global remembers and checks that a
+Workspace reader sees only the value's sentence (or no text when none
+matches) on search, Claim query, Claim and Source Link inspection and object
+listing, while a Global reader still sees the whole message; it also checks
+that the dense index embeds the plain Claim text, so a later same-named Entity
+does not make an indexed vector look stale. The matching rules have table
+tests in `internal/eviedb/semantic_source_binding_test.go`.
 
 | Target (plan acceptance) | Met | Evidence |
 | --- | --- | --- |
 | M5: a proposed memory's source is the exact quoted span | yes | span locator and hash on the proposal; replay verified |
 | M5: a value absent from the owner's words is Evie-proposed and the card says so | yes | approval arguments and card test |
-| M5: Global text does not reach Workspace sessions | yes | Workspace recall carries only the span |
+| M5: Global text does not reach Workspace sessions | yes | Workspace recall carries only the span, including for pre-Stage-14 whole-message sources |
+| M5: corrections bind like remembers | yes | correction span and Evie-proposed tests |
 | M6: alias reuse is shown on the card | yes | `identities` on the proposal and card test |
 | M6: ambiguous aliases are marked in recall | yes | `ambiguous_names` and identifying text |
 

@@ -680,6 +680,9 @@ func (s *Store) collectExactObjects(ctx context.Context, queryer semanticInspect
 				if !containsString(allowedSemanticReadScopeKeys(scope), source.ScopeKey) {
 					source.Evidence = ""
 				}
+				if err := narrowForeignWholeSourceLink(ctx, queryer, &source, readerFromScope(scope)); err != nil {
+					return err
+				}
 				row.Source = &source
 			}
 			visible[semanticNodeKey{Kind: kind, ID: id}] = row

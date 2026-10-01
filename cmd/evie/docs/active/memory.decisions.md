@@ -50,9 +50,21 @@
     `graph-replay-recovery`) now record Evie-proposed sources; their expected
     scope hashes and operation frontiers and the manifest digest were
     re-recorded.
-  - *Out of scope.* `memory_correct_claim` replacement values still cite the
-    whole correction request as `owner_statement`; binding them is the same
-    mechanism but was not part of this decision.
+  - *Corrections.* A `memory_correct_claim` replacement is the same
+    model-proposed path, so its Source binds the same way: the span holding
+    the replacement value (a literal, or an ordinary subject's and object
+    Entity's names), or `evie_proposed` when the correction request does not
+    contain it. The correction card shows the same plain notice. Accepted
+    whole-message corrections replay as before.
+  - *Legacy whole sources.* History is not rewritten. At read time, a
+    whole-message `owner_statement` Source shown outside the Context Scope it
+    was said in (a Global message read from a Workspace or project session)
+    renders only the sentence holding its Claim's value, found with the same
+    matcher; with no matching sentence it renders no text. Its locator, hash,
+    authority and identity are unchanged. Readers in the Source's own scope
+    (and its own session) keep the whole message. This applies on every
+    rendering path: recall, identity matches, Claim queries, object and
+    Source Link inspection, and object listings.
 
 - **2026-10-01 — Entity reuse and ambiguous names are visible (harness
   review M6, Stage 14).** Applies the plan's M6 default. Resolution itself is
@@ -70,7 +82,9 @@
   `ambiguous_names` (name, Entity ID, type, count) and its text names the
   Entity: `Sarah [person 1f3c9a2e; 2 entities named "sarah"] — plays: Tennis`.
   Ambiguity uses current state, so a newly ambiguous name refreshes evidence
-  already in a turn. Merge and split remain out of scope.
+  already in a turn. The marker is reader presentation only: the dense index
+  embeds the plain Claim text, so a later same-named Entity cannot make an
+  indexed vector look stale. Merge and split remain out of scope.
 
 - **2026-10-01 — Predicate drift neither mints needless versions nor hides
   conflicts (harness review M4, Stage 13).** The encodings contract says the

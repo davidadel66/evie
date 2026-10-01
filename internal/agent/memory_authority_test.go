@@ -375,3 +375,91 @@ func TestRetiringAnEvieProposedMemoryLeavesTheRequestMessageUnlabelled(t *testin
 		t.Fatal("retiring an Evie-proposed memory hid the owner's unrelated request message")
 	}
 }
+
+func (f *retrievalFixture) prepareCorrection(record memory.Session, saved memory.RememberLiteralProposal, command, value string) memory.CorrectClaimProposal {
+	f.t.Helper()
+	proposal, err := f.session(record, nil).PrepareCorrectClaim(context.Background(), f.store, command, memory.CorrectClaimRequest{
+		IdempotencyKey: "idem:v1:" + uuid.NewString(), OldClaimID: saved.ClaimID, Mode: memory.CorrectionError,
+		Replacement: memory.ClaimProposition{SubjectEntityID: saved.Subject.ID, PredicateID: saved.Predicate.ID, Polarity: memory.PolarityAffirmed,
+			Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: value}}}})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return proposal
+}
+
+// A correction's replacement value is proposed the same way as a remembered
+// value, so it binds to the owner's words the same way (harness review M5).
+func TestCorrectionCitesOnlyTheOwnerSpanOfItsReplacement(t *testing.T) {
+	f := newRetrievalFixture(t)
+	ctx := context.Background()
+	global := f.global()
+	saved := f.prepareLiteral(global, "Remember that my mom lives in Boston.", "mom_city", "Boston")
+	f.approveLiteral(global, saved)
+	command := "We talked about the clinic and the kids yesterday. Correction: my mom lives in Chicago, not Boston."
+	span := "Correction: my mom lives in Chicago, not Boston."
+	proposal := f.prepareCorrection(global, saved, command, "Chicago")
+	start := strings.Index(command, span)
+	if proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.LocatorKind != memory.LocatorUTF8ByteRange ||
+		proposal.Source.LocatorValue != fmt.Sprintf("%d:%d", start, start+len(span)) || proposal.Source.Evidence != span ||
+		proposal.Source.EvidenceSHA256 != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(span))) {
+		t.Fatalf("correction source is not the exact owner span: %+v", proposal.Source)
+	}
+	if _, err := f.session(global, nil).ResolveCorrectClaim(ctx, f.store, proposal, tools.Approved); err != nil {
+		t.Fatal(err)
+	}
+
+	other := f.prepareLiteral(global, "Remember that my dad lives in Denver.", "dad_city", "Denver")
+	f.approveLiteral(global, other)
+	absent := f.prepareCorrection(global, other, "Fix my dad's city using the article I pasted.", "Lisbon")
+	if absent.Source.Authority != memory.AuthorityEvieProposed || absent.Source.LocatorKind != memory.LocatorWhole || absent.Source.Evidence != "" {
+		t.Fatalf("correction value absent from the owner's words kept owner authority or quoted the request: %+v", absent.Source)
+	}
+	corrected, err := f.session(global, nil).ResolveCorrectClaim(ctx, f.store, absent, tools.Approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.refresh()
+	evidence := suppliedEvidence(t, func() *fakeClient { client, _ := f.search(f.global(), "Lisbon"); return client }())
+	found := false
+	for _, item := range evidence {
+		if item.ClaimID == corrected.ReplacementClaimID {
+			found = len(item.Sources) == 1 && item.Sources[0].Authority == memory.AuthorityEvieProposed && item.Sources[0].Evidence == ""
+		}
+	}
+	if !found {
+		t.Fatalf("Evie-proposed correction is missing or lost its label: %+v", evidence)
+	}
+	if verification, err := f.store.VerifySemanticProjection(ctx); err != nil || !verification.Valid {
+		t.Fatalf("bound corrections do not replay: %+v: %v", verification, err)
+	}
+}
+
+func TestModelProposedCorrectionFromFetchedTextIsLabelledOnTheApprovalCard(t *testing.T) {
+	f := newRetrievalFixture(t)
+	global := f.global()
+	saved := f.prepareLiteral(global, "Remember that my preferred payee is Northwind Credit Union.", "preferred_payee", "Northwind Credit Union")
+	f.approveLiteral(global, saved)
+	args, _ := json.Marshal(map[string]string{
+		"idempotency_key": "idem:v1:" + uuid.NewString(), "claim_id": string(saved.ClaimID), "subject_entity_id": string(saved.Subject.ID),
+		"predicate_id": string(saved.Predicate.ID), "literal_kind": "text", "literal_value": "Acme Offshore Holdings", "polarity": "affirmed", "mode": "error",
+	})
+	client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("correct", "memory_correct_claim", string(args))), assistantStep("Updated.", nil)}}
+	var shown string
+	approve := func(_ context.Context, name, arguments string, _ *tools.FileChangePreview) tools.Decision {
+		if name == "memory_correct_claim" {
+			shown = arguments
+		}
+		return tools.Declined
+	}
+	if err := f.session(global, client).Send(context.Background(), "Read this article and update my payee if needed.", &recorder{}, approve); err != nil {
+		t.Fatal(err)
+	}
+	var proposal memory.CorrectClaimProposal
+	if err := json.Unmarshal([]byte(shown), &proposal); err != nil {
+		t.Fatalf("approval arguments are not the prepared correction: %q: %v", shown, err)
+	}
+	if proposal.Source.Authority != memory.AuthorityEvieProposed || proposal.Source.Evidence != "" || strings.Contains(shown, "Read this article") {
+		t.Fatalf("approval card presented an injected correction as the owner's statement: %s", shown)
+	}
+}

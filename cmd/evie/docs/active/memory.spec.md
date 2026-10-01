@@ -244,16 +244,18 @@ execute again.
 15. Workflow Runs use separate durable run and step leases. A background run
     never reuses or revives a conversational turn lease, and an unresolved
     workflow effect blocks dependent nodes until reconciliation.
-16. A remembered value carries owner authority only when the cited owner
-    message contains it. Its Source Link is the exact span of that message
-    holding the value, cited by UTF-8 byte range and the span's hash (whole
-    content when the span is the entire message). A value the message does not
-    contain is `evie_proposed`: the Source Link cites the message by hash, quotes
-    none of it, and the approval says the value is not in the owner's words.
-    Every rendering of a Claim's source shows only its bound span, and
-    retirement suppresses that span, never the rest of the message. Approval
-    never upgrades the recorded authority (harness review M5; see the
-    2026-10-01 memory decision).
+16. A remembered or corrected value carries owner authority only when the
+    cited owner message contains it. Its Source Link is the exact span of that
+    message holding the value, cited by UTF-8 byte range and the span's hash
+    (whole content when the span is the entire message). A value the message
+    does not contain is `evie_proposed`: the Source Link cites the message by
+    hash, quotes none of it, and the approval says the value is not in the
+    owner's words. Every rendering of a Claim's source shows only its bound
+    span, and retirement suppresses that span, never the rest of the message.
+    A whole-message owner Source recorded earlier and read outside the Context
+    Scope it was said in renders only the sentence holding its Claim's value,
+    or no text. Approval never upgrades the recorded authority (harness review
+    M5; see the 2026-10-01 memory decision).
 
 ## Scope And Authority
 

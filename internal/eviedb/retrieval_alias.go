@@ -143,6 +143,11 @@ func resolveRetrievalIdentityMatches(ctx context.Context, q semanticInspectionQu
 			if err != nil {
 				return nil, err
 			}
+			if eligible {
+				if err := narrowForeignWholeSource(ctx, q, &source, *evidence.Claim, readerFromAllowed(metadata.AllowedScopes)); err != nil {
+					return nil, err
+				}
+			}
 			if !eligible || source.Evidence == "" {
 				continue
 			}

@@ -251,6 +251,9 @@ func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer,
 			return e, false, err
 		}
 		if ok {
+			if err := narrowForeignWholeSource(ctx, q, &projected, claim, readerFromAllowed(metadata.AllowedScopes)); err != nil {
+				return e, false, err
+			}
 			eligibleSources = append(eligibleSources, projected)
 		}
 		if len(eligibleSources) == 3 {

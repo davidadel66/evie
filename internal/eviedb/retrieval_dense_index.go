@@ -227,7 +227,13 @@ func (s *Store) denseClaimDocument(ctx context.Context, q semanticInspectionQuer
 		Correction, CurrentCorrection memory.CorrectionMode
 		Effective                     *memory.ValidTime
 	}{*evidence.Claim, evidence.Status, evidence.CurrentStatus, evidence.CorrectionMode, evidence.CurrentCorrectionMode, evidence.EffectiveValidTime})
-	doc.scope, doc.text = claim.ScopeKey, evidence.Text
+	// Embed the plain Claim text: the reader-facing ambiguity marker (harness
+	// review M6) changes with other Entities and would make vectors look stale.
+	plain, err := renderClaimText(ctx, q, *evidence.Claim)
+	if err != nil {
+		return doc, false, err
+	}
+	doc.scope, doc.text = claim.ScopeKey, plain
 	doc.sourceHash, doc.revisionHash, doc.contentHash = memory.CompilerHash(sources), memory.CompilerHash(revision), memory.CompilerHash([]byte(doc.text))
 	return doc, true, nil
 }

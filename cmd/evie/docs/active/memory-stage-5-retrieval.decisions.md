@@ -5,7 +5,10 @@
   decisions on owner-span binding and Entity identity.
   - A Claim's source renders only its bound span on every path, so a Global
     memory read in a Workspace or project session no longer carries the rest
-    of the Global message.
+    of the Global message. A whole-message owner Source accepted before Stage
+    14 is narrowed at read time for such readers to the sentence holding its
+    Claim's value (same matcher), or to no text; its reference (locator and
+    hash) is unchanged, and Global readers still see the whole message.
   - An approved `evie_proposed` Claim stays retrievable (the owner approved
     it): the accepted-memory authority allowlist gains `evie_proposed`, its
     source carries the label and no text, and the cited message's hash is
