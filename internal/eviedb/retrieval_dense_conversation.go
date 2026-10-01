@@ -240,121 +240,97 @@ func pruneDenseEventParts(ctx context.Context, q *sql.Conn, generation string, i
 	return nil
 }
 
-func (s *Store) denseConversationCandidates(ctx context.Context, tx *sql.Tx, scope memory.ScopeContext, query memory.RetrievalQuery, known time.Time, remaining int, prepared *denseQueryPreparation) ([]memory.RetrievalEvidence, *memory.RetrievalCoverage, bool, bool, error) {
+type denseConversationResult struct {
+	evidence              []memory.RetrievalEvidence
+	coverage              *memory.RetrievalCoverage
+	incomplete, truncated bool
+	cut                   bool // the scan budget left vectors uncompared
+}
+
+func (s *Store) denseConversationCandidates(ctx context.Context, tx *sql.Tx, scope memory.ScopeContext, query memory.RetrievalQuery, known time.Time, remaining int, prepared *denseQueryPreparation, cutoff int64) (denseConversationResult, error) {
 	if prepared == nil {
-		return nil, nil, false, false, nil
+		return denseConversationResult{}, nil
 	}
 	vectors, err := prepared.wait(ctx)
 	coverage := prepared.coverage
+	result := denseConversationResult{coverage: &coverage, incomplete: true}
 	if err != nil {
-		return nil, &coverage, true, false, err
+		return result, err
 	}
 	if len(vectors) == 0 {
-		return nil, &coverage, true, false, nil
+		return result, nil
 	}
 	if remaining <= 0 {
-		return nil, &coverage, coverage.Pending > 0, true, nil
+		result.incomplete, result.truncated = coverage.Pending > 0, true
+		return result, nil
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT v.event_id,v.byte_start,v.byte_end,v.source_hash,v.revision_hash,v.content_hash,v.vector FROM memory_dense_event_vectors v JOIN events e ON e.id=v.event_id
+	// Keep one hit beyond the remaining candidate work so exhausting it is
+	// still reported as truncation.
+	scan, err := denseScan(ctx, vectors[0], remaining+1, func(id string, start, end, limit int) (*sql.Rows, error) {
+		return tx.QueryContext(ctx, `SELECT v.event_id,v.byte_start,v.byte_end,v.source_hash,v.revision_hash,v.content_hash,'',v.vector FROM memory_dense_event_vectors v JOIN events e ON e.id=v.event_id
  WHERE v.generation=? AND v.scope_key=? AND NOT EXISTS(SELECT 1 FROM memory_dense_event_dirty d WHERE d.generation=v.generation AND d.event_id=v.event_id)
  AND `+conversationObservedTimeSQL+`<=?
- AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
+ AND (e.session_id!=? OR e.sequence<?)
  AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY v.event_id,v.byte_start LIMIT ?`, coverage.Generation, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, denseVectorScanLimit+1)
-	if err != nil {
-		return nil, &coverage, true, false, err
-	}
-	type hit struct {
-		id       memory.EventID
-		document denseEventDocument
-		score    float64
-	}
-	var hits []hit
-	scanned := 0
-	truncated, incomplete := false, coverage.Pending > 0
-	for rows.Next() {
-		var item hit
-		var encoded []byte
-		if err := rows.Scan(&item.id, &item.document.start, &item.document.end, &item.document.sourceHash, &item.document.revisionHash, &item.document.contentHash, &encoded); err != nil {
-			rows.Close()
-			return nil, &coverage, true, truncated, err
-		}
-		if scanned == denseVectorScanLimit {
-			truncated = true
-			break
-		}
-		scanned++
-		vector, ok := decodeDenseVector(encoded)
-		if !ok {
-			incomplete = true
-			coverage.State = "unavailable"
-			continue
-		}
-		for i, value := range vector {
-			item.score += float64(value) * float64(vectors[0][i])
-		}
-		if item.score >= 0.25 {
-			hits = append(hits, item)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, &coverage, true, truncated, err
-	}
-	rows.Close()
-	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].score != hits[j].score {
-			return hits[i].score > hits[j].score
-		}
-		if hits[i].id != hits[j].id {
-			return hits[i].id < hits[j].id
-		}
-		return hits[i].document.start < hits[j].document.start
+ AND (v.event_id,v.byte_start,v.byte_end)>(?,?,?)
+ ORDER BY v.event_id,v.byte_start,v.byte_end LIMIT ?`, coverage.Generation, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, cutoff, query.ExcludeCurrentRequestCopies, scope.SessionID, id, start, end, limit)
 	})
-	var evidence []memory.RetrievalEvidence
-	for _, item := range hits {
-		if len(evidence) == 8 {
+	if err != nil {
+		return result, err
+	}
+	result.incomplete = coverage.Pending > 0
+	if scan.invalid {
+		result.incomplete = true
+		coverage.State = "unavailable"
+	}
+	if scan.cut {
+		result.incomplete, result.truncated, result.cut = true, true, true
+	}
+	for _, item := range scan.hits {
+		if len(result.evidence) == 8 {
 			break
 		}
 		if remaining <= 0 {
-			truncated = true
+			result.truncated = true
 			break
 		}
 		remaining--
-		e, documents, err := s.denseEventDocuments(ctx, tx, item.id)
+		e, documents, err := s.denseEventDocuments(ctx, tx, memory.EventID(item.id))
 		if errors.Is(err, ErrConversationAssociation) {
-			incomplete = true
+			result.incomplete = true
 			continue
 		}
 		if err != nil {
-			return nil, &coverage, true, truncated, err
+			result.incomplete = true
+			return result, err
 		}
 		var current *denseEventDocument
 		for i := range documents {
 			doc := &documents[i]
-			if doc.start == item.document.start && doc.end == item.document.end && doc.sourceHash == item.document.sourceHash && doc.revisionHash == item.document.revisionHash && doc.contentHash == item.document.contentHash {
+			if doc.start == item.start && doc.end == item.end && doc.sourceHash == item.sourceHash && doc.revisionHash == item.revisionHash && doc.contentHash == item.contentHash {
 				current = doc
 				break
 			}
 		}
 		if current == nil {
-			incomplete = true
+			result.incomplete = true
 			continue
 		}
 		candidate := conversationTypedExcerpt(e, conversationReadSpan{evidenceSpan{current.start, current.end}, memory.SemanticStatusActive, memory.SemanticStatusActive}, known, known, query.Intent)
 		resolved, eligible, err := s.resolveConversationReference(ctx, tx, scope, candidate.Reference())
 		if err != nil {
-			return nil, &coverage, true, truncated, err
+			result.incomplete = true
+			return result, err
 		}
 		if !eligible {
 			continue
 		}
 		resolved.Paths = []string{"conversation_dense"}
 		resolved.RetrievalGeneration = coverage.Generation
-		evidence = append(evidence, resolved)
-		truncated = truncated || current.start > 0 || current.end < len(e.content)
+		result.evidence = append(result.evidence, resolved)
+		result.truncated = result.truncated || current.start > 0 || current.end < len(e.content)
 	}
-	return evidence, &coverage, incomplete, truncated, nil
+	return result, nil
 }
 
 func fuseConversationEvidence(lexical, dense []memory.RetrievalEvidence, limit int) ([]memory.RetrievalEvidence, bool) {

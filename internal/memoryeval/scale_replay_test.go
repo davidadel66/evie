@@ -38,9 +38,11 @@ import (
 const (
 	scaleUpdateEnv = "EVIE_MEMORY_SCALE_UPDATE"
 	scaleTierEnv   = "EVIE_MEMORY_SCALE_EVAL"
-	// Mirrors the production dense scan bound (eviedb denseVectorScanLimit)
-	// so the report can say which targets a bounded scan could reach.
-	scaleDenseScanLimit = 4096
+	// Mirrors the production dense scan budget (eviedb denseVectorScanBudget)
+	// so the report can say which targets a budgeted scan could reach.
+	scaleDenseScanLimit = 65536
+	// The single-page bound before Stage 12; the large tier is sized past it.
+	scaleLegacyDenseScanBound = 4096
 )
 
 func TestMemoryScaleReplayDefaultTier(t *testing.T) {
@@ -52,12 +54,15 @@ func TestMemoryScaleReplayDefaultTier(t *testing.T) {
 
 func TestMemoryScaleReplayLargeTier(t *testing.T) {
 	if os.Getenv(scaleTierEnv) != memoryeval.ScaleTierLarge {
-		t.Skipf("set %s=%s to run the dense tier beyond %d vectors", scaleTierEnv, memoryeval.ScaleTierLarge, scaleDenseScanLimit)
+		t.Skipf("set %s=%s to run the dense tier beyond %d vectors", scaleTierEnv, memoryeval.ScaleTierLarge, scaleLegacyDenseScanBound)
 	}
 	runScaleTier(t, memoryeval.LargeScaleCorpusOptions(), filepath.Join("testdata", "scale-baseline-large.json"), true)
 }
 
 func runScaleTier(t *testing.T, options memoryeval.ScaleCorpusOptions, baselinePath string, dense bool) {
+	if memoryeval.ScaleGapDenseScan != memory.RetrievalGapDenseScan {
+		t.Fatal("the scorer's dense scan gap no longer mirrors the production signal")
+	}
 	corpus := memoryeval.GenerateScaleCorpus(options)
 	if err := corpus.Validate(); err != nil {
 		t.Fatalf("invalid generated corpus: %v", err)
@@ -459,17 +464,20 @@ func (r *scaleReplay) probe(probe memoryeval.ScaleProbe) memoryeval.ScaleObserva
 				continue
 			}
 			// The model-visible outcome is framed metadata: status, match count,
-			// lexical coverage and a truncation flag. Dense coverage is not
-			// exposed, so "partial" is the only incompleteness signal it sees.
+			// lexical coverage, a truncation flag and any coverage gaps. Dense
+			// coverage itself is not exposed; "partial" alone cannot tell a scan
+			// cut from pending index work, so the distinct gap is read too.
 			lines := strings.Split(message.Content, "\n")
 			var result struct {
-				Status string `json:"status"`
+				Status string   `json:"status"`
+				Gaps   []string `json:"gaps"`
 			}
 			if len(lines) != 3 || json.Unmarshal([]byte(lines[1]), &result) != nil {
 				r.t.Fatalf("probe %s tool outcome has an unexpected frame: %q", probe.ID, message.Content)
 			}
 			observation.ToolStatus = append(observation.ToolStatus, result.Status)
 			observation.ToolPartial = result.Status == memory.RetrievalPartial
+			observation.Gaps = scaleAddGaps(observation.Gaps, result.Gaps)
 		}
 	}
 	data, ok := scaleMemoryData(request)
@@ -479,12 +487,14 @@ func (r *scaleReplay) probe(probe memoryeval.ScaleProbe) memoryeval.ScaleObserva
 	}
 	var payload struct {
 		Status   string                     `json:"status"`
+		Gaps     []string                   `json:"gaps"`
 		Evidence []memory.RetrievalEvidence `json:"evidence"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(data, "EVIE_MEMORY_DATA\n")), &payload); err != nil {
 		r.t.Fatalf("probe %s memory data: %v", probe.ID, err)
 	}
 	observation.Status = payload.Status
+	observation.Gaps = scaleAddGaps(observation.Gaps, payload.Gaps)
 	for _, evidence := range payload.Evidence {
 		observation.Items = append(observation.Items, r.item(evidence))
 	}
@@ -587,6 +597,16 @@ func (r *scaleReplay) denseMetrics(corpus memoryeval.ScaleCorpus, observations [
 		}
 	}
 	report.Targets = memoryeval.ScaleTargetsFor(*report)
+}
+
+func scaleAddGaps(gaps, more []string) []string {
+	for _, gap := range more {
+		if !slices.Contains(gaps, gap) {
+			gaps = append(gaps, gap)
+		}
+	}
+	slices.Sort(gaps)
+	return gaps
 }
 
 func scaleMemoryData(request openrouter.ChatRequest) (string, bool) {

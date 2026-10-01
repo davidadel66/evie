@@ -34,7 +34,7 @@ deadline.
 | Candidate similarity | Cosine, minimum 0.25 |
 | Dense generator result list | 8 eligible candidates |
 | Active dense conversation candidate work | 24 lexical suggestions, remaining 40 of the shared 64 for dense validation |
-| Vector scoring scan | 4096 stored parts per selected scope query |
+| Vector scoring scan | Every stored part, read 1,024 at a time with a running top-k; at most 65,536 per generator per query, and stopping with a reported `dense_scan_budget` gap when under 125 ms of the deadline remains (Stage 12; was a single 4,096-part read) |
 | Fusion | Reciprocal rank, k=60, after authoritative eligibility |
 | New embedding inputs per maintenance call | 16 total across Claims and events |
 | Projection chunk / overlap | 240 / 48 UTF-8 bytes |

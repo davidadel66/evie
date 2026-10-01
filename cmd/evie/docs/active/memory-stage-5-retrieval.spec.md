@@ -142,7 +142,8 @@ explain what was supplied for the original answer, even after memory changes.
    and transparent reranking by relevance, entity match, relationship support,
    authority, temporal applicability, corroboration, and evidence diversity.
    Recency is contextual rather than a universal truth ranking. Do not pad a
-   result to its budget with weak evidence.
+   result to its budget with weak evidence. Automatic Recall's measured
+   relevance floor is recorded in the adjacent decisions (2026-10-01).
 
 8. **Evidence identity.** Results distinguish accepted Claim evidence from
    Conversation Excerpts; an excerpt does not require a fabricated Claim ID.
@@ -182,6 +183,8 @@ explain what was supplied for the original answer, even after memory changes.
     unavailable memory is necessary, explain the limitation. Exhaustion reports
     supported findings and unresolved gaps. Exact numerical defaults and
     accounting policy are measured deliverables, not values invented here.
+    A dense scan cut by its budget reports a distinct coverage gap; see the
+    adjacent decisions (2026-10-01).
 
 12. **Context rendering and egress.** Supply bounded, source-bearing
     EVIE_MEMORY_DATA as a synthetic user-role message immediately before the

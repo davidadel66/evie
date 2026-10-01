@@ -162,6 +162,49 @@ func TestScaleScoreClassifiesItemsAndStaleOutcomes(t *testing.T) {
 	}
 }
 
+// The M7 target accepts "found or reported as truncated": a missed dense
+// target counts only when its outcome carried the dense scan gap, which is
+// distinct from "partial" (pending index work also produces that).
+func TestScaleScoreCountsDenseScanGapAsReportedTruncation(t *testing.T) {
+	c := GenerateScaleCorpus(LargeScaleCorpusOptions())
+	var dense []ScaleProbe
+	for _, probe := range c.Probes {
+		if probe.Family == ScaleFamilyDenseCoverage {
+			dense = append(dense, probe)
+		}
+	}
+	observe := func(missed string, gap bool) []ScaleObservation {
+		var observations []ScaleObservation
+		for _, probe := range dense {
+			observation := ScaleObservation{ProbeID: probe.ID, Status: "partial", ToolPartial: true, Items: []ScaleItem{}}
+			if probe.ID != missed {
+				observation.Items = append(observation.Items, ScaleItem{Key: probe.Required[0], Kind: "conversation_excerpt", Area: ScaleAreaGlobal})
+			} else if gap {
+				observation.Gaps = []string{"dense_scan_budget"}
+			}
+			observations = append(observations, observation)
+		}
+		return observations
+	}
+	m7 := func(report ScaleReport) ScaleTarget {
+		for _, target := range report.Targets {
+			if target.ID == "M7.dense_covers_all_vectors" {
+				return target
+			}
+		}
+		t.Fatal("no M7 target")
+		return ScaleTarget{}
+	}
+	reported := ScoreScale(c, observe(dense[3].ID, true))
+	if reported.Dense.TargetsFound != len(dense)-1 || reported.Dense.MissedWithScanGap != 1 || reported.Dense.ScanGapOutcomes != 1 || !m7(reported).Met {
+		t.Fatalf("a gap-reported miss did not satisfy M7: %+v %+v", reported.Dense, m7(reported))
+	}
+	silent := ScoreScale(c, observe(dense[3].ID, false))
+	if silent.Dense.MissedWithScanGap != 0 || m7(silent).Met {
+		t.Fatalf("a silent miss (partial only) satisfied M7: %+v %+v", silent.Dense, m7(silent))
+	}
+}
+
 func TestScaleScoreReportsUndefinedRatesAsNull(t *testing.T) {
 	c := GenerateScaleCorpus(DefaultScaleCorpusOptions())
 	report := ScoreScale(c, []ScaleObservation{{ProbeID: "auto.unrelated.math", Status: "empty", Items: []ScaleItem{}}})

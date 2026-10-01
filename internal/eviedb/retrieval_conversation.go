@@ -219,13 +219,17 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		// independent dense generator has contributed eligible suggestions.
 		lexicalLimit = retrievalLexicalCandidates
 	}
+	cutoff, err := conversationSessionCutoff(ctx, tx, scope.SessionID, query.Relevance)
+	if err != nil {
+		return retrievalReadFailure(ctx, result, err)
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT f.event_id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
  WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
  AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=f.generation AND g.state='active')
  AND `+conversationObservedTimeSQL+`<=?
- AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
+ AND (e.session_id!=? OR e.sequence<?)
  AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY bm25(memory_retrieval_event_fts_v3),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, lexicalLimit+1)
+ ORDER BY bm25(memory_retrieval_event_fts_v3),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, cutoff, query.ExcludeCurrentRequestCopies, scope.SessionID, lexicalLimit+1)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -247,6 +251,12 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		return retrievalReadFailure(ctx, result, err)
 	}
 	rows.Close()
+	var frequency map[string]int
+	if query.Relevance != nil && len(ids) > 0 {
+		if frequency, err = relevanceFrequencies(ctx, tx, query.Relevance, scopeKeyForContext(scope), known, scope.SessionID, cutoff); err != nil {
+			return retrievalReadFailure(ctx, result, err)
+		}
+	}
 	for _, id := range ids {
 		e, eligible, err := loadConversationEvidence(ctx, tx, id)
 		if err != nil {
@@ -263,6 +273,9 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		if !matched {
 			continue
 		}
+		if query.Relevance != nil && !relevantToRequest(e.content[span.start:span.end], query.Relevance, frequency) {
+			continue
+		}
 		if len(result.Evidence) >= query.Limit {
 			result.Truncated = true
 			break
@@ -270,13 +283,17 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		result.Truncated = result.Truncated || span.start > 0 || span.end < len(e.content)
 		result.Evidence = append(result.Evidence, conversationTypedExcerpt(e, span, known, known, query.Intent))
 	}
-	dense, denseCoverage, denseIncomplete, denseTruncated, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-len(ids), prepared)
+	dense, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-len(ids), prepared, cutoff)
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
-	result.DenseCoverage = denseCoverage
+	result.DenseCoverage = dense.coverage
+	denseIncomplete, denseTruncated := dense.incomplete, dense.truncated
+	if dense.cut {
+		result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
+	}
 	var fusedTruncated bool
-	result.Evidence, fusedTruncated = fuseConversationEvidence(result.Evidence, dense, query.Limit)
+	result.Evidence, fusedTruncated = fuseConversationEvidence(result.Evidence, dense.evidence, query.Limit)
 	result.Truncated = result.Truncated || denseTruncated || fusedTruncated
 	if err = tx.Commit(); err != nil {
 		return retrievalReadFailure(ctx, result, err)

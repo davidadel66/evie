@@ -48,6 +48,7 @@ type retrievalCandidates struct {
 	truncated        bool
 	denseCoverage    *memory.RetrievalCoverage
 	denseIncomplete  bool
+	denseCut         bool
 	densePreparation *denseQueryPreparation
 }
 

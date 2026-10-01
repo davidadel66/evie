@@ -51,6 +51,8 @@ type retrievalTurn struct {
 	outcomes       []string
 	withheld       bool
 	lastReceipt    *memory.RetrievalReceipt
+	// gaps names coverage a Kernel budget cut short during this turn.
+	gaps []string
 }
 
 func (s *Session) newRetrievalTurn() *retrievalTurn {
@@ -129,6 +131,11 @@ func (r *retrievalTurn) search(ctx context.Context, query memory.RetrievalQuery)
 	}
 	if !slices.Contains(r.outcomes, result.Status) {
 		r.outcomes = append(r.outcomes, result.Status)
+	}
+	for _, gap := range result.Gaps {
+		if !slices.Contains(r.gaps, gap) {
+			r.gaps = append(r.gaps, gap)
+		}
 	}
 	r.status = combinedRecallStatus(r.outcomes)
 	if slices.Contains(r.outcomes, memory.RetrievalExhausted) {
@@ -262,10 +269,11 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 	data := struct {
 		Version        string                     `json:"version"`
 		Status         string                     `json:"status"`
+		Gaps           []string                   `json:"gaps,omitempty"`
 		ReadingGuide   string                     `json:"reading_guide,omitempty"`
 		HistoricalOnly []string                   `json:"historical_only,omitempty"`
 		Evidence       []memory.RetrievalEvidence `json:"evidence"`
-	}{Version: retrievalVersion, Status: r.status, Evidence: r.evidence}
+	}{Version: retrievalVersion, Status: r.status, Gaps: r.gaps, Evidence: r.evidence}
 	if len(r.evidence) > 0 {
 		data.ReadingGuide = "current_status:retired cannot establish a current fact, even with status:active at as_known_at. Prefer paraphrases with original event citations. Use quotation marks only for verbatim source text, preserving case and punctuation; keep formatting outside the quotation. Cite that source entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation."
 	}
@@ -283,7 +291,7 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 	if err != nil || memory.HasRetrievalSecret(encoded) {
 		receipt.Evidence = nil
 		receipt.Status = "unavailable"
-		data.Status, data.Evidence = receipt.Status, nil
+		data.Status, data.Evidence, data.Gaps = receipt.Status, nil, nil
 		data.ReadingGuide, data.HistoricalOnly = "", nil
 		encoded, _ = json.Marshal(data)
 	}

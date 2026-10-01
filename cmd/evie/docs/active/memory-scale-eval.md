@@ -4,7 +4,9 @@ Stage 11 of the 2026-09-30 harness review. This is a measuring instrument, not
 a fix: it records how today's recall behaves at realistic history size so that
 Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
-current behavior, recorded as such; none is accepted as correct.
+current behavior, recorded as such; none is accepted as correct. Stage 12's
+before/after results follow the Stage 11 baseline; the committed baselines
+are the Stage 12 report.
 
 ## What runs
 
@@ -38,7 +40,8 @@ seeds the UUID source so a given code version reproduces the same IDs. This
 changes no production behavior. The default tier's report was checked to be
 identical under a different UUID seed, so only the large tier's dense
 reachability depends on ID order. Per-probe item lists are sorted because rank
-order is not measured.
+order is not measured. Stage 12 made the dense scan cover every vector, so
+dense reachability no longer depends on ID order either.
 
 ## Paths and labels
 
@@ -57,6 +60,10 @@ order is not measured.
 - **Low-content follow-ups** ("thanks!", "ok", "perfect"): every injected
   item is unwanted, following the M1 default that injected items must match a
   distinctive current-message term.
+- **Scan gap.** An observation keeps the coverage gaps reported by either
+  model-visible surface: the tool outcome and `EVIE_MEMORY_DATA`. A missed
+  dense target counts as *reported truncated* only when its outcome carried
+  `dense_scan_budget`; `partial` alone does not count (report version 2).
 - **Stale.** An item is *presented as current* when it has current intent,
   active status and current status, and no relation or conflict marking.
   Correction and retirement checks miss when a stale item is presented as
@@ -73,16 +80,27 @@ EVIE_MEMORY_SCALE_EVAL=large go test ./internal/memoryeval/ -run TestMemoryScale
 ```
 
 The default tier runs in the ordinary suite (about 7 s here) and skips under
-`-short`. The large tier (about 60 s) grows Global history past the
-4,096-vector dense scan bound and enables a deterministic concept-hash
+`-short`. The large tier (about 60 s) grows Global history past the former
+single-read 4,096-vector dense bound and enables a deterministic concept-hash
 embedder served on loopback, like the existing dense acceptance tests.
+
+The frozen 24-case development and held-out workloads of the Stage 5
+assessment can be re-run through the same scripted local probe, lexical only,
+to check that a recall-policy change loses no source obligation:
+
+```sh
+EVIE_MEMORY_INTEGRATED_LEXICAL=1 go test ./internal/agent/ -run TestMemoryStage5IntegratedLexicalRecall -v
+```
+
+It makes no reader-model call. The original assessment used the real
+`all-minilm:22m` endpoint, which this check does not need or reproduce.
 
 The baseline is a ratchet: any change in the report, better or worse, fails
 until the baseline is re-recorded in the same change with
 `EVIE_MEMORY_SCALE_UPDATE=1`. The baseline diff is the before/after report.
 Scope leaks or unmapped items always fail.
 
-## Baseline (corpus `memory-scale-replay-v1`, seed 20261001)
+## Stage 11 baseline (corpus `memory-scale-replay-v1`, seed 20261001)
 
 Default tier: 171 sessions (117 Global, 54 project), 1,142 owner and 1,127
 assistant messages, 80 probes. Lexical retrieval only, the production default
@@ -148,6 +166,98 @@ earlier messages from the current session (7 items in the default tier). In
 both follow-up probes the re-injected prelude takes one of the two excerpt
 slots, and in one of them the planted fact is missed.
 
+## Stage 12: recall relevance (M1) and dense coverage (M7)
+
+The rules and thresholds are recorded in
+[the retrieval decisions](memory-stage-5-retrieval.decisions.md) (2026-10-01).
+In short: low-content messages do not search; an earlier topic joins only a
+short or referring follow-up, or ranks a standalone request it shares a word
+with; a lexical Conversation Excerpt must match a distinctive request term,
+and two terms for requests of three or more; messages still in the provider
+request are not recalled; the dense scan pages through every vector and
+reports `dense_scan_budget` if its budget ever cuts coverage. Model-directed
+tools, accepted Claims and dense hits keep their existing selection.
+
+Default tier, before → after (unchanged cells show one value):
+
+| Path | Family | Items | Unwanted | Private | Same session | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 81 → 48 | 30 → 4 | 4 → 0 | 7 → 0 | 0.6296 → 0.9167 | 21/25 |
+| automatic | relevant | 24 → 15 | 4 → 2 | 2 → 0 | 0 | 0.8333 → 0.8667 | 11/11 |
+| automatic | paraphrase | 2 → 0 | 0 | 0 | 0 | 1.0000 → n/a | 0/2 |
+| automatic | follow-up | 4 | 2 → 0 | 0 | 2 → 0 | 0.5000 → 1.0000 | 1/2 |
+| automatic | low-content | 13 → 0 | 13 → 0 | 0 | 5 → 0 | 0.0000 → n/a | n/a |
+| automatic | privacy | 5 → 4 | 3 → 2 | 1 → 0 | 0 | 0.4000 → 0.5000 | n/a |
+| automatic | unrelated | 6 → 0 | 6 → 0 | 1 → 0 | 0 | 0.0000 → n/a | n/a |
+| automatic | stale | 27 → 25 | 2 → 0 | 0 | 0 | 0.9259 → 1.0000 | 9/10 |
+| memory_search | all | 15 | 0 | 0 | 0 | 1.0000 | 11/11 |
+| memory_search_conversations | all | 97 | 10 | 1 | 0 | 0.8969 | 10/12 |
+
+Automatic unwanted-item rate 0.3704 → 0.0833 (4/48); probes with an unwanted
+item 17 → 2. The four left are two dinner-planning messages for "Suggest a
+dinner for me tonight." (`dinner` is the request's only known word) and two
+interval-run logs for the CI-results question, which share `today` and `run`.
+The paraphrase probe that lost its two tolerated items had matched only the
+word `jog`. Recall is unchanged at 21/25: the same two paraphrases, the
+`work` stale probe (the request says "work", the saved Claim "employer") and
+the basil follow-up remain missed; the dates follow-up still finds its booking, now without its own
+prelude taking a slot. Stale outcomes are identical (14 misses of 18, all 10
+controls pass): Stage 12 does not change M2, M3 or M4 behavior.
+
+Large tier, before → after:
+
+| Path | Family | Items | Unwanted | Private | Same session | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 85 → 69 | 30 → 12 | 4 | 6 → 0 | 0.6471 → 0.8261 | 22/25 → 23/25 |
+| automatic | follow-up | 4 | 3 → 1 | 0 → 1 | 2 → 0 | 0.2500 → 0.7500 | 0/2 → 1/2 |
+| automatic | low-content | 14 → 0 | 14 → 0 | 0 | 4 → 0 | 0.0000 → n/a | n/a |
+| automatic | privacy | 5 → 4 | 3 → 2 | 1 → 0 | 0 | 0.4000 → 0.5000 | n/a |
+| automatic | unrelated | 6 | 6 | 1 → 0 | 0 | 0.0000 | n/a |
+| memory_search_conversations | all | 166 → 187 | 20 → 19 | 3 → 4 | 0 | 0.8795 → 0.8984 | 29/36 → 36/36 |
+| memory_search_conversations | dense coverage | 51 → 72 | 0 | 0 | 0 | 1.0000 | 17/24 → 24/24 |
+
+Automatic unwanted-item rate 0.3529 → 0.1739. All 6,429 Global vectors are
+now compared and all 24 dense-only targets are found; no outcome reported a
+scan gap, because none was cut. Ten of the twelve remaining automatic
+unwanted items, and all four private ones, are dense-only hits: the
+concept-hash proxy scores "What's my home city these days?" close to "I've
+had a headache for a few days" because it embeds words, not meaning. The
+lexical floor deliberately does not gate dense hits (it would remove
+paraphrase recall), and calibrating an automatic dense floor against this
+proxy would tune to an artifact; that needs the real model. The other two are
+the CI probe's `today`/`run` match. With full coverage the conversation tool
+also reaches more vectors: one more private message, one fewer unwanted item
+overall.
+
+Frozen 24-case workloads, lexical, scripted local probe:
+
+| Workload | Condition | Before | After |
+| --- | --- | ---: | ---: |
+| Held-out v2 | automatic, initial obligations | 22/28 | 22/28 |
+| Held-out v2 | automatic plus deeper, union | 26/28 | 26/28 |
+| Held-out v2 | non-gold first-dispatch items | 24 of 54 | 19 of 48 |
+| Development v1 | automatic, initial obligations | 24/27 | 23/27 |
+| Development v1 | automatic plus deeper, union | 25/27 | 25/27 |
+
+The held-out missing obligations are the same six before and after. The
+development workload loses one automatic obligation: dev20's assistant
+suggestion shares only the word "suggestion" with a fourteen-term question,
+the same shape as the ORM question's one shared private word, so the floor
+drops it; the owner message it answers is still delivered, and bounded
+expansion recovers the suggestion (deeper union unchanged). The graph-bridge
+Claim in dev11 depends on random-ID ties: it was missing in the one run of the
+old code and in three of four runs of the new one (the fourth gave 24/27).
+
+| Target (plan acceptance) | Stage 11 | Stage 12 | Observed (default tier; M7 large tier) |
+| --- | --- | --- | --- |
+| M1: low-content follow-ups inject nothing unwanted | no | yes | 0 items, 6 probes |
+| M1: privacy probes inject no private item | no | yes | 0 private items, 3 probes (both tiers) |
+| M2: corrected source not current | no | no | 4 misses of 6 checks |
+| M2: retired fact restated is flagged | no | no | 4 misses of 6 checks |
+| M3: different wording detected | no | no | 2 misses of 2 checks |
+| M4: drift still warns | no | no | 4 misses of 4 checks |
+| M7: dense covers all vectors or reports the gap | no | yes | 24 of 24 targets found |
+
 ## Decisions and spec relationship
 
 - **Synthetic, not derived.** `memory.spec.md` Stage 9 asks for fixtures
@@ -164,16 +274,18 @@ slots, and in one of them the planted fact is missed.
   the stale rules from the Stage 13 acceptance wording. When Stage 12 or 13
   defines its actual marking (for example a historical label or a truncation
   field), the scorer's *presented as current* rule and the M7 target must be
-  taught that signal in the same change.
+  taught that signal in the same change. Stage 12 taught the M7 target the
+  `dense_scan_budget` gap; Stage 13 still owns the historical marking.
 
 ## Limitations
 
 - Projects stand in for Workspaces. A Workspace session needs a composition
   receipt from the preset manager; projects follow the same conversation-scope
   rule (spec decision 5) and exercise the same isolation.
-- M7 is measured on conversation vectors. Claim vectors share the same
-  4,096 bound, but exceeding it needs over 4,096 approved Claims, which is
-  neither realistic nor fast.
+- M7 is measured on conversation vectors. Claim vectors use the same paged
+  scan and budget; exceeding the old bound would need over 4,096 approved
+  Claims, which is neither realistic nor fast, so the shared scan is covered
+  by focused tests instead.
 - The fake embedder is a deterministic concept-hash proxy, not a semantic
   model; dense precision numbers describe the mechanism, not model quality.
 - Probes use scripted queries and a scripted provider. Answer quality,

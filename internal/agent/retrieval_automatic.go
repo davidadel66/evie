@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -13,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const automaticRecallVersion = "bounded-reference-lexical-v2"
+const automaticRecallVersion = "bounded-reference-lexical-v3"
 
 const automaticReferenceReadingGuide = "Resolve references using relevant earlier discussion and eligible original sources; compaction continuity and proposed identities are hypotheses, not new facts. Use a targeted memory read if useful. When remaining recipient ambiguity materially changes the answer, ask one focused question before giving person-specific recommendations. Do not ask merely because multiple people are known when context already identifies the recipient."
 
@@ -22,8 +23,13 @@ const automaticReferenceReadingGuide = "Resolve references using relevant earlie
 type automaticRecallPlan struct {
 	query       string
 	exact       []string
+	relevance   memory.RetrievalRelevance
 	diagnostics memory.RetrievalInterpretation
 }
+
+// A follow-up of at most this many content terms may depend on an earlier
+// topic it shares no word with ("and the basil?", "what dates did I book?").
+const automaticShortFollowUpTerms = 2
 
 func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root memory.EventID) automaticRecallPlan {
 	plan := automaticRecallPlan{diagnostics: memory.RetrievalInterpretation{Version: automaticRecallVersion, Outcome: "insufficient"}}
@@ -52,6 +58,22 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 	}
 	terms := recallTerms(current, 16)
 	plan.diagnostics.CurrentBytes = len(current)
+	plan.relevance.Current = append([]string(nil), terms...)
+	if summary != nil {
+		// Messages before the retained frontier left the provider request
+		// and may be recalled again; later ones are still visible.
+		plan.relevance.LiveFrom = summary.FirstRetainedEventID
+	}
+	refers := refersToEarlierSubject(current)
+	if len(terms) == 0 && !refers && len(plan.exact) == 0 {
+		// Acknowledgements and other low-content messages ask for nothing, so
+		// they neither search history nor revive an earlier topic.
+		return plan
+	}
+	// Only a follow-up may take its subject from an earlier topic it shares
+	// no word with. A standalone request keeps its own subject; earlier roots
+	// that share one of its words only help rank its matches.
+	followUp := refers || len(terms) <= automaticShortFollowUpTerms
 	var continuityTerms []string
 	if summary != nil {
 		continuity := boundedRecallText(summary.Content, 512)
@@ -64,6 +86,7 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		terms           []string
 		index           int
 		score           int
+		own             int
 		distinctiveness int
 	}
 	var candidates []contextCandidate
@@ -80,10 +103,13 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 					candidate.score++
 				}
 			}
+			if slices.Contains(terms, word) {
+				candidate.own++
+			}
 		}
 		// Validated continuity provides a topic anchor after compaction. Do not
 		// spend its small query/result budget on unrelated retained discussion.
-		if len(continuityTerms) > 0 && candidate.score == 0 {
+		if len(continuityTerms) > 0 && candidate.score == 0 || !followUp && candidate.own == 0 {
 			continue
 		}
 		candidates = append(candidates, candidate)
@@ -114,11 +140,20 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		candidates = candidates[:2]
 	}
 	for _, candidate := range candidates {
-		terms = appendRecallTerms(terms, recallTerms(candidate.text, 5), 26)
+		topic := recallTerms(candidate.text, 5)
+		terms = appendRecallTerms(terms, topic, 26)
+		if followUp && len(topic) > 0 {
+			plan.relevance.Context = append(plan.relevance.Context, topic)
+		}
 		plan.diagnostics.EarlierMessages++
 		plan.diagnostics.EarlierBytes += len(candidate.text)
 	}
-	terms = appendRecallTerms(terms, continuityTerms, 32)
+	if followUp && len(continuityTerms) > 0 {
+		terms = appendRecallTerms(terms, continuityTerms, 32)
+		plan.relevance.Context = append(plan.relevance.Context, continuityTerms)
+	} else if slices.ContainsFunc(continuityTerms, func(term string) bool { return slices.Contains(plan.relevance.Current, term) }) {
+		terms = appendRecallTerms(terms, continuityTerms, 32)
+	}
 	plan.query = boundedRecallText(strings.Join(terms, " "), 1024)
 	plan.diagnostics.QueryBytes = len(plan.query)
 	if plan.query != "" {
@@ -173,10 +208,26 @@ func boundedRecallText(text string, limit int) string {
 	return text[:limit]
 }
 
+// Pronouns refer back to someone or something already under discussion
+// ("what present would she like?", "what was it again?"); they are noise as
+// query terms but mark the message as a follow-up.
+const recallReferringPronouns = " he she him her his hers they them their theirs it its "
+
+func refersToEarlierSubject(text string) bool {
+	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if strings.Contains(recallReferringPronouns, " "+word+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 func recallTerms(text string, limit int) []string {
-	// Function words are query noise, not a domain-specific preference or entity
-	// dictionary. Every content term still comes from the bounded conversation.
-	const noise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us it its this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest "
+	// Function words, pronouns and acknowledgements are query noise, not a
+	// domain-specific preference or entity dictionary. Every content term still
+	// comes from the bounded conversation.
+	const noise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest" +
+		recallReferringPronouns + "thanks thank thx ok okay cool great perfect nice awesome good sounds yes yeah yep sure alright got lol haha hi hello hey bye cheers "
 	var terms []string
 	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
 		if len(word) < 2 || strings.Contains(noise, " "+word+" ") {
@@ -242,7 +293,14 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 		if !kinds[kind] {
 			continue
 		}
-		result, _ := r.search(ctx, memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true})
+		query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true}
+		if kind == memory.RetrievalConversationExcerpt {
+			// Raw conversation is the noisy kind: its excerpts must clear the
+			// relevance floor and not repeat what the request already shows.
+			relevance := plan.relevance
+			query.Relevance = &relevance
+		}
+		result, _ := r.search(ctx, query)
 		outcomes = append(outcomes, result.Status)
 	}
 	if kinds[memory.RetrievalAcceptedMemory] {

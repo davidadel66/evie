@@ -40,6 +40,9 @@ func normalizeRetrievalQuery(q memory.RetrievalQuery) (memory.RetrievalQuery, st
 	if q.Kind == memory.RetrievalConversationExcerpt && q.ValidAt != nil || q.ValidAt != nil && q.ValidAt.IsZero() || q.AsKnownAt != nil && q.AsKnownAt.IsZero() {
 		return q, "", ErrInvalidRetrievalQuery
 	}
+	if !validRetrievalRelevance(q.Relevance) {
+		return q, "", ErrInvalidRetrievalQuery
+	}
 	q.Text = strings.TrimSpace(q.Text)
 	if q.Text == "" || len(q.Text) > retrievalQueryLimit || !utf8.ValidString(q.Text) {
 		return q, "", ErrInvalidRetrievalQuery
@@ -117,6 +120,9 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		return retrievalReadFailure(ctx, result, err)
 	}
 	result.DenseCoverage = candidates.denseCoverage
+	if candidates.denseCut {
+		result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
+	}
 	for _, candidate := range candidates.ordered() {
 		if len(result.Evidence) == query.Limit {
 			result.Truncated = true

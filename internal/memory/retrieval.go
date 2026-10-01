@@ -15,6 +15,11 @@ const (
 	RetrievalFailed                = "failed"
 	RetrievalCancelled             = "cancelled"
 	RetrievalExhausted             = "exhausted"
+
+	// RetrievalGapDenseScan marks a dense scan its work budget stopped before
+	// every vector was compared. It is distinct from pending index work, which
+	// also makes a result partial.
+	RetrievalGapDenseScan = "dense_scan_budget"
 )
 
 // RetrievalQuery contains caller requests, never authority. The Kernel resolves
@@ -36,6 +41,22 @@ type RetrievalQuery struct {
 	MaxBytes                    int                  `json:"max_bytes,omitempty"`
 	ValidAt                     *time.Time           `json:"valid_at,omitempty"`
 	AsKnownAt                   *time.Time           `json:"as_known_at,omitempty"`
+	// Relevance is set only by Automatic Recall, never from model arguments.
+	// The Kernel applies it to conversation excerpts.
+	Relevance *RetrievalRelevance `json:"-"`
+}
+
+// RetrievalRelevance is Automatic Recall's deterministic relevance contract.
+// Current holds the active request's content terms. Context holds the term
+// groups of earlier topics a short or referring follow-up depends on; each
+// group can qualify evidence on its own. LiveFrom is the first event of the
+// bound session still in the provider request, empty when nothing has been
+// compacted; that session's messages from there on are already visible to the
+// model and are not recalled again.
+type RetrievalRelevance struct {
+	Current  []string
+	Context  [][]string
+	LiveFrom EventID
 }
 
 type RetrievalCoverage struct {
@@ -153,6 +174,8 @@ type RetrievalResult struct {
 	Coverage        RetrievalCoverage   `json:"coverage"`
 	Truncated       bool                `json:"truncated"`
 	SerializedBytes int                 `json:"serialized_bytes"`
+	// Gaps names coverage a budget cut short, such as RetrievalGapDenseScan.
+	Gaps []string `json:"gaps,omitempty"`
 }
 
 type RetrievalInspection struct {

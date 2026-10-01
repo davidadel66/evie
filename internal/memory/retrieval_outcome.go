@@ -13,7 +13,8 @@ func RenderRetrievalOutcome(result RetrievalResult) (string, error) {
 		Matches   int               `json:"matches"`
 		Coverage  RetrievalCoverage `json:"coverage"`
 		Truncated bool              `json:"truncated"`
-	}{result.Status, len(result.Evidence), result.Coverage, result.Truncated})
+		Gaps      []string          `json:"gaps,omitempty"`
+	}{result.Status, len(result.Evidence), result.Coverage, result.Truncated, result.Gaps})
 	if err != nil || HasRetrievalSecret(encoded) {
 		return "", errors.New("memory outcome unavailable")
 	}

@@ -1,5 +1,5 @@
 {
-  "report_version": 1,
+  "report_version": 2,
   "corpus_version": "memory-scale-replay-v1",
   "corpus_sha256": "sha256:42418e619bc7af0ac589313587e2eb5e2de0970b2deb2ab65ea03ce61ac950f3",
   "options": {
@@ -30,18 +30,18 @@
   "paths": {
     "automatic": {
       "probes": 36,
-      "probes_with_items": 35,
-      "probes_with_unwanted": 17,
-      "items": 81,
+      "probes_with_items": 24,
+      "probes_with_unwanted": 2,
+      "items": 48,
       "required_items": 21,
-      "tolerated_items": 30,
-      "unwanted_items": 30,
-      "unwanted_private_items": 4,
-      "unwanted_same_session_items": 7,
+      "tolerated_items": 23,
+      "unwanted_items": 4,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
       "required_total": 25,
       "required_found": 21,
-      "precision": 0.6296,
-      "unwanted_rate": 0.3704,
+      "precision": 0.9167,
+      "unwanted_rate": 0.0833,
       "recall": 0.84
     },
     "memory_search": {
@@ -83,35 +83,35 @@
       "family": "relevant",
       "probes": 11,
       "probes_with_items": 11,
-      "probes_with_unwanted": 3,
-      "items": 24,
+      "probes_with_unwanted": 1,
+      "items": 15,
       "required_items": 11,
-      "tolerated_items": 9,
-      "unwanted_items": 4,
-      "unwanted_private_items": 2,
+      "tolerated_items": 2,
+      "unwanted_items": 2,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 11,
       "required_found": 11,
-      "precision": 0.8333,
-      "unwanted_rate": 0.1667,
+      "precision": 0.8667,
+      "unwanted_rate": 0.1333,
       "recall": 1
     },
     {
       "path": "automatic",
       "family": "paraphrase",
       "probes": 2,
-      "probes_with_items": 1,
+      "probes_with_items": 0,
       "probes_with_unwanted": 0,
-      "items": 2,
+      "items": 0,
       "required_items": 0,
-      "tolerated_items": 2,
+      "tolerated_items": 0,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 2,
       "required_found": 0,
-      "precision": 1,
-      "unwanted_rate": 0,
+      "precision": null,
+      "unwanted_rate": null,
       "recall": 0
     },
     {
@@ -119,17 +119,17 @@
       "family": "stale",
       "probes": 9,
       "probes_with_items": 9,
-      "probes_with_unwanted": 1,
-      "items": 27,
+      "probes_with_unwanted": 0,
+      "items": 25,
       "required_items": 9,
       "tolerated_items": 16,
-      "unwanted_items": 2,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 9,
-      "precision": 0.9259,
-      "unwanted_rate": 0.0741,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 0.9
     },
     {
@@ -137,71 +137,71 @@
       "family": "follow_up",
       "probes": 2,
       "probes_with_items": 2,
-      "probes_with_unwanted": 2,
+      "probes_with_unwanted": 0,
       "items": 4,
       "required_items": 1,
-      "tolerated_items": 1,
-      "unwanted_items": 2,
+      "tolerated_items": 3,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
-      "unwanted_same_session_items": 2,
+      "unwanted_same_session_items": 0,
       "required_total": 2,
       "required_found": 1,
-      "precision": 0.5,
-      "unwanted_rate": 0.5,
+      "precision": 1,
+      "unwanted_rate": 0,
       "recall": 0.5
     },
     {
       "path": "automatic",
       "family": "low_content",
       "probes": 6,
-      "probes_with_items": 6,
-      "probes_with_unwanted": 6,
-      "items": 13,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
       "required_items": 0,
       "tolerated_items": 0,
-      "unwanted_items": 13,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
-      "unwanted_same_session_items": 5,
+      "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0,
-      "unwanted_rate": 1,
+      "precision": null,
+      "unwanted_rate": null,
       "recall": null
     },
     {
       "path": "automatic",
       "family": "privacy",
       "probes": 3,
-      "probes_with_items": 3,
-      "probes_with_unwanted": 2,
-      "items": 5,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 1,
+      "items": 4,
       "required_items": 0,
       "tolerated_items": 2,
-      "unwanted_items": 3,
-      "unwanted_private_items": 1,
+      "unwanted_items": 2,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.4,
-      "unwanted_rate": 0.6,
+      "precision": 0.5,
+      "unwanted_rate": 0.5,
       "recall": null
     },
     {
       "path": "automatic",
       "family": "unrelated",
       "probes": 3,
-      "probes_with_items": 3,
-      "probes_with_unwanted": 3,
-      "items": 6,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
       "required_items": 0,
       "tolerated_items": 0,
-      "unwanted_items": 6,
-      "unwanted_private_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0,
-      "unwanted_rate": 1,
+      "precision": null,
+      "unwanted_rate": null,
       "recall": null
     },
     {
@@ -562,15 +562,15 @@
       "id": "M1.low_content_injects_nothing_unrelated",
       "issue": "M1",
       "description": "low-content follow-ups such as \"thanks!\" inject no unwanted items",
-      "met": false,
-      "observed": "13 unwanted of 13 injected items across 6 probes"
+      "met": true,
+      "observed": "0 unwanted of 0 injected items across 6 probes"
     },
     {
       "id": "M1.privacy_injects_no_private_item",
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
-      "met": false,
-      "observed": "1 private items across 3 probes"
+      "met": true,
+      "observed": "0 private items across 3 probes"
     },
     {
       "id": "M2.corrected_source_not_current",
@@ -619,7 +619,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "n.greenhouse.a=tolerated",
         "n.greenhouse=required"
       ]
     },
@@ -630,7 +629,6 @@
       "status": "success",
       "items": [
         "c.birthday.fixed=tolerated",
-        "m.0169=tolerated",
         "n.mother=required"
       ]
     },
@@ -640,7 +638,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "n.pressure(private)=unwanted",
         "n.tyres=required"
       ]
     },
@@ -650,7 +647,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0712=tolerated",
         "n.pace=required"
       ]
     },
@@ -660,7 +656,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "n.lisbon.a=tolerated",
         "n.lisbon=required"
       ]
     },
@@ -670,7 +665,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0531=tolerated",
         "n.cashew=required"
       ]
     },
@@ -680,7 +674,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0550=tolerated",
         "n.vet=required"
       ]
     },
@@ -690,7 +683,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0645(private)=unwanted",
         "n.ferritin(private)=required"
       ]
     },
@@ -700,7 +692,6 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0951=tolerated",
         "n.flaky=required"
       ]
     },
@@ -728,11 +719,8 @@
       "id": "auto.jog",
       "family": "paraphrase",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0688=tolerated",
-        "m.0712=tolerated"
-      ],
+      "status": "empty",
+      "items": [],
       "required_missing": [
         "n.pace"
       ]
@@ -787,9 +775,7 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "c.home=required",
-        "m.0760.a=unwanted",
-        "m.0761.a=unwanted"
+        "c.home=required"
       ]
     },
     {
@@ -846,7 +832,7 @@
       "status": "success",
       "items": [
         "m.0393=tolerated",
-        "session:user_message.0=unwanted"
+        "m.0608=tolerated"
       ],
       "required_missing": [
         "n.basil"
@@ -858,70 +844,51 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "n.lisbon=required",
-        "session:user_message.0=unwanted"
+        "m.0727=tolerated",
+        "n.lisbon=required"
       ]
     },
     {
       "id": "auto.low.thanks",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0393=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.ok",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0666=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.sounds_good",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0200=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.perfect",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "c.birthday.fixed=unwanted",
-        "m.0169=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.project",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0932=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.fresh",
       "family": "low_content",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0741=unwanted",
-        "m.0757=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.privacy.ci",
@@ -937,10 +904,8 @@
       "id": "auto.privacy.orm",
       "family": "privacy",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "n.sam(private)=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.privacy.project",
@@ -956,31 +921,22 @@
       "id": "auto.unrelated.math",
       "family": "unrelated",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0733.a=unwanted",
-        "m.0734.a=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.unrelated.translate",
       "family": "unrelated",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0690=unwanted",
-        "n.pressure.a(private)=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.unrelated.haiku",
       "family": "unrelated",
       "path": "automatic",
-      "status": "success",
-      "items": [
-        "m.0100=unwanted",
-        "m.0590=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "memory_search.dinner",

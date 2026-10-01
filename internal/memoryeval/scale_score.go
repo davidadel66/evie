@@ -8,7 +8,12 @@ import (
 	"strings"
 )
 
-const ScaleReportVersion = 1
+// Version 2 adds the dense scan gap signal (Stage 12, M7).
+const ScaleReportVersion = 2
+
+// ScaleGapDenseScan mirrors memory.RetrievalGapDenseScan: the model-visible
+// signal that a dense scan budget left vectors uncompared.
+const ScaleGapDenseScan = "dense_scan_budget"
 
 const (
 	ScaleClassRequired  = "required"
@@ -32,13 +37,15 @@ type ScaleItem struct {
 
 // ScaleObservation is what one probe actually delivered. Status is the
 // EVIE_MEMORY_DATA status; ToolStatus and ToolPartial come from the
-// model-visible outcome of a scripted read tool.
+// model-visible outcome of a scripted read tool. Gaps is the union of the
+// coverage gaps either surface reported.
 type ScaleObservation struct {
 	ProbeID     string      `json:"probe_id"`
 	Status      string      `json:"status"`
 	Items       []ScaleItem `json:"items"`
 	ToolStatus  []string    `json:"tool_status,omitempty"`
 	ToolPartial bool        `json:"tool_partial,omitempty"`
+	Gaps        []string    `json:"gaps,omitempty"`
 }
 
 type ScaleCorpusStats struct {
@@ -106,6 +113,8 @@ type ScaleStaleSummary struct {
 // PartialOutcomes counts model-visible "partial" outcomes. It is not a
 // scan-truncation signal: the probe's own just-appended message leaves dense
 // work pending, which already makes every dense-enabled search partial.
+// ScanGapOutcomes counts outcomes carrying the distinct dense scan gap, and
+// MissedWithScanGap the missed targets whose outcome reported it.
 type ScaleDenseMetrics struct {
 	VectorsInScope    int      `json:"vectors_in_global_scope"`
 	ScanLimit         int      `json:"scan_limit"`
@@ -116,6 +125,8 @@ type ScaleDenseMetrics struct {
 	ReachableFound    int      `json:"reachable_targets_found"`
 	UnreachableFound  int      `json:"unreachable_targets_found"`
 	PartialOutcomes   int      `json:"partial_outcomes"`
+	ScanGapOutcomes   int      `json:"scan_gap_outcomes"`
+	MissedWithScanGap int      `json:"missed_targets_with_scan_gap"`
 }
 
 type ScaleProbeResult struct {
@@ -123,6 +134,7 @@ type ScaleProbeResult struct {
 	Family          string   `json:"family"`
 	Path            string   `json:"path"`
 	Status          string   `json:"status"`
+	Gaps            []string `json:"gaps,omitempty"`
 	Items           []string `json:"items"`
 	RequiredMissing []string `json:"required_missing,omitempty"`
 }
@@ -221,7 +233,7 @@ func ScoreScale(c ScaleCorpus, observations []ScaleObservation) ScaleReport {
 			familyOrder = append(familyOrder, key)
 		}
 		pathCounts := report.Paths[probe.Path]
-		result := ScaleProbeResult{ID: probe.ID, Family: probe.Family, Path: probe.Path, Status: observation.Status, Items: []string{}}
+		result := ScaleProbeResult{ID: probe.ID, Family: probe.Family, Path: probe.Path, Status: observation.Status, Gaps: observation.Gaps, Items: []string{}}
 		found := map[string]bool{}
 		unwanted := false
 		var probeCounts ScaleCounts
@@ -428,14 +440,18 @@ func scaleDenseOutcomes(c ScaleCorpus, byProbe map[string]ScaleObservation) *Sca
 			dense = &ScaleDenseMetrics{}
 		}
 		dense.Targets++
-		for _, item := range observation.Items {
-			if slices.Contains(probe.Required, item.Key) {
-				dense.TargetsFound++
-				break
-			}
+		found := slices.ContainsFunc(observation.Items, func(item ScaleItem) bool { return slices.Contains(probe.Required, item.Key) })
+		gap := slices.Contains(observation.Gaps, ScaleGapDenseScan)
+		if found {
+			dense.TargetsFound++
+		} else if gap {
+			dense.MissedWithScanGap++
 		}
 		if observation.ToolPartial {
 			dense.PartialOutcomes++
+		}
+		if gap {
+			dense.ScanGapOutcomes++
 		}
 	}
 	return dense
@@ -483,14 +499,13 @@ func ScaleTargetsFor(r ScaleReport) []ScaleTarget {
 		targets = append(targets, ScaleTarget{ID: t.id, Issue: t.issue, Description: t.description, Met: checks > 0 && misses == 0, Observed: fmt.Sprintf("%d misses of %d checks", misses, checks)})
 	}
 	if r.Dense != nil {
-		// A truncation report would also satisfy the plan, but no outcome field
-		// distinguishes scan truncation today; whichever signal Stage 12 adds
-		// must be taught to the driver before this target can count it.
+		// The plan accepts a target found or reported as truncated. Only the
+		// distinct dense scan gap counts as a report; "partial" does not.
 		targets = append(targets, ScaleTarget{ID: "M7.dense_covers_all_vectors", Issue: "M7",
-			Description: "dense recall finds targets anywhere in the vector table",
-			Met:         r.Dense.Targets > 0 && r.Dense.TargetsFound == r.Dense.Targets,
-			Observed: fmt.Sprintf("%d of %d targets found; %d of %d vectors inside the scan bound; %d unreachable targets found", r.Dense.TargetsFound, r.Dense.Targets,
-				min(r.Dense.VectorsInScope, r.Dense.ScanLimit), r.Dense.VectorsInScope, r.Dense.UnreachableFound)})
+			Description: "dense recall finds targets anywhere in the vector table, or reports the scan gap",
+			Met:         r.Dense.Targets > 0 && r.Dense.TargetsFound+r.Dense.MissedWithScanGap == r.Dense.Targets,
+			Observed: fmt.Sprintf("%d of %d targets found; %d missed with a scan gap reported; %d of %d vectors inside the scan bound; %d unreachable targets found", r.Dense.TargetsFound, r.Dense.Targets,
+				r.Dense.MissedWithScanGap, min(r.Dense.VectorsInScope, r.Dense.ScanLimit), r.Dense.VectorsInScope, r.Dense.UnreachableFound)})
 	}
 	return targets
 }
@@ -532,8 +547,8 @@ func (r ScaleReport) Markdown() string {
 		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %t |\n", o.ProbeID, o.Path, scenario, o.Issue, o.Outcome, o.Miss)
 	}
 	if r.Dense != nil {
-		fmt.Fprintf(&b, "\nDense: %d vectors in Global scope, scan limit %d (reachable fraction %s); %d/%d targets found (%d reachable, %d reachable found, %d unreachable found); %d partial outcomes.\n",
-			r.Dense.VectorsInScope, r.Dense.ScanLimit, format(r.Dense.ReachableFraction), r.Dense.TargetsFound, r.Dense.Targets, r.Dense.TargetsReachable, r.Dense.ReachableFound, r.Dense.UnreachableFound, r.Dense.PartialOutcomes)
+		fmt.Fprintf(&b, "\nDense: %d vectors in Global scope, scan limit %d (reachable fraction %s); %d/%d targets found (%d reachable, %d reachable found, %d unreachable found); %d partial outcomes; %d scan-gap outcomes, %d missed targets with a scan gap.\n",
+			r.Dense.VectorsInScope, r.Dense.ScanLimit, format(r.Dense.ReachableFraction), r.Dense.TargetsFound, r.Dense.Targets, r.Dense.TargetsReachable, r.Dense.ReachableFound, r.Dense.UnreachableFound, r.Dense.PartialOutcomes, r.Dense.ScanGapOutcomes, r.Dense.MissedWithScanGap)
 	}
 	b.WriteString("\n| Target | Met | Observed |\n| --- | --- | --- |\n")
 	for _, t := range r.Targets {

@@ -1,5 +1,5 @@
 {
-  "report_version": 1,
+  "report_version": 2,
   "corpus_version": "memory-scale-replay-v1",
   "corpus_sha256": "sha256:a9b417cd8b2f0bcb5d089a7dff96963d069694317cc9fbb02ee57031c5299856",
   "options": {
@@ -30,19 +30,19 @@
   "paths": {
     "automatic": {
       "probes": 36,
-      "probes_with_items": 36,
-      "probes_with_unwanted": 16,
-      "items": 85,
-      "required_items": 22,
-      "tolerated_items": 33,
-      "unwanted_items": 30,
+      "probes_with_items": 29,
+      "probes_with_unwanted": 7,
+      "items": 69,
+      "required_items": 23,
+      "tolerated_items": 34,
+      "unwanted_items": 12,
       "unwanted_private_items": 4,
-      "unwanted_same_session_items": 6,
+      "unwanted_same_session_items": 0,
       "required_total": 25,
-      "required_found": 22,
-      "precision": 0.6471,
-      "unwanted_rate": 0.3529,
-      "recall": 0.88
+      "required_found": 23,
+      "precision": 0.8261,
+      "unwanted_rate": 0.1739,
+      "recall": 0.92
     },
     "memory_search": {
       "probes": 22,
@@ -64,17 +64,17 @@
       "probes": 46,
       "probes_with_items": 45,
       "probes_with_unwanted": 5,
-      "items": 166,
-      "required_items": 29,
-      "tolerated_items": 117,
-      "unwanted_items": 20,
-      "unwanted_private_items": 3,
+      "items": 187,
+      "required_items": 36,
+      "tolerated_items": 132,
+      "unwanted_items": 19,
+      "unwanted_private_items": 4,
       "unwanted_same_session_items": 0,
       "required_total": 36,
-      "required_found": 29,
-      "precision": 0.8795,
-      "unwanted_rate": 0.1205,
-      "recall": 0.8056
+      "required_found": 36,
+      "precision": 0.8984,
+      "unwanted_rate": 0.1016,
+      "recall": 1
     }
   },
   "families": [
@@ -83,17 +83,17 @@
       "family": "relevant",
       "probes": 11,
       "probes_with_items": 11,
-      "probes_with_unwanted": 2,
-      "items": 25,
+      "probes_with_unwanted": 1,
+      "items": 24,
       "required_items": 11,
       "tolerated_items": 12,
-      "unwanted_items": 2,
+      "unwanted_items": 1,
       "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 11,
       "required_found": 11,
-      "precision": 0.92,
-      "unwanted_rate": 0.08,
+      "precision": 0.9583,
+      "unwanted_rate": 0.0417,
       "recall": 1
     },
     {
@@ -124,7 +124,7 @@
       "required_items": 9,
       "tolerated_items": 16,
       "unwanted_items": 2,
-      "unwanted_private_items": 1,
+      "unwanted_private_items": 2,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 9,
@@ -137,53 +137,53 @@
       "family": "follow_up",
       "probes": 2,
       "probes_with_items": 2,
-      "probes_with_unwanted": 2,
+      "probes_with_unwanted": 1,
       "items": 4,
-      "required_items": 0,
-      "tolerated_items": 1,
-      "unwanted_items": 3,
-      "unwanted_private_items": 0,
-      "unwanted_same_session_items": 2,
+      "required_items": 1,
+      "tolerated_items": 2,
+      "unwanted_items": 1,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
       "required_total": 2,
-      "required_found": 0,
-      "precision": 0.25,
-      "unwanted_rate": 0.75,
-      "recall": 0
+      "required_found": 1,
+      "precision": 0.75,
+      "unwanted_rate": 0.25,
+      "recall": 0.5
     },
     {
       "path": "automatic",
       "family": "low_content",
       "probes": 6,
-      "probes_with_items": 6,
-      "probes_with_unwanted": 6,
-      "items": 14,
+      "probes_with_items": 0,
+      "probes_with_unwanted": 0,
+      "items": 0,
       "required_items": 0,
       "tolerated_items": 0,
-      "unwanted_items": 14,
+      "unwanted_items": 0,
       "unwanted_private_items": 0,
-      "unwanted_same_session_items": 4,
+      "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0,
-      "unwanted_rate": 1,
+      "precision": null,
+      "unwanted_rate": null,
       "recall": null
     },
     {
       "path": "automatic",
       "family": "privacy",
       "probes": 3,
-      "probes_with_items": 3,
-      "probes_with_unwanted": 2,
-      "items": 5,
+      "probes_with_items": 2,
+      "probes_with_unwanted": 1,
+      "items": 4,
       "required_items": 0,
       "tolerated_items": 2,
-      "unwanted_items": 3,
-      "unwanted_private_items": 1,
+      "unwanted_items": 2,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.4,
-      "unwanted_rate": 0.6,
+      "precision": 0.5,
+      "unwanted_rate": 0.5,
       "recall": null
     },
     {
@@ -196,7 +196,7 @@
       "required_items": 0,
       "tolerated_items": 0,
       "unwanted_items": 6,
-      "unwanted_private_items": 1,
+      "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
@@ -230,14 +230,14 @@
       "probes_with_unwanted": 3,
       "items": 69,
       "required_items": 10,
-      "tolerated_items": 52,
-      "unwanted_items": 7,
-      "unwanted_private_items": 3,
+      "tolerated_items": 53,
+      "unwanted_items": 6,
+      "unwanted_private_items": 4,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 10,
-      "precision": 0.8986,
-      "unwanted_rate": 0.1014,
+      "precision": 0.913,
+      "unwanted_rate": 0.087,
       "recall": 1
     },
     {
@@ -318,17 +318,17 @@
       "probes": 24,
       "probes_with_items": 24,
       "probes_with_unwanted": 0,
-      "items": 51,
-      "required_items": 17,
-      "tolerated_items": 34,
+      "items": 72,
+      "required_items": 24,
+      "tolerated_items": 48,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 24,
-      "required_found": 17,
+      "required_found": 24,
       "precision": 1,
       "unwanted_rate": 0,
-      "recall": 0.7083
+      "recall": 1
     }
   ],
   "stale": {
@@ -577,29 +577,31 @@
   "unmapped_items": 0,
   "dense": {
     "vectors_in_global_scope": 6429,
-    "scan_limit": 4096,
-    "reachable_fraction": 0.6371,
+    "scan_limit": 65536,
+    "reachable_fraction": 1,
     "targets": 24,
-    "targets_found": 17,
-    "targets_reachable": 17,
-    "reachable_targets_found": 17,
+    "targets_found": 24,
+    "targets_reachable": 24,
+    "reachable_targets_found": 24,
     "unreachable_targets_found": 0,
-    "partial_outcomes": 24
+    "partial_outcomes": 24,
+    "scan_gap_outcomes": 0,
+    "missed_targets_with_scan_gap": 0
   },
   "targets": [
     {
       "id": "M1.low_content_injects_nothing_unrelated",
       "issue": "M1",
       "description": "low-content follow-ups such as \"thanks!\" inject no unwanted items",
-      "met": false,
-      "observed": "14 unwanted of 14 injected items across 6 probes"
+      "met": true,
+      "observed": "0 unwanted of 0 injected items across 6 probes"
     },
     {
       "id": "M1.privacy_injects_no_private_item",
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
-      "met": false,
-      "observed": "1 private items across 3 probes"
+      "met": true,
+      "observed": "0 private items across 3 probes"
     },
     {
       "id": "M2.corrected_source_not_current",
@@ -632,9 +634,9 @@
     {
       "id": "M7.dense_covers_all_vectors",
       "issue": "M7",
-      "description": "dense recall finds targets anywhere in the vector table",
-      "met": false,
-      "observed": "17 of 24 targets found; 4096 of 6429 vectors inside the scan bound; 0 unreachable targets found"
+      "description": "dense recall finds targets anywhere in the vector table, or reports the scan gap",
+      "met": true,
+      "observed": "24 of 24 targets found; 0 missed with a scan gap reported; 6429 of 6429 vectors inside the scan bound; 0 unreachable targets found"
     }
   ],
   "probes": [
@@ -677,7 +679,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.0533=tolerated",
+        "m.0979=tolerated",
         "n.tyres=required"
       ]
     },
@@ -707,7 +709,6 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.3401=unwanted",
         "n.cashew=required"
       ]
     },
@@ -767,7 +768,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2819=tolerated",
+        "m.3244=tolerated",
         "n.pace=required"
       ]
     },
@@ -822,8 +823,8 @@
       "status": "partial",
       "items": [
         "c.home=required",
-        "m.0821(private)=unwanted",
-        "m.3489.a=unwanted"
+        "m.0505(private)=unwanted",
+        "m.0821(private)=unwanted"
       ]
     },
     {
@@ -880,7 +881,7 @@
       "status": "partial",
       "items": [
         "m.0192=tolerated",
-        "session:user_message.0=unwanted"
+        "m.0337=tolerated"
       ],
       "required_missing": [
         "n.basil"
@@ -892,74 +893,51 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.1315=unwanted",
-        "session:user_message.0=unwanted"
-      ],
-      "required_missing": [
-        "n.lisbon"
+        "m.0505(private)=unwanted",
+        "n.lisbon=required"
       ]
     },
     {
       "id": "auto.low.thanks",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "m.0337=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.ok",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "m.3282=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.sounds_good",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "m.2349=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.perfect",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "c.birthday.fixed=unwanted",
-        "m.1786=unwanted",
-        "m.2516=unwanted",
-        "session:user_message.0=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.project",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "m.3696=unwanted",
-        "m.3777=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.low.fresh",
       "family": "low_content",
       "path": "automatic",
-      "status": "partial",
-      "items": [
-        "m.2811=unwanted",
-        "m.3508=unwanted"
-      ]
+      "status": "empty",
+      "items": []
     },
     {
       "id": "auto.privacy.ci",
@@ -976,9 +954,7 @@
       "family": "privacy",
       "path": "automatic",
       "status": "partial",
-      "items": [
-        "n.sam(private)=unwanted"
-      ]
+      "items": []
     },
     {
       "id": "auto.privacy.project",
@@ -1006,8 +982,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2808=unwanted",
-        "n.pressure.a(private)=unwanted"
+        "m.0008=unwanted",
+        "m.2808=unwanted"
       ]
     },
     {
@@ -1016,8 +992,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.1109=unwanted",
-        "m.3195=unwanted"
+        "m.2577=unwanted",
+        "m.3010=unwanted"
       ]
     },
     {
@@ -1037,10 +1013,10 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
-        "m.0717=unwanted",
         "m.0844=tolerated",
-        "m.1276=unwanted",
         "m.3065=unwanted",
+        "m.3161=tolerated",
+        "m.3299=tolerated",
         "m.3326=unwanted",
         "m.3345=tolerated",
         "m.3454=tolerated",
@@ -1145,8 +1121,8 @@
       "items": [
         "m.0656=tolerated",
         "m.1176=tolerated",
-        "m.3177=tolerated",
-        "m.3335=tolerated",
+        "m.1295=tolerated",
+        "m.2282=tolerated",
         "m.3504=tolerated",
         "m.3509=tolerated",
         "n.lisbon.a=tolerated",
@@ -1166,12 +1142,12 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
-        "m.0497=tolerated",
+        "m.0849=tolerated",
         "m.1369=tolerated",
         "m.1436=tolerated",
         "m.1898=tolerated",
-        "m.2165=tolerated",
         "m.3164=tolerated",
+        "m.3322=tolerated",
         "m.3489=tolerated",
         "n.cashew=required"
       ]
@@ -1191,8 +1167,8 @@
       "items": [
         "m.0130(private)=unwanted",
         "m.0893(private)=unwanted",
+        "m.1069(private)=unwanted",
         "m.2447=tolerated",
-        "m.3094=tolerated",
         "m.3206=tolerated",
         "m.3391=tolerated",
         "m.3392=tolerated",
@@ -1350,9 +1326,9 @@
       "items": [
         "m.0079=tolerated",
         "m.1630=tolerated",
+        "m.1739=tolerated",
         "m.1757=tolerated",
         "m.1786=tolerated",
-        "m.2006=tolerated",
         "m.2516=tolerated",
         "m.c.birthday.fixed=tolerated",
         "m.c.birthday=tolerated"
@@ -1507,11 +1483,9 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.01=required",
         "d.target.09=tolerated",
         "d.target.17=tolerated"
-      ],
-      "required_missing": [
-        "d.target.01"
       ]
     },
     {
@@ -1521,6 +1495,7 @@
       "status": "partial",
       "items": [
         "d.target.02=required",
+        "d.target.10=tolerated",
         "d.target.18=tolerated"
       ]
     },
@@ -1531,6 +1506,7 @@
       "status": "partial",
       "items": [
         "d.target.03=required",
+        "d.target.11=tolerated",
         "d.target.19=tolerated"
       ]
     },
@@ -1551,10 +1527,9 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.05=required",
+        "d.target.13=tolerated",
         "d.target.21=tolerated"
-      ],
-      "required_missing": [
-        "d.target.05"
       ]
     },
     {
@@ -1564,6 +1539,7 @@
       "status": "partial",
       "items": [
         "d.target.06=required",
+        "d.target.14=tolerated",
         "d.target.22=tolerated"
       ]
     },
@@ -1574,7 +1550,8 @@
       "status": "partial",
       "items": [
         "d.target.07=required",
-        "d.target.15=tolerated"
+        "d.target.15=tolerated",
+        "d.target.23=tolerated"
       ]
     },
     {
@@ -1594,6 +1571,7 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.01=tolerated",
         "d.target.09=required",
         "d.target.17=tolerated"
       ]
@@ -1605,10 +1583,8 @@
       "status": "partial",
       "items": [
         "d.target.02=tolerated",
+        "d.target.10=required",
         "d.target.18=tolerated"
-      ],
-      "required_missing": [
-        "d.target.10"
       ]
     },
     {
@@ -1618,10 +1594,8 @@
       "status": "partial",
       "items": [
         "d.target.03=tolerated",
+        "d.target.11=required",
         "d.target.19=tolerated"
-      ],
-      "required_missing": [
-        "d.target.11"
       ]
     },
     {
@@ -1641,10 +1615,9 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.05=tolerated",
+        "d.target.13=required",
         "d.target.21=tolerated"
-      ],
-      "required_missing": [
-        "d.target.13"
       ]
     },
     {
@@ -1654,10 +1627,8 @@
       "status": "partial",
       "items": [
         "d.target.06=tolerated",
+        "d.target.14=required",
         "d.target.22=tolerated"
-      ],
-      "required_missing": [
-        "d.target.14"
       ]
     },
     {
@@ -1667,7 +1638,8 @@
       "status": "partial",
       "items": [
         "d.target.07=tolerated",
-        "d.target.15=required"
+        "d.target.15=required",
+        "d.target.23=tolerated"
       ]
     },
     {
@@ -1687,6 +1659,7 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.01=tolerated",
         "d.target.09=tolerated",
         "d.target.17=required"
       ]
@@ -1698,6 +1671,7 @@
       "status": "partial",
       "items": [
         "d.target.02=tolerated",
+        "d.target.10=tolerated",
         "d.target.18=required"
       ]
     },
@@ -1708,6 +1682,7 @@
       "status": "partial",
       "items": [
         "d.target.03=tolerated",
+        "d.target.11=tolerated",
         "d.target.19=required"
       ]
     },
@@ -1728,6 +1703,8 @@
       "path": "memory_search_conversations",
       "status": "partial",
       "items": [
+        "d.target.05=tolerated",
+        "d.target.13=tolerated",
         "d.target.21=required"
       ]
     },
@@ -1738,6 +1715,7 @@
       "status": "partial",
       "items": [
         "d.target.06=tolerated",
+        "d.target.14=tolerated",
         "d.target.22=required"
       ]
     },
@@ -1748,10 +1726,8 @@
       "status": "partial",
       "items": [
         "d.target.07=tolerated",
-        "d.target.15=tolerated"
-      ],
-      "required_missing": [
-        "d.target.23"
+        "d.target.15=tolerated",
+        "d.target.23=required"
       ]
     }
   ]
