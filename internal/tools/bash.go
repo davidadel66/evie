@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/openrouter"
 )
@@ -209,14 +209,22 @@ func runBash(parent context.Context, args string) (string, error) {
 	// and closes the pipes.
 	cmd.WaitDelay = 2 * time.Second
 
-	// CombinedOutput interleaves stderr with stdout in the order they were
-	// actually written, which is how a human reads a failing build. Separate
-	// streams would put every error after every line of normal output.
-	out, err := cmd.CombinedOutput()
+	// One writer for both streams interleaves stderr with stdout in the order
+	// they were actually written, which is how a human reads a failing build;
+	// separate streams would put every error after every line of normal
+	// output. exec gives a shared, comparable writer a single pipe and calls
+	// it from one goroutine at a time — what CombinedOutput did, minus
+	// holding the whole output in memory.
+	out := &boundedOutput{}
+	cmd.Stdout = out
+	cmd.Stderr = out
+	err = cmd.Run()
+	out.finish()
 
 	// Checked before the error: a timed-out command still produced whatever
 	// it wrote before the kill, and that output is usually the diagnosis.
 	if parent.Err() != nil {
+		out.discard()
 		return "", parent.Err()
 	}
 
@@ -227,7 +235,7 @@ func runBash(parent context.Context, args string) (string, error) {
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("command timed out after %s and was killed. Partial output:\n%s", timeout, out)
+		return "", fmt.Errorf("command timed out after %s and was killed. Partial output:\n%s", timeout, out.render())
 	}
 
 	var exitErr *exec.ExitError
@@ -237,10 +245,11 @@ func runBash(parent context.Context, args string) (string, error) {
 	case errors.As(err, &exitErr):
 		// The command ran and failed. Normal result, not a Go error.
 	default:
+		out.discard()
 		return "", fmt.Errorf("run command: %w", err)
 	}
 
-	return fmt.Sprintf("%s\nexit status: %d\n", capOutput(out), cmd.ProcessState.ExitCode()), nil
+	return fmt.Sprintf("%s\nexit status: %d\n", out.render(), cmd.ProcessState.ExitCode()), nil
 }
 
 // rememberCwd stores wherever the command ended up as the starting point
@@ -262,24 +271,117 @@ func rememberCwd(pwdPath string) {
 	sessionCwd = dir
 }
 
-// capOutput trims oversized output and spills the whole of it to a file the
-// model can slice with head/tail/grep. Truncating in silence would have the
-// model reason confidently about a result it only half saw; truncating with
-// a pointer to the rest costs one line and loses nothing.
-func capOutput(out []byte) string {
-	if len(out) <= maxBashOutput {
-		return string(out)
+// boundedOutput collects a command's combined output while holding at most
+// maxBashOutput bytes in memory: the head the model sees inline. Everything
+// past the cap streams straight to a spill file the model can slice with
+// head/tail/grep, so `find /` or a chatty build costs disk rather than RAM.
+// Truncating in silence would have the model reason confidently about a
+// result it only half saw; truncating with a pointer to the rest costs one
+// line and loses nothing.
+//
+// The spill is unique per call, not per process: a second capped command
+// would otherwise overwrite the first one's file while the model was still
+// reading it.
+type boundedOutput struct {
+	mu       sync.Mutex
+	head     []byte
+	total    int64
+	spill    *os.File
+	spillErr error
+}
+
+// Write never reports an error: failing it would make exec stop copying and
+// the command die on a broken pipe because a spill file could not be written.
+// A spill failure is reported in the rendered note instead.
+func (o *boundedOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	written := len(p)
+	o.total += int64(written)
+	if o.head == nil {
+		o.head = make([]byte, 0, maxBashOutput)
+	}
+	if room := maxBashOutput - len(o.head); room > 0 {
+		n := min(room, len(p))
+		o.head = append(o.head, p[:n]...)
+		p = p[n:]
+	}
+	if len(p) == 0 || o.spillErr != nil {
+		return written, nil
+	}
+	if o.spill == nil {
+		if o.spill, o.spillErr = createSpillFile("evie-output-"); o.spillErr != nil {
+			return written, nil
+		}
+		_, o.spillErr = o.spill.Write(o.head)
+	}
+	if o.spillErr == nil {
+		_, o.spillErr = o.spill.Write(p)
+	}
+	return written, nil
+}
+
+// finish closes the spill file once the command's output is complete. A file
+// that could not be fully written is removed rather than handed to the model
+// as if it were the whole output.
+func (o *boundedOutput) finish() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.spill == nil {
+		return
+	}
+	if err := o.spill.Close(); err != nil && o.spillErr == nil {
+		o.spillErr = err
+	}
+	if o.spillErr != nil {
+		os.Remove(o.spill.Name())
+	}
+}
+
+// discard removes a spill whose path the model will never be shown.
+func (o *boundedOutput) discard() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.spill != nil {
+		os.Remove(o.spill.Name())
+	}
+}
+
+// render returns the whole output when it fit under the cap, and otherwise
+// the head cut at a UTF-8 boundary plus a note naming the spill file.
+func (o *boundedOutput) render() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.total <= maxBashOutput {
+		return string(o.head)
 	}
 
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("evie-output-%d.txt", os.Getpid()))
-	note := fmt.Sprintf("\n\n[output trimmed: %d of %d characters shown", maxBashOutput, len(out))
-	if err := os.WriteFile(path, out, 0o600); err != nil {
+	cut := completeRunePrefix(o.head)
+	note := fmt.Sprintf("\n\n[output trimmed: %d of %d characters shown", cut, o.total)
+	if o.spill == nil || o.spillErr != nil {
 		note += "; the rest could not be saved]"
 	} else {
-		note += fmt.Sprintf("; full output saved to %s — read it with head, tail, or grep]", path)
+		note += fmt.Sprintf("; full output saved to %s for %d hours — read it with head, tail, or grep]", o.spill.Name(), int(spillRetention.Hours()))
 	}
+	return string(o.head[:cut]) + note
+}
 
-	return string(out[:maxBashOutput]) + note
+// completeRunePrefix returns the length of b without a trailing partial
+// UTF-8 sequence: a byte cut at the cap can land inside a multi-byte rune,
+// and half a rune is invalid text that can poison downstream tokenization.
+// It looks back at most one rune's width, so output that is not UTF-8 at all
+// is cut at the cap rather than scanned.
+func completeRunePrefix(b []byte) int {
+	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(b[i]) {
+			if utf8.FullRune(b[i:]) {
+				return len(b)
+			}
+			return i
+		}
+	}
+	return len(b)
 }
 
 // shellQuote wraps a path in single quotes for safe interpolation into the

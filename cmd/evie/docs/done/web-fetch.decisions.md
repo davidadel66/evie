@@ -84,3 +84,50 @@ Fresh-context reviewer, diff + spec only. Four real bugs, all fixed:
 4. **Nested `<pre>` dropped verbatim mode early** — inner block set
    `inPre = false` on exit while still inside the outer. Save/restore,
    not set/clear, for any recursion-carried flag.
+
+## October 1 amendments — harness review Stage 1 (T2, T3, T7)
+
+From `docs/harness-review-2026-09-30.md`; David decided the worker rule
+on 2026-09-30.
+
+- **Delegated workers fetch public addresses only.** This narrows "Local
+  and private addresses are allowed" and "No SSRF denylist" for one
+  caller. Those rested on `bash` being in the same session, so a block
+  bought nothing. A delegated research worker has no shell, files, or
+  memory: `web_fetch` is its only network reach, so there the block is a
+  real boundary. The main chat keeps the original rule.
+  - **Who:** a call whose harness-owned `InvocationContext` scope has a
+    parent session, which only delegated children have. Model arguments
+    can't set it. A main chat built from the Research preset keeps local
+    access.
+  - **Where:** in the worker transport's dialer (`net.Dialer.Control`),
+    after DNS resolution and before connect. So a DNS name that resolves
+    to a private address, a rebinding DNS answer, and every redirect hop
+    are judged by the address actually connected to. The worker transport
+    uses no proxy, because a proxy would make the proxy's address the one
+    checked.
+  - **Refused:** unspecified, loopback, RFC 1918 and ULA private,
+    link-local (including `169.254.169.254`), multicast, `0.0.0.0/8`,
+    `100.64.0.0/10` (CGNAT, which Tailscale uses), `192.0.0.0/24`,
+    `198.18.0.0/15`, `240.0.0.0/4`, and `fec0::/10`. IPv4-mapped IPv6 is
+    judged as the IPv4 address it carries.
+  - **Scope:** both the legacy and excerpt contracts, for new and resumed
+    worker compositions. Schemas and receipts don't change; only network
+    reach narrows.
+  - **Known gap:** private IPv4 addresses embedded in NAT64 or 6to4 IPv6
+    addresses are not unwrapped.
+- **Frames are escaped.** Before framing, `web_fetch`, excerpts, and
+  `web_search` prefix every `[begin untrusted web content` and
+  `[end untrusted web content` sequence in third-party text with a
+  backslash. The delimiters are then numbered (`… #1]`) until neither
+  appears in the payload. This is the transcript tools' approach, so a
+  page can no longer close its own frame. Text without markers frames
+  exactly as before.
+- **Spill files expire after 24 hours.** Spills are unique per call, so
+  without a bound they pile up in the temp directory at up to 10 MB per
+  fetch. Each new spill first removes same-prefix spills older than 24
+  hours (`evie-fetch-*.txt`; bash's `evie-output-*.txt`, now also per
+  call). The trim note states the retention. The model is told to read a
+  spill right away with `grep` or `head`, so a day covers that and a
+  resumed session. An expired path means fetch again. There is no
+  background sweeper and no per-session deletion.

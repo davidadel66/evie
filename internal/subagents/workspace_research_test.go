@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"reflect"
 	"strings"
 	"testing"
@@ -253,6 +254,8 @@ func TestWorkspaceWorkerReadsExcerptsBeyondLegacyBudgetAndReturnsOnlyFindings(t 
 		fmt.Fprint(w, strings.Repeat("irrelevant navigation\n", 6000)+"Relevant section\n"+strings.Repeat("evidence-sentinel ", 7000))
 	}))
 	defer page.Close()
+	// Delegated workers may fetch only public addresses; the page stands in for one.
+	t.Cleanup(tools.PermitWorkerFetchesForTest(netip.MustParseAddrPort(page.Listener.Addr().String())))
 	manager, err := plugins.NewManager(tools.KernelToolset(), plugins.NewWeb(), plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(f.store), plugins.NewSubagents(f.supervisor))
 	if err != nil {
 		t.Fatal(err)

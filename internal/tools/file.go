@@ -469,6 +469,23 @@ func prepareFileEditContext(ctx context.Context, args string) (preparedFileEdit,
 		return preparedFileEdit{}, err
 	}
 
+	// The write is an atomic rename, and renaming over a symlink replaces the
+	// link itself with a regular file, leaving the file it pointed at stale.
+	// So a symlinked path is resolved once, here, and everything after —
+	// preview, stale check, rename — targets the real file. Re-checking the
+	// fence on that exact path closes the window between resolvePath's own
+	// check and this resolution.
+	if link, err := os.Lstat(abs); err == nil && link.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			return preparedFileEdit{}, fmt.Errorf("resolve symlink %s: %w", abs, err)
+		}
+		if denied(target) {
+			return preparedFileEdit{}, fmt.Errorf("%s resolves to %s, which is off-limits", abs, target)
+		}
+		abs = target
+	}
+
 	info, err := os.Stat(abs)
 	if err != nil {
 		return preparedFileEdit{}, fmt.Errorf("stat %s: %w", abs, err)

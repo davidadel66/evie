@@ -12,6 +12,8 @@ import (
 	"github.com/davidadel66/evie/internal/finance"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/youtube"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const (
@@ -188,8 +190,8 @@ func QueryDBToolWithEvieReader(openEvie func(context.Context) (*sql.DB, error)) 
 
 // queryDB runs the model's SQL through the named database's read-only
 // connection and renders the result as a pipe-separated table. Fences
-// per database as in editDB; the SELECT-prefix check and engine-level
-// mode=ro are layered defenses.
+// per database as in editDB; the single-SELECT check, engine-level mode=ro,
+// and (for finance) a connection that cannot ATTACH are layered defenses.
 func queryDB(ctx context.Context, args string) (string, error) {
 	return queryDBWithEvieReader(ctx, args, eviedb.OpenDBReadOnlyContext)
 }
@@ -212,6 +214,9 @@ func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(conte
 	var err error
 	switch params.DB {
 	case "finance":
+		if err := validateSingleSelect(q, "finance"); err != nil {
+			return "", err
+		}
 		if strings.Contains(strings.ToLower(q), "items") {
 			return "", fmt.Errorf("the items table is off-limits")
 		}
@@ -238,7 +243,13 @@ func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(conte
 		return queryTranscriptDB(ctx, db, q)
 	}
 
-	columns, rows, err := finance.Query(ctx, db, q)
+	var columns []string
+	var rows [][]string
+	if params.DB == "finance" {
+		columns, rows, err = queryFinanceDB(ctx, db, q)
+	} else {
+		columns, rows, err = finance.Query(ctx, db, q)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -249,6 +260,53 @@ func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(conte
 	}
 	out += fmt.Sprintf("(%d rows)\n", len(rows))
 	return out, nil
+}
+
+// queryFinanceDB is the engine-level half of the finance fence. mode=ro
+// protects finance.db itself, but an attached database opens with the
+// connection's own read-write flags — so the query runs on one connection
+// whose SQLITE_LIMIT_ATTACHED is 0. ATTACH, and VACUUM INTO (which attaches
+// its output file internally), then fail inside SQLite before any file is
+// created, whatever the lexical check in validateSingleSelect missed.
+func queryFinanceDB(ctx context.Context, db *sql.DB, query string) ([]string, [][]string, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := sqlite.Limit(conn, sqlite3.SQLITE_LIMIT_ATTACHED, 0); err != nil {
+		return nil, nil, fmt.Errorf("fence connection: %w", err)
+	}
+
+	result, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, fmt.Errorf("run query: %w", err)
+	}
+	defer result.Close()
+
+	columns, err := result.Columns()
+	if err != nil {
+		return nil, nil, fmt.Errorf("read columns: %w", err)
+	}
+	var rows [][]string
+	for result.Next() {
+		values := make([]any, len(columns))
+		for i := range values {
+			values[i] = new(sql.NullString)
+		}
+		if err := result.Scan(values...); err != nil {
+			return nil, nil, fmt.Errorf("scan row: %w", err)
+		}
+		row := make([]string, len(columns))
+		for i, value := range values {
+			row[i] = "NULL"
+			if nullString := value.(*sql.NullString); nullString.Valid {
+				row[i] = nullString.String
+			}
+		}
+		rows = append(rows, row)
+	}
+	return columns, rows, result.Err()
 }
 
 func queryTranscriptDB(ctx context.Context, db *sql.DB, query string) (string, error) {
@@ -360,6 +418,22 @@ func validateTranscriptSelect(query string) error {
 	return validateSingleSelect(query, "transcript")
 }
 
+// rawPageTables are SQLite's built-in virtual tables that read the database
+// below the table layer. A per-table fence — finance's items table, Evie's
+// private tables — means nothing to a query that can read the pages those
+// tables live on, so no registered database may name them.
+var rawPageTables = map[string]struct{}{
+	"SQLITE_DBPAGE": {},
+	"DBSTAT":        {},
+}
+
+func rawPageTableError(database, name string) error {
+	if _, denied := rawPageTables[strings.ToUpper(name)]; denied {
+		return fmt.Errorf("%s queries may not read raw database pages (%s)", database, name)
+	}
+	return nil
+}
+
 func validateSingleSelect(query, database string) error {
 	firstToken := ""
 	for i := 0; i < len(query); {
@@ -367,15 +441,25 @@ func validateSingleSelect(query, database string) error {
 		case isSQLSpace(query[i]):
 			i++
 		case query[i] == '\'' || query[i] == '"' || query[i] == '`':
-			next, ok := skipSQLQuoted(query, i, query[i])
+			quote := query[i]
+			next, ok := skipSQLQuoted(query, i, quote)
 			if !ok {
 				return fmt.Errorf("%s query contains an unterminated quoted value", database)
+			}
+			// SQLite resolves a quoted name — even a single-quoted string in
+			// table position — to the same table, so quotes hide nothing.
+			name := strings.ReplaceAll(query[i+1:next-1], string([]byte{quote, quote}), string(quote))
+			if err := rawPageTableError(database, name); err != nil {
+				return err
 			}
 			i = next
 		case query[i] == '[':
 			end := strings.IndexByte(query[i+1:], ']')
 			if end < 0 {
 				return fmt.Errorf("%s query contains an unterminated quoted identifier", database)
+			}
+			if err := rawPageTableError(database, query[i+1:i+1+end]); err != nil {
+				return err
 			}
 			i += end + 2
 		case query[i] == '-' && i+1 < len(query) && query[i+1] == '-':
@@ -405,6 +489,9 @@ func validateSingleSelect(query, database string) error {
 			}
 			if token == "ATTACH" || token == "DETACH" {
 				return fmt.Errorf("%s queries may not use %s", database, token)
+			}
+			if err := rawPageTableError(database, query[start:i]); err != nil {
+				return err
 			}
 		default:
 			i++
