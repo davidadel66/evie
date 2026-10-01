@@ -51,12 +51,14 @@ func TestQueuedChildAtDeadlineIsReportedAsDeadline(t *testing.T) {
 	f := setup(t, p)
 	var calls atomic.Int32
 	release := make(chan struct{})
-	// The started child ignores cancellation, so it holds the only slot past
-	// the queued sibling's deadline.
-	configure(t, f, clientFunc(func(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
+	// The started child ignores cancellation until released, so it holds the
+	// only slot past the queued sibling's deadline. It then returns only once
+	// its own deadline has fired, so its outcome never races that deadline.
+	configure(t, f, clientFunc(func(ctx context.Context, _ openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 		calls.Add(1)
 		<-release
-		return response("late evidence"), nil
+		<-ctx.Done()
+		return openrouter.ChatResponse{}, ctx.Err()
 	}))
 	done := make(chan []delegation.Result, 1)
 	errs := make(chan error, 1)
