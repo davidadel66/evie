@@ -59,6 +59,12 @@ func setup(t *testing.T, policy delegation.Policy) *fixture {
 // setupWith optionally routes every store statement through a fault seam.
 func setupWith(t *testing.T, policy delegation.Policy, fault *storeFault) *fixture {
 	t.Helper()
+	return setupFixture(t, policy, fault, researchWeb{})
+}
+
+// setupFixture replaces only the Web execution boundary with web.
+func setupFixture(t *testing.T, policy delegation.Policy, fault *storeFault, web plugins.Plugin) *fixture {
+	t.Helper()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "evie.db")
 	db, err := eviedb.OpenDBAt(path)
@@ -81,7 +87,7 @@ func setupWith(t *testing.T, policy delegation.Policy, fault *storeFault) *fixtu
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.manager, err = plugins.NewManager(tools.KernelToolset(), researchWeb{}, plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(f.store), plugins.NewSubagents(f.supervisor))
+	f.manager, err = plugins.NewManager(tools.KernelToolset(), web, plugins.NewFinance(), plugins.NewYouTube(), plugins.NewTodo(f.store), plugins.NewSubagents(f.supervisor))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +144,9 @@ func TestForegroundAssignmentRetainsResultAcrossDuplicateRequests(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first) != 1 || first[0].Status != "succeeded" || first[0].Findings == "" || len(first[0].Sources) != 1 || first[0].Usage != nil {
+	// The fake provider cites a URL it never fetched and reports no usage.
+	if len(first) != 1 || first[0].Status != "succeeded" || first[0].Summary == "" || len(first[0].Sources) != 0 ||
+		len(first[0].UnverifiedURLs) != 1 || first[0].Usage != nil {
 		t.Fatalf("outcome: %+v", first)
 	}
 	second, err := f.delegate(t, ctx, f.parent, requests)
@@ -333,24 +341,6 @@ func TestBatchRetainsPartialFailureAndAcceptedResultsAfterCancellation(t *testin
 	}
 }
 
-func TestChildModelCallAllowanceStopsRepeatedToolRequests(t *testing.T) {
-	policy := delegation.DefaultPolicy()
-	policy.ModelCalls = 2
-	f := setup(t, policy)
-	var calls atomic.Int32
-	configure(t, f, clientFunc(func(_ context.Context, _ openrouter.ChatRequest, _ openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
-		n := calls.Add(1)
-		return openrouter.ChatResponse{Choices: []openrouter.Choice{{Message: openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{ID: fmt.Sprint(n), Type: "function", Function: openrouter.FunctionCall{Name: "read_file", Arguments: `{"path":"/etc/passwd"}`}}}}}}}, nil
-	}))
-	r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "limit", Objective: "keep researching"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if calls.Load() != 2 || r[0].Status != "failed" || r[0].Reason != "policy_limit" {
-		t.Fatalf("model allowance: %+v calls=%d", r, calls.Load())
-	}
-}
-
 func TestDuplicateWaiterCancellationDoesNotCancelOriginalChild(t *testing.T) {
 	f := setup(t, delegation.DefaultPolicy())
 	g := &gatedProvider{entered: make(chan struct{}, 2), release: make(chan struct{}, 2)}
@@ -449,7 +439,7 @@ func TestComposedParentDelegatesThroughPluginAndReceivesIsolatedEvidence(t *test
 					}
 				}
 			}
-			if len(results) != 1 || results[0].Status != "succeeded" || !strings.Contains(results[0].Findings, "child evidence") {
+			if len(results) != 1 || results[0].Status != "succeeded" || !strings.Contains(results[0].Summary, "child evidence") {
 				return openrouter.ChatResponse{}, fmt.Errorf("parent received no evidence: %+v", results)
 			}
 			return response("Owner-visible researched answer"), nil
@@ -541,7 +531,7 @@ func TestTaskAssociationLeavesClaimsAndCompletionWithOrchestrator(t *testing.T) 
 		t.Fatalf("premature parent completion: %v", err)
 	}
 	for i, child := range tree.Children {
-		summary := results[i].Findings
+		summary := results[i].Summary
 		if _, err = f.store.UpdateGlobalTask(ctx, child.ID, task.UpdateInput{ExpectedRevision: child.Revision, Status: &completed, ResultSummary: &summary, IdempotencyKey: task.IdempotencyKey("complete-" + string(child.ID))}); err != nil {
 			t.Fatal(err)
 		}
@@ -723,7 +713,7 @@ func TestConfiguredDeadlineContextAndResultLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 		b, _ := json.Marshal(r[0])
-		if len(b) > 512 || !utf8.ValidString(r[0].Findings) || len(r[0].Limitations) == 0 {
+		if len(b) > 512 || !utf8.ValidString(r[0].Summary) || !r[0].SummaryTruncated || len(r[0].Limitations) == 0 {
 			t.Fatalf("unbounded result %d bytes %+v", len(b), r[0])
 		}
 	})
@@ -810,7 +800,7 @@ func TestOldAndNewParentReceiptsReopenWithoutChangingDelegation(t *testing.T) {
 	before.Receipt.Preset.Version = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
 	warnings := before.Receipt.Warnings[:0]
 	for _, w := range before.Receipt.Warnings {
-		if w.CapabilityID != delegation.CapabilityID {
+		if w.CapabilityID != delegation.CapabilityID && w.CapabilityID != delegation.ReportCapabilityID {
 			warnings = append(warnings, w)
 		}
 	}
@@ -827,10 +817,10 @@ func TestOldAndNewParentReceiptsReopenWithoutChangingDelegation(t *testing.T) {
 	}
 }
 
-func TestChildOutputLimitIsAppliedBeforeResponsesSerialization(t *testing.T) {
-	p := delegation.DefaultPolicy()
-	p.OutputTokens = 128
-	f := setup(t, p)
+// G1: the per-request output cap is gone; a child gets the model's normal
+// output reserve, applied before Responses serialization.
+func TestChildUsesModelOutputReserveBeforeResponsesSerialization(t *testing.T) {
+	f := setup(t, delegation.DefaultPolicy())
 	profile, err := openrouter.NewExplicitContextProfile(openrouter.AstraModel, 131072, 65536, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -855,11 +845,14 @@ func TestChildOutputLimitIsAppliedBeforeResponsesSerialization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r[0].Status != "succeeded" || serializedLimit != 128 {
+	if r[0].Status != "succeeded" || serializedLimit != 2048 {
 		t.Fatalf("serialized output limit=%d outcome=%+v", serializedLimit, r)
 	}
 }
-func TestFailedProviderCallMakesIncompleteUsageUnknown(t *testing.T) {
+
+// G6: a failed child reports what was measured and marks the total incomplete,
+// because the failed provider call's usage is unknown.
+func TestFailedChildReportsMeasuredUsageAsIncomplete(t *testing.T) {
 	f := setup(t, delegation.DefaultPolicy())
 	var calls int
 	configure(t, f, clientFunc(func(context.Context, openrouter.ChatRequest, openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
@@ -874,8 +867,9 @@ func TestFailedProviderCallMakesIncompleteUsageUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r[0].Status != "failed" || r[0].Usage != nil {
-		t.Fatalf("incomplete usage reported as complete: %+v", r)
+	if r[0].Status != "failed" || r[0].Reason != "provider_failure" || r[0].Usage == nil ||
+		r[0].Usage.TotalTokens == nil || *r[0].Usage.TotalTokens != 40 || !r[0].Usage.Incomplete {
+		t.Fatalf("failed child usage: %+v", r)
 	}
 }
 

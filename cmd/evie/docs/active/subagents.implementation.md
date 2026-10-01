@@ -20,7 +20,10 @@ The Plugin provides `delegate_research` with an `assignments` array. Each member
 has `idempotency_key`, `objective`, optional `context`, and optional `task_id`.
 There are no model arguments for providers, presets, credentials, scope,
 permissions, parent identity or policy. Results carry execution and child IDs,
-terminal state, findings, sources, limitations, a safe reason and nullable usage.
+terminal state, a safe reason, the report's summary, structured sources,
+unverified URLs, limitations and usage. Since 2026-10-01 the Plugin also provides
+`read_subagent_report(execution_id, offset?, limit?)`, which pages a child's full
+stored report for the parent session that delegated it.
 
 An identical key resolves to its retained attempt. Changed content conflicts.
 Failed, cancelled and interrupted keys require a new key to run again. A failed
@@ -42,7 +45,10 @@ most one deadline after admission; if it never starts it ends
 `cancelled`/`parent_cancelled`; stopping the supervisor (process shutdown, or
 stopping or disabling the Subagents Plugin) ends them `cancelled`/`shutdown`;
 lost parent authority ends them `interrupted`/`authority_ended`. One tool call
-can therefore wait up to two deadlines when children queue.
+can therefore wait up to two deadlines when children queue. Since 2026-10-01 a
+child that wraps up at 90% of its time or token budget, or at the step limit,
+ends `partial`/`time_budget`, `token_budget` or `step_limit` with its report;
+a wrap-up response that still requests tools ends `failed`/`wrap_up_failed`.
 
 Parent authority is proved by the intent's position in the current parent turn
 rather than by walking event ancestry, so it holds at any turn depth. Checks that
@@ -104,12 +110,16 @@ Operator environment settings (all must be finite and positive):
 | `PER_PARENT` | 2 running children |
 | `RUNTIME` | 4 running children |
 | `MAX_BATCH` | 8 assignments |
-| `DEADLINE` | `2m` per child from its start; also bounds its capacity wait |
-| `MODEL_CALLS` | 8 per child, shared with compaction |
+| `PER_TURN` | 16 children per parent turn, across its delegation calls |
+| `DEADLINE` | `15m` per child from its start; also bounds its capacity wait |
+| `TOKEN_BUDGET` | 1000000 input plus output tokens per child, shared with compaction |
 | `ASSIGNMENT_BYTES` | 8192 objective/context bytes |
 | `REQUEST_BYTES` | 1048576 serialized model-request/response bytes (1 MiB), subject to the invoking model's route-safe context limit |
-| `RESULT_BYTES` | 2048 serialized result bytes per child, minimum 512 |
-| `OUTPUT_TOKENS` | 1024 per model call |
+| `RESULT_BYTES` | 12000 serialized inline result bytes per child, minimum 512 |
+
+`MODEL_CALLS` and `OUTPUT_TOKENS` were retired on 2026-10-01; setting either
+fails startup with the replacement named. Children use the model's normal
+output reserve and wrap up at 90% of their time or token budget.
 
 The complete batch result envelope must fit 96 KiB so it survives the existing
 100 KiB tool-result admission boundary. This limits one response, not the product's
@@ -227,3 +237,46 @@ Verification passed:
 Startup in `cmd/evie/main.go` still treats any recovery error as fatal, so an
 unreadable record now reported by recovery would stop startup as before; that
 file was outside this change.
+
+## Budgets and results — 2026-10-01
+
+Stage 8 of the 2026-09-30 harness review (G1, G2, G3, G6); the binding record is
+the 2026-10-01 entry in [subagents.decisions.md](subagents.decisions.md).
+
+Review entry points: `internal/subagents/budget.go` (token meter, wrap-up
+signal, budget brief), `internal/agent/step_limit.go` (`WithWrapUp`, the only
+agent-loop change), `internal/eviedb/subagent_result.go` (sources, summary,
+bounding, report paging, durable wrap-up mark), `finishSubagent` in
+`subagent_execution.go`, the per-turn count and `partial` migration in
+`subagents.go`, and `read_subagent_report` in `internal/plugins/subagents.go`.
+
+Schema change: `subagent_executions.state` accepts `partial`. Startup rebuilds
+an earlier table under the write lock, copying rows and rowids unchanged; an
+unknown shape fails closed. The Standard preset gains the optional
+`subagents.report` capability (new version `sha256:adeb2e7b…`); the previous
+version `sha256:50ff6768…` is kept as a historical definition, so existing
+sessions reopen unchanged and need a new chat to read reports.
+
+Regression tests: `internal/subagents/budget_results_test.go` (step-limit,
+injected-clock and reported-token wrap-ups returning `partial` with findings;
+unreported usage counted conservatively; a wrap-up that still requests tools;
+fetched, cited and unverified sources; long reports paged only for their own
+parent; the 17th child of a parent turn), `TestFailedChildReportsMeasuredUsageAsIncomplete`,
+`internal/eviedb/subagent_budget_test.go` (pre-amendment table and records
+load, recover and render unchanged), `internal/agent/wrap_up_test.go` and
+`cmd/evie/subagents_test.go`.
+
+Verification passed:
+
+- `./scripts/verify-change.sh` — UI lint/build, full Go tests and vet, both
+  whitespace checks; only the existing UI lint and Vite chunk-size warnings.
+- `go test -race -count=1 ./internal/subagents/ ./internal/delegation/ ./internal/plugins/`
+- `go test -race -count=1 -run 'Subagent|Delegated|RecoveryPreservesAcceptedChild|OngoingRecovery|PreBudget|WrapUpSignal|StepLimit' ./internal/eviedb/ ./internal/agent/`
+- `go test -race -count=3` over the new budget and result tests.
+
+Known limits: the time budget is checked before each model call, so a step in
+flight at 90% can consume the remaining 10% and end at the hard deadline
+without a report (its fetched sources are still listed). A one-turn child has
+no closed turns to compact; it relies on projection of older tool results, and
+a context overflow still fails it as `policy_limit`. Live model and Web
+execution was not exercised.

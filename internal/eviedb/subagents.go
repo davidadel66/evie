@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/composition"
@@ -14,15 +16,66 @@ import (
 	"github.com/google/uuid"
 )
 
-func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS subagent_executions (
+// subagentExecutionsTable is the attempt table. The 2026-10-01 amendment adds
+// the terminal state 'partial' for a child that wrapped up at its budget.
+const subagentExecutionsTable = `CREATE TABLE IF NOT EXISTS subagent_executions (
  id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL REFERENCES sessions(id),
  idempotency_key TEXT NOT NULL, request_digest TEXT NOT NULL,
  child_session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id),
- state TEXT NOT NULL CHECK(state IN ('admitted','running','succeeded','failed','cancelled','interrupted')),
+ state TEXT NOT NULL CHECK(state IN ('admitted','running','succeeded','partial','failed','cancelled','interrupted')),
  record_json TEXT NOT NULL, UNIQUE(parent_session_id,idempotency_key)
- ); CREATE INDEX IF NOT EXISTS subagent_execution_state ON subagent_executions(state,parent_session_id);`)
-	return err
+ )`
+
+const subagentExecutionsIndex = `CREATE INDEX IF NOT EXISTS subagent_execution_state ON subagent_executions(state,parent_session_id)`
+
+// preBudgetSubagentStates is the state check of tables created before 'partial'.
+const preBudgetSubagentStates = `CHECK(state IN ('admitted','running','succeeded','failed','cancelled','interrupted'))`
+
+// ensureSubagentSchema creates the attempt table or widens an earlier one's
+// state check. SQLite cannot alter a CHECK, so the earlier table is rebuilt
+// with every row copied unchanged. The shape is re-read under the write lock
+// so competing startups migrate once; an unknown shape fails closed.
+func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
+	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+		var definition string
+		err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='subagent_executions'`).Scan(&definition)
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, err = conn.ExecContext(ctx, subagentExecutionsTable); err != nil {
+				return err
+			}
+			_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		if strings.Contains(definition, "'partial'") {
+			_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+			return err
+		}
+		if !strings.Contains(definition, preBudgetSubagentStates) {
+			return errors.New("unsupported subagent execution table schema")
+		}
+		var references int
+		if err = conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f WHERE m.type='table' AND f."table"='subagent_executions'`).Scan(&references); err != nil {
+			return err
+		}
+		if references != 0 {
+			return errors.New("unsupported subagent execution foreign reference")
+		}
+		replacement := strings.Replace(subagentExecutionsTable, "IF NOT EXISTS subagent_executions", "subagent_executions_partial", 1)
+		if _, err = conn.ExecContext(ctx, replacement); err != nil {
+			return fmt.Errorf("create subagent execution table: %w", err)
+		}
+		if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions_partial(rowid,id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json)
+ SELECT rowid,id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json FROM subagent_executions;
+ DROP TABLE subagent_executions;
+ ALTER TABLE subagent_executions_partial RENAME TO subagent_executions;`); err != nil {
+			return fmt.Errorf("migrate subagent executions: %w", err)
+		}
+		_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+		return err
+	})
 }
 
 // AdmitSubagents validates the entire batch and atomically reserves every new
@@ -61,7 +114,9 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 			return errors.New("assignments do not match committed invocation")
 		}
 
-		for _, r := range requests {
+		retained := make([]*delegation.Attempt, len(requests))
+		fresh := 0
+		for i, r := range requests {
 			if err := authorizeSubagentTask(ctx, conn, p, r.TaskID); err != nil {
 				return err
 			}
@@ -70,23 +125,43 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 				if a.Digest != delegation.Digest(r) {
 					return delegation.ErrConflict
 				}
-				attempts = append(attempts, a)
+				retained[i] = &a
 				continue
 			}
 			if !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
+			fresh++
+		}
+		if fresh > 0 {
+			// Every child admitted for this parent turn counts, whichever
+			// delegation call admitted it and however it ended. An unreadable
+			// record proves no turn and never blocks admission.
+			var started int
+			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM subagent_executions WHERE parent_session_id=?
+ AND CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.parent.SourceEventID') END=?`, p.Scope.SessionID, p.SourceEventID).Scan(&started); err != nil {
+				return err
+			}
+			if started+fresh > policy.PerTurn {
+				return &delegation.TurnLimitError{Limit: policy.PerTurn, Started: started, Requested: fresh}
+			}
+		}
+		for i, r := range requests {
+			if retained[i] != nil {
+				attempts = append(attempts, *retained[i])
+				continue
+			}
 			now := s.now().UTC()
 			child := memory.Session{ID: memory.SessionID(uuid.NewString()), ParentSessionID: p.Scope.SessionID, Status: memory.SessionActive, CreatedAt: now, UpdatedAt: now,
 				WorkspaceID: p.Scope.WorkspaceID, WorkspaceRevisionSnapshot: p.Scope.WorkspaceRevision, ProjectID: p.Scope.ProjectID, ProjectRootSnapshot: p.Scope.ProjectRoot}
-			if _, err = conn.ExecContext(ctx, `INSERT INTO sessions(id,workspace_id,workspace_revision_snapshot,project_id,project_root_snapshot,parent_session_id,status,created_at,updated_at)
+			if _, err := conn.ExecContext(ctx, `INSERT INTO sessions(id,workspace_id,workspace_revision_snapshot,project_id,project_root_snapshot,parent_session_id,status,created_at,updated_at)
     VALUES (?,NULLIF(?,''),NULLIF(?,''),NULLIF(?,''),NULLIF(?,''),?,?,?,?)`, child.ID, child.WorkspaceID, child.WorkspaceRevisionSnapshot, child.ProjectID, child.ProjectRootSnapshot, child.ParentSessionID, child.Status, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
 				return err
 			}
-			if err = insertCompositionReceipt(ctx, conn, child.ID, encoded, now); err != nil {
+			if err := insertCompositionReceipt(ctx, conn, child.ID, encoded, now); err != nil {
 				return err
 			}
-			a = delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now}
+			a := delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now}
 			data, err := json.Marshal(a)
 			if err != nil {
 				return err
@@ -274,36 +349,42 @@ func (s *Store) InspectSubagent(ctx context.Context, p delegation.Parent, id str
 	var a delegation.Attempt
 	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
 		var err error
-		a, err = readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=? AND parent_session_id=?`, id, p.Scope.SessionID))
-		if err != nil {
-			return err
-		}
-		if p.Scope.OwnerID != memory.LocalOwnerID || p.Scope.ParentSessionID != "" {
-			return delegation.ErrAuthority
-		}
-		if err = validateSessionScope(ctx, conn, p.Scope); err != nil {
-			return err
-		}
-		if p.Scope.WorkspaceID != "" {
-			var active bool
-			if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=? AND lifecycle_state='active')`, p.Scope.WorkspaceID).Scan(&active); err != nil {
-				return err
-			}
-			if !active || p.Scope.WorkspaceID != a.Parent.Scope.WorkspaceID || p.Scope.WorkspaceRevision != a.Parent.Scope.WorkspaceRevision {
-				return delegation.ErrAuthority
-			}
-		}
-		if p.Scope.ProjectID != "" {
-			var archived bool
-			if err = conn.QueryRowContext(ctx, `SELECT archived FROM projects WHERE id=?`, p.Scope.ProjectID).Scan(&archived); err != nil {
-				return err
-			}
-			if archived {
-				return ErrProjectNotActive
-			}
-		}
-
-		return authorizeSubagentTask(ctx, conn, p, a.Assignment.TaskID)
+		a, err = s.inspectSubagent(ctx, conn, p, id)
+		return err
 	})
 	return a, err
+}
+
+// inspectSubagent reads one attempt of p's session under current access.
+// Another session's attempt is indistinguishable from a missing one.
+func (s *Store) inspectSubagent(ctx context.Context, conn *sql.Conn, p delegation.Parent, id string) (delegation.Attempt, error) {
+	a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=? AND parent_session_id=?`, id, p.Scope.SessionID))
+	if err != nil {
+		return a, err
+	}
+	if p.Scope.OwnerID != memory.LocalOwnerID || p.Scope.ParentSessionID != "" {
+		return a, delegation.ErrAuthority
+	}
+	if err = validateSessionScope(ctx, conn, p.Scope); err != nil {
+		return a, err
+	}
+	if p.Scope.WorkspaceID != "" {
+		var active bool
+		if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE id=? AND lifecycle_state='active')`, p.Scope.WorkspaceID).Scan(&active); err != nil {
+			return a, err
+		}
+		if !active || p.Scope.WorkspaceID != a.Parent.Scope.WorkspaceID || p.Scope.WorkspaceRevision != a.Parent.Scope.WorkspaceRevision {
+			return a, delegation.ErrAuthority
+		}
+	}
+	if p.Scope.ProjectID != "" {
+		var archived bool
+		if err = conn.QueryRowContext(ctx, `SELECT archived FROM projects WHERE id=?`, p.Scope.ProjectID).Scan(&archived); err != nil {
+			return a, err
+		}
+		if archived {
+			return a, ErrProjectNotActive
+		}
+	}
+	return a, authorizeSubagentTask(ctx, conn, p, a.Assignment.TaskID)
 }

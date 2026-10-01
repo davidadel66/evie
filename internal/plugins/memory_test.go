@@ -115,7 +115,8 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("disabled optional Memory Plugin invalidated standard: %v", err)
 	}
-	if len(disabled.Warnings) != len(want)+1 || containsMemorySchema(disabled.Toolset) {
+	// Plus the uncompiled Subagents delegation and report capabilities.
+	if len(disabled.Warnings) != len(want)+2 || containsMemorySchema(disabled.Toolset) {
 		t.Fatalf("disabled composition warnings/schemas = %d/%v", len(disabled.Warnings), disabled.Toolset.Schemas())
 	}
 	if err := manager.Enable(context.Background(), MemoryPluginID); err != nil {
@@ -131,7 +132,7 @@ func TestStandardPresetTreatsMemoryCapabilitiesAsOptional(t *testing.T) {
 			memoryReceipts++
 		}
 	}
-	if len(enabled.Warnings) != 1 || memoryReceipts != len(want) {
+	if len(enabled.Warnings) != 2 || memoryReceipts != len(want) {
 		t.Fatalf("enabled composition warnings/capabilities = %v/%v", enabled.Warnings, enabled.Receipt.Capabilities)
 	}
 }
@@ -168,7 +169,8 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "memory_remember_literal") {
 		t.Fatal("remote-memory opt-out removed non-egress mutation capabilities")
 	}
-	if len(resolved.Warnings) != 10 {
+	// Nine Memory reads plus the uncompiled Subagents delegation and report capabilities.
+	if len(resolved.Warnings) != 11 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }
@@ -628,7 +630,8 @@ func TestFailedMemoryPluginStaysOutOfComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed optional Memory Plugin invalidated standard preset: %v", err)
 	}
-	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+1 {
+	// Plus the uncompiled Subagents delegation and report capabilities.
+	if containsMemorySchema(composition.Toolset) || len(composition.Warnings) != len(allMemoryCapabilityIDs())+2 {
 		t.Fatalf("failed Memory Plugin composition = warnings %v schemas %v", composition.Warnings, composition.Toolset.Schemas())
 	}
 }

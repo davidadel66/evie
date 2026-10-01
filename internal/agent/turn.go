@@ -205,8 +205,9 @@ func (s *Session) runOwnedTurn(
 			iteration++
 		}
 		// The last permitted model response is requested without tools, so
-		// a runaway tool loop ends with an answer from what the turn has.
-		finalStep := iteration >= s.stepLimit
+		// a runaway tool loop ends with an answer from what the turn has. A
+		// worker's wrap-up signal can make an earlier response the last.
+		finalStepNote, finalStep := s.finalStepNotice(iteration)
 
 		events, err := s.history.Events(coordinator.ctx)
 		if err == nil {
@@ -246,7 +247,7 @@ func (s *Session) runOwnedTurn(
 		rejectedRequestBytes = 0
 		if finalStep {
 			composeInput.ToolChoice = "none"
-			composeInput.FinalStepNote = stepLimitNote(s.stepLimit)
+			composeInput.FinalStepNote = finalStepNote
 		}
 		composeInput, err = recall.fitContext(composeInput, s.composer)
 		if err != nil {
@@ -425,7 +426,7 @@ func (s *Session) runOwnedTurn(
 		if finalStep && len(msg.ToolCalls) != 0 {
 			// Nothing from a response that ignored the withheld tools is
 			// committed or executed.
-			err := fmt.Errorf("%w (%d model responses)", ErrStepLimitExceeded, s.stepLimit)
+			err := fmt.Errorf("%w (%d model responses)", ErrStepLimitExceeded, iteration)
 			coordinator.selectCause(causeStepLimit, err, 0)
 			return err
 		}

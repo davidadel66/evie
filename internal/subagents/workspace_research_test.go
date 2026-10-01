@@ -241,7 +241,8 @@ func TestWorkerUsesInvokingModelAndOneMiBDefaultWithSmallParentWindow(t *testing
 	if snapshot.UsableInputBytes != 1_048_576 || snapshot.ConfiguredModel != "selected/model" || snapshot.SerializedBytes <= 8192 {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
-	if strings.Contains(results[0].Findings, "private parent") || len(results[0].Sources) != 1 {
+	// The worker cites a URL without fetching it, so it is unverified.
+	if strings.Contains(results[0].Summary, "private parent") || len(results[0].Sources) != 0 || len(results[0].UnverifiedURLs) != 1 {
 		t.Fatalf("result=%+v", results[0])
 	}
 }
@@ -319,7 +320,8 @@ func TestWorkspaceWorkerReadsExcerptsBeyondLegacyBudgetAndReturnsOnlyFindings(t 
 		t.Fatalf("worker requests calls=%d largest=%d", calls, largest)
 	}
 	b, _ := json.Marshal(results[0])
-	if len(b) > delegation.DefaultPolicy().ResultBytes || strings.Contains(string(b), "evidence-sentinel") || len(results[0].Sources) != 1 {
+	if len(b) > delegation.DefaultPolicy().ResultBytes || strings.Contains(string(b), "evidence-sentinel") || len(results[0].Sources) != 1 ||
+		!results[0].Sources[0].Fetched || !results[0].Sources[0].Cited || len(results[0].UnverifiedURLs) != 0 {
 		t.Fatalf("parent result contains worker pages: %s", b)
 	}
 }

@@ -60,6 +60,8 @@ type Session struct {
 	// stepLimit is the most model responses one turn may request; the last
 	// one is sent without tools.
 	stepLimit int
+	// wrapUp optionally ends a turn earlier through the same final call.
+	wrapUp WrapUpSignal
 }
 
 type legacyToolSignature struct {
@@ -576,8 +578,8 @@ func approvalEventInputWithHashes(
 
 // NewDelegatedWithToolset reuses the normal fenced conversation loop while
 // making the trusted role and automatic-context policy explicit.
-func NewDelegatedWithToolset(client Client, profile openrouter.ContextProfile, history History, scope memory.ScopeContext, owner TurnOwnership, toolset tools.Toolset, instructions string) *Session {
-	s := NewWithToolset(client, profile, history, scope, owner, toolset, WithAutomaticMemoryRecall(false), WithModelMemoryRetrieval(false))
+func NewDelegatedWithToolset(client Client, profile openrouter.ContextProfile, history History, scope memory.ScopeContext, owner TurnOwnership, toolset tools.Toolset, instructions string, options ...SessionOption) *Session {
+	s := NewWithToolset(client, profile, history, scope, owner, toolset, append([]SessionOption{WithAutomaticMemoryRecall(false), WithModelMemoryRetrieval(false)}, options...)...)
 	// A worker's working ceiling encodes its serialized request-byte
 	// allowance, so its budget stays at one token per byte rather than being
 	// scaled by a calibrated bytes-per-token ratio.

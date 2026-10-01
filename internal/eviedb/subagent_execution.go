@@ -6,10 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/memory"
@@ -138,7 +135,7 @@ func (s *Store) withSubagentReadTransaction(ctx context.Context, operation func(
 // FinishSubagent arbitrates against accepted child evidence under the write
 // lock. A later cancellation can never replace an already accepted final answer.
 func (s *Store) FinishSubagent(ctx context.Context, id, state, reason string) (delegation.Attempt, error) {
-	if state != "failed" && state != "cancelled" && state != "interrupted" && state != "succeeded" {
+	if state != "failed" && state != "cancelled" && state != "interrupted" && state != "succeeded" && state != delegation.StatePartial {
 		return delegation.Attempt{}, errors.New("invalid terminal subagent state")
 	}
 	var a delegation.Attempt
@@ -157,20 +154,26 @@ func (s *Store) FinishSubagent(ctx context.Context, id, state, reason string) (d
 }
 
 func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegation.Attempt, state, reason string) error {
-	var finalID, content string
-	var payload []byte
-	err := conn.QueryRowContext(ctx, `SELECT id,content,payload_json FROM events WHERE session_id=? AND event_type='assistant_message'
- AND COALESCE(json_array_length(payload_json,'$.tool_calls'),0)=0 ORDER BY sequence DESC LIMIT 1`, a.Child.ID).Scan(&finalID, &content, &payload)
-	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
-	if err == nil {
-		result.Status = "succeeded"
-		result.Reason = ""
-		result.Findings = content
-		a.FinalEventID = memory.EventID(finalID)
-		result.Sources = researchSources(content)
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	var finalID, report string
+	err := conn.QueryRowContext(ctx, `SELECT id,content FROM events WHERE session_id=? AND event_type='assistant_message'
+ AND COALESCE(json_array_length(payload_json,'$.tool_calls'),0)=0 ORDER BY sequence DESC LIMIT 1`, a.Child.ID).Scan(&finalID, &report)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
-	} else if state == "succeeded" {
+	}
+	hasReport := err == nil
+	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
+	switch {
+	case hasReport:
+		// An accepted final answer is the authoritative completion. It is a
+		// partial report when the child was wrapping up at a budget.
+		a.FinalEventID = memory.EventID(finalID)
+		result.Status, result.Reason = "succeeded", ""
+		if a.WrapUp != nil {
+			result.Status, result.Reason = delegation.StatePartial, a.WrapUp.Reason
+		} else if state == delegation.StatePartial {
+			result.Status, result.Reason = delegation.StatePartial, reason
+		}
+	case state == "succeeded" || state == delegation.StatePartial:
 		result.Status = "interrupted"
 		result.Reason = "no_accepted_final_answer"
 	}
@@ -192,18 +195,25 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 				result.Reason = "provider_response_invalid"
 			case memory.ClassificationContextOverflow:
 				result.Reason = "policy_limit"
+			case memory.ClassificationStepLimitExceeded:
+				result.Reason = delegation.ReasonWrapUpFailed
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 	}
-	if result.Status == "succeeded" {
-		result.Usage, err = subagentUsage(ctx, conn, a.Child.ID)
-		if err != nil {
-			return err
-		}
+	// Usage and the Web evidence are reported for every outcome.
+	if result.Usage, err = subagentUsage(ctx, conn, a.Child.ID); err != nil {
+		return err
 	}
-	boundSubagentResult(&result, a.Policy.ResultBytes)
+	evidence, err := subagentWebEvidence(ctx, conn, a.Child.ID)
+	if err != nil {
+		return err
+	}
+	if !hasReport {
+		report = ""
+	}
+	buildSubagentResult(&result, hasReport, report, evidence, a.Policy.ResultBytes)
 	now := s.now().UTC()
 	a.EndedAt = &now
 	a.State = result.Status
@@ -216,62 +226,34 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	return err
 }
 
-var researchURL = regexp.MustCompile(`https?://[^\s<>"\x60]+`)
-
-func researchSources(content string) []string {
-	var sources []string
-	seen := map[string]bool{}
-	for _, v := range researchURL.FindAllString(content, -1) {
-		v = strings.TrimRight(v, ".,;:)]}")
-		if !seen[v] {
-			sources = append(sources, v)
-			seen[v] = true
-		}
-		if len(sources) == 8 {
-			break
-		}
-	}
-	return sources
-}
-func boundSubagentResult(r *delegation.Result, limit int) {
-	if r.Status != "succeeded" {
-		r.Limitations = []string{"Assignment did not complete; a new idempotency key is required for another attempt."}
-	}
-	for {
-		b, _ := json.Marshal(r)
-		if len(b) <= limit {
-			return
-		}
-		r.Limitations = []string{"Findings were truncated to the configured result limit."}
-		if len(r.Sources) > 0 {
-			r.Sources = r.Sources[:len(r.Sources)-1]
-			continue
-		}
-		if len(r.Findings) > 0 {
-			n := len(r.Findings) - (len(b) - limit) - len(r.Limitations[0])
-			if n < 0 {
-				n = 0
-			}
-			for n > 0 && !utf8.RuneStart(r.Findings[n]) {
-				n--
-			}
-			r.Findings = r.Findings[:n]
-			continue
-		}
-		return
-	}
-}
-func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) (*memory.TokenUsage, error) {
-	rows, err := conn.QueryContext(ctx, `SELECT payload_json FROM events WHERE session_id=? AND event_type IN ('assistant_message','context_compacted')`, child)
+// subagentUsage sums the usage of the child's committed responses, including
+// compactions. A response without usage, or a turn that ended inside a
+// provider or compaction call, makes the total a lower bound (Incomplete).
+// With no reported usage at all it stays unknown (nil).
+func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) (*delegation.Usage, error) {
+	rows, err := conn.QueryContext(ctx, `SELECT event_type,payload_json FROM events WHERE session_id=?
+ AND event_type IN ('assistant_message','context_compacted','turn_failed','turn_interrupted') ORDER BY sequence`, child)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var total *memory.TokenUsage
+	var total *delegation.Usage
+	incomplete := false
 	for rows.Next() {
+		var kind string
 		var b []byte
-		if err = rows.Scan(&b); err != nil {
+		if err = rows.Scan(&kind, &b); err != nil {
 			return nil, err
+		}
+		if kind == string(memory.EventTurnFailed) || kind == string(memory.EventTurnInterrupted) {
+			var terminal memory.TurnTerminalPayload
+			if err = json.Unmarshal(b, &terminal); err != nil {
+				return nil, err
+			}
+			if terminal.Stage == memory.StageProvider || terminal.Stage == memory.StageContextCompaction {
+				incomplete = true
+			}
+			continue
 		}
 		var p struct {
 			Usage *memory.TokenUsage `json:"usage"`
@@ -280,19 +262,21 @@ func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) 
 			return nil, err
 		}
 		if p.Usage == nil {
-			return nil, nil
-		}
-		if total == nil {
-			copy := *p.Usage
-			total = &copy
+			incomplete = true
 			continue
 		}
+		if total == nil {
+			total = &delegation.Usage{TokenUsage: *p.Usage}
+			continue
+		}
+		// A field is reported only when every measured response reported it.
 		addUsage := func(dst **int64, src *int64) {
 			if src == nil || *dst == nil {
 				*dst = nil
 				return
 			}
-			**dst += *src
+			sum := **dst + *src
+			*dst = &sum
 		}
 		addUsage(&total.InputTokens, p.Usage.InputTokens)
 		addUsage(&total.OutputTokens, p.Usage.OutputTokens)
@@ -301,7 +285,13 @@ func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) 
 		addUsage(&total.CachedInputTokens, p.Usage.CachedInputTokens)
 		addUsage(&total.CacheWriteInputTokens, p.Usage.CacheWriteInputTokens)
 	}
-	return total, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if total != nil {
+		total.Incomplete = incomplete
+	}
+	return total, nil
 }
 
 // RecoverSubagents never starts execution or fabricates conversational events.

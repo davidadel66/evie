@@ -47,14 +47,15 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 	beforeSubagents := preSubagentsStandardPresetContent()
 	beforeSubagents.Version = preSubagentsStandardPresetVersion
 	for _, tc := range []struct {
-		name                  string
-		preset                Preset
-		retrieval, delegation int
+		name                          string
+		preset                        Preset
+		retrieval, delegation, report int
 	}{
-		{"baseline", preRetrievalStandardPreset(), 0, 0},
-		{"retrieval_only", beforeSubagents, 1, 0},
-		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1},
-		{"combined", BuiltinStandardPreset(), 1, 1},
+		{"baseline", preRetrievalStandardPreset(), 0, 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0},
+		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0},
+		{"combined", BuiltinStandardPreset(), 1, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
@@ -71,7 +72,8 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 			if !reflect.DeepEqual(selected.Receipt, reopened.Receipt) || !reflect.DeepEqual(selected.Toolset.Schemas(), reopened.Toolset.Schemas()) {
 				t.Fatal("reopening changed pinned receipt or tools")
 			}
-			if countSchema(reopened.Toolset, "memory_search") != tc.retrieval || countSchema(reopened.Toolset, delegation.ToolName) != tc.delegation {
+			if countSchema(reopened.Toolset, "memory_search") != tc.retrieval || countSchema(reopened.Toolset, delegation.ToolName) != tc.delegation ||
+				countSchema(reopened.Toolset, delegation.ReportToolName) != tc.report {
 				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
 			}
 		})

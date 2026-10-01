@@ -45,6 +45,11 @@ cannot delegate; the Standard preset remains the default for delegation-enabled
 Workspaces. No new dependencies, PDF extraction, unrestricted workers, background
 execution, or larger parent-result cap are introduced.
 
+Amended 2026-10-01: harness review Stage 8 later replaced the worker result
+contract and raised the inline result cap; see the 2026-10-01 entry in
+[subagents.decisions.md](subagents.decisions.md). The Workspace allowance,
+revocation, and excerpt contracts above are unchanged.
+
 ## Verification
 
 Use the existing public profile, tool execution, composed supervisor/SQLite,

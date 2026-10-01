@@ -4,6 +4,14 @@
 > foreground work and orchestrator-owned Task updates. GitHub #155 and #169–#175
 > describe the original foundation; they have not been changed or retroactively
 > treated as acceptance criteria for this extension.
+>
+> Amended 2026-10-01 by the owner's approval of harness review Stage 8 (G1,
+> G2, G3, G6). Children are budgeted by wall-clock time and tokens instead of
+> a model-call allowance and per-request output cap, wrap up into a `partial`
+> report when a budget runs low, store their full report for paging, and
+> return sources taken from their own Web tool events. Amended text below is
+> marked; the binding record is the 2026-10-01 entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -79,7 +87,7 @@ allowances produce an explicit refusal rather than a change of scope.
 29. As Evie's owner, I want each execution attempt to have its own durable record, so that session state and Task status are not overloaded to describe agent execution.
 30. As Evie's owner, I want repeated identical delegation requests to resolve to the same attempt, so that retries do not duplicate work or model usage.
 31. As Evie's owner, I want reuse of an idempotency key with a different assignment rejected, so that the system cannot confuse two different requests.
-32. As Evie's owner, I want limits enforced on execution time, model calls, context, and returned findings, so that a bounded assignment cannot run indefinitely.
+32. As Evie's owner, I want each child bounded by wall-clock time and tokens, told its budget up front, and given one tool-free wrap-up when a budget runs low, with request context, returned-result size, and children per parent turn also limited, so that a bounded assignment cannot run indefinitely and still returns the work it did. (Amended 2026-10-01; formerly limits on execution time, model calls, context, and returned findings.)
 33. As Evie's owner, I want child model configuration derived from the parent's resolved configuration initially, so that delegation does not introduce unexpected provider or model selection.
 34. As Evie's owner, I want nested delegation unavailable and rejected, so that one assignment cannot expand into an uncontrolled execution tree.
 35. As Evie's owner, I want cancelling the parent turn to stop its child, so that cancellation reaches all work started for that turn.
@@ -203,31 +211,52 @@ allowances produce an explicit refusal rather than a change of scope.
   outcome and requires a new key to authorize a fresh attempt. Unrelated
   parents cannot inspect or attach to another parent's attempt.
 - **Lifecycle and ownership.** Execution states distinguish admitted, running,
-  succeeded, failed, cancelled, and interrupted attempts. The child uses its
+  succeeded, partial (amended 2026-10-01: the child wrapped up at a budget and
+  returned a report), failed, cancelled, and interrupted attempts. The child uses its
   own normal history binding and fenced turn lease. Authority to start further
   child activity and accept its result also depends on the originating parent
   invocation remaining authorized. An active child lease alone is insufficient.
   Child execution does not acquire the parent's session lock again or write
   directly into the parent's history.
-- **Execution limits.** The amended release enforces configurable finite per-parent and
-  runtime concurrency and permits depth one. The child has no delegation capability,
-  and Kernel admission also rejects nested requests. Enforce finite configured
-  runtime-wide capacity, wall-clock deadline, total model-call allowance, input
-  and output context limits, and returned-result size. Count conversational
-  and compaction model calls against the same child allowance. Invalid or
+- **Execution limits.** (Amended 2026-10-01.) The release enforces configurable
+  finite per-parent and runtime concurrency and permits depth one. The child has
+  no delegation capability, and Kernel admission also rejects nested requests.
+  Enforce finite configured runtime-wide capacity, a per-child wall-clock
+  deadline, a per-child token budget, the request-context limit, returned-result
+  size, and a limit on children per parent turn counted across that turn's
+  delegation calls. The token budget counts provider-reported input plus output
+  tokens of conversational and compaction calls alike; a response without
+  reported usage is counted from its serialized request and response bytes. No
+  request-count allowance or per-request output cap applies: the child uses the
+  model's normal output reserve and compacts or projects its own context like
+  the primary chat, and the turn step limit remains its runaway guard. The
+  child is told its time and token budget and its report format with the
+  assignment. When it has used 90% of its time or tokens, or reaches the step
+  limit, its next model call is a single tool-free wrap-up call asking for the
+  report now; once the token budget is spent no other call starts. Invalid or
   unbounded policy configuration rejects admission. Pin the effective policy
   for diagnostics; the model cannot raise these limits. Reuse the parent's
   resolved model/provider configuration while respecting the child's narrower
   execution policy. No exact monetary-budget guarantee is introduced.
-- **Result contract.** Successful delegation returns the attempt and child
-  session identities, terminal status, concise findings, supporting source
-  references, limitations or blockers, and available usage. Research success
-  means the bounded assignment finished, not that every claim is established.
-  Failures distinguish provider, policy-limit, cancellation, interruption, and
-  infrastructure causes without exposing secrets. Persist the bounded result
-  and terminal state consistently before returning them for parent delivery.
-  Preserve absent usage as unknown. Return findings and evidence rather than
-  reasoning or a full child transcript.
+- **Result contract.** (Amended 2026-10-01.) Delegation returns, for every
+  outcome, the attempt and child session identities, terminal status and safe
+  reason, the report's Summary section, structured sources, limitations or
+  blockers, and available usage. The child's full final report is stored
+  durably and the parent pages it on request through a read-only report
+  capability, only for attempts its own session delegated. A child that wraps
+  up at a budget ends `partial` with its report. Sources are the URLs the
+  child's own Web tool events fetched or returned, each marked cited in the
+  report or not; URLs the report cites that no tool returned are listed
+  separately as unverified. Research success means the bounded assignment
+  finished, not that every claim is established. Failures distinguish
+  provider, policy-limit, wrap-up, cancellation, interruption, and
+  infrastructure causes without exposing secrets; work that ended without a
+  report keeps the sources it fetched and says no report was produced. Persist
+  the bounded result and terminal state consistently before returning them for
+  parent delivery. Report measured usage for every outcome, mark it incomplete
+  when a call's usage is unknown, and preserve wholly absent usage as unknown.
+  Return findings and evidence rather than reasoning or a full child
+  transcript.
 - **Cancellation and terminal races.** Propagate parent cancellation, parent
   ownership loss, shutdown, and relevant revocation to the child. Prevent new
   activity after authority ends, join admitted execution, and release child
@@ -316,9 +345,13 @@ allowances produce an explicit refusal rather than a change of scope.
   persistence before parent delivery. Assert durable observable invariants;
   avoid tests that duplicate private implementation structure.
 - Use deterministic gates, clocks, and small injected policies for deadline,
-  capacity, total model-call, context, and result limits. A child that repeatedly
-  requests allowed capabilities must terminate at its limit, including when
-  compaction consumes model calls. Missing provider usage must remain unknown.
+  capacity, time and token budget, per-turn, context, and result limits.
+  (Amended 2026-10-01.) A child that repeatedly requests allowed capabilities
+  must get one tool-free wrap-up call and end `partial` with its report, at the
+  step limit, at 90% of an injected clock's time budget, and at 90% of reported
+  or estimated tokens. Long reports must page only for their own parent. Usage
+  is present on partial and failed outcomes; wholly missing provider usage
+  remains unknown.
 - Follow existing turn-ownership race-test patterns for parent cancellation,
   parent lease expiry/replacement, child lease loss, disable after a parent pins
   delegation, and shutdown. Prove no further child admission or external

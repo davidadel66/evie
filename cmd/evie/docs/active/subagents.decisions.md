@@ -1,5 +1,94 @@
 # Subagents implementation decisions
 
+## 2026-10-01 — Time and token budgets, wrap-up reports, pageable results
+
+Source: harness review Stage 8 (G1, G2, G3, G6) in
+[docs/harness-review-2026-09-30.md](../../../../docs/harness-review-2026-09-30.md),
+which the owner approved, following the pattern shared by Anthropic's research
+system, Claude Code sub-agents and the OpenAI Agents SDK. It deliberately
+replaces specified limits.
+
+Superseded wording: the spec's "total model-call allowance, input and output
+context limits" and "Count conversational and compaction model calls against
+the same child allowance"; the 2026-09-10 entry's "total model-call" limit; the
+regex-extracted sources and blind result truncation of #172; and the Workspace
+research slice's "no ... larger parent-result cap".
+
+- **Budget.** Each child has a wall-clock deadline (default 15 minutes from its
+  own start) and a token budget (default 1,000,000 input plus output tokens).
+  Tokens are provider-reported usage of every conversational and compaction
+  call; when a response lacks usage, its serialized request and response bytes
+  count at one token per byte. Failed calls count nothing, since transport
+  retries happen only before a response. The 8-call allowance and the
+  1024-token output cap are removed; the child uses the model's normal output
+  reserve. The request-byte limit, per-parent and runtime concurrency, the
+  capacity wait and the turn step limit stay.
+- **Told up front.** The harness appends the budget and the report format to
+  the child's first message, after the assignment and selected context. The
+  pinned `ResearchInstructions` are unchanged, so the research preset version,
+  its instruction digest and every existing receipt stay valid.
+- **Wrap-up.** Before each model call the supervisor checks the child's budget
+  through the step-limit seam of the agent loop (`agent.WithWrapUp`). At 90% of
+  the time or tokens, or at the step limit, it durably records the reason on
+  the attempt (`wrap_up`), and that call is sent with `tool_choice: "none"`
+  and a trailing harness notice asking for the report now. A text answer
+  settles the attempt as the new terminal state `partial` with reason
+  `time_budget`, `token_budget` or `step_limit`; the durable mark makes a
+  report accepted before a crash recover as `partial` too. If the wrap-up
+  response still asks for tools, nothing is committed and the attempt is
+  `failed`/`wrap_up_failed` (formerly a step-limit child was
+  `infrastructure_failure`). Once the token budget is spent no further call
+  starts except that one wrap-up. The hard deadline still cancels the child;
+  an in-flight step at 90% can use the remaining 10%.
+- **Report and result.** The child is asked for `## Summary` (about 1,000 to
+  2,000 tokens), then `## Details`, then `## Limitations`. Its final answer is
+  the stored report. The inline result carries status and reason, `summary`
+  (the Summary section, or the report's beginning when it has none),
+  `report_bytes`, structured `sources`, `unverified_urls`, `limitations`
+  (harness notes first, then up to eight report bullets), `usage` and the
+  execution ID. Older results keep `findings` and string `sources` and render
+  exactly as stored. The inline result is bounded by `result_bytes` (default
+  12,000 so eight results still fit the 96 KiB batch envelope); the summary is
+  cut first, with `summary_truncated` and a limitation pointing to the reader,
+  then the least useful list entries, with an omitted count. Nothing is cut
+  silently.
+- **Reading reports.** A new optional Standard preset capability,
+  `subagents.report` (`read_subagent_report(execution_id, offset?, limit?)`),
+  pages the stored report in UTF-8-safe byte pages of 256 to 32,768 bytes
+  (default 16,384), with `next_offset`. It reads only attempts whose parent
+  session is the calling session, under InspectSubagent's current Workspace,
+  project and Task access checks; another session's attempt is reported as not
+  found. Sessions composed before it keep their receipts (`sha256:50ff…`) and
+  need a new chat to gain it. The research preset never includes it.
+- **Sources.** Built from the child's successful tool events: every URL
+  `web_fetch` read (the excerpt's reported URL, or the requested URL for the
+  legacy contract; a cross-host redirect notice reads nothing), and each
+  `web_search` result URL line. Fetched URLs are listed cited or not; search
+  results only when cited, marked `fetched: false`. URLs the report cites that
+  no tool event returned are `unverified_urls`. Citation matching ignores
+  scheme and host case, fragments, trailing slashes and trailing punctuation.
+- **Salvage.** An attempt that ended without a report (failure, cancellation,
+  authority loss, wrap-up failure) still lists the pages it fetched and says
+  no report was produced; nothing is synthesized.
+- **Usage.** Every outcome reports the sum of usage on the child's committed
+  responses. `incomplete` marks a lower bound: a committed response without
+  usage (compactions record none), or a turn that ended inside a provider or
+  compaction call. With no reported usage at all it stays `null`.
+- **Per-turn limit.** One parent turn admits at most `per_turn` children
+  (default 16) across all its delegation calls, counted durably by the turn's
+  root event. Retrying retained keys admits nothing new. A refusal names the
+  limit, the children already started and the number requested.
+- **Persistence.** `subagent_executions.state` gains `partial`; startup
+  rebuilds an earlier table under the write lock, copying every row
+  unchanged, and refuses an unknown table shape. Policies gain `per_turn` and
+  `token_budget`; earlier policies keep `model_calls` and `output_tokens` when
+  rewritten and cannot execute. Operators setting the retired
+  `EVIE_SUBAGENTS_MODEL_CALLS` or `EVIE_SUBAGENTS_OUTPUT_TOKENS` get a startup
+  error naming the replacement.
+
+Continuing a partial child (G10) is harness review Stage 9; until then a new key
+starts a fresh attempt.
+
 ## 2026-09-11 — Capability-aware parent delegation guidance
 
 The owner approved general delegation guidance in the parent's system prompt:

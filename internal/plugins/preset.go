@@ -20,7 +20,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:50ff6768089e364a67229790b5410ed13c8b00e5d0b8980b5e6e45f8cca93b83"
+	StandardPresetVersion                               = "sha256:adeb2e7be36e4ce573154b8a2b7cb6d95c84039f78275e8c3f8ce43cda9e30cc"
+	preReportStandardPresetVersion                      = "sha256:50ff6768089e364a67229790b5410ed13c8b00e5d0b8980b5e6e45f8cca93b83"
 	preSubagentsStandardPresetVersion                   = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
 	preRetrievalStandardPresetVersion                   = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
 	preRetrievalSubagentsStandardPresetVersion          = "sha256:ea528f3f1eed0716eb107c00b8fc99f62c93edc14185158c73f0c6b958428f02"
@@ -626,6 +627,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preRetrievalSubagentsStandardPresetVersion {
 		return m.resumePreset(preRetrievalSubagentsStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preReportStandardPresetVersion {
+		return m.resumePreset(preReportStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -917,7 +921,20 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 }
 
 func standardPresetContent() Preset {
+	p := preReportStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities, CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	return p
+}
+
+func preReportStandardPresetContent() Preset {
 	p := preSubagentsStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities, CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	return p
+}
+
+// Sessions composed before read_subagent_report keep delegation without it.
+func preReportStandardPreset() Preset {
+	p := preReportStandardPresetContent()
+	p.Version = preReportStandardPresetVersion
 	return p
 }
