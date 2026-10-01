@@ -145,7 +145,7 @@ func TestSessionRestartAdvancesWithCurrentConfigurationAndProjectsLatestSummary(
 		t.Fatal(err)
 	}
 	messages := conversation.reqs[0].Messages
-	if len(messages) < 3 || messages[1].Content != secondSummary {
+	if len(messages) < 3 || messages[1].Content != contextSummaryMessage(secondSummary) {
 		t.Fatalf("provider messages=%+v", messages)
 	}
 	encoded, err := json.Marshal(messages)
@@ -341,7 +341,7 @@ func TestSessionCompactPersistsAcceptedGenerationAndUsesItForLaterConversation(t
 		t.Fatalf("conversation requests=%d", len(conversation.reqs))
 	}
 	messages := conversation.reqs[0].Messages
-	if len(messages) < 3 || messages[1].Content != validCompactionSummary() {
+	if len(messages) < 3 || messages[1].Content != contextSummaryMessage(validCompactionSummary()) {
 		t.Fatalf("conversation messages=%+v", messages)
 	}
 	for _, message := range messages {
@@ -473,7 +473,7 @@ func TestSessionCompactPersistenceFailureKeepsPriorAcceptedSummary(t *testing.T)
 		t.Fatal(err)
 	}
 	if len(conversation.reqs) != 1 || len(conversation.reqs[0].Messages) < 2 ||
-		conversation.reqs[0].Messages[1].Content != priorSummary {
+		conversation.reqs[0].Messages[1].Content != contextSummaryMessage(priorSummary) {
 		t.Fatalf("provider request after failed replacement=%+v", conversation.reqs)
 	}
 	requestJSON, err := json.Marshal(conversation.reqs[0])
@@ -774,7 +774,7 @@ func TestSessionCompactCancellationAfterGenerationKeepsPriorSummary(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conversation.reqs[0].Messages[1].Content != priorSummary ||
+	if conversation.reqs[0].Messages[1].Content != contextSummaryMessage(priorSummary) ||
 		strings.Contains(string(requestJSON), "generated but cancelled") {
 		t.Fatalf("provider projection after cancelled replacement=%s", requestJSON)
 	}

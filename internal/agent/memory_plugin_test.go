@@ -94,7 +94,7 @@ func TestMemoryPluginCompositionReceiptSurvivesProcessReopen(t *testing.T) {
 	}
 	memorySchemas := 0
 	for _, schema := range resumed.Toolset.Schemas() {
-		if strings.HasPrefix(schema.Function.Name, "memory_") {
+		if strings.HasPrefix(schema.Function.Name, "memory_") || schema.Function.Name == "read_tool_result" {
 			memorySchemas++
 		}
 	}

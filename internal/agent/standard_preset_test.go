@@ -387,10 +387,12 @@ func TestStandardWorkspaceTodoDefaultsScopeAndProjectsDurableFocus(t *testing.T)
 	if err := session.Send(ctx, "continue", &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(client.reqs) != 3 || len(client.reqs[2].Messages) < 2 ||
-		client.reqs[2].Messages[1].Role != "user" ||
-		!strings.Contains(client.reqs[2].Messages[1].Content, "<task-focus-data>") ||
-		!strings.Contains(client.reqs[2].Messages[1].Content, "workspace work") {
+	// Task Focus is volatile working context, so it trails the conversation.
+	if len(client.reqs) != 3 || len(client.reqs[2].Messages) < 2 {
+		t.Fatalf("focused request = %+v", client.reqs)
+	}
+	if focus := client.reqs[2].Messages[len(client.reqs[2].Messages)-1]; focus.Role != "user" ||
+		!strings.Contains(focus.Content, "<task-focus-data>") || !strings.Contains(focus.Content, "workspace work") {
 		t.Fatalf("focused request = %+v", client.reqs)
 	}
 	if stored.ScopeContext().WorkspaceID != workspace.ID || stored.ScopeContext().ProjectID != "" {

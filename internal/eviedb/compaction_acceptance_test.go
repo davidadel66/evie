@@ -332,7 +332,9 @@ func TestDurableCompactionChainSurvivesSQLiteRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if conversation.requests[0].Messages[1].Content != secondSummary ||
+	// The accepted summary is a labelled user-role data block, not a system message.
+	if summary := conversation.requests[0].Messages[1]; summary.Role != "user" ||
+		!strings.HasPrefix(summary.Content, "<conversation-summary>") || !strings.Contains(summary.Content, secondSummary) ||
 		strings.Contains(string(requestJSON), firstSummary) || strings.Contains(string(requestJSON), "artifact-42 is intact") ||
 		!strings.Contains(string(requestJSON), "Execute the next action.") {
 		t.Fatalf("provider projection after restart=%s", requestJSON)

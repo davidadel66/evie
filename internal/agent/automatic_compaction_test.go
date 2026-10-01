@@ -193,7 +193,7 @@ func TestSendAutomaticallyCompactsBeforeConversationAndSnapshotsAcceptedSummary(
 		snapshot.RetainedFirstEventID != payload.FirstRetainedEventID || snapshot.CompactionFailureCategory != "" {
 		t.Fatalf("compaction=%+v snapshot=%+v", payload, snapshot)
 	}
-	if len(conversation.reqs[0].Messages) < 3 || conversation.reqs[0].Messages[1].Content != validCompactionSummary() {
+	if len(conversation.reqs[0].Messages) < 3 || conversation.reqs[0].Messages[1].Content != contextSummaryMessage(validCompactionSummary()) {
 		t.Fatalf("conversation request=%+v", conversation.reqs[0])
 	}
 }
@@ -257,7 +257,7 @@ func TestSendAutomaticFailureKeepsPriorAcceptedSummaryActive(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(conversation.reqs) != 1 || len(conversation.reqs[0].Messages) < 3 ||
-		conversation.reqs[0].Messages[1].Content != priorSummary {
+		conversation.reqs[0].Messages[1].Content != contextSummaryMessage(priorSummary) {
 		t.Fatalf("conversation request=%+v", conversation.reqs)
 	}
 	for _, message := range conversation.reqs[0].Messages {

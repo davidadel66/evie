@@ -86,8 +86,8 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Request.Messages) != 3 || result.Request.Messages[1].Role != "system" ||
-		!strings.Contains(result.Request.Messages[1].Content, "approved rolling summary") ||
+	if len(result.Request.Messages) != 3 || result.Request.Messages[1].Role != "user" ||
+		result.Request.Messages[1].Content != contextSummaryMessage("approved rolling summary") ||
 		result.Request.Messages[2].Content != "current" {
 		t.Fatalf("messages=%+v", result.Request.Messages)
 	}
@@ -96,7 +96,7 @@ func TestContextComposerIncludesAcceptedSummaryBeforeRecentHistory(t *testing.T)
 	}
 }
 
-func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T) {
+func TestContextComposerPlacesWorkingContextAfterSummaryAndHistory(t *testing.T) {
 	// This fixture checks message ordering. Overflow has separate boundary tests.
 	profile := testContextProfile("test/model")
 	result, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(ContextComposeInput{
@@ -110,8 +110,8 @@ func TestContextComposerPlacesWorkingContextBeforeSummaryAndHistory(t *testing.T
 		t.Fatal(err)
 	}
 	messages := result.Request.Messages
-	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != "prior summary" ||
-		messages[2].Role != "user" || messages[2].Content != "# Task Focus\n- id=task-1 title=\"ship\"" || messages[3].Content != "continue" {
+	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != contextSummaryMessage("prior summary") ||
+		messages[2].Content != "continue" || messages[3].Role != "user" || messages[3].Content != "# Task Focus\n- id=task-1 title=\"ship\"" {
 		t.Fatalf("messages = %+v", messages)
 	}
 	if result.Snapshot.SystemMessageBytes == 0 || result.Snapshot.HistoryMessageBytes == 0 || result.Snapshot.SummaryMessageBytes == 0 {

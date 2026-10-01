@@ -44,7 +44,8 @@ func TestRepositoryInstructionsCountedAndKeptOutsideConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	messages := result.Request.Messages
-	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != "task data" || messages[2].Content != "root guide" || messages[3].Content != "current owner request" {
+	// Repository guidance is stable and leads; Task Focus is volatile and trails.
+	if len(messages) != 4 || messages[0].Content != systemPrompt || messages[1].Content != "root guide" || messages[2].Content != "current owner request" || messages[3].Content != "task data" {
 		t.Fatalf("message ordering=%+v", messages)
 	}
 	estimate, err := (CanonicalRequestEstimator{}).Estimate(result.Request)

@@ -228,12 +228,13 @@ func (s *Session) runOwnedTurn(
 		if iteration == 1 && !retrying && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
+		environmentNote := ""
 		if workingFolder != "" {
-			workingContext += fmt.Sprintf("\nLocal working folder: %q. Relative file paths and shell commands start in this session's working directory.\n", workingFolder)
+			environmentNote = fmt.Sprintf("Local working folder: %q. Relative file paths and shell commands start in this session's working directory.", workingFolder)
 		}
 		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
-			MemoryData: memoryData, MemoryReceipt: memoryReceipt,
+			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: environmentNote,
 			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
@@ -636,6 +637,7 @@ func (s *Session) runOwnedTurn(
 				Profile:   s.profile,
 				Directory: &s.directory,
 				Scope:     s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID, SearchMemory: recall.searchForTool(call.ID),
+				ReadToolResult: s.readStoredToolResult,
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),

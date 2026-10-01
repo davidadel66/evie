@@ -20,7 +20,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:adeb2e7be36e4ce573154b8a2b7cb6d95c84039f78275e8c3f8ce43cda9e30cc"
+	StandardPresetVersion                               = "sha256:a42624b010eede75f2befb6bc42c88d237b03b0da21dad8a07852ab8e5e8ded6"
+	preReadToolResultStandardPresetVersion              = "sha256:adeb2e7be36e4ce573154b8a2b7cb6d95c84039f78275e8c3f8ce43cda9e30cc"
 	preReportStandardPresetVersion                      = "sha256:50ff6768089e364a67229790b5410ed13c8b00e5d0b8980b5e6e45f8cca93b83"
 	preSubagentsStandardPresetVersion                   = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
 	preRetrievalStandardPresetVersion                   = "sha256:35d56debddef4411a4a9eff972376708bf8aabb811f02e25df5c93582e066754"
@@ -106,7 +107,7 @@ func preSubagentsStandardPresetContent() Preset {
 			{ID: TodoClaimCapabilityID, Compatibility: compatibility},
 			{ID: TodoReleaseCapabilityID, Compatibility: compatibility},
 		},
-		OptionalCapabilities: memoryCapabilityRequirements(compatibility),
+		OptionalCapabilities: preReadToolResultMemoryCapabilityRequirements(compatibility),
 	}
 }
 
@@ -219,6 +220,18 @@ func memoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequir
 	requirements := make([]CapabilityRequirement, len(ids))
 	for i, id := range ids {
 		requirements[i] = CapabilityRequirement{ID: id, Compatibility: compatibility}
+	}
+	return requirements
+}
+
+// preReadToolResultMemoryCapabilityRequirements freezes the Memory list of
+// presets created before the stored tool result reader, in its exact order.
+func preReadToolResultMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
+	var requirements []CapabilityRequirement
+	for _, requirement := range memoryCapabilityRequirements(compatibility) {
+		if requirement.ID != MemoryReadToolResultCapabilityID {
+			requirements = append(requirements, requirement)
+		}
 	}
 	return requirements
 }
@@ -630,6 +643,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preReportStandardPresetVersion {
 		return m.resumePreset(preReportStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preReadToolResultStandardPresetVersion {
+		return m.resumePreset(preReadToolResultStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -920,9 +936,24 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 	return ImplementationCompatibility{}, false
 }
 
+// standardPresetContent is the current standard preset: every Memory
+// Capability including the stored tool result reader, then delegation and
+// its report reader.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preSubagentsStandardPresetContent()
+	p.OptionalCapabilities = append(memoryCapabilityRequirements(compatibility),
+		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preReadToolResultStandardPreset is the standard preset before the stored
+// tool result reader; sessions pinned to it keep their exact capabilities.
+func preReadToolResultStandardPreset() Preset {
 	p := preReportStandardPresetContent()
 	p.OptionalCapabilities = append(p.OptionalCapabilities, CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	p.Version = preReadToolResultStandardPresetVersion
 	return p
 }
 

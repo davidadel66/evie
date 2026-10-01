@@ -173,6 +173,9 @@ type InvocationContext struct {
 	Scope         memory.ScopeContext
 	Lease         memory.TurnLease
 	SourceEventID memory.EventID
+	// ReadToolResult returns one durable tool outcome of the current session.
+	// It cannot address another session's history.
+	ReadToolResult func(context.Context, memory.EventID) (StoredToolResult, error)
 }
 
 type invocationContextKey struct{}

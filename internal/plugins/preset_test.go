@@ -47,15 +47,16 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 	beforeSubagents := preSubagentsStandardPresetContent()
 	beforeSubagents.Version = preSubagentsStandardPresetVersion
 	for _, tc := range []struct {
-		name                          string
-		preset                        Preset
-		retrieval, delegation, report int
+		name                                string
+		preset                              Preset
+		retrieval, delegation, report, read int
 	}{
-		{"baseline", preRetrievalStandardPreset(), 0, 0, 0},
-		{"retrieval_only", beforeSubagents, 1, 0, 0},
-		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0},
-		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0},
-		{"combined", BuiltinStandardPreset(), 1, 1, 1},
+		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0, 0, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0},
+		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0},
+		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0},
+		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
@@ -73,7 +74,8 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 				t.Fatal("reopening changed pinned receipt or tools")
 			}
 			if countSchema(reopened.Toolset, "memory_search") != tc.retrieval || countSchema(reopened.Toolset, delegation.ToolName) != tc.delegation ||
-				countSchema(reopened.Toolset, delegation.ReportToolName) != tc.report {
+				countSchema(reopened.Toolset, delegation.ReportToolName) != tc.report ||
+				countSchema(reopened.Toolset, "read_tool_result") != tc.read {
 				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
 			}
 		})
@@ -181,7 +183,7 @@ func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t 
 	if countSchema(resumed.Toolset, "memory_search") != 0 {
 		t.Fatal("old conversation gained relevance search")
 	}
-	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.2.0" {
+	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
 		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
 	}
 	fresh, err := current.ResolvePreset(StandardPresetID)
@@ -191,6 +193,63 @@ func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t 
 	if fresh.Receipt.Preset.Version == legacy.Receipt.Preset.Version || countSchema(fresh.Toolset, "memory_search") != 1 {
 		t.Fatal("new conversation does not pin a new retrieval composition")
 	}
+}
+
+func TestPreReadToolResultStandardReceiptResumesWithoutTheReader(t *testing.T) {
+	t.Setenv("EVIE_REMOTE_MEMORY", "on")
+	makeManager := func(memoryPlugin Plugin) *Manager {
+		manager, err := NewManager(tools.KernelToolset(), NewWeb(), NewFinance(), NewYouTube(), NewTodo(&taskServiceFixture{}), memoryPlugin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []PluginID{WebPluginID, FinancePluginID, YouTubePluginID, TodoPluginID, MemoryPluginID} {
+			if err := manager.SetEnabled(id, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return manager
+	}
+	plugin := NewMemory(&stubSemanticKernel{})
+	legacyPreset := preReadToolResultStandardPreset()
+	if got := canonicalPresetVersion(legacyPreset); got != preReadToolResultStandardPresetVersion {
+		t.Fatalf("historical content hash=%s, want frozen %s", got, preReadToolResultStandardPresetVersion)
+	}
+	legacy, err := makeManager(preReaderMemoryPlugin{plugin}).resolvePreset(legacyPreset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := makeManager(plugin).ResumeComposition(legacy.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resumed.Receipt, legacy.Receipt) || !reflect.DeepEqual(resumed.Toolset.Schemas(), legacy.Toolset.Schemas()) {
+		t.Fatal("resuming added capabilities or rewrote the old receipt")
+	}
+	if countSchema(resumed.Toolset, "read_tool_result") != 0 || countSchema(resumed.Toolset, "memory_search") != 1 {
+		t.Fatalf("pinned conversation tools changed: %v", schemaNames(resumed.Toolset))
+	}
+	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.3.0" {
+		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
+	}
+}
+
+// preReaderMemoryPlugin is the Memory Plugin as released before the stored
+// tool result reader.
+type preReaderMemoryPlugin struct{ *Memory }
+
+func (p preReaderMemoryPlugin) ToolCapabilities() []ToolCapability {
+	return p.Memory.ResumableToolCapabilities("1.2.0")
+}
+func (p preReaderMemoryPlugin) Manifest() Manifest {
+	manifest := p.Memory.Manifest()
+	manifest.ImplementationVersion = "1.2.0"
+	manifest.ResumableFrom = nil
+	manifest.Capabilities = nil
+	for _, capability := range p.ToolCapabilities() {
+		manifest.Capabilities = append(manifest.Capabilities, CapabilityContract{ID: capability.ID, Version: capability.ContractVersion})
+	}
+	return manifest
 }
 
 type preRetrievalMemoryPlugin struct{ *Memory }

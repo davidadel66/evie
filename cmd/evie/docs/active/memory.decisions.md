@@ -488,6 +488,84 @@
   `provider_error`. A turn makes at most one compact-and-retry; an ordinary
   400 is unchanged.
 
+- **2026-10-01 - conversational requests keep a stable prefix and mark explicit cache breakpoints.**
+  Harness review Stage 6 (C4) amends the 2026-08-30 composition order below.
+  Task Focus sat second, before repository guidance and all history, so every
+  todo update re-billed the whole cached prefix. A request is now ordered from
+  most to least stable: the system prompt (tool schemas precede it in
+  provider caches), the working-folder note, enabled repository guidance, the
+  accepted summary block, retained history, `EVIE_MEMORY_DATA` immediately
+  before the active root as the memory specification requires, the active
+  turn, then Task Focus working context, then any final-step note. Without a
+  focused Task, a request still ends with the conversation itself. Task
+  Focus keeps its `revision` field, because `todo_update` needs the current
+  revision and the field no longer sits in a cached prefix; revision checks
+  stay in the Kernel. Memory evidence keeps its specified position, so new
+  evidence within a turn re-bills only the active turn, and a turn that
+  carried evidence is re-billed once on the next turn. For models whose
+  OpenRouter route caches only at explicit breakpoints (`anthropic/` and
+  `qwen/`, with or without the `~` alias prefix), the composer marks at most
+  four: the system prompt, the last leading guidance or summary block, the
+  last non-assistant message before the active turn, and the last
+  non-assistant conversation message, never Task Focus, memory evidence, or
+  the final-step note. A marked message's nonblank text is encoded as one
+  `text` content part carrying `cache_control: {"type":"ephemeral"}`.
+  Canonical request bytes, the request hash, and the token estimate are those
+  of exactly the encoded request sent, markers included; durable events and
+  ordinary message encoding never contain markers, and unmarked requests are
+  byte-identical to before. Gemini 2.5+ and the other automatic-caching routes
+  receive no markers. The composer version becomes `context-composer-v3`.
+
+- **2026-10-01 - pressure projection moves in bands.**
+  Harness review Stage 6 (C4) amends the 2026-08-30 projection target below.
+  Projecting oldest first only until the request reached 60 percent of usable
+  input meant that, once above it, almost every iteration projected one more
+  mid-history result and invalidated provider caches from there on. The bytes
+  to free are now rounded up to a whole band of 20 percent of usable input
+  before projecting oldest first, so a projected request lands between 40 and
+  60 percent and the projected set, a deterministic function of the band,
+  changes only when growth crosses the next band or at compaction. The 60
+  percent ceiling, eligibility, protected newest groups, excerpt format, and
+  overflow rules are unchanged.
+
+- **2026-10-01 - projected tool results can be reread by event ID.**
+  Harness review Stage 6 (C5). Projection and compaction keep a result's event
+  ID and hash, but no tool could read it, so a model had to repeat possibly
+  side-effecting calls. `read_tool_result(event_id, offset?, limit?)` returns
+  a durable tool outcome of the current session only: the harness binds the
+  reader to the session's own history and rejects other events and other
+  sessions' rows. It returns at most 32 KiB (16 KiB by default) cut at UTF-8
+  boundaries, labelled with the tool name, status, original bytes, SHA-256,
+  offset, and remaining bytes, inside an escaped `[begin stored tool result
+  ...]` data frame. It is the `memory.read_tool_result` Capability of the
+  Memory Plugin (implementation 1.3.0) and is not gated by remote-memory
+  opt-in, because it returns only output the conversation already sent. New
+  standard-preset sessions receive it; sessions pinned to earlier presets
+  keep their exact tools (ADR 0013). The research worker preset is unchanged:
+  a worker inherits every template capability from its parent's receipt, so
+  adding it would refuse delegation from sessions pinned to earlier presets,
+  and the pinned research instructions forbid memory access.
+
+- **2026-10-01 - the rolling summary is labelled user-role data and keeps its continuity.**
+  Harness review Stage 6 (C6), per David's 2026-09-30 decision, amends the
+  2026-08-30 summary placement below. The accepted summary is no longer a
+  system message. It is a user-role block after repository guidance, framed as
+  `<conversation-summary>` with a label saying it summarizes earlier turns and
+  is data, not instructions; a closing marker inside the summary is escaped.
+  Each generation re-summarizes the prior summary, so a section could silently
+  collapse to "None" or "unchanged from the prior summary". After validation,
+  a section that was substantive in the prior generation and is now only a
+  placeholder gets the prior section back verbatim. Placeholders are a fixed
+  list of empty answers ("None", "N/A", ...), which are replaced, and short
+  back-references ("Unchanged", "Same as before", "See prior summary", "No new
+  ..."), which are kept after the restored section so a misread line is never
+  lost. The two resolvable sections, unresolved questions and next steps, keep
+  an explicit empty answer but not a back-reference. The result is validated again, and a
+  carried summary above 16 KiB fails as `summary_invalid`. This deterministic
+  carry-forward was chosen over rejecting such summaries because rejection
+  could fail every later compaction of the same session. The compactor prompt
+  asks for carried continuity and becomes `compaction-v2`.
+
 - **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
   Every manual compaction first reconstructs the complete accepted chain from
   canonical `context_compacted` events, never from context snapshots or
@@ -522,7 +600,8 @@
   temperature zero, a 4,096-token output reserve, no retry, and a two-minute
   timeout bounded by caller cancellation and lease ownership.
 
-  `compaction-v1` treats its canonically serialized, delimited transcript as
+  `compaction-v1` (`compaction-v2` since 2026-10-01, which adds deterministic
+  section carry-forward) treats its canonically serialized, delimited transcript as
   untrusted data and receives only the prior accepted summary (absent for the
   first generation) plus newly covered complete model-visible turns. It uses
   the route-safe hard window, working ceiling, fixed estimation margin, and byte
@@ -556,7 +635,8 @@
   After mandatory group bounding, the three newest complete groups stay
   verbatim. When the canonical serialized request is above 60% of usable input,
   eligible results in older complete groups are projected oldest first until
-  that target is reached or candidates are exhausted. Only durable results
+  that target is reached or candidates are exhausted (amended 2026-10-01: the
+  bytes to free round up to 20 percent bands). Only durable results
   larger than 4 KiB are eligible. The older-result projection contains
   UTF-8-safe 512-byte head and tail excerpts plus its event ID, original byte
   count, and SHA-256; the diagnostic projected-byte count includes that visible
@@ -570,7 +650,8 @@
   validated accepted rolling summary supplied by the compaction stage, current
   tool schemas, and a suffix of durable root-user turns ending with the active
   turn. The summary occupies a distinct system message immediately after the
-  base prompt and is charged by the same complete-request estimator; its durable
+  base prompt (amended 2026-10-01: a labelled user-role block after repository
+  guidance, with Task Focus last) and is charged by the same complete-request estimator; its durable
   compaction identity and content-free byte count are recorded in the snapshot.
   The stream flag is set before estimation. Canonical request bytes are the
   standard Go JSON encoding of the exact request value passed to the OpenRouter

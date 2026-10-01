@@ -31,7 +31,7 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	plugin := NewMemory(&stubSemanticKernel{})
 	manifest := plugin.Manifest()
-	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.2.0" {
+	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.3.0" {
 		t.Fatalf("manifest identity = %s@%s", manifest.ID, manifest.ImplementationVersion)
 	}
 	if err := plugin.Start(context.Background()); err != nil {
@@ -61,14 +61,14 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 		"memory.list_scopes", "memory.list_objects", "memory.inspect_object", "memory.query_claims",
 		"memory.lookup_alias", "memory.traverse", "memory.remember_literal", "memory.remember_entity",
 		"memory.correct_claim", "memory.create_graph_link", "memory.promote_claim", "memory.retire",
-		"memory.restore", "memory.retract_source", "memory.restore_source",
+		"memory.restore", "memory.retract_source", "memory.restore_source", "memory.read_tool_result",
 	}
 	wantSchemas := []string{
 		"memory_search", "memory_search_conversations", "memory_expand_conversation",
 		"memory_list_scopes", "memory_list_objects", "memory_inspect_object", "memory_query_claims",
 		"memory_lookup_alias", "memory_traverse", "memory_remember_literal", "memory_remember_entity",
 		"memory_correct_claim", "memory_create_graph_link", "memory_promote_claim", "memory_retire",
-		"memory_restore", "memory_retract_source", "memory_restore_source",
+		"memory_restore", "memory_retract_source", "memory_restore_source", "read_tool_result",
 	}
 	if !reflect.DeepEqual(gotIDs, wantIDs) || !reflect.DeepEqual(gotSchemas, wantSchemas) {
 		t.Fatalf("focused capabilities = %v / %v", gotIDs, gotSchemas)
@@ -168,6 +168,11 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	}
 	if !containsSchema(resolved.Toolset, "memory_remember_literal") {
 		t.Fatal("remote-memory opt-out removed non-egress mutation capabilities")
+	}
+	// Rereading this conversation's own tool output sends nothing that the
+	// conversation did not already send, so it is not a remote memory read.
+	if !containsSchema(resolved.Toolset, "read_tool_result") {
+		t.Fatal("remote-memory opt-out removed the stored tool result reader")
 	}
 	// Nine Memory reads plus the uncompiled Subagents delegation and report capabilities.
 	if len(resolved.Warnings) != 11 {

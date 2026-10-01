@@ -146,7 +146,7 @@ const ContextSnapshotSchemaVersion = 1
 
 const (
 	ContextCompactedSchemaVersion   = 1
-	ContextCompactionPromptVersion  = "compaction-v1"
+	ContextCompactionPromptVersion  = "compaction-v2"
 	ContextCompactedSummaryMaxBytes = 16 * 1024
 )
 

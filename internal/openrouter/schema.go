@@ -21,6 +21,17 @@ type Message struct {
 	// ephemeral transport continuation, never serialized as Chat or evidence.
 	TextParts     []TextPart        `json:"-"`
 	ResponseItems []json.RawMessage `json:"-"`
+	// CacheControl marks the end of a prompt-cache prefix for providers that
+	// need explicit breakpoints. Request encoding sends a marked message's
+	// nonblank text as one content part carrying the marker; durable events
+	// and ordinary message encoding never contain it.
+	CacheControl *CacheControl `json:"-"`
+}
+
+// CacheControl is a provider prompt-cache breakpoint. "ephemeral" is the only
+// type OpenRouter documents.
+type CacheControl struct {
+	Type string `json:"type"`
 }
 
 type TextPart struct {

@@ -18,7 +18,7 @@ import (
 const (
 	MemoryPluginID              PluginID = "memory"
 	MemoryContractVersion                = "1.0.0"
-	memoryImplementationVersion          = "1.2.0"
+	memoryImplementationVersion          = "1.3.0"
 	memoryReadOutputLimit                = 64 * 1024
 )
 
@@ -41,6 +41,9 @@ const (
 	MemoryRestoreCapabilityID             CapabilityID = "memory.restore"
 	MemoryRetractSourceCapabilityID       CapabilityID = "memory.retract_source"
 	MemoryRestoreSourceCapabilityID       CapabilityID = "memory.restore_source"
+	// MemoryReadToolResultCapabilityID rereads this conversation's own durable
+	// tool output, which context projection and compaction may have shortened.
+	MemoryReadToolResultCapabilityID CapabilityID = "memory.read_tool_result"
 )
 
 type memoryCapabilityDescriptor struct {
@@ -72,6 +75,9 @@ var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
 	{id: MemoryRestoreSourceCapabilityID, build: func(p *Memory) tools.Tool {
 		return p.sourceLifecycleTool("memory_restore_source", memory.LifecycleRestoreSource)
 	}},
+	// Not gated by remote-memory opt-in: it returns only tool output this
+	// conversation already sent to its provider.
+	{id: MemoryReadToolResultCapabilityID, build: func(*Memory) tools.Tool { return tools.ReadToolResultTool() }},
 }
 
 func allMemoryCapabilityIDs() []CapabilityID {
@@ -129,7 +135,7 @@ func (p *Memory) Manifest() Manifest {
 		contracts[i] = CapabilityContract{ID: capability.ID, Version: MemoryContractVersion}
 	}
 	var compatibility []ImplementationCompatibility
-	for _, version := range []string{"1.0.0", "1.1.0"} {
+	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
 		legacy := p.ResumableToolCapabilities(version)
 		evidence := make([]CapabilityCompatibility, len(legacy))
 		for i, c := range legacy {
@@ -159,16 +165,21 @@ func (p *Memory) ToolCapabilities() []ToolCapability {
 // Existing sessions retain their exact pre-applicability schemas and behavior.
 // New sessions use the current capabilities; no saved receipt is rewritten.
 func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
-	if version != "1.0.0" && version != "1.1.0" {
+	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" {
 		return nil
 	}
 	var capabilities []ToolCapability
 	for _, capability := range p.ToolCapabilities() {
-		if capability.ID != MemorySearchCapabilityID && capability.ID != MemorySearchConversationsCapabilityID && capability.ID != MemoryExpandConversationCapabilityID {
+		// Version 1.3.0 added the stored tool result reader.
+		if capability.ID == MemoryReadToolResultCapabilityID {
+			continue
+		}
+		if version == "1.2.0" || (capability.ID != MemorySearchCapabilityID &&
+			capability.ID != MemorySearchConversationsCapabilityID && capability.ID != MemoryExpandConversationCapabilityID) {
 			capabilities = append(capabilities, capability)
 		}
 	}
-	if version == "1.1.0" {
+	if version != "1.0.0" {
 		return capabilities
 	}
 	for i := range capabilities {

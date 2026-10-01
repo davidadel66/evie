@@ -54,7 +54,7 @@ func RequestBytes(r ChatRequest) ([]byte, error) {
 		return bytes.Clone(r.prepared.body), nil
 	}
 	if !UsesResponses(r.Model) {
-		return json.Marshal(r)
+		return encodeChatRequest(r)
 	}
 	encoded, err := encodeResponsesRequest(r)
 	if err != nil {

@@ -239,7 +239,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		return c.responses(ctx, r, h)
 	}
 	r.Stream = true
-	jsonBody, err := json.Marshal(r)
+	jsonBody, err := encodeChatRequest(r)
 	if err != nil {
 		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to marshal json: %w", err))
 	}
@@ -424,7 +424,7 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 		r.Stream = false
 		return c.responses(context.Background(), r, StreamHandlers{})
 	}
-	jsonBody, err := json.Marshal(r)
+	jsonBody, err := encodeChatRequest(r)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to marshal json: %w", err)
 	}

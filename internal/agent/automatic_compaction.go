@@ -108,7 +108,7 @@ func selectAutomaticCompaction(
 			priorID = chain[len(chain)-1].Event.ID
 		}
 		return compactionPlan{
-			Request: request, Generation: generation, PriorCompactionEventID: priorID,
+			Request: request, PriorSummary: summaryContent(activeSummary), Generation: generation, PriorCompactionEventID: priorID,
 			CoveredFirst:  covered[0].events[0],
 			CoveredLast:   covered[len(covered)-1].events[len(covered[len(covered)-1].events)-1],
 			FirstRetained: compactionTurns[retainedIndex].events[0],
@@ -203,6 +203,9 @@ func (s *Session) performAutomaticCompaction(
 		return nil, memory.Event{}, &automaticCompactionFailure{err: err}
 	}
 	summary, err := validatedCompactionSummary(response)
+	if err == nil {
+		summary, err = carryForwardCompactionSections(plan.PriorSummary, summary)
+	}
 	if err != nil {
 		return nil, memory.Event{}, &automaticCompactionFailure{
 			category: memory.ContextCompactionSummaryInvalid,

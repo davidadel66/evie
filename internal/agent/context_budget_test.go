@@ -114,7 +114,7 @@ func TestSendCompactsAndContinuesOnSmallWorkingCeilings(t *testing.T) {
 				t.Fatalf("first turn: %v", err)
 			}
 			if len(compactor.reqs) != 1 || len(conversation.reqs) != 1 ||
-				conversation.reqs[0].Messages[1].Content != validCompactionSummary() {
+				conversation.reqs[0].Messages[1].Content != contextSummaryMessage(validCompactionSummary()) {
 				t.Fatalf("compactor requests=%d conversation requests=%d", len(compactor.reqs), len(conversation.reqs))
 			}
 			if err := session.Send(context.Background(), "and again", &recorder{}, nil); err != nil {
@@ -520,7 +520,7 @@ func TestSendCompactsAndRetriesOnceAfterProviderContextLengthRejection(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if retried.SerializedBytes >= first.SerializedBytes || conversation.reqs[1].Messages[1].Content != validCompactionSummary() {
+	if retried.SerializedBytes >= first.SerializedBytes || conversation.reqs[1].Messages[1].Content != contextSummaryMessage(validCompactionSummary()) {
 		t.Fatalf("retry was not compacted: first=%d retried=%d", first.SerializedBytes, retried.SerializedBytes)
 	}
 	var shape []memory.EventType
