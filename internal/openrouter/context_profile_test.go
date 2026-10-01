@@ -33,8 +33,15 @@ func TestDeepSeekContextDiscoveryAcceptsAdvertisedAlias(t *testing.T) {
 			}))
 			profile, err := client.ResolveContextProfile(context.Background(), "deepseek/deepseek-v4.1-flash")
 			if endpointID == "other/model" {
-				if err == nil || !strings.Contains(err.Error(), "does not match") {
-					t.Fatalf("mismatched endpoint identity: %v", err)
+				// Discovery rejects the unrelated identity; startup then uses the
+				// default model's checked-in fallback, never that metadata.
+				_, discoverErr := client.discoverContextProfile(context.Background(), "deepseek/deepseek-v4.1-flash",
+					contextProfileConfig{working: defaultContextWorkingTokens, output: defaultContextOutputTokens})
+				if discoverErr == nil || !strings.Contains(discoverErr.Error(), "does not match") {
+					t.Fatalf("mismatched endpoint identity: %v", discoverErr)
+				}
+				if err != nil || profile.Diagnostics().Source != ContextProfileBuiltinFallback || profile.Diagnostics().HardWindowTokens != 262144 {
+					t.Fatalf("profile=%+v err=%v", profile.Diagnostics(), err)
 				}
 				return
 			}

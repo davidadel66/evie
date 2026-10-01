@@ -437,6 +437,20 @@
   snapshot data makes the command visibly fail rather than silently falling
   back.
 
+- **2026-10-01 - the application default model has a checked-in context fallback.**
+  Harness review Stage 2 (C7) amends the built-in-model clause of the
+  2026-08-30 route-safety decision below. When discovery fails or exceeds its
+  deadline, a checked-in `builtin_fallback` hard window is used only for exact
+  listed models: Evie's built-in `moonshotai/kimi-k3` and the application
+  default `deepseek/deepseek-v4.1-flash`, both 262,144 tokens. DeepSeek's value
+  is the default working ceiling, the smallest window under which the default
+  configuration is valid, so it assumes nothing beyond what adopting DeepSeek
+  as the default already required. Fallback diagnostics name the configured
+  model as canonical, and startup logs a warning naming the model and window.
+  Caller cancellation still aborts, invalid limits still fail, Astra still
+  never inherits a fallback, and every other model still fails startup
+  without a hard override.
+
 - **2026-09-29 - owner-selected models for web foreground chats.**
   David requested a provider-grouped model dropdown. The
   [chat model selection contract](chat-model-selection.spec.md) supersedes the
@@ -687,6 +701,29 @@
   snapshots rather than proof of current ownership. Closed sessions cannot
   acquire, renew, or authorize writes; the matching unexpired holder may still
   release for cleanup.
+
+- **2026-10-01 - provider streams are bounded, incomplete generations fail, and transient failures retry before output.**
+  Harness review Stage 2 (L2, L3, L4, L7) extends the terminal-evidence rules
+  below. A Chat Completions `finish_reason` of `length` records
+  `provider_response_invalid` and `error` records `provider_error`; neither is
+  committed, so truncated text or tool arguments never become accepted history.
+  This matches the Responses path's incomplete and failed handling and applies
+  to compaction calls through the same transport. A streaming request fails as
+  `provider_error` after five minutes without a received line, including the
+  wait for headers; keepalive comments count as activity and there is no total
+  stream deadline. Dial, TLS handshake, and response-header waits are bounded
+  at 30 seconds, 10 seconds, and five minutes. A conversational provider call
+  is retried at most twice with the identical admitted request and its single
+  context snapshot, only when no reasoning or content callback fired and the
+  failure carried no HTTP response (a refused, reset, or closed connection,
+  never a timeout or cancellation) or HTTP 429, 502, 503, or 504. Backoff is
+  one then two seconds, or a longer `Retry-After`; a requested wait above 30
+  seconds fails at once. Each retry is lease-authorized immediately before it
+  starts, caller cancellation interrupts the backoff, and exhausted retries
+  record the last failure. Astra never retries because it opens reasoning
+  activity at dispatch, and compaction keeps its no-retry rule. Non-2xx
+  provider bodies are drained up to 64 KiB and never included in errors, so
+  the browser and terminal see only the status.
 
 - **2026-08-23 - turn terminal evidence separates failures from interruptions.**
   Request construction, transport, non-2xx HTTP, and response-body or scanner

@@ -45,6 +45,9 @@ type Client struct {
 	apiBaseURL              string
 	httpClient              *http.Client
 	contextDiscoveryTimeout time.Duration
+	// streamIdleTimeout fails a streaming request after this long without a
+	// received line. It bounds silence, not total stream duration.
+	streamIdleTimeout time.Duration
 }
 
 // Tool is the wire format for advertising one tool to the model. Type is

@@ -54,6 +54,10 @@ type turnTiming struct {
 	// beforeToolResultHandoff is a deterministic test seam at the zero-work
 	// boundary after ordinary tool return and before lifecycle-stage handoff.
 	beforeToolResultHandoff func()
+	// providerRetryBase is the first transient-failure backoff; each later
+	// retry doubles it. waitProviderRetry sleeps unless ctx ends first.
+	providerRetryBase time.Duration
+	waitProviderRetry func(context.Context, time.Duration) error
 }
 
 var defaultTurnTiming = turnTiming{
@@ -66,6 +70,8 @@ var defaultTurnTiming = turnTiming{
 	newCleanupContext: func(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 		return context.WithTimeout(context.WithoutCancel(parent), timeout)
 	},
+	providerRetryBase: time.Second,
+	waitProviderRetry: waitProviderRetry,
 }
 
 type heartbeatTicker interface {

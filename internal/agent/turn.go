@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -357,44 +359,9 @@ func (s *Session) runOwnedTurn(
 			return err
 		}
 
-		callbackLifetime := &providerCallbackLifetime{}
-		handlers := openrouter.StreamHandlers{
-			OnReasoning: func(text string) {
-				callbackLifetime.invoke(func() {
-					coordinator.emitIfActive(func() {
-						rendered.mu.Lock()
-						if rendered.content {
-							rendered.mu.Unlock()
-							return
-						}
-						rendered.reasoning = rendered.reasoning || text != ""
-						rendered.reasoningOpen = true
-						rendered.mu.Unlock()
-						ev.Reasoning(text)
-					})
-				})
-			},
-			OnContent: func(text string) {
-				callbackLifetime.invoke(func() {
-					coordinator.emitIfActive(func() {
-						rendered.mu.Lock()
-						closeReasoning := rendered.reasoningOpen
-						rendered.reasoningOpen = false
-						rendered.content = true
-						rendered.mu.Unlock()
-						if closeReasoning {
-							ev.ReasoningDone()
-						}
-						ev.Delta(text)
-					})
-				})
-			},
-		}
-
-		res, err := s.client.ChatStream(coordinator.ctx, req, handlers)
-		callbackLifetime.closeAndWait()
+		res, err := s.callProvider(coordinator, lease, req, ev, rendered)
 		if err != nil {
-			return s.classifyProviderError(coordinator, err)
+			return err
 		}
 		if err := s.observeTurnContext(coordinator); err != nil {
 			return err
@@ -402,6 +369,17 @@ func (s *Session) runOwnedTurn(
 		if len(res.Choices) == 0 {
 			err := errors.New("agent: provider returned no choices")
 			coordinator.selectCause(causeProviderInvalid, err, 0)
+			return err
+		}
+		switch res.Choices[0].FinishReason {
+		case "length":
+			// Truncated text or tool arguments are never durable success.
+			err := errors.New("agent: provider stopped at the output token limit")
+			coordinator.selectCause(causeProviderInvalid, err, 0)
+			return err
+		case "error":
+			err := errors.New("agent: provider reported a generation error")
+			coordinator.selectCause(causeProviderError, err, 0)
 			return err
 		}
 
@@ -630,6 +608,135 @@ func (s *Session) runOwnedTurn(
 			}
 		}
 		requestParentID = lastOutcomeID
+	}
+}
+
+const (
+	maxProviderRetries = 2
+	// maxProviderRetryDelay bounds any single backoff, including a provider's
+	// Retry-After. A longer requested wait fails the turn instead of stalling it.
+	maxProviderRetryDelay = 30 * time.Second
+)
+
+// callProvider streams one admitted request and returns either a response or
+// an already classified turn error. A transient failure is retried with the
+// identical request only while no live callback has fired, so nothing has
+// reached the user and no tool can have run. Each attempt is lease-authorized
+// immediately before it starts.
+func (s *Session) callProvider(
+	coordinator *turnCoordinator,
+	lease memory.TurnLease,
+	req openrouter.ChatRequest,
+	ev Events,
+	rendered *renderedOutput,
+) (openrouter.ChatResponse, error) {
+	for attempt := 0; ; attempt++ {
+		res, callbackFired, err := s.streamProviderAttempt(coordinator, req, ev, rendered)
+		if err == nil {
+			return res, nil
+		}
+		delay, retry := providerRetryDelay(err, attempt, s.timing.providerRetryBase)
+		if !retry || callbackFired || coordinator.result().kind != causeNone || coordinator.ctx.Err() != nil {
+			return openrouter.ChatResponse{}, s.classifyProviderError(coordinator, err)
+		}
+		if waitErr := s.timing.waitProviderRetry(coordinator.ctx, delay); waitErr != nil {
+			if observed := s.observeTurnContext(coordinator); observed != nil {
+				return openrouter.ChatResponse{}, observed
+			}
+			return openrouter.ChatResponse{}, s.classifyProviderError(coordinator, err)
+		}
+		if err := s.owner.Authorize(coordinator.ctx, lease); err != nil {
+			return openrouter.ChatResponse{}, s.classifyLocalError(coordinator, fmt.Errorf("authorize provider retry: %w", err))
+		}
+		if err := s.observeTurnContext(coordinator); err != nil {
+			return openrouter.ChatResponse{}, err
+		}
+	}
+}
+
+// streamProviderAttempt runs one provider call and reports whether any live
+// callback was admitted during it. The callback lifetime is closed and joined
+// before returning, so the report is final.
+func (s *Session) streamProviderAttempt(
+	coordinator *turnCoordinator,
+	req openrouter.ChatRequest,
+	ev Events,
+	rendered *renderedOutput,
+) (openrouter.ChatResponse, bool, error) {
+	callbackLifetime := &providerCallbackLifetime{}
+	var callbackFired atomic.Bool
+	handlers := openrouter.StreamHandlers{
+		OnReasoning: func(text string) {
+			callbackLifetime.invoke(func() {
+				callbackFired.Store(true)
+				coordinator.emitIfActive(func() {
+					rendered.mu.Lock()
+					if rendered.content {
+						rendered.mu.Unlock()
+						return
+					}
+					rendered.reasoning = rendered.reasoning || text != ""
+					rendered.reasoningOpen = true
+					rendered.mu.Unlock()
+					ev.Reasoning(text)
+				})
+			})
+		},
+		OnContent: func(text string) {
+			callbackLifetime.invoke(func() {
+				callbackFired.Store(true)
+				coordinator.emitIfActive(func() {
+					rendered.mu.Lock()
+					closeReasoning := rendered.reasoningOpen
+					rendered.reasoningOpen = false
+					rendered.content = true
+					rendered.mu.Unlock()
+					if closeReasoning {
+						ev.ReasoningDone()
+					}
+					ev.Delta(text)
+				})
+			})
+		},
+	}
+	res, err := s.client.ChatStream(coordinator.ctx, req, handlers)
+	callbackLifetime.closeAndWait()
+	return res, callbackFired.Load(), err
+}
+
+// providerRetryDelay decides whether a failed provider attempt may repeat and
+// after how long. Only failures that prove nothing was generated qualify: no
+// HTTP response at all, or 429/502/503/504. Backoff doubles from base and
+// honors a longer Retry-After up to maxProviderRetryDelay.
+func providerRetryDelay(err error, attempt int, base time.Duration) (time.Duration, bool) {
+	var streamErr *openrouter.StreamError
+	if attempt >= maxProviderRetries || !errors.As(err, &streamErr) || streamErr.Kind != openrouter.StreamProviderError {
+		return 0, false
+	}
+	switch streamErr.HTTPStatus {
+	case 0:
+		if !streamErr.NoResponse {
+			return 0, false
+		}
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+	default:
+		return 0, false
+	}
+	delay := max(base<<attempt, streamErr.RetryAfter)
+	if delay > maxProviderRetryDelay {
+		return 0, false
+	}
+	return delay, true
+}
+
+func waitProviderRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

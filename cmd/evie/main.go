@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -171,6 +172,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
+		if warning := contextFallbackWarning(profile.Diagnostics()); warning != "" {
+			log.Print(warning)
+		}
 
 		configureSubagentRuntime(supervisor, pluginManager, client, profile)
 		store := kernelStore
@@ -287,6 +291,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
 		}
+		if warning := contextFallbackWarning(profile.Diagnostics()); warning != "" {
+			log.Print(warning)
+		}
 		configureSubagentRuntime(supervisor, pluginManager, client, profile)
 		controller := newWebContextSessionController(kernelStore, pluginManager, nil)
 		controller.modelClient, controller.defaultModel = client, model
@@ -314,4 +321,17 @@ func main() {
 	default:
 		log.Fatalf("unknown command %q (usage: evie [serve|cron-exec <job-id>|plugins ...|presets ...|sessions ...])", cmd)
 	}
+}
+
+// contextFallbackWarning makes a degraded startup visible: the process is
+// running on a checked-in context window because model metadata discovery
+// failed or timed out. It is empty for discovered or explicit profiles.
+func contextFallbackWarning(d openrouter.ContextProfileDiagnostics) string {
+	if d.Source != openrouter.ContextProfileBuiltinFallback {
+		return ""
+	}
+	return fmt.Sprintf(
+		"warning: model metadata for %s was unavailable; using the built-in %d-token context window",
+		d.ConfiguredModel, d.HardWindowTokens,
+	)
 }

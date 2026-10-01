@@ -16,12 +16,25 @@ import (
 
 const (
 	BuiltinModel                      = "moonshotai/kimi-k3"
+	deepSeekV41FlashModel             = "deepseek/deepseek-v4.1-flash"
 	defaultContextWorkingTokens int64 = 262144
 	defaultContextOutputTokens  int64 = 16384
 	contextEstimationMargin     int64 = 4096
-	builtinContextFallback      int64 = 262144
 	maxContextMetadataBody            = 1 << 20
 )
+
+// builtinContextFallback returns the checked-in hard window that may replace
+// failed metadata discovery. Only exact listed models have one: Evie's
+// built-in Kimi model and the application default DeepSeek model. Each window
+// equals the default working ceiling, the smallest window under which the
+// default configuration is valid. Every other model, including Astra, fails.
+func builtinContextFallback(model string) (int64, bool) {
+	switch model {
+	case BuiltinModel, deepSeekV41FlashModel:
+		return defaultContextWorkingTokens, true
+	}
+	return 0, false
+}
 
 type ContextProfileSource string
 
@@ -163,13 +176,14 @@ func (c *Client) resolveContextProfile(ctx context.Context, model string, adapti
 	if err := ctx.Err(); err != nil {
 		return ContextProfile{}, err
 	}
-	if model != BuiltinModel {
+	fallbackWindow, ok := builtinContextFallback(model)
+	if !ok {
 		return ContextProfile{}, fmt.Errorf("discover context profile for %q: %w", model, discoveryErr)
 	}
 	return newContextProfile(ContextProfileDiagnostics{
 		ConfiguredModel:        model,
-		CanonicalModel:         BuiltinModel,
-		HardWindowTokens:       builtinContextFallback,
+		CanonicalModel:         model,
+		HardWindowTokens:       fallbackWindow,
 		WorkingTokens:          config.working,
 		OutputReserveTokens:    config.output,
 		EstimationMarginTokens: contextEstimationMargin,
@@ -386,7 +400,7 @@ func newContextProfile(d ContextProfileDiagnostics) (ContextProfile, error) {
 			return ContextProfile{}, invalidContextProfile("explicit context profile contains undiscovered model diagnostics")
 		}
 	case ContextProfileBuiltinFallback:
-		if d.CanonicalModel != BuiltinModel || d.AdvertisedModel != "" || d.AdvertisedWindowTokens != 0 {
+		if _, listed := builtinContextFallback(d.CanonicalModel); !listed || d.AdvertisedModel != "" || d.AdvertisedWindowTokens != 0 {
 			return ContextProfile{}, invalidContextProfile("built-in fallback context profile has invalid model diagnostics")
 		}
 	default:

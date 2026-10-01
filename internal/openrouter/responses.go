@@ -43,7 +43,14 @@ func (c *Client) responses(ctx context.Context, r ChatRequest, h StreamHandlers)
 	if err != nil {
 		return ChatResponse{}, streamError(StreamProviderError, err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.apiBaseURL, "/")+"/responses", bytes.NewReader(body))
+	requestCtx := ctx
+	var watchdog *streamWatchdog
+	if r.Stream {
+		watchdog = c.watchStream(ctx)
+		defer watchdog.stop()
+		requestCtx = watchdog.ctx
+	}
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, strings.TrimRight(c.apiBaseURL, "/")+"/responses", bytes.NewReader(body))
 	if err != nil {
 		return ChatResponse{}, streamError(StreamProviderError, err)
 	}
@@ -56,12 +63,11 @@ func (c *Client) responses(ctx context.Context, r ChatRequest, h StreamHandlers)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return ChatResponse{}, streamError(StreamProviderError, err)
+		return ChatResponse{}, transportFailure(ctx, watchdog, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Provider error bodies are untrusted and may echo credentials/content.
-		return ChatResponse{}, &StreamError{Kind: StreamProviderError, HTTPStatus: resp.StatusCode, Err: fmt.Errorf("Responses API returned status %d", resp.StatusCode)}
+		return ChatResponse{}, httpStatusFailure(resp, fmt.Sprintf("Responses API returned status %d", resp.StatusCode))
 	}
 	if !r.Stream {
 		data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponsesBody+1))
@@ -80,6 +86,7 @@ func (c *Client) responses(ctx context.Context, r ChatRequest, h StreamHandlers)
 	announced := map[string]responseItem{}
 	var usage *TokenUsage
 	for scanner.Scan() {
+		watchdog.touch()
 		line := scanner.Text()
 		if reader.N <= 0 {
 			return invalidResponse("response stream exceeds byte limit")
@@ -183,6 +190,9 @@ func (c *Client) responses(ctx context.Context, r ChatRequest, h StreamHandlers)
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		if watchdog.idle() {
+			return ChatResponse{}, watchdog.failure()
+		}
 		return ChatResponse{}, streamError(StreamProviderError, err)
 	}
 	return invalidResponse("stream ended before response completion")

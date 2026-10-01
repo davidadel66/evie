@@ -953,7 +953,10 @@ func TestProviderTerminalPayloadIsSafeAndCorrelated(t *testing.T) {
 	status := 503
 	providerErr := &openrouter.StreamError{Kind: openrouter.StreamProviderError, HTTPStatus: status, Err: errors.New("secret URL https://provider.invalid body=raw")}
 	history := &fakeHistory{}
-	err := ownedSession(&fakeClient{steps: []step{{err: providerErr}}}, history, &scriptedOwner{}).Send(context.Background(), "go", &recorder{}, nil)
+	// 503 is retried twice before the terminal is recorded.
+	s := ownedSession(&fakeClient{steps: []step{{err: providerErr}, {err: providerErr}, {err: providerErr}}}, history, &scriptedOwner{})
+	recordProviderRetryWaits(s)
+	err := s.Send(context.Background(), "go", &recorder{}, nil)
 	if err == nil || len(history.events) != 2 {
 		t.Fatalf("Send error=%v events=%+v", err, history.events)
 	}

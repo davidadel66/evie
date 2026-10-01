@@ -11,12 +11,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
 
 type StreamErrorKind string
+
+const (
+	defaultStreamIdleTimeout      = 5 * time.Minute
+	providerDialTimeout           = 30 * time.Second
+	providerTLSHandshakeTimeout   = 10 * time.Second
+	providerResponseHeaderTimeout = 5 * time.Minute
+	maxRetryAfter                 = 10 * time.Minute
+	maxProviderErrorBody          = 64 << 10
+)
+
+// ErrStreamIdle reports a provider stream that sent nothing for longer than
+// the client's idle timeout.
+var ErrStreamIdle = errors.New("provider stream idle timeout")
 
 const (
 	StreamProviderError           StreamErrorKind = "provider_error"
@@ -29,6 +44,13 @@ const (
 type StreamError struct {
 	Kind       StreamErrorKind
 	HTTPStatus int
+	// RetryAfter is the provider's Retry-After hint on a non-2xx response,
+	// clamped to maxRetryAfter; zero when absent, malformed, or in the past.
+	RetryAfter time.Duration
+	// NoResponse marks a transport failure before any HTTP status arrived,
+	// such as a refused, reset, or closed connection. Timeouts, idle streams,
+	// and caller cancellation are never marked.
+	NoResponse bool
 	Err        error
 }
 
@@ -37,6 +59,93 @@ func (e *StreamError) Unwrap() error { return e.Err }
 
 func streamError(kind StreamErrorKind, err error) error {
 	return &StreamError{Kind: kind, Err: err}
+}
+
+// transportFailure classifies an error from sending a request. Only a failure
+// before any response that is neither a timeout nor cancellation is marked
+// NoResponse; the harness may retry those because nothing was generated.
+func transportFailure(caller context.Context, watchdog *streamWatchdog, err error) error {
+	if watchdog.idle() {
+		return watchdog.failure()
+	}
+	var netErr net.Error
+	timedOut := errors.As(err, &netErr) && netErr.Timeout()
+	return &StreamError{Kind: StreamProviderError, NoResponse: caller.Err() == nil && !timedOut, Err: err}
+}
+
+// httpStatusFailure reports a non-2xx response by status alone. Provider error
+// bodies are untrusted and may echo credentials or request content, so a
+// bounded prefix is drained for connection reuse and never surfaced.
+func httpStatusFailure(resp *http.Response, message string) error {
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxProviderErrorBody))
+	return &StreamError{
+		Kind:       StreamProviderError,
+		HTTPStatus: resp.StatusCode,
+		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
+		Err:        errors.New(message),
+	}
+}
+
+// parseRetryAfter accepts delta-seconds or an HTTP date and clamps the result
+// to [0, maxRetryAfter]. Anything else is treated as absent.
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if strings.Trim(value, "0123456789") == "" {
+		seconds, err := strconv.ParseUint(value, 10, 64)
+		if err != nil || seconds > uint64(maxRetryAfter/time.Second) {
+			return maxRetryAfter
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	when, err := http.ParseTime(value)
+	if err != nil {
+		return 0
+	}
+	return min(max(when.Sub(now), 0), maxRetryAfter)
+}
+
+// streamWatchdog cancels a streaming request once it has gone streamIdleTimeout
+// without a received line, including the wait for response headers. It bounds
+// silence, not total duration, so long healthy streams are unaffected.
+type streamWatchdog struct {
+	timeout time.Duration
+	timer   *time.Timer
+	ctx     context.Context
+	cancel  context.CancelCauseFunc
+}
+
+func (c *Client) watchStream(parent context.Context) *streamWatchdog {
+	ctx, cancel := context.WithCancelCause(parent)
+	w := &streamWatchdog{timeout: c.streamIdleTimeout, ctx: ctx, cancel: cancel}
+	if w.timeout > 0 {
+		w.timer = time.AfterFunc(w.timeout, func() { cancel(ErrStreamIdle) })
+	}
+	return w
+}
+
+func (w *streamWatchdog) touch() {
+	if w != nil && w.timer != nil {
+		w.timer.Reset(w.timeout)
+	}
+}
+
+func (w *streamWatchdog) stop() {
+	if w.timer != nil {
+		w.timer.Stop()
+	}
+	w.cancel(nil)
+}
+
+// idle reports whether the watchdog, rather than the caller, ended the request.
+func (w *streamWatchdog) idle() bool {
+	return w != nil && errors.Is(context.Cause(w.ctx), ErrStreamIdle)
+}
+
+func (w *streamWatchdog) failure() error {
+	return streamError(StreamProviderError, fmt.Errorf("%w: no data for %s", ErrStreamIdle, w.timeout))
 }
 
 // NewClient is the only way to build a Client: it rejects an empty API key
@@ -51,9 +160,27 @@ func NewClient(key string) (*Client, error) {
 		apiKey:                  key,
 		baseURL:                 "https://openrouter.ai/api/v1/chat/completions",
 		apiBaseURL:              "https://openrouter.ai/api/v1",
-		httpClient:              &http.Client{},
+		httpClient:              newProviderHTTPClient(),
 		contextDiscoveryTimeout: 3 * time.Second,
+		streamIdleTimeout:       defaultStreamIdleTimeout,
 	}, nil
+}
+
+// newProviderHTTPClient bounds each connection phase. It deliberately has no
+// total timeout: streams may legitimately run long, and stream silence is
+// bounded separately by the idle watchdog.
+func newProviderHTTPClient() *http.Client {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		// An instrumented process (such as the opt-in production reader
+		// capture) replaced the default transport; route through it unchanged.
+		return &http.Client{}
+	}
+	transport := base.Clone()
+	transport.DialContext = (&net.Dialer{Timeout: providerDialTimeout, KeepAlive: 30 * time.Second}).DialContext
+	transport.TLSHandshakeTimeout = providerTLSHandshakeTimeout
+	transport.ResponseHeaderTimeout = providerResponseHeaderTimeout
+	return &http.Client{Transport: transport}
 }
 
 // StreamHandlers carries the live callbacks ChatStream invokes as fragments
@@ -82,8 +209,10 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to marshal json: %w", err))
 	}
 
+	watchdog := c.watchStream(ctx)
+	defer watchdog.stop()
 	req, err := http.NewRequestWithContext(
-		ctx,
+		watchdog.ctx,
 		http.MethodPost,
 		c.baseURL,
 		bytes.NewReader(jsonBody),
@@ -97,22 +226,12 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to get response: %w", err))
+		return ChatResponse{}, transportFailure(ctx, watchdog, fmt.Errorf("failed to get response: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return ChatResponse{}, &StreamError{
-				Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
-				Err: fmt.Errorf("api returned status %d and response body could not be read: %w", resp.StatusCode, readErr),
-			}
-		}
-		return ChatResponse{}, &StreamError{
-			Kind: StreamProviderError, HTTPStatus: resp.StatusCode,
-			Err: fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes),
-		}
+		return ChatResponse{}, httpStatusFailure(resp, fmt.Sprintf("api returned status %d", resp.StatusCode))
 	}
 
 	var (
@@ -129,6 +248,7 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
+		watchdog.touch() // any line, including keepalive comments, is liveness
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
 			continue // blank lines and ": keepalive" comments
@@ -210,8 +330,16 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 		if choice.FinishReason != "" {
 			finishReason = choice.FinishReason
 		}
+		if finishReason == "error" {
+			// OpenRouter reports a failure after streaming began this way, and
+			// may not send [DONE]. Its error object is untrusted detail.
+			return ChatResponse{}, streamError(StreamProviderError, errors.New("provider reported a generation error"))
+		}
 	}
 	if err := scanner.Err(); err != nil {
+		if watchdog.idle() {
+			return ChatResponse{}, watchdog.failure()
+		}
 		return ChatResponse{}, streamError(StreamProviderError, fmt.Errorf("failed to read stream: %w", err))
 	}
 	if !completed {
@@ -219,6 +347,11 @@ func (c *Client) ChatStream(ctx context.Context, r ChatRequest, h StreamHandlers
 	}
 	if !gotChunk {
 		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("stream contained no chunks"))
+	}
+	if finishReason == "length" {
+		// Truncated text or tool arguments must never look like a completed
+		// generation, matching the Responses path's incomplete status.
+		return ChatResponse{}, streamError(StreamProviderResponseInvalid, errors.New("provider stopped at the output token limit"))
 	}
 	if len(toolCalls) > 0 {
 		msg.ToolCalls = make([]ToolCall, len(toolCalls))
@@ -276,13 +409,15 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 
 	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return ChatResponse{}, httpStatusFailure(resp, fmt.Sprintf("api returned status %d", resp.StatusCode))
+	}
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponsesBody+1))
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		return ChatResponse{}, fmt.Errorf("api returned status %d: %s", resp.StatusCode, bodyBytes)
+	if len(bodyBytes) > maxResponsesBody {
+		return ChatResponse{}, errors.New("response exceeds byte limit")
 	}
 
 	var wireResponse struct {
@@ -298,7 +433,7 @@ func (c *Client) Chat(r ChatRequest) (ChatResponse, error) {
 	chatResp := ChatResponse{Choices: wireResponse.Choices, Usage: usage}
 
 	if len(chatResp.Choices) == 0 {
-		return ChatResponse{}, fmt.Errorf("response contained no choices: %s", bodyBytes)
+		return ChatResponse{}, errors.New("response contained no choices")
 	}
 
 	return chatResp, nil
