@@ -84,6 +84,9 @@ type ContextComposeInput struct {
 	Reasoning                    *openrouter.ReasoningConfig
 	WorkingContext               string
 	Continuation                 map[memory.EventID][]json.RawMessage
+	// FinalStepNote, when set, is a trusted harness instruction appended
+	// after the conversation as the request's last message.
+	FinalStepNote string
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -241,6 +244,9 @@ func (c *ContextComposer) projectAtStart(
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.RepositoryInstructions})
 		}
 		messages = append(messages, projection.conversation...)
+		if input.FinalStepNote != "" {
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.FinalStepNote})
+		}
 		projection.request = openrouter.ChatRequest{
 			Model:     profile.ConfiguredModel,
 			Messages:  messages,
@@ -317,8 +323,13 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 	if canonicalModel == "" {
 		canonicalModel = profile.ConfiguredModel
 	}
+	// A final-step note trails the conversation and is accounted as history.
+	historyMessages := len(projection.conversation)
+	if input.FinalStepNote != "" {
+		historyMessages++
+	}
 	systemBytes, summaryBytes, historyBytes, toolBytes, settingsBytes, err := contextByteBreakdown(
-		projection.request, len(projection.conversation), input.Summary != nil,
+		projection.request, historyMessages, input.Summary != nil,
 	)
 	if err != nil {
 		return ComposedContext{}, err

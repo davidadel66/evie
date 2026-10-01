@@ -46,6 +46,7 @@ const (
 	ClassificationCallerDeadlineExceeded  TurnClassification = "caller_deadline_exceeded"
 	ClassificationContextOverflow         TurnClassification = "context_overflow"
 	ClassificationRepositoryInstructions  TurnClassification = "repository_instructions_unavailable"
+	ClassificationStepLimitExceeded       TurnClassification = "step_limit_exceeded"
 )
 
 type TurnStage string
@@ -86,13 +87,17 @@ func (p TurnTerminalPayload) Validate(eventType EventType) error {
 	if p.Classification == ClassificationRepositoryInstructions && p.Stage != StageContextCompose {
 		return fmt.Errorf("repository instructions cannot use lifecycle stage %q", p.Stage)
 	}
+	if p.Classification == ClassificationStepLimitExceeded && p.Stage != StageProvider {
+		return fmt.Errorf("step limit cannot use lifecycle stage %q", p.Stage)
+	}
 
 	switch eventType {
 	case EventTurnFailed:
 		if p.Classification != ClassificationProviderError &&
 			p.Classification != ClassificationProviderResponseInvalid &&
 			p.Classification != ClassificationContextOverflow &&
-			p.Classification != ClassificationRepositoryInstructions {
+			p.Classification != ClassificationRepositoryInstructions &&
+			p.Classification != ClassificationStepLimitExceeded {
 			return fmt.Errorf("invalid failed-turn classification %q", p.Classification)
 		}
 	case EventTurnInterrupted:
@@ -127,6 +132,8 @@ func (p TurnTerminalPayload) SafeContent() string {
 		return "The turn could not fit within the configured model context."
 	case ClassificationRepositoryInstructions:
 		return "Repository instructions could not be prepared for this turn."
+	case ClassificationStepLimitExceeded:
+		return "The turn reached its step limit without a final answer."
 	default:
 		return ""
 	}

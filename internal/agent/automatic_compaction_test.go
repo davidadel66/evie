@@ -410,17 +410,21 @@ func TestSendContinuesAfterLargeToolGroupWhenNoCompactionTargetFits(t *testing.T
 	}
 }
 
-func TestSendAttemptsAutomaticCompactionOnceOnEachRepeatedPostToolIteration(t *testing.T) {
+// L6: a failed automatic compaction is remembered for the rest of its turn.
+// Later pressured iterations that still fit proceed without calling the
+// compactor again, and their snapshots keep the remembered failure category.
+// The next turn starts fresh and may attempt compaction again.
+func TestSendDoesNotRetryFailedAutomaticCompactionWithinTurn(t *testing.T) {
 	history := &fakeHistory{events: automaticPressureHistory(190_000)}
 	compactor := &fakeClient{steps: []step{
 		{err: errors.New("summary unavailable one")},
 		{err: errors.New("summary unavailable two")},
-		{err: errors.New("summary unavailable three")},
 	}}
 	conversation := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("call-1", "echo", `{}`)),
 		assistantStep("", nil, toolCall("call-2", "echo", `{}`)),
 		assistantStep("done", nil),
+		assistantStep("done again", nil),
 	}}
 	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
 		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
@@ -428,7 +432,7 @@ func TestSendAttemptsAutomaticCompactionOnceOnEachRepeatedPostToolIteration(t *t
 	if err := session.Send(context.Background(), "repeat it", &recorder{}, nil, echoTool("echo", false, nil)); err != nil {
 		t.Fatal(err)
 	}
-	if len(conversation.reqs) != 3 || len(compactor.reqs) != 3 {
+	if len(conversation.reqs) != 3 || len(compactor.reqs) != 1 {
 		t.Fatalf("conversation requests=%d compactor attempts=%d", len(conversation.reqs), len(compactor.reqs))
 	}
 	var failureIterations []int
@@ -447,6 +451,50 @@ func TestSendAttemptsAutomaticCompactionOnceOnEachRepeatedPostToolIteration(t *t
 	}
 	if fmt.Sprint(failureIterations) != "[1 2 3]" {
 		t.Fatalf("failure snapshot iterations=%v", failureIterations)
+	}
+
+	if err := session.Send(context.Background(), "next turn", &recorder{}, nil, echoTool("echo", false, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(conversation.reqs) != 4 || len(compactor.reqs) != 2 {
+		t.Fatalf("next turn: conversation requests=%d compactor attempts=%d", len(conversation.reqs), len(compactor.reqs))
+	}
+}
+
+// L6: when a later iteration no longer fits after the turn's compaction
+// failed, the turn fails with the remembered failure instead of calling the
+// compactor again.
+func TestSendFailsWithRememberedCompactionFailureWhenLaterIterationNoLongerFits(t *testing.T) {
+	history := &fakeHistory{events: automaticPressureHistory(330_000)}
+	compactor := &fakeClient{steps: []step{
+		{err: errors.New("summary unavailable one")},
+		{err: errors.New("summary unavailable two")},
+	}}
+	conversation := &fakeClient{steps: []step{
+		assistantStep("", nil, toolCall("call-1", "large", `{}`)),
+		assistantStep("must not run", nil),
+	}}
+	large := echoTool("large", false, nil)
+	large.Execute = func(context.Context, string) (string, error) { return strings.Repeat("z", 70_000), nil }
+	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 400_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+
+	err := session.Send(context.Background(), "run it", &recorder{}, nil, large)
+	if err == nil {
+		t.Fatal("Send unexpectedly succeeded")
+	}
+	if len(conversation.reqs) != 1 || len(compactor.reqs) != 1 {
+		t.Fatalf("conversation requests=%d compactor attempts=%d events=%v", len(conversation.reqs), len(compactor.reqs), eventTypes(history.allEvents()))
+	}
+	events := history.allEvents()
+	last := events[len(events)-1]
+	terminal := terminalPayloadOf(t, last)
+	if last.Type != memory.EventTurnFailed || terminal.Classification != memory.ClassificationProviderError ||
+		terminal.Stage != memory.StageContextCompose {
+		t.Fatalf("terminal event=%+v payload=%+v", last, terminal)
+	}
+	if err := terminal.Validate(last.Type); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -168,6 +168,9 @@ func main() {
 		if err := agent.ValidateModelConfiguration(model); err != nil {
 			log.Fatalf("invalid model configuration: %v", err)
 		}
+		if err := agent.ValidateTurnConfiguration(); err != nil {
+			log.Fatalf("invalid turn configuration: %v", err)
+		}
 		profile, err := client.ResolveContextProfile(ctx, model)
 		if err != nil {
 			log.Fatalf("failed to resolve context profile: %v", err)
@@ -286,6 +289,9 @@ func main() {
 		}
 		if err := agent.ValidateModelConfiguration(model); err != nil {
 			log.Fatalf("invalid model configuration: %v", err)
+		}
+		if err := agent.ValidateTurnConfiguration(); err != nil {
+			log.Fatalf("invalid turn configuration: %v", err)
 		}
 		profile, err := client.ResolveContextProfile(runtimeCtx, model)
 		if err != nil {

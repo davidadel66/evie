@@ -341,6 +341,19 @@
   unchanged. Verify the usable-byte boundary and a post-tool iteration that
   retains all prior turns and both results in a large atomic tool group.
 
+- **2026-10-01 - a failed automatic compaction is not retried within its turn.**
+  Harness review Stage 3 (L6) narrows the 2026-08-30 "one attempt per provider
+  iteration" rule to at most one failed attempt per turn, because each attempt
+  may wait out the two-minute compactor bound. After an automatic compaction
+  fails and the unchanged request fits, later pressured iterations of the same
+  turn proceed without calling the compactor and their snapshots record the
+  remembered failure category. If a later iteration no longer fits, the turn
+  fails with the remembered failure's existing classification
+  (`provider_error`, `provider_response_invalid`, or the local storage failure
+  for `summary_persistence_failed`) at `context_compose`, without another
+  compactor call. No-legal-cut overflow is unchanged, a successful compaction
+  does not suppress later attempts, and the next turn starts fresh.
+
 - **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
   Every manual compaction first reconstructs the complete accepted chain from
   canonical `context_compacted` events, never from context snapshots or
@@ -744,6 +757,27 @@
   activity at dispatch, and compaction keeps its no-retry rule. Non-2xx
   provider bodies are drained up to 64 KiB and never included in errors, so
   the browser and terminal see only the status.
+
+- **2026-10-01 - a turn is bounded by a model-response step limit.**
+  Harness review Stage 3 (L1). One turn, including a delegated worker turn,
+  requests at most `EVIE_TURN_STEP_LIMIT` model responses (default 100; a
+  positive integer, validated at startup and by session construction).
+  Transport retries of one admitted request and compactor calls do not count.
+  The last permitted response is requested with tool schemas withheld (the
+  request types carry no tool-choice field) and a trailing user-role harness
+  note that states the limit and asks for an answer from what the turn already
+  has; its context snapshot describes that exact request. A text-only final
+  response commits as ordinary success. If it still contains tool calls,
+  nothing from it is committed or executed, and the turn records `turn_failed`
+  with the new classification `step_limit_exceeded` at stage `provider`.
+  Transport, response-validation, and caller failures of that final call keep
+  their existing classifications. Streamed text from the discarded response
+  uses the existing `provider_response_invalid` discard cause, so the wire
+  vocabulary stays closed. Sub-agent budgets layer on top later; web
+  cancellation is separate. Registry lifecycle callbacks (preparation and
+  execution authorization, approval observation) never reserve a terminal
+  cause while their tool phase is open: a rejected entry returns the current
+  cause or context error, and classification follows the aborted tool phase.
 
 - **2026-08-23 - turn terminal evidence separates failures from interruptions.**
   Request construction, transport, non-2xx HTTP, and response-body or scanner

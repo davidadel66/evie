@@ -57,6 +57,9 @@ type Session struct {
 	owner                TurnOwnership
 	composer             *ContextComposer
 	timing               turnTiming
+	// stepLimit is the most model responses one turn may request; the last
+	// one is sent without tools.
+	stepLimit int
 }
 
 type legacyToolSignature struct {
@@ -336,6 +339,10 @@ func NewWithCompactorAndToolset(
 	options ...SessionOption,
 ) *Session {
 	reasoning, configurationErr := resolveModelReasoning(profile.Model(), os.Getenv("EVIE_REASONING"))
+	stepLimit, stepLimitErr := resolveTurnStepLimit(os.Getenv(TurnStepLimitEnv))
+	if configurationErr == nil {
+		configurationErr = stepLimitErr
+	}
 	session := &Session{
 		client:           client,
 		compactor:        compactor,
@@ -348,6 +355,7 @@ func NewWithCompactorAndToolset(
 		owner:            owner,
 		composer:         NewContextComposer(CanonicalRequestEstimator{}),
 		timing:           defaultTurnTiming,
+		stepLimit:        stepLimit,
 	}
 	for _, option := range options {
 		option(session)

@@ -54,6 +54,11 @@ type turnTiming struct {
 	// beforeToolResultHandoff is a deterministic test seam at the zero-work
 	// boundary after ordinary tool return and before lifecycle-stage handoff.
 	beforeToolResultHandoff func()
+	// beforeToolPhaseCallback is a deterministic test seam at the start of a
+	// registry lifecycle callback (authorization or approval observation),
+	// after the registry's own context check. It receives the stage that the
+	// callback is about to enter or commit.
+	beforeToolPhaseCallback func(memory.TurnStage)
 	// providerRetryBase is the first transient-failure backoff; each later
 	// retry doubles it. waitProviderRetry sleeps unless ctx ends first.
 	providerRetryBase time.Duration
@@ -100,6 +105,7 @@ const (
 	causeStorage
 	causeContextOverflow
 	causeRepositoryInstructions
+	causeStepLimit
 )
 
 type terminalCause struct {
@@ -264,6 +270,20 @@ func (c *turnCoordinator) completeToolPhase() {
 	c.mu.Unlock()
 }
 
+// toolPhaseInterruption is what a registry lifecycle callback returns when its
+// phase entry is rejected. It never selects a cause: selection waits for
+// toolDone, which only the goroutine running the tool phase closes after the
+// registry returns. The turn loop classifies after abortToolPhase instead.
+func (c *turnCoordinator) toolPhaseInterruption() error {
+	if cause := c.result(); cause.kind != causeNone {
+		return cause.err
+	}
+	if err := c.ctx.Err(); err != nil {
+		return err
+	}
+	return errors.New("agent: tool phase is no longer active")
+}
+
 func (c *turnCoordinator) abortToolPhase() {
 	c.mu.Lock()
 	if c.toolDone != nil {
@@ -311,6 +331,10 @@ func (c terminalCause) discardReason() DiscardReason {
 	case causeProviderError:
 		return DiscardProviderError
 	case causeProviderInvalid:
+		return DiscardProviderResponseInvalid
+	case causeStepLimit:
+		// The wire vocabulary is closed. A final response that asked for
+		// withheld tools is an invalid response to that request.
 		return DiscardProviderResponseInvalid
 	case causeCallerCancelled:
 		return DiscardCallerCancelled

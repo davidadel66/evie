@@ -186,6 +186,9 @@ func (s *Session) runOwnedTurn(
 	// Opaque transport state belongs only to this live turn. Durable events
 	// remain sufficient to start a new turn after restart or cancellation.
 	continuation := make(map[memory.EventID][]json.RawMessage)
+	// A failed automatic compaction is remembered for the rest of this turn
+	// and never retried in it; each attempt may wait out the compactor bound.
+	var compactionFailure *automaticCompactionFailure
 	for {
 		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
@@ -194,6 +197,9 @@ func (s *Session) runOwnedTurn(
 		}
 		rendered.begin()
 		iteration++
+		// The last permitted model response is requested without tools, so
+		// a runaway tool loop ends with an answer from what the turn has.
+		finalStep := iteration >= s.stepLimit
 
 		events, err := s.history.Events(coordinator.ctx)
 		if err == nil {
@@ -230,6 +236,10 @@ func (s *Session) runOwnedTurn(
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
 			Continuation: continuation,
 		}
+		if finalStep {
+			composeInput.Tools = nil
+			composeInput.FinalStepNote = stepLimitNote(s.stepLimit)
+		}
 		composeInput, err = recall.fitContext(composeInput, s.composer)
 		if err != nil {
 			if IsContextOverflow(err) {
@@ -249,25 +259,32 @@ func (s *Session) runOwnedTurn(
 		}
 		failureCategory := memory.ContextCompactionFailureNone
 		if required {
-			if s.compactor == nil {
-				return s.classifyLocalError(coordinator, errors.New("agent: compactor is not configured"))
-			}
-			if !coordinator.setStage(memory.StageContextCompaction) {
-				return s.observeTurnContext(coordinator)
-			}
-			newSummary, compacted, failure := s.performAutomaticCompaction(coordinator, lease, plan)
+			failure := compactionFailure
 			if failure == nil {
-				summary = newSummary
-				events = append(events, compacted)
-				composeInput.Summary = summary
-				composeInput.Events = events
-				if err := s.observeTurnContext(coordinator); err != nil {
-					return err
+				if s.compactor == nil {
+					return s.classifyLocalError(coordinator, errors.New("agent: compactor is not configured"))
 				}
-			} else {
-				if coordinator.result().kind != causeNone {
+				if !coordinator.setStage(memory.StageContextCompaction) {
+					return s.observeTurnContext(coordinator)
+				}
+				var newSummary *ContextSummary
+				var compacted memory.Event
+				newSummary, compacted, failure = s.performAutomaticCompaction(coordinator, lease, plan)
+				if failure == nil {
+					summary = newSummary
+					events = append(events, compacted)
+					composeInput.Summary = summary
+					composeInput.Events = events
+					if err := s.observeTurnContext(coordinator); err != nil {
+						return err
+					}
+				} else if coordinator.result().kind != causeNone {
 					return failure.err
+				} else {
+					compactionFailure = failure
 				}
+			}
+			if failure != nil {
 				fits, fitErr := completeAutomaticProjectionFits(composeInput, s.composer)
 				if fitErr != nil {
 					return s.classifyLocalError(coordinator, fitErr)
@@ -388,6 +405,13 @@ func (s *Session) runOwnedTurn(
 			coordinator.selectCause(causeProviderInvalid, err, 0)
 			return err
 		}
+		if finalStep && len(msg.ToolCalls) != 0 {
+			// Nothing from a response that ignored the withheld tools is
+			// committed or executed.
+			err := fmt.Errorf("%w (%d model responses)", ErrStepLimitExceeded, s.stepLimit)
+			coordinator.selectCause(causeStepLimit, err, 0)
+			return err
+		}
 
 		if s.timing.beforeAssistantConstruction != nil {
 			s.timing.beforeAssistantConstruction()
@@ -496,6 +520,9 @@ func (s *Session) runOwnedTurn(
 				return admitApproval(coordinator, approve, approvalCtx, name, args, preview)
 			}
 			observeApproval := func(observeCtx context.Context, decision tools.Decision, metadata tools.ApprovalMetadata) error {
+				if s.timing.beforeToolPhaseCallback != nil {
+					s.timing.beforeToolPhaseCallback(memory.StageToolApproval)
+				}
 				input, err := approvalEventInput(intentEvent.ID, executionID, decision)
 				var semanticInput memory.EventInput
 				hasSemanticInput := metadata != (tools.ApprovalMetadata{})
@@ -509,7 +536,7 @@ func (s *Session) runOwnedTurn(
 					return err
 				}
 				if !coordinator.beginCommitBoundary() {
-					return s.observeTurnContext(coordinator)
+					return coordinator.toolPhaseInterruption()
 				}
 				approvalEvent, err := s.history.Append(observeCtx, lease, input)
 				if err != nil {
@@ -532,14 +559,24 @@ func (s *Session) runOwnedTurn(
 				return nil
 			}
 			authorize := func(authorizeCtx context.Context, boundary tools.AuthorizationBoundary) error {
+				if s.timing.beforeToolPhaseCallback != nil {
+					stage := memory.StageToolExecute
+					if boundary == tools.AuthorizePreparation {
+						stage = memory.StageToolPrepare
+					}
+					s.timing.beforeToolPhaseCallback(stage)
+				}
+				// Lifecycle callbacks run inside the tool phase, so a rejected
+				// entry reports without selecting a cause (see
+				// toolPhaseInterruption); classification follows abortToolPhase.
 				switch boundary {
 				case tools.AuthorizePreparation:
 					if !coordinator.setStage(memory.StageToolPrepare) {
-						return s.observeTurnContext(coordinator)
+						return coordinator.toolPhaseInterruption()
 					}
 				case tools.AuthorizeExecution:
 					if !coordinator.setStage(memory.StageToolExecute) {
-						return s.observeTurnContext(coordinator)
+						return coordinator.toolPhaseInterruption()
 					}
 				}
 				return s.owner.Authorize(authorizeCtx, lease)
@@ -859,7 +896,8 @@ func validateAssistantResponse(msg openrouter.Message) error {
 func causeHasDurableTerminal(kind causeKind) bool {
 	return kind == causeProviderError || kind == causeProviderInvalid ||
 		kind == causeCallerCancelled || kind == causeCallerDeadline ||
-		kind == causeContextOverflow || kind == causeRepositoryInstructions
+		kind == causeContextOverflow || kind == causeRepositoryInstructions ||
+		kind == causeStepLimit
 }
 
 func (s *Session) appendTerminal(
@@ -894,6 +932,9 @@ func (s *Session) appendTerminal(
 	case causeRepositoryInstructions:
 		input.Type = memory.EventTurnFailed
 		payload.Classification = memory.ClassificationRepositoryInstructions
+	case causeStepLimit:
+		input.Type = memory.EventTurnFailed
+		payload.Classification = memory.ClassificationStepLimitExceeded
 	default:
 		return nil
 	}
