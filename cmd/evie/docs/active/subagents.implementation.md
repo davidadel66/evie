@@ -34,6 +34,26 @@ including raw provider errors. Recovery revisits initially live ownership during
 CLI/web operation even when the Plugin is disabled. It only reconciles metadata;
 it never resumes execution or appends a conversation outcome.
 
+The deadline applies to each child from its own start, so a child that waited
+for capacity still receives the full deadline. A child waits for capacity at
+most one deadline after admission; if it never starts it ends
+`failed`/`queue_deadline`. A child exceeding its own deadline ends
+`failed`/`deadline_limit`. Parent turn cancellation ends unfinished children
+`cancelled`/`parent_cancelled`; stopping the supervisor (process shutdown, or
+stopping or disabling the Subagents Plugin) ends them `cancelled`/`shutdown`;
+lost parent authority ends them `interrupted`/`authority_ended`. One tool call
+can therefore wait up to two deadlines when children queue.
+
+Parent authority is proved by the intent's position in the current parent turn
+rather than by walking event ancestry, so it holds at any turn depth. Checks that
+only read (the child watchdog, pre-model-call authorization, inspection and
+recovery candidate selection) use read transactions; every child mutation still
+re-authorizes under the write lock. SQLite lock contention (`SQLITE_BUSY`/
+`SQLITE_LOCKED`) is retried and never ends a child's authority. Recovery
+reconciles each attempt in its own transaction; an unreadable record is reported
+without blocking other attempts or new delegation, and failed passes retry with
+backoff up to 10 seconds.
+
 Task associations are lineage only. The orchestrator uses existing Todo access,
 claims and revision checks to maintain the Task Tree explicitly. Children cannot
 read Tasks, receive focus or claim work through association. Incidental research
@@ -84,7 +104,7 @@ Operator environment settings (all must be finite and positive):
 | `PER_PARENT` | 2 running children |
 | `RUNTIME` | 4 running children |
 | `MAX_BATCH` | 8 assignments |
-| `DEADLINE` | `2m` foreground deadline |
+| `DEADLINE` | `2m` per child from its start; also bounds its capacity wait |
 | `MODEL_CALLS` | 8 per child, shared with compaction |
 | `ASSIGNMENT_BYTES` | 8192 objective/context bytes |
 | `REQUEST_BYTES` | 1048576 serialized model-request/response bytes (1 MiB), subject to the invoking model's route-safe context limit |
@@ -177,3 +197,33 @@ Integration verification passed:
 - `go test -race ./internal/subagents ./internal/agent ./internal/eviedb ./internal/plugins -run 'Subagent|Delegated|ForegroundBatch|ForegroundAssignment|BatchRetains|ChildModel|DuplicateWaiter|ComposedParent|TaskAssociation|RuntimeCapacity|AuthorityLoss|RecoveryPreservesAcceptedChild|ConfiguredDeadline|WorkspaceAdmission|ChildOutputLimit|ProviderFailures|ChildPersistenceFailure|ChildComposedContext|OngoingRecovery|ParallelAndRetrievalPreset' -timeout 180s`
   — all four packages passed, with no races.
 - Read-only integration review — no remaining findings.
+
+## Supervision durability — 2026-10-01
+
+Stage 7 of the 2026-09-30 harness review (D1–D6). No schema change or
+migration. Behavior changes are described above: per-child deadlines with a
+bounded capacity wait, distinct `queue_deadline` and `shutdown` reasons, parent
+authority without an ancestry walk, read-only authority checks, retried lock
+contention, and recovery isolated per attempt with bounded backoff.
+
+Regression tests: `internal/eviedb/subagent_durability_test.go` (110-round
+parent turn, preserved lineage refusals, never-started attempt after reopen,
+unreadable record isolation) and `internal/subagents/durability_test.go`
+(queued child at the deadline, late starter's full deadline, shutdown versus
+parent cancellation, transient errors in the watchdog and pre-call check,
+recovery surviving transient errors, capacity-wait failure, delegation past an
+unreadable record). `store_fault_test.go` injects coded SQLite errors into a
+real SQLite connection.
+
+Verification passed:
+
+- `./scripts/verify-change.sh` — UI lint/build, full Go tests and vet, both
+  whitespace checks; only the existing UI lint and Vite chunk-size warnings.
+- `go test -race ./internal/subagents -count=1 -timeout 300s`
+- `go test -race ./internal/agent ./internal/eviedb ./internal/plugins -run 'Subagent|Delegated|ForegroundBatch|ForegroundAssignment|BatchRetains|ChildModel|DuplicateWaiter|ComposedParent|TaskAssociation|RuntimeCapacity|AuthorityLoss|RecoveryPreservesAcceptedChild|RecoveryInterrupts|RecoveryIsolates|ConfiguredDeadline|WorkspaceAdmission|ChildOutputLimit|ProviderFailures|ChildPersistenceFailure|ChildComposedContext|OngoingRecovery|ParallelAndRetrievalPreset' -count=1 -timeout 300s`
+- `go test -race ./internal/subagents -count=5 -run` over the new and existing
+  timing-sensitive supervisor tests.
+
+Startup in `cmd/evie/main.go` still treats any recovery error as fatal, so an
+unreadable record now reported by recovery would stop startup as before; that
+file was outside this change.

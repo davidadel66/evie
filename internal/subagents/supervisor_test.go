@@ -53,10 +53,23 @@ type fixture struct {
 
 func setup(t *testing.T, policy delegation.Policy) *fixture {
 	t.Helper()
+	return setupWith(t, policy, nil)
+}
+
+// setupWith optionally routes every store statement through a fault seam.
+func setupWith(t *testing.T, policy delegation.Policy, fault *storeFault) *fixture {
+	t.Helper()
 	ctx := context.Background()
-	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	path := filepath.Join(t.TempDir(), "evie.db")
+	db, err := eviedb.OpenDBAt(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if fault != nil {
+		if err = db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		db = openFaultDB(path, fault)
 	}
 	t.Cleanup(func() { db.Close() })
 	f := &fixture{db: db, store: eviedb.NewStore(db), client: &provider{}}
@@ -367,16 +380,25 @@ func TestDuplicateWaiterCancellationDoesNotCancelOriginalChild(t *testing.T) {
 // Each public-supervisor request is backed by an actual fenced, committed intent.
 func (f *fixture) delegate(t *testing.T, ctx context.Context, p delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
 	t.Helper()
+	p, err := f.invoke(ctx, p, requests)
+	if err != nil {
+		return nil, err
+	}
+	return f.supervisor.Delegate(ctx, p, requests)
+}
+
+// invoke commits the parent's delegation intent for requests.
+func (f *fixture) invoke(ctx context.Context, p delegation.Parent, requests []delegation.Assignment) (delegation.Parent, error) {
 	b, _ := json.Marshal(struct {
 		Assignments []delegation.Assignment `json:"assignments"`
 	}{requests})
 	payload, _ := json.Marshal(memory.ToolIntentPayload{Call: memory.ToolCall{ID: "call-" + uuid.NewString(), Name: delegation.ToolName, Arguments: string(b)}})
 	intent, err := f.store.AppendEventWithLease(ctx, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, memory.EventInput{Type: memory.EventToolIntent, ParentID: p.SourceEventID, ExecutionID: memory.ExecutionID(uuid.NewString()), Payload: payload})
 	if err != nil {
-		return nil, err
+		return p, err
 	}
 	p.IntentEventID = intent.ID
-	return f.supervisor.Delegate(ctx, p, requests)
+	return p, nil
 }
 
 type eventSink struct{ content []string }
@@ -642,6 +664,9 @@ func TestAuthorityLossAndShutdownJoinForegroundChildren(t *testing.T) {
 					}
 					if action == "parent_lease" && (r.Status != "interrupted" || r.Reason != "authority_ended") {
 						t.Fatalf("ownership loss reported as user cancellation: %+v", r)
+					}
+					if action != "parent_lease" && (r.Status != "cancelled" || r.Reason != "shutdown") {
+						t.Fatalf("supervisor stop reported as another cause after %s: %+v", action, r)
 					}
 				}
 			case <-ctx.Done():

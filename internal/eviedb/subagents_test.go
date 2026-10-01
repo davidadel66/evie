@@ -196,7 +196,7 @@ func TestOngoingRecoveryRevisitsAttemptAfterEarlyRestart(t *testing.T) {
 	}
 	recoveryCtx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
-	go func() { done <- supervisor.RunRecovery(recoveryCtx) }()
+	go func() { done <- supervisor.RunRecovery(recoveryCtx, nil) }()
 	defer func() { cancel(); <-done }()
 	if err = store.ReleaseTurnLease(ctx, parent.Scope.SessionID, parent.Lease.HolderID, parent.Lease.FencingToken); err != nil {
 		t.Fatal(err)

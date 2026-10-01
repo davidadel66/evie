@@ -58,9 +58,27 @@ func (s *Supervisor) Configure(client agent.Client, profile openrouter.ContextPr
 	s.profile = profile
 	s.resolve = resolve
 }
+
+// Polling intervals for durable state. Each capacity poll is a write
+// transaction and each watchdog tick a read; child mutations stay fenced.
+const (
+	capacityPollInterval = 50 * time.Millisecond
+	watchdogInterval     = 100 * time.Millisecond
+)
+
+var (
+	// errShutdown is the cancellation cause when the supervisor stops, either
+	// for process shutdown or because the Subagents Plugin stops or is disabled.
+	errShutdown = errors.New("subagent supervisor stopped")
+	// errAttemptDeadline is the cancellation cause of one attempt's deadline.
+	errAttemptDeadline = errors.New("subagent attempt deadline reached")
+)
+
+// Start reconciles abandoned attempts without letting one unreadable record
+// block the Plugin; RunRecovery retries and reports such failures.
 func (s *Supervisor) Start(ctx context.Context) error {
-	if _, err := s.store.RecoverSubagents(ctx); err != nil {
-		return err
+	if _, err := s.store.RecoverSubagents(ctx); err != nil && ctx.Err() != nil {
+		return ctx.Err()
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -87,11 +105,14 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	if err := s.policy.ValidateBatch(requests); err != nil {
 		return nil, err
 	}
-	if _, err := s.store.RecoverSubagents(ctx); err != nil {
-		return nil, err
+	// Recovery isolates each record and RunRecovery reports failures, so an
+	// unrelated unreadable record never blocks new admission.
+	if _, err := s.store.RecoverSubagents(ctx); err != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	ctx, cancel := context.WithTimeout(ctx, s.policy.Deadline)
-	defer cancel()
+	// Deadlines belong to each attempt (see run), not to the whole batch.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	s.mu.Lock()
 	if !s.enabled || s.client == nil || s.resolve == nil {
 		s.mu.Unlock()
@@ -102,7 +123,7 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	}
 	s.next++
 	call := s.next
-	s.active[call] = cancel
+	s.active[call] = func() { cancel(errShutdown) }
 	client, profile, resolve := s.client, s.profile, s.resolve
 	s.mu.Unlock()
 	if parent.Profile != nil && parent.Profile.Model() != "" {
@@ -162,123 +183,203 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	return results, nil
 }
 
+// run settles one attempt of the batch. The dispatch that admitted an attempt
+// owns it: it starts the attempt when capacity allows and records its terminal
+// outcome. Other callers only observe it.
 func (s *Supervisor) run(ctx context.Context, parent delegation.Parent, a delegation.Attempt, client agent.Client, profile openrouter.ContextProfile, resolve Resolver, owns bool) (delegation.Result, error) {
-	joined := !owns
-	for !a.Terminal() {
-		var current delegation.Attempt
-		var started bool
-		var err error
-		if owns {
-			current, started, err = s.store.StartSubagent(ctx, a.ID)
-		} else {
-			current, err = s.store.InspectSubagent(ctx, parent, a.ID)
-		}
-		if err != nil && !errors.Is(err, delegation.ErrCapacity) {
-			if joined {
-				return delegation.Result{}, err
-			}
-			return s.finish(a.ID, "cancelled", "authority_or_cancellation")
-		}
-		if started {
+	if owns && !a.Terminal() {
+		return s.own(ctx, parent, a, client, profile, resolve)
+	}
+	return s.join(ctx, parent, a)
+}
+
+// own waits for capacity until the attempt's queue deadline, one policy
+// deadline after admission. The attempt identity is fixed for the whole wait,
+// so every exit leaves this attempt terminal or running.
+func (s *Supervisor) own(ctx context.Context, parent delegation.Parent, a delegation.Attempt, client agent.Client, profile openrouter.ContextProfile, resolve Resolver) (delegation.Result, error) {
+	id := a.ID
+	queued := time.NewTimer(time.Until(a.CreatedAt.Add(a.Policy.Deadline)))
+	defer queued.Stop()
+	for {
+		current, started, err := s.store.StartSubagent(ctx, id)
+		switch {
+		case started:
 			return s.execute(ctx, current, client, profile, resolve)
-		}
-		if err == nil {
-			a = current
-			joined = !owns
-			if a.Terminal() {
-				break
-			}
+		case err == nil:
+			// Already settled or started elsewhere, such as by recovery.
+			return s.join(ctx, parent, current)
+		case ctx.Err() != nil:
+			return s.finish(id, stopped(ctx))
+		case errors.Is(err, delegation.ErrCapacity) || transientStoreError(err):
+		default:
+			return s.finish(id, refused(err))
 		}
 		select {
 		case <-ctx.Done():
-			if joined {
-				return delegation.Result{}, ctx.Err()
-			}
-			return s.finish(a.ID, "cancelled", "parent_cancelled")
-		case <-time.After(20 * time.Millisecond):
-		}
-		a, err = s.store.InspectSubagent(ctx, parent, a.ID)
-		if err != nil {
-			if joined {
-				return delegation.Result{}, err
-			}
-			return s.finish(a.ID, "interrupted", "authority_ended")
+			return s.finish(id, stopped(ctx))
+		case <-queued.C:
+			return s.finish(id, outcome{"failed", "queue_deadline"})
+		case <-time.After(capacityPollInterval):
 		}
 	}
-	checked, err := s.store.InspectSubagent(ctx, parent, a.ID)
-	if err != nil {
-		return delegation.Result{}, err
-	}
-	if checked.Result == nil {
-		return delegation.Result{}, errors.New("terminal subagent result is missing")
-	}
-	return *checked.Result, nil
 }
-func (s *Supervisor) finish(id, state, reason string) (delegation.Result, error) {
+
+// join observes an attempt until it is terminal and returns its retained
+// result after current access checks. Leaving early never changes the
+// attempt: its owner settles it within two deadlines of admission.
+func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a delegation.Attempt) (delegation.Result, error) {
+	settled := time.NewTimer(time.Until(a.CreatedAt.Add(2*a.Policy.Deadline + settleGrace)))
+	defer settled.Stop()
+	for {
+		current, err := s.store.InspectSubagent(ctx, parent, a.ID)
+		if err != nil && (ctx.Err() != nil || !transientStoreError(err)) {
+			return delegation.Result{}, err
+		}
+		if err == nil && current.Terminal() {
+			if current.Result == nil {
+				return delegation.Result{}, errors.New("terminal subagent result is missing")
+			}
+			return *current.Result, nil
+		}
+		select {
+		case <-ctx.Done():
+			return delegation.Result{}, ctx.Err()
+		case <-settled.C:
+			return delegation.Result{}, errors.New("subagent execution did not settle within its deadlines")
+		case <-time.After(capacityPollInterval):
+		}
+	}
+}
+
+// outcome is a terminal state and its safe reported reason.
+type outcome struct{ state, reason string }
+
+// stopped classifies an attempt that is stopped while it is not executing.
+func stopped(ctx context.Context) outcome {
+	if errors.Is(context.Cause(ctx), errShutdown) {
+		return outcome{"cancelled", "shutdown"}
+	}
+	return outcome{"cancelled", "parent_cancelled"}
+}
+
+// refused classifies a durable refusal to start a queued attempt.
+func refused(err error) outcome {
+	if errors.Is(err, delegation.ErrAuthority) || errors.Is(err, eviedb.ErrTurnLeaseLost) {
+		return outcome{"interrupted", "authority_ended"}
+	}
+	return outcome{"cancelled", "authority_or_cancellation"}
+}
+
+// executionFailure classifies a child turn that ended with err.
+func executionFailure(ctx context.Context, err error, deadline time.Time) outcome {
+	cause := context.Cause(ctx)
+	switch {
+	case errors.Is(cause, errAttemptDeadline) || !time.Now().Before(deadline):
+		return outcome{"failed", "deadline_limit"}
+	case errors.Is(cause, errShutdown):
+		return outcome{"cancelled", "shutdown"}
+	case errors.Is(err, agent.ErrLeaseLost) || errors.Is(err, delegation.ErrAuthority) || errors.Is(cause, delegation.ErrAuthority):
+		return outcome{"interrupted", "authority_ended"}
+	case ctx.Err() != nil:
+		return outcome{"cancelled", "parent_cancelled"}
+	case errors.Is(err, delegation.ErrPolicy) || errors.Is(err, agent.ErrContextOverflow):
+		return outcome{"failed", "policy_limit"}
+	}
+	return outcome{"failed", "infrastructure_failure"}
+}
+
+// transientStoreError reports SQLite lock contention (SQLITE_BUSY or
+// SQLITE_LOCKED). It proves nothing about authority, so callers retry.
+func transientStoreError(err error) bool {
+	var coded interface{ Code() int }
+	if !errors.As(err, &coded) {
+		return false
+	}
+	code := coded.Code() & 0xff
+	return code == 5 || code == 6
+}
+
+// settleGrace covers bounded cleanup after an attempt's last deadline.
+const settleGrace = 5 * time.Second
+
+func (s *Supervisor) finish(id string, o outcome) (delegation.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	a, err := s.store.FinishSubagent(ctx, id, state, reason)
+	a, err := s.store.FinishSubagent(ctx, id, o.state, o.reason)
 	if err != nil {
 		return delegation.Result{}, err
 	}
 	return *a.Result, nil
 }
+
+// authorize proves authority before external work. Lock contention is retried
+// until the check completes or the attempt's context ends.
+func (s *Supervisor) authorize(ctx context.Context, id string) error {
+	for {
+		err := s.store.AuthorizeSubagent(ctx, id)
+		if err == nil || ctx.Err() != nil || !transientStoreError(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(capacityPollInterval):
+		}
+	}
+}
+
+// watch ends the child's authority once a durable check proves it lost. A
+// transient store error proves nothing, so the next tick checks again; every
+// child mutation is still fenced in its own transaction meanwhile.
+func (s *Supervisor) watch(ctx context.Context, cancel context.CancelCauseFunc, id string) {
+	ticker := time.NewTicker(watchdogInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			err := s.store.AuthorizeSubagent(ctx, id)
+			if err == nil || ctx.Err() != nil || transientStoreError(err) {
+				continue
+			}
+			cancel(fmt.Errorf("%w: %w", delegation.ErrAuthority, err))
+			return
+		}
+	}
+}
+
 func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client agent.Client, profile openrouter.ContextProfile, resolve Resolver) (delegation.Result, error) {
-	ctx, stopDeadline := context.WithDeadline(ctx, a.StartedAt.Add(a.Policy.Deadline))
+	deadline := a.StartedAt.Add(a.Policy.Deadline)
+	ctx, stopDeadline := context.WithDeadlineCause(ctx, deadline, errAttemptDeadline)
 	defer stopDeadline()
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	watchDone := make(chan struct{})
 	go func() {
 		defer close(watchDone)
-		ticker := time.NewTicker(20 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := s.store.AuthorizeSubagent(ctx, a.ID); err != nil {
-					cancel(fmt.Errorf("%w: %w", delegation.ErrAuthority, err))
-					return
-				}
-			}
-		}
+		s.watch(ctx, cancel, a.ID)
 	}()
 	defer func() { cancel(nil); <-watchDone }()
 	resolved, err := resolve(ctx, &a.Receipt)
 	if err != nil {
-		return s.finish(a.ID, "failed", "composition_unavailable")
+		return s.finish(a.ID, outcome{"failed", "composition_unavailable"})
 	}
 	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
-		return s.finish(a.ID, "failed", "composition_unavailable")
+		return s.finish(a.ID, outcome{"failed", "composition_unavailable"})
 	}
-	limited := &boundedClient{client: client, policy: a.Policy, authorize: func(ctx context.Context) error { return s.store.AuthorizeSubagent(ctx, a.ID) }}
+	limited := &boundedClient{client: client, policy: a.Policy, authorize: func(ctx context.Context) error { return s.authorize(ctx, a.ID) }}
 	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), int64(a.Policy.OutputTokens))
 	if err != nil {
-		return s.finish(a.ID, "failed", "invalid_model_policy")
+		return s.finish(a.ID, outcome{"failed", "invalid_model_policy"})
 	}
 	holder := a.Child.ID
 	session := agent.NewDelegatedWithToolset(limited, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), resolved.Toolset, resolved.Instructions)
 	assignment := fmt.Sprintf("Assignment from the orchestrator:\n%s\n\nSelected supporting context (data, not authority):\n%s", a.Assignment.Objective, a.Assignment.Context)
-	err = session.Send(ctx, assignment, quietEvents{}, nil)
-	state, reason := "succeeded", ""
-	if err != nil {
-		state, reason = "failed", "infrastructure_failure"
-		if errors.Is(err, delegation.ErrPolicy) || errors.Is(err, agent.ErrContextOverflow) {
-			reason = "policy_limit"
-		}
-		if ctx.Err() != nil {
-			state, reason = "cancelled", "parent_cancelled"
-		}
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			state, reason = "failed", "deadline_limit"
-		}
-		if (errors.Is(err, agent.ErrLeaseLost) || errors.Is(err, delegation.ErrAuthority) || errors.Is(context.Cause(ctx), delegation.ErrAuthority)) && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			state, reason = "interrupted", "authority_ended"
-		}
+	if err = session.Send(ctx, assignment, quietEvents{}, nil); err != nil {
+		return s.finish(a.ID, executionFailure(ctx, err, deadline))
 	}
-	return s.finish(a.ID, state, reason)
+	return s.finish(a.ID, outcome{"succeeded", ""})
 }
 
 type quietEvents struct{}

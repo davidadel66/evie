@@ -61,7 +61,8 @@ func startSubagentRecovery(ctx context.Context, supervisor *subagents.Supervisor
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if err := supervisor.RunRecovery(ctx); err != nil && ctx.Err() == nil {
+		report := func(err error) { log.Printf("Subagent recovery failed; retrying: %v", err) }
+		if err := supervisor.RunRecovery(ctx, report); err != nil && ctx.Err() == nil {
 			log.Printf("Subagent recovery stopped: %v", err)
 		}
 	}()

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -53,6 +54,10 @@ func (s *Store) StartSubagent(ctx context.Context, id string) (delegation.Attemp
 // authorizeSubagentChild is part of every fenced child mutation, including
 // final assistant acceptance. Parent and child fences share one transaction.
 func (s *Store) authorizeSubagentChild(ctx context.Context, conn *sql.Conn, child memory.SessionID) error {
+	return s.authorizeSubagentChildWith(ctx, conn, child, fenceTurnLeaseWrite)
+}
+
+func (s *Store) authorizeSubagentChildWith(ctx context.Context, conn *sql.Conn, child memory.SessionID, fence subagentLeaseFence) error {
 	var parent sql.NullString
 	if err := conn.QueryRowContext(ctx, `SELECT parent_session_id FROM sessions WHERE id=?`, child).Scan(&parent); err != nil {
 		return err
@@ -70,17 +75,64 @@ func (s *Store) authorizeSubagentChild(ctx context.Context, conn *sql.Conn, chil
 	if a.State != "running" || a.StartedAt == nil || !s.now().Before(a.StartedAt.Add(a.Policy.Deadline)) {
 		return delegation.ErrAuthority
 	}
-	return s.authorizeSubagentParent(ctx, conn, a.Parent, a.Receipt)
+	return s.authorizeSubagentParentWith(ctx, conn, a.Parent, a.Receipt, fence)
 }
 
+// AuthorizeSubagent reports whether a running child still holds authority.
+// It gates external work and the supervisor's watchdog but writes nothing, so
+// it evaluates the same checks on one read snapshot without the write lock.
+// Every child mutation still re-authorizes under BEGIN IMMEDIATE.
 func (s *Store) AuthorizeSubagent(ctx context.Context, id string) error {
-	return s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+	return s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
 		a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=?`, id))
 		if err != nil {
 			return err
 		}
-		return s.authorizeSubagentChild(ctx, conn, a.Child.ID)
+		return s.authorizeSubagentChildWith(ctx, conn, a.Child.ID, checkTurnLeaseLive)
 	})
+}
+
+// checkTurnLeaseLive is the read-only form of fenceTurnLeaseWrite, with the
+// same predicate. It proves ownership at the snapshot without fencing writes.
+func checkTurnLeaseLive(ctx context.Context, conn *sql.Conn, sessionID memory.SessionID, holderID memory.LeaseHolderID, token memory.FencingToken, nowText string) error {
+	var live bool
+	if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM session_turn_leases l JOIN sessions s ON s.id=l.session_id
+ WHERE l.session_id=? AND l.holder_id=? AND l.fencing_token=? AND l.expires_at>? AND s.status=?)`, sessionID, holderID, token, nowText, memory.SessionActive).Scan(&live); err != nil {
+		return fmt.Errorf("check turn lease: %w", err)
+	}
+	if !live {
+		return fmt.Errorf("%w: session %q", ErrTurnLeaseLost, sessionID)
+	}
+	return nil
+}
+
+// withSubagentReadTransaction runs read-only subagent checks on one WAL
+// snapshot without taking SQLite's write lock. It always rolls back, so a
+// check can never persist a change.
+func (s *Store) withSubagentReadTransaction(ctx context.Context, operation func(*sql.Conn) error) (err error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("open subagent read connection: %w", err)
+	}
+	defer func() {
+		if closeErr := conn.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close subagent read connection: %w", closeErr)
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, `BEGIN`); err != nil {
+		return fmt.Errorf("begin subagent read transaction: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		if _, rollbackErr := conn.ExecContext(rollbackCtx, `ROLLBACK`); rollbackErr != nil {
+			discardImmediateTransactionConnection(conn)
+			if err == nil {
+				err = fmt.Errorf("end subagent read transaction: %w", rollbackErr)
+			}
+		}
+	}()
+	return operation(conn)
 }
 
 // FinishSubagent arbitrates against accepted child evidence under the write
@@ -254,41 +306,101 @@ func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) 
 
 // RecoverSubagents never starts execution or fabricates conversational events.
 // Only attempts whose original parent lease is no longer live are reconciled.
+// Each attempt is reconciled in its own transaction: a record that cannot be
+// reconciled is reported in the returned error and does not block the rest.
 func (s *Store) RecoverSubagents(ctx context.Context) (int, error) {
+	candidates, err := s.subagentRecoveryCandidates(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list unfinished subagent executions: %w", err)
+	}
 	count := 0
-	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		rows, err := conn.QueryContext(ctx, `SELECT record_json FROM subagent_executions WHERE state IN ('admitted','running')`)
+	var failures []error
+	for _, id := range candidates {
+		if err := ctx.Err(); err != nil {
+			return count, errors.Join(append(failures, err)...)
+		}
+		recovered, err := s.recoverSubagent(ctx, id)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("recover subagent execution %q: %w", id, err))
+			continue
+		}
+		if recovered {
+			count++
+		}
+	}
+	return count, errors.Join(failures...)
+}
+
+// subagentRecoveryCandidates selects unfinished attempts whose parent lease is
+// not live on one read snapshot, so live work costs no write transaction. An
+// unreadable record is still selected so its own transaction reports it.
+func (s *Store) subagentRecoveryCandidates(ctx context.Context) ([]string, error) {
+	var candidates []string
+	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
+		rows, err := conn.QueryContext(ctx, `SELECT id,record_json FROM subagent_executions WHERE state IN ('admitted','running') ORDER BY id`)
 		if err != nil {
 			return err
 		}
-		var attempts []delegation.Attempt
+		type unfinished struct{ id, record string }
+		var found []unfinished
 		for rows.Next() {
-			a, err := readSubagent(rows)
-			if err != nil {
+			var u unfinished
+			if err = rows.Scan(&u.id, &u.record); err != nil {
 				rows.Close()
 				return err
 			}
-			attempts = append(attempts, a)
+			found = append(found, u)
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
 			return err
 		}
-		for _, a := range attempts {
-			err = fenceTurnLeaseWrite(ctx, conn, a.Parent.Scope.SessionID, a.Parent.Lease.HolderID, a.Parent.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat))
-			if err == nil {
+		now := s.now().UTC().Format(turnLeaseTimeFormat)
+		for _, u := range found {
+			var a delegation.Attempt
+			if json.Unmarshal([]byte(u.record), &a) != nil {
+				candidates = append(candidates, u.id)
 				continue
 			}
-			if !errors.Is(err, ErrTurnLeaseLost) {
+			err = checkTurnLeaseLive(ctx, conn, a.Parent.Scope.SessionID, a.Parent.Lease.HolderID, a.Parent.Lease.FencingToken, now)
+			if errors.Is(err, ErrTurnLeaseLost) {
+				candidates = append(candidates, u.id)
+			} else if err != nil {
 				return err
 			}
-			if err = s.finishSubagent(ctx, conn, &a, "interrupted", "original_parent_ownership_ended"); err != nil {
-				return err
-			}
-			count++
 		}
 		return nil
 	})
-	return count, err
+	return candidates, err
+}
+
+// recoverSubagent re-proves abandonment under the write lock before finishing.
+func (s *Store) recoverSubagent(ctx context.Context, id string) (bool, error) {
+	recovered := false
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=?`, id))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if a.Terminal() {
+			return nil
+		}
+		err = fenceTurnLeaseWrite(ctx, conn, a.Parent.Scope.SessionID, a.Parent.Lease.HolderID, a.Parent.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat))
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, ErrTurnLeaseLost) {
+			return err
+		}
+		if err = s.finishSubagent(ctx, conn, &a, "interrupted", "original_parent_ownership_ended"); err != nil {
+			return err
+		}
+		recovered = true
+		return nil
+	})
+	return recovered, err
 }

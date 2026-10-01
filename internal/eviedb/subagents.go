@@ -119,7 +119,16 @@ func writeSubagent(ctx context.Context, conn *sql.Conn, a delegation.Attempt) er
 	return err
 }
 
+// subagentLeaseFence proves the parent's turn lease inside a transaction.
+// Mutations use fenceTurnLeaseWrite under BEGIN IMMEDIATE; read-only checks
+// use checkTurnLeaseLive on their snapshot and never take the write lock.
+type subagentLeaseFence func(context.Context, *sql.Conn, memory.SessionID, memory.LeaseHolderID, memory.FencingToken, string) error
+
 func (s *Store) authorizeSubagentParent(ctx context.Context, conn *sql.Conn, p delegation.Parent, child composition.Receipt) error {
+	return s.authorizeSubagentParentWith(ctx, conn, p, child, fenceTurnLeaseWrite)
+}
+
+func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn, p delegation.Parent, child composition.Receipt, fence subagentLeaseFence) error {
 	if p.Scope.ParentSessionID != "" || p.Scope.SessionID != p.Lease.SessionID || p.Scope.OwnerID != memory.LocalOwnerID || p.Lease.Generation != memory.LeaseGeneration(p.Lease.FencingToken) {
 		return delegation.ErrAuthority
 	}
@@ -155,7 +164,7 @@ func (s *Store) authorizeSubagentParent(ctx context.Context, conn *sql.Conn, p d
 			return err
 		}
 	}
-	if err := fenceTurnLeaseWrite(ctx, conn, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
+	if err := fence(ctx, conn, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
 		return err
 	}
 	for _, plugin := range []string{"subagents", "web"} {
@@ -202,23 +211,24 @@ func (s *Store) authorizeSubagentParent(ctx context.Context, conn *sql.Conn, p d
 	if intent.Lease == nil || intent.Lease.SessionID != p.Lease.SessionID || intent.Lease.HolderID != p.Lease.HolderID || intent.Lease.FencingToken != p.Lease.FencingToken {
 		return delegation.ErrAuthority
 	}
+	// A turn appends its root user message first and every later event of
+	// that turn under the same fenced lease; the next turn, or the turn's
+	// failure or interruption, appends a boundary. An outstanding intent that
+	// was written under the live lease after the latest root, with no boundary
+	// since, therefore descends from that root. Proving this by position uses
+	// indexed lookups with no ancestry walk, so it has no turn-depth limit.
 	var linked bool
-	if err = conn.QueryRowContext(ctx, `WITH RECURSIVE chain(id,parent_id,depth) AS (
- SELECT id,parent_id,0 FROM events WHERE id=? AND session_id=?
- UNION ALL SELECT e.id,e.parent_id,chain.depth+1 FROM events e JOIN chain ON e.id=chain.parent_id WHERE e.session_id=? AND chain.depth<128
- ) SELECT EXISTS(SELECT 1 FROM chain WHERE id=?) AND NOT EXISTS(
+	if err = conn.QueryRowContext(ctx, `SELECT EXISTS(
+ SELECT 1 FROM events source JOIN events intent ON intent.session_id=source.session_id
+ WHERE source.id=? AND source.session_id=? AND source.event_type='user_message' AND source.parent_id IS NULL
+ AND intent.id=? AND intent.event_type='tool_intent' AND intent.sequence>source.sequence
+ ) AND NOT EXISTS(
  SELECT 1 FROM events WHERE session_id=? AND sequence>(SELECT sequence FROM events WHERE id=?) AND event_type IN ('user_message','turn_failed','turn_interrupted')
- ) AND NOT EXISTS(SELECT 1 FROM events WHERE session_id=? AND execution_id=(SELECT execution_id FROM events WHERE id=?) AND event_type IN ('tool_succeeded','tool_failed','tool_cancelled'))`, p.IntentEventID, p.Scope.SessionID, p.Scope.SessionID, p.SourceEventID, p.Scope.SessionID, p.SourceEventID, p.Scope.SessionID, p.IntentEventID).Scan(&linked); err != nil {
+ ) AND NOT EXISTS(SELECT 1 FROM events WHERE session_id=? AND execution_id=(SELECT execution_id FROM events WHERE id=?) AND event_type IN ('tool_succeeded','tool_failed','tool_cancelled'))`,
+		p.SourceEventID, p.Scope.SessionID, p.IntentEventID, p.Scope.SessionID, p.SourceEventID, p.Scope.SessionID, p.IntentEventID).Scan(&linked); err != nil {
 		return err
 	}
 	if !linked {
-		return delegation.ErrAuthority
-	}
-	var validRoot bool
-	if err = conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE id=? AND session_id=? AND event_type='user_message' AND parent_id IS NULL)`, p.SourceEventID, p.Scope.SessionID).Scan(&validRoot); err != nil {
-		return err
-	}
-	if !validRoot {
 		return delegation.ErrAuthority
 	}
 	return nil
@@ -259,9 +269,10 @@ func authorizeSubagentTask(ctx context.Context, conn *sql.Conn, p delegation.Par
 }
 
 // InspectSubagent applies current parent and Task access even to retained results.
+// It only reads, so waiting callers never contend for SQLite's write lock.
 func (s *Store) InspectSubagent(ctx context.Context, p delegation.Parent, id string) (delegation.Attempt, error) {
 	var a delegation.Attempt
-	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
 		var err error
 		a, err = readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=? AND parent_session_id=?`, id, p.Scope.SessionID))
 		if err != nil {
