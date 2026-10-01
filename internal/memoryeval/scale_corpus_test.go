@@ -213,3 +213,75 @@ func TestScaleScoreReportsUndefinedRatesAsNull(t *testing.T) {
 		t.Fatalf("empty denominators invented rates: %+v", counts)
 	}
 }
+
+// Stage 13 teaches the scorer the Kernel's historical-claim link: an excerpt
+// linked to a retired or superseded Claim is not presented as current, and a
+// ClearKeys pair is over-linked only when the message arrives linked to that
+// Claim (by relation, conflict or historical link).
+func TestScaleScoreHistoricalLinksAndOverLinking(t *testing.T) {
+	c := GenerateScaleCorpus(DefaultScaleCorpusOptions())
+	global := ScaleAreaGlobal
+	observations := []ScaleObservation{
+		{ProbeID: "auto.work", Status: "success", Items: []ScaleItem{
+			{Key: "m.c.employer", Kind: "conversation_excerpt", Area: global, Status: "superseded", CurrentStatus: "superseded", HistoricalKeys: []string{"c.employer", "c.employer.new"}},
+		}},
+		{ProbeID: "auto.coffee", Status: "success", Items: []ScaleItem{
+			{Key: "m.coffee.restated", Kind: "conversation_excerpt", Area: global, Status: "active", CurrentStatus: "active", HistoricalKeys: []string{"c.coffee"}},
+		}},
+		{ProbeID: "memory_search_conversations.blue_bottle", Status: "success", Items: []ScaleItem{
+			{Key: "m.coffee.restated", Kind: "conversation_excerpt", Area: global, HistoricalKeys: []string{"c.coffee"}},
+			{Key: "m.coffee.airport", Kind: "conversation_excerpt", Area: global, HistoricalKeys: []string{"c.coffee"}},
+		}},
+		{ProbeID: "auto.blue_bottle", Status: "success", Items: []ScaleItem{
+			{Key: "m.coffee.airport", Kind: "conversation_excerpt", Area: global},
+		}},
+		{ProbeID: "memory_search.home_city", Status: "success", Items: []ScaleItem{
+			{Key: "c.home", Kind: "accepted_memory", Area: global},
+			{Key: "m.boston.marathon", Kind: "conversation_excerpt", Area: global, RelatedKeys: []string{"c.home"}},
+		}},
+		{ProbeID: "memory_search.carrier", Status: "success", Items: []ScaleItem{
+			{Key: "c.carrier", Kind: "accepted_memory", Area: global},
+			{Key: "m.carrier.switch", Kind: "conversation_excerpt", Area: global, RelatedKeys: []string{"c.carrier"}},
+		}},
+	}
+	report := ScoreScale(c, observations)
+	outcomes := map[string]string{}
+	for _, o := range report.Stale.Outcomes {
+		key := o.ProbeID + "/" + o.Scenario
+		if prior, ok := outcomes[key]; ok {
+			key += "/" + prior
+		}
+		outcomes[key] = o.Outcome
+	}
+	for key, want := range map[string]string{
+		"auto.work/" + ScaleStaleCorrection:                                   "labelled",
+		"auto.coffee/" + ScaleStaleRetiredRestated:                            "labelled",
+		"memory_search_conversations.blue_bottle/" + ScaleStaleOverFlag:       "over_linked",
+		"auto.blue_bottle/" + ScaleStaleOverFlag:                              "clear",
+		"memory_search.carrier/" + ScaleStaleNewerSavedValue:                  "linked",
+		"memory_search.carrier/" + ScaleStaleOverLink:                         "absent",
+		"memory_search.home_city/" + ScaleStaleOverLink:                       "over_linked",
+		"memory_search.home_city/" + ScaleStaleOverLink + "/" + "over_linked": "absent",
+	} {
+		if outcomes[key] != want {
+			t.Fatalf("%s outcome = %q, want %q (all: %v)", key, outcomes[key], want, outcomes)
+		}
+	}
+	targets := map[string]ScaleTarget{}
+	for _, target := range report.Targets {
+		targets[target.ID] = target
+	}
+	if targets["M3.no_over_linking"].Met || targets["M2.no_over_flagging"].Met {
+		t.Fatalf("over-linking met its precision targets: %+v", targets)
+	}
+	if targets["M3.different_wording_detected"].Observed != "1 misses of 2 checks" {
+		t.Fatalf("M3 target does not cover every different-wording scenario: %+v", targets["M3.different_wording_detected"])
+	}
+	for _, probe := range c.Probes {
+		for _, check := range probe.Checks {
+			if check.Scenario == ScaleStaleOverLink && probe.Path == ScalePathConversationSearch {
+				t.Fatalf("conversation search cannot link Claims, but %s carries an over-link check", probe.ID)
+			}
+		}
+	}
+}

@@ -172,6 +172,9 @@ explain what was supplied for the original answer, even after memory changes.
     silently selecting the stored Claim. Recency does not override source
     authority or establish truth. Reads do not accept, correct, supersede, or
     promote memory; mutations retain their existing reviewed operation path.
+    The historical labelling of corrected and restated evidence and the
+    deterministic newer-statement rule are recorded in the adjacent
+    decisions (2026-10-01, Stage 13).
 
 11. **Bounded work and failure.** Enforce search deadlines, concurrency,
     candidate/result sizes, expansion limits, and cumulative retrieval context

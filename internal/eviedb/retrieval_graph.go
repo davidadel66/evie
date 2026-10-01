@@ -230,7 +230,7 @@ func (c *retrievalCandidates) ordered() []*retrievalCandidate {
 			continue
 		}
 		claim := item.evidence.Claim
-		key := claim.ScopeKey + ":" + string(claim.SubjectEntityID) + ":" + string(claim.Predicate.ID)
+		key := claim.ScopeKey + ":" + string(claim.SubjectEntityID) + ":" + claim.Predicate.Token
 		layers[claim.ID] = groups[key]
 		groups[key]++
 	}

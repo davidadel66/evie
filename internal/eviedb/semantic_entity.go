@@ -364,7 +364,7 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		predicate.ID, err = newSemanticID()
 		predicate.Version = 1
 		predicate.Create = true
-	} else if err == nil && (predicate.Label != request.PredicateLabel || predicate.ObjectConstraint != memory.ConstraintEntity ||
+	} else if err == nil && (!predicateLabelsEquivalent(predicate.Label, request.PredicateLabel) || predicate.ObjectConstraint != memory.ConstraintEntity ||
 		predicate.Cardinality != request.PredicateCardinality) {
 		predicate.ID, err = newSemanticID()
 		predicate.Version++
@@ -582,7 +582,7 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 		proposal.Claim.Polarity != proposal.Request.Polarity ||
 		!validTimesEqual(proposal.Claim.ValidTime, proposal.Request.ValidTime) ||
 		proposal.Predicate.Cardinality != proposal.Request.PredicateCardinality ||
-		proposal.Predicate.Label != proposal.Request.PredicateLabel {
+		!predicateLabelsEquivalent(proposal.Predicate.Label, proposal.Request.PredicateLabel) {
 		return errors.New("Entity Claim does not match its prepared scope or Predicate")
 	}
 	if proposal.Source.EventID != proposal.Request.SourceEventID || proposal.Source.SessionID != proposal.SessionID ||

@@ -1,5 +1,25 @@
 # memory - decisions
 
+- **2026-10-01 — Predicate drift neither mints needless versions nor hides
+  conflicts (harness review M4, Stage 13).** The encodings contract says the
+  human label does not participate in Predicate identity. A remember request
+  whose label differs from the token's latest definition only in letter case
+  or whitespace reuses that definition and its stored label; the approval
+  card shows `predicate.create:false` and the existing version. Any other
+  label change, a cardinality change or an object-constraint change still
+  appends a new version, visible on the card as `predicate.create:true` with
+  the new `version`, so the approver sees it. Conflict diagnostics compare
+  Claims by subject and Predicate token across every version: exact
+  inspection warnings, retrieval conflict companions and `conflicts`, the
+  newer-statement family, refresh validity and correction-chain refresh all
+  span versions. A one-cardinality warning applies when either Claim's
+  version says one, so a deliberate change to many still shows the overlap
+  against older one-valued Claims; warnings stay diagnostic and never pick a
+  winner. Broader label reuse (any label change reusing the definition) is
+  allowed by the encodings contract but deferred: it would silently replace
+  the label the approver was shown. Compiler candidate review still finds
+  conflict peers by Predicate ID; it was outside this stage's scope.
+
 - **2026-09-10 — Retirement also excludes corresponding conversation evidence from ordinary recall.**
   David accepted retrieval interview Q19: retiring a saved memory prevents its
   corresponding conversation evidence from bringing it back through automatic

@@ -74,8 +74,8 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 			break
 		}
 		rows, err := q.QueryContext(ctx, `SELECT c.claim_id FROM semantic_claims c JOIN semantic_scopes sc ON sc.scope_id=c.scope_id
- WHERE sc.scope_key IN (?,?,?) AND c.subject_entity_id=? AND c.predicate_id=? AND c.claim_id!=? AND c.transaction_time<=?
- ORDER BY c.claim_id LIMIT ?`, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), seed.Claim.SubjectEntityID, seed.Claim.Predicate.ID, seed.ClaimID, formatSemanticTime(metadata.AsKnownAt), remaining+1)
+ WHERE sc.scope_key IN (?,?,?) AND c.subject_entity_id=? AND c.predicate_token=? AND c.claim_id!=? AND c.transaction_time<=?
+ ORDER BY c.claim_id LIMIT ?`, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), seed.Claim.SubjectEntityID, seed.Claim.Predicate.Token, seed.ClaimID, formatSemanticTime(metadata.AsKnownAt), remaining+1)
 		if err != nil {
 			return false, err
 		}
@@ -125,26 +125,35 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 		return true, nil
 	}
 	incomplete := coverage.Pending > 0
-	groups := make(map[string]bool)
 	eventsSeen := make(map[memory.EventID]bool)
 	companions := 0
-	for _, seed := range append([]memory.RetrievalEvidence(nil), result.Evidence...) {
-		if seed.Claim == nil {
+	// One family per subject and Predicate token, so drifted versions share
+	// newer statements (M4) and every label joins the vocabulary (M3).
+	var order []string
+	families := make(map[string][]memory.SemanticClaim)
+	for _, item := range result.Evidence {
+		if item.Claim == nil {
 			continue
 		}
-		key := string(seed.Claim.SubjectEntityID) + ":" + string(seed.Claim.Predicate.ID)
-		if groups[key] {
-			continue
+		key := string(item.Claim.SubjectEntityID) + "\x00" + item.Claim.Predicate.Token
+		if _, ok := families[key]; !ok {
+			order = append(order, key)
 		}
-		groups[key] = true
+		families[key] = append(families[key], *item.Claim)
+	}
+	for _, key := range order {
 		if remaining <= 0 {
 			result.Truncated = true
 			break
 		}
+		family, err := newNewerStatementFamily(ctx, q, families[key], query.Text)
+		if err != nil {
+			return false, err
+		}
 		var after time.Time
 		var related []memory.SemanticID
 		for _, item := range result.Evidence {
-			if item.Claim == nil || item.Claim.SubjectEntityID != seed.Claim.SubjectEntityID || item.Claim.Predicate.ID != seed.Claim.Predicate.ID {
+			if item.Claim == nil || string(item.Claim.SubjectEntityID)+"\x00"+item.Claim.Predicate.Token != key {
 				continue
 			}
 			related = append(related, item.ClaimID)
@@ -158,20 +167,12 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 				}
 			}
 		}
-		subject, err := loadSemanticEntityForInspection(ctx, q, seed.Claim.SubjectEntityID)
-		if err != nil {
-			return false, err
-		}
-		match := "(" + retrievalPhrase(seed.Claim.Predicate.Token) + " OR " + retrievalPhrase(seed.Claim.Predicate.Label) + " OR " + retrievalPhrase(query.Text) + ")"
-		if subject.AnchorKind != "owner" {
-			match += " AND " + retrievalPhrase(subject.CanonicalName)
-		}
 		rows, err := q.QueryContext(ctx, `SELECT e.id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
  WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=? AND e.event_type='user_message' AND e.role='user'
  AND `+conversationObservedTimeSQL+`>? AND `+conversationObservedTimeSQL+`<=?
  AND (e.session_id!=? OR e.sequence<COALESCE((SELECT MAX(sequence) FROM events WHERE session_id=? AND event_type='user_message'),0))
  AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY `+conversationObservedTimeSQL+` DESC,bm25(memory_retrieval_event_fts_v3),e.id LIMIT ?`, match, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(after), formatSemanticTime(metadata.AsKnownAt), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, remaining+1)
+ ORDER BY `+conversationObservedTimeSQL+` DESC,bm25(memory_retrieval_event_fts_v3),e.id LIMIT ?`, family.match(), conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(after), formatSemanticTime(metadata.AsKnownAt), scope.SessionID, scope.SessionID, query.ExcludeCurrentRequestCopies, scope.SessionID, remaining+1)
 		if err != nil {
 			return false, err
 		}
@@ -217,7 +218,7 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 			if err != nil {
 				return false, err
 			}
-			span, matched := chooseConversationReadExcerpt(e.content, seed.Claim.Predicate.Token+" "+seed.Claim.Predicate.Label+" "+query.Text, spans)
+			span, matched := family.window(e.content, spans)
 			if !matched {
 				continue
 			}
@@ -225,7 +226,14 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 				result.Truncated = true
 				continue
 			}
-			evidence := conversationTypedExcerpt(e, span, metadata.AsKnownAt, metadata.ValidAt, query.Intent)
+			evidence, err := annotatedConversationExcerpt(ctx, q, scope, e, span, metadata.AsKnownAt, metadata.ValidAt, query.Intent)
+			if errors.Is(err, ErrConversationAssociation) {
+				incomplete = true
+				continue
+			}
+			if err != nil {
+				return false, err
+			}
 			evidence.Paths = []string{"newer_owner_statement"}
 			evidence.RelatedClaimIDs = append([]memory.SemanticID(nil), related...)
 			result.Evidence = append(result.Evidence, evidence)

@@ -28,12 +28,12 @@ func (s *Store) hasNewRetrievalInformation(ctx context.Context, tx *sql.Tx, scop
 func (s *Store) hasNewRetrievalConflict(ctx context.Context, tx *sql.Tx, scope memory.ScopeContext, metadata memory.ExactReadMetadata, current, prior memory.RetrievalEvidence) (bool, error) {
 	after, through := formatSemanticTime(prior.AsKnownAt), formatSemanticTime(metadata.AsKnownAt)
 	rows, err := tx.QueryContext(ctx, `SELECT c.claim_id FROM semantic_claims c JOIN semantic_scopes sc ON sc.scope_id=c.scope_id
- WHERE sc.scope_key IN (?,?,?) AND c.subject_entity_id=? AND c.predicate_id=? AND c.transaction_time<=? AND c.claim_id!=?
+ WHERE sc.scope_key IN (?,?,?) AND c.subject_entity_id=? AND c.predicate_token=? AND c.transaction_time<=? AND c.claim_id!=?
  AND (c.transaction_time>? OR EXISTS(SELECT 1 FROM semantic_state_events st
  WHERE st.transaction_time>? AND st.transaction_time<=? AND
  ((st.object_kind='claim' AND st.object_id=c.claim_id) OR
  (st.object_kind='source_link' AND st.object_id IN (SELECT source_link_id FROM semantic_source_links WHERE claim_id=c.claim_id)))))
- ORDER BY c.transaction_time,c.claim_id LIMIT 9`, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), current.Claim.SubjectEntityID, current.Claim.Predicate.ID, through, prior.ClaimID, after, after, through)
+ ORDER BY c.transaction_time,c.claim_id LIMIT 9`, "global", scopeKeyForContext(scope), "session:"+string(scope.SessionID), current.Claim.SubjectEntityID, current.Claim.Predicate.Token, through, prior.ClaimID, after, after, through)
 	if err != nil {
 		return false, err
 	}
@@ -74,14 +74,11 @@ func (s *Store) hasNewRetrievalOwnerStatement(ctx context.Context, tx *sql.Tx, s
 	if err != nil || coverage.State != "active" {
 		return false, err
 	}
-	subject, err := loadSemanticEntityForInspection(ctx, tx, current.Claim.SubjectEntityID)
+	family, err := newNewerStatementFamily(ctx, tx, []memory.SemanticClaim{*current.Claim}, "")
 	if err != nil {
 		return false, err
 	}
-	match := "(" + retrievalPhrase(current.Claim.Predicate.Token) + " OR " + retrievalPhrase(current.Claim.Predicate.Label) + ")"
-	if subject.AnchorKind != "owner" {
-		match += " AND " + retrievalPhrase(subject.CanonicalName)
-	}
+	match := family.match()
 	after := prior.AsKnownAt
 	for _, source := range current.Sources {
 		observed, err := time.Parse(time.RFC3339Nano, source.ObservedAt)
@@ -136,7 +133,7 @@ func (s *Store) hasNewRetrievalOwnerStatement(ctx context.Context, tx *sql.Tx, s
 		if err != nil {
 			return false, err
 		}
-		if _, eligible := chooseConversationReadExcerpt(event.content, current.Claim.Predicate.Token+" "+current.Claim.Predicate.Label, spans); eligible {
+		if _, eligible := family.window(event.content, spans); eligible {
 			return true, nil
 		}
 	}

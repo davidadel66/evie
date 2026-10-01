@@ -5,8 +5,8 @@ a fix: it records how today's recall behaves at realistic history size so that
 Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
 current behavior, recorded as such; none is accepted as correct. Stage 12's
-before/after results follow the Stage 11 baseline; the committed baselines
-are the Stage 12 report.
+and Stage 13's before/after results follow the Stage 11 baseline; the
+committed baselines are the Stage 13 report on corpus v2.
 
 ## What runs
 
@@ -30,7 +30,10 @@ facts ("needles") among same-topic distractors, 15 accepted Claims, two
 corrections (one `changed`, one `error`), two retirements, an unlinked mention
 before a Claim, a restatement after retirement, a newer statement in different
 words, and predicate label and cardinality drift. A project message reuses a
-Global needle's exact words to test scope isolation.
+Global needle's exact words to test scope isolation. Corpus v2 (Stage 13)
+adds two Claims whose later updates share the saved value or the Predicate's
+words but not its phrase, and five distractors that share a saved value or a
+Predicate word without updating or restating the Claim (see Stage 13).
 
 Each probe runs in a fresh session on its own copy of the built database.
 Messages are indexed when they are appended, so a shared database would let
@@ -65,12 +68,14 @@ dense reachability no longer depends on ID order either.
   dense target counts as *reported truncated* only when its outcome carried
   `dense_scan_budget`; `partial` alone does not count (report version 2).
 - **Stale.** An item is *presented as current* when it has current intent,
-  active status and current status, and no relation or conflict marking.
-  Correction and retirement checks miss when a stale item is presented as
-  current. Contradiction and drift checks miss unless the two items are
-  linked by a relation or conflict warning. Controls use wording the current
-  code already handles; a failing control on a tool path fails the test,
-  because then the instrument is wrong.
+  active status and current status, and no relation, conflict or
+  historical-claim marking (report version 3). Correction and retirement
+  checks miss when a stale item is presented as current. Contradiction and
+  drift checks miss unless the two items are linked by a relation, conflict
+  warning or historical-claim link. Over-linking checks (corpus v2) miss when
+  a distractor arrives linked or flagged against the named Claim. Controls
+  use wording the current code already handles; a failing control on a tool
+  path fails the test, because then the instrument is wrong.
 
 ## Running it
 
@@ -258,6 +263,100 @@ old code and in three of four runs of the new one (the fourth gave 24/27).
 | M4: drift still warns | no | no | 4 misses of 4 checks |
 | M7: dense covers all vectors or reports the gap | no | yes | 24 of 24 targets found |
 
+## Stage 13: currency and conflicts (M2, M3, M4)
+
+The rules are recorded in [the retrieval decisions](memory-stage-5-retrieval.decisions.md)
+(M2, M3) and [the memory decisions](memory.decisions.md) (M4), all 2026-10-01.
+In short: every Conversation Excerpt carries `historical_claims` naming a
+retired or superseded Claim it is a source of (a corrected source is also
+marked `superseded` and names the correction and replacement) or restates
+(saved value plus a Predicate word, or a non-owner subject's name, in one
+sentence); a later owner statement is linked to a saved Claim when one
+first-person sentence names the saved value with a change cue, or the
+Predicate's words with a change or novelty cue; conflicts, refresh validity
+and correction refresh span every version of a Predicate token; labels that
+differ only in case or spacing reuse the existing definition.
+
+**Corpus v2.** Measuring precision needed cases the v1 corpus lacked, so the
+corpus version is `memory-scale-replay-v2` (seed unchanged) and the scorer
+report version is 3. Added: Claims `phone carrier: Verizon` and
+`shoe size: 9` with updates "I finally dropped Verizon last week and switched
+to T-Mobile." (saved value) and "My shoes are a size 10 now after the running
+season." (Predicate words); distractors "The Boston marathon moved to a new
+date this year." (no first person), "My Boston friends are visiting next
+week." (no change cue), "Verizon sent me a new bill…" (`new` beside a value),
+"I need new running shoes before the 10k." (one of two Predicate words) and
+"Grabbed a Blue Bottle cold brew at the airport this morning." (a retired
+value without its Predicate's words); and a `blue_bottle` probe that queries
+the retired value so that mention is delivered and its flag can be checked.
+All new assistant replies are "Okay, noted." so the additions exercise only
+M2–M4. "Before" is the Stage 12 code on corpus v2; the Stage 12 numbers
+above are corpus v1 and are not directly comparable.
+
+Stale-fact checks, before → after:
+
+| Tier | Misses | Controls passing | Scope leaks |
+| --- | ---: | ---: | ---: |
+| default | 20 of 36 → 2 of 36 | 10/10 | 0 |
+| large | 19 of 36 → 2 of 36 | 10/10 | 0 |
+
+| Target | Default before → after | Large before → after |
+| --- | --- | --- |
+| M2: corrected source not current | 4 of 6 → 0 of 6 misses | 3 of 6 → 0 of 6 |
+| M2: retired fact restated is flagged | 6 of 9 → 0 of 9 | 6 of 9 → 0 of 9 |
+| M2: no over-flagging | 0 of 3 → 0 of 3 | 0 of 3 → 0 of 3 |
+| M3: different wording detected | 6 of 6 → 2 of 6 | 6 of 6 → 2 of 6 |
+| M3: no over-linking | 0 of 8 → 0 of 8 | 0 of 8 → 0 of 8 |
+| M4: drift still warns | 4 of 4 → 0 of 4 | 4 of 4 → 0 of 4 |
+
+The two remaining misses are the same scenario on the automatic and
+`memory_search` paths: "I moved to Chicago last month and I'm still unpacking
+boxes." against `home city: Boston` ("Remember that I live in Boston."). It
+shares no word with the saved value, the Predicate token or label, or the
+query, so no lexical rule can relate them without a topic dictionary
+("moved" means "home"), which the retrieval decisions exclude; the real
+embedding model is the measured next step. The review's own example, "Big
+news: I moved to Chicago last month, Boston is behind me.", names the saved
+value and is linked (covered by the Stage 13 agent tests).
+
+Precision: the over-linking checks pass (0 of 8, 0 of 3). Across every probe
+of the default tier the new rule added exactly three items, all intended: the
+carrier update on the automatic and `memory_search` paths and the shoe-size
+update on `memory_search`; on the automatic path the already-delivered
+shoe-size update gained its link. Every delivered historical link (11
+deliveries over 11 probes) names the right Claim: they are the two corrected
+sources and the two restated retired facts, nothing else.
+
+Path totals, before → after (unchanged cells show one value):
+
+| Tier | Path | Items | Unwanted | Private | Same session | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| default | automatic | 55 → 56 | 4 | 0 | 0 | 0.9273 → 0.9286 | 23/27 |
+| default | memory_search | 17 → 19 | 0 | 0 | 0 | 1.0000 | 13/13 |
+| default | memory_search_conversations | 110 | 18 | 1 | 0 | 0.8364 | 10/12 |
+| large | automatic | 77 → 78 | 14 | 4 | 0 | 0.8182 → 0.8205 | 25/27 |
+| large | memory_search | 19 → 21 | 1 | 0 | 0 | 0.9474 → 0.9524 | 13/13 |
+| large | memory_search_conversations | 200 | 27 | 4 | 0 | 0.8650 | 36/36 |
+
+Stage 12's automatic-recall numbers do not regress: the automatic unwanted
+items, private items, same-session items and recall are identical before and
+after on both tiers (the unwanted rate falls only because one wanted item is
+added), every M1 target stays met, and M7 still finds 24 of 24 dense targets
+over 6,445 vectors. The frozen 24-case lexical workloads are unchanged:
+held-out 22/28 automatic, 26/28 with deeper search, 19 non-gold of 48
+first-dispatch items; development 23–24/27 automatic (the dev11 random-ID tie
+recorded in Stage 12) and 25/27 with deeper search.
+
+| Target (plan acceptance) | Stage 12 | Stage 13 | Observed (default tier; M7 large tier) |
+| --- | --- | --- | --- |
+| M1: low-content follow-ups inject nothing unwanted | yes | yes | 0 items, 6 probes |
+| M1: privacy probes inject no private item | yes | yes | 0 private items, 3 probes |
+| M2: corrected source not current | no | yes | 0 misses of 6 checks |
+| M2: retired fact restated is flagged | no | yes | 0 misses of 9 checks |
+| M3: different wording detected | no | no | 2 misses of 6 checks (one scenario, above) |
+| M4: drift still warns | no | yes | 0 misses of 4 checks |
+| M7: dense covers all vectors or reports the gap | yes | yes | 24 of 24 targets found |
+
 ## Decisions and spec relationship
 
 - **Synthetic, not derived.** `memory.spec.md` Stage 9 asks for fixtures
@@ -275,7 +374,8 @@ old code and in three of four runs of the new one (the fourth gave 24/27).
   defines its actual marking (for example a historical label or a truncation
   field), the scorer's *presented as current* rule and the M7 target must be
   taught that signal in the same change. Stage 12 taught the M7 target the
-  `dense_scan_budget` gap; Stage 13 still owns the historical marking.
+  `dense_scan_budget` gap; Stage 13 taught the stale rules the
+  `historical_claims` link.
 
 ## Limitations
 

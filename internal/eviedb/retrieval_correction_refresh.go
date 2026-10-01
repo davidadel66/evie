@@ -54,8 +54,8 @@ func (c *retrievalCandidates) correctionRefreshGenerator(ctx context.Context) er
  JOIN semantic_claims candidate ON candidate.claim_id=correction.replacement_claim_id
  JOIN semantic_scopes scope ON scope.scope_id=candidate.scope_id
  WHERE correction.old_claim_id=? AND correction.transaction_time<=?
- AND scope.scope_key=? AND candidate.subject_entity_id=? AND candidate.predicate_id=?`,
-				id, formatSemanticTime(c.plan.metadata.AsKnownAt), original.ScopeKey, original.Claim.SubjectEntityID, original.Claim.Predicate.ID).Scan(&replacement)
+ AND scope.scope_key=? AND candidate.subject_entity_id=? AND candidate.predicate_token=?`,
+				id, formatSemanticTime(c.plan.metadata.AsKnownAt), original.ScopeKey, original.Claim.SubjectEntityID, original.Claim.Predicate.Token).Scan(&replacement)
 			if errors.Is(err, sql.ErrNoRows) {
 				break
 			}

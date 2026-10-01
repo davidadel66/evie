@@ -525,6 +525,13 @@ func (r *scaleReplay) item(e memory.RetrievalEvidence) memoryeval.ScaleItem {
 			}
 		}
 	}
+	for _, link := range e.HistoricalClaims {
+		for _, id := range []memory.SemanticID{link.ClaimID, link.ReplacementClaimID} {
+			if id != "" && !slices.Contains(item.HistoricalKeys, r.claims[id]) {
+				item.HistoricalKeys = append(item.HistoricalKeys, r.claims[id])
+			}
+		}
+	}
 	return item
 }
 

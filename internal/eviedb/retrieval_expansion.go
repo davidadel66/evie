@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -209,7 +210,14 @@ func (s *Store) expandConversation(ctx context.Context, scope memory.ScopeContex
 					}
 				}
 			}
-			evidence := conversationTypedExcerpt(e, selected, known, valid, intent)
+			evidence, err := annotatedConversationExcerpt(ctx, tx, scope, e, selected, known, valid, intent)
+			if errors.Is(err, ErrConversationAssociation) {
+				result.Truncated = true
+				continue
+			}
+			if err != nil {
+				return retrievalReadFailure(ctx, result, err)
+			}
 			evidence.Paths = []string{memory.RetrievalConversationExpansion}
 			result.Evidence = append(result.Evidence, evidence)
 		}

@@ -220,7 +220,9 @@ deterministic regression behind an aggregate model-quality score.
   inspection computes opposite-polarity warnings for the same proposition and
   overlapping single-cardinality warnings for distinct affirmed objects. It
   does not persist a contradiction Link, reject accepted conflicting evidence,
-  or choose a winning Claim.
+  or choose a winning Claim. Warnings compare every version of a Predicate
+  token, and a label that differs only in case or whitespace reuses the
+  existing definition (memory decisions, 2026-10-01).
 - Claims represent temporal propositions about the represented world. Graph
   Links use a closed structural relation set among semantic records for meanings
   such as derivation, generalization, and explicitly recognized contradiction.

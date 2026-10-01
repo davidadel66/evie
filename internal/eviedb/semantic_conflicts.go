@@ -120,12 +120,23 @@ type claimConflictCandidate struct {
 	Cardinality    memory.PredicateCardinality
 }
 
+// samePredicateFamily compares Predicates by token, so every version of a
+// definition shares one conflict family (harness review M4): a label or
+// cardinality change versions the definition but must not hide a conflict.
+// A one-cardinality warning applies when either Claim's version says one.
+func samePredicateFamily(left, right claimConflictCandidate) bool {
+	if left.PredicateToken == "" || right.PredicateToken == "" {
+		return left.PredicateID == right.PredicateID
+	}
+	return left.PredicateToken == right.PredicateToken
+}
+
 func classifyClaimConflicts(claims []claimConflictCandidate) []memory.ClaimConflictWarning {
 	var opposite, cardinality []memory.ClaimConflictWarning
 	for leftIndex := range claims {
 		for rightIndex := leftIndex + 1; rightIndex < len(claims); rightIndex++ {
 			left, right := claims[leftIndex], claims[rightIndex]
-			if left.SubjectID != right.SubjectID || left.PredicateID != right.PredicateID ||
+			if left.SubjectID != right.SubjectID || !samePredicateFamily(left, right) ||
 				!validTimesOverlap(left.ValidTime, right.ValidTime) {
 				continue
 			}

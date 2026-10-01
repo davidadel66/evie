@@ -12,7 +12,7 @@ import (
 // ScaleCorpusVersion identifies the generated history, labels, and probes.
 // Change it whenever generated content or gold labels change so a baseline is
 // never compared across different corpora.
-const ScaleCorpusVersion = "memory-scale-replay-v1"
+const ScaleCorpusVersion = "memory-scale-replay-v2"
 
 const (
 	ScaleTierDefault = "default"
@@ -59,10 +59,18 @@ const (
 	ScaleStaleRetiredRepeat    = "retired_unlinked_repeat"
 	ScaleStaleRetiredSource    = "retired_source_control"
 	ScaleStaleNewerWording     = "contradiction_different_wording"
+	ScaleStaleNewerSavedValue  = "contradiction_saved_value"
+	ScaleStaleNewerPredicate   = "contradiction_predicate_words"
 	ScaleStaleNewerSameWording = "contradiction_same_wording_control"
 	ScaleStaleLabelDrift       = "predicate_label_drift"
 	ScaleStaleCardinalityDrift = "predicate_cardinality_drift"
 	ScaleStaleSamePredicate    = "same_predicate_conflict_control"
+	// Precision checks (corpus v2): a later owner message that shares a saved
+	// value or Predicate word but does not update the Claim must not be linked
+	// to it, and a mention of a retired value that does not restate the Claim
+	// must not be flagged as its restatement.
+	ScaleStaleOverLink = "unrelated_statement_not_linked"
+	ScaleStaleOverFlag = "unrelated_mention_not_flagged"
 )
 
 type ScaleCorpusOptions struct {
@@ -141,13 +149,16 @@ type ScaleSession struct {
 
 // ScaleStaleCheck is evaluated against one probe's delivered evidence.
 // StaleKeys must not be delivered as unflagged current evidence. LinkKeys is a
-// pair that must be connected by a conflict warning or relation.
+// pair that must be connected by a conflict warning or relation. ClearKeys is
+// a (Claim, message) pair that must not be connected: delivering the message
+// linked or flagged against that Claim is over-linking.
 type ScaleStaleCheck struct {
 	Scenario  string   `json:"scenario"`
 	Issue     string   `json:"issue"`
 	Control   bool     `json:"control,omitempty"`
 	StaleKeys []string `json:"stale_keys,omitempty"`
 	LinkKeys  []string `json:"link_keys,omitempty"`
+	ClearKeys []string `json:"clear_keys,omitempty"`
 }
 
 type ScaleProbe struct {
@@ -296,13 +307,24 @@ func (c ScaleCorpus) Validate() error {
 			}
 		}
 		for _, check := range probe.Checks {
-			for _, key := range append(append([]string(nil), check.StaleKeys...), check.LinkKeys...) {
+			for _, key := range append(append(append([]string(nil), check.StaleKeys...), check.LinkKeys...), check.ClearKeys...) {
 				if !known(key) {
 					return fmt.Errorf("probe %s check %s names unknown key %s", probe.ID, check.Scenario, key)
 				}
 			}
-			if (len(check.StaleKeys) == 0) == (len(check.LinkKeys) == 0) || len(check.LinkKeys) != 0 && len(check.LinkKeys) != 2 {
-				return fmt.Errorf("probe %s check %s needs stale keys or exactly two link keys", probe.ID, check.Scenario)
+			kinds := 0
+			for _, keys := range [][]string{check.StaleKeys, check.LinkKeys, check.ClearKeys} {
+				if len(keys) > 0 {
+					kinds++
+				}
+			}
+			if kinds != 1 || len(check.LinkKeys) != 0 && len(check.LinkKeys) != 2 || len(check.ClearKeys) != 0 && len(check.ClearKeys) != 2 {
+				return fmt.Errorf("probe %s check %s needs stale keys, two link keys or two clear keys", probe.ID, check.Scenario)
+			}
+			if len(check.ClearKeys) == 2 {
+				if _, ok := c.Claim(check.ClearKeys[0]); !ok {
+					return fmt.Errorf("probe %s check %s clear keys must start with a Claim", probe.ID, check.Scenario)
+				}
 			}
 		}
 	}
@@ -657,6 +679,10 @@ var scaleClaims = []ScaleClaim{
 	{Key: "c.birthday", Topic: "family", Predicate: "sister_birthday", Label: "sister's birthday", Cardinality: "one", Value: "June 3"},
 	{Key: "c.birthday.fixed", Topic: "family", Predicate: "sister_birthday", Label: "sister's birthday", Cardinality: "one", Value: "June 13"},
 	{Key: "c.parking", Topic: "parking", Predicate: "parking_spot", Label: "parking spot", Cardinality: "one", Value: "level 2 bay 14"},
+	// Corpus v2: Claims whose later updates use different words that still
+	// share the saved value or the Predicate's words.
+	{Key: "c.carrier", Topic: "carrier", Predicate: "phone_carrier", Label: "phone carrier", Cardinality: "one", Value: "Verizon"},
+	{Key: "c.shoe", Topic: "shoe", Predicate: "shoe_size", Label: "shoe size", Cardinality: "one", Value: "9"},
 }
 
 func scaleOwner(key, topic, text string) ScaleMessage {
@@ -698,6 +724,8 @@ func scaleScenarios() []scaleScenario {
 		{at: .12, steps: []ScaleStep{scaleRemember("c.dentist", "Remember that my dentist is Dr. Patel.")}},
 		{at: .13, steps: []ScaleStep{scaleRemember("c.bank", "Remember that my primary bank is Chase.")}},
 		{at: .15, steps: []ScaleStep{scaleRemember("c.barber", "Remember that my barber is Luis.")}},
+		{at: .16, steps: []ScaleStep{scaleRemember("c.carrier", "Remember that my phone carrier is Verizon.")}},
+		{at: .17, steps: []ScaleStep{scaleRemember("c.shoe", "Remember that my shoe size is 9.")}},
 		{at: .45, steps: []ScaleStep{{Kind: ScaleStepRetire, Target: "c.coffee",
 			Owner:     scaleOwner("m.retire.coffee", "coffee", "Please retire the saved coffee shop memory; I stopped going there."),
 			Assistant: scaleReply("m.retire.coffee.a", "coffee", "Done; that saved coffee shop memory is retired.")}}},
@@ -714,6 +742,19 @@ func scaleScenarios() []scaleScenario {
 		{at: .66, steps: []ScaleStep{scaleRemember("c.bank.drift", "Remember that my primary bank is Ally.")}},
 		{at: .67, steps: []ScaleStep{scaleRemember("c.barber.second", "Remember that my barber is Marco.")}},
 		{at: .75, steps: []ScaleStep{scaleExchange("m.coffee.restated", "coffee", "Honestly, Blue Bottle is still my favorite coffee shop.", "Noted, Blue Bottle it is.")}},
+		// Corpus v2. Updates in different words: the saved value with a change
+		// cue, and the Predicate's words in another order and inflection.
+		{at: .70, steps: []ScaleStep{scaleExchange("m.carrier.switch", "carrier", "I finally dropped Verizon last week and switched to T-Mobile.", "Okay, noted.")}},
+		{at: .71, steps: []ScaleStep{scaleExchange("m.shoe.newer", "shoe", "My shoes are a size 10 now after the running season.", "Okay, noted.")}},
+		// Distractors that share a word with a saved Claim but do not update or
+		// restate it: a value without first person, a value without a change
+		// cue, a value with only a novelty word, one of two Predicate words,
+		// and a retired value without its Predicate's words.
+		{at: .72, steps: []ScaleStep{scaleExchange("m.boston.marathon", "boston", "The Boston marathon moved to a new date this year.", "Okay, noted.")}},
+		{at: .73, steps: []ScaleStep{scaleExchange("m.boston.friends", "boston", "My Boston friends are visiting next week.", "Okay, noted.")}},
+		{at: .74, steps: []ScaleStep{scaleExchange("m.carrier.bill", "carrier", "Verizon sent me a new bill and I need to check the charges.", "Okay, noted.")}},
+		{at: .76, steps: []ScaleStep{scaleExchange("m.shoe.running", "running", "I need new running shoes before the 10k.", "Okay, noted.")}},
+		{at: .78, steps: []ScaleStep{scaleExchange("m.coffee.airport", "coffee", "Grabbed a Blue Bottle cold brew at the airport this morning.", "Okay, noted.")}},
 	}
 }
 
@@ -999,10 +1040,33 @@ func scaleProbes() []ScaleProbe {
 				{Scenario: ScaleStaleRetiredRestated, Issue: "M2", StaleKeys: []string{"m.coffee.restated"}},
 				{Scenario: ScaleStaleRetiredSource, Issue: "M2", Control: true, StaleKeys: []string{"m.c.coffee", "c.coffee"}},
 			}},
+		// Corpus v2: the retired value itself is the query, so a mention that
+		// does not restate the Claim is delivered and its flag can be checked.
+		{"blue_bottle", ScaleFamilyStale, ScaleAreaGlobal, "Have I mentioned Blue Bottle before?", "Blue Bottle", []string{"coffee"}, nil,
+			[]ScaleStaleCheck{
+				{Scenario: ScaleStaleRetiredRestated, Issue: "M2", StaleKeys: []string{"m.coffee.restated"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.airport"}},
+			}},
 		// M3: the question finds the saved claim through its predicate wording,
 		// isolating newer-statement detection from claim recall.
 		{"home_city", ScaleFamilyStale, ScaleAreaGlobal, "What's my home city these days?", "home city", []string{"home_city"}, []string{"c.home"},
-			[]ScaleStaleCheck{{Scenario: ScaleStaleNewerWording, Issue: "M3", LinkKeys: []string{"c.home", "m.moved"}}}},
+			[]ScaleStaleCheck{
+				{Scenario: ScaleStaleNewerWording, Issue: "M3", LinkKeys: []string{"c.home", "m.moved"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.marathon"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.friends"}},
+			}},
+		// Corpus v2: the newer statement shares the saved value or the
+		// Predicate's words, but not the Predicate phrase.
+		{"carrier", ScaleFamilyStale, ScaleAreaGlobal, "Which phone carrier am I with?", "phone carrier", []string{"carrier"}, []string{"c.carrier"},
+			[]ScaleStaleCheck{
+				{Scenario: ScaleStaleNewerSavedValue, Issue: "M3", LinkKeys: []string{"c.carrier", "m.carrier.switch"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.carrier", "m.carrier.bill"}},
+			}},
+		{"shoe_size", ScaleFamilyStale, ScaleAreaGlobal, "What's my shoe size?", "shoe size", []string{"shoe"}, []string{"c.shoe"},
+			[]ScaleStaleCheck{
+				{Scenario: ScaleStaleNewerPredicate, Issue: "M3", LinkKeys: []string{"c.shoe", "m.shoe.newer"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.shoe", "m.shoe.running"}},
+			}},
 		{"gym", ScaleFamilyStale, ScaleAreaGlobal, "Which gym do I go to?", "gym", []string{"gym"}, []string{"c.gym"},
 			[]ScaleStaleCheck{{Scenario: ScaleStaleNewerSameWording, Issue: "M3", Control: true, LinkKeys: []string{"c.gym", "m.gym.newer"}}}},
 		{"dentist", ScaleFamilyStale, ScaleAreaGlobal, "Who is my dentist?", "dentist", []string{"dentist"}, []string{"c.dentist", "c.dentist.drift"},
@@ -1043,8 +1107,9 @@ func scaleProbes() []ScaleProbe {
 	}
 	// Each read tool is measured on its own with the query a model would plausibly
 	// choose. Required items are split by evidence kind: Claims for
-	// memory_search, original messages for conversation search. Link checks need
-	// accepted Claims, which conversation search never returns.
+	// memory_search, original messages for conversation search. Link checks,
+	// and checks that a statement is not linked, need accepted Claims, which
+	// conversation search never returns.
 	for _, s := range specs {
 		for _, path := range []string{ScalePathMemorySearch, ScalePathConversationSearch} {
 			probe := ScaleProbe{ID: path + "." + s.id, Family: s.family, Path: path, Area: s.area, Message: "Look this up in my memory: " + s.message, Query: s.query, Topics: s.topics}
@@ -1057,7 +1122,7 @@ func scaleProbes() []ScaleProbe {
 				}
 			}
 			for _, check := range s.checks {
-				if len(check.LinkKeys) == 0 || path == ScalePathMemorySearch {
+				if len(check.LinkKeys) == 0 && check.Scenario != ScaleStaleOverLink || path == ScalePathMemorySearch {
 					probe.Checks = append(probe.Checks, check)
 				}
 			}

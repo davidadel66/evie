@@ -8,8 +8,9 @@ import (
 	"strings"
 )
 
-// Version 2 adds the dense scan gap signal (Stage 12, M7).
-const ScaleReportVersion = 2
+// Version 2 adds the dense scan gap signal (Stage 12, M7). Version 3 adds the
+// historical-claim link (Stage 13, M2) and the over-linking checks.
+const ScaleReportVersion = 3
 
 // ScaleGapDenseScan mirrors memory.RetrievalGapDenseScan: the model-visible
 // signal that a dense scan budget left vectors uncompared.
@@ -33,6 +34,9 @@ type ScaleItem struct {
 	Paths         []string `json:"paths,omitempty"`
 	RelatedKeys   []string `json:"related_keys,omitempty"`
 	ConflictKeys  []string `json:"conflict_keys,omitempty"`
+	// HistoricalKeys are the retired or superseded Claims (and any
+	// replacement) the Kernel linked this excerpt to.
+	HistoricalKeys []string `json:"historical_keys,omitempty"`
 }
 
 // ScaleObservation is what one probe actually delivered. Status is the
@@ -379,10 +383,14 @@ func scaleRatio(numerator, denominator int) *float64 {
 
 // scalePresentedAsCurrent is evidence the model would read as a current,
 // unqualified owner fact: no historical intent, no non-active status, and no
-// relation or conflict marking it against other memory.
+// relation, conflict or historical-claim link marking it against other memory.
 func scalePresentedAsCurrent(item ScaleItem) bool {
 	active := func(status string) bool { return status == "" || status == "active" }
-	return item.Intent != "historical" && active(item.Status) && active(item.CurrentStatus) && len(item.RelatedKeys) == 0 && len(item.ConflictKeys) == 0
+	return item.Intent != "historical" && active(item.Status) && active(item.CurrentStatus) && len(item.RelatedKeys) == 0 && len(item.ConflictKeys) == 0 && len(item.HistoricalKeys) == 0
+}
+
+func scaleLinkedTo(item ScaleItem, key string) bool {
+	return slices.Contains(item.RelatedKeys, key) || slices.Contains(item.ConflictKeys, key) || slices.Contains(item.HistoricalKeys, key)
 }
 
 func scaleCheck(check ScaleStaleCheck, items []ScaleItem) (string, bool) {
@@ -399,6 +407,20 @@ func scaleCheck(check ScaleStaleCheck, items []ScaleItem) (string, bool) {
 		}
 		return outcome, false
 	}
+	if len(check.ClearKeys) == 2 {
+		claim, message := check.ClearKeys[0], check.ClearKeys[1]
+		outcome := "absent"
+		for _, item := range items {
+			if item.Key != message {
+				continue
+			}
+			if scaleLinkedTo(item, claim) {
+				return "over_linked", true
+			}
+			outcome = "clear"
+		}
+		return outcome, false
+	}
 	first, second := check.LinkKeys[0], check.LinkKeys[1]
 	var haveFirst, haveSecond bool
 	for _, item := range items {
@@ -411,7 +433,7 @@ func scaleCheck(check ScaleStaleCheck, items []ScaleItem) (string, bool) {
 		default:
 			continue
 		}
-		if slices.Contains(item.RelatedKeys, other) || slices.Contains(item.ConflictKeys, other) {
+		if scaleLinkedTo(item, other) {
 			return "linked", false
 		}
 	}
@@ -492,7 +514,9 @@ func ScaleTargetsFor(r ScaleReport) []ScaleTarget {
 	}{
 		{"M2.corrected_source_not_current", "M2", "after a correction the old source is not delivered as an unqualified current statement", []string{ScaleStaleCorrection}},
 		{"M2.retired_restatement_flagged", "M2", "a retired fact restated without a source link, before or after retirement, is not delivered as unflagged current evidence", []string{ScaleStaleRetiredRestated, ScaleStaleRetiredRepeat}},
-		{"M3.different_wording_detected", "M3", "a later owner statement with different wording is linked to the saved claim it contradicts", []string{ScaleStaleNewerWording}},
+		{"M2.no_over_flagging", "M2", "a mention of a retired value that does not restate the claim is not flagged as its restatement", []string{ScaleStaleOverFlag}},
+		{"M3.different_wording_detected", "M3", "a later owner statement with different wording is linked to the saved claim it contradicts", []string{ScaleStaleNewerWording, ScaleStaleNewerSavedValue, ScaleStaleNewerPredicate}},
+		{"M3.no_over_linking", "M3", "a later owner message sharing a saved value or Predicate word without updating the claim is not linked to it", []string{ScaleStaleOverLink}},
 		{"M4.drift_conflicts_warned", "M4", "predicate label or cardinality drift still produces a conflict warning", []string{ScaleStaleLabelDrift, ScaleStaleCardinalityDrift}},
 	} {
 		checks, misses := scenario(t.scenarios...)

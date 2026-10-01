@@ -922,6 +922,15 @@ func normalizeClaimSemantics(
 	return cardinality, polarity, normalizedTime, nil
 }
 
+// predicateLabelsEquivalent treats human labels that differ only in letter
+// case or whitespace as the same label (harness review M4). The label does not
+// participate in Predicate identity, so such a difference reuses the latest
+// definition with its stored label instead of minting a new version. Any other
+// label, cardinality or object-constraint change still versions visibly.
+func predicateLabelsEquivalent(left, right string) bool {
+	return strings.EqualFold(strings.Join(strings.Fields(left), " "), strings.Join(strings.Fields(right), " "))
+}
+
 func normalizeLiteralRequest(request memory.RememberLiteralRequest) (memory.RememberLiteralRequest, error) {
 	cardinality, polarity, validTime, err := normalizeClaimSemantics(
 		request.PredicateCardinality, memory.CardinalityOne, request.Polarity, request.ValidTime,
@@ -1110,7 +1119,7 @@ func (s *Store) PrepareRememberLiteral(
 		}
 		proposal.Request = request
 		if proposal.SessionID != scope.SessionID || proposal.Source.EventID != request.SourceEventID ||
-			proposal.Predicate.Token != request.Predicate || proposal.Predicate.Label != request.PredicateLabel ||
+			proposal.Predicate.Token != request.Predicate || !predicateLabelsEquivalent(proposal.Predicate.Label, request.PredicateLabel) ||
 			proposal.Predicate.Cardinality != request.PredicateCardinality || proposal.Literal != request.Literal ||
 			proposal.Polarity != request.Polarity || !validTimesEqual(proposal.ValidTime, request.ValidTime) {
 			return memory.RememberLiteralProposal{}, ErrIdempotencyConflict
@@ -1169,7 +1178,7 @@ func (s *Store) PrepareRememberLiteral(
 		predicate.ID, err = newSemanticID()
 		predicate.Version = 1
 		predicate.Create = true
-	} else if err == nil && (predicate.Label != request.PredicateLabel ||
+	} else if err == nil && (!predicateLabelsEquivalent(predicate.Label, request.PredicateLabel) ||
 		predicate.ObjectConstraint != memory.PredicateObjectConstraint(request.Literal.Kind) ||
 		predicate.Cardinality != request.PredicateCardinality) {
 		predicate.ID, err = newSemanticID()
@@ -1603,7 +1612,7 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 
 func literalRequestMatchesProposal(request memory.RememberLiteralRequest, proposal memory.RememberLiteralProposal) bool {
 	return request.IdempotencyKey == proposal.IdempotencyKey && request.SourceEventID == proposal.Source.EventID &&
-		request.Predicate == proposal.Predicate.Token && request.PredicateLabel == proposal.Predicate.Label &&
+		request.Predicate == proposal.Predicate.Token && predicateLabelsEquivalent(request.PredicateLabel, proposal.Predicate.Label) &&
 		request.PredicateCardinality == proposal.Predicate.Cardinality && request.Literal == proposal.Literal &&
 		request.Polarity == proposal.Polarity && validTimesEqual(request.ValidTime, proposal.ValidTime)
 }

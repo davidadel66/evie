@@ -251,6 +251,7 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 		return retrievalReadFailure(ctx, result, err)
 	}
 	rows.Close()
+	unclassified := false
 	var frequency map[string]int
 	if query.Relevance != nil && len(ids) > 0 {
 		if frequency, err = relevanceFrequencies(ctx, tx, query.Relevance, scopeKeyForContext(scope), known, scope.SessionID, cutoff); err != nil {
@@ -280,8 +281,17 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 			result.Truncated = true
 			break
 		}
+		evidence, err := annotatedConversationExcerpt(ctx, tx, scope, e, span, known, known, query.Intent)
+		if errors.Is(err, ErrConversationAssociation) {
+			// An excerpt that cannot be classified is withheld, never shown as current.
+			unclassified = true
+			continue
+		}
+		if err != nil {
+			return retrievalReadFailure(ctx, result, err)
+		}
 		result.Truncated = result.Truncated || span.start > 0 || span.end < len(e.content)
-		result.Evidence = append(result.Evidence, conversationTypedExcerpt(e, span, known, known, query.Intent))
+		result.Evidence = append(result.Evidence, evidence)
 	}
 	dense, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-len(ids), prepared, cutoff)
 	if err != nil {
@@ -302,7 +312,7 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 	if len(result.Evidence) == 0 {
 		result.Status = memory.RetrievalEmpty
 	}
-	if result.Coverage.State != "active" || result.Coverage.Pending > 0 || denseIncomplete {
+	if result.Coverage.State != "active" || result.Coverage.Pending > 0 || denseIncomplete || unclassified {
 		result.Status = memory.RetrievalPartial
 	}
 	if result.Coverage.State != "active" && len(result.Evidence) == 0 && (result.DenseCoverage == nil || result.DenseCoverage.State != "active") {
@@ -386,7 +396,16 @@ func (s *Store) resolveConversationReferenceAt(ctx context.Context, q semanticIn
 	if cursor != span.end {
 		return memory.RetrievalEvidence{}, false, nil
 	}
-	resolved := conversationTypedExcerpt(e, selected, ref.AsKnownAt, ref.ValidAt, ref.Intent)
+	// Historical-claim links are recomputed from current accepted state, never
+	// copied from the reference. An excerpt that cannot be classified is not
+	// eligible to be shown as current.
+	resolved, err := annotatedConversationExcerpt(ctx, q, scope, e, selected, ref.AsKnownAt, ref.ValidAt, ref.Intent)
+	if errors.Is(err, ErrConversationAssociation) {
+		return memory.RetrievalEvidence{}, false, nil
+	}
+	if err != nil {
+		return memory.RetrievalEvidence{}, false, err
+	}
 	if resolved.ID != ref.ID {
 		return memory.RetrievalEvidence{}, false, nil
 	}

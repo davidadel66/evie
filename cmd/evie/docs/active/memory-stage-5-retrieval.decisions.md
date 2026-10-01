@@ -1,5 +1,62 @@
 # Memory Stage 5 retrieval — decisions
 
+- **2026-10-01 — Corrected and retired facts are labelled, not presented as
+  current (harness review M2, Stage 13).** Applies implementation decision 10
+  and David's M2 default: corrected sources stay retrievable but are labelled
+  historical and linked to the correction. Every Conversation Excerpt, on
+  every path (Automatic Recall, conversation search, newer-statement
+  companions, expansion, dense hits, revalidation and source inspection),
+  carries `historical_claims`, recomputed from accepted state on each read and
+  never copied from a reference:
+  - *source*: the excerpt overlaps an eligible Source Link of a retired or
+    superseded Claim. A superseded Claim also sets the excerpt's `status`
+    (pinned) and `current_status` to `superseded`, and the link names the
+    correction mode and `replacement_claim_id`. Retirement suppression of a
+    retired Claim's own source is unchanged.
+  - *restatement*: the excerpt is not a Source of the Claim, and one sentence
+    repeats the saved value (literal value or object Entity name, as a word
+    sequence after inflection folding) with at least one of the Predicate
+    token's or label's content words, or, for a non-owner subject, the
+    subject's canonical name. Booleans and lone numbers never anchor a match.
+    An event that is a Source of an active Claim in the same subject and
+    Predicate family states the current value and is exempt (so the
+    correction message itself is not flagged).
+  Only Claims in scopes the reader may read are named. Labels never suppress
+  evidence. At most 1,024 retired or superseded readable Claims are compared
+  with one excerpt; beyond that the excerpt is withheld and the result is
+  partial rather than shown unlabelled. `EVIE_MEMORY_DATA` lists superseded
+  items in `historical_only` beside retired ones, and the projection version
+  becomes `memory-retrieval-v3`.
+
+- **2026-10-01 — Newer owner statements in different words (harness review
+  M3, Stage 13).** Q18 and implementation decision 10 ask that newer owner
+  evidence contradicting a saved Claim be surfaced. The companion search now
+  groups the selected Claims by subject and Predicate *token* (every version)
+  and keeps the earlier rule unchanged: the token, any label, or the whole
+  query as a phrase. It adds one deterministic rule, checked per declarative
+  sentence (sentences end at `. ! ? ;` or a line break before whitespace; a
+  period after `dr mr mrs ms st jr sr prof vs etc mt` or a single letter does
+  not end one; questions never qualify):
+  - the subject speaks: first person (`i me my mine myself we us our ours`)
+    for the owner, or the subject's canonical name otherwise; and
+  - a saved value of the family with a change cue, or at least
+    min(2, n) of one Predicate word group's n content words with a change cue
+    or the novelty cue `new`.
+  Change cues: `now nowadays anymore instead moved moving relocated relocating
+  switched switching changed changing left quit quitting former formerly
+  previously` and the phrases `no longer`, `used to`, `behind me`,
+  `these days`. `new` is excluded beside a saved value, where it is usually
+  news about that value ("Verizon sent me a new bill"). Matching folds
+  inflection with the Stage 12 `relevanceKey`; FTS fetches candidates with
+  prefix terms and every hit is re-checked in Go. The companion bound (two per
+  search, shared candidate budget) is unchanged, and refresh validity uses
+  the same rule. A companion remains a candidate discrepancy, never an
+  accepted contradiction. Known limit: a statement sharing no word with the
+  saved value or Predicate ("I moved to Chicago" against `home city: Boston`)
+  is not linked; that needs meaning, which a topic dictionary or the real
+  embedding model could supply and this rule deliberately does not.
+  Measured on the scale corpus v2 (`memory-scale-eval.md`, Stage 13).
+
 - **2026-10-01 — Automatic Recall relevance floor (harness review M1, Stage 12).**
   Implementation decisions 7 and 11 deferred the selection thresholds to
   measurement; these are the measured values, applying the plan's M1 default

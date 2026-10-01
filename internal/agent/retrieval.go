@@ -24,7 +24,7 @@ type MemoryActivityEvents interface {
 }
 
 const (
-	retrievalVersion        = "memory-retrieval-v2"
+	retrievalVersion        = "memory-retrieval-v3"
 	retrievalSearchLimit    = 8
 	retrievalResultLimit    = 8
 	retrievalResultBytes    = 12 * 1024
@@ -255,6 +255,12 @@ func (r *retrievalTurn) projection(ctx context.Context) (string, *memory.Retriev
 	return r.renderProjection()
 }
 
+// historicalOnly evidence is no longer current: a retired item, or an
+// excerpt whose supported Claim was corrected (harness review M2).
+func historicalOnly(evidence memory.RetrievalEvidence) bool {
+	return evidence.CurrentStatus == memory.SemanticStatusRetired || evidence.CurrentStatus == memory.SemanticStatusSuperseded
+}
+
 // A sizing preview is local only: compaction sees original durable messages,
 // never this synthetic evidence. Revalidate and charge the final projection
 // after compaction, immediately before composing the provider-bound request.
@@ -275,13 +281,13 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 		Evidence       []memory.RetrievalEvidence `json:"evidence"`
 	}{Version: retrievalVersion, Status: r.status, Gaps: r.gaps, Evidence: r.evidence}
 	if len(r.evidence) > 0 {
-		data.ReadingGuide = "current_status:retired cannot establish a current fact, even with status:active at as_known_at. Prefer paraphrases with original event citations. Use quotation marks only for verbatim source text, preserving case and punctuation; keep formatting outside the quotation. Cite that source entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation."
+		data.ReadingGuide = "current_status retired or superseded cannot establish a current fact, even with status:active at as_known_at; nor can an excerpt with historical_claims (the source or a restatement of memory no longer current; see replacement_claim_id). Prefer paraphrases with original event citations. Use quotation marks only for verbatim source text, preserving case and punctuation; keep formatting outside the quotation. Cite that source entry's event_id and actor, never a nearby result. Assistant inference and reported speech are not owner confirmation."
 	}
 	if r.interpretation != nil {
 		data.ReadingGuide += " " + automaticReferenceReadingGuide
 	}
 	for _, evidence := range r.evidence {
-		if evidence.CurrentStatus == memory.SemanticStatusRetired {
+		if historicalOnly(evidence) {
 			data.HistoricalOnly = append(data.HistoricalOnly, evidence.ID)
 		}
 	}
@@ -314,7 +320,7 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 				candidate := data
 				candidate.Evidence = []memory.RetrievalEvidence{evidence}
 				candidate.HistoricalOnly = nil
-				if evidence.CurrentStatus == memory.SemanticStatusRetired {
+				if historicalOnly(evidence) {
 					candidate.HistoricalOnly = []string{evidence.ID}
 				}
 				body, _ := json.Marshal(candidate)
@@ -329,7 +335,7 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 		receipt.Evidence, data.HistoricalOnly = nil, nil
 		for _, item := range data.Evidence {
 			receipt.Evidence = append(receipt.Evidence, item.Reference())
-			if item.CurrentStatus == memory.SemanticStatusRetired {
+			if historicalOnly(item) {
 				data.HistoricalOnly = append(data.HistoricalOnly, item.ID)
 			}
 		}
