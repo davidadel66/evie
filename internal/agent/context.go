@@ -81,9 +81,12 @@ type ContextComposeInput struct {
 	TriggerEventID               memory.EventID
 	Iteration                    int
 	Tools                        []openrouter.Tool
-	Reasoning                    *openrouter.ReasoningConfig
-	WorkingContext               string
-	Continuation                 map[memory.EventID][]json.RawMessage
+	// ToolChoice "none" forbids tool calls while keeping Tools in the
+	// request, as the final step-limit call requires.
+	ToolChoice     string
+	Reasoning      *openrouter.ReasoningConfig
+	WorkingContext string
+	Continuation   map[memory.EventID][]json.RawMessage
 	// FinalStepNote, when set, is a trusted harness instruction appended
 	// after the conversation as the request's last message.
 	FinalStepNote string
@@ -248,12 +251,13 @@ func (c *ContextComposer) projectAtStart(
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.FinalStepNote})
 		}
 		projection.request = openrouter.ChatRequest{
-			Model:     profile.ConfiguredModel,
-			Messages:  messages,
-			Tools:     append([]openrouter.Tool(nil), input.Tools...),
-			Stream:    true,
-			Reasoning: cloneReasoning(input.Reasoning),
-			MaxTokens: profile.OutputReserveTokens,
+			Model:      profile.ConfiguredModel,
+			Messages:   messages,
+			Tools:      append([]openrouter.Tool(nil), input.Tools...),
+			ToolChoice: input.ToolChoice,
+			Stream:     true,
+			Reasoning:  cloneReasoning(input.Reasoning),
+			MaxTokens:  profile.OutputReserveTokens,
 		}
 		projection.request, err = openrouter.PrepareRequest(projection.request)
 		if err != nil {

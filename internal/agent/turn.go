@@ -237,7 +237,7 @@ func (s *Session) runOwnedTurn(
 			Continuation: continuation,
 		}
 		if finalStep {
-			composeInput.Tools = nil
+			composeInput.ToolChoice = "none"
 			composeInput.FinalStepNote = stepLimitNote(s.stepLimit)
 		}
 		composeInput, err = recall.fitContext(composeInput, s.composer)

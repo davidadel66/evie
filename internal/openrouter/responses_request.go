@@ -81,6 +81,7 @@ type responsesRequest struct {
 	Model           string             `json:"model"`
 	Input           []json.RawMessage  `json:"input"`
 	Tools           []responseFunction `json:"tools,omitempty"`
+	ToolChoice      string             `json:"tool_choice,omitempty"`
 	Stream          bool               `json:"stream"`
 	Store           bool               `json:"store"`
 	Reasoning       responseReasoning  `json:"reasoning"`
@@ -118,7 +119,7 @@ func encodeResponsesRequest(r ChatRequest) (*responseEncoding, error) {
 	default:
 		return nil, errors.New("unsupported Astra reasoning effort")
 	}
-	request := responsesRequest{Model: r.Model, Input: []json.RawMessage{}, Stream: r.Stream,
+	request := responsesRequest{Model: r.Model, Input: []json.RawMessage{}, ToolChoice: r.ToolChoice, Stream: r.Stream,
 		Reasoning: responseReasoning{Effort: effort}, MaxOutputTokens: r.MaxTokens,
 		Include: []string{"reasoning.encrypted_content"}, Provider: responseProvider{RequireParameters: true}}
 	if r.Reasoning != nil {

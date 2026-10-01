@@ -156,7 +156,7 @@ func countingEchoTool(name string, runs *int) tools.Tool {
 
 func isStepLimitRequest(req openrouter.ChatRequest) bool {
 	last := req.Messages[len(req.Messages)-1]
-	return len(req.Tools) == 0 && last.Role == "user" && strings.Contains(last.Content, "Evie harness notice")
+	return req.ToolChoice == "none" && last.Role == "user" && strings.Contains(last.Content, "Evie harness notice")
 }
 
 func snapshotsOf(t *testing.T, events []memory.Event) []memory.ContextSnapshotPayload {
@@ -176,8 +176,9 @@ func snapshotsOf(t *testing.T, events []memory.Event) []memory.ContextSnapshotPa
 }
 
 // L1: a model that keeps calling tools gets exactly one final request at the
-// cap, with tools withheld and a harness note, and its answer commits as the
-// turn's success.
+// cap, with tool calls forbidden (schemas kept for providers that replay
+// tool-call history) and a harness note, and its answer commits as the turn's
+// success.
 func TestStepLimitEndsRunawayToolLoopWithToolFreeFinalAnswer(t *testing.T) {
 	t.Setenv(TurnStepLimitEnv, "3")
 	history := &fakeHistory{}
@@ -196,14 +197,14 @@ func TestStepLimitEndsRunawayToolLoopWithToolFreeFinalAnswer(t *testing.T) {
 		t.Fatalf("provider calls=%d tool runs=%d", len(client.reqs), runs)
 	}
 	for i, req := range client.reqs[:2] {
-		if len(req.Tools) == 0 || isStepLimitRequest(req) {
-			t.Fatalf("request %d withheld tools before the cap", i+1)
+		if len(req.Tools) == 0 || req.ToolChoice != "" || isStepLimitRequest(req) {
+			t.Fatalf("request %d restricted tools before the cap", i+1)
 		}
 	}
 	final := client.reqs[2]
 	finalNote := final.Messages[len(final.Messages)-1]
-	if !isStepLimitRequest(final) || !strings.Contains(finalNote.Content, "limit of 3 model responses") {
-		t.Fatalf("final request tools=%d last message=%+v, want tools withheld and a harness note", len(final.Tools), finalNote)
+	if !isStepLimitRequest(final) || len(final.Tools) == 0 || !strings.Contains(finalNote.Content, "limit of 3 model responses") {
+		t.Fatalf("final request tools=%d tool_choice=%q last message=%+v, want schemas kept, tool_choice none and a harness note", len(final.Tools), final.ToolChoice, finalNote)
 	}
 	if final.Messages[len(final.Messages)-2].Role != "tool" {
 		t.Fatalf("harness note must follow the last tool result: %+v", final.Messages)
@@ -213,7 +214,7 @@ func TestStepLimitEndsRunawayToolLoopWithToolFreeFinalAnswer(t *testing.T) {
 		t.Fatalf("last durable event=%+v, want final assistant", last)
 	}
 	snapshots := snapshotsOf(t, history.allEvents())
-	if len(snapshots) != 3 || snapshots[2].Iteration != 3 || snapshots[2].ToolSchemaCount != 0 ||
+	if len(snapshots) != 3 || snapshots[2].Iteration != 3 || snapshots[2].ToolSchemaCount != snapshots[1].ToolSchemaCount ||
 		snapshots[2].MessageCount != len(final.Messages) || snapshots[1].ToolSchemaCount == 0 {
 		t.Fatalf("snapshots=%+v", snapshots)
 	}

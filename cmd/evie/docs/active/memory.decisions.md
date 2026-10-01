@@ -763,8 +763,9 @@
   requests at most `EVIE_TURN_STEP_LIMIT` model responses (default 100; a
   positive integer, validated at startup and by session construction).
   Transport retries of one admitted request and compactor calls do not count.
-  The last permitted response is requested with tool schemas withheld (the
-  request types carry no tool-choice field) and a trailing user-role harness
+  The last permitted response is requested with `tool_choice: "none"` and the
+  tool schemas kept (providers such as Anthropic reject tool-call history sent
+  without them) and a trailing user-role harness
   note that states the limit and asks for an answer from what the turn already
   has; its context snapshot describes that exact request. A text-only final
   response commits as ordinary success. If it still contains tool calls,

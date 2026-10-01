@@ -133,9 +133,12 @@ type ReasoningConfig struct {
 // a nil omits the key entirely — a model without reasoning support must
 // see exactly the request it saw before this field existed.
 type ChatRequest struct {
-	Model       string           `json:"model"`
-	Messages    []Message        `json:"messages"`
-	Tools       []Tool           `json:"tools,omitempty"`
+	Model    string    `json:"model"`
+	Messages []Message `json:"messages"`
+	Tools    []Tool    `json:"tools,omitempty"`
+	// ToolChoice "none" keeps the schemas (providers that replay tool-call
+	// history require them) while forbidding new tool calls.
+	ToolChoice  string           `json:"tool_choice,omitempty"`
 	Stream      bool             `json:"stream,omitempty"`
 	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 	Temperature *float64         `json:"temperature,omitempty"`
