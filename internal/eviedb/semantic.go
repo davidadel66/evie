@@ -3,7 +3,6 @@ package eviedb
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -1242,21 +1241,24 @@ func (s *Store) PrepareRememberLiteral(
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
-	digest := sha256.Sum256([]byte(content))
-	evidenceHash := fmt.Sprintf("sha256:%x", digest)
+	binding := bindOwnerSource(content, literalOccurrences(content, request.Literal, request.Predicate, request.PredicateLabel))
 	var sourceLinkID memory.SemanticID
 	var sourceOperationID memory.SemanticID
 	sourceCreate := false
+	var existingAuthority memory.SourceAuthority
 	err = s.db.QueryRowContext(ctx, `
-		SELECT source_link_id, created_operation_id FROM semantic_source_links
-		WHERE claim_id = ? AND event_id = ? AND event_part = 'content' AND locator_kind = 'whole'
-		  AND locator_value = '' AND evidence_sha256 = ?
-	`, claimID, request.SourceEventID, evidenceHash).Scan(&sourceLinkID, &sourceOperationID)
+		SELECT source_link_id, created_operation_id, authority FROM semantic_source_links
+		WHERE claim_id = ? AND event_id = ? AND event_part = 'content' AND locator_kind = ?
+		  AND locator_value = ? AND evidence_sha256 = ?
+	`, claimID, request.SourceEventID, binding.kind, binding.value, binding.hash).Scan(&sourceLinkID, &sourceOperationID, &existingAuthority)
 	if errors.Is(err, sql.ErrNoRows) {
 		sourceLinkID, err = newSemanticID()
 		sourceOperationID = operationID
 		sourceCreate = true
 	} else if err == nil {
+		if existingAuthority != binding.authority {
+			return memory.RememberLiteralProposal{}, errors.New("source event is already cited for this Claim with a different authority")
+		}
 		state, stateErr := loadLatestState(ctx, dbLifecycleQueryer{s.db}, memory.SemanticObjectSourceLink, sourceLinkID)
 		if stateErr != nil {
 			return memory.RememberLiteralProposal{}, stateErr
@@ -1298,12 +1300,11 @@ func (s *Store) PrepareRememberLiteral(
 		Literal: request.Literal, Polarity: request.Polarity, ValidTime: request.ValidTime,
 		Source: memory.SemanticSource{
 			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: sourceKey,
-			EventPart: "content", LocatorKind: "whole", LocatorValue: "",
-			EvidenceSHA256: evidenceHash, Actor: "owner", SourceType: "user_message",
-			Authority: "owner_statement", ObservedAt: formatSemanticTime(observed), Evidence: content,
+			EventPart: "content", Actor: "owner", SourceType: "user_message", ObservedAt: formatSemanticTime(observed),
 			Eligibility: memory.EligibilityEligible, Create: sourceCreate,
 		}, Request: request,
 	}
+	binding.apply(&proposal.Source)
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalRememberLiteralProposal(proposal))
 	if err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("hash proposal: %w", err)
@@ -1594,11 +1595,8 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 		proposal.Evie.EntityType != "agent" || proposal.Evie.AnchorKind != "evie" {
 		return errors.New("remember literal proposal does not use the canonical Evie anchor")
 	}
-	if proposal.Source.EventPart != "content" || proposal.Source.LocatorKind != "whole" ||
-		proposal.Source.LocatorValue != "" || proposal.Source.Actor != "owner" ||
-		proposal.Source.SourceType != "user_message" || proposal.Source.Authority != "owner_statement" ||
-		proposal.Source.Eligibility != memory.EligibilityEligible {
-		return errors.New("remember literal proposal source attributes are invalid")
+	if err := validateRememberSourceShape(proposal.Source); err != nil {
+		return fmt.Errorf("remember literal proposal source attributes are invalid: %w", err)
 	}
 	if proposal.Source.Create {
 		if proposal.Source.OperationID != proposal.OperationID {
@@ -1682,11 +1680,12 @@ func (s *Store) ApplyRememberLiteral(
 		`, proposal.Source.EventID).Scan(&eventSession, &eventType, &eventRole, &eventContent, &eventRecorded); err != nil {
 			return fmt.Errorf("revalidate source event: %w", err)
 		}
-		digest := sha256.Sum256([]byte(eventContent))
 		if eventSession != string(proposal.SessionID) || eventType != string(memory.EventUserMessage) ||
-			eventRole != string(memory.RoleUser) || proposal.Source.Evidence != eventContent ||
-			proposal.Source.EvidenceSHA256 != fmt.Sprintf("sha256:%x", digest) {
+			eventRole != string(memory.RoleUser) {
 			return errors.New("semantic source evidence changed")
+		}
+		if err := verifyRememberSourceEvidence(proposal.Source, eventContent); err != nil {
+			return err
 		}
 		observed, err := time.Parse(time.RFC3339Nano, eventRecorded)
 		if err != nil || proposal.Source.ObservedAt != formatSemanticTime(observed) {

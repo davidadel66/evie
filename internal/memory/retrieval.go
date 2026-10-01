@@ -86,7 +86,18 @@ type RetrievalCoverage struct {
 	Indexed    int64  `json:"indexed"`
 }
 
+// RetrievalAmbiguousName marks an Entity of an accepted Claim whose name also
+// names another active Entity the reader can see (harness review M6). It says
+// which Entity this Claim is about; it never merges or chooses between them.
+type RetrievalAmbiguousName struct {
+	Name       string     `json:"name"`
+	EntityID   SemanticID `json:"entity_id"`
+	EntityType string     `json:"entity_type"`
+	Entities   int        `json:"entities"`
+}
+
 type RetrievalEvidence struct {
+	AmbiguousNames        []RetrievalAmbiguousName   `json:"ambiguous_names,omitempty"`
 	AsKnownAtConstrained  bool                       `json:"as_known_at_constrained,omitempty"`
 	IdentityMatches       []RetrievalIdentityMatch   `json:"identity_matches,omitempty"`
 	RetrievalGeneration   string                     `json:"retrieval_generation,omitempty"`

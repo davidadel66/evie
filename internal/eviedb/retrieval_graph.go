@@ -132,7 +132,7 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 		plan: retrievalQueryPlan{query: query, metadata: metadata, lexical: lexical,
 			scopes:      [3]string{"global", scopeKeyForContext(scope), "session:" + string(scope.SessionID)},
 			graph:       retrievalGraphBounds{anchors: retrievalGraphAnchors, width: retrievalGraphWidth, depth: retrievalGraphDepth},
-			authorities: []memory.SourceAuthority{memory.AuthorityOwnerStatement, memory.AuthorityToolObservation}},
+			authorities: []memory.SourceAuthority{memory.AuthorityOwnerStatement, memory.AuthorityToolObservation, memory.AuthorityEvieProposed}},
 		seen: make(map[memory.SemanticID]bool), eligible: make(map[memory.SemanticID]*retrievalCandidate)}
 	prepared, err := prepareDenseQuery(ctx, tx, query.Text)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -261,28 +260,16 @@ func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer,
 	if len(eligibleSources) == 0 {
 		return e, false, nil
 	}
-	subject, err := loadSemanticEntityForInspection(ctx, q, claim.SubjectEntityID)
+	// An Entity whose name also names another visible Entity is identified in
+	// the text and marked (harness review M6).
+	ambiguous, text, err := ambiguousEntityNames(ctx, q, claim, metadata.AllowedScopes)
 	if err != nil {
 		return e, false, err
-	}
-	object := ""
-	if claim.Object.Literal != nil {
-		object = claim.Object.Literal.Value
-	} else {
-		entity, err := loadSemanticEntityForInspection(ctx, q, claim.Object.EntityID)
-		if err != nil {
-			return e, false, err
-		}
-		object = entity.CanonicalName
-	}
-	text := fmt.Sprintf("%s — %s: %s", subject.CanonicalName, claim.Predicate.Label, object)
-	if claim.Polarity == memory.PolarityDenied {
-		text = "Denied: " + text
 	}
 	if len(text) > 4096 || compilerHasSecret(text) {
 		return e, false, nil
 	}
-	e = memory.RetrievalEvidence{ID: "claim:" + string(id), Kind: memory.RetrievalAcceptedMemory, ClaimID: id, ClaimOperationID: claim.CreatedOperationID,
+	e = memory.RetrievalEvidence{AmbiguousNames: ambiguous, ID: "claim:" + string(id), Kind: memory.RetrievalAcceptedMemory, ClaimID: id, ClaimOperationID: claim.CreatedOperationID,
 		AsKnownAt: metadata.AsKnownAt, ValidAt: metadata.ValidAt, ScopeKey: claim.ScopeKey, Status: semanticStatus(state), Text: text, Sources: eligibleSources, Paths: []string{},
 		Intent: intent, ValidAtConstrained: validAtConstrained, CurrentStatus: semanticStatus(currentState), Claim: &claim, EffectiveValidTime: &effective,
 		CorrectionMode: correction.Mode, CurrentCorrectionMode: currentCorrection}
@@ -292,7 +279,7 @@ func (s *Store) retrievalClaim(ctx context.Context, q semanticInspectionQueryer,
 // retrievalSource resolves the immutable evidence field and validates its
 // locator/hash anew. It never substitutes arbitrary payload JSON for evidence.
 func retrievalSource(ctx context.Context, q semanticInspectionQueryer, source memory.SemanticSource, allowed []string) (memory.SemanticSource, bool, error) {
-	if source.EventPart != memory.EvidenceContent || source.Evidence == "" {
+	if source.EventPart != memory.EvidenceContent || (source.Evidence == "" && source.Authority != memory.AuthorityEvieProposed) {
 		return source, false, nil
 	}
 	var session memory.SessionID
@@ -318,7 +305,8 @@ func retrievalSource(ctx context.Context, q semanticInspectionQueryer, source me
 		return source, false, err
 	}
 	if kind == "user_message" {
-		if role != "user" || source.Actor != memory.SemanticActorOwner || source.Authority != memory.AuthorityOwnerStatement {
+		if role != "user" || source.Actor != memory.SemanticActorOwner ||
+			(source.Authority != memory.AuthorityOwnerStatement && source.Authority != memory.AuthorityEvieProposed) {
 			return source, false, nil
 		}
 	} else if kind != "tool_succeeded" || role != "tool" || source.Authority != memory.AuthorityToolObservation {
@@ -344,6 +332,11 @@ func retrievalSource(ctx context.Context, q semanticInspectionQueryer, source me
 			return source, false, nil
 		}
 		source.Evidence = projected.Evidence
+		if source.Authority == memory.AuthorityEvieProposed {
+			// The cited message is the request Evie proposed the value in, not
+			// evidence for it (harness review M5); it is never quoted.
+			source.Evidence = ""
+		}
 	}
 	if allowed != nil && !containsString(allowed, source.ScopeKey) {
 		source.Evidence = ""

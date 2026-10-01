@@ -1083,7 +1083,7 @@ func rememberScopeClaim(t *testing.T, ctx context.Context, store *Store, session
 		t.Fatal(err)
 	}
 	source, err := store.AppendEventWithLease(ctx, session.ID, lease.HolderID, lease.FencingToken, memory.EventInput{
-		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: fmt.Sprintf("scope claim %d", sequence),
+		Type: memory.EventUserMessage, Role: memory.RoleUser, Content: fmt.Sprintf("scope claim %d: subject-%d scope marker object-%d", sequence, sequence, sequence),
 	})
 	if err != nil {
 		t.Fatal(err)

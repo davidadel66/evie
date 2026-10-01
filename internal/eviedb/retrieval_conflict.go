@@ -252,7 +252,7 @@ func retrievalPhrase(value string) string {
 // Existing accepted provenance is not a new independent owner observation.
 // Subtract exact accepted Source Link intervals, retaining unrelated bytes.
 func unrepresentedConversationSpans(ctx context.Context, q semanticInspectionQueryer, e conversationEvidence, spans []conversationReadSpan) ([]conversationReadSpan, error) {
-	rows, err := q.QueryContext(ctx, `SELECT event_part,locator_kind,locator_value,evidence_sha256 FROM semantic_source_links WHERE event_id=? ORDER BY source_link_id LIMIT 257`, e.id)
+	rows, err := q.QueryContext(ctx, `SELECT event_part,locator_kind,locator_value,evidence_sha256 FROM semantic_source_links WHERE event_id=? AND authority<>'evie_proposed' ORDER BY source_link_id LIMIT 257`, e.id)
 	if err != nil {
 		return nil, err
 	}

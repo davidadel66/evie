@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "fixture_version": "semantic-stage-3-v1",
-  "dataset_sha256": "sha256:643cc01820592e63c8ba40ad1154ec4eed489d2aa07ec36e70846c2c2aabe4fd",
+  "dataset_sha256": "sha256:6386c783327bf28d733c8b407931610fe4f15021989cd1ca8795cdf8c8a7d987",
   "imports": [
     "../../v1/literal-claim.json",
     "../../v2/claim-correction.json",
@@ -795,12 +795,12 @@
             "workspace:20000000-0000-4000-8000-000000000301": 1
           },
           "scope_hashes": {
-            "global": "sha256:94efd4b4e81c7db4c57d70bb466cfa892c63b0bd12a994c97e092d66d73a2645",
-            "workspace:20000000-0000-4000-8000-000000000301": "sha256:1dea5dbd4bd32924293fe22b297fe03afa306bcc5c69a432cf2261fad7db5a64"
+            "global": "sha256:4dd80ff284f433aff758fd77c511675aefce8cab0323362ce0fade12824633ae",
+            "workspace:20000000-0000-4000-8000-000000000301": "sha256:6aa5b8a4e6e5569761ab9c7165ce5fdb12dbe8dd12d9f8f7025270ee83a72f96"
           },
           "scope_frontiers": {
-            "global": "sha256:0593873166303200d654bc8bdf7402ada6adf3dd8a41e423d12c38198d48dc1b",
-            "workspace:20000000-0000-4000-8000-000000000301": "sha256:1fba9a8f7984ca4e03821f4851bc8a6890a6f428fe1b7551ee5c8cfdc19b80ed"
+            "global": "sha256:d5907d8e5079519fd23dfd1deeb894baa9029c507bd6c87c0c89dfcfa1665113",
+            "workspace:20000000-0000-4000-8000-000000000301": "sha256:bf0cfe33ac0fbcbd38cefb1cb8fe338f0d02239510abddf1c165cc0a95c308a9"
           },
           "predicate_ids": [
             "63000000-0000-4000-8000-000000000301"
@@ -1395,10 +1395,10 @@
             "global": 5
           },
           "scope_hashes": {
-            "global": "sha256:ba8d720a7b261963067206747156b5ff172f78d811ee8b837d9502731cee3de5"
+            "global": "sha256:e7926b406bb2753ce2851534f63c85b7bc6d2d973eb59ad8c13253a8890ea2d0"
           },
           "scope_frontiers": {
-            "global": "sha256:36042a4e1b04b468f3c3fb825c6ecffc2a18a0c4a6760d9f10f214ffef445f12"
+            "global": "sha256:c0a9f5ce24f203e904c319ce37ec1148af7c65c28b0ee6ba3f5f9fa776eb05c9"
           },
           "predicate_ids": [
             "63000000-0000-4000-8000-000000000401"

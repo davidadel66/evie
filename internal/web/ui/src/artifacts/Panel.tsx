@@ -116,7 +116,7 @@ function MemoryInspection({ detail }: { detail: SemanticObjectInspection }) {
       {detail.sources.map(({ source }) => (
         <div key={source.source_link_id ?? source.event_id} className="border-hair mt-3 border-l pl-3">
           <p className="text-teal text-[10px]">Source episode · <span className="font-mono">{source.event_id}</span></p>
-          <p className="text-body text-xs leading-5">{source.evidence || "Source text is not available in this scope."}</p>
+          <p className="text-body text-xs leading-5">{source.evidence || (source.authority === "evie_proposed" ? "Evie proposed this value; it is not in your words." : "Source text is not available in this scope.")}</p>
           <p className="text-fainter mt-2 font-mono text-[10px] leading-4">{source.authority} · {source.eligibility}<br />{source.source_scope_key}<br />{formatTime(source.observed_at)}</p>
         </div>
       ))}

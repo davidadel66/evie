@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -336,7 +337,17 @@ func integratedBuildSeed(t *testing.T, c integratedCase, destination string) int
 				t.Fatalf("exact approved source missing: %s: %v", r.ID, err)
 			}
 			binding.Source = inspected.Sources[0].Source
-			if binding.Source.ID == "" || binding.Source.Evidence != r.Text {
+			// Harness review M5: the source is the record's sentence that holds
+			// the saved value, or, when the value paraphrases the record, an
+			// Evie-proposed reference to the record that quotes nothing.
+			var start, end int
+			_, rangeErr := fmt.Sscanf(binding.Source.LocatorValue, "%d:%d", &start, &end)
+			span := binding.Source.LocatorKind == memory.LocatorUTF8ByteRange && rangeErr == nil && start >= 0 && start < end && end <= len(r.Text) &&
+				binding.Source.Evidence == r.Text[start:end] && binding.Source.Authority == memory.AuthorityOwnerStatement
+			whole := binding.Source.LocatorKind == memory.LocatorWhole && binding.Source.Evidence == r.Text && binding.Source.Authority == memory.AuthorityOwnerStatement
+			evieProposed := binding.Source.Authority == memory.AuthorityEvieProposed && binding.Source.Evidence == "" &&
+				binding.Source.EvidenceSHA256 == fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(r.Text)))
+			if binding.Source.ID == "" || !(span || whole || evieProposed) {
 				t.Fatalf("exact approved source differs from declared record %s", r.ID)
 			}
 		}

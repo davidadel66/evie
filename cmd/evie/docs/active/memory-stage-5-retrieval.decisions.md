@@ -1,5 +1,27 @@
 # Memory Stage 5 retrieval — decisions
 
+- **2026-10-01 — Bound spans, Evie-proposed sources and ambiguous names in
+  recall (harness review M5, M6, Stage 14).** Follows the 2026-10-01 memory
+  decisions on owner-span binding and Entity identity.
+  - A Claim's source renders only its bound span on every path, so a Global
+    memory read in a Workspace or project session no longer carries the rest
+    of the Global message.
+  - An approved `evie_proposed` Claim stays retrievable (the owner approved
+    it): the accepted-memory authority allowlist gains `evie_proposed`, its
+    source carries the label and no text, and the cited message's hash is
+    still verified.
+  - Conversation associations ignore `evie_proposed` Source Links: retiring
+    such a Claim suppresses nothing in the request message, never labels it a
+    historical source, and does not count it as represented provenance for
+    newer-statement companions. Span-bound links suppress and label only their
+    span, so unrelated sentences of the same message stay recallable
+    (decision Q19's "unrelated information remains eligible").
+  - A Claim whose Entity name is ambiguous among the reader's visible Entities
+    carries `ambiguous_names` and identifies the Entity in its text; the
+    lexical index and generators are unchanged.
+  Measured on the scale corpus (`memory-scale-eval.md`, Stage 14): both tiers'
+  reports are unchanged.
+
 - **2026-10-01 — Corrected and retired facts are labelled, not presented as
   current (harness review M2, Stage 13).** Applies implementation decision 10
   and David's M2 default: corrected sources stay retrievable but are labelled

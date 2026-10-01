@@ -3,7 +3,7 @@
 // edit_db. Anything else gets pretty-printed JSON — correct, if plain.
 
 export type ApprovalView =
-  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; json: string }
+  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string }
   | { shape: "diff"; subject: string; oldText: string; newText: string }
   | { shape: "statement"; subject: string; statement: string }
   | { shape: "json"; subject: string; json: string };
@@ -22,7 +22,12 @@ export function readApprovalArgs(name: string, args: string, ownerName = "You"):
     const entities = Array.isArray(parsed.entities) ? parsed.entities.map(object) : [];
     const label = (entity: Record<string, unknown> | null | undefined) => entity?.anchor_kind === "owner" && entity?.canonical_name === "owner" ? ownerName : str(entity?.canonical_name);
     const subject = [label(object(parsed.subject)) || label(entities.find(e => e?.entity_id === claim?.subject_entity_id)), predicate?.label, value || label(entities.find(e => e?.entity_id === claim?.object_entity_id))].filter(Boolean).join(" · ");
-    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: str(source?.evidence), json: pretty(args) };
+    // Harness review M5/M6: an Evie-proposed value has no quote from the
+    // owner, and each reused or created Entity is named with what tells
+    // same-named Entities apart.
+    const evieProposed = str(source?.authority) === "evie_proposed";
+    const identities = Array.isArray(parsed.identities) ? parsed.identities.map(object).filter((identity) => identity !== null).map(identityLine) : [];
+    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args) };
   }
 
   if (name === "edit_file" && parsed) {
@@ -76,3 +81,19 @@ function pretty(args: string): string {
 }
 
 function object(v: unknown): Record<string, unknown> | null { return typeof v === "object" && v !== null ? v as Record<string, unknown> : null; }
+
+function identityLine(identity: Record<string, unknown>): string {
+  const name = str(identity.canonical_name);
+  const type = str(identity.entity_type);
+  if (identity.reused !== true) {
+    const others = typeof identity.same_name === "number" && identity.same_name > 0 ? ` · ${identity.same_name} existing ${identity.same_name === 1 ? "entity has" : "entities have"} this name` : "";
+    return `Creates new ${name} (${type})${others}`;
+  }
+  const parts = [`Reuses existing ${name} (${type}, ${str(identity.entity_id).split("-")[0]})`];
+  parts.push(identity.selected_by === "entity_id" ? "chosen by ID" : "matched by name");
+  const aliases = Array.isArray(identity.aliases) ? identity.aliases.filter((alias): alias is string => typeof alias === "string") : [];
+  if (aliases.length > 0) parts.push(`also called ${aliases.join(", ")}`);
+  if (str(identity.example_claim)) parts.push(`e.g. ${str(identity.example_claim)}`);
+  if (typeof identity.same_name === "number" && identity.same_name > 0) parts.push(`${identity.same_name} other ${identity.same_name === 1 ? "entity shares" : "entities share"} this name`);
+  return parts.join(" · ");
+}

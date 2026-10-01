@@ -407,6 +407,31 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	}
 	entities = appendUniqueEntity(entities, subject)
 	entities = appendUniqueEntity(entities, object)
+	// Identity details come only from the scopes this operation resolves
+	// Entities in, so a Global-target proposal never carries narrower text.
+	readable := []string{"global", referenceContext, targetKey}
+	needs, err := entityBindingNeeds(ctx, s.db, source.Evidence, request, readable,
+		entityWithAlias{subject, subjectAlias}, entityWithAlias{object, objectAlias})
+	if err != nil {
+		return memory.RememberEntityProposal{}, err
+	}
+	bindOwnerSource(source.Evidence, needs).apply(&source)
+	var identities []memory.ProposalEntityIdentity
+	for _, item := range []struct {
+		role     string
+		entity   memory.SemanticEntity
+		alias    *memory.SemanticAlias
+		selector memory.EntitySelector
+	}{{"subject", subject, subjectAlias, request.Subject}, {"object", object, objectAlias, request.Object}} {
+		if item.entity.AnchorKind != "" {
+			continue
+		}
+		identity, err := proposalEntityIdentity(ctx, s.db, item.role, item.entity, item.alias, item.selector, readable)
+		if err != nil {
+			return memory.RememberEntityProposal{}, err
+		}
+		identities = append(identities, identity)
+	}
 	aliases := make([]memory.SemanticAlias, 0, 2)
 	if subjectAlias != nil {
 		aliases = append(aliases, *subjectAlias)
@@ -431,16 +456,20 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
+	var existingAuthority memory.SourceAuthority
 	err = s.db.QueryRowContext(ctx, `
-		SELECT source_link_id, created_operation_id FROM semantic_source_links
+		SELECT source_link_id, created_operation_id, authority FROM semantic_source_links
 		WHERE claim_id = ? AND event_id = ? AND event_part = ? AND locator_kind = ?
 		  AND locator_value = ? AND evidence_sha256 = ?
 	`, claim.ID, source.EventID, source.EventPart, source.LocatorKind,
-		source.LocatorValue, source.EvidenceSHA256).Scan(&source.ID, &source.OperationID)
+		source.LocatorValue, source.EvidenceSHA256).Scan(&source.ID, &source.OperationID, &existingAuthority)
 	if errors.Is(err, sql.ErrNoRows) {
 		source.ID, err = newSemanticID()
 		source.Create = true
 	} else if err == nil {
+		if existingAuthority != source.Authority {
+			return memory.RememberEntityProposal{}, errors.New("source event is already cited for this Claim with a different authority")
+		}
 		state, stateErr := loadLatestState(ctx, dbLifecycleQueryer{s.db}, memory.SemanticObjectSourceLink, source.ID)
 		if stateErr != nil {
 			return memory.RememberEntityProposal{}, stateErr
@@ -477,7 +506,7 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		IdempotencyKey: request.IdempotencyKey, Actor: memory.SemanticActorOwner, SessionID: scope.SessionID,
 		Scope: target.SemanticScope, Scopes: scopes, PriorRevisions: priors, Predicate: predicate,
 		Entities: entities, Aliases: aliases, Claim: claim, Source: source,
-		ResultingRevision: target.Revision + 1, Request: request,
+		ResultingRevision: target.Revision + 1, Request: request, Identities: identities,
 	}
 	writeGlobal := entityProposalWritesGlobal(proposal)
 	for _, semanticScope := range proposal.Scopes {
@@ -586,11 +615,14 @@ func validateEntityProposalRelations(proposal memory.RememberEntityProposal) err
 		return errors.New("Entity Claim does not match its prepared scope or Predicate")
 	}
 	if proposal.Source.EventID != proposal.Request.SourceEventID || proposal.Source.SessionID != proposal.SessionID ||
-		(proposal.Request.Destination == "" && proposal.Source.ScopeKey != proposal.Scope.Key) || proposal.Source.EventPart != memory.EvidenceContent ||
-		proposal.Source.LocatorKind != memory.LocatorWhole || proposal.Source.LocatorValue != "" ||
-		proposal.Source.Actor != memory.SemanticActorOwner || proposal.Source.SourceType != memory.SourceTypeUserMessage ||
-		proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Eligibility != memory.EligibilityEligible {
+		(proposal.Request.Destination == "" && proposal.Source.ScopeKey != proposal.Scope.Key) ||
+		validateRememberSourceShape(proposal.Source) != nil {
 		return errors.New("Entity proposal Source is not canonical owner-message provenance")
+	}
+	for _, identity := range proposal.Identities {
+		if _, ok := entities[identity.EntityID]; !ok || (identity.Role != "subject" && identity.Role != "object") {
+			return errors.New("Entity proposal identity is not one of its enumerated Entities")
+		}
 	}
 	if proposal.Source.Create {
 		if proposal.Source.OperationID != proposal.OperationID {
@@ -712,12 +744,12 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 		`, proposal.Source.EventID), proposal.SessionID, proposal.Source.EventID, proposal.Source.ScopeKey)
 		if err != nil || source.EventID != proposal.Source.EventID || source.SessionID != proposal.Source.SessionID ||
 			source.ScopeKey != proposal.Source.ScopeKey || source.EventPart != proposal.Source.EventPart ||
-			source.LocatorKind != proposal.Source.LocatorKind || source.LocatorValue != proposal.Source.LocatorValue ||
-			source.Evidence != proposal.Source.Evidence || source.EvidenceSHA256 != proposal.Source.EvidenceSHA256 ||
 			source.Actor != proposal.Source.Actor || source.SourceType != proposal.Source.SourceType ||
-			source.Authority != proposal.Source.Authority || source.ObservedAt != proposal.Source.ObservedAt ||
-			source.Eligibility != proposal.Source.Eligibility {
+			source.ObservedAt != proposal.Source.ObservedAt || source.Eligibility != proposal.Source.Eligibility {
 			return errors.New("semantic source evidence changed")
+		}
+		if err := verifyRememberSourceEvidence(proposal.Source, source.Evidence); err != nil {
+			return err
 		}
 
 		byKey, err := validateSemanticScopeVector(ctx, writer, proposal.Scopes, proposal.PriorRevisions, s.now())

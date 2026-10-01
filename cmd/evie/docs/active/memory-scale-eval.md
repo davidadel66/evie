@@ -357,6 +357,68 @@ recorded in Stage 12) and 25/27 with deeper search.
 | M4: drift still warns | no | yes | 0 misses of 4 checks |
 | M7: dense covers all vectors or reports the gap | yes | yes | 24 of 24 targets found |
 
+## Stage 14: memory authority and entities (M5, M6)
+
+The rules are recorded in [the memory decisions](memory.decisions.md) and
+[the retrieval decisions](memory-stage-5-retrieval.decisions.md) (2026-10-01).
+In short: a remembered value cites the exact sentence span of the owner's
+message that contains it (whole content when that is the entire message); a
+value the message does not contain is `evie_proposed`, quotes nothing, and is
+labelled on the approval card; sources render only their span; retirement
+suppresses only the span; reused and same-named Entities are named on the
+card and ambiguous names are marked in recall.
+
+**Regression check.** Both tiers were run on the Stage 13 code and on this
+change with the committed corpus v2 and report v3 baselines. Both reports are
+identical before and after (the ratchet passes without re-recording), so
+every Stage 12 and 13 number above stands: stale misses 2 of 36 in each tier
+with 10/10 controls, no scope leaks, automatic unwanted 4 (default) and 14
+(large), no private items in the privacy probes, every M1 target met, and 24
+of 24 dense targets. This is expected: every corpus remember command is one
+sentence that states its value ("Remember that my barber is Luis."), so its
+span is the whole message and it is cited exactly as before.
+
+The frozen 24-case lexical workloads are also unchanged: held-out 22/28
+automatic, 26/28 with deeper search, 19 non-gold of 48 first-dispatch items;
+development 23–24/27 automatic (the dev11 random-ID tie recorded in Stage
+12) and 25/27 with deeper search. Of the held-out workload's 29 accepted
+records, one now cites a single sentence ("For audiobooks I prefer one
+narrator throughout;") and one is Evie-proposed, because its saved value
+paraphrases the record ("A3 sheets with seam allowances included" against
+"A3 sheets with the seam allowances already included"); the development
+workload's 33 are all whole-message owner statements. The workload builder
+now accepts a bound span or an Evie-proposed reference as the record's exact
+source.
+
+**Probes not added.** The scale instrument cannot express M5 or M6 without
+new machinery: its corpus has only Typed Literal Claims whose commands state
+their value, no Entity Claims, and its scorer records item keys, status and
+links, not source authority, source text or Entity identity. Adding them
+needs a corpus v3 (Evie-proposed and multi-sentence remember steps, Entity
+steps), new item fields and check kinds, and a report version bump. That is
+deferred; the acceptance criteria are covered by focused tests through the
+same production seams (real SQLite, real agent turns, the Memory Plugin and
+approval path) in `internal/agent/memory_authority_test.go`:
+a multi-sentence Global command is cited as its one sentence and a Workspace
+reader sees nothing else of it; a value absent from the command is
+Evie-proposed, retrievable, labelled and unquoted in retrieval and
+inspection; a model tool call after "Read this article and remember what
+matters." reaches the approval card as Evie-proposed with no quote; retiring a
+span-bound memory keeps the message's other sentence recallable; retiring an
+Evie-proposed memory neither hides nor labels its request; promotion keeps
+the Evie-proposed label; Alias reuse, stable-ID reuse and a new same-named
+Entity are shown for approval; and two Entities named Sarah are marked and
+told apart in recall while a unique name is not. The matching rules have
+table tests in `internal/eviedb/semantic_source_binding_test.go`.
+
+| Target (plan acceptance) | Met | Evidence |
+| --- | --- | --- |
+| M5: a proposed memory's source is the exact quoted span | yes | span locator and hash on the proposal; replay verified |
+| M5: a value absent from the owner's words is Evie-proposed and the card says so | yes | approval arguments and card test |
+| M5: Global text does not reach Workspace sessions | yes | Workspace recall carries only the span |
+| M6: alias reuse is shown on the card | yes | `identities` on the proposal and card test |
+| M6: ambiguous aliases are marked in recall | yes | `ambiguous_names` and identifying text |
+
 ## Decisions and spec relationship
 
 - **Synthetic, not derived.** `memory.spec.md` Stage 9 asks for fixtures

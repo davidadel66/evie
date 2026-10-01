@@ -973,15 +973,22 @@ func rememberProposalApprovalJSON(proposal memory.RememberLiteralProposal) strin
 	return string(encoded)
 }
 
+func locatorSuffix(value string) string {
+	if value == "" {
+		return ""
+	}
+	return "[" + value + "]"
+}
+
 func writeRememberProposal(out io.Writer, proposal memory.RememberLiteralProposal) {
 	_, _ = fmt.Fprintln(out, "Memory proposal")
 	_, _ = fmt.Fprintf(out, "scope: %s (expected revision %d)\n", proposal.Scope.Key, proposal.ExpectedRevision)
 	_, _ = fmt.Fprintf(out, "proposition: %s %s %q (%s, %s)\n",
 		proposal.Subject.CanonicalName, proposal.Predicate.Token, proposal.Literal.Value, proposal.Literal.Kind, proposal.Polarity)
 	_, _ = fmt.Fprintf(out, "valid time: from=%s to=%s\n", memoryTimeLabel(proposal.ValidTime.From), memoryTimeLabel(proposal.ValidTime.To))
-	_, _ = fmt.Fprintf(out, "evidence: event=%s part=%s locator=%s hash=%s observed_at=%s\n",
-		proposal.Source.EventID, proposal.Source.EventPart, proposal.Source.LocatorKind,
-		proposal.Source.EvidenceSHA256, proposal.Source.ObservedAt)
+	_, _ = fmt.Fprintf(out, "evidence: event=%s part=%s locator=%s%s hash=%s observed_at=%s authority=%s\n",
+		proposal.Source.EventID, proposal.Source.EventPart, proposal.Source.LocatorKind, locatorSuffix(proposal.Source.LocatorValue),
+		proposal.Source.EvidenceSHA256, proposal.Source.ObservedAt, proposal.Source.Authority)
 	_, _ = fmt.Fprintf(out, "generated IDs: operation=%s scope=%s predicate=%s owner=%s evie=%s claim=%s source_link=%s\n",
 		proposal.OperationID, proposal.Scope.ID, proposal.Predicate.ID, proposal.Subject.ID,
 		proposal.Evie.ID, proposal.ClaimID, proposal.SourceLinkID)

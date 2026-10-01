@@ -156,6 +156,12 @@ func validateReviewOriginVisibility(ctx context.Context, q historicalReviewQuery
 }
 
 func projectSourceWithReviewOrigin(ctx context.Context, q historicalReviewQuery, source memory.SemanticSource) (memory.SemanticSource, bool, error) {
+	if source.Authority == memory.AuthorityEvieProposed {
+		// The cited message is the request Evie proposed the value in, not
+		// evidence for it (harness review M5); it is never quoted.
+		source.Evidence = ""
+		return source, false, nil
+	}
 	origin, err := reviewSourceOrigin(ctx, q, source.ID)
 	if err != nil {
 		return source, false, err

@@ -34,7 +34,7 @@ func conversationReadSpans(ctx context.Context, q semanticInspectionQueryer, e c
  ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1),'active') AS current,
  COALESCE((SELECT state FROM semantic_state_events WHERE object_kind='source_link' AND object_id=sl.source_link_id
  ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1),'eligible') AS source_state
- FROM semantic_source_links sl WHERE sl.event_id=?)
+ FROM semantic_source_links sl WHERE sl.event_id=? AND sl.authority<>'evie_proposed')
  SELECT event_part,locator_kind,locator_value,evidence_sha256,pinned,current,source_state FROM associations
  WHERE pinned='retired' OR current='retired' OR source_state='retracted' LIMIT 257`, knownAt, knownAt, e.id)
 	if err != nil {

@@ -1467,6 +1467,11 @@ func freezeEntityFixtureProposal(t *testing.T, proposal memory.RememberEntityPro
 		}
 		proposal.Aliases[index].OperationID = proposal.OperationID
 	}
+	for index := range proposal.Identities {
+		if id, ok := remap[proposal.Identities[index].EntityID]; ok {
+			proposal.Identities[index].EntityID = id
+		}
+	}
 	if id := operation.GeneratedIDs["subject_entity_id"]; id != "" {
 		proposal.Claim.SubjectEntityID = memory.SemanticID(id)
 	}

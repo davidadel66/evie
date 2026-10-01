@@ -1,5 +1,77 @@
 # memory - decisions
 
+- **2026-10-01 — Remembered values bind to the owner's exact words
+  (harness review M5, Stage 14).** David decided: bind each model-proposed
+  memory to the exact span of the owner's message that contains the value; a
+  value not in the owner's own words is saved as Evie-proposed, not
+  `owner_statement`, and the approval card says so. Implementation choices:
+  - *Matching* (Prepare time, deterministic, `semantic_source_binding.go`).
+    Words fold case, punctuation and whitespace and common inflection
+    (`relevanceKey`, plus `-ves`→`-f`/`-fe` and `-ies`→`-y` plurals, each
+    reading kept). A text value must appear as consecutive words; paraphrase,
+    reordering or inserted words do not match. Numbers compare by value
+    (`1,500` = `1500`, `2.50` = `2.5`, leading zeros, number words zero to
+    twenty). A date also matches its month-name forms and US `m/d[/y]`; a
+    stated different year does not match; relative dates ("tomorrow") do not.
+    A datetime matches by its UTC calendar date. A boolean has no words, so it
+    binds to a sentence with min(2, n) of a Predicate wording's n content
+    words. An Entity counts only through its canonical name, the request's
+    Alias or an active Alias that appears in the message; owner, Evie and
+    Context anchors are implied. Values found only inside a question still
+    match (the quote shows the question).
+  - *Span.* The sentence (Stage 13 splitter) holding the value, or every
+    sentence a multi-sentence value touches; for an Entity Claim the sentence
+    or two adjacent sentences naming both subject and object; trimmed of
+    whitespace; a sentence over 600 bytes narrows to the match plus up to eight
+    words each side. Locator `utf8_byte_range` with the span's SHA-256; a span
+    equal to the entire message is cited as `whole`, which is what it denotes
+    (so single-sentence commands, compiler duplicates and replay keep their
+    previous identity).
+  - *Authority label.* `evie_proposed`. Actor and source type stay `owner` /
+    `user_message` (copied from the cited event, per the encodings contract);
+    locator `whole` with the message hash records which request Evie proposed
+    it in; evidence is empty. Approval never upgrades it. It ranks no higher
+    than assistant inference for conflicts.
+  - *Rendering.* Every source projection (retrieval, receipts, inspection,
+    promotion) renders only the bound span; an `evie_proposed` source renders
+    no text. The approval card shows the span under "Your words", or "Evie's
+    proposal: this value is not in your message…" with no quote; the REPL
+    proposal line prints the authority.
+  - *Validation.* Prepare decides; Apply and replay re-verify only structure:
+    a range span with owner authority quoting exactly its bytes and hash, a
+    whole message with owner authority quoting all of it, or a whole-message
+    `evie_proposed` reference quoting nothing. Matching rules are never re-run
+    on replay, so they can change later without breaking accepted history.
+  - *Compatibility.* No migration and no rewrite: accepted pre-Stage-14
+    remember operations (whole message, owner authority) replay and render as
+    before. Operation schema version 1 is unchanged; the new values use
+    existing fields. Two Stage 3 evaluation fixtures whose remember messages
+    do not contain their values (`promotion-and-isolation`,
+    `graph-replay-recovery`) now record Evie-proposed sources; their expected
+    scope hashes and operation frontiers and the manifest digest were
+    re-recorded.
+  - *Out of scope.* `memory_correct_claim` replacement values still cite the
+    whole correction request as `owner_statement`; binding them is the same
+    mechanism but was not part of this decision.
+
+- **2026-10-01 — Entity reuse and ambiguous names are visible (harness
+  review M6, Stage 14).** Applies the plan's M6 default. Resolution itself is
+  unchanged (one Alias match is reused; any readable stable ID is accepted;
+  duplicates are preferred over merges). The remember-entity proposal gains
+  review-only `identities` (not part of the accepted effect or its hash
+  contract): for each ordinary subject and object, whether it is reused or
+  created, how it was selected (`entity_id`, `alias`, `create`), its type,
+  up to five active Aliases, one current Claim about a reused Entity, and how
+  many other active Entities the session can read share its name or an Alias.
+  The card lists them ("Reuses existing Sarah (person, 1f3c9a2e) · matched by
+  name · also called … · e.g. Sarah — plays: Tennis"). In recall, an accepted
+  Claim whose ordinary Entity shares its canonical name or an active Alias
+  with another active Entity in the reader's scopes carries
+  `ambiguous_names` (name, Entity ID, type, count) and its text names the
+  Entity: `Sarah [person 1f3c9a2e; 2 entities named "sarah"] — plays: Tennis`.
+  Ambiguity uses current state, so a newly ambiguous name refreshes evidence
+  already in a turn. Merge and split remain out of scope.
+
 - **2026-10-01 — Predicate drift neither mints needless versions nor hides
   conflicts (harness review M4, Stage 13).** The encodings contract says the
   human label does not participate in Predicate identity. A remember request

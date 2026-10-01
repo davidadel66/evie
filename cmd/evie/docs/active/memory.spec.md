@@ -244,6 +244,16 @@ execute again.
 15. Workflow Runs use separate durable run and step leases. A background run
     never reuses or revives a conversational turn lease, and an unresolved
     workflow effect blocks dependent nodes until reconciliation.
+16. A remembered value carries owner authority only when the cited owner
+    message contains it. Its Source Link is the exact span of that message
+    holding the value, cited by UTF-8 byte range and the span's hash (whole
+    content when the span is the entire message). A value the message does not
+    contain is `evie_proposed`: the Source Link cites the message by hash, quotes
+    none of it, and the approval says the value is not in the owner's words.
+    Every rendering of a Claim's source shows only its bound span, and
+    retirement suppresses that span, never the rest of the message. Approval
+    never upgrades the recorded authority (harness review M5; see the
+    2026-10-01 memory decision).
 
 ## Scope And Authority
 
@@ -337,7 +347,9 @@ Source authority is explicit and ordered for conflict handling:
 6. unsupported assistant text.
 
 This ordering is a policy input, not a relevance score or an extraction
-allowlist. Initial Stage 4 support is narrowed to owner assertions and contracted
+allowlist. An `evie_proposed` Source (invariant 16) is Evie's proposal that the
+cited owner message does not state; it ranks no higher than assistant
+inference, even after the owner approves it. Initial Stage 4 support is narrowed to owner assertions and contracted
 tool observations as defined below. Candidate approval retains original evidence
 authority separately from approval authority. A semantically similar external
 document cannot overwrite a direct user correction.
@@ -413,6 +425,12 @@ derived-index generations, and retrieval diagnostics begin in Stage 5.
 
 Entity resolution must prefer duplicates over unsafe merges. Two people with the
 same name remain separate until evidence is sufficient or David resolves them.
+Resolution is visible rather than silent: a remember approval names each Entity
+it reuses (by Alias or stable ID) with its type, Aliases and one current Claim,
+and says when a new Entity shares a name with an existing one. Recall marks a
+Claim whose Entity shares its name or an Alias with another active Entity the
+reader can see, and identifies that Entity in the Claim text. Merge and split
+remain out of scope (harness review M6).
 
 ### Claims
 

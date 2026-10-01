@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -59,6 +60,10 @@ func TestREPLRememberApprovalAndEventlessInspectionUseSemanticInterface(t *testi
 	}
 	if client.calls != 0 {
 		t.Fatalf("semantic commands made %d model calls", client.calls)
+	}
+	// The proposal names the authority its source will carry (harness review M5).
+	if !strings.Contains(got, "locator=whole hash=") || !regexp.MustCompile(`evidence: event=\S+ part=content locator=whole hash=\S+ observed_at=\S+ authority=owner_statement\n`).MatchString(got) {
+		t.Fatalf("proposal evidence line does not name its authority: %q", got)
 	}
 	events, err := store.LoadEvents(ctx, storedSession.ID)
 	if err != nil {

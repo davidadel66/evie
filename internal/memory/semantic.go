@@ -50,6 +50,11 @@ const (
 	SemanticActorOwner      SemanticActor      = "owner"
 	SourceTypeUserMessage   SemanticSourceType = "user_message"
 	AuthorityOwnerStatement SourceAuthority    = "owner_statement"
+	// AuthorityEvieProposed marks a remembered value that the cited owner
+	// message does not contain (harness review M5). The message is recorded
+	// as the request during which Evie proposed the memory; its text is never
+	// rendered as evidence for the value.
+	AuthorityEvieProposed SourceAuthority = "evie_proposed"
 
 	EvidenceContent EvidencePart = "content"
 	EvidencePayload EvidencePart = "payload"
@@ -660,9 +665,37 @@ type RememberEntityProposal struct {
 	ResultingRevision  int64                 `json:"resulting_revision"`
 	ResultingRevisions []ScopeRevision       `json:"resulting_revisions"`
 	Request            RememberEntityRequest `json:"request"`
-	ProposalSHA256     string                `json:"-"`
-	PreparedSHA256     string                `json:"-"`
+	// Identities describes the ordinary subject and object Entities for the
+	// approval card (harness review M6): whether each is reused or created,
+	// how it was selected, and details that tell same-named Entities apart.
+	// It is review context, not part of the accepted effect.
+	Identities     []ProposalEntityIdentity `json:"identities,omitempty"`
+	ProposalSHA256 string                   `json:"-"`
+	PreparedSHA256 string                   `json:"-"`
 }
+
+// ProposalEntityIdentity is one ordinary Entity a remember proposal names.
+// SameName counts other active Entities the session can read that share its
+// canonical name or one of its Aliases; a nonzero count means the name alone
+// does not identify it.
+type ProposalEntityIdentity struct {
+	Role          string     `json:"role"`
+	EntityID      SemanticID `json:"entity_id"`
+	CanonicalName string     `json:"canonical_name"`
+	EntityType    string     `json:"entity_type"`
+	ScopeKey      string     `json:"scope_key"`
+	Reused        bool       `json:"reused"`
+	SelectedBy    string     `json:"selected_by"`
+	Aliases       []string   `json:"aliases,omitempty"`
+	ExampleClaim  string     `json:"example_claim,omitempty"`
+	SameName      int        `json:"same_name,omitempty"`
+}
+
+const (
+	EntitySelectedByID     = "entity_id"
+	EntitySelectedByAlias  = "alias"
+	EntitySelectedByCreate = "create"
+)
 
 type RememberEntityResult struct {
 	OperationID        SemanticID      `json:"operation_id"`

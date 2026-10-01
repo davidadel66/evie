@@ -50,7 +50,7 @@ func annotateConversationHistory(ctx context.Context, q semanticInspectionQuerye
  COALESCE((SELECT state FROM semantic_state_events WHERE object_kind='source_link' AND object_id=sl.source_link_id
  ORDER BY transaction_time DESC,scope_revision DESC LIMIT 1),'eligible')
  FROM semantic_source_links sl JOIN semantic_claims c ON c.claim_id=sl.claim_id JOIN semantic_scopes sc ON sc.scope_id=c.scope_id
- WHERE sl.event_id=? ORDER BY sl.source_link_id LIMIT 257`, knownAt, knownAt, e.id)
+ WHERE sl.event_id=? AND sl.authority<>'evie_proposed' ORDER BY sl.source_link_id LIMIT 257`, knownAt, knownAt, e.id)
 	if err != nil {
 		return err
 	}

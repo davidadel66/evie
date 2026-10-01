@@ -161,6 +161,13 @@ boundary, not silently widened to the whole session. If a later acceptance case
 requires recovering unrelated facts inside the same whole-content source, that
 requires a new approved provenance association; it is not manufactured here.
 
+Since harness review Stage 14 (M5), that association is made at approval time:
+a remember operation cites the exact sentence span holding its value, so
+retiring it suppresses that span and leaves the message's other sentences
+recallable. An Evie-proposed value cites its request message without any span
+and suppresses nothing. Whole-content citations recorded earlier keep their
+whole-message boundary; they are not narrowed after the fact.
+
 The event index has its own immutable generation and durable retained-row
 checkpoint. Initial backfill runs in bounded maintenance batches; eligible
 appends update the allowlisted projection inside the event transaction. Only
