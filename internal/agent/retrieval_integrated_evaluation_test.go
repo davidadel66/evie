@@ -236,7 +236,7 @@ type integratedClient struct {
 	encodedRequests       []json.RawMessage
 	scripted              func(integratedDispatch) openrouter.ChatResponse
 	history               *integratedHistory
-	cumulativeMemoryBytes int
+	cumulativeMemoryTally memoryDeliveryTally
 }
 
 func (c *integratedClient) ChatStream(ctx context.Context, request openrouter.ChatRequest, handlers openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
@@ -281,8 +281,9 @@ func (c *integratedClient) ChatStream(ctx context.Context, request openrouter.Ch
 			d.SourceTextBytes += len(source.Evidence)
 		}
 	}
-	c.cumulativeMemoryBytes += d.MemoryBytes + d.OutcomeReplayBytes
-	d.CumulativeMemoryBytes = c.cumulativeMemoryBytes
+	d.CumulativeMemoryBytes = c.cumulativeMemoryTally.add(c.t, request, func(message openrouter.Message) bool {
+		return c.history != nil && c.history.chargedToolIDs[message.ToolCallID]
+	})
 	events, err := c.f.store.LoadEvents(ctx, c.reader.ID)
 	if err != nil {
 		return openrouter.ChatResponse{}, err

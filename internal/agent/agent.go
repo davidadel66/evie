@@ -353,7 +353,7 @@ func NewWithCompactorAndToolset(
 		scope:            scope,
 		history:          history,
 		owner:            owner,
-		composer:         NewContextComposer(CanonicalRequestEstimator{}),
+		composer:         NewContextComposer(CalibratedRequestEstimator{}),
 		timing:           defaultTurnTiming,
 		stepLimit:        stepLimit,
 	}
@@ -578,6 +578,10 @@ func approvalEventInputWithHashes(
 // making the trusted role and automatic-context policy explicit.
 func NewDelegatedWithToolset(client Client, profile openrouter.ContextProfile, history History, scope memory.ScopeContext, owner TurnOwnership, toolset tools.Toolset, instructions string) *Session {
 	s := NewWithToolset(client, profile, history, scope, owner, toolset, WithAutomaticMemoryRecall(false), WithModelMemoryRetrieval(false))
+	// A worker's working ceiling encodes its serialized request-byte
+	// allowance, so its budget stays at one token per byte rather than being
+	// scaled by a calibrated bytes-per-token ratio.
+	s.composer = NewContextComposer(CanonicalRequestEstimator{})
 	if scope.ParentSessionID == "" || instructions == "" {
 		s.configurationErr = errors.New("delegated session requires parent lineage and pinned instructions")
 	}

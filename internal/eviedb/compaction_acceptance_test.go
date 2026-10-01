@@ -352,7 +352,9 @@ func TestAutomaticCompactionCrossesWindowWithToolHistoryAcrossRestart(t *testing
 		t.Fatal(err)
 	}
 	const holder = memory.LeaseHolderID("automatic-compaction-acceptance")
-	profile := compactionAcceptanceProfile(t, "automatic/model", 600_000)
+	// Budgets are tokens. An uncalibrated session assumes 3 canonical bytes per
+	// token, so this 200,000-token ceiling is 600,000 request bytes.
+	profile := compactionAcceptanceProfile(t, "automatic/model", 200_000)
 	firstSummary := compactionAcceptanceSummary("automatic generation one")
 	firstConversation := &compactionAcceptanceClient{responses: []openrouter.ChatResponse{
 		compactionAcceptanceResponse("first answer"),
@@ -422,7 +424,7 @@ func TestAutomaticCompactionCrossesWindowWithToolHistoryAcrossRestart(t *testing
 		},
 	}
 	restarted := agent.NewWithCompactor(
-		secondConversation, secondCompactor, compactionAcceptanceProfile(t, "automatic/model", 330_000), store.BindHistory(sessionRecord.ID, holder),
+		secondConversation, secondCompactor, compactionAcceptanceProfile(t, "automatic/model", 110_000), store.BindHistory(sessionRecord.ID, holder),
 		sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
 	)
 	if err := restarted.Send(ctx, "Run the large tool after restart.", nilAgentEvents{}, nil, largeTool); err != nil {
@@ -544,6 +546,8 @@ func TestAutomaticCompactionPersistsDeterministicFailureAndCancellationEvidence(
 			}
 
 			conversation := &compactionAcceptanceClient{}
+			// A 76,667-token ceiling is 230,001 request bytes at the
+			// uncalibrated 3 bytes per token.
 			var compactor agent.Client
 			var cancel context.CancelFunc
 			sendCtx := ctx
@@ -553,7 +557,7 @@ func TestAutomaticCompactionPersistsDeterministicFailureAndCancellationEvidence(
 				sendCtx, cancel = context.WithCancel(ctx)
 				done := make(chan error, 1)
 				session := agent.NewWithCompactor(
-					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 230_000), history,
+					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 76_667), history,
 					sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
 				)
 				go func() { done <- session.Send(sendCtx, strings.Repeat("d", 8_000), nilAgentEvents{}, nil) }()
@@ -566,7 +570,7 @@ func TestAutomaticCompactionPersistsDeterministicFailureAndCancellationEvidence(
 				failing := &compactionAcceptanceErrorClient{err: errors.New("deterministic summary transport failure")}
 				compactor = failing
 				session := agent.NewWithCompactor(
-					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 230_000), history,
+					conversation, compactor, compactionAcceptanceProfile(t, "evidence/model", 76_667), history,
 					sessionRecord.ScopeContext(), store.BindTurnOwner(sessionRecord.ID, holder),
 				)
 				if err := session.Send(sendCtx, strings.Repeat("d", 8_000), nilAgentEvents{}, nil); err == nil {

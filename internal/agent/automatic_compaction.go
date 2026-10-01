@@ -22,11 +22,18 @@ func automaticCompactionRequired(serializedBytes, workingCeiling int64) bool {
 	return serializedBytes >= percentageFloor(workingCeiling, automaticCompactionThresholdPercent)
 }
 
+// automaticCompactionSummaryReserveBytes is the encoded summary size planning
+// reserves: the 16 KiB summary limit plus 25 percent for the JSON escaping of
+// typical Markdown. Every accepted summary is measured again before it is
+// committed, so an unusually escaped one cannot overrun the usable budget.
+const automaticCompactionSummaryReserveBytes = CompactionSummaryMaxBytes * 5 / 4
+
 // selectAutomaticCompaction first measures the complete projected request at
 // the active summary frontier. Under pressure it selects the smallest legal
-// contiguous prefix whose replacement by a maximum-sized summary leaves the
+// contiguous prefix whose replacement by a reserved-size summary leaves the
 // canonical request at or below the target. If no such prefix exists, an
-// unchanged projection within the usable input budget can still proceed.
+// unchanged projection within the usable input budget can still proceed. A
+// recovery from a provider context-length rejection is always under pressure.
 func selectAutomaticCompaction(
 	input ContextComposeInput,
 	composer *ContextComposer,
@@ -41,7 +48,8 @@ func selectAutomaticCompaction(
 	if err != nil {
 		return compactionPlan{}, true, err
 	}
-	if !automaticCompactionRequired(projection.estimate.SerializedBytes, profile.WorkingTokens) {
+	if input.RejectedRequestBytes <= 0 &&
+		!automaticCompactionRequired(projection.estimate.SerializedBytes, prepared.workingBytes()) {
 		return compactionPlan{}, false, nil
 	}
 
@@ -56,12 +64,12 @@ func selectAutomaticCompaction(
 	if len(compactionTurns) != len(turns) {
 		return compactionPlan{}, true, errors.New("automatic compaction turn projection is inconsistent")
 	}
-	compactorUsable, err := compactionUsableInputBytes(profile)
+	compactorUsable, err := compactionUsableInputBytes(profile, prepared.ratio)
 	if err != nil {
 		return compactionPlan{}, true, ErrNoLegalAutomaticCompaction
 	}
-	target := percentageFloor(profile.WorkingTokens, automaticCompactionTargetPercent)
-	planningSummary := maximumCanonicalCompactionSummary()
+	target := percentageFloor(prepared.workingBytes(), automaticCompactionTargetPercent)
+	planningSummary := planningCompactionSummary()
 	for retainedIndex := start + 1; retainedIndex <= activeIndex; retainedIndex++ {
 		covered := compactionTurns[start:retainedIndex]
 		if !covered[len(covered)-1].complete {
@@ -104,28 +112,38 @@ func selectAutomaticCompaction(
 			CoveredFirst:  covered[0].events[0],
 			CoveredLast:   covered[len(covered)-1].events[len(covered[len(covered)-1].events)-1],
 			FirstRetained: compactionTurns[retainedIndex].events[0],
+			summaryFits: func(summary string) (bool, error) {
+				actual := input
+				actual.Summary = &ContextSummary{
+					CompactionEventID: "automatic-planning", FirstRetainedEventID: turns[retainedIndex][0].ID, Content: summary,
+				}
+				projection, err := composer.projectAtStart(actual, prepared, retainedIndex)
+				if err != nil {
+					return false, err
+				}
+				return projection.estimate.SerializedBytes <= prepared.usable, nil
+			},
 		}, true, nil
 	}
 	// Pressure and the preferred compaction target are not hard input limits.
 	// Keep the full projected history when it fits, even if the active turn or
-	// maximum summary size makes the target unreachable.
+	// reserved summary size makes the target unreachable.
 	if projection.estimate.SerializedBytes <= prepared.usable {
 		return compactionPlan{}, false, nil
 	}
 	return compactionPlan{}, true, ErrNoLegalAutomaticCompaction
 }
 
-// maximumCanonicalCompactionSummary realizes the largest canonical JSON
-// encoding permitted by the summary byte limit. encoding/json expands '<' to
-// six bytes, so this bounds every accepted summary rather than only typical
-// prose containing no escaped characters.
-func maximumCanonicalCompactionSummary() string {
+// planningCompactionSummary stands in for the unknown summary while planning:
+// the required section headings filled to the reserved encoded size with text
+// that JSON encodes byte for byte.
+func planningCompactionSummary() string {
 	var summary strings.Builder
 	for _, heading := range memory.ContextCompactionSectionHeadings() {
 		fmt.Fprintf(&summary, "## %s\nkept\n\n", heading)
 	}
-	if summary.Len() < CompactionSummaryMaxBytes {
-		summary.WriteString(strings.Repeat("<", CompactionSummaryMaxBytes-summary.Len()))
+	if summary.Len() < automaticCompactionSummaryReserveBytes {
+		summary.WriteString(strings.Repeat("x", automaticCompactionSummaryReserveBytes-summary.Len()))
 	}
 	return summary.String()
 }
@@ -190,6 +208,23 @@ func (s *Session) performAutomaticCompaction(
 			category: memory.ContextCompactionSummaryInvalid,
 			cause:    causeProviderInvalid,
 			err:      err,
+		}
+	}
+	// Planning reserved a typical summary encoding; measure the real one
+	// before it can become the active generation.
+	if plan.summaryFits != nil {
+		fits, err := plan.summaryFits(summary)
+		if err != nil {
+			return nil, memory.Event{}, &automaticCompactionFailure{err: s.classifyLocalError(
+				coordinator, fmt.Errorf("measure automatic summary: %w", err),
+			)}
+		}
+		if !fits {
+			return nil, memory.Event{}, &automaticCompactionFailure{
+				category: memory.ContextCompactionSummaryInvalid,
+				cause:    causeProviderInvalid,
+				err:      errors.New("automatic summary does not fit the usable input budget"),
+			}
 		}
 	}
 

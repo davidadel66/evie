@@ -75,11 +75,14 @@ func (p TurnTerminalPayload) Validate(eventType EventType) error {
 		return errors.New("terminal turn ID must not be empty")
 	}
 	switch p.Stage {
-	case StageTurnStart, StageProvider, StageAssistantCommit, StageToolPrepare,
+	case StageTurnStart, StageAssistantCommit, StageToolPrepare,
 		StageToolApproval, StageToolExecute, StageToolCommit, StageContextCompaction:
 		if p.Classification == ClassificationContextOverflow {
 			return fmt.Errorf("context overflow cannot use lifecycle stage %q", p.Stage)
 		}
+	case StageProvider:
+		// A provider context-length rejection that survives its one
+		// compact-and-retry ends at the provider as context_overflow.
 	case StageContextCompose:
 	default:
 		return fmt.Errorf("invalid terminal lifecycle stage %q", p.Stage)
@@ -297,7 +300,10 @@ type ContextPlaceholderManifest struct {
 
 // ContextSnapshotPayload is a content-free manifest of one exact
 // conversational provider request. Content-bearing request fields deliberately
-// have no representation here.
+// have no representation here. BytesPerTokenMilli is the bytes-per-token
+// ratio, in thousandths, that converted token budgets to canonical bytes, and
+// CalibrationSamples counts the recorded provider measurements behind it; a
+// zero ratio is the original one-byte-per-token estimator.
 type ContextSnapshotPayload struct {
 	RepositoryInstructionsTurnID EventID                          `json:"repository_instructions_turn_id,omitempty"`
 	Memory                       *RetrievalReceipt                `json:"memory,omitempty"`
@@ -314,6 +320,8 @@ type ContextSnapshotPayload struct {
 	WorkingCeilingTokens         int64                            `json:"working_ceiling_tokens"`
 	OutputReserveTokens          int64                            `json:"output_reserve_tokens"`
 	EstimationMarginTokens       int64                            `json:"estimation_margin_tokens"`
+	BytesPerTokenMilli           int64                            `json:"bytes_per_token_milli,omitempty"`
+	CalibrationSamples           int                              `json:"calibration_samples,omitempty"`
 	UsableInputBytes             int64                            `json:"usable_input_bytes"`
 	SerializedBytes              int64                            `json:"serialized_bytes"`
 	RoughTokenEstimate           int64                            `json:"rough_token_estimate"`
@@ -364,13 +372,17 @@ func (p ContextSnapshotPayload) Validate() error {
 		p.OutputReserveTokens > math.MaxInt64-p.EstimationMarginTokens {
 		return errors.New("context snapshot budgets are inconsistent")
 	}
+	if p.BytesPerTokenMilli < 0 || p.CalibrationSamples < 0 ||
+		(p.BytesPerTokenMilli == 0 && p.CalibrationSamples != 0) {
+		return errors.New("context snapshot token ratio is invalid")
+	}
 	ceiling := min(p.HardWindowTokens, p.WorkingCeilingTokens)
 	if p.OutputReserveTokens+p.EstimationMarginTokens >= ceiling ||
-		p.UsableInputBytes != ceiling-p.OutputReserveTokens-p.EstimationMarginTokens {
+		p.UsableInputBytes != ContextBudgetBytes(ceiling-p.OutputReserveTokens-p.EstimationMarginTokens, p.BytesPerTokenMilli) {
 		return errors.New("context snapshot usable input does not match its budgets")
 	}
 	if p.SerializedBytes <= 0 || p.SerializedBytes > p.UsableInputBytes ||
-		p.RoughTokenEstimate != (p.SerializedBytes+3)/4 {
+		p.RoughTokenEstimate != ContextTokenEstimate(p.SerializedBytes, p.BytesPerTokenMilli) {
 		return errors.New("context snapshot request estimates are inconsistent")
 	}
 	if !validSHA256(p.RequestSHA256) {
@@ -407,6 +419,32 @@ func (p ContextSnapshotPayload) Validate() error {
 		seenPlaceholders[placeholder.EventID] = struct{}{}
 	}
 	return nil
+}
+
+// ContextBudgetBytes converts a token budget to canonical request bytes at a
+// bytes-per-token ratio given in thousandths, rounding down and saturating.
+// A zero ratio is the original estimator: one byte per token.
+func ContextBudgetBytes(tokens, bytesPerTokenMilli int64) int64 {
+	if bytesPerTokenMilli == 0 || tokens <= 0 {
+		return tokens
+	}
+	if tokens > math.MaxInt64/bytesPerTokenMilli {
+		return math.MaxInt64 / 1000
+	}
+	return tokens * bytesPerTokenMilli / 1000
+}
+
+// ContextTokenEstimate is the token estimate recorded for a request of the
+// given canonical bytes: rounded up at a calibrated ratio, or the original
+// rough bytes/4 diagnostic when the ratio is zero.
+func ContextTokenEstimate(bytes, bytesPerTokenMilli int64) int64 {
+	if bytesPerTokenMilli == 0 {
+		return (bytes + 3) / 4
+	}
+	if bytes > (math.MaxInt64-bytesPerTokenMilli)/1000 {
+		return math.MaxInt64 / bytesPerTokenMilli
+	}
+	return (bytes*1000 + bytesPerTokenMilli - 1) / bytesPerTokenMilli
 }
 
 func validSHA256(value string) bool {

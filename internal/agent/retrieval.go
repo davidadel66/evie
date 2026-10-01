@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"os"
@@ -53,6 +54,9 @@ type retrievalTurn struct {
 	lastReceipt    *memory.RetrievalReceipt
 	// gaps names coverage a Kernel budget cut short during this turn.
 	gaps []string
+	// deliveredUnits names the memory units already charged to delivered in
+	// this turn; resending one is not new delivery.
+	deliveredUnits map[[sha256.Size]byte]struct{}
 }
 
 func (s *Session) newRetrievalTurn() *retrievalTurn {
@@ -301,14 +305,17 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 		data.ReadingGuide, data.HistoricalOnly = "", nil
 		encoded, _ = json.Marshal(data)
 	}
-	limit := retrievalTurnBytes - r.delivered - r.requestReserve
-	if r.contextBytes > 0 {
-		limit = min(limit, r.contextBytes)
+	// Resending already delivered evidence is free; only new evidence draws on
+	// the turn's remaining memory budget. The request headroom bounds the
+	// whole message.
+	budget := retrievalTurnBytes - r.delivered - r.requestReserve
+	fits := func(message []byte, evidence []memory.RetrievalEvidence) bool {
+		return (r.contextBytes <= 0 || len(message) <= r.contextBytes) && r.newEvidenceBytes(evidence) <= budget
 	}
 	for {
 		content = "EVIE_MEMORY_DATA\n" + string(encoded)
 		serialized, _ = json.Marshal(openrouter.Message{Role: "user", Content: content})
-		if len(serialized) <= limit || len(data.Evidence) == 0 {
+		if fits(serialized, data.Evidence) || len(data.Evidence) == 0 {
 			break
 		}
 		receipt.Status, data.Status = memory.RetrievalExhausted, memory.RetrievalExhausted
@@ -325,7 +332,7 @@ func (r *retrievalTurn) renderProjection() (string, *memory.RetrievalReceipt) {
 				}
 				body, _ := json.Marshal(candidate)
 				message, _ := json.Marshal(openrouter.Message{Role: "user", Content: "EVIE_MEMORY_DATA\n" + string(body)})
-				if len(message) > limit {
+				if !fits(message, candidate.Evidence) {
 					remove = i
 					break
 				}

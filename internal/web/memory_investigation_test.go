@@ -126,7 +126,10 @@ func TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches(t *t
 	if inspected.AnswerID != answer || inspected.Status != "partial" || len(inspected.Requests) != 4 {
 		t.Fatalf("answer inspection lost the partial state or request sequence: %s", inspection.Body.String())
 	}
-	charged := 0
+	// Each distinct memory byte is charged once per turn: every evidence item
+	// of the memory message (as escaped there) and every replayed retrieval
+	// outcome message, the first time its exact bytes are sent.
+	charged, delivered := 0, map[string]bool{}
 	for i, request := range client.reqs {
 		wire, err := openrouter.RequestBytes(request)
 		if err != nil {
@@ -149,12 +152,33 @@ func TestMemoryInvestigationHTTPPreservesPartialAfterFailedAndEmptySearches(t *t
 				}
 				replayed++
 			}
-			if message.Role == "user" && strings.HasPrefix(message.Content, "EVIE_MEMORY_DATA\n") || message.Role == "tool" && retrievalOutcome {
+			if message.Role == "user" && strings.HasPrefix(message.Content, "EVIE_MEMORY_DATA\n") {
+				var block struct {
+					Evidence []json.RawMessage `json:"evidence"`
+				}
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(message.Content, "EVIE_MEMORY_DATA\n")), &block); err != nil {
+					t.Fatal(err)
+				}
+				for _, item := range block.Evidence {
+					escaped, err := json.Marshal(string(item))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !delivered["evidence:"+string(item)] {
+						delivered["evidence:"+string(item)] = true
+						charged += len(escaped) - 2
+					}
+				}
+			}
+			if message.Role == "tool" && retrievalOutcome {
 				encoded, err := json.Marshal(message)
 				if err != nil {
 					t.Fatal(err)
 				}
-				charged += len(encoded)
+				if !delivered["outcome:"+string(encoded)] {
+					delivered["outcome:"+string(encoded)] = true
+					charged += len(encoded)
+				}
 			}
 		}
 		if replayed != i {

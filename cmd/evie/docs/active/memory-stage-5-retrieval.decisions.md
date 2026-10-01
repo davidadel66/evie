@@ -1,5 +1,25 @@
 # Memory Stage 5 retrieval — decisions
 
+- **2026-10-01 — The cumulative memory budget charges each delivered byte once
+  per turn (harness review C2, Stage 4).** The 36 KiB per-turn bound still
+  limits new memory evidence, but admission no longer charges a request's
+  complete memory message and every replayed memory-tool outcome again on each
+  provider request. A unit is one evidence item of `EVIE_MEMORY_DATA`, charged
+  for the escaped bytes it adds to that message and keyed by its exact
+  encoding, or one replayed memory-tool outcome message. It is charged the
+  first time its exact bytes reach the provider in the turn; resending it is
+  not new delivery. The envelope (status, gaps, reading guide, historical IDs)
+  is harness metadata and is not charged. A turn with one search followed by
+  ordinary tool calls therefore no longer stops with a misleading
+  `context_overflow` around its eleventh request. When new evidence would
+  exceed the remaining budget, already delivered evidence stays, only new
+  evidence that fits is admitted, and the projection is marked `exhausted`.
+  The former early close of investigation when one request used more than
+  half the remaining budget is removed, because the reader's resend is free.
+  `CumulativeMemoryBytes` in `turn-evidence-v1` receipts records this distinct
+  delivery. A hard overflow of new delivery still stops the turn before
+  another provider request. Request-headroom fitting is unchanged.
+
 - **2026-10-01 — Bound spans, Evie-proposed sources and ambiguous names in
   recall (harness review M5, M6, Stage 14).** Follows the 2026-10-01 memory
   decisions on owner-span binding and Entity identity.

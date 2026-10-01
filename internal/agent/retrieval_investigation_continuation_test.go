@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -55,7 +54,8 @@ func TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting(t
 	if len(receipts) != 3 {
 		t.Fatalf("receipts=%d", len(receipts))
 	}
-	cumulative := 0
+	var delivery memoryDeliveryTally
+	first := 0
 	for i, receipt := range receipts {
 		if len(receipt.Evidence) != 1 || receipt.Evidence[0].ClaimID != saved.ClaimID {
 			t.Fatalf("original source lost: %+v", receipt)
@@ -63,14 +63,14 @@ func TestMemoryInvestigationReusesUnchangedEvidenceWithExactDeliveryAccounting(t
 		if !reflect.DeepEqual(receipt.Evidence, receipts[0].Evidence) {
 			t.Fatal("unchanged continuation repinned or changed immutable references")
 		}
-		for _, message := range client.reqs[i+1].Messages {
-			if strings.HasPrefix(message.Content, "EVIE_MEMORY_DATA\n") || message.Role == "tool" && message.ToolCallID == "search" {
-				raw, err := json.Marshal(message)
-				if err != nil {
-					t.Fatal(err)
-				}
-				cumulative += len(raw)
-			}
+		// Each delivered memory byte is charged once per turn; resending the
+		// unchanged evidence and search outcome adds nothing.
+		cumulative := delivery.add(t, client.reqs[i+1], func(message openrouter.Message) bool { return message.ToolCallID == "search" })
+		if i == 0 {
+			first = cumulative
+		}
+		if cumulative != first {
+			t.Fatalf("unchanged continuation %d was charged again: %d after %d", i, cumulative, first)
 		}
 		accounting := receipt.Investigation
 		reused := 0

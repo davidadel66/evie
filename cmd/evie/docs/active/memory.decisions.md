@@ -440,6 +440,54 @@
   compactor call. No-legal-cut overflow is unchanged, a successful compaction
   does not suppress later attempts, and the next turn starts fresh.
 
+- **2026-10-01 - automatic compaction plans against a realistic summary and verifies it.**
+  Harness review Stage 4 (C1) amends the 2026-08-30 "maximum-sized validated
+  summary" planning rule. Planning reserved the worst-case canonical encoding
+  of a 16 KiB summary, about 97 KB because `encoding/json` escapes `<` to six
+  bytes. With the roughly 25 KB system prompt and tool schemas no prefix could
+  reach the 60 percent target below a working ceiling of about 205k, so a
+  session over budget on a 128k or 200k model stopped on `context_overflow`
+  every turn, and larger windows over-compacted. Planning now reserves 20 KiB
+  of encoded summary: the 16 KiB limit plus 25 percent JSON-escaping headroom.
+  Before an accepted summary is appended, the request carrying the real
+  summary at the planned frontier is measured. If it exceeds the usable input
+  budget, the summary is not committed and the attempt fails as
+  `summary_invalid` under the existing failure rules. A committed summary that
+  leaves the request above the 60 percent target but within usable input
+  proceeds, since the target is a planning preference (2026-09-29); the former
+  post-compaction target check is removed. `/context` reports the request the
+  turn path would build: without pressure the exact composition, which names
+  any older turns it omits; under pressure the unchanged projection at the
+  active summary frontier (headroom may be negative) with the planned
+  compaction's covered and retained event IDs, or a warning that the next turn
+  would fail with `context_overflow`. It never reports a silently trimmed
+  composition as headroom. Web `/compact` remains harness review Stage 5.
+
+- **2026-10-01 - a provider context-length rejection gets one compact-and-retry.**
+  Harness review Stage 4 (C8). The OpenRouter client derives one structural
+  bit from a bounded non-2xx error body: a 400 whose body names a
+  context-length condition, or any 413. The body is still never retained or
+  surfaced. When the conversational provider rejects a request this way before
+  any live output, the same iteration is composed once more for the same
+  trigger. Its bytes-per-token ratio is capped at what the rejection proved,
+  the rejected bytes over the hard window less the output reserve, which puts
+  the rejected request above the usable budget; automatic compaction is always
+  planned; and the retry is sent only after a compaction succeeds. The durable
+  shape is trigger, rejected request's snapshot, automatic `context_compacted`,
+  retry snapshot. This is the only case in which a snapshot does not
+  immediately follow its trigger or that trigger's compaction, and SQLite
+  correlation and agent history validation accept exactly this one extra
+  snapshot. The retry is not a new model response for the step limit and does
+  not rerun automatic recall. The 2026-10-01 Stage 3 rule holds: a compaction
+  that already failed in the turn is not attempted, and recovery fails with
+  that failure's classification at `context_compose`. No legal cut fails with
+  `context_overflow` at `context_compose`, and a fresh compaction failure uses
+  its existing classification at `context_compaction`. If the provider also
+  rejects the retry, the turn fails with `context_overflow` at the `provider`
+  stage, now allowed for that classification and distinct from
+  `provider_error`. A turn makes at most one compact-and-retry; an ordinary
+  400 is unchanged.
+
 - **2026-08-30 - accepted compaction chains reconstruct and advance from append-only evidence.**
   Every manual compaction first reconstructs the complete accepted chain from
   canonical `context_compacted` events, never from context snapshots or
@@ -535,6 +583,34 @@
   omit-whole projection. If the active turn cannot fit, the provider is not
   called and the turn records `context_overflow` at `context_compose` with the
   fixed safe message.
+
+- **2026-10-01 - token budgets use a calibrated bytes-per-token ratio.**
+  Harness review Stage 4 (C3) amends the one-token-per-byte estimator above,
+  the 2026-08-30 deferral of exact tokenization in automatic compaction, and
+  the 2026-08-25 rule that usage is never budget state. Canonical request bytes
+  are still measured exactly. The token budgets (hard window, working ceiling,
+  output reserve, estimation margin) are converted to canonical bytes with a
+  per-model ratio derived deterministically from the session's durable
+  history, so a request and `/context` see the same ratio for the same stored
+  samples. A sample pairs an assistant message's recorded `input_tokens` with
+  the canonical bytes of the context snapshot sent for the same trigger, when
+  that snapshot's canonical model is the current one; usage samples are kept
+  within 1 to 6 bytes per token. A request the provider rejected for context
+  length adds a sample of its bytes over the hard window less the output
+  reserve. The ratio is the minimum of the newest 32 samples. Until 8 samples
+  exist it is also at most 3 bytes per token, and with none it is 3. Typical
+  text measures 4.2 to 4.7 canonical bytes per provider token, so the estimate
+  stays an over-estimate of tokens while a new session already gets three
+  times the former byte budget. The minimum, the floor, and the C8
+  compact-and-retry bound the error when new content tokenizes more densely
+  than the samples. Snapshots record `bytes_per_token_milli` and
+  `calibration_samples`, and their usable bytes and token estimate are exact
+  functions of that ratio; older snapshots without the fields keep their
+  one-byte-per-token meaning and validate unchanged. The estimator version
+  becomes `calibrated-provider-json-bytes-v3`. Delegated workers keep one
+  token per byte, because their working ceiling encodes a serialized
+  request-byte allowance. Usage remains immutable episodic diagnostics read
+  only to derive the ratio; exact tokenization remains deferred.
 
 - **2026-08-30 - context snapshots and local diagnostics contain manifests, never request content.**
   After final composition and before provider authorization, every conversational

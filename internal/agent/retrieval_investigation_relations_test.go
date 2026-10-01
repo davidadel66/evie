@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -10,14 +11,21 @@ import (
 	"github.com/davidadel66/evie/internal/tools"
 )
 
+// Resending delivered evidence no longer draws on the cumulative memory
+// budget (harness review C2), so trimming here comes from the request's
+// actual headroom: each check returns about 3 KB, and the 39,500-byte profile
+// fits the full three-item projection on the third request but not later.
 func TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations(t *testing.T) {
+	t.Setenv(TurnStepLimitEnv, "12")
 	f := newRetrievalFixture(t)
 	source := f.global()
 	readerRemember(t, f, source, "live_in", "Remember that I live in Boston.", "Boston")
 	readerRemember(t, f, source, "live_in", "Remember that I live in Portland.", "Portland")
 	f.converse(source, "I live in Chicago now.")
 	f.refresh()
-	check := tools.Tool{Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "continue_check", Parameters: openrouter.Parameter{Type: "object"}}}, Execute: func(context.Context, string) (string, error) { return "Checked the current request.", nil }}
+	check := tools.Tool{Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "continue_check", Parameters: openrouter.Parameter{Type: "object"}}}, Execute: func(context.Context, string) (string, error) {
+		return "Checked the current request. " + strings.Repeat("ok ", 1000), nil
+	}}
 	sawRelations, sawTrim := false, false
 	client := &expansionBoundaryClient{reply: func(request openrouter.ChatRequest, call int) step {
 		if call == 0 {
@@ -56,7 +64,9 @@ func TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations(t *testing
 		}
 		return assistantStep("", nil, toolCall(fmt.Sprintf("check-%d", call), "continue_check", `{}`))
 	}}
-	err := f.session(f.global(), client, check).Send(context.Background(), "Investigate the conflicting city records.", &recorder{}, nil)
+	session := withByteBudgets(f.session(f.global(), client, check))
+	session.profile = automaticTestProfile(t, 39_500)
+	err := session.Send(context.Background(), "Investigate the conflicting city records.", &recorder{}, nil)
 	if !IsContextOverflow(err) || !sawRelations || !sawTrim {
 		t.Fatalf("fixture failed to exercise bounded relation trimming: err=%v relations=%v trimmed=%v", err, sawRelations, sawTrim)
 	}

@@ -29,7 +29,7 @@ func (r *retrievalTurn) fitContext(input ContextComposeInput, composer *ContextC
 	if err != nil {
 		return input, err
 	}
-	ceiling := min(prepared.usable, percentageFloor(prepared.profile.WorkingTokens, automaticCompactionThresholdPercent)-1)
+	ceiling := min(prepared.usable, percentageFloor(prepared.workingBytes(), automaticCompactionThresholdPercent)-1)
 	if baseline.estimate.SerializedBytes > ceiling {
 		return input, nil
 	}

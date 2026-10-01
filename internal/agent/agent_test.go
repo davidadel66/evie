@@ -457,7 +457,8 @@ func TestSendRecordsContextOverflowBeforeProviderTransport(t *testing.T) {
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
 	}, newFakeTurnOwner())
 
-	err := session.Send(context.Background(), strings.Repeat("x", 250000), &recorder{}, nil)
+	// Larger than 241,664 usable tokens at the uncalibrated 3 bytes per token.
+	err := session.Send(context.Background(), strings.Repeat("x", 750000), &recorder{}, nil)
 	if !errors.Is(err, ErrContextOverflow) {
 		t.Fatalf("Send error=%v, want ErrContextOverflow", err)
 	}
@@ -1282,9 +1283,9 @@ func TestSessionSendProjectsOldToolResultWithoutChangingDurableHistory(t *testin
 	}
 	history := &fakeHistory{events: events}
 	client := &fakeClient{steps: []step{assistantStep("done", nil)}}
-	session := New(client, profile, history, memory.ScopeContext{
+	session := withByteBudgets(New(client, profile, history, memory.ScopeContext{
 		OwnerID: memory.LocalOwnerID, SessionID: "test-session",
-	}, newFakeTurnOwner())
+	}, newFakeTurnOwner()))
 	session.reasoning = nil
 
 	if err := session.Send(context.Background(), "continue", &recorder{}, nil); err != nil {

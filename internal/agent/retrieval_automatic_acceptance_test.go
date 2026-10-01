@@ -99,7 +99,7 @@ func TestAutomaticMemoryRecallRevalidatesEgressAfterCompactionBeforeDispatch(t *
 	}}
 	client := &fakeClient{steps: []step{assistantStep("I can help from the current request.", nil)}}
 	holder = "automatic-pressure"
-	session := NewWithCompactorAndToolset(client, compactor, automaticTestProfile(t, 230000), f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions))
+	session := withByteBudgets(NewWithCompactorAndToolset(client, compactor, automaticTestProfile(t, 230000), f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions)))
 	if err := session.Send(context.Background(), "Suggest dinner. "+strings.Repeat("d", 8000), &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}

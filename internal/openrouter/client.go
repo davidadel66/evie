@@ -51,7 +51,11 @@ type StreamError struct {
 	// such as a refused, reset, or closed connection. Timeouts, idle streams,
 	// and caller cancellation are never marked.
 	NoResponse bool
-	Err        error
+	// ContextLengthExceeded marks a non-2xx response whose bounded error body
+	// says the request exceeded the model's context window. Only this bit is
+	// derived from the untrusted body; the body itself is never retained.
+	ContextLengthExceeded bool
+	Err                   error
 }
 
 func (e *StreamError) Error() string { return e.Err.Error() }
@@ -75,15 +79,46 @@ func transportFailure(caller context.Context, watchdog *streamWatchdog, err erro
 
 // httpStatusFailure reports a non-2xx response by status alone. Provider error
 // bodies are untrusted and may echo credentials or request content, so a
-// bounded prefix is drained for connection reuse and never surfaced.
+// bounded prefix is drained for connection reuse and never surfaced. A 400 or
+// 413 body is only scanned for a context-length rejection marker.
 func httpStatusFailure(resp *http.Response, message string) error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxProviderErrorBody))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxProviderErrorBody))
 	return &StreamError{
-		Kind:       StreamProviderError,
-		HTTPStatus: resp.StatusCode,
-		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
-		Err:        errors.New(message),
+		Kind:                  StreamProviderError,
+		HTTPStatus:            resp.StatusCode,
+		RetryAfter:            parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
+		ContextLengthExceeded: contextLengthRejection(resp.StatusCode, body),
+		Err:                   errors.New(message),
 	}
+}
+
+// contextLengthMarkers are lowercase phrases providers use when a request is
+// larger than the model's context window.
+var contextLengthMarkers = []string{
+	"context_length_exceeded",
+	"context length",
+	"context window",
+	"maximum context",
+	"prompt is too long",
+	"input is too long",
+	"reduce the length",
+}
+
+// contextLengthRejection reports whether a client-error response refused the
+// request for its size. Server errors never qualify; 413 always does.
+func contextLengthRejection(status int, body []byte) bool {
+	switch status {
+	case http.StatusRequestEntityTooLarge:
+		return true
+	case http.StatusBadRequest:
+		text := strings.ToLower(string(body))
+		for _, marker := range contextLengthMarkers {
+			if strings.Contains(text, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // parseRetryAfter accepts delta-seconds or an HTTP date and clamps the result

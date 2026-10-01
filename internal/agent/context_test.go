@@ -137,17 +137,30 @@ func TestContextComposerRejectsAnActiveTurnThatCannotFit(t *testing.T) {
 	}
 }
 
-func TestDefaultContextBudgetAdmitsAtMost241664SerializedBytes(t *testing.T) {
+func TestDefaultContextBudgetAdmitsAtMost241664Tokens(t *testing.T) {
 	profile, err := openrouter.NewExplicitContextProfile("test/model", 262144, 262144, 16384)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := usableInputBytes(profile.Diagnostics())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != 241664 {
-		t.Fatalf("usable input=%d, want 241664", got)
+	for _, test := range []struct {
+		name  string
+		ratio tokenRatio
+		want  int64
+	}{
+		// The original estimator charges one token per serialized byte.
+		{name: "one byte per token", want: 241664},
+		// Before calibration a session assumes at most 3 bytes per token.
+		{name: "uncalibrated", ratio: tokenRatio{milli: uncalibratedBytesPerTokenMilli}, want: 724992},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := usableInputBytes(profile.Diagnostics(), test.ratio)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("usable input=%d, want %d", got, test.want)
+			}
+		})
 	}
 }
 

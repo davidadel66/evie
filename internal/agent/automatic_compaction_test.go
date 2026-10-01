@@ -20,6 +20,14 @@ func automaticPressureHistory(size int) []memory.Event {
 	return events
 }
 
+// withByteBudgets pins the original one-token-per-byte estimator, so tests of
+// compaction and projection mechanics keep their byte-denominated budgets.
+// Calibrated budgets have their own tests in context_budget_test.go.
+func withByteBudgets(session *Session) *Session {
+	session.composer = NewContextComposer(CanonicalRequestEstimator{})
+	return session
+}
+
 func automaticTestProfile(t *testing.T, working int64) openrouter.ContextProfile {
 	t.Helper()
 	profile, err := openrouter.NewExplicitContextProfile("test/model", working, working, 1)
@@ -49,8 +57,10 @@ func TestAutomaticCompactionPressureBoundary(t *testing.T) {
 
 func TestAutomaticCompactionSelectsWholePrefixToSixtyPercent(t *testing.T) {
 	profile := automaticTestProfile(t, 230_000)
+	// Covering turn-1 alone leaves turn-2 plus the reserved summary above
+	// the 60 percent target, so the smallest legal prefix is two turns.
 	events := completedCompactionTurn("turn-1", 1, strings.Repeat("a", 85_000), "answer")
-	events = append(events, completedCompactionTurn("turn-2", 3, strings.Repeat("b", 85_000), "answer")...)
+	events = append(events, completedCompactionTurn("turn-2", 3, strings.Repeat("b", 100_000), "answer")...)
 	events = append(events, completedCompactionTurn("turn-3", 5, strings.Repeat("c", 10_000), "answer")...)
 	events = append(events, memory.Event{
 		ID: "active", Sequence: 7, Type: memory.EventUserMessage, Role: memory.RoleUser,
@@ -72,14 +82,14 @@ func TestAutomaticCompactionSelectsWholePrefixToSixtyPercent(t *testing.T) {
 	}
 	input.Summary = &ContextSummary{
 		CompactionEventID: "planning", FirstRetainedEventID: plan.FirstRetained.ID,
-		Content: maximumCanonicalCompactionSummary(),
+		Content: planningCompactionSummary(),
 	}
 	composed, err := NewContextComposer(CanonicalRequestEstimator{}).Compose(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if composed.Snapshot.SerializedBytes > percentageFloor(composed.Snapshot.WorkingCeilingTokens, automaticCompactionTargetPercent) {
-		t.Fatalf("worst-case planned request=%d, target=%d", composed.Snapshot.SerializedBytes,
+		t.Fatalf("reserved-summary planned request=%d, target=%d", composed.Snapshot.SerializedBytes,
 			percentageFloor(composed.Snapshot.WorkingCeilingTokens, automaticCompactionTargetPercent))
 	}
 }
@@ -148,8 +158,8 @@ func TestSendAutomaticallyCompactsBeforeConversationAndSnapshotsAcceptedSummary(
 		Role: "assistant", Content: validCompactionSummary(),
 	}}}}}}}
 	conversation := &fakeClient{steps: []step{assistantStep("done", nil)}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 
 	if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); err != nil {
 		t.Fatal(err)
@@ -201,8 +211,8 @@ func TestSendProceedsWithStableAutomaticFailureCategoryWhenUnchangedRequestFits(
 			history := &fakeHistory{events: automaticPressureHistory(190_000)}
 			compactor := &fakeClient{steps: []step{test.step}}
 			conversation := &fakeClient{steps: []step{assistantStep("done", nil)}}
-			session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-				memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+			session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+				memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 			if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); err != nil {
 				t.Fatal(err)
 			}
@@ -241,8 +251,8 @@ func TestSendAutomaticFailureKeepsPriorAcceptedSummaryActive(t *testing.T) {
 	history := &fakeHistory{events: events}
 	compactor := &fakeClient{steps: []step{assistantStep("generated but invalid", nil)}}
 	conversation := &fakeClient{steps: []step{assistantStep("done", nil)}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -282,8 +292,8 @@ func TestSendMapsTerminalAutomaticCompactionFailureBeforeConversation(t *testing
 			history := &fakeHistory{events: automaticPressureHistory(210_000)}
 			compactor := &fakeClient{steps: []step{test.step}}
 			conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-			session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-				memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+			session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+				memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 			if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); err == nil {
 				t.Fatal("Send unexpectedly succeeded")
 			}
@@ -315,8 +325,8 @@ func TestSendAttemptsAutomaticCompactionAgainOnPostToolIteration(t *testing.T) {
 	}}
 	large := echoTool("large", false, nil)
 	large.Execute = func(context.Context, string) (string, error) { return strings.Repeat("z", 25_000), nil }
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 250_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 250_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(context.Background(), "run it", &recorder{}, nil, large); err != nil {
 		t.Fatal(err)
 	}
@@ -356,8 +366,8 @@ func TestSendContinuesAfterLargeToolGroupWhenNoCompactionTargetFits(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	session := NewWithCompactor(conversation, compactor, profile, history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, profile, history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(context.Background(), "read both pages", &recorder{}, nil, first, second); err != nil {
 		t.Fatal(err)
 	}
@@ -426,8 +436,8 @@ func TestSendDoesNotRetryFailedAutomaticCompactionWithinTurn(t *testing.T) {
 		assistantStep("done", nil),
 		assistantStep("done again", nil),
 	}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 
 	if err := session.Send(context.Background(), "repeat it", &recorder{}, nil, echoTool("echo", false, nil)); err != nil {
 		t.Fatal(err)
@@ -476,8 +486,8 @@ func TestSendFailsWithRememberedCompactionFailureWhenLaterIterationNoLongerFits(
 	}}
 	large := echoTool("large", false, nil)
 	large.Execute = func(context.Context, string) (string, error) { return strings.Repeat("z", 70_000), nil }
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 400_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 400_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 
 	err := session.Send(context.Background(), "run it", &recorder{}, nil, large)
 	if err == nil {
@@ -506,8 +516,8 @@ func TestSendRecordsRecoverableAutomaticSummaryPersistenceFailure(t *testing.T) 
 		Role: "assistant", Content: validCompactionSummary(),
 	}}}}}}}
 	conversation := &fakeClient{steps: []step{assistantStep("done", nil)}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -533,8 +543,8 @@ func TestSendRecordsRecoverableAutomaticSummaryPersistenceFailure(t *testing.T) 
 func TestSendCancellationBeforeAutomaticCompactionCommitKeepsOldSummary(t *testing.T) {
 	history := &fakeHistory{events: automaticPressureHistory(190_000)}
 	compactor := &cancellingCompactor{entered: make(chan struct{})}
-	session := NewWithCompactor(&fakeClient{}, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(&fakeClient{}, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- session.Send(ctx, strings.Repeat("d", 8_000), &recorder{}, nil) }()
@@ -570,8 +580,8 @@ func TestSendCancellationAfterAutomaticCompactionCommitKeepsSummaryAtCompose(t *
 		Role: "assistant", Content: validCompactionSummary(),
 	}}}}}}}
 	conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(ctx, strings.Repeat("d", 8_000), &recorder{}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Send error=%v, want context canceled", err)
 	}
@@ -612,8 +622,8 @@ func TestSendCancellationAfterAutomaticSnapshotKeepsSnapshotDurable(t *testing.T
 		Role: "assistant", Content: validCompactionSummary(),
 	}}}}}}}
 	conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	if err := session.Send(ctx, strings.Repeat("d", 8_000), &recorder{}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Send error=%v, want context canceled", err)
 	}
@@ -649,8 +659,8 @@ func TestSendLeaseLossFencesAutomaticCompactionAndLaterWrites(t *testing.T) {
 	conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
 	compactor := &fakeClient{steps: []step{assistantStep(validCompactionSummary(), nil)}}
 	owner := &scriptedOwner{authorizeErrAt: 1, authorizeErr: errFakeLeaseLost}
-	session := NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, owner)
+	session := withByteBudgets(NewWithCompactor(conversation, compactor, automaticTestProfile(t, 230_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, owner))
 	if err := session.Send(context.Background(), strings.Repeat("d", 8_000), &recorder{}, nil); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("Send error=%v, want lease loss", err)
 	}
@@ -669,8 +679,8 @@ func TestSendLeaseLossFencesAutomaticCompactionAndLaterWrites(t *testing.T) {
 func TestSendNoLegalAutomaticCutRecordsSafeContextOverflow(t *testing.T) {
 	history := &fakeHistory{}
 	conversation := &fakeClient{steps: []step{assistantStep("must not run", nil)}}
-	session := NewWithCompactor(conversation, conversation, automaticTestProfile(t, 100_000), history,
-		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	session := withByteBudgets(NewWithCompactor(conversation, conversation, automaticTestProfile(t, 100_000), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner()))
 	err := session.Send(context.Background(), strings.Repeat("x", 96_000), &recorder{}, nil)
 	if !errors.Is(err, ErrContextOverflow) || len(conversation.reqs) != 0 {
 		t.Fatalf("Send error=%v conversation requests=%d", err, len(conversation.reqs))

@@ -189,6 +189,10 @@ func (s *Session) runOwnedTurn(
 	// A failed automatic compaction is remembered for the rest of this turn
 	// and never retried in it; each attempt may wait out the compactor bound.
 	var compactionFailure *automaticCompactionFailure
+	// A provider context-length rejection gets exactly one compact-and-retry
+	// per turn: the same iteration is composed again for its trigger.
+	var rejectedRequestBytes int64
+	contextRetryUsed := false
 	for {
 		if !coordinator.transitionIfActive(memory.StageContextCompose, func() {
 			progress.requestParentID = requestParentID
@@ -196,7 +200,10 @@ func (s *Session) runOwnedTurn(
 			return s.observeTurnContext(coordinator)
 		}
 		rendered.begin()
-		iteration++
+		retrying := rejectedRequestBytes > 0
+		if !retrying {
+			iteration++
+		}
 		// The last permitted model response is requested without tools, so
 		// a runaway tool loop ends with an answer from what the turn has.
 		finalStep := iteration >= s.stepLimit
@@ -221,7 +228,7 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
 			}
 		}
-		if iteration == 1 && !s.automaticRecallDisabled {
+		if iteration == 1 && !retrying && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
 		if workingFolder != "" {
@@ -234,8 +241,9 @@ func (s *Session) runOwnedTurn(
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
-			Continuation: continuation,
+			Continuation: continuation, RejectedRequestBytes: rejectedRequestBytes,
 		}
+		rejectedRequestBytes = 0
 		if finalStep {
 			composeInput.ToolChoice = "none"
 			composeInput.FinalStepNote = stepLimitNote(s.stepLimit)
@@ -256,6 +264,12 @@ func (s *Session) runOwnedTurn(
 				return overflow
 			}
 			return s.classifyLocalError(coordinator, err)
+		}
+		if retrying && !required {
+			// The retry is only ever a compacted request.
+			overflow := fmt.Errorf("%w: no automatic compaction can shrink the request the provider rejected", ErrContextOverflow)
+			coordinator.selectCause(causeContextOverflow, overflow, 0)
+			return overflow
 		}
 		failureCategory := memory.ContextCompactionFailureNone
 		if required {
@@ -289,7 +303,7 @@ func (s *Session) runOwnedTurn(
 				if fitErr != nil {
 					return s.classifyLocalError(coordinator, fitErr)
 				}
-				if !fits {
+				if !fits || retrying {
 					if failure.cause != causeNone {
 						coordinator.selectCause(failure.cause, failure.err, failure.httpStatus)
 						return failure.err
@@ -337,12 +351,6 @@ func (s *Session) runOwnedTurn(
 			coordinator.selectCause(causeContextOverflow, overflow, 0)
 			return overflow
 		}
-		if required && failureCategory == memory.ContextCompactionFailureNone &&
-			composed.Snapshot.SerializedBytes > percentageFloor(composed.Snapshot.WorkingCeilingTokens, automaticCompactionTargetPercent) {
-			overflow := fmt.Errorf("%w: accepted automatic summary did not satisfy its target", ErrContextOverflow)
-			coordinator.selectCause(causeContextOverflow, overflow, 0)
-			return overflow
-		}
 		composed.Snapshot.CompactionFailureCategory = failureCategory
 		recall.recordAccounting(composed.Snapshot.Memory)
 		if err := composed.Snapshot.Validate(); err != nil {
@@ -378,7 +386,16 @@ func (s *Session) runOwnedTurn(
 
 		res, err := s.callProvider(coordinator, lease, req, ev, rendered)
 		if err != nil {
-			return err
+			var rejection *providerContextRejection
+			if !errors.As(err, &rejection) {
+				return err
+			}
+			if contextRetryUsed {
+				return s.failContextRejection(coordinator, rejection)
+			}
+			contextRetryUsed = true
+			rejectedRequestBytes = composed.Snapshot.SerializedBytes
+			continue
 		}
 		if err := s.observeTurnContext(coordinator); err != nil {
 			return err
@@ -674,6 +691,9 @@ func (s *Session) callProvider(
 		}
 		delay, retry := providerRetryDelay(err, attempt, s.timing.providerRetryBase)
 		if !retry || callbackFired || coordinator.result().kind != causeNone || coordinator.ctx.Err() != nil {
+			if rejection := contextRejection(coordinator, err, callbackFired); rejection != nil {
+				return openrouter.ChatResponse{}, rejection
+			}
 			return openrouter.ChatResponse{}, s.classifyProviderError(coordinator, err)
 		}
 		if waitErr := s.timing.waitProviderRetry(coordinator.ctx, delay); waitErr != nil {

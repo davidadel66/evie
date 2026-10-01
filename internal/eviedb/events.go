@@ -556,8 +556,26 @@ func validateContextSnapshotCorrelation(
 		return fmt.Errorf("validate latest context snapshot trigger: %w", err)
 	}
 	if memory.EventID(latestEventID) != parentID {
+		// After a provider context-length rejection, the single retry follows
+		// the rejected request's snapshot and its automatic compaction.
+		retry := false
+		if latestSequence == parentSequence+2 {
+			var betweenType string
+			var betweenParent sql.NullString
+			err := executor.queryRowContext(ctx, `
+				SELECT event_type, parent_id
+				FROM events
+				WHERE session_id = ? AND sequence = ?
+			`, sessionID, parentSequence+1).Scan(&betweenType, &betweenParent)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("validate rejected context snapshot: %w", err)
+			}
+			retry = err == nil && memory.EventType(betweenType) == memory.EventContextSnapshot &&
+				betweenParent.Valid && memory.EventID(betweenParent.String) == parentID
+		}
 		if memory.EventID(latestEventID) != snapshot.ActiveCompactionEventID ||
-			memory.EventType(latestEventType) != memory.EventContextCompacted || latestSequence != parentSequence+1 {
+			memory.EventType(latestEventType) != memory.EventContextCompacted ||
+			(latestSequence != parentSequence+1 && !retry) {
 			return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
 		}
 		compacted, _, err := decodeCanonicalContextCompactedPayload(json.RawMessage(latestPayloadJSON))

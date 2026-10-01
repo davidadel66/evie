@@ -58,7 +58,7 @@ func memoryInvestigationContext(t *testing.T, earlier, constraint string, wantCl
 		assistantStep("I can report only the supplied original sources; further memory is limited.", nil),
 	}}
 	holder := memory.LeaseHolderID("context-investigation")
-	session := NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false))
+	session := withByteBudgets(NewWithToolset(client, profile, f.store.BindHistory(reader.ID, holder), reader.ScopeContext(), f.store.BindTurnOwner(reader.ID, holder), tools.NewToolset(definitions), WithAutomaticMemoryRecall(false)))
 	before, err := f.store.InspectClaims(context.Background(), source.ScopeContext(), memory.ClaimQuery{})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func memoryInvestigationContext(t *testing.T, earlier, constraint string, wantCl
 	if len(snapshots) != len(client.reqs) {
 		t.Fatal("provider requests and immutable receipts differ")
 	}
-	cumulative := 0
+	var delivery memoryDeliveryTally
 	for i, request := range client.reqs {
 		wire, err := openrouter.RequestBytes(request)
 		if err != nil {
@@ -109,14 +109,10 @@ func memoryInvestigationContext(t *testing.T, earlier, constraint string, wantCl
 		for _, message := range request.Messages {
 			questionPresent = questionPresent || message.Role == "user" && message.Content == question
 			discussionPresent = discussionPresent || message.Role == "user" && message.Content == earlier
-			if strings.HasPrefix(message.Content, "EVIE_MEMORY_DATA\n") || message.Role == "tool" && (message.ToolCallID == "accepted" || message.ToolCallID == "original") {
-				encoded, err := json.Marshal(message)
-				if err != nil {
-					t.Fatal(err)
-				}
-				cumulative += len(encoded)
-			}
 		}
+		cumulative := delivery.add(t, request, func(message openrouter.Message) bool {
+			return message.ToolCallID == "accepted" || message.ToolCallID == "original"
+		})
 		if !questionPresent || !discussionPresent || cumulative > 36*1024 {
 			t.Fatal("memory displaced the original request or escaped cumulative delivery")
 		}

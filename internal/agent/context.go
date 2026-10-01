@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	ContextComposerVersion           = "context-composer-v2"
-	CanonicalRequestEstimatorVersion = "canonical-provider-json-bytes-v2"
+	ContextComposerVersion            = "context-composer-v2"
+	CanonicalRequestEstimatorVersion  = "canonical-provider-json-bytes-v2"
+	CalibratedRequestEstimatorVersion = "calibrated-provider-json-bytes-v3"
 )
 
 var ErrContextOverflow = errors.New("agent: request exceeds configured model context")
@@ -90,6 +91,11 @@ type ContextComposeInput struct {
 	// FinalStepNote, when set, is a trusted harness instruction appended
 	// after the conversation as the request's last message.
 	FinalStepNote string
+	// RejectedRequestBytes, when positive, is the canonical size of this
+	// trigger's request that the provider rejected for context length. The
+	// one recovery request assumes no more bytes per token than that
+	// rejection proved and always plans an automatic compaction.
+	RejectedRequestBytes int64
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -120,7 +126,16 @@ type ContextDiagnostics struct {
 	CurrentDurableEventID  memory.EventID                       `json:"current_durable_event_id,omitempty"`
 	CurrentDurableSequence int64                                `json:"current_durable_sequence,omitempty"`
 	HeadroomBytes          int64                                `json:"headroom_bytes"`
+	AutomaticCompaction    *ContextCompactionPlanDiagnostics    `json:"automatic_compaction,omitempty"`
 	Warnings               []string                             `json:"warnings,omitempty"`
+}
+
+// ContextCompactionPlanDiagnostics names, by content-free event identity, the
+// automatic compaction the next request would attempt before it is sent.
+type ContextCompactionPlanDiagnostics struct {
+	CoveredFirstEventID  memory.EventID `json:"covered_first_event_id"`
+	CoveredLastEventID   memory.EventID `json:"covered_last_event_id"`
+	FirstRetainedEventID memory.EventID `json:"first_retained_event_id"`
 }
 
 type ContextComposer struct {
@@ -141,11 +156,18 @@ type contextProjection struct {
 
 type contextPreparation struct {
 	profile     openrouter.ContextProfileDiagnostics
+	ratio       tokenRatio
 	usable      int64
 	turns       [][]memory.Event
 	activeIndex int
 	trigger     memory.Event
 	start       int
+}
+
+// workingBytes is the working ceiling in canonical request bytes, the base of
+// the automatic compaction threshold and target.
+func (p contextPreparation) workingBytes() int64 {
+	return p.ratio.budgetBytes(p.profile.WorkingTokens)
 }
 
 func (c *ContextComposer) prepare(
@@ -161,11 +183,13 @@ func (c *ContextComposer) prepare(
 		return contextPreparation{}, errors.New("context summary identity and content must be present")
 	}
 	profile := input.Profile.Diagnostics()
-	usable, err := usableInputBytes(profile)
-	if err != nil {
+	if err := validateDurableContextHistory(input.Events); err != nil {
 		return contextPreparation{}, err
 	}
-	if err := validateDurableContextHistory(input.Events); err != nil {
+	ratio := contextTokenRatio(c.estimator, input.Events, profileCanonicalModel(profile),
+		profile.HardWindowTokens, profile.OutputReserveTokens, input.RejectedRequestBytes)
+	usable, err := usableInputBytes(profile, ratio)
+	if err != nil {
 		return contextPreparation{}, err
 	}
 	turns, activeIndex, trigger, err := contextRootTurns(input.Events, input.ActiveRootID, input.TriggerEventID)
@@ -190,7 +214,7 @@ func (c *ContextComposer) prepare(
 		}
 	}
 	return contextPreparation{
-		profile: profile, usable: usable, turns: turns, activeIndex: activeIndex, trigger: trigger, start: start,
+		profile: profile, ratio: ratio, usable: usable, turns: turns, activeIndex: activeIndex, trigger: trigger, start: start,
 	}, nil
 }
 
@@ -301,8 +325,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 	if err != nil {
 		return ComposedContext{}, err
 	}
-	profile, usable, turns := prepared.profile, prepared.usable, prepared.turns
-	activeIndex, trigger, start := prepared.activeIndex, prepared.trigger, prepared.start
+	usable, activeIndex, start := prepared.usable, prepared.activeIndex, prepared.start
 	var projection contextProjection
 	for {
 		projection, err = c.projectAtStart(input, prepared, start)
@@ -321,12 +344,26 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		}
 		start++
 	}
-
-	first := turns[start][0]
-	canonicalModel := profile.CanonicalModel
-	if canonicalModel == "" {
-		canonicalModel = profile.ConfiguredModel
+	snapshot, err := c.projectionSnapshot(input, prepared, start, projection)
+	if err != nil {
+		return ComposedContext{}, err
 	}
+	if err := snapshot.Validate(); err != nil {
+		return ComposedContext{}, fmt.Errorf("validate context snapshot: %w", err)
+	}
+	return ComposedContext{Request: projection.request, Snapshot: snapshot}, nil
+}
+
+// projectionSnapshot is the content-free manifest of one projected request.
+// Callers validate it before it can describe a request that is sent.
+func (c *ContextComposer) projectionSnapshot(
+	input ContextComposeInput,
+	prepared contextPreparation,
+	start int,
+	projection contextProjection,
+) (memory.ContextSnapshotPayload, error) {
+	profile := prepared.profile
+	first := prepared.turns[start][0]
 	// A final-step note trails the conversation and is accounted as history.
 	historyMessages := len(projection.conversation)
 	if input.FinalStepNote != "" {
@@ -336,7 +373,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		projection.request, historyMessages, input.Summary != nil,
 	)
 	if err != nil {
-		return ComposedContext{}, err
+		return memory.ContextSnapshotPayload{}, err
 	}
 	snapshot := memory.ContextSnapshotPayload{
 		Memory:                       input.MemoryReceipt,
@@ -346,7 +383,7 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		EstimatorVersion:             c.estimator.Version(),
 		Iteration:                    input.Iteration,
 		ConfiguredModel:              profile.ConfiguredModel,
-		CanonicalModel:               canonicalModel,
+		CanonicalModel:               profileCanonicalModel(profile),
 		AdvertisedModel:              profile.AdvertisedModel,
 		ProfileSource:                string(profile.Source),
 		AdvertisedWindowTokens:       profile.AdvertisedWindowTokens,
@@ -354,14 +391,15 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		WorkingCeilingTokens:         profile.WorkingTokens,
 		OutputReserveTokens:          profile.OutputReserveTokens,
 		EstimationMarginTokens:       profile.EstimationMarginTokens,
-		UsableInputBytes:             usable,
+		BytesPerTokenMilli:           prepared.ratio.milli,
+		UsableInputBytes:             prepared.usable,
 		SerializedBytes:              projection.estimate.SerializedBytes,
-		RoughTokenEstimate:           projection.estimate.RoughTokens,
+		RoughTokenEstimate:           memory.ContextTokenEstimate(projection.estimate.SerializedBytes, prepared.ratio.milli),
 		RequestSHA256:                projection.estimate.RequestSHA256,
 		RetainedFirstEventID:         first.ID,
 		RetainedFirstSequence:        first.Sequence,
-		RetainedLastEventID:          trigger.ID,
-		RetainedLastSequence:         trigger.Sequence,
+		RetainedLastEventID:          prepared.trigger.ID,
+		RetainedLastSequence:         prepared.trigger.Sequence,
 		MessageCount:                 len(projection.request.Messages),
 		ToolSchemaCount:              len(projection.request.Tools),
 		SystemMessageBytes:           systemBytes,
@@ -371,13 +409,20 @@ func (c *ContextComposer) Compose(input ContextComposeInput) (ComposedContext, e
 		RequestSettingsBytes:         settingsBytes,
 		Placeholders:                 toolResultPlaceholderManifests(projection.selectedOriginal, projection.selectedProjected),
 	}
+	if prepared.ratio.milli > 0 {
+		snapshot.CalibrationSamples = prepared.ratio.samples
+	}
 	if input.Summary != nil {
 		snapshot.ActiveCompactionEventID = input.Summary.CompactionEventID
 	}
-	if err := snapshot.Validate(); err != nil {
-		return ComposedContext{}, fmt.Errorf("validate context snapshot: %w", err)
+	return snapshot, nil
+}
+
+func profileCanonicalModel(profile openrouter.ContextProfileDiagnostics) string {
+	if profile.CanonicalModel != "" {
+		return profile.CanonicalModel
 	}
-	return ComposedContext{Request: projection.request, Snapshot: snapshot}, nil
+	return profile.ConfiguredModel
 }
 
 func percentageFloor(value int64, percent int64) int64 {
@@ -462,7 +507,7 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 		}
 		repository = repoinstructions.Render(snapshot)
 	}
-	composed, err := s.composer.Compose(ContextComposeInput{
+	projection, compaction, planWarnings, err := s.composer.inspectNextRequest(ContextComposeInput{
 		RepositoryInstructions: repository,
 		Profile:                s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
@@ -472,9 +517,10 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 		return ContextDiagnostics{}, fmt.Errorf("compose hypothetical context: %w", err)
 	}
 	diagnostics := ContextDiagnostics{
-		Profile: s.profile.Diagnostics(), LatestSnapshot: latest, Projection: composed.Snapshot,
+		Profile: s.profile.Diagnostics(), LatestSnapshot: latest, Projection: projection,
 		CurrentDurableEventID: currentEventID, CurrentDurableSequence: maxSequence,
-		HeadroomBytes: composed.Snapshot.UsableInputBytes - composed.Snapshot.SerializedBytes,
+		HeadroomBytes:       projection.UsableInputBytes - projection.SerializedBytes,
+		AutomaticCompaction: compaction, Warnings: planWarnings,
 	}
 	if diagnostics.Profile.Source == openrouter.ContextProfileBuiltinFallback {
 		diagnostics.Warnings = append(diagnostics.Warnings, "context profile uses built-in fallback metadata")
@@ -492,6 +538,56 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	return diagnostics, nil
 }
 
+// inspectNextRequest describes the request the turn path would build for
+// input, using the same planning as a turn. Without pressure it is exactly
+// the composed request. Under pressure the turn compacts first or fails, so
+// the unchanged projection at the active summary frontier is reported with
+// the planned compaction, never a silently trimmed composition.
+func (c *ContextComposer) inspectNextRequest(
+	input ContextComposeInput,
+) (memory.ContextSnapshotPayload, *ContextCompactionPlanDiagnostics, []string, error) {
+	prepared, err := c.prepare(input)
+	if err != nil {
+		return memory.ContextSnapshotPayload{}, nil, nil, err
+	}
+	plan, required, planErr := selectAutomaticCompaction(input, c)
+	if planErr != nil && !errors.Is(planErr, ErrNoLegalAutomaticCompaction) {
+		return memory.ContextSnapshotPayload{}, nil, nil, planErr
+	}
+	if !required {
+		composed, err := c.Compose(input)
+		if err != nil {
+			return memory.ContextSnapshotPayload{}, nil, nil, err
+		}
+		var warnings []string
+		if composed.Snapshot.RetainedFirstEventID != prepared.turns[prepared.start][0].ID {
+			warnings = append(warnings, fmt.Sprintf(
+				"the next request omits older turns before %s to fit the usable input budget",
+				composed.Snapshot.RetainedFirstEventID))
+		}
+		return composed.Snapshot, nil, warnings, nil
+	}
+	projection, err := c.projectAtStart(input, prepared, prepared.start)
+	if err != nil {
+		return memory.ContextSnapshotPayload{}, nil, nil, err
+	}
+	snapshot, err := c.projectionSnapshot(input, prepared, prepared.start, projection)
+	if err != nil {
+		return memory.ContextSnapshotPayload{}, nil, nil, err
+	}
+	if planErr != nil {
+		return snapshot, nil, []string{
+			"the next request cannot fit: no legal automatic compaction reaches the usable input budget, so the turn would fail with context_overflow",
+		}, nil
+	}
+	return snapshot, &ContextCompactionPlanDiagnostics{
+			CoveredFirstEventID: plan.CoveredFirst.ID, CoveredLastEventID: plan.CoveredLast.ID,
+			FirstRetainedEventID: plan.FirstRetained.ID,
+		}, []string{fmt.Sprintf(
+			"the next request will first run automatic compaction through %s, retaining from %s",
+			plan.CoveredLast.ID, plan.FirstRetained.ID)}, nil
+}
+
 func snapshotMatchesProfile(snapshot memory.ContextSnapshotPayload, profile openrouter.ContextProfileDiagnostics) bool {
 	canonical := profile.CanonicalModel
 	if canonical == "" {
@@ -504,14 +600,14 @@ func snapshotMatchesProfile(snapshot memory.ContextSnapshotPayload, profile open
 		snapshot.EstimationMarginTokens == profile.EstimationMarginTokens
 }
 
-func usableInputBytes(profile openrouter.ContextProfileDiagnostics) (int64, error) {
+func usableInputBytes(profile openrouter.ContextProfileDiagnostics, ratio tokenRatio) (int64, error) {
 	ceiling := min(profile.HardWindowTokens, profile.WorkingTokens)
 	if ceiling <= 0 || profile.OutputReserveTokens <= 0 || profile.EstimationMarginTokens <= 0 ||
 		profile.OutputReserveTokens > math.MaxInt64-profile.EstimationMarginTokens ||
 		profile.OutputReserveTokens+profile.EstimationMarginTokens >= ceiling {
 		return 0, errors.New("context profile has no usable input budget")
 	}
-	return ceiling - profile.OutputReserveTokens - profile.EstimationMarginTokens, nil
+	return ratio.budgetBytes(ceiling - profile.OutputReserveTokens - profile.EstimationMarginTokens), nil
 }
 
 func contextRootTurns(
@@ -674,10 +770,14 @@ func validateDurableContextHistory(events []memory.Event) error {
 			return fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
 		}
 		parent, ok := byID[event.ParentID]
-		if !ok || (parent.index != i-1 && parent.index != i-2) {
+		// The single compact-and-retry after a provider context-length
+		// rejection follows the rejected request's snapshot for this trigger.
+		retry := ok && parent.index == i-3 && events[i-2].Type == memory.EventContextSnapshot &&
+			events[i-2].ParentID == event.ParentID
+		if !ok || (parent.index != i-1 && parent.index != i-2 && !retry) {
 			return fmt.Errorf("context snapshot event %q does not immediately follow its durable parent", event.ID)
 		}
-		if parent.index == i-2 {
+		if parent.index < i-1 {
 			compaction := events[i-1]
 			if compaction.Type != memory.EventContextCompacted || payload.ActiveCompactionEventID != compaction.ID {
 				return fmt.Errorf("context snapshot event %q has an invalid intervening compaction", event.ID)

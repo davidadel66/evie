@@ -149,7 +149,8 @@ func TestTextlessReasoningClosesBeforeToolExecution(t *testing.T) {
 func TestResponsesOversizedContinuationStopsBeforeNextDispatch(t *testing.T) {
 	t.Setenv("EVIE_REASONING", "low")
 	first := assistantStep("", nil, toolCall("call-1", "echo", `{}`))
-	opaque, err := json.Marshal(map[string]any{"type": "reasoning", "id": "rs_1", "summary": []any{}, "encrypted_content": strings.Repeat("x", 300000)})
+	// Larger than 241,664 usable tokens at the uncalibrated 3 bytes per token.
+	opaque, err := json.Marshal(map[string]any{"type": "reasoning", "id": "rs_1", "summary": []any{}, "encrypted_content": strings.Repeat("x", 800000)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -98,48 +98,46 @@ func TestMemoryInvestigationCanFollowNewInformationWithAFullEvidenceSet(t *testi
 	}
 }
 
-func TestMemoryInvestigationChargesReplayedOutcomesAndStopsWithSupportedFindings(t *testing.T) {
+// Replayed memory-tool outcomes and resent evidence are charged once per turn
+// (harness review C2), so ordinary continuations keep every supported finding
+// without exhausting the cumulative memory budget.
+func TestMemoryInvestigationChargesReplayedOutcomesOnceAndKeepsSupportedFindings(t *testing.T) {
 	f := newRetrievalFixture(t)
 	source := f.global()
 	f.remember(source, memory.MemoryEverywhere, "moonstone keepsake")
 	f.converse(source, "The indigo observatory experiment is provisional.")
 	f.refresh()
 	check := tools.Tool{Schema: openrouter.Tool{Type: "function", Function: openrouter.Function{Name: "continue_check", Parameters: openrouter.Parameter{Type: "object"}}}, Execute: func(context.Context, string) (string, error) { return "Checked the current request.", nil }}
-	charged, exhausted := 0, false
+	var delivery memoryDeliveryTally
+	first := 0
 	client := &expansionBoundaryClient{reply: func(request openrouter.ChatRequest, call int) step {
-		for _, message := range request.Messages {
-			if strings.HasPrefix(message.Content, "EVIE_MEMORY_DATA\n") || message.Role == "tool" && strings.HasPrefix(message.Content, "[begin untrusted semantic memory") {
-				encoded, err := json.Marshal(message)
-				if err != nil {
-					t.Fatal(err)
-				}
-				charged += len(encoded)
-			}
-		}
+		charged := delivery.add(t, request, func(message openrouter.Message) bool {
+			return strings.HasPrefix(message.Content, "[begin untrusted semantic memory")
+		})
 		if charged > 36*1024 {
-			t.Errorf("actual cumulative memory messages escaped the declared 36 KiB bound: %d", charged)
+			t.Errorf("actual cumulative memory delivery escaped the declared 36 KiB bound: %d", charged)
 			return assistantStep("A budget violation was observed.", nil)
 		}
 		if call == 0 {
 			return assistantStep("", nil, toolCall("accepted", "memory_search", `{"query":"moonstone"}`), toolCall("original", "memory_search_conversations", `{"query":"indigo"}`))
 		}
-		if strings.Contains(retrievalData(t, request), `"status":"exhausted"`) {
-			if len(expansionBoundaryEvidence(t, request)) == 0 {
-				t.Fatal("exhaustion discarded every supported finding before the final answer")
-			}
-			exhausted = true
-			return assistantStep("The supplied sources establish a moonstone keepsake and a provisional observatory experiment. Further investigation is limited by the memory budget; no unsupported negative conclusion follows.", nil)
+		if call == 1 {
+			first = charged
 		}
-		if call >= 40 {
-			t.Fatal("memory budget did not stop repeated delivery")
+		if charged != first || len(expansionBoundaryEvidence(t, request)) != 2 ||
+			strings.Contains(retrievalData(t, request), `"status":"exhausted"`) {
+			t.Fatalf("continuation %d was recharged or lost supported findings: charged=%d first=%d", call, charged, first)
+		}
+		if call == 20 {
+			return assistantStep("The supplied sources establish a moonstone keepsake and a provisional observatory experiment.", nil)
 		}
 		return assistantStep("", nil, toolCall(fmt.Sprintf("check-%d", call), "continue_check", `{}`))
 	}}
 	if err := f.session(f.global(), client, check).Send(context.Background(), "Investigate the keepsake and observatory, checking the current request as needed.", &recorder{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !exhausted {
-		t.Fatal("the provider never received the explicit exhausted state")
+	if len(client.reqs) != 21 {
+		t.Fatalf("provider requests=%d", len(client.reqs))
 	}
 }
 

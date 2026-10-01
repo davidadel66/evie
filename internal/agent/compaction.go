@@ -234,6 +234,9 @@ type compactionPlan struct {
 	CoveredFirst           memory.Event
 	CoveredLast            memory.Event
 	FirstRetained          memory.Event
+	// summaryFits, set by automatic planning, reports whether the request
+	// with the generated summary at the planned frontier fits usable input.
+	summaryFits func(summary string) (bool, error)
 }
 
 type acceptedCompaction struct {
@@ -310,7 +313,10 @@ func selectManualCompaction(
 		return compactionPlan{}, ErrNothingEligibleForCompaction
 	}
 
-	usable, err := compactionUsableInputBytes(profile.Diagnostics())
+	diagnostics := profile.Diagnostics()
+	ratio := contextTokenRatio(estimator, events, profileCanonicalModel(diagnostics),
+		diagnostics.HardWindowTokens, diagnostics.OutputReserveTokens, 0)
+	usable, err := compactionUsableInputBytes(diagnostics, ratio)
 	if err != nil {
 		return compactionPlan{}, err
 	}
@@ -352,7 +358,7 @@ func selectManualCompaction(
 	}, nil
 }
 
-func compactionUsableInputBytes(profile openrouter.ContextProfileDiagnostics) (int64, error) {
+func compactionUsableInputBytes(profile openrouter.ContextProfileDiagnostics, ratio tokenRatio) (int64, error) {
 	ceiling := min(profile.HardWindowTokens, profile.WorkingTokens)
 	reserve := CompactionOutputReserveTokens
 	if openrouter.UsesResponses(profile.ConfiguredModel) {
@@ -364,7 +370,7 @@ func compactionUsableInputBytes(profile openrouter.ContextProfileDiagnostics) (i
 		reserve >= ceiling-profile.EstimationMarginTokens {
 		return 0, errors.New("context profile has no usable compactor input budget")
 	}
-	return ceiling - reserve - profile.EstimationMarginTokens, nil
+	return ratio.budgetBytes(ceiling - reserve - profile.EstimationMarginTokens), nil
 }
 
 func compactionRootTurns(events []memory.Event) ([]compactionRootTurn, error) {
