@@ -105,8 +105,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialize Subagents: %v", err)
 	}
+	// Unrecoverable records are isolated per attempt and retried by the
+	// background recovery loop, so they must not block startup.
 	if _, err := kernelStore.RecoverSubagents(context.Background()); err != nil {
-		log.Fatalf("recover Subagents: %v", err)
+		log.Printf("recover Subagents: %v", err)
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
