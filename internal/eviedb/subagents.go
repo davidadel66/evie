@@ -16,25 +16,35 @@ import (
 	"github.com/google/uuid"
 )
 
-// subagentExecutionsTable is the attempt table. The 2026-10-01 amendment adds
-// the terminal state 'partial' for a child that wrapped up at its budget.
+// subagentExecutionsTable is the attempt table. The 2026-10-01 amendments add
+// the terminal state 'partial' for a child that wrapped up at its budget, and
+// let one child session hold several attempts: its original assignment and
+// each continuation, of which at most one is unfinished.
 const subagentExecutionsTable = `CREATE TABLE IF NOT EXISTS subagent_executions (
  id TEXT PRIMARY KEY, parent_session_id TEXT NOT NULL REFERENCES sessions(id),
  idempotency_key TEXT NOT NULL, request_digest TEXT NOT NULL,
- child_session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id),
+ child_session_id TEXT NOT NULL REFERENCES sessions(id),
  state TEXT NOT NULL CHECK(state IN ('admitted','running','succeeded','partial','failed','cancelled','interrupted')),
  record_json TEXT NOT NULL, UNIQUE(parent_session_id,idempotency_key)
  )`
 
-const subagentExecutionsIndex = `CREATE INDEX IF NOT EXISTS subagent_execution_state ON subagent_executions(state,parent_session_id)`
+const subagentExecutionsIndexes = `CREATE INDEX IF NOT EXISTS subagent_execution_state ON subagent_executions(state,parent_session_id);
+ CREATE INDEX IF NOT EXISTS subagent_execution_child ON subagent_executions(child_session_id);
+ CREATE UNIQUE INDEX IF NOT EXISTS subagent_execution_live_child ON subagent_executions(child_session_id) WHERE state IN ('admitted','running');`
 
-// preBudgetSubagentStates is the state check of tables created before 'partial'.
-const preBudgetSubagentStates = `CHECK(state IN ('admitted','running','succeeded','failed','cancelled','interrupted'))`
+// Shapes of earlier tables: before continuation each child session had
+// exactly one attempt, and before 'partial' the state check was narrower.
+const (
+	continuableChildColumn   = "child_session_id TEXT NOT NULL REFERENCES sessions(id)"
+	singleAttemptChildColumn = "child_session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id)"
+	preBudgetSubagentStates  = `CHECK(state IN ('admitted','running','succeeded','failed','cancelled','interrupted'))`
+)
 
-// ensureSubagentSchema creates the attempt table or widens an earlier one's
-// state check. SQLite cannot alter a CHECK, so the earlier table is rebuilt
-// with every row copied unchanged. The shape is re-read under the write lock
-// so competing startups migrate once; an unknown shape fails closed.
+// ensureSubagentSchema creates the attempt table or rebuilds an earlier one.
+// SQLite cannot drop a column's UNIQUE or alter a CHECK, so an earlier table
+// is rebuilt once with every row and rowid copied unchanged. The shape is
+// re-read under the write lock so competing startups migrate once; an
+// unknown shape fails closed.
 func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
 	return withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
 		var definition string
@@ -43,17 +53,18 @@ func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
 			if _, err = conn.ExecContext(ctx, subagentExecutionsTable); err != nil {
 				return err
 			}
-			_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+			_, err = conn.ExecContext(ctx, subagentExecutionsIndexes)
 			return err
 		}
 		if err != nil {
 			return err
 		}
-		if strings.Contains(definition, "'partial'") {
-			_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+		if strings.Contains(definition, "'partial'") && strings.Contains(definition, continuableChildColumn) {
+			_, err = conn.ExecContext(ctx, subagentExecutionsIndexes)
 			return err
 		}
-		if !strings.Contains(definition, preBudgetSubagentStates) {
+		if !strings.Contains(definition, singleAttemptChildColumn) ||
+			(!strings.Contains(definition, "'partial'") && !strings.Contains(definition, preBudgetSubagentStates)) {
 			return errors.New("unsupported subagent execution table schema")
 		}
 		var references int
@@ -63,17 +74,17 @@ func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
 		if references != 0 {
 			return errors.New("unsupported subagent execution foreign reference")
 		}
-		replacement := strings.Replace(subagentExecutionsTable, "IF NOT EXISTS subagent_executions", "subagent_executions_partial", 1)
+		replacement := strings.Replace(subagentExecutionsTable, "IF NOT EXISTS subagent_executions", "subagent_executions_continuable", 1)
 		if _, err = conn.ExecContext(ctx, replacement); err != nil {
 			return fmt.Errorf("create subagent execution table: %w", err)
 		}
-		if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions_partial(rowid,id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json)
+		if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions_continuable(rowid,id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json)
  SELECT rowid,id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json FROM subagent_executions;
  DROP TABLE subagent_executions;
- ALTER TABLE subagent_executions_partial RENAME TO subagent_executions;`); err != nil {
+ ALTER TABLE subagent_executions_continuable RENAME TO subagent_executions;`); err != nil {
 			return fmt.Errorf("migrate subagent executions: %w", err)
 		}
-		_, err = conn.ExecContext(ctx, subagentExecutionsIndex)
+		_, err = conn.ExecContext(ctx, subagentExecutionsIndexes)
 		return err
 	})
 }
@@ -96,12 +107,8 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 		if err := s.authorizeSubagentParent(ctx, conn, p, receipt); err != nil {
 			return err
 		}
-		var payload string
-		if err := conn.QueryRowContext(ctx, `SELECT payload_json FROM events WHERE id=?`, p.IntentEventID).Scan(&payload); err != nil {
-			return err
-		}
-		var intent memory.ToolIntentPayload
-		if err := json.Unmarshal([]byte(payload), &intent); err != nil {
+		intent, err := committedSubagentIntent(ctx, conn, p, delegation.ToolName)
+		if err != nil {
 			return err
 		}
 		var committed struct {
@@ -134,16 +141,8 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 			fresh++
 		}
 		if fresh > 0 {
-			// Every child admitted for this parent turn counts, whichever
-			// delegation call admitted it and however it ended. An unreadable
-			// record proves no turn and never blocks admission.
-			var started int
-			if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM subagent_executions WHERE parent_session_id=?
- AND CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.parent.SourceEventID') END=?`, p.Scope.SessionID, p.SourceEventID).Scan(&started); err != nil {
+			if err := admitWithinTurnLimit(ctx, conn, p, policy, fresh); err != nil {
 				return err
-			}
-			if started+fresh > policy.PerTurn {
-				return &delegation.TurnLimitError{Limit: policy.PerTurn, Started: started, Requested: fresh}
 			}
 		}
 		for i, r := range requests {
@@ -174,6 +173,150 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 		return s.authorizeSubagentParent(ctx, conn, p, receipt)
 	})
 	return attempts, err
+}
+
+// admitWithinTurnLimit refuses fresh attempts beyond the per-turn limit.
+// Every attempt admitted for this parent turn counts, whichever delegation or
+// continuation call admitted it and however it ended. An unreadable record
+// proves no turn and never blocks admission.
+func admitWithinTurnLimit(ctx context.Context, conn *sql.Conn, p delegation.Parent, policy delegation.Policy, fresh int) error {
+	var started int
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM subagent_executions WHERE parent_session_id=?
+ AND CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.parent.SourceEventID') END=?`, p.Scope.SessionID, p.SourceEventID).Scan(&started); err != nil {
+		return err
+	}
+	if started+fresh > policy.PerTurn {
+		return &delegation.TurnLimitError{Limit: policy.PerTurn, Started: started, Requested: fresh}
+	}
+	return nil
+}
+
+// committedSubagentIntent reads the parent's committed tool intent, which
+// authorizeSubagentParent proved outstanding in the current turn, and
+// requires it to be a call of tool.
+func committedSubagentIntent(ctx context.Context, conn *sql.Conn, p delegation.Parent, tool string) (memory.ToolIntentPayload, error) {
+	var payload string
+	var intent memory.ToolIntentPayload
+	if err := conn.QueryRowContext(ctx, `SELECT payload_json FROM events WHERE id=? AND session_id=?`, p.IntentEventID, p.Scope.SessionID).Scan(&payload); err != nil {
+		return intent, err
+	}
+	if err := json.Unmarshal([]byte(payload), &intent); err != nil {
+		return intent, err
+	}
+	if intent.Call.Name != tool {
+		return intent, fmt.Errorf("%w: the committed invocation is not %s", delegation.ErrAuthority, tool)
+	}
+	return intent, nil
+}
+
+// AdmitSubagentContinuation admits a continuation of one of p's finished
+// attempts as a new attempt on the same child session. It is authorized like
+// a fresh delegation, by the current parent turn's live lease and committed
+// continue_research intent, never by the authority of the attempt it extends,
+// and counts toward the current turn's limit. A retry of the same intent
+// returns the attempt it admitted. Only the child's latest report can be
+// extended, and only while none of its attempts is unfinished.
+func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Parent, executionID, message string, policy delegation.Policy, dispatchID string) (delegation.Attempt, error) {
+	if dispatchID == "" {
+		return delegation.Attempt{}, errors.New("subagent dispatch identity is required")
+	}
+	if err := policy.ValidateContinuation(executionID, message); err != nil {
+		return delegation.Attempt{}, err
+	}
+	request := delegation.Continuation{ExecutionID: executionID, Message: message}
+	digest := delegation.Digest(request)
+	key := delegation.ContinuationKey(p.IntentEventID)
+	var a delegation.Attempt
+	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+		retained, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE parent_session_id=? AND idempotency_key=?`, p.Scope.SessionID, key))
+		if err == nil {
+			if retained.Continues == nil || retained.Continues.ExecutionID != executionID || retained.Digest != digest {
+				return delegation.ErrConflict
+			}
+			if err = s.authorizeSubagentParent(ctx, conn, p, retained.Receipt); err != nil {
+				return err
+			}
+			if _, err = s.inspectSubagent(ctx, conn, p, retained.ID); err != nil {
+				return err
+			}
+			a = retained
+			return nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		original, err := s.inspectSubagent(ctx, conn, p, executionID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: %q", delegation.ErrNotFound, executionID)
+		}
+		if err != nil {
+			return err
+		}
+		if err = s.authorizeSubagentParent(ctx, conn, p, original.Receipt); err != nil {
+			return err
+		}
+		intent, err := committedSubagentIntent(ctx, conn, p, delegation.ContinueToolName)
+		if err != nil {
+			return err
+		}
+		var committed delegation.Continuation
+		if err = json.Unmarshal([]byte(intent.Call.Arguments), &committed); err != nil || committed != request {
+			return errors.New("continuation does not match the committed invocation")
+		}
+		if err = resumableSubagent(ctx, conn, original); err != nil {
+			return err
+		}
+		if err = admitWithinTurnLimit(ctx, conn, p, policy, 1); err != nil {
+			return err
+		}
+		var after int64
+		if err = conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0) FROM events WHERE session_id=?`, original.Child.ID).Scan(&after); err != nil {
+			return err
+		}
+		now := s.now().UTC()
+		assignment := delegation.Assignment{Key: key, Objective: message, TaskID: original.Assignment.TaskID}
+		a = delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: assignment, Digest: digest, Child: original.Child, Receipt: original.Receipt,
+			Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Continues: &delegation.Continues{ExecutionID: original.ID, AfterSequence: after}}
+		data, err := json.Marshal(a)
+		if err != nil {
+			return err
+		}
+		if _, err = conn.ExecContext(ctx, `INSERT INTO subagent_executions(id,parent_session_id,idempotency_key,request_digest,child_session_id,state,record_json) VALUES(?,?,?,?,?,?,?)`, a.ID, p.Scope.SessionID, key, digest, a.Child.ID, a.State, string(data)); err != nil {
+			return err
+		}
+		return s.authorizeSubagentParent(ctx, conn, p, original.Receipt)
+	})
+	return a, err
+}
+
+// resumableSubagent refuses to continue an attempt unless it ended with an
+// accepted report, its child has no unfinished attempt, and no later attempt
+// of the child has a newer report: a continuation always resumes the child's
+// whole history, so it extends the child's latest report.
+func resumableSubagent(ctx context.Context, conn *sql.Conn, a delegation.Attempt) error {
+	var live, liveState string
+	err := conn.QueryRowContext(ctx, `SELECT id,state FROM subagent_executions WHERE child_session_id=? AND state IN ('admitted','running')`, a.Child.ID).Scan(&live, &liveState)
+	if err == nil {
+		return fmt.Errorf("%w: its child is still %s as execution %q; wait for that result", delegation.ErrNotResumable, liveState, live)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	var latest string
+	err = conn.QueryRowContext(ctx, `SELECT id FROM subagent_executions WHERE child_session_id=? AND state IN ('succeeded','partial')
+ AND CASE WHEN json_valid(record_json) THEN COALESCE(json_extract(record_json,'$.final_event_id'),'') END<>'' ORDER BY rowid DESC LIMIT 1`, a.Child.ID).Scan(&latest)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	switch {
+	case a.Resumable() && latest == a.ID:
+		return nil
+	case latest == "":
+		return fmt.Errorf("%w: execution %q ended %s without a report to continue from; start a new attempt with a new idempotency key", delegation.ErrNotResumable, a.ID, a.State)
+	case !a.Resumable():
+		return fmt.Errorf("%w: execution %q ended %s without a report; continue execution %q, the child's latest report", delegation.ErrNotResumable, a.ID, a.State, latest)
+	}
+	return fmt.Errorf("%w: execution %q was already continued; continue execution %q, the child's latest report", delegation.ErrNotResumable, a.ID, latest)
 }
 
 func readSubagent(row rowScanner) (delegation.Attempt, error) {
@@ -280,8 +423,12 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 		return errors.New("delegation requires a committed source invocation")
 	}
 	var intent memory.ToolIntentPayload
-	if err = json.Unmarshal([]byte(payload), &intent); err != nil || intent.Call.Name != delegation.ToolName {
+	if err = json.Unmarshal([]byte(payload), &intent); err != nil || !delegation.AdmitsChildren(intent.Call.Name) {
 		return delegation.ErrAuthority
+	}
+	// A continuation is delegated work too: it needs both capabilities.
+	if _, ok := caps[delegation.ContinueCapabilityID]; intent.Call.Name == delegation.ContinueToolName && !ok {
+		return errors.New("parent composition does not permit continuing research")
 	}
 	if intent.Lease == nil || intent.Lease.SessionID != p.Lease.SessionID || intent.Lease.HolderID != p.Lease.HolderID || intent.Lease.FencingToken != p.Lease.FencingToken {
 		return delegation.ErrAuthority

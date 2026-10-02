@@ -42,10 +42,28 @@ func (s *Store) StartSubagent(ctx context.Context, id string) (delegation.Attemp
 		if err = writeSubagent(ctx, conn, a); err != nil {
 			return err
 		}
+		if a.Continues != nil {
+			if err = reopenSubagentChild(ctx, conn, a.Child.ID, now); err != nil {
+				return err
+			}
+		}
 		started = true
 		return nil
 	})
 	return a, started, err
+}
+
+// reopenSubagentChild makes a continued child's closed session runnable for
+// its new attempt. Any child lease still recorded belongs to an earlier,
+// finished attempt (for example one that crashed before releasing it); it is
+// released so the continuation acquires the session with a new fencing token
+// and the earlier holder can never write again.
+func reopenSubagentChild(ctx context.Context, conn *sql.Conn, child memory.SessionID, now time.Time) error {
+	if _, err := conn.ExecContext(ctx, `UPDATE sessions SET status=?,updated_at=? WHERE id=?`, memory.SessionActive, now.Format(time.RFC3339Nano), child); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, `UPDATE session_turn_leases SET holder_id=NULL,expires_at=NULL WHERE session_id=?`, child)
+	return err
 }
 
 // authorizeSubagentChild is part of every fenced child mutation, including
@@ -62,7 +80,9 @@ func (s *Store) authorizeSubagentChildWith(ctx context.Context, conn *sql.Conn, 
 	if !parent.Valid {
 		return nil
 	}
-	a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE child_session_id=?`, child))
+	// The child's latest attempt is the only one that can be running: a
+	// continuation is admitted only after every earlier attempt finished.
+	a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE child_session_id=? ORDER BY rowid DESC LIMIT 1`, child))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -84,6 +104,9 @@ func (s *Store) AuthorizeSubagent(ctx context.Context, id string) error {
 		a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE id=?`, id))
 		if err != nil {
 			return err
+		}
+		if a.State != "running" {
+			return delegation.ErrAuthority
 		}
 		return s.authorizeSubagentChildWith(ctx, conn, a.Child.ID, checkTurnLeaseLive)
 	})
@@ -154,14 +177,24 @@ func (s *Store) FinishSubagent(ctx context.Context, id, state, reason string) (d
 }
 
 func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegation.Attempt, state, reason string) error {
+	// An attempt owns the child events after the earlier attempts' turns:
+	// all of them for an original assignment, its own turn for a
+	// continuation. An earlier report never settles a continuation.
+	var after int64
+	next := subagentNextSteps{continuable: subagentParentCanContinue(ctx, conn, a.Parent.Scope.SessionID)}
+	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
+	if a.Continues != nil {
+		after = a.Continues.AfterSequence
+		next.continues = a.Continues.ExecutionID
+		result.ContinuesExecutionID = a.Continues.ExecutionID
+	}
 	var finalID, report string
-	err := conn.QueryRowContext(ctx, `SELECT id,content FROM events WHERE session_id=? AND event_type='assistant_message'
- AND COALESCE(json_array_length(payload_json,'$.tool_calls'),0)=0 ORDER BY sequence DESC LIMIT 1`, a.Child.ID).Scan(&finalID, &report)
+	err := conn.QueryRowContext(ctx, `SELECT id,content FROM events WHERE session_id=? AND sequence>? AND event_type='assistant_message'
+ AND COALESCE(json_array_length(payload_json,'$.tool_calls'),0)=0 ORDER BY sequence DESC LIMIT 1`, a.Child.ID, after).Scan(&finalID, &report)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	hasReport := err == nil
-	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
 	switch {
 	case hasReport:
 		// An accepted final answer is the authoritative completion. It is a
@@ -182,7 +215,7 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 		// Reuse that safe classification, including invalid nil-error responses,
 		// without copying raw provider errors into the delegation result.
 		var terminalPayload []byte
-		err = conn.QueryRowContext(ctx, `SELECT payload_json FROM events WHERE session_id=? AND event_type='turn_failed' ORDER BY sequence DESC LIMIT 1`, a.Child.ID).Scan(&terminalPayload)
+		err = conn.QueryRowContext(ctx, `SELECT payload_json FROM events WHERE session_id=? AND sequence>? AND event_type='turn_failed' ORDER BY sequence DESC LIMIT 1`, a.Child.ID, after).Scan(&terminalPayload)
 		if err == nil {
 			var terminal memory.TurnTerminalPayload
 			if err = json.Unmarshal(terminalPayload, &terminal); err != nil {
@@ -203,17 +236,17 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 		}
 	}
 	// Usage and the Web evidence are reported for every outcome.
-	if result.Usage, err = subagentUsage(ctx, conn, a.Child.ID); err != nil {
+	if result.Usage, err = subagentUsage(ctx, conn, a.Child.ID, after); err != nil {
 		return err
 	}
-	evidence, err := subagentWebEvidence(ctx, conn, a.Child.ID)
+	evidence, err := subagentWebEvidence(ctx, conn, a.Child.ID, after)
 	if err != nil {
 		return err
 	}
 	if !hasReport {
 		report = ""
 	}
-	buildSubagentResult(&result, hasReport, report, evidence, a.Policy.ResultBytes)
+	buildSubagentResult(&result, hasReport, report, evidence, a.Policy.ResultBytes, next)
 	now := s.now().UTC()
 	a.EndedAt = &now
 	a.State = result.Status
@@ -221,18 +254,35 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	if err = writeSubagent(ctx, conn, *a); err != nil {
 		return err
 	}
-	// Terminal execution never leaves a resumable worker or an outstanding claim.
+	// Terminal execution never leaves a runnable worker or an outstanding
+	// claim; only a started continuation reopens the session (StartSubagent).
 	_, err = conn.ExecContext(ctx, `UPDATE sessions SET status='closed',updated_at=? WHERE id=?`, now.Format(time.RFC3339Nano), a.Child.ID)
 	return err
 }
 
-// subagentUsage sums the usage of the child's committed responses, including
-// compactions. A response without usage, or a turn that ended inside a
-// provider or compaction call, makes the total a lower bound (Incomplete).
-// With no reported usage at all it stays unknown (nil).
-func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID) (*delegation.Usage, error) {
-	rows, err := conn.QueryContext(ctx, `SELECT event_type,payload_json FROM events WHERE session_id=?
- AND event_type IN ('assistant_message','context_compacted','turn_failed','turn_interrupted') ORDER BY sequence`, child)
+// subagentParentCanContinue reports whether the parent's pinned composition
+// includes continue_research, so results only suggest a tool the parent has.
+func subagentParentCanContinue(ctx context.Context, conn *sql.Conn, parent memory.SessionID) bool {
+	receipt, err := getCompositionReceipt(ctx, conn, parent)
+	if err != nil {
+		return false
+	}
+	for _, c := range receipt.Capabilities {
+		if c.ID == delegation.ContinueCapabilityID {
+			return true
+		}
+	}
+	return false
+}
+
+// subagentUsage sums the usage of the child's committed responses after the
+// sequence where the attempt began, including compactions. A response without
+// usage, or a turn that ended inside a provider or compaction call, makes the
+// total a lower bound (Incomplete). With no reported usage at all it stays
+// unknown (nil).
+func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID, after int64) (*delegation.Usage, error) {
+	rows, err := conn.QueryContext(ctx, `SELECT event_type,payload_json FROM events WHERE session_id=? AND sequence>?
+ AND event_type IN ('assistant_message','context_compacted','turn_failed','turn_interrupted') ORDER BY sequence`, child, after)
 	if err != nil {
 		return nil, err
 	}

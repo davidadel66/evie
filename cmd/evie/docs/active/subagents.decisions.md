@@ -1,5 +1,98 @@
 # Subagents implementation decisions
 
+## 2026-10-01 — Continuing a finished child
+
+Source: harness review Stage 9 (G10) in
+[docs/harness-review-2026-09-30.md](../../../../docs/harness-review-2026-09-30.md):
+the owner decided the parent can continue a child that stopped at a limit
+instead of restarting it, modelled on Claude Code's resumable sub-agents.
+
+Superseded wording: the spec's out-of-scope "child-session resume or
+multi-turn worker conversations"; "The child's own recorded history may be
+used for continuation within its one foreground turn"; the Stage 8 entry's "A
+child runs one turn, so automatic compaction ... never applies to it" and its
+closing note that a new key is the only way to run again; and #172's one
+attempt per child session. Background continuation, child-initiated messages
+and automatic restarts stay out of scope.
+
+- **Tool.** A new optional Standard preset capability, `subagents.continue`
+  (`continue_research(execution_id, message)`), returns one result in the
+  `delegate_research` format plus `continues_execution_id`. The Standard preset
+  version becomes `sha256:3b3ef3ab…`; `sha256:a42624b0…`, `adeb2e7b…` and
+  `50ff6768…` stay historical definitions, so existing sessions reopen with
+  exactly their tools and need a new chat to continue children. The Subagents
+  Plugin keeps implementation version 1.0.0, as when `subagents.report` was
+  added. The research preset never includes it.
+- **What can be continued.** Only the calling session's own attempts, under
+  InspectSubagent's current Workspace, project and Task checks; another
+  session's attempt reads as not found. The attempt must have ended with an
+  accepted report (`succeeded` or `partial`; follow-ups to a succeeded child
+  are allowed, as Claude Code allows messaging a finished sub-agent), must be
+  the child's latest report, and the child must have no unfinished attempt.
+  Failed, cancelled and interrupted attempts without a report still need a new
+  idempotency key; a continuation that fails leaves the report it extended
+  continuable. A refusal names the running or latest execution to use.
+- **Authority.** A continuation is admitted exactly like a fresh delegation,
+  under the current parent turn: its live fenced lease, an outstanding
+  committed `continue_research` intent whose arguments match exactly, the
+  parent's capability ceiling (both `subagents.research` and
+  `subagents.continue`), live Plugin enablement and Workspace research
+  permission. It counts as one of the turn's `per_turn` child runs, waits for
+  per-parent and runtime capacity at start, and is watched, fenced and
+  cancelled like any attempt. The earlier attempt's turn authority is never
+  reused: the new attempt records the current turn's lease, and the child's
+  previous lease is released when the continuation starts, so the new lease's
+  fencing token excludes any earlier holder.
+- **Child session and history.** The continuation runs a new turn in the same
+  child session, so the child sees its earlier assignment, tool results and
+  report. The parent's message is a new user-role turn framed as a follow-up
+  assignment from the orchestrator, with the delegated-assignment origin: data
+  for the worker role, never owner testimony, and excluded from memory
+  compilation like the original assignment. A finished child's session stays
+  closed; the continuation's admitted-to-running edge reopens it under the
+  write lock, and finishing closes it again.
+- **Budget.** Each continuation gets a fresh slice: the operator policy
+  current at its admission (default 15 minutes and 1,000,000 tokens), pinned
+  on the new attempt, timed from its own start, with tokens counted from zero.
+  The child is told the fresh budget and asked for a complete report that
+  replaces its previous one. Wrap-up, `partial`, `wrap_up_failed` and the
+  durable wrap-up mark work exactly as for a fresh attempt.
+- **Result.** The summary, `report_bytes` and `read_subagent_report` come from
+  the continuation's own report, paged by its own execution ID; the earlier
+  attempt and its report are unchanged. Usage covers only the continuation's
+  turn. Sources: citations are verified against the Web tool events of every
+  turn of the child, since its context holds them and its new report replaces
+  the old one; pages from earlier turns are listed only when the new report
+  cites them, while uncited fetched pages and the no-report salvage count only
+  pages fetched in the continuation, because earlier results already listed
+  theirs. A `partial` result tells a parent that has the tool it can continue.
+- **Persistence and idempotency.** A continuation is a new attempt row on the
+  same `child_session_id`, its record linking the extended attempt and the
+  last child event before it (`continues.execution_id`,
+  `continues.after_sequence`). Its idempotency key is derived from the
+  committed intent (`continue_research:<intent event ID>`), so a retry of that
+  intent joins or returns the same attempt; different arguments conflict, and
+  a new intent naming an already-continued attempt is refused. The table loses
+  `UNIQUE` on `child_session_id` and gains a child index and a unique partial
+  index allowing at most one unfinished attempt per child. Startup rebuilds an
+  earlier table (with or without `partial`) once under the write lock, copying
+  every row and rowid unchanged, and refuses an unknown shape. Older records
+  load unchanged and can be continued under the current policy.
+- **Recovery.** Identical to fresh attempts: reconciled per attempt, only
+  after its own parent turn's ownership ended, never resumed. Recovery and
+  every settlement read only the events after `after_sequence`, so an earlier
+  report never settles a continuation, while a report the continuation
+  accepted before a crash does.
+- **Compaction.** A continued child has closed earlier turns, so automatic
+  compaction now applies to it as in the primary chat: at 80% of its working
+  ceiling the earlier turns are summarized before the request, through the
+  child's metered client and against its token budget. The context wrap-up
+  still guards each turn from its second response and is decided before
+  compaction, so a single step that jumps from below the compaction threshold
+  to 90% of the usable budget still ends the turn with the wrap-up (its
+  request fitted, and compacted if still over the threshold); a later
+  continuation starts with the earlier turns compactable.
+
 ## 2026-10-01 — Time and token budgets, wrap-up reports, pageable results
 
 Source: harness review Stage 8 (G1, G2, G3, G6) in
@@ -106,7 +199,7 @@ research slice's "no ... larger parent-result cap".
   `failed`/`policy_limit`.
 
 Continuing a partial child (G10) is harness review Stage 9; until then a new key
-starts a fresh attempt.
+starts a fresh attempt. (Since done: see "Continuing a finished child" above.)
 
 ## 2026-09-11 — Capability-aware parent delegation guidance
 

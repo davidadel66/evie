@@ -251,7 +251,7 @@ func (s *Store) AppendEventWithLease(
 		if err := json.Unmarshal(input.Payload, &intent); err != nil {
 			return memory.Event{}, err
 		}
-		if intent.Call.Name == delegation.ToolName {
+		if delegation.AdmitsChildren(intent.Call.Name) {
 			intent.Lease = &memory.TurnLease{SessionID: sessionID, HolderID: holderID, FencingToken: token, Generation: memory.LeaseGeneration(token)}
 			input.Payload, err = json.Marshal(intent)
 			if err != nil {

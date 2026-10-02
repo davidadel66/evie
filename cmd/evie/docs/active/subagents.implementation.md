@@ -23,7 +23,9 @@ permissions, parent identity or policy. Results carry execution and child IDs,
 terminal state, a safe reason, the report's summary, structured sources,
 unverified URLs, limitations and usage. Since 2026-10-01 the Plugin also provides
 `read_subagent_report(execution_id, offset?, limit?)`, which pages a child's full
-stored report for the parent session that delegated it.
+stored report for the parent session that delegated it, and
+`continue_research(execution_id, message)`, which extends the parent's own
+finished child in its same session (see "Continuation" below).
 
 An identical key resolves to its retained attempt. Changed content conflicts.
 Failed, cancelled and interrupted keys require a new key to run again. A failed
@@ -288,3 +290,66 @@ request budget the wrap-up request is fitted by shortening tool results, and it
 fails (`wrap_up_failed`, sources listed) only when assistant messages, the
 assignment and instructions alone overflow. Live model and Web execution was
 not exercised.
+
+## Continuation — 2026-10-01
+
+Stage 9 of the 2026-09-30 harness review (G10); the binding record is the
+"Continuing a finished child" entry in
+[subagents.decisions.md](subagents.decisions.md).
+
+`continue_research(execution_id, message)` extends one of the calling
+session's own attempts that finished with a report (`succeeded` or
+`partial`), provided it is the child's latest report and none of the child's
+attempts is unfinished. It returns one result in the `delegate_research`
+format with `continues_execution_id`; the new `execution_id` pages the new
+report and can itself be continued. Refusals name the running or latest
+execution to use; another session's attempt reads as not found.
+
+Review entry points: `AdmitSubagentContinuation` and `resumableSubagent` in
+`internal/eviedb/subagents.go` (admission, idempotency, resumability, the
+table rebuild), `StartSubagent`/`reopenSubagentChild`, the latest-attempt
+child fence and the `after_sequence` boundary in `finishSubagent`
+(`internal/eviedb/subagent_execution.go`), turn-scoped evidence in
+`subagent_result.go`, `Continue` and `enter` in
+`internal/subagents/supervisor.go`, the follow-up framing in `budget.go`, the
+capability in `internal/plugins/subagents.go`, and the lease stamp for
+`continue_research` intents in `internal/eviedb/events.go`.
+
+Schema change: `subagent_executions.child_session_id` is no longer unique; a
+child index and a unique partial index (one unfinished attempt per child) are
+added. Startup rebuilds the Stage 8 table, or an earlier one without
+`partial`, once under the write lock with rows and rowids unchanged; an
+unknown shape fails closed. The Standard preset gains the optional
+`subagents.continue` capability (new version `sha256:3b3ef3ab…`); the previous
+version `sha256:a42624b0…` joins `adeb2e7b…` and `50ff6768…` as historical
+definitions, so existing sessions reopen unchanged and need a new chat to
+continue children.
+
+Demonstration, after enabling Subagents and starting a new chat: ask for
+research on a broad question with a small budget (for example
+`EVIE_SUBAGENTS_TOKEN_BUDGET=20000`) so the child returns `partial`, then ask
+Evie to continue that child on the gaps it listed. Observe one
+`continue_research` call whose result has the same `child_session_id`, a new
+`execution_id` and `continues_execution_id`, and a report that builds on the
+first. Asking to continue the earlier execution again is refused with the
+latest one named.
+
+Regression tests: `internal/subagents/continuation_test.go` (continuing a
+partial child in the same session with its history and a fresh budget, and a
+new result with turn-scoped sources and usage; refusal for another parent, an
+unknown ID, a running child and a failed attempt; same-intent retry,
+changed-arguments refusal, superseded-attempt refusal and chaining; per-turn
+counting; compaction of the earlier turn; wrap-up and parent authority loss
+during a continuation; the composed parent loop delegating then continuing),
+`internal/eviedb/subagent_continuation_test.go` (crash mid-continuation with
+and without an accepted report, the stale child lease fenced out, the parent
+capability and intent requirement, the Stage 8 table and a pre-budget record
+migrating and continuing) and the preset history case
+`combined_before_continuation` in `internal/plugins/preset_test.go`.
+
+Known limits: the context wrap-up is decided before compaction, so a single
+step that jumps past 90% of the usable budget ends the continuation with a
+wrap-up even when its earlier turns could have been compacted; the next
+continuation compacts them. A continuation's result lists earlier-turn pages
+only when its report cites them. Live model and Web execution was not
+exercised.

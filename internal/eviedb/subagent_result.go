@@ -31,27 +31,32 @@ const (
 )
 
 // webURL is one URL the child's own Web tool events returned, in the order
-// the events first returned it.
+// the events first returned it. recent marks a page fetched during the
+// attempt being settled; earlier turns of a continued child only verify the
+// report's citations.
 type webURL struct {
 	url      string
 	fetched  bool
 	returned bool
+	recent   bool
 }
 
 // subagentWebEvidence reads the URLs the child actually fetched (successful
-// web_fetch results) or was shown as web_search results. Snippet text and
-// other free text in tool results is not evidence of a source.
-func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.SessionID) ([]webURL, error) {
-	rows, err := conn.QueryContext(ctx, `SELECT i.payload_json,o.content FROM events o
+// web_fetch results) or was shown as web_search results, in every turn of
+// the child session; those after sequence after belong to the attempt being
+// settled. Snippet text and other free text in tool results is not evidence
+// of a source.
+func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.SessionID, after int64) ([]webURL, error) {
+	rows, err := conn.QueryContext(ctx, `SELECT i.payload_json,o.content,o.sequence>? FROM events o
  JOIN events i ON i.session_id=o.session_id AND i.execution_id=o.execution_id AND i.event_type='tool_intent'
- WHERE o.session_id=? AND o.event_type='tool_succeeded' ORDER BY o.sequence`, child)
+ WHERE o.session_id=? AND o.event_type='tool_succeeded' ORDER BY o.sequence`, after, child)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var found []webURL
 	index := map[string]int{}
-	add := func(raw string, fetched bool) {
+	add := func(raw string, fetched, recent bool) {
 		key, ok := sourceKey(raw)
 		if !ok {
 			return
@@ -64,6 +69,7 @@ func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.Sessi
 		}
 		if fetched {
 			found[i].fetched = true
+			found[i].recent = found[i].recent || recent
 		} else {
 			found[i].returned = true
 		}
@@ -71,7 +77,8 @@ func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.Sessi
 	for rows.Next() {
 		var payload []byte
 		var content string
-		if err = rows.Scan(&payload, &content); err != nil {
+		var recent bool
+		if err = rows.Scan(&payload, &content, &recent); err != nil {
 			return nil, err
 		}
 		var intent memory.ToolIntentPayload
@@ -81,12 +88,12 @@ func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.Sessi
 		switch intent.Call.Name {
 		case "web_fetch":
 			if fetched := fetchedURL(intent.Call.Arguments, content); fetched != "" {
-				add(fetched, true)
+				add(fetched, true, recent)
 			}
 		case "web_search":
 			for _, line := range strings.Split(content, "\n") {
 				if result := searchResultURL(line); result != "" {
-					add(result, false)
+					add(result, false, recent)
 				}
 			}
 		}
@@ -271,11 +278,21 @@ var wrapUpPhrases = map[string]string{
 	delegation.WrapUpContext: "90% of its context budget",
 }
 
+// subagentNextSteps is what the harness can tell the parent about extending
+// a child: whether its composition has continue_research, and which attempt
+// a continuation extended.
+type subagentNextSteps struct {
+	continuable bool
+	continues   string
+}
+
 // buildSubagentResult fills the inline result from the child's final report
 // and Web evidence, then bounds it to limit bytes. The summary is cut first,
 // because the full report stays readable; lists lose their least useful
-// entries next. Every cut is stated in the limitations.
-func buildSubagentResult(r *delegation.Result, hasReport bool, report string, evidence []webURL, limit int) {
+// entries next. Every cut is stated in the limitations. Every turn's evidence
+// verifies citations, but only pages fetched during this attempt are listed
+// uncited or counted as salvage: earlier turns' results already listed theirs.
+func buildSubagentResult(r *delegation.Result, hasReport bool, report string, evidence []webURL, limit int, next subagentNextSteps) {
 	citedKeys := map[string]bool{}
 	var unverified []string
 	known := map[string]bool{}
@@ -294,13 +311,13 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 	fetched := 0
 	for _, e := range evidence {
 		key, _ := sourceKey(e.url)
-		if e.fetched {
+		if e.fetched && e.recent {
 			fetched++
 		}
 		switch {
 		case citedKeys[key]:
 			cited = append(cited, delegation.Source{URL: e.url, Fetched: e.fetched, Cited: true})
-		case e.fetched:
+		case e.fetched && e.recent:
 			uncited = append(uncited, delegation.Source{URL: e.url, Fetched: true})
 		}
 	}
@@ -326,9 +343,17 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 		if phrase == "" {
 			phrase = "its budget"
 		}
-		harness = append(harness, "Stopped at "+phrase+" and wrapped up without tools; the report covers only the work done before then. A new idempotency key is required for another attempt.")
+		if next.continuable {
+			harness = append(harness, "Stopped at "+phrase+" and wrapped up without tools; the report covers only the work done before then. continue_research can extend this child from its report with a fresh budget; a new idempotency key starts over.")
+		} else {
+			harness = append(harness, "Stopped at "+phrase+" and wrapped up without tools; the report covers only the work done before then. A new idempotency key is required for another attempt.")
+		}
 	default:
-		harness = append(harness, "Assignment did not complete; a new idempotency key is required for another attempt.")
+		if next.continues != "" {
+			harness = append(harness, fmt.Sprintf("Continuation did not complete; continue_research can still extend the child from execution %s.", next.continues))
+		} else {
+			harness = append(harness, "Assignment did not complete; a new idempotency key is required for another attempt.")
+		}
 	}
 	if !hasReport && r.Status != "succeeded" {
 		if fetched > 0 {

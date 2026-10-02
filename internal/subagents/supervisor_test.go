@@ -800,7 +800,7 @@ func TestOldAndNewParentReceiptsReopenWithoutChangingDelegation(t *testing.T) {
 	before.Receipt.Preset.Version = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
 	warnings := before.Receipt.Warnings[:0]
 	for _, w := range before.Receipt.Warnings {
-		if w.CapabilityID != delegation.CapabilityID && w.CapabilityID != delegation.ReportCapabilityID {
+		if w.CapabilityID != delegation.CapabilityID && w.CapabilityID != delegation.ReportCapabilityID && w.CapabilityID != delegation.ContinueCapabilityID {
 			warnings = append(warnings, w)
 		}
 	}

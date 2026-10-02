@@ -12,6 +12,13 @@
 > return sources taken from their own Web tool events. Amended text below is
 > marked; the binding record is the 2026-10-01 entry in
 > [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-01 by the owner's decision for harness review Stage 9 (G10).
+> The parent can continue a child that finished with a report, resuming the
+> same child session as a new attempt under the current parent turn's
+> authority, instead of restarting it. Amended text below is marked "Stage 9";
+> the binding record is the "Continuing a finished child" entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -106,6 +113,7 @@ allowances produce an explicit refusal rather than a change of scope.
 48. As a maintainer, I want one high-level acceptance seam for delegation, so that tests demonstrate the owner's observable result across the real composed runtime.
 49. As a maintainer, I want deterministic admission and recovery tests with real SQLite, so that duplicate, interrupted, and stale-owner behavior is verified without live models.
 50. As a maintainer, I want restricted composition and foreground execution delivered as focused changes, so that authorization and persistence decisions remain inspectable.
+51. As Evie's owner, I want the primary agent to continue a child that stopped at a limit, or whose findings need a follow-up, with its history intact and a fresh budget, so that bounded research is extended instead of restarted. (Added 2026-10-01, Stage 9.)
 
 ## Implementation Decisions
 
@@ -167,7 +175,9 @@ allowances produce an explicit refusal rather than a change of scope.
   failure follows those contracts rather than silently omitting governing
   instructions. Supporting context is labeled as data and does not become a
   new instruction or authority source. The child's own recorded history may be
-  used for continuation within its one foreground turn.
+  used for continuation within its foreground turn and, when the parent
+  continues the child (amended 2026-10-01, Stage 9), in that child's later
+  turns; a parent's follow-up message is assignment data like the original.
 - **Memory policy.** The initial preset exposes no Memory capabilities and
   permits no Automatic Recall or retrieval of prior conversations, Global
   memory, Workspace memory, or project memory. Inherited scope metadata does
@@ -210,9 +220,26 @@ allowances produce an explicit refusal rather than a change of scope.
   current access checks. Retrying an interrupted or failed attempt returns its
   outcome and requires a new key to authorize a fresh attempt. Unrelated
   parents cannot inspect or attach to another parent's attempt.
+- **Continuation.** (Added 2026-10-01, Stage 9.) The parent may continue one
+  of its own attempts that finished with a report (succeeded or partial), if
+  it is the child's latest report and no attempt of that child is unfinished.
+  The continuation is a new attempt on the same child session, linked to the
+  attempt it extends, admitted atomically under the current parent turn's live
+  fence and committed continuation invocation with the same parent authority,
+  capability ceiling, Plugin, Workspace, per-turn, concurrency and Task checks
+  as a fresh delegation; it never reuses the earlier turn's authority. A retry
+  of the same invocation returns the same attempt. The child sees its earlier
+  turns and receives the parent's message as follow-up assignment data. It
+  runs under a fresh time and token budget, and settles, recovers and reports
+  exactly like a fresh attempt, from its own turn only. Unrelated parents'
+  attempts read as not found; failed, cancelled and interrupted attempts with
+  no report still need a new key.
 - **Lifecycle and ownership.** Execution states distinguish admitted, running,
   succeeded, partial (amended 2026-10-01: the child wrapped up at a budget and
-  returned a report), failed, cancelled, and interrupted attempts. The child uses its
+  returned a report), failed, cancelled, and interrupted attempts. A child
+  session holds its original attempt and any continuations, at most one of
+  them unfinished; it is closed between attempts (amended 2026-10-01, Stage
+  9). The child uses its
   own normal history binding and fenced turn lease. Authority to start further
   child activity and accept its result also depends on the originating parent
   invocation remaining authorized. An active child lease alone is insufficient.
@@ -258,7 +285,9 @@ allowances produce an explicit refusal rather than a change of scope.
   parent delivery. Report measured usage for every outcome, mark it incomplete
   when a call's usage is unknown, and preserve wholly absent usage as unknown.
   Return findings and evidence rather than reasoning or a full child
-  transcript.
+  transcript. (Stage 9.) A continuation's result also names the attempt it
+  extended; its summary, report, usage and uncited sources are its own turn's,
+  while its citations are verified against every turn of the child.
 - **Cancellation and terminal races.** Propagate parent cancellation, parent
   ownership loss, shutdown, and relevant revocation to the child. Prevent new
   activity after authority ends, join admitted execution, and release child
@@ -354,6 +383,15 @@ allowances produce an explicit refusal rather than a change of scope.
   or estimated tokens. Long reports must page only for their own parent. Usage
   is present on partial and failed outcomes; wholly missing provider usage
   remains unknown.
+- (Stage 9.) Continuing a partial child resumes the same child session with
+  its earlier history visible and a fresh budget, and returns a new result
+  without changing the earlier one. Continuation is refused for another
+  parent's attempt, while the child is still running, and for an attempt with
+  no report or a superseded one; a retry of the same invocation returns the
+  same attempt; continuations count toward the per-turn limit; a crash during
+  a continuation recovers from its own turn only; earlier tables, records and
+  preset versions still load, and old records can be continued; earlier turns
+  of a continued child are compacted under context pressure.
 - Follow existing turn-ownership race-test patterns for parent cancellation,
   parent lease expiry/replacement, child lease loss, disable after a parent pins
   delegation, and shutdown. Prove no further child admission or external
@@ -385,8 +423,10 @@ allowances produce an explicit refusal rather than a change of scope.
 - Asynchronous spawn/status/wait/cancel capabilities, background continuation,
   restart-driven execution, recurring
   scheduling, result outboxes, and notifications.
-- Nested delegation, sibling messaging, child-session resume or multi-turn
-  worker conversations, and arbitrary model-selected worker presets.
+- Nested delegation, sibling messaging, child-initiated or background
+  multi-turn worker conversations, and arbitrary model-selected worker
+  presets. (Amended 2026-10-01, Stage 9: a parent's explicit foreground
+  continuation of its own finished child is in scope.)
 - Write-enabled workers, approval forwarding to unattended children, file
   mutation, worktree isolation, shell access, or a coding-worker preset.
 - Memory-enabled worker presets, automatic retrieval for workers, semantic

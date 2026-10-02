@@ -23,10 +23,27 @@ const ToolName = "delegate_research"
 const ReportCapabilityID = "subagents.report"
 const ReportToolName = "read_subagent_report"
 
+// ContinueCapabilityID lets a parent extend a child it delegated, resuming
+// the child's own session with a follow-up message (added 2026-10-01).
+const ContinueCapabilityID = "subagents.continue"
+const ContinueToolName = "continue_research"
+
+// AdmitsChildren reports whether a committed parent tool intent can authorize
+// child execution: a delegation batch or a continuation.
+func AdmitsChildren(tool string) bool { return tool == ToolName || tool == ContinueToolName }
+
 var ErrConflict = errors.New("subagent idempotency key conflicts with an existing assignment")
 var ErrCapacity = errors.New("subagent concurrency capacity is occupied")
 var ErrAuthority = errors.New("subagent authority is no longer available")
 var ErrPolicy = errors.New("subagent execution policy limit")
+
+// ErrNotFound is an execution that does not exist or belongs to another
+// session; the two are deliberately indistinguishable.
+var ErrNotFound = errors.New("no delegated research execution with this ID belongs to this session")
+
+// ErrNotResumable refuses a continuation of an attempt that is still running
+// or has no report to continue from.
+var ErrNotResumable = errors.New("subagent execution cannot be continued")
 
 // Terminal states and reasons added on 2026-10-01. A child that reaches 90%
 // of its time or token budget, or the turn step limit, makes one tool-free
@@ -110,6 +127,31 @@ func (p Policy) ValidateBatch(a []Assignment) error {
 	return nil
 }
 
+// ValidateContinuation bounds a continue_research request before any child
+// or model provider is touched. The message has the assignment byte limit.
+func (p Policy) ValidateContinuation(executionID, message string) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(executionID) == "" || len(executionID) > 128 {
+		return errors.New("continue_research requires the execution_id of a research result from this conversation")
+	}
+	if strings.TrimSpace(message) == "" || len(message) > p.AssignmentBytes {
+		return fmt.Errorf("continue_research message must be nonblank and at most %d bytes", p.AssignmentBytes)
+	}
+	return nil
+}
+
+// Continuation is a parent's continue_research request.
+type Continuation struct {
+	ExecutionID string `json:"execution_id"`
+	Message     string `json:"message"`
+}
+
+// ContinuationKey is the idempotency key of the continuation admitted for one
+// committed parent tool intent, so a retry of that intent finds it again.
+func ContinuationKey(intent memory.EventID) string { return "continue_research:" + string(intent) }
+
 // TurnLimitError refuses a delegation that would start more children in one
 // parent turn than the policy allows.
 type TurnLimitError struct{ Limit, Started, Requested int }
@@ -140,7 +182,9 @@ type Parent struct {
 type Result struct {
 	ExecutionID    string           `json:"execution_id"`
 	ChildSessionID memory.SessionID `json:"child_session_id"`
-	Status         string           `json:"status"`
+	// ContinuesExecutionID is the attempt a continuation extended.
+	ContinuesExecutionID string `json:"continues_execution_id,omitempty"`
+	Status               string `json:"status"`
 	// Summary is the report's Summary section, or its beginning when the
 	// report has none. SummaryTruncated marks a summary cut to the result
 	// limit; ReportBytes is the full report's size.
@@ -221,6 +265,15 @@ type WrapUp struct {
 	At     time.Time `json:"at"`
 }
 
+// Continues links a continuation attempt to the attempt it extended. The
+// continuation runs a new turn in the same child session; AfterSequence is
+// the last child event before it, so its report, usage and fetched pages are
+// the events after that.
+type Continues struct {
+	ExecutionID   string `json:"execution_id"`
+	AfterSequence int64  `json:"after_sequence"`
+}
+
 type Attempt struct {
 	DispatchID   string              `json:"dispatch_id"`
 	ID           string              `json:"id"`
@@ -237,7 +290,14 @@ type Attempt struct {
 	EndedAt      *time.Time          `json:"ended_at,omitempty"`
 	FinalEventID memory.EventID      `json:"final_event_id,omitempty"`
 	WrapUp       *WrapUp             `json:"wrap_up,omitempty"`
+	Continues    *Continues          `json:"continues,omitempty"`
 	Result       *Result             `json:"result,omitempty"`
+}
+
+// Resumable reports whether a continuation may extend this attempt: it
+// finished with an accepted report, as succeeded or partial.
+func (a Attempt) Resumable() bool {
+	return (a.State == "succeeded" || a.State == StatePartial) && a.FinalEventID != ""
 }
 
 func (a Attempt) Terminal() bool { return a.State != "admitted" && a.State != "running" }

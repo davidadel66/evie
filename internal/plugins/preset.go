@@ -20,7 +20,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:a42624b010eede75f2befb6bc42c88d237b03b0da21dad8a07852ab8e5e8ded6"
+	StandardPresetVersion                               = "sha256:3b3ef3ab00330870c95a752c4611b3ec765032ad545e63c2dd5e9862294df6ce"
+	preContinueStandardPresetVersion                    = "sha256:a42624b010eede75f2befb6bc42c88d237b03b0da21dad8a07852ab8e5e8ded6"
 	preReadToolResultStandardPresetVersion              = "sha256:adeb2e7be36e4ce573154b8a2b7cb6d95c84039f78275e8c3f8ce43cda9e30cc"
 	preReportStandardPresetVersion                      = "sha256:50ff6768089e364a67229790b5410ed13c8b00e5d0b8980b5e6e45f8cca93b83"
 	preSubagentsStandardPresetVersion                   = "sha256:3c812f0838e55608076db195ca47ae01bc434896fefb190b98e7ff17eb0c8e87"
@@ -646,6 +647,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preReadToolResultStandardPresetVersion {
 		return m.resumePreset(preReadToolResultStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preContinueStandardPresetVersion {
+		return m.resumePreset(preContinueStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -937,14 +941,31 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 }
 
 // standardPresetContent is the current standard preset: every Memory
-// Capability including the stored tool result reader, then delegation and
-// its report reader.
+// Capability including the stored tool result reader, then delegation, its
+// report reader and continuation.
 func standardPresetContent() Preset {
+	p := preContinueStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities, CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}})
+	return p
+}
+
+// preContinueStandardPresetContent is the content of version a42624b0…. A
+// later Memory Capability must freeze its Memory list, as
+// preReadToolResultMemoryCapabilityRequirements does for earlier versions.
+func preContinueStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preSubagentsStandardPresetContent()
 	p.OptionalCapabilities = append(memoryCapabilityRequirements(compatibility),
 		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preContinueStandardPreset is the standard preset before continue_research;
+// sessions pinned to it keep delegation and reports without continuation.
+func preContinueStandardPreset() Preset {
+	p := preContinueStandardPresetContent()
+	p.Version = preContinueStandardPresetVersion
 	return p
 }
 

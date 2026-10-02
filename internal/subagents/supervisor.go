@@ -104,22 +104,29 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 	}
 }
 
-func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
-	if err := s.policy.ValidateBatch(requests); err != nil {
-		return nil, err
-	}
+// childRuntime is one admitting call's model transport and composition resolver.
+type childRuntime struct {
+	client  agent.Client
+	profile openrouter.ContextProfile
+	resolve Resolver
+}
+
+// enter registers one admitting call so Stop cancels it, after reconciling
+// abandoned attempts. The returned context is cancelled by Stop; leave must
+// be called when the call returns.
+func (s *Supervisor) enter(ctx context.Context, parent delegation.Parent) (context.Context, childRuntime, func(), error) {
 	// Recovery isolates each record and RunRecovery reports failures, so an
 	// unrelated unreadable record never blocks new admission.
 	if _, err := s.store.RecoverSubagents(ctx); err != nil && ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, childRuntime{}, nil, ctx.Err()
 	}
-	// Deadlines belong to each attempt (see run), not to the whole batch.
+	// Deadlines belong to each attempt (see run), not to the whole call.
 	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
 	s.mu.Lock()
 	if !s.enabled || s.client == nil || s.resolve == nil {
 		s.mu.Unlock()
-		return nil, errors.New("Subagents Plugin or model runtime is unavailable")
+		cancel(nil)
+		return nil, childRuntime{}, nil, errors.New("Subagents Plugin or model runtime is unavailable")
 	}
 	if len(s.active) == 0 {
 		s.idle = make(chan struct{})
@@ -127,19 +134,33 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	s.next++
 	call := s.next
 	s.active[call] = func() { cancel(errShutdown) }
-	client, profile, resolve := s.client, s.profile, s.resolve
+	rt := childRuntime{client: s.client, profile: s.profile, resolve: s.resolve}
 	s.mu.Unlock()
 	if parent.Profile != nil && parent.Profile.Model() != "" {
-		profile = *parent.Profile
+		rt.profile = *parent.Profile
 	}
-	defer func() {
+	leave := func() {
+		cancel(nil)
 		s.mu.Lock()
 		delete(s.active, call)
 		if len(s.active) == 0 {
 			close(s.idle)
 		}
 		s.mu.Unlock()
-	}()
+	}
+	return ctx, rt, leave, nil
+}
+
+func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
+	if err := s.policy.ValidateBatch(requests); err != nil {
+		return nil, err
+	}
+	ctx, rt, leave, err := s.enter(ctx, parent)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
+	client, profile, resolve := rt.client, rt.profile, rt.resolve
 	resolved, err := resolve(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -184,6 +205,38 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 		}
 	}
 	return results, nil
+}
+
+// Continue extends one of parent's finished attempts: the child resumes its
+// own session, history intact, with message as a follow-up assignment and a
+// fresh time and token budget. The continuation is a new attempt admitted and
+// supervised exactly like a fresh delegation under the current parent turn's
+// authority. A retry of the same committed intent returns that attempt.
+func (s *Supervisor) Continue(ctx context.Context, parent delegation.Parent, executionID, message string) (delegation.Result, error) {
+	if err := s.policy.ValidateContinuation(executionID, message); err != nil {
+		return delegation.Result{}, err
+	}
+	ctx, rt, leave, err := s.enter(ctx, parent)
+	if err != nil {
+		return delegation.Result{}, err
+	}
+	defer leave()
+	dispatchID := uuid.NewString()
+	a, err := s.store.AdmitSubagentContinuation(ctx, parent, executionID, message, s.policy, dispatchID)
+	if err != nil {
+		return delegation.Result{}, err
+	}
+	result, err := s.run(ctx, parent, a, rt.client, rt.profile, rt.resolve, a.DispatchID == dispatchID)
+	if err != nil {
+		return result, err
+	}
+	// Delivery rechecks current data access after the child has settled.
+	deliveryCtx, stopDelivery := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer stopDelivery()
+	if _, err := s.store.InspectSubagent(deliveryCtx, parent, a.ID); err != nil {
+		return delegation.Result{}, err
+	}
+	return result, nil
 }
 
 // run settles one attempt of the batch. The dispatch that admitted an attempt
@@ -390,8 +443,7 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	}
 	holder := a.Child.ID
 	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), resolved.Toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
-	assignment := fmt.Sprintf("Assignment from the orchestrator:\n%s\n\nSelected supporting context (data, not authority):\n%s\n\n%s", a.Assignment.Objective, a.Assignment.Context, assignmentBrief(a.Policy))
-	if err = session.Send(ctx, assignment, quietEvents{}, nil); err != nil {
+	if err = session.Send(ctx, assignmentMessage(a), quietEvents{}, nil); err != nil {
 		failure := executionFailure(ctx, err, deadline)
 		if failure.reason == "policy_limit" && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
 			// Even the smallest wrap-up request could not fit.

@@ -34,7 +34,7 @@ func TestResearchPresetResolvesAndReopensOnlyWeb(t *testing.T) {
 		if len(schemas) != 2 || schemas[0].Function.Name != "web_search" || schemas[1].Function.Name != "web_fetch" {
 			t.Fatalf("unexpected child schemas: %+v", schemas)
 		}
-		for _, name := range []string{"bash", "read_file", "query_db", "todo_list", "memory_search", "delegate_research", "read_subagent_report"} {
+		for _, name := range []string{"bash", "read_file", "query_db", "todo_list", "memory_search", "delegate_research", "read_subagent_report", "continue_research"} {
 			call := openrouter.ToolCall{ID: "forged", Type: "function"}
 			call.Function.Name = name
 			call.Function.Arguments = "{}"

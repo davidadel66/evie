@@ -19,6 +19,12 @@ import (
 )
 
 func newSubagentAdmission(t *testing.T) (*eviedb.Store, *sql.DB, string, delegation.Parent, composition.Receipt) {
+	return newSubagentAdmissionWith(t, delegation.CapabilityID, delegation.ContinueCapabilityID)
+}
+
+// newSubagentAdmissionWith composes the parent with the given Subagents
+// capabilities in addition to the research preset's Web capabilities.
+func newSubagentAdmissionWith(t *testing.T, subagentCapabilities ...string) (*eviedb.Store, *sql.DB, string, delegation.Parent, composition.Receipt) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "evie.db")
 	db, err := eviedb.OpenDBAt(path)
@@ -40,7 +46,9 @@ func newSubagentAdmission(t *testing.T) (*eviedb.Store, *sql.DB, string, delegat
 	}
 	parentReceipt := composition.Clone(research.Receipt)
 	parentReceipt.Preset = composition.PresetIdentity{ID: "test-parent", Version: research.Receipt.Preset.Version}
-	parentReceipt.Capabilities = append(parentReceipt.Capabilities, composition.Capability{ID: delegation.CapabilityID, ProviderID: "subagents", ContractVersion: "1.0.0", SchemaSHA256: parentReceipt.Capabilities[0].SchemaSHA256})
+	for _, id := range subagentCapabilities {
+		parentReceipt.Capabilities = append(parentReceipt.Capabilities, composition.Capability{ID: id, ProviderID: "subagents", ContractVersion: "1.0.0", SchemaSHA256: parentReceipt.Capabilities[0].SchemaSHA256})
+	}
 	parentReceipt.Providers = append(parentReceipt.Providers, composition.Provider{ID: "subagents", ImplementationVersion: "1.0.0"})
 	parent, err := store.CreateGlobalSessionWithComposition(ctx, parentReceipt)
 	if err != nil {
