@@ -18,7 +18,7 @@ const (
 	retrievalResultLimit    = 8
 	retrievalContextLimit   = 24576
 	retrievalQueryLimit     = 1024
-	retrievalDeadline       = 500 * time.Millisecond
+	retrievalDeadline       = 500 * time.Millisecond * raceTimeScale
 )
 
 var ErrInvalidRetrievalQuery = errors.New("invalid bounded memory query")

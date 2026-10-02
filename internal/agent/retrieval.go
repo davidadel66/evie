@@ -30,8 +30,8 @@ const (
 	retrievalResultLimit    = 8
 	retrievalResultBytes    = 12 * 1024
 	retrievalTurnBytes      = 36 * 1024
-	retrievalSearchDeadline = 750 * time.Millisecond
-	retrievalTurnWork       = 3 * time.Second
+	retrievalSearchDeadline = 750 * time.Millisecond * raceTimeScale
+	retrievalTurnWork       = 3 * time.Second * raceTimeScale
 )
 
 type retrievalTurn struct {
