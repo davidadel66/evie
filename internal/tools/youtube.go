@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/untrusted"
 	"github.com/davidadel66/evie/internal/youtube"
 )
 
@@ -196,19 +197,14 @@ func renderYouTubeToolOutput(ctx context.Context, payload string, capOutput bool
 	return begin + "\n" + escaped[:cut] + note + "\n" + end, nil
 }
 
+// escapeFrameDelimiters and collisionSafeFrame are the shared untrusted-data
+// frame (package untrusted), also used for research children's output.
 func escapeFrameDelimiters(data string, begin, end string) string {
-	data = strings.ReplaceAll(data, begin, `\`+begin)
-	return strings.ReplaceAll(data, end, `\`+end)
+	return untrusted.Escape(data, begin, end)
 }
 
 func collisionSafeFrame(data, begin, end string) (string, string) {
-	baseBegin := strings.TrimSuffix(begin, "]")
-	baseEnd := strings.TrimSuffix(end, "]")
-	for n := 1; strings.Contains(data, begin) || strings.Contains(data, end); n++ {
-		begin = fmt.Sprintf("%s #%d]", baseBegin, n)
-		end = fmt.Sprintf("%s #%d]", baseEnd, n)
-	}
-	return begin, end
+	return untrusted.Delimiters(data, begin, end)
 }
 
 func utf8SafeCut(value string, limit int) int {

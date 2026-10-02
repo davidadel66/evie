@@ -96,3 +96,29 @@ func TestActiveSessionBoundaryExcludesClosedAndReturnsStoredScopeAndTitle(t *tes
 		t.Fatalf("closed sessions leaked from storage boundary: %+v", listings)
 	}
 }
+
+// G8: a delegated child session is the parent's work, not an owner
+// conversation. It stays out of the owner's session lists while it is active,
+// and its parent remains listed.
+func TestOwnerSessionListsHideDelegatedChildSessions(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(newTestDB(t))
+	parent, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := store.CreateDelegatedSessionWithComposition(ctx, parent.ID, standardReceipt(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active, err := store.GetActiveSession(ctx, child.ID); err != nil || active.ParentSessionID != parent.ID {
+		t.Fatalf("child is not an active delegated session: %+v %v", active, err)
+	}
+	listings, err := store.ListActiveSessions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listings) != 1 || listings[0].ID != parent.ID {
+		t.Fatalf("active owner listing=%+v, want only parent %q", listings, parent.ID)
+	}
+}

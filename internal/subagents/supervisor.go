@@ -3,10 +3,12 @@ package subagents
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/agent"
 	"github.com/davidadel66/evie/internal/composition"
@@ -193,18 +195,50 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 		}(i, a)
 	}
 	workers.Wait()
-	if err := errors.Join(failures...); err != nil {
-		return results, err
+	if ctx.Err() != nil {
+		// The call itself was cancelled (a waiting duplicate, or shutdown):
+		// it fails as a whole, as before. Owned children have already
+		// settled as cancelled outcomes rather than failures.
+		if err := errors.Join(failures...); err != nil {
+			return results, err
+		}
 	}
-	// Delivery rechecks current data access after the final child has settled.
+	// Delivery rechecks current data access after the final child has
+	// settled. A child that cannot be settled or delivered becomes an error
+	// entry carrying none of its content; its siblings are still returned
+	// (amended 2026-10-01; formerly one failure discarded the whole batch).
 	deliveryCtx, stopDelivery := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer stopDelivery()
-	for _, a := range attempts {
-		if _, err := s.store.InspectSubagent(deliveryCtx, parent, a.ID); err != nil {
-			return nil, err
+	for i, a := range attempts {
+		err := failures[i]
+		if err == nil {
+			_, err = s.store.InspectSubagent(deliveryCtx, parent, a.ID)
+		}
+		if err != nil {
+			results[i] = undeliverable(a, err, s.policy.ResultBytes)
 		}
 	}
 	return results, nil
+}
+
+// undeliverable is the error entry of one batch member whose result could
+// not be settled or delivered. It names the assignment's key and the error,
+// cut so the entry stays within the result limit, and nothing else.
+func undeliverable(a delegation.Attempt, err error, limit int) delegation.Result {
+	r := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: delegation.StatusError,
+		Error: fmt.Sprintf("assignment %q: %v", a.Assignment.Key, err),
+		Notes: []string{"Not delivered; the other results are unaffected. Repeat this assignment with the same idempotency_key to retry delivery without running it again."}}
+	for r.ParentBytes() > limit && r.Error != "" {
+		cut := len(r.Error) * 3 / 4
+		for cut > 0 && !utf8.RuneStart(r.Error[cut]) {
+			cut--
+		}
+		r.Error = r.Error[:cut]
+	}
+	if r.ParentBytes() > limit {
+		r.Notes = nil
+	}
+	return r
 }
 
 // Continue extends one of parent's finished attempts: the child resumes its
@@ -241,12 +275,21 @@ func (s *Supervisor) Continue(ctx context.Context, parent delegation.Parent, exe
 
 // run settles one attempt of the batch. The dispatch that admitted an attempt
 // owns it: it starts the attempt when capacity allows and records its terminal
-// outcome. Other callers only observe it.
+// outcome. Other callers only observe it, and their result is a replay of the
+// earlier call's attempt, marked with the time that attempt ended.
 func (s *Supervisor) run(ctx context.Context, parent delegation.Parent, a delegation.Attempt, client agent.Client, profile openrouter.ContextProfile, resolve Resolver, owns bool) (delegation.Result, error) {
 	if owns && !a.Terminal() {
 		return s.own(ctx, parent, a, client, profile, resolve)
 	}
-	return s.join(ctx, parent, a)
+	settled, err := s.join(ctx, parent, a)
+	if err != nil {
+		return delegation.Result{}, err
+	}
+	result := *settled.Result
+	if !owns {
+		result.Replayed, result.CompletedAt = true, settled.EndedAt
+	}
+	return result, nil
 }
 
 // own waits for capacity until the attempt's queue deadline, one policy
@@ -263,7 +306,11 @@ func (s *Supervisor) own(ctx context.Context, parent delegation.Parent, a delega
 			return s.execute(ctx, current, client, profile, resolve)
 		case err == nil:
 			// Already settled or started elsewhere, such as by recovery.
-			return s.join(ctx, parent, current)
+			settled, err := s.join(ctx, parent, current)
+			if err != nil {
+				return delegation.Result{}, err
+			}
+			return *settled.Result, nil
 		case ctx.Err() != nil:
 			return s.finish(id, stopped(ctx))
 		case errors.Is(err, delegation.ErrCapacity) || transientStoreError(err):
@@ -280,28 +327,28 @@ func (s *Supervisor) own(ctx context.Context, parent delegation.Parent, a delega
 	}
 }
 
-// join observes an attempt until it is terminal and returns its retained
-// result after current access checks. Leaving early never changes the
-// attempt: its owner settles it within two deadlines of admission.
-func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a delegation.Attempt) (delegation.Result, error) {
+// join observes an attempt until it is terminal and returns it, with its
+// retained result, after current access checks. Leaving early never changes
+// the attempt: its owner settles it within two deadlines of admission.
+func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a delegation.Attempt) (delegation.Attempt, error) {
 	settled := time.NewTimer(time.Until(a.CreatedAt.Add(2*a.Policy.Deadline + settleGrace)))
 	defer settled.Stop()
 	for {
 		current, err := s.store.InspectSubagent(ctx, parent, a.ID)
 		if err != nil && (ctx.Err() != nil || !transientStoreError(err)) {
-			return delegation.Result{}, err
+			return delegation.Attempt{}, err
 		}
 		if err == nil && current.Terminal() {
 			if current.Result == nil {
-				return delegation.Result{}, errors.New("terminal subagent result is missing")
+				return delegation.Attempt{}, errors.New("terminal subagent result is missing")
 			}
-			return *current.Result, nil
+			return current, nil
 		}
 		select {
 		case <-ctx.Done():
-			return delegation.Result{}, ctx.Err()
+			return delegation.Attempt{}, ctx.Err()
 		case <-settled.C:
-			return delegation.Result{}, errors.New("subagent execution did not settle within its deadlines")
+			return delegation.Attempt{}, errors.New("subagent execution did not settle within its deadlines")
 		case <-time.After(capacityPollInterval):
 		}
 	}
@@ -318,12 +365,16 @@ func stopped(ctx context.Context) outcome {
 	return outcome{"cancelled", "parent_cancelled"}
 }
 
-// refused classifies a durable refusal to start a queued attempt.
+// refused classifies a durable refusal to start a queued attempt: the parent's
+// authority or scope ended (its lease, its project, or its active session), or
+// the store failed. Amended 2026-10-01; formerly one cancelled/
+// authority_or_cancellation for both.
 func refused(err error) outcome {
-	if errors.Is(err, delegation.ErrAuthority) || errors.Is(err, eviedb.ErrTurnLeaseLost) {
+	if errors.Is(err, delegation.ErrAuthority) || errors.Is(err, eviedb.ErrTurnLeaseLost) ||
+		errors.Is(err, eviedb.ErrProjectNotActive) || errors.Is(err, sql.ErrNoRows) {
 		return outcome{"interrupted", "authority_ended"}
 	}
-	return outcome{"cancelled", "authority_or_cancellation"}
+	return outcome{"failed", "infrastructure_failure"}
 }
 
 // executionFailure classifies a child turn that ended with err.
@@ -342,8 +393,14 @@ func executionFailure(ctx context.Context, err error, deadline time.Time) outcom
 		// The tool-free wrap-up response still requested tools, so nothing
 		// from it was committed.
 		return outcome{"failed", delegation.ReasonWrapUpFailed}
-	case errors.Is(err, delegation.ErrPolicy) || errors.Is(err, agent.ErrContextOverflow):
-		return outcome{"failed", "policy_limit"}
+	// Policy limits name the limit reached (2026-10-01; formerly all
+	// policy_limit).
+	case errors.Is(err, errTokenBudgetSpent):
+		return outcome{"failed", delegation.ReasonTokenBudgetSpent}
+	case errors.Is(err, errResponseTooLarge):
+		return outcome{"failed", delegation.ReasonResponseTooLarge}
+	case errors.Is(err, errRequestTooLarge) || errors.Is(err, agent.ErrContextOverflow):
+		return outcome{"failed", delegation.ReasonContextLimit}
 	}
 	return outcome{"failed", "infrastructure_failure"}
 }
@@ -429,8 +486,9 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		return s.finish(a.ID, outcome{"failed", "composition_unavailable"})
 	}
 	if a.Policy.Validate() != nil {
-		// Policies pinned before the 2026-10-01 budgets cannot run.
-		return s.finish(a.ID, outcome{"failed", "invalid_model_policy"})
+		// Policies pinned before the 2026-10-01 budgets cannot run. Distinct
+		// from a model profile that cannot take the policy (below).
+		return s.finish(a.ID, outcome{"failed", "pinned_policy_invalid"})
 	}
 	metered := &budget{client: client, policy: a.Policy, now: s.now, started: s.now(),
 		authorize: func(ctx context.Context) error { return s.authorize(ctx, a.ID) },
@@ -445,7 +503,7 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), resolved.Toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
 	if err = session.Send(ctx, assignmentMessage(a), quietEvents{}, nil); err != nil {
 		failure := executionFailure(ctx, err, deadline)
-		if failure.reason == "policy_limit" && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
+		if failure.reason == delegation.ReasonContextLimit && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {
 			// Even the smallest wrap-up request could not fit.
 			failure.reason = delegation.ReasonWrapUpFailed
 		}

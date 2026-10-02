@@ -123,6 +123,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 
 		retained := make([]*delegation.Attempt, len(requests))
 		fresh := 0
+		var conflicts []string
 		for i, r := range requests {
 			if err := authorizeSubagentTask(ctx, conn, p, r.TaskID); err != nil {
 				return err
@@ -130,7 +131,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 			a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE parent_session_id=? AND idempotency_key=?`, p.Scope.SessionID, r.Key))
 			if err == nil {
 				if a.Digest != delegation.Digest(r) {
-					return delegation.ErrConflict
+					conflicts = append(conflicts, fmt.Sprintf("%q", r.Key))
 				}
 				retained[i] = &a
 				continue
@@ -139,6 +140,10 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 				return err
 			}
 			fresh++
+		}
+		if len(conflicts) > 0 {
+			// The whole batch is refused, so name every key that caused it.
+			return fmt.Errorf("%w: idempotency_key %s already ran in this conversation with a different objective, context or task_id; reuse a key only to retrieve that result, and give a new assignment a new key", delegation.ErrConflict, strings.Join(conflicts, ", "))
 		}
 		if fresh > 0 {
 			if err := admitWithinTurnLimit(ctx, conn, p, policy, fresh); err != nil {
@@ -231,7 +236,7 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 		retained, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE parent_session_id=? AND idempotency_key=?`, p.Scope.SessionID, key))
 		if err == nil {
 			if retained.Continues == nil || retained.Continues.ExecutionID != executionID || retained.Digest != digest {
-				return delegation.ErrConflict
+				return fmt.Errorf("%w: this continue_research call (key %q) already admitted execution %q with different arguments", delegation.ErrConflict, key, retained.ID)
 			}
 			if err = s.authorizeSubagentParent(ctx, conn, p, retained.Receipt); err != nil {
 				return err

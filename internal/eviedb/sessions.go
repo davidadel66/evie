@@ -121,7 +121,10 @@ func (s *Store) GetActiveSessionForChooser(
 // ListActiveSessions excludes closed sessions at the persistence boundary and
 // returns one globally ordered stream for consumers to partition without
 // re-sorting. Activity is the parsed timestamp attached to the greatest accepted
-// sequence, with creation time as the empty-history fallback.
+// sequence, with creation time as the empty-history fallback. Delegated child
+// sessions, running or reopened for a continuation, are their parent's work
+// rather than owner conversations; they are inspected through the parent
+// (read_subagent_report) and never listed (amended 2026-10-01).
 func (s *Store) ListActiveSessions(ctx context.Context) ([]memory.SessionListing, error) {
 	return s.listSessions(ctx, memory.SessionActive)
 }
@@ -146,8 +149,8 @@ func (s *Store) listSessions(ctx context.Context, status memory.SessionStatus) (
 		           LIMIT 1
 		       )
 		FROM sessions
-		WHERE sessions.status = ? AND (? = 'active' OR sessions.parent_session_id IS NULL)
-	`, status, status)
+		WHERE sessions.status = ? AND sessions.parent_session_id IS NULL
+	`, status)
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}

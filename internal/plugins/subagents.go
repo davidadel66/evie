@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -55,13 +56,18 @@ func (s Subagents) ToolCapabilities() []ToolCapability {
 				Assignments []delegation.Assignment `json:"assignments"`
 			}
 			if err := decodeStrict(args, &request); err != nil {
-				return "", errors.New("invalid delegation arguments")
+				return "", fmt.Errorf("invalid delegate_research arguments: %w", err)
 			}
 			results, err := s.supervisor.Delegate(ctx, parent, request.Assignments)
 			if err != nil {
 				return "", err
 			}
-			b, err := json.Marshal(results)
+			// Child-written text reaches the parent framed as untrusted data.
+			views := make([]delegation.ParentResult, len(results))
+			for i, r := range results {
+				views[i] = r.ParentView()
+			}
+			b, err := json.Marshal(views)
 			return string(b), err
 		}}},
 		{ID: SubagentsReportCapabilityID, ContractVersion: "1.0.0", Tool: tools.Tool{Schema: report, Execute: func(ctx context.Context, args string) (string, error) {
@@ -74,14 +80,17 @@ func (s Subagents) ToolCapabilities() []ToolCapability {
 				Offset      int    `json:"offset"`
 				Limit       int    `json:"limit"`
 			}
-			if err := decodeStrict(args, &request); err != nil || strings.TrimSpace(request.ExecutionID) == "" {
-				return "", errors.New("invalid read_subagent_report arguments: execution_id is required")
+			if err := decodeStrict(args, &request); err != nil {
+				return "", fmt.Errorf("invalid read_subagent_report arguments: %w", err)
+			}
+			if strings.TrimSpace(request.ExecutionID) == "" {
+				return "", errors.New("invalid read_subagent_report arguments: execution_id is blank")
 			}
 			page, err := s.supervisor.ReadReport(ctx, parent, request.ExecutionID, request.Offset, request.Limit)
 			if err != nil {
 				return "", err
 			}
-			b, err := json.Marshal(page)
+			b, err := json.Marshal(page.ParentView())
 			return string(b), err
 		}}},
 		{ID: SubagentsContinueCapabilityID, ContractVersion: "1.0.0", Tool: tools.Tool{Schema: continuation, Execute: func(ctx context.Context, args string) (string, error) {
@@ -90,14 +99,15 @@ func (s Subagents) ToolCapabilities() []ToolCapability {
 				return "", err
 			}
 			var request delegation.Continuation
-			if err := decodeStrict(args, &request); err != nil || strings.TrimSpace(request.ExecutionID) == "" || strings.TrimSpace(request.Message) == "" {
-				return "", errors.New("invalid continue_research arguments: execution_id and message are required")
+			if err := decodeStrict(args, &request); err != nil {
+				return "", fmt.Errorf("invalid continue_research arguments: %w", err)
 			}
+			// The supervisor names a blank or oversized execution_id or message.
 			result, err := s.supervisor.Continue(ctx, parent, request.ExecutionID, request.Message)
 			if err != nil {
 				return "", err
 			}
-			b, err := json.Marshal(result)
+			b, err := json.Marshal(result.ParentView())
 			return string(b), err
 		}}},
 	}

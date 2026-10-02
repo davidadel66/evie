@@ -227,7 +227,7 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 			case memory.ClassificationProviderResponseInvalid:
 				result.Reason = "provider_response_invalid"
 			case memory.ClassificationContextOverflow:
-				result.Reason = "policy_limit"
+				result.Reason = delegation.ReasonContextLimit
 			case memory.ClassificationStepLimitExceeded:
 				result.Reason = delegation.ReasonWrapUpFailed
 			}
@@ -246,7 +246,7 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	if !hasReport {
 		report = ""
 	}
-	buildSubagentResult(&result, hasReport, report, evidence, a.Policy.ResultBytes, next)
+	buildSubagentResult(&result, hasReport, report, evidence, a.Policy, next)
 	now := s.now().UTC()
 	a.EndedAt = &now
 	a.State = result.Status

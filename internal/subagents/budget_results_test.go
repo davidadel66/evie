@@ -137,8 +137,11 @@ func TestChildThatKeepsCallingToolsWrapsUpAsPartialWithFindings(t *testing.T) {
 	if len(got.Sources) != 1 || got.Sources[0] != (delegation.Source{URL: "https://search.example/hit", Fetched: true, Cited: true}) {
 		t.Fatalf("partial sources: %+v", got.Sources)
 	}
-	limitations := strings.Join(got.Limitations, "\n")
-	if !strings.Contains(limitations, "model-response limit") || !strings.Contains(limitations, "Only one source was read.") || !strings.Contains(limitations, "Dates were not confirmed.") {
+	// Harness notes and the child's own limitations are kept apart (G4).
+	if notes := strings.Join(got.Notes, "\n"); !strings.Contains(notes, "model-response limit") || strings.Contains(notes, "Only one source") {
+		t.Fatalf("partial notes: %q", got.Notes)
+	}
+	if limitations := strings.Join(got.Limitations, "\n"); limitations != "Only one source was read.\nDates were not confirmed." {
 		t.Fatalf("partial limitations: %q", got.Limitations)
 	}
 	// A crash before the result is written still recovers as partial: the
@@ -269,8 +272,8 @@ func TestWrapUpThatStillRequestsToolsFailsWithSalvagedSources(t *testing.T) {
 	if got.Usage == nil || *got.Usage.InputTokens != 100 || !got.Usage.Incomplete {
 		t.Fatalf("salvaged usage: %+v", got.Usage)
 	}
-	if !strings.Contains(strings.Join(got.Limitations, "\n"), "No report") {
-		t.Fatalf("salvage not explained: %q", got.Limitations)
+	if !strings.Contains(strings.Join(got.Notes, "\n"), "No report") || len(got.Limitations) != 0 {
+		t.Fatalf("salvage not explained: %q %q", got.Notes, got.Limitations)
 	}
 }
 
@@ -335,7 +338,7 @@ func TestLongReportIsPagedOnlyForItsParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inline, _ := json.Marshal(r[0])
+	inline, _ := json.Marshal(r[0].ParentView())
 	if r[0].Summary != "Short summary citing https://example.com/a" || r[0].SummaryTruncated || r[0].ReportBytes != len(full) ||
 		strings.Contains(string(inline), "detail-sentinel") || len(inline) > delegation.DefaultPolicy().ResultBytes {
 		t.Fatalf("inline result: %s", inline)
@@ -351,6 +354,9 @@ func TestLongReportIsPagedOnlyForItsParent(t *testing.T) {
 		if err = json.Unmarshal([]byte(out), &page); err != nil {
 			t.Fatal(err)
 		}
+		// The page text is framed child output (G4); this report has no
+		// frame markers to escape, so the payload is the stored text.
+		page.Text = sealedResearchFrame(t, page.Text)
 		if page.ExecutionID != r[0].ExecutionID || page.TotalBytes != len(full) || page.Offset != offset || len(page.Text) > 8192 || len(page.Text) == 0 {
 			t.Fatalf("page: %+v", page)
 		}
@@ -520,7 +526,7 @@ func TestUnfittableWrapUpFailsWithFetchedSources(t *testing.T) {
 	}
 	got := r[0]
 	if len(client.recorded()) != 2 || got.Status != "failed" || got.Reason != "wrap_up_failed" || got.Summary != "" || len(got.Sources) != 2 || !got.Sources[0].Fetched ||
-		!strings.Contains(strings.Join(got.Limitations, "\n"), "No report") {
+		!strings.Contains(strings.Join(got.Notes, "\n"), "No report") {
 		t.Fatalf("unfittable wrap-up: calls=%d %+v", len(client.recorded()), got)
 	}
 }

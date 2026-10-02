@@ -439,8 +439,9 @@ func TestComposedParentDelegatesThroughPluginAndReceivesIsolatedEvidence(t *test
 					}
 				}
 			}
-			if len(results) != 1 || results[0].Status != "succeeded" || !strings.Contains(results[0].Summary, "child evidence") {
-				return openrouter.ChatResponse{}, fmt.Errorf("parent received no evidence: %+v", results)
+			if len(results) != 1 || results[0].Status != "succeeded" || !strings.Contains(results[0].Summary, "child evidence") ||
+				!strings.HasPrefix(results[0].Summary, "[begin untrusted research child output from execution "+results[0].ExecutionID) {
+				return openrouter.ChatResponse{}, fmt.Errorf("parent received no framed evidence: %+v", results)
 			}
 			return response("Owner-visible researched answer"), nil
 		}
@@ -697,7 +698,8 @@ func TestConfiguredDeadlineContextAndResultLimits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if r[0].Reason != "policy_limit" || f.client.calls != 0 {
+		// G7: the reason names the limit, and a note states its value.
+		if r[0].Reason != delegation.ReasonContextLimit || f.client.calls != 0 || !strings.Contains(strings.Join(r[0].Notes, " "), "request_bytes 100") {
 			t.Fatalf("oversized context reached provider: %+v", r)
 		}
 	})
@@ -712,8 +714,11 @@ func TestConfiguredDeadlineContextAndResultLimits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, _ := json.Marshal(r[0])
-		if len(b) > 512 || !utf8.ValidString(r[0].Summary) || !r[0].SummaryTruncated || len(r[0].Limitations) == 0 {
+		// The bound is on the parent view, framed and with replay fields (G4).
+		replayed := r[0]
+		replayed.Replayed = true
+		b, _ := json.Marshal(replayed.ParentView())
+		if len(b) > 512 || r[0].ParentBytes() > 512 || !utf8.ValidString(r[0].Summary) || !r[0].SummaryTruncated || len(r[0].Notes) == 0 {
 			t.Fatalf("unbounded result %d bytes %+v", len(b), r[0])
 		}
 	})
@@ -899,6 +904,13 @@ func TestProviderFailuresRemainDistinctAndSafeAcrossBatchRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A retry is a flagged replay (G5); otherwise the outcomes are unchanged.
+	for i := range retained {
+		if !retained[i].Replayed || retained[i].CompletedAt == nil {
+			t.Fatalf("retained outcome %d not flagged as a replay: %+v", i, retained[i])
+		}
+		retained[i].Replayed, retained[i].CompletedAt = false, nil
+	}
 	before, _ := json.Marshal(first)
 	after, _ := json.Marshal(retained)
 	if string(before) != string(after) || strings.Contains(string(after), "secret-sentinel") || calls.Load() != 3 {
@@ -918,7 +930,7 @@ func TestChildComposedContextOverflowIsAPolicyFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r[0].Status != "failed" || r[0].Reason != "policy_limit" || f.client.calls != 0 {
+	if r[0].Status != "failed" || r[0].Reason != delegation.ReasonContextLimit || f.client.calls != 0 {
 		t.Fatalf("context overflow classification: %+v calls=%d", r, f.client.calls)
 	}
 }

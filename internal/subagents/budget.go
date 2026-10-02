@@ -34,6 +34,14 @@ type budget struct {
 	reason string
 }
 
+// Policy refusals of one model call, each naming the limit it reached so the
+// attempt's failure reason does too (2026-10-01; formerly all policy_limit).
+var (
+	errTokenBudgetSpent = fmt.Errorf("%w: token budget spent", delegation.ErrPolicy)
+	errRequestTooLarge  = fmt.Errorf("%w: request exceeds request_bytes", delegation.ErrPolicy)
+	errResponseTooLarge = fmt.Errorf("%w: provider output exceeds request_bytes", delegation.ErrPolicy)
+)
+
 func (b *budget) ChatStream(ctx context.Context, r openrouter.ChatRequest, h openrouter.StreamHandlers) (openrouter.ChatResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return openrouter.ChatResponse{}, err
@@ -45,14 +53,14 @@ func (b *budget) ChatStream(ctx context.Context, r openrouter.ChatRequest, h ope
 	spent := b.tokens >= b.policy.TokenBudget
 	b.mu.Unlock()
 	if spent && r.ToolChoice != "none" {
-		return openrouter.ChatResponse{}, fmt.Errorf("%w: token budget", delegation.ErrPolicy)
+		return openrouter.ChatResponse{}, errTokenBudgetSpent
 	}
 	request, err := openrouter.RequestBytes(r)
 	if err != nil {
 		return openrouter.ChatResponse{}, err
 	}
 	if len(request) > b.policy.RequestBytes {
-		return openrouter.ChatResponse{}, fmt.Errorf("%w: request context", delegation.ErrPolicy)
+		return openrouter.ChatResponse{}, errRequestTooLarge
 	}
 	result, err := b.client.ChatStream(ctx, r, h)
 	if err != nil {
@@ -64,7 +72,7 @@ func (b *budget) ChatStream(ctx context.Context, r openrouter.ChatRequest, h ope
 		return openrouter.ChatResponse{}, err
 	}
 	if len(response) > b.policy.RequestBytes {
-		return openrouter.ChatResponse{}, fmt.Errorf("%w: provider output", delegation.ErrPolicy)
+		return openrouter.ChatResponse{}, errResponseTooLarge
 	}
 	b.mu.Lock()
 	b.tokens += countedTokens(result.Usage, len(request), len(response))

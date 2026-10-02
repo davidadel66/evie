@@ -53,11 +53,34 @@ func (f *fixture) callContinue(t *testing.T, p delegation.Parent, args string) (
 	if err != nil {
 		return delegation.Result{}, err
 	}
+	return unframedResult(t, out), nil
+}
+
+// unframedResult decodes one parent-view result and, after checking that the
+// child's text arrived sealed in its data frame (G4), restores the summary
+// and the child's limitations, so assertions can compare them exactly.
+func unframedResult(t *testing.T, out string) delegation.Result {
+	t.Helper()
 	var r delegation.Result
-	if err = json.Unmarshal([]byte(out), &r); err != nil {
-		t.Fatalf("continue_research result %q: %v", out, err)
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("parent-view result %q: %v", out, err)
 	}
-	return r, nil
+	if r.Summary == "" {
+		return r
+	}
+	payload := sealedResearchFrame(t, r.Summary)
+	summary, limitations, found := strings.Cut(payload, "\n\nLimitations:\n- ")
+	if !found {
+		summary, limitations, found = "", strings.TrimPrefix(payload, "Limitations:\n- "), strings.HasPrefix(payload, "Limitations:\n- ")
+		if !found {
+			summary = payload
+		}
+	}
+	r.Summary = summary
+	if found {
+		r.Limitations = strings.Split(limitations, "\n- ")
+	}
+	return r
 }
 
 // continueResearch is one parent continue_research call in p's turn.
@@ -86,6 +109,9 @@ func reportPage(t *testing.T, f *fixture, p delegation.Parent, executionID strin
 	if err = json.Unmarshal([]byte(out), &page); err != nil {
 		t.Fatal(err)
 	}
+	// Pages are framed child output (G4); these reports contain no frame
+	// markers, so the payload is the stored text.
+	page.Text = sealedResearchFrame(t, page.Text)
 	return page
 }
 
@@ -122,8 +148,8 @@ func TestContinuePartialChildResumesSameSessionWithFreshBudget(t *testing.T) {
 	if original.Status != "partial" || original.Reason != "token_budget" || !isWrapUpRequest(client.recorded()[2]) {
 		t.Fatalf("original outcome: %+v", original)
 	}
-	if !strings.Contains(strings.Join(original.Limitations, "\n"), "continue_research") {
-		t.Fatalf("partial result does not say it can be continued: %q", original.Limitations)
+	if !strings.Contains(strings.Join(original.Notes, "\n"), "continue_research") {
+		t.Fatalf("partial result does not say it can be continued: %q", original.Notes)
 	}
 
 	c, err := f.continueResearch(t, f.parent, original.ExecutionID, "followup-sentinel: check the late source too")
@@ -271,6 +297,10 @@ func TestContinuationRetryOfSameIntentReturnsTheSameAttempt(t *testing.T) {
 	again, err := f.callContinue(t, p, args)
 	if err != nil || again.ExecutionID != first.ExecutionID || f.client.calls != 2 || f.attemptCount(t) != 2 {
 		t.Fatalf("retry reran the continuation: %+v %v calls=%d", again, err, f.client.calls)
+	}
+	// G5: the retry is reported as a replay of the attempt it returns.
+	if first.Replayed || first.CompletedAt != nil || !again.Replayed || again.CompletedAt == nil {
+		t.Fatalf("continuation replay not flagged: first=%+v again=%+v", first, again)
 	}
 	// Arguments that differ from the committed intent are refused.
 	changed, _ := json.Marshal(delegation.Continuation{ExecutionID: r[0].ExecutionID, Message: "something else"})
@@ -430,8 +460,8 @@ func TestContinuationWrapsUpAndLosesAuthorityLikeAFreshAttempt(t *testing.T) {
 		if err != nil || stored.WrapUp == nil || stored.WrapUp.Reason != "step_limit" || stored.Continues == nil || stored.Continues.ExecutionID != r[0].ExecutionID {
 			t.Fatalf("stored continuation: %+v %v", stored, err)
 		}
-		if !strings.Contains(strings.Join(c.Limitations, "\n"), "continue_research") {
-			t.Fatalf("partial continuation does not say it can be continued: %q", c.Limitations)
+		if !strings.Contains(strings.Join(c.Notes, "\n"), "continue_research") {
+			t.Fatalf("partial continuation does not say it can be continued: %q", c.Notes)
 		}
 	})
 	t.Run("parent_authority", func(t *testing.T) {
@@ -543,8 +573,9 @@ func TestComposedParentContinuesItsChildThroughThePlugin(t *testing.T) {
 	if parentCalls.Load() != 3 || childCalls.Load() != 2 {
 		t.Fatalf("calls: parent=%d child=%d", parentCalls.Load(), childCalls.Load())
 	}
+	// The parent read the child's report framed as untrusted data (G4).
 	if continued.Status != "succeeded" || continued.ContinuesExecutionID != first[0].ExecutionID || continued.ChildSessionID != first[0].ChildSessionID ||
-		continued.Summary != "second report https://example.com/a" {
+		!strings.HasPrefix(sealedResearchFrame(t, continued.Summary), "second report https://example.com/a\n\nLimitations:\n- Only one source was read.") {
 		t.Fatalf("parent received continuation: %+v", continued)
 	}
 }

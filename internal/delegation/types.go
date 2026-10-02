@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +63,19 @@ const (
 	// report: the response still requested tools, or even the smallest
 	// wrap-up request could not fit the context budget.
 	ReasonWrapUpFailed = "wrap_up_failed"
+
+	// Failure reasons that name the limit reached. Together they replace
+	// the catch-all policy_limit for new attempts (2026-10-01); results
+	// stored with policy_limit keep it.
+	//
+	// ReasonTokenBudgetSpent: the token budget was spent and a further call
+	// that was not the wrap-up was needed.
+	ReasonTokenBudgetSpent = "token_budget_spent"
+	// ReasonContextLimit: a request did not fit the child's request_bytes
+	// limit or the model's context window.
+	ReasonContextLimit = "context_limit"
+	// ReasonResponseTooLarge: a model response exceeded request_bytes.
+	ReasonResponseTooLarge = "response_too_large"
 )
 
 // WrapUpPercent is the share of the time, token or context budget after which
@@ -98,31 +112,89 @@ type Policy struct {
 func DefaultPolicy() Policy {
 	return Policy{PerParent: 2, Runtime: 4, MaxBatch: 8, PerTurn: 16, Deadline: 15 * time.Minute, TokenBudget: 1_000_000, AssignmentBytes: 8192, RequestBytes: 1 << 20, ResultBytes: 12000}
 }
+
+// Validate names every setting that is not a finite positive limit (amended
+// 2026-10-01: errors name the setting and its bound).
 func (p Policy) Validate() error {
-	if p.PerParent <= 0 || p.Runtime <= 0 || p.MaxBatch <= 0 || p.PerTurn <= 0 || p.Deadline <= 0 || p.TokenBudget <= 0 || p.AssignmentBytes <= 0 || p.RequestBytes <= 0 || p.ResultBytes < 512 {
-		return errors.New("subagent policy requires finite positive limits (result_bytes >= 512)")
+	var invalid []string
+	for _, setting := range []struct {
+		name     string
+		positive bool
+	}{
+		{"per_parent", p.PerParent > 0}, {"runtime", p.Runtime > 0}, {"max_batch", p.MaxBatch > 0},
+		{"per_turn", p.PerTurn > 0}, {"deadline", p.Deadline > 0}, {"token_budget", p.TokenBudget > 0},
+		{"assignment_bytes", p.AssignmentBytes > 0}, {"request_bytes", p.RequestBytes > 0},
+	} {
+		if !setting.positive {
+			invalid = append(invalid, setting.name)
+		}
+	}
+	if len(invalid) > 0 {
+		return fmt.Errorf("subagent policy requires finite positive limits; invalid: %s", strings.Join(invalid, ", "))
+	}
+	if p.ResultBytes < MinResultBytes {
+		return fmt.Errorf("subagent policy result_bytes is %s; minimum %s", Grouped(p.ResultBytes), Grouped(MinResultBytes))
 	}
 	if p.LegacyModelCalls != 0 || p.LegacyOutputTokens != 0 {
 		return errors.New("subagent model-call and output-token limits were retired; budget children by deadline and token_budget")
 	}
-	if p.ResultBytes > 96*1024 || p.MaxBatch > (96*1024-2)/(p.ResultBytes+1) {
-		return errors.New("subagent batch result envelope exceeds 96 KiB; lower max_batch or result_bytes")
+	if p.ResultBytes > BatchEnvelopeBytes || p.MaxBatch > (BatchEnvelopeBytes-2)/(p.ResultBytes+1) {
+		return fmt.Errorf("subagent batch result envelope exceeds 96 KiB: max_batch %d × result_bytes %s; lower max_batch or result_bytes", p.MaxBatch, Grouped(p.ResultBytes))
 	}
 	return nil
 }
+
+// Bounds of one delegation call. A batch of MaxBatch results, each at most
+// ResultBytes as the parent reads it, fits BatchEnvelopeBytes, which stays
+// under the agent loop's 100 KiB tool-result admission boundary.
+const (
+	MinResultBytes     = 512
+	BatchEnvelopeBytes = 96 * 1024
+	// MaxKeyBytes bounds idempotency keys, Task identities and execution IDs.
+	MaxKeyBytes = 128
+)
+
+// ValidateBatch checks a delegate_research request before any child or model
+// provider is touched. Every violation names its assignment (by key, or by
+// position when the key itself is unusable), the field and the limit.
 func (p Policy) ValidateBatch(a []Assignment) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	if len(a) == 0 || len(a) > p.MaxBatch {
-		return errors.New("subagent batch size exceeds policy")
+	if len(a) == 0 {
+		return errors.New("delegate_research requires at least one assignment")
 	}
-	keys := map[string]bool{}
-	for _, v := range a {
-		if strings.TrimSpace(v.Key) == "" || len(v.Key) > 128 || keys[v.Key] || strings.TrimSpace(v.Objective) == "" || len(v.Objective)+len(v.Context) > p.AssignmentBytes || len(v.TaskID) > 128 {
-			return errors.New("invalid or oversized subagent assignment")
+	if len(a) > p.MaxBatch {
+		return fmt.Errorf("delegate_research has %d assignments; limit %d per call", len(a), p.MaxBatch)
+	}
+	var problems []string
+	first := map[string]int{}
+	for i, v := range a {
+		n := i + 1
+		name := fmt.Sprintf("assignment %d", n)
+		switch {
+		case strings.TrimSpace(v.Key) == "":
+			problems = append(problems, fmt.Sprintf("assignment %d idempotency_key is blank", n))
+		case len(v.Key) > MaxKeyBytes:
+			problems = append(problems, fmt.Sprintf("assignment %d idempotency_key is %s bytes; limit %d", n, Grouped(len(v.Key)), MaxKeyBytes))
+		case first[v.Key] != 0:
+			problems = append(problems, fmt.Sprintf("assignments %d and %d share idempotency_key %q; each assignment needs its own key", first[v.Key], n, v.Key))
+		default:
+			first[v.Key] = n
+			name = fmt.Sprintf("assignment %q", v.Key)
 		}
-		keys[v.Key] = true
+		if strings.TrimSpace(v.Objective) == "" {
+			problems = append(problems, name+" objective is blank")
+		}
+		if size := len(v.Objective) + len(v.Context); size > p.AssignmentBytes {
+			problems = append(problems, fmt.Sprintf("%s objective plus context is %s bytes; limit %s", name, Grouped(size), Grouped(p.AssignmentBytes)))
+		}
+		if len(v.TaskID) > MaxKeyBytes {
+			problems = append(problems, fmt.Sprintf("%s task_id is %s bytes; limit %d", name, Grouped(len(v.TaskID)), MaxKeyBytes))
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("invalid delegate_research request: %s", strings.Join(problems, "; "))
 	}
 	return nil
 }
@@ -133,13 +205,35 @@ func (p Policy) ValidateContinuation(executionID, message string) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(executionID) == "" || len(executionID) > 128 {
-		return errors.New("continue_research requires the execution_id of a research result from this conversation")
-	}
-	if strings.TrimSpace(message) == "" || len(message) > p.AssignmentBytes {
-		return fmt.Errorf("continue_research message must be nonblank and at most %d bytes", p.AssignmentBytes)
+	switch {
+	case strings.TrimSpace(executionID) == "":
+		return errors.New("continue_research execution_id is blank; use the execution_id of a research result from this conversation")
+	case len(executionID) > MaxKeyBytes:
+		return fmt.Errorf("continue_research execution_id is %s bytes; limit %d", Grouped(len(executionID)), MaxKeyBytes)
+	case strings.TrimSpace(message) == "":
+		return errors.New("continue_research message is blank")
+	case len(message) > p.AssignmentBytes:
+		return fmt.Errorf("continue_research message is %s bytes; limit %s", Grouped(len(message)), Grouped(p.AssignmentBytes))
 	}
 	return nil
+}
+
+// Grouped formats n with thousands separators, as limits are stated to the
+// parent model ("9,214 bytes; limit 8,192").
+func Grouped[N ~int | ~int64](n N) string {
+	digits := strconv.FormatInt(int64(n), 10)
+	sign := ""
+	if strings.HasPrefix(digits, "-") {
+		sign, digits = "-", digits[1:]
+	}
+	var b strings.Builder
+	for i, d := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(d)
+	}
+	return sign + b.String()
 }
 
 // Continuation is a parent's continue_research request.
@@ -177,14 +271,22 @@ type Parent struct {
 	IntentEventID memory.EventID
 }
 
-// Result is what the parent receives inline. The full report stays in the
-// child session and is paged with read_subagent_report.
+// Result is the retained outcome of one attempt. The parent reads it through
+// ParentView, which frames everything the child wrote as untrusted data. The
+// full report stays in the child session and is paged with
+// read_subagent_report.
 type Result struct {
 	ExecutionID    string           `json:"execution_id"`
 	ChildSessionID memory.SessionID `json:"child_session_id"`
 	// ContinuesExecutionID is the attempt a continuation extended.
 	ContinuesExecutionID string `json:"continues_execution_id,omitempty"`
 	Status               string `json:"status"`
+	// Replayed marks a result this call did not produce: its idempotency key
+	// (or continuation intent) resolved to an attempt an earlier call admitted.
+	// CompletedAt is when that attempt ended. Both are set only on delivery
+	// and never stored (added 2026-10-01).
+	Replayed    bool       `json:"replayed,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// Summary is the report's Summary section, or its beginning when the
 	// report has none. SummaryTruncated marks a summary cut to the result
 	// limit; ReportBytes is the full report's size.
@@ -195,10 +297,25 @@ type Result struct {
 	Findings       string   `json:"findings,omitempty"`
 	Sources        []Source `json:"sources,omitempty"`
 	UnverifiedURLs []string `json:"unverified_urls,omitempty"`
-	Limitations    []string `json:"limitations,omitempty"`
-	Reason         string   `json:"reason,omitempty"`
-	Usage          *Usage   `json:"usage"`
+	// Limitations are child-written: the bullets of the report's Limitations
+	// section. Results stored before the Stage 10 amendment of 2026-10-01 mix
+	// harness notes into them, or hold only harness notes, so the parent view
+	// frames all of them as child output.
+	Limitations []string `json:"limitations,omitempty"`
+	// Notes are harness-written: why the attempt stopped, what was cut from
+	// this inline result, and how to continue or retry (added 2026-10-01).
+	Notes  []string `json:"notes,omitempty"`
+	Reason string   `json:"reason,omitempty"`
+	// Error replaces the outcome of one batch member whose result could not
+	// be settled or delivered; its siblings are unaffected. Status is
+	// StatusError. It is set only on delivery and never stored.
+	Error string `json:"error,omitempty"`
+	Usage *Usage `json:"usage"`
 }
+
+// StatusError is the delivered status of a batch member whose result could
+// not be settled or delivered (added 2026-10-01). It is not a stored state.
+const StatusError = "error"
 
 // Source is a URL the child's own Web tool events returned. Fetched means the
 // child read it with web_fetch; otherwise only a web_search result listed it.

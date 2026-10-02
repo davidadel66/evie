@@ -286,13 +286,37 @@ type subagentNextSteps struct {
 	continues   string
 }
 
+// limitNote states, with the attempt's pinned limit, which limit stopped an
+// attempt that ended without a report (amended 2026-10-01: results name the
+// limit, not only a reason code).
+func limitNote(reason string, p delegation.Policy) string {
+	switch reason {
+	case "deadline_limit":
+		return fmt.Sprintf("Stopped at its %s deadline before it wrote a report.", p.Deadline)
+	case "queue_deadline":
+		return fmt.Sprintf("Never started: no running slot opened within its %s deadline (limits: %d running per parent, %d in total).", p.Deadline, p.PerParent, p.Runtime)
+	case delegation.ReasonTokenBudgetSpent:
+		return fmt.Sprintf("Its %s-token budget was spent before it wrote a report.", delegation.Grouped(p.TokenBudget))
+	case delegation.ReasonContextLimit:
+		return fmt.Sprintf("A request did not fit the child's context limit (request_bytes %s, or the model's context window if smaller); shorten the objective or context.", delegation.Grouped(p.RequestBytes))
+	case delegation.ReasonResponseTooLarge:
+		return fmt.Sprintf("A model response exceeded the %s-byte response limit.", delegation.Grouped(p.RequestBytes))
+	case delegation.ReasonWrapUpFailed:
+		return "Its tool-free wrap-up call produced no report."
+	}
+	return ""
+}
+
 // buildSubagentResult fills the inline result from the child's final report
-// and Web evidence, then bounds it to limit bytes. The summary is cut first,
-// because the full report stays readable; lists lose their least useful
-// entries next. Every cut is stated in the limitations. Every turn's evidence
-// verifies citations, but only pages fetched during this attempt are listed
-// uncited or counted as salvage: earlier turns' results already listed theirs.
-func buildSubagentResult(r *delegation.Result, hasReport bool, report string, evidence []webURL, limit int, next subagentNextSteps) {
+// and Web evidence, then bounds it to the policy's result_bytes as the parent
+// reads it: framed, and with the replay fields a later delivery adds. The
+// summary is cut first, because the full report stays readable; lists lose
+// their least useful entries next. Every cut is stated in the harness notes.
+// Every turn's evidence verifies citations, but only pages fetched during this
+// attempt are listed uncited or counted as salvage: earlier turns' results
+// already listed theirs.
+func buildSubagentResult(r *delegation.Result, hasReport bool, report string, evidence []webURL, policy delegation.Policy, next subagentNextSteps) {
+	limit := policy.ResultBytes
 	citedKeys := map[string]bool{}
 	var unverified []string
 	known := map[string]bool{}
@@ -349,6 +373,9 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 			harness = append(harness, "Stopped at "+phrase+" and wrapped up without tools; the report covers only the work done before then. A new idempotency key is required for another attempt.")
 		}
 	default:
+		if note := limitNote(r.Reason, policy); note != "" {
+			harness = append(harness, note)
+		}
 		if next.continues != "" {
 			harness = append(harness, fmt.Sprintf("Continuation did not complete; continue_research can still extend the child from execution %s.", next.continues))
 		} else {
@@ -375,33 +402,49 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 		r.ReportBytes = len(report)
 		fromReport = reportLimitations(report)
 	}
+	// Harness notes and the child's own limitations are kept apart, so the
+	// parent view can frame only what the child wrote (2026-10-01).
 	compose := func() {
 		r.Sources = append(append([]delegation.Source(nil), cited...), uncited...)
 		r.UnverifiedURLs = unverified
-		r.Limitations = append([]string(nil), harness...)
+		r.Notes = append([]string(nil), harness...)
 		if omitted > 0 {
-			r.Limitations = append(r.Limitations, fmt.Sprintf("%d more source URL(s) were omitted from this inline result.", omitted))
+			r.Notes = append(r.Notes, fmt.Sprintf("%d more source URL(s) were omitted from this inline result.", omitted))
 		}
 		if r.SummaryTruncated {
-			r.Limitations = append(r.Limitations, "The inline summary was cut to fit the result limit; read the full report with read_subagent_report.")
+			r.Notes = append(r.Notes, "The inline summary was cut to fit the result limit; read the full report with read_subagent_report.")
 		}
-		r.Limitations = append(r.Limitations, fromReport...)
+		if len(r.Notes) == 0 {
+			r.Notes = nil
+		}
+		r.Limitations = append([]string(nil), fromReport...)
 		if len(r.Limitations) == 0 {
 			r.Limitations = nil
 		}
 	}
 	for {
 		compose()
-		b, _ := json.Marshal(r)
-		over := len(b) - limit
-		if over <= 0 {
+		if r.ParentBytes() <= limit {
 			return
 		}
 		switch {
 		case r.Summary != "" && !r.SummaryTruncated:
 			r.SummaryTruncated = true
 		case r.Summary != "":
-			r.Summary = utf8Prefix(r.Summary, len(r.Summary)-over)
+			// Framing escapes and JSON-encodes the summary, so its parent
+			// size is not linear in its bytes: keep the longest prefix that
+			// fits, or none, and let the lists be cut next.
+			full := r.Summary
+			keep, drop := 0, len(full)-1
+			for keep < drop {
+				mid := (keep + drop + 1) / 2
+				if r.Summary = utf8Prefix(full, mid); r.ParentBytes() <= limit {
+					keep = mid
+				} else {
+					drop = mid - 1
+				}
+			}
+			r.Summary = utf8Prefix(full, keep)
 		case len(fromReport) > 0:
 			fromReport = fromReport[:len(fromReport)-1]
 		case len(uncited) > 0:
@@ -452,8 +495,11 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 	if limit == 0 {
 		limit = defaultReportPageBytes
 	}
-	if offset < 0 || limit < minReportPageBytes || limit > maxReportPageBytes {
-		return delegation.ReportPage{}, fmt.Errorf("invalid report page: offset must be nonnegative and limit %d to %d bytes", minReportPageBytes, maxReportPageBytes)
+	if offset < 0 {
+		return delegation.ReportPage{}, fmt.Errorf("read_subagent_report offset is %d; use 0 or a next_offset", offset)
+	}
+	if limit < minReportPageBytes || limit > maxReportPageBytes {
+		return delegation.ReportPage{}, fmt.Errorf("read_subagent_report limit is %s bytes; allowed %d to %s", delegation.Grouped(limit), minReportPageBytes, delegation.Grouped(maxReportPageBytes))
 	}
 	var page delegation.ReportPage
 	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
@@ -472,7 +518,7 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 			return fmt.Errorf("load stored report: %w", err)
 		}
 		if offset > len(report) || (offset < len(report) && !utf8.RuneStart(report[offset])) {
-			return fmt.Errorf("offset must be within the %d-byte report at a UTF-8 boundary; use next_offset", len(report))
+			return fmt.Errorf("read_subagent_report offset %s is not a UTF-8 boundary within the %s-byte report; use 0 or a next_offset", delegation.Grouped(offset), delegation.Grouped(len(report)))
 		}
 		page = delegation.ReportPage{ExecutionID: a.ID, Status: a.State, TotalBytes: len(report), Offset: offset}
 		end := offset + len(utf8Prefix(report[offset:], limit))
@@ -482,11 +528,8 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 				next := end
 				page.NextOffset = &next
 			}
-			encoded, err := json.Marshal(page)
-			if err != nil {
-				return err
-			}
-			if len(encoded) <= maxReportPageEnvelope || end-offset <= utf8.UTFMax {
+			// The envelope is measured as the parent reads it, framed.
+			if page.ParentBytes() <= maxReportPageEnvelope || end-offset <= utf8.UTFMax {
 				return nil
 			}
 			end = offset + len(utf8Prefix(report[offset:end], (end-offset)/2))

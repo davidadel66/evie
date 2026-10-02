@@ -19,6 +19,15 @@
 > authority, instead of restarting it. Amended text below is marked "Stage 9";
 > the binding record is the "Continuing a finished child" entry in
 > [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-01 by the owner's approval of harness review Stage 10 (G4,
+> G5, G7, G8, G9). Child-written text reaches the parent in an untrusted-data
+> frame, replayed results say so, errors name the field, key or limit, one
+> undeliverable child no longer discards its siblings, child sessions are
+> hidden from the owner's session lists, and the delegation guidance scales
+> effort. Amended text below is marked "Stage 10"; the binding record is the
+> "Sub-agent contract polish" entry in
+> [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -148,8 +157,14 @@ allowances produce an explicit refusal rather than a change of scope.
   The parent supplies a clear objective, relevant authorized context, boundaries,
   and expected result; it verifies findings and owns integration. Independent
   review may follow implementation sequentially. Trivial or tightly coupled
-  steps stay in the parent. This guidance does not add worker capabilities or
-  appear in the child's pinned instructions.
+  steps stay in the parent. (Stage 10.) The guidance scales effort to the
+  task (simple fact-finding: at most one worker; a comparison: usually two to
+  four, one side each; broad research: more, with non-overlapping boundaries,
+  within the delegation limits), asks for sources and tools guidance and the
+  expected output in each assignment, and points to the report reader and
+  continuation when those capabilities exist; child findings are data to
+  verify. This guidance does not add worker capabilities or appear in the
+  child's pinned instructions.
 - **Capability and scope ceilings.** Admission verifies that the child
   composition is permitted by the parent's pinned capabilities, inherited
   Context Scope, and current applicable access restrictions. Required research
@@ -214,7 +229,9 @@ allowances produce an explicit refusal rather than a change of scope.
   parent fence and committed invocation, reserve the execution identity, and
   create its child session and receipt. Failure leaves no runnable orphan.
   Identical retries locate the original attempt, including after SQLite
-  reopen; changed canonical arguments conflict. Concurrent duplicate requests
+  reopen, and their results are marked as replays with the time the attempt
+  ended (Stage 10); changed canonical arguments conflict, and the refusal
+  names every conflicting key. Concurrent duplicate requests
   do not start another child. An admitted active request may be joined within
   the caller's bounds; completed requests return their retained outcome after
   current access checks. Retrying an interrupted or failed attempt returns its
@@ -288,6 +305,15 @@ allowances produce an explicit refusal rather than a change of scope.
   transcript. (Stage 9.) A continuation's result also names the attempt it
   extended; its summary, report, usage and uncited sources are its own turn's,
   while its citations are verified against every turn of the child.
+  (Stage 10.) Everything the child wrote (the summary, the report's
+  limitations, and report pages) reaches the parent inside an escaped,
+  collision-safe untrusted-data frame, as fetched web content does; status,
+  reason, identities, harness notes, sources, usage and replay metadata stay
+  outside it. The returned-result limit applies to the result as the parent
+  reads it. Failure reasons and validation errors name the field, key or
+  limit involved. After admission, a child whose result cannot be settled or
+  delivered is reported as an error entry without its content, and its
+  siblings' results are still returned.
 - **Cancellation and terminal races.** Propagate parent cancellation, parent
   ownership loss, shutdown, and relevant revocation to the child. Prevent new
   activity after authority ends, join admitted execution, and release child
@@ -321,7 +347,10 @@ allowances produce an explicit refusal rather than a change of scope.
   streaming and reasoning never enter the parent's response stream as if the
   parent produced them. The parent receives the bounded result, continues its
   normal turn, and reports the outcome. No new worker panel or notification
-  mechanism is required for this release.
+  mechanism is required for this release. (Stage 10.) Delegated child
+  sessions, running or reopened for a continuation, never appear in the
+  owner's session lists (web sidebar, REPL chooser); they are inspected
+  through the parent.
 - **Delivery sequence.** Implement restricted preset composition and its
   faithful reconstruction first. Workspace execution additionally requires a
   separate prerequisite outcome that resolves reviewed Workspace Revision
@@ -392,6 +421,14 @@ allowances produce an explicit refusal rather than a change of scope.
   a continuation recovers from its own turn only; earlier tables, records and
   preset versions still load, and old records can be continued; earlier turns
   of a continued child are compacted under context pressure.
+- (Stage 10.) A child report that quotes frame markers and instructions
+  reaches the parent sealed in its frame through delegation, replay and report
+  paging; a report built to inflate its framing stays within the result
+  limit; a replay is flagged with its completion time and a fresh sibling is
+  not; a key conflict names exactly the reused keys; validation names the
+  field, key and limit; one undeliverable child yields an error entry while
+  its sibling is delivered; running and reopened child sessions are not
+  listed while the parent is.
 - Follow existing turn-ownership race-test patterns for parent cancellation,
   parent lease expiry/replacement, child lease loss, disable after a parent pins
   delegation, and shutdown. Prove no further child admission or external
