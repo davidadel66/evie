@@ -20,36 +20,74 @@ func (busyError) Code() int     { return 5 }
 
 // storeFault fails selected statements on a real SQLite connection. Every
 // other statement, including the one under test once disarmed, uses SQLite.
+// Several rules can be armed at once; each counts its own hits.
 type storeFault struct {
-	mu        sync.Mutex
+	mu    sync.Mutex
+	rules []*faultRule
+}
+
+type faultRule struct {
 	match     string
 	err       error
 	remaining int // negative: until disarmed
 	hits      int
 }
 
+// arm replaces every rule with one.
 func (f *storeFault) arm(match string, err error, count int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.match, f.err, f.remaining, f.hits = match, err, count, 0
+	f.rules = nil
+	if err != nil {
+		f.rules = []*faultRule{{match: match, err: err, remaining: count}}
+	}
+}
+
+// also adds a rule beside the armed ones.
+func (f *storeFault) also(match string, err error, count int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rules = append(f.rules, &faultRule{match: match, err: err, remaining: count})
 }
 func (f *storeFault) disarm() { f.arm("", nil, 0) }
+
+// hitCount is the hits of every rule armed since the last arm.
 func (f *storeFault) hitCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.hits
+	n := 0
+	for _, r := range f.rules {
+		n += r.hits
+	}
+	return n
+}
+
+// hitsOf is the hits of the rules matching match.
+func (f *storeFault) hitsOf(match string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, r := range f.rules {
+		if r.match == match {
+			n += r.hits
+		}
+	}
+	return n
 }
 func (f *storeFault) inject(query string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.err == nil || f.remaining == 0 || !strings.Contains(query, f.match) {
-		return nil
+	for _, r := range f.rules {
+		if r.remaining == 0 || !strings.Contains(query, r.match) {
+			continue
+		}
+		if r.remaining > 0 {
+			r.remaining--
+		}
+		r.hits++
+		return r.err
 	}
-	if f.remaining > 0 {
-		f.remaining--
-	}
-	f.hits++
-	return f.err
+	return nil
 }
 
 // waitForHits waits through the public fault seam rather than for elapsed time.

@@ -170,3 +170,42 @@ func TestWebContextControllerPreservesProjectAndUnscopedCreation(t *testing.T) {
 		t.Fatalf("project=%+v unscoped=%+v", projectOpened.Session, unscoped.Session)
 	}
 }
+
+// G8: a delegated child session is its parent's work. Selecting it by ID, as
+// a chat or for a model change, is refused before any agent is opened, so an
+// owner turn can never land in it.
+func TestWebContextControllerRefusesDelegatedChildSession(t *testing.T) {
+	db, err := eviedb.OpenDBAt(filepath.Join(t.TempDir(), "evie.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := eviedb.NewStore(db)
+	manager := sessionCompositionManager(t)
+	opened := 0
+	controller := newWebContextSessionController(store, manager, func(memory.Session, plugins.ResolvedComposition) (*agent.Session, error) {
+		opened++
+		return &agent.Session{}, nil
+	})
+	parent, err := controller.SelectSession(context.Background(), web.ContextSessionSelection{Unscoped: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	research, err := manager.ResolvePreset(plugins.ResearchPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := store.CreateDelegatedSessionWithComposition(context.Background(), parent.Session.ID, research.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controller.SelectSession(context.Background(), web.ContextSessionSelection{SessionID: child.ID}); !errors.Is(err, eviedb.ErrSessionDelegated) {
+		t.Fatalf("selecting a delegated child: %v", err)
+	}
+	if opened != 1 {
+		t.Fatalf("agents opened = %d, want only the parent's", opened)
+	}
+	if again, err := controller.SelectSession(context.Background(), web.ContextSessionSelection{SessionID: parent.Session.ID}); err != nil || again.Session.ID != parent.Session.ID {
+		t.Fatalf("reselecting the parent: %+v %v", again.Session, err)
+	}
+}

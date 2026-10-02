@@ -51,6 +51,29 @@ func (s *Store) GetActiveSession(ctx context.Context, id memory.SessionID) (memo
 	return session, nil
 }
 
+// GetActiveOwnerSession returns an active session the owner can open as a
+// conversation. A delegated child session, running or reopened for a
+// continuation, is its parent's work: an owner turn in it would become the
+// attempt's report, so it is refused with ErrSessionDelegated (amended
+// 2026-10-01; formerly only hidden from lists).
+func (s *Store) GetActiveOwnerSession(ctx context.Context, id memory.SessionID) (memory.Session, error) {
+	session, err := s.GetActiveSession(ctx, id)
+	if err != nil {
+		return memory.Session{}, err
+	}
+	if err := requireOwnerSession(session); err != nil {
+		return memory.Session{}, err
+	}
+	return session, nil
+}
+
+func requireOwnerSession(session memory.Session) error {
+	if session.ParentSessionID != "" {
+		return fmt.Errorf("%w: session %q is delegated research work of conversation %q and cannot be opened", ErrSessionDelegated, session.ID, session.ParentSessionID)
+	}
+	return nil
+}
+
 // EnsureGlobalSession returns one durable active Global primary session for a
 // caller-owned stable identity. It never reopens or repurposes an existing
 // session, so a collision cannot silently change scope or lifecycle history.
@@ -113,9 +136,12 @@ func (s *Store) GetActiveSessionForChooser(
 		if err != nil {
 			return fmt.Errorf("read active session: %w", err)
 		}
-		return nil
+		return requireOwnerSession(session)
 	})
-	return session, err
+	if err != nil {
+		return memory.Session{}, err
+	}
+	return session, nil
 }
 
 // ListActiveSessions excludes closed sessions at the persistence boundary and

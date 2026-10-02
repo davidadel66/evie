@@ -737,6 +737,28 @@ func TestSelectREPLSessionClosedSelectionRefreshes(t *testing.T) {
 	}
 }
 
+// G8: the chooser never resumes a delegated child session; the store's
+// refusal is explained and the owner chooses again.
+func TestSelectREPLSessionRefusesDelegatedSession(t *testing.T) {
+	root := t.TempDir()
+	child := memory.Session{ID: "child", ParentSessionID: "parent", CreatedAt: time.Now()}
+	store := &fakeREPLSessionStore{}
+	store.listHook = func() ([]memory.Project, []memory.SessionListing) {
+		return nil, []memory.SessionListing{{Session: child}}
+	}
+	store.getHook = func(memory.SessionID) (memory.Session, error) {
+		return memory.Session{}, fmt.Errorf("%w: session %q", eviedb.ErrSessionDelegated, child.ID)
+	}
+	var out bytes.Buffer
+	selected, err := selectREPLSession(context.Background(), store, root, bufio.NewScanner(strings.NewReader("2\n1\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ID != "new-global" || len(store.activeGets) != 1 || !strings.Contains(out.String(), replDelegatedSession) {
+		t.Fatalf("delegated selection result=%+v gets=%v out=%q", selected, store.activeGets, out.String())
+	}
+}
+
 func TestArchivedExactCWDHasNoSuggestionOrRegistration(t *testing.T) {
 	root := t.TempDir()
 	project := memory.Project{ID: "archived", DisplayName: "Archived", CanonicalRoot: root, Archived: true}

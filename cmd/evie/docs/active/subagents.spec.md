@@ -28,6 +28,15 @@
 > effort. Amended text below is marked "Stage 10"; the binding record is the
 > "Sub-agent contract polish" entry in
 > [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-01 by the final verification pass of that review. A child
+> outcome the store cannot record is retried and then handed to recovery and
+> same-key retries; child sessions cannot be opened as owner conversations;
+> listed URLs end at any Unicode space, control or format character; harness
+> guidance names only follow-up tools the session has; and a wrap-up's
+> compaction summarizes stored events. Amended text below is marked
+> "Verification fixes"; the binding record is the "Final verification fixes"
+> entry in [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -429,6 +438,17 @@ allowances produce an explicit refusal rather than a change of scope.
   field, key and limit; one undeliverable child yields an error entry while
   its sibling is delivered; running and reopened child sessions are not
   listed while the parent is.
+- (Verification fixes.) One lock-contention error on a terminal write still
+  settles the attempt; a write refused past its retries yields an error entry,
+  a same-key retry that fails at once while the store refuses and replays the
+  settled result once it accepts, and recovery settles it and frees its slot
+  while the parent turn is live; capacity-wait faults never leave an attempt
+  `admitted`; selecting a child session by ID is refused in the web and the
+  REPL; a report URL joined to text by a no-break, line-separator,
+  zero-width or other Unicode space or control character, or with an
+  over-long tail, never carries that text into `unverified_urls`; the cut
+  summary note and the delegation guidance name only tools the session has;
+  a wrap-up's compaction summarizes full stored tool results.
 - Follow existing turn-ownership race-test patterns for parent cancellation,
   parent lease expiry/replacement, child lease loss, disable after a parent pins
   delegation, and shutdown. Prove no further child admission or external

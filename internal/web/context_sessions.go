@@ -128,6 +128,9 @@ func (s *Server) handleContextSessionSelect(w http.ResponseWriter, r *http.Reque
 			status = http.StatusConflict
 			code = "context_session_state_changed"
 			message = "Context Scope choices changed; refresh and try again"
+		} else if errors.Is(err, eviedb.ErrSessionDelegated) {
+			code = "context_session_delegated"
+			message = "Delegated research sessions belong to their parent conversation and cannot be opened"
 		}
 		managementJSONError(w, status, code, message)
 		return

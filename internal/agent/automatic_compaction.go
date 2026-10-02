@@ -38,6 +38,28 @@ func selectAutomaticCompaction(
 	input ContextComposeInput,
 	composer *ContextComposer,
 ) (compactionPlan, bool, error) {
+	return selectAutomaticCompactionFrom(input, input.Events, composer)
+}
+
+// selectAutomaticCompactionFrom plans like selectAutomaticCompaction when
+// input.Events is a projection of stored, the durable events, with tool-result
+// content shortened (a worker's wrap-up fit). Pressure and every candidate
+// are measured on input, the request actually sent, while the covered turns
+// the compactor summarizes come from stored, so a summary never records
+// excerpts or omission markers as the conversation (amended 2026-10-01).
+func selectAutomaticCompactionFrom(
+	input ContextComposeInput,
+	stored []memory.Event,
+	composer *ContextComposer,
+) (compactionPlan, bool, error) {
+	if len(stored) != len(input.Events) {
+		return compactionPlan{}, true, errors.New("automatic compaction source does not match the projected history")
+	}
+	for i := range stored {
+		if stored[i].ID != input.Events[i].ID {
+			return compactionPlan{}, true, errors.New("automatic compaction source does not match the projected history")
+		}
+	}
 	prepared, err := composer.prepare(input)
 	if err != nil {
 		return compactionPlan{}, false, err
@@ -53,11 +75,11 @@ func selectAutomaticCompaction(
 		return compactionPlan{}, false, nil
 	}
 
-	activeSummary, chain, err := reconstructCompactionChain(input.Events)
+	activeSummary, chain, err := reconstructCompactionChain(stored)
 	if err != nil {
 		return compactionPlan{}, true, err
 	}
-	compactionTurns, err := compactionRootTurns(input.Events)
+	compactionTurns, err := compactionRootTurns(stored)
 	if err != nil {
 		return compactionPlan{}, true, err
 	}

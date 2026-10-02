@@ -3,12 +3,14 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/davidadel66/evie/internal/agent"
+	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 )
 
@@ -59,6 +61,19 @@ func TestContextSessionHTTPDoesNotExposeControllerErrors(t *testing.T) {
 	selected := httptest.NewRecorder()
 	handler.ServeHTTP(selected, managementRequest("/api/context-sessions/select", `{"unscoped":true}`))
 	if selected.Code != http.StatusUnprocessableEntity || strings.Contains(selected.Body.String(), "secret-value") {
+		t.Fatalf("selection status=%d body=%s", selected.Code, selected.Body.String())
+	}
+}
+
+// G8: selecting a delegated child session by ID is refused with an error
+// that says why, not the generic selection failure.
+func TestContextSessionHTTPRefusesDelegatedSessions(t *testing.T) {
+	controller := &fakeContextSessionController{selectErr: fmt.Errorf("%w: session %q", eviedb.ErrSessionDelegated, "child-1")}
+	handler := NewContextServer(nil, nil, nil, controller).Handler()
+	selected := httptest.NewRecorder()
+	handler.ServeHTTP(selected, managementRequest("/api/context-sessions/select", `{"sessionId":"child-1"}`))
+	if selected.Code != http.StatusUnprocessableEntity || !strings.Contains(selected.Body.String(), "context_session_delegated") ||
+		!strings.Contains(selected.Body.String(), "parent conversation") {
 		t.Fatalf("selection status=%d body=%s", selected.Code, selected.Body.String())
 	}
 }

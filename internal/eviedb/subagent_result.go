@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/delegation"
@@ -57,15 +58,16 @@ func subagentWebEvidence(ctx context.Context, conn *sql.Conn, child memory.Sessi
 	var found []webURL
 	index := map[string]int{}
 	add := func(raw string, fetched, recent bool) {
-		key, ok := sourceKey(raw)
+		clean, ok := resultURL(raw)
 		if !ok {
 			return
 		}
+		key, _ := sourceKey(clean)
 		i, seen := index[key]
 		if !seen {
 			i = len(found)
 			index[key] = i
-			found = append(found, webURL{url: raw})
+			found = append(found, webURL{url: clean})
 		}
 		if fetched {
 			found[i].fetched = true
@@ -129,23 +131,52 @@ var numberedResult = regexp.MustCompile(`^\d+\.\s+`)
 // exactly one URL, optionally numbered when it is also the result's title.
 func searchResultURL(line string) string {
 	line = numberedResult.ReplaceAllString(strings.TrimSpace(line), "")
-	if strings.ContainsAny(line, " \t") || !strings.HasPrefix(line, "http") {
+	if !strings.HasPrefix(line, "http") {
 		return ""
 	}
-	if _, ok := sourceKey(line); !ok {
+	clean, ok := resultURL(line)
+	if !ok {
 		return ""
 	}
-	return line
+	return clean
+}
+
+// urlBreak reports a character that can never be part of a URL the harness
+// lists: any Unicode space (including no-break and line separators), control
+// or format character (including zero-width ones). Amended 2026-10-01: an
+// ASCII-only check let child text joined by such characters ride along.
+func urlBreak(r rune) bool {
+	return r == utf8.RuneError || unicode.IsSpace(r) || unicode.In(r, unicode.Z, unicode.Cc, unicode.Cf)
+}
+
+// resultURL is the form of a URL token the harness lists outside the child's
+// data frame: an http or https URL with a host, without any urlBreak
+// character, re-serialized by net/url and at most maxResultURLBytes. Anything
+// else is dropped.
+func resultURL(raw string) (string, bool) {
+	if len(raw) > maxResultURLBytes || !utf8.ValidString(raw) || strings.IndexFunc(raw, urlBreak) >= 0 {
+		return "", false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", false
+	}
+	clean := u.String()
+	if len(clean) > maxResultURLBytes || strings.IndexFunc(clean, urlBreak) >= 0 {
+		return "", false
+	}
+	return clean, true
 }
 
 // sourceKey compares URLs as citations: scheme and host case, a fragment and
 // a trailing slash do not distinguish them.
 func sourceKey(raw string) (string, bool) {
-	if len(raw) > maxResultURLBytes || !utf8.ValidString(raw) {
+	clean, ok := resultURL(raw)
+	if !ok {
 		return "", false
 	}
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	u, err := url.Parse(clean)
+	if err != nil {
 		return "", false
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
@@ -156,20 +187,26 @@ func sourceKey(raw string) (string, bool) {
 	return u.String(), true
 }
 
-var reportURL = regexp.MustCompile(`https?://[^\s<>"\x60]+`)
+// reportURL finds URL tokens in report prose. A token ends at any urlBreak
+// character as well as at the characters that commonly delimit a URL.
+var reportURL = regexp.MustCompile(`https?://[^<>"\x60\s\p{Z}\p{Cc}\p{Cf}]+`)
 
-// citedURLs lists the URLs a report mentions, in order and without repeats.
+// citedURLs lists the URLs a report mentions, in order, without repeats and
+// in their re-serialized form.
 func citedURLs(report string) []string {
 	var cited []string
 	seen := map[string]bool{}
 	for _, raw := range reportURL.FindAllString(report, -1) {
-		raw = trimCitation(raw)
-		key, ok := sourceKey(raw)
-		if !ok || seen[key] {
+		clean, ok := resultURL(trimCitation(raw))
+		if !ok {
+			continue
+		}
+		key, _ := sourceKey(clean)
+		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		cited = append(cited, raw)
+		cited = append(cited, clean)
 	}
 	return cited
 }
@@ -278,11 +315,12 @@ var wrapUpPhrases = map[string]string{
 	delegation.WrapUpContext: "90% of its context budget",
 }
 
-// subagentNextSteps is what the harness can tell the parent about extending
-// a child: whether its composition has continue_research, and which attempt
-// a continuation extended.
+// subagentNextSteps is what the harness can tell the parent about following
+// up on a child: whether its composition has continue_research and
+// read_subagent_report, and which attempt a continuation extended.
 type subagentNextSteps struct {
 	continuable bool
+	readable    bool
 	continues   string
 }
 
@@ -411,8 +449,11 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 		if omitted > 0 {
 			r.Notes = append(r.Notes, fmt.Sprintf("%d more source URL(s) were omitted from this inline result.", omitted))
 		}
-		if r.SummaryTruncated {
+		switch {
+		case r.SummaryTruncated && next.readable:
 			r.Notes = append(r.Notes, "The inline summary was cut to fit the result limit; read the full report with read_subagent_report.")
+		case r.SummaryTruncated:
+			r.Notes = append(r.Notes, "The inline summary was cut to fit the result limit.")
 		}
 		if len(r.Notes) == 0 {
 			r.Notes = nil

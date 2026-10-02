@@ -427,8 +427,49 @@ web sidebar and `go run ./cmd/evie` chooser list only the parent chat.
 Known limits: results stored before this change render their harness notes
 inside the frame, since they cannot be told apart from the child's bullets.
 At the 512-byte minimum `result_bytes`, the frame leaves little or no room
-for a summary. A child whose terminal write failed in the store stays
-`running` until recovery, which needs the parent turn to end, so retrying its
-key in the same turn waits up to its two deadlines and then reports an error
-entry again (unchanged from before; only the siblings are now kept). Live
-model and Web execution was not exercised.
+for a summary. Live model and Web execution was not exercised. (A further
+limit recorded here, that a child whose terminal write failed stayed
+`running` until its parent turn ended, is fixed below.)
+
+## Verification fixes — 2026-10-01
+
+Fixes for six findings of the harness review's final verification pass; the
+binding record is the "Final verification fixes" entry in
+[subagents.decisions.md](subagents.decisions.md). No schema, migration,
+receipt, preset or tool-schema change.
+
+| Finding | Fix | Review entry points | Regression tests |
+| --- | --- | --- | --- |
+| Terminal write had one 3 s try, no retry; an unsettled attempt held its slot and a same-key retry waited ~30 min | Bounded retry (contention or per-try timeout, up to 5 s); otherwise the decided outcome is kept for recovery passes and same-key retries, which settle it or fail at once | `finish`, `settleOnce`, `settlePending`, `join` in `internal/subagents/supervisor.go`; `RunRecovery` | `TestTerminalWriteRetriesLockContention`, `TestSameKeyRetrySettlesAnUnsettledAttemptPromptly`, `TestRecoverySettlesAnUnsettledAttemptAndFreesItsSlot` |
+| D5 test injected into a query the capacity wait no longer runs | Faults now hit the start (capacity count) and terminal writes the wait performs; asserts hit counts and no attempt left `admitted` | `store_fault_test.go` (several rules per seam) | `TestCapacityWaitStoreFailuresNeverStrandAnAdmittedAttempt` |
+| URL extraction stopped only at ASCII whitespace, so NBSP-joined text reached `unverified_urls` | Tokens end at any Unicode space, control or format character; every listed URL is validated, re-serialized and capped | `reportURL`, `urlBreak`, `resultURL`, `searchResultURL` in `internal/eviedb/subagent_result.go` | `TestReportURLsEndAtUnicodeSpaceControlAndFormatCharacters`, `TestSearchResultURLRejectsJoinedText`, `TestUnverifiedURLsCarryNoChildTextJoinedByUnicodeSpace` |
+| Child sessions hidden but selectable by ID | `GetActiveOwnerSession`; chooser read refuses children; web 422 `context_session_delegated`; REPL notice | `internal/eviedb/sessions.go`, `cmd/evie/web_context_sessions.go`, `cmd/evie/repl.go`, `internal/web/context_sessions.go` | `TestOwnerSessionSelectionRefusesDelegatedChildSessions`, `TestWebContextControllerRefusesDelegatedChildSession`, `TestSelectREPLSessionRefusesDelegatedSession`, `TestContextSessionHTTPRefusesDelegatedSessions` |
+| Notes and guidance named tools a pinned session may lack | Cut-summary note checks `subagents.report`; prompt follow-up line built from the session's toolset | `subagentParentNextSteps` in `subagent_execution.go`; `primaryInstructions` in `internal/agent/prompt.go`, used by `context.go` | `TestCutSummaryNoteNamesTheReportToolOnlyWhenTheParentHasIt`, `TestDelegationGuidanceNamesOnlyToolsTheSessionHas` |
+| Wrap-up compaction summarized excerpts/markers | Plan measured on the fitted request, compactor turns taken from stored events | `selectAutomaticCompactionFrom` in `internal/agent/automatic_compaction.go`, its call in `turn.go` | `TestWrapUpCompactionSummarizesStoredEventsNotFittedProjection` |
+
+Each regression test failed before its fix (the D5 rewrite's refused-start
+case left the sibling `admitted`; its contended-start case guards the seam).
+
+Verification:
+
+- `./scripts/verify-change.sh` passed — UI lint/build, full Go tests and vet,
+  both whitespace checks; only the existing UI lint and Vite chunk-size
+  warnings.
+- `go test -race -count=1 ./internal/subagents/ ./internal/delegation/ ./internal/plugins/`
+  passed. Of thirteen race runs of `internal/subagents` during this work
+  (including `-count=4` under combined load), one failed; its output was not
+  kept, so the failing test is unknown, and it did not recur.
+- `go test -race -count=5` over the new supervisor and contract tests passed.
+
+Demonstration: with Subagents enabled in the web app, delegate research in a
+new chat, take `child_session_id` from the result, and run
+`curl -X POST http://127.0.0.1:6687/api/context-sessions/select -H 'Content-Type: application/json' -d '{"sessionId":"<child_session_id>"}'`:
+the answer is 422 `context_session_delegated` and the parent chat stays
+selected.
+
+Known limits: the unsettled-outcome handover is in memory, so after a crash
+an unsettled attempt still waits for its parent turn's ownership to end
+before recovery settles it (interrupted, or succeeded from an accepted
+report). A non-ASCII host in a listed URL is shown percent-encoded. A wrap-up
+whose full earlier turns do not fit the compactor proceeds without
+compaction.

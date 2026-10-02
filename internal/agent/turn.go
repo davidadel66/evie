@@ -271,7 +271,9 @@ func (s *Session) runOwnedTurn(
 			}
 			return s.classifyLocalError(coordinator, err)
 		}
-		plan, required, err := selectAutomaticCompaction(composeInput, s.composer)
+		// A wrap-up fit may have shortened composeInput's tool results; the
+		// compactor summarizes the stored events, not that projection.
+		plan, required, err := selectAutomaticCompactionFrom(composeInput, events, s.composer)
 		if err != nil {
 			if errors.Is(err, ErrNoLegalAutomaticCompaction) || IsContextOverflow(err) {
 				overflow := fmt.Errorf("%w: %v", ErrContextOverflow, err)

@@ -100,7 +100,8 @@ func (c *webContextSessionController) selectSession(ctx context.Context, selecti
 	}
 	switch {
 	case selection.SessionID != "":
-		session, err = c.store.GetActiveSession(ctx, selection.SessionID)
+		// A delegated child session is refused (ErrSessionDelegated).
+		session, err = c.store.GetActiveOwnerSession(ctx, selection.SessionID)
 		if err == nil {
 			_, receiptErr := c.store.GetCompositionReceipt(ctx, session.ID)
 			if errors.Is(receiptErr, eviedb.ErrCompositionReceiptNotFound) {

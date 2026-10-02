@@ -3,7 +3,9 @@ package subagents_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +14,7 @@ import (
 	"github.com/davidadel66/evie/internal/delegation"
 	"github.com/davidadel66/evie/internal/openrouter"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/subagents"
 )
 
 // unfinished counts attempts that still claim to be admitted or running.
@@ -273,45 +276,200 @@ func TestRunRecoverySurvivesTransientStoreErrors(t *testing.T) {
 	}
 }
 
-func TestCapacityWaitStoreFailureKeepsAttemptIdentity(t *testing.T) {
-	fault := &storeFault{}
-	p := delegation.DefaultPolicy()
-	p.PerParent = 1
-	f := setupWith(t, p, fault)
-	g := &gatedProvider{entered: make(chan struct{}, 2), release: make(chan struct{}, 2)}
-	configure(t, f, g)
-	done := make(chan []delegation.Result, 1)
-	errs := make(chan error, 1)
-	go func() {
-		r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "running", Objective: "a"}, {Key: "queued", Objective: "b"}})
-		done <- r
-		errs <- err
-	}()
-	select {
-	case <-g.entered:
-	case <-time.After(gateTimeout):
-		t.Fatal("child did not start")
+// Statements the capacity wait and settlement perform, matched by the fault
+// seam: each start attempt counts running attempts, and only the terminal
+// write closes the child session.
+const (
+	capacityCount = "FROM subagent_executions WHERE state='running'"
+	terminalWrite = "UPDATE sessions SET status='closed'"
+)
+
+// D5: a queued attempt's capacity wait performs only start attempts and, at
+// its end, the terminal write. Faults in either leave the attempt waiting or
+// settled, never stranded in admitted.
+func TestCapacityWaitStoreFailuresNeverStrandAnAdmittedAttempt(t *testing.T) {
+	type fault struct {
+		match string
+		err   error
+		count int
 	}
-	// Attempt inspection fails while one sibling waits for capacity.
-	fault.arm("FROM subagent_executions WHERE id=? AND parent_session_id=?", errors.New("injected inspection failure"), -1)
-	time.Sleep(200 * time.Millisecond)
-	fault.disarm()
-	g.release <- struct{}{}
-	select {
-	case <-g.entered:
-	case <-time.After(gateTimeout):
-		t.Fatal("queued child never started")
+	for _, tc := range []struct {
+		name    string
+		faults  []fault
+		settles bool // the queued sibling settles before the running child ends
+		want    []string
+	}{{
+		// Lock contention on every start attempt keeps the sibling waiting
+		// until the running child frees the slot.
+		name:   "contended_starts_keep_waiting",
+		faults: []fault{{capacityCount, busyError{}, 3}},
+		want:   []string{"succeeded/", "succeeded/"},
+	}, {
+		// A start the store refuses settles the sibling, even when its
+		// terminal write meets contention first.
+		name:    "refused_start_with_contended_terminal_write",
+		faults:  []fault{{capacityCount, errors.New("injected start failure"), 1}, {terminalWrite, busyError{}, 1}},
+		settles: true,
+		want:    []string{"failed/infrastructure_failure", "succeeded/"},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			faults := &storeFault{}
+			p := delegation.DefaultPolicy()
+			p.PerParent = 1
+			f := setupWith(t, p, faults)
+			g := &gatedProvider{entered: make(chan struct{}, 2), release: make(chan struct{}, 2)}
+			configure(t, f, g)
+			done := make(chan []delegation.Result, 1)
+			errs := make(chan error, 1)
+			go func() {
+				r, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "running", Objective: "a"}, {Key: "queued", Objective: "b"}})
+				done <- r
+				errs <- err
+			}()
+			select {
+			case <-g.entered:
+			case <-time.After(gateTimeout):
+				t.Fatal("child did not start")
+			}
+			// Only the queued sibling starts or settles while the running
+			// child is held, so every fault lands in its capacity wait.
+			faults.arm(tc.faults[0].match, tc.faults[0].err, tc.faults[0].count)
+			for _, extra := range tc.faults[1:] {
+				faults.also(extra.match, extra.err, extra.count)
+			}
+			waitUntil(t, "faults in the capacity wait", func() bool {
+				for _, fault := range tc.faults {
+					if faults.hitsOf(fault.match) < fault.count {
+						return false
+					}
+				}
+				return true
+			})
+			if tc.settles {
+				waitUntil(t, "queued sibling to settle", func() bool { return unfinished(t, f) == 1 })
+			} else {
+				g.release <- struct{}{}
+				select {
+				case <-g.entered:
+				case <-time.After(gateTimeout):
+					t.Fatal("queued child never started")
+				}
+			}
+			g.release <- struct{}{}
+			results := <-done
+			if err := <-errs; err != nil {
+				t.Fatalf("capacity wait lost its attempt: %v (unfinished=%d)", err, unfinished(t, f))
+			}
+			if got := outcomes(results); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Fatalf("outcomes=%v, want %v", got, tc.want)
+			}
+			if n := unfinished(t, f); n != 0 {
+				t.Fatalf("%d attempts left unfinished", n)
+			}
+		})
 	}
-	g.release <- struct{}{}
-	results := <-done
-	if err := <-errs; err != nil {
-		t.Fatalf("capacity wait lost its attempt: %v (unfinished=%d)", err, unfinished(t, f))
+}
+
+// One lock-contention error on an attempt's terminal write is retried: the
+// child settles with its own outcome, and repeating its key replays that
+// result at once.
+func TestTerminalWriteRetriesLockContention(t *testing.T) {
+	faults := &storeFault{}
+	f := setupWith(t, delegation.DefaultPolicy(), faults)
+	faults.arm(terminalWrite, busyError{}, 1)
+	requests := []delegation.Assignment{{Key: "settles", Objective: "research"}}
+	first, err := f.delegate(t, context.Background(), f.parent, requests)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := outcomes(results); len(got) != 2 || got[0] != "succeeded/" || got[1] != "succeeded/" {
-		t.Fatalf("outcomes=%v", got)
+	if faults.hitsOf(terminalWrite) != 1 || first[0].Status != "succeeded" {
+		t.Fatalf("terminal write contention: hits=%d result=%+v", faults.hitsOf(terminalWrite), first[0])
 	}
 	if n := unfinished(t, f); n != 0 {
 		t.Fatalf("%d attempts left unfinished", n)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), gateTimeout)
+	defer cancel()
+	again, err := f.delegate(t, ctx, f.parent, requests)
+	if err != nil || again[0].Status != "succeeded" || !again[0].Replayed || again[0].ExecutionID != first[0].ExecutionID || f.client.calls != 1 {
+		t.Fatalf("same-key retry: %+v %v calls=%d", again, err, f.client.calls)
+	}
+}
+
+// An attempt whose terminal write still fails after the bounded retries is
+// handed over rather than left running until its deadlines: repeating its
+// key fails at once with the reason while the store refuses the write, and
+// settles it with the outcome its owner decided once the store accepts it.
+func TestSameKeyRetrySettlesAnUnsettledAttemptPromptly(t *testing.T) {
+	faults := &storeFault{}
+	f := setupWith(t, delegation.DefaultPolicy(), faults)
+	subagents.SetSettleWindowForTest(f.supervisor, 100*time.Millisecond)
+	faults.arm(terminalWrite, busyError{}, -1)
+	requests := []delegation.Assignment{{Key: "stuck", Objective: "research"}}
+	first, err := f.delegate(t, context.Background(), f.parent, requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first[0].Status != delegation.StatusError || !strings.Contains(first[0].Error, `"stuck"`) || first[0].Summary != "" {
+		t.Fatalf("unsettled attempt delivered: %+v", first[0])
+	}
+	// Each retry must answer within this bound; before the handover a retry
+	// waited out two 15-minute deadlines.
+	ctx, cancel := context.WithTimeout(context.Background(), gateTimeout)
+	defer cancel()
+	again, err := f.delegate(t, ctx, f.parent, requests)
+	if err != nil || again[0].Status != delegation.StatusError || !strings.Contains(again[0].Error, "has not settled") ||
+		!strings.Contains(again[0].Error, "SQLITE_BUSY") {
+		t.Fatalf("retry while the write is refused: %+v %v", again, err)
+	}
+	faults.disarm()
+	ctx, cancel = context.WithTimeout(context.Background(), gateTimeout)
+	defer cancel()
+	settled, err := f.delegate(t, ctx, f.parent, requests)
+	if err != nil || settled[0].Status != "succeeded" || !settled[0].Replayed || settled[0].ExecutionID != first[0].ExecutionID ||
+		!strings.Contains(settled[0].Summary, "Research finding") || f.client.calls != 1 {
+		t.Fatalf("retry after the store recovered: %+v %v calls=%d", settled, err, f.client.calls)
+	}
+	if n := unfinished(t, f); n != 0 {
+		t.Fatalf("%d attempts left unfinished", n)
+	}
+}
+
+// Recovery settles an attempt whose terminal write failed while its parent
+// turn is still live, so the attempt stops holding its running slot.
+func TestRecoverySettlesAnUnsettledAttemptAndFreesItsSlot(t *testing.T) {
+	faults := &storeFault{}
+	p := delegation.DefaultPolicy()
+	p.PerParent = 1
+	f := setupWith(t, p, faults)
+	subagents.SetSettleWindowForTest(f.supervisor, 100*time.Millisecond)
+	faults.arm(terminalWrite, busyError{}, -1)
+	first, err := f.delegate(t, context.Background(), f.parent, []delegation.Assignment{{Key: "stuck", Objective: "research"}})
+	if err != nil || first[0].Status != delegation.StatusError {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	if n := unfinished(t, f); n != 1 {
+		t.Fatalf("unsettled attempts = %d", n)
+	}
+	faults.disarm()
+	recoveryCtx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		_ = f.supervisor.RunRecovery(recoveryCtx, nil)
+	}()
+	defer func() { cancel(); <-stopped }()
+	waitUntil(t, "recovery to settle the attempt", func() bool { return unfinished(t, f) == 0 })
+	var state string
+	if err := f.db.QueryRow(`SELECT state FROM subagent_executions WHERE id=?`, first[0].ExecutionID).Scan(&state); err != nil || state != "succeeded" {
+		t.Fatalf("settled state=%q %v", state, err)
+	}
+	// The parent's only running slot is free again.
+	ctx, stop := context.WithTimeout(context.Background(), gateTimeout)
+	defer stop()
+	next, err := f.delegate(t, ctx, f.parent, []delegation.Assignment{{Key: "next", Objective: "research"}})
+	if err != nil || next[0].Status != "succeeded" {
+		t.Fatalf("next: %+v %v", next, err)
 	}
 }
 

@@ -1,5 +1,66 @@
 # Subagents implementation decisions
 
+## 2026-10-01 — Final verification fixes
+
+Source: the final verification pass of the 2026-09-30 harness review
+([docs/harness-review-2026-09-30.md](../../../../docs/harness-review-2026-09-30.md)),
+which found these gaps in Stages 7–10 with probes. Each closes a gap against
+an outcome the owner already approved; no schema, migration, receipt, preset
+or tool-schema change.
+
+Superseded wording: the Stage 10 known limit that a child whose terminal
+write failed stays `running` until its parent turn ends; "They stay
+inspectable ... by ID" in Hidden child sessions below, for opening a child as
+a conversation; "no whitespace" for `unverified_urls`, which meant ASCII
+whitespace only; and, in Delegation guidance below, naming
+`read_subagent_report` and `continue_research` to every session.
+
+- **Settlement (D3, D5).** An attempt's terminal write is retried like every
+  other supervisor store call: lock contention (`SQLITE_BUSY`/
+  `SQLITE_LOCKED`), or one write outliving its 3-second timeout, is retried
+  with backoff for up to 5 seconds. An outcome that still cannot be recorded
+  is kept in memory and handed over: every recovery pass (every 250 ms while
+  healthy) records it, so the attempt settles with the outcome its owner
+  decided and frees its running slot as soon as the store accepts the write,
+  while its parent turn is still live. Repeating the key (or continuation
+  intent) records it at once; if the store still refuses, that retry fails
+  immediately with an error entry saying the execution has not settled and
+  why, instead of waiting out the attempt's two deadlines. After a crash the
+  existing recovery still settles it once the parent turn's ownership ends.
+- **Child sessions are fenced (G8).** Hiding child sessions from lists was not
+  enough: selecting one by ID could open it as an owner conversation, and an
+  owner turn there could become the attempt's report. The web selection (and
+  model change) and the REPL chooser now refuse a delegated session with
+  `ErrSessionDelegated`; the web answers 422 `context_session_delegated`
+  ("Delegated research sessions belong to their parent conversation and cannot
+  be opened") and the REPL says so and shows the chooser again. Archive and
+  restore already refused them.
+- **Listed URLs (G3, G4).** A URL token in a report ends at any Unicode space
+  (including no-break, ideographic and line separators), control or format
+  character (including zero-width ones), as well as at `<`, `>`, `"` and a
+  backtick. Every URL the harness lists outside the child-output frame
+  (`sources` and `unverified_urls`), from reports, search results or fetches,
+  must parse as http or https with a host, contain none of those characters,
+  and is re-serialized by `net/url` (non-ASCII is percent-encoded) and at most
+  512 bytes; anything else is dropped. A web_search line counts as a result
+  URL only when the whole line is one such URL.
+- **Follow-up tools named only when present (G9).** Sessions pinned to the
+  Standard preset before `read_subagent_report` or `continue_research`
+  existed resume without them. The harness note for a cut summary names
+  `read_subagent_report` only when the parent's pinned composition has
+  `subagents.report` (otherwise it says only that the summary was cut), as
+  the `partial` note already did for continuation. The Delegation guidance's
+  follow-up sentence is composed from the session's toolset: it names each of
+  the two tools only when the session has it, and is omitted when it has
+  neither. The rest of the system prompt is unchanged, and a session's pinned
+  toolset keeps its prompt stable across turns.
+- **Wrap-up compaction (G1, G10).** When a wrap-up shortens tool results to fit
+  its request and the fitted request still needs automatic compaction, the
+  compaction is planned on the fitted request (what is sent) but summarizes
+  the stored events of the covered turns, never the excerpts or omission
+  markers. If the full turns do not fit the compactor, no compaction runs and
+  the fitted request proceeds, as it fits by construction.
+
 ## 2026-10-01 — Sub-agent contract polish
 
 Source: harness review Stage 10 (G4, G5, G7, G8, G9) in

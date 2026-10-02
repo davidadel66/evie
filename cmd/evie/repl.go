@@ -55,6 +55,7 @@ const (
 	replActionNewWorkspace      = "new-workspace"
 	replActionRegisterWorkspace = "register-workspace"
 	replStateChanged            = "Session choices changed; refreshing."
+	replDelegatedSession        = "That session is delegated research work of another conversation and cannot be opened; refreshing."
 )
 
 func selectREPLSession(
@@ -106,6 +107,12 @@ func selectREPLSession(
 		switch action.kind {
 		case replActionResume:
 			session, err := store.GetActiveSessionForChooser(ctx, action.sessionID, canonicalRoot, renderedCWDProjectID)
+			if errors.Is(err, eviedb.ErrSessionDelegated) {
+				if _, writeErr := fmt.Fprintln(out, replDelegatedSession); writeErr != nil {
+					return memory.Session{}, fmt.Errorf("write delegated session notice: %w", writeErr)
+				}
+				continue
+			}
 			if errors.Is(err, eviedb.ErrSessionNotActive) || errors.Is(err, eviedb.ErrChooserStateChanged) {
 				if _, writeErr := fmt.Fprintln(out, replStateChanged); writeErr != nil {
 					return memory.Session{}, fmt.Errorf("write stale session notice: %w", writeErr)

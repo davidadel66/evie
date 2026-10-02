@@ -181,7 +181,7 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	// all of them for an original assignment, its own turn for a
 	// continuation. An earlier report never settles a continuation.
 	var after int64
-	next := subagentNextSteps{continuable: subagentParentCanContinue(ctx, conn, a.Parent.Scope.SessionID)}
+	next := subagentParentNextSteps(ctx, conn, a.Parent.Scope.SessionID)
 	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
 	if a.Continues != nil {
 		after = a.Continues.AfterSequence
@@ -260,19 +260,25 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	return err
 }
 
-// subagentParentCanContinue reports whether the parent's pinned composition
-// includes continue_research, so results only suggest a tool the parent has.
-func subagentParentCanContinue(ctx context.Context, conn *sql.Conn, parent memory.SessionID) bool {
+// subagentParentNextSteps reports whether the parent's pinned composition
+// includes continue_research and read_subagent_report, so results only
+// suggest tools the parent has (read_subagent_report since 2026-10-01: a
+// session pinned before it resumes without it).
+func subagentParentNextSteps(ctx context.Context, conn *sql.Conn, parent memory.SessionID) subagentNextSteps {
+	var next subagentNextSteps
 	receipt, err := getCompositionReceipt(ctx, conn, parent)
 	if err != nil {
-		return false
+		return next
 	}
 	for _, c := range receipt.Capabilities {
-		if c.ID == delegation.ContinueCapabilityID {
-			return true
+		switch c.ID {
+		case delegation.ContinueCapabilityID:
+			next.continuable = true
+		case delegation.ReportCapabilityID:
+			next.readable = true
 		}
 	}
-	return false
+	return next
 }
 
 // subagentUsage sums the usage of the child's committed responses after the

@@ -299,7 +299,7 @@ func (c *ContextComposer) projectAtStart(
 			conversation = append(withMemory, conversation[activeStart:]...)
 		}
 		messages := make([]openrouter.Message, 0, len(conversation)+5)
-		instructions := systemPrompt
+		instructions := primaryInstructions(input.Tools)
 		if input.WorkerInstructions != "" {
 			instructions = input.WorkerInstructions
 		}

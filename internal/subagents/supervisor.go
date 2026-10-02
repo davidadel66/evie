@@ -40,6 +40,11 @@ type Supervisor struct {
 	// now measures each child's time budget; tests inject a clock. The hard
 	// deadline itself is a real-time context deadline.
 	now func() time.Time
+	// settleWindow bounds an owner's retries of its attempt's terminal write.
+	settleWindow time.Duration
+	// unsettled holds the outcome each owner decided but could not record
+	// within settleWindow. Recovery passes and same-key retries record it.
+	unsettled map[string]outcome
 }
 
 func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
@@ -51,7 +56,8 @@ func New(store *eviedb.Store, policy delegation.Policy) (*Supervisor, error) {
 	}
 	idle := make(chan struct{})
 	close(idle)
-	return &Supervisor{store: store, policy: policy, active: map[uint64]context.CancelFunc{}, idle: idle, now: time.Now}, nil
+	return &Supervisor{store: store, policy: policy, active: map[uint64]context.CancelFunc{}, idle: idle, now: time.Now,
+		settleWindow: settleGrace, unsettled: map[string]outcome{}}, nil
 }
 
 // Configure supplies the same resolved transport and model used by parents.
@@ -329,7 +335,9 @@ func (s *Supervisor) own(ctx context.Context, parent delegation.Parent, a delega
 
 // join observes an attempt until it is terminal and returns it, with its
 // retained result, after current access checks. Leaving early never changes
-// the attempt: its owner settles it within two deadlines of admission.
+// the attempt: its owner settles it within two deadlines of admission. An
+// attempt whose owner could not record its outcome is settled here with that
+// outcome, or the join fails at once saying why (amended 2026-10-01).
 func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a delegation.Attempt) (delegation.Attempt, error) {
 	settled := time.NewTimer(time.Until(a.CreatedAt.Add(2*a.Policy.Deadline + settleGrace)))
 	defer settled.Stop()
@@ -343,6 +351,14 @@ func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a deleg
 				return delegation.Attempt{}, errors.New("terminal subagent result is missing")
 			}
 			return current, nil
+		}
+		if err == nil {
+			if o, pending := s.pendingOutcome(a.ID); pending {
+				if _, err := s.settleOnce(a.ID, o); err != nil {
+					return delegation.Attempt{}, fmt.Errorf("execution %s has not settled: recording its outcome failed (%w); recovery keeps retrying, so repeat this request later", a.ID, err)
+				}
+				continue
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -419,14 +435,90 @@ func transientStoreError(err error) bool {
 // settleGrace covers bounded cleanup after an attempt's last deadline.
 const settleGrace = 5 * time.Second
 
+// terminalWriteTimeout bounds one attempt at recording a terminal outcome.
+const terminalWriteTimeout = 3 * time.Second
+
+// finish records the owner's terminal outcome for id. Lock contention, or a
+// write that outlives its timeout, is retried with bounded backoff for up to
+// settleWindow; like every other supervisor store call, contention proves
+// nothing. An outcome that still cannot be recorded is handed to recovery
+// (settlePending) and to same-key retries (join), so the attempt does not keep
+// its running slot until its parent turn ends (amended 2026-10-01).
 func (s *Supervisor) finish(id string, o outcome) (delegation.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	deadline := time.Now().Add(s.settleWindow)
+	delay := capacityPollInterval
+	for {
+		a, err := s.settleOnce(id, o)
+		if err == nil {
+			return *a.Result, nil
+		}
+		if !retryableTerminalWrite(err) || time.Now().Add(delay).After(deadline) {
+			s.mu.Lock()
+			s.unsettled[id] = o
+			s.mu.Unlock()
+			return delegation.Result{}, fmt.Errorf("recording the outcome failed; recovery keeps retrying: %w", err)
+		}
+		time.Sleep(delay)
+		delay = min(2*delay, time.Second)
+	}
+}
+
+// settleOnce makes one bounded attempt to record o for id. Recording an
+// attempt that is already terminal returns it unchanged, so an outcome
+// recorded by recovery or another settler is never replaced.
+func (s *Supervisor) settleOnce(id string, o outcome) (delegation.Attempt, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), terminalWriteTimeout)
 	defer cancel()
 	a, err := s.store.FinishSubagent(ctx, id, o.state, o.reason)
-	if err != nil {
-		return delegation.Result{}, err
+	if err == nil && a.Result == nil {
+		err = errors.New("terminal subagent result is missing")
 	}
-	return *a.Result, nil
+	if err != nil {
+		if ctx.Err() != nil {
+			err = fmt.Errorf("%w: %w", errTerminalWriteTimeout, err)
+		}
+		return delegation.Attempt{}, err
+	}
+	s.mu.Lock()
+	delete(s.unsettled, id)
+	s.mu.Unlock()
+	return a, nil
+}
+
+// errTerminalWriteTimeout marks a terminal write that outlived its own
+// timeout, which under SQLite's busy timeout means it waited on the lock.
+var errTerminalWriteTimeout = errors.New("terminal write timed out")
+
+func retryableTerminalWrite(err error) bool {
+	return transientStoreError(err) || errors.Is(err, errTerminalWriteTimeout)
+}
+
+// pendingOutcome reports the outcome an owner decided for id but could not
+// record.
+func (s *Supervisor) pendingOutcome(id string) (outcome, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.unsettled[id]
+	return o, ok
+}
+
+// settlePending makes one attempt to record every outcome an owner could not.
+// Recovery runs it on each pass, so an unsettled attempt is settled as soon as
+// the store accepts the write, while its parent turn is still live.
+func (s *Supervisor) settlePending() error {
+	s.mu.Lock()
+	pending := make(map[string]outcome, len(s.unsettled))
+	for id, o := range s.unsettled {
+		pending[id] = o
+	}
+	s.mu.Unlock()
+	var failures []error
+	for id, o := range pending {
+		if _, err := s.settleOnce(id, o); err != nil {
+			failures = append(failures, fmt.Errorf("settle subagent execution %q: %w", id, err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // authorize proves authority before external work. Lock contention is retried

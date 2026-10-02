@@ -3,6 +3,7 @@ package eviedb
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,5 +121,34 @@ func TestOwnerSessionListsHideDelegatedChildSessions(t *testing.T) {
 	}
 	if len(listings) != 1 || listings[0].ID != parent.ID {
 		t.Fatalf("active owner listing=%+v, want only parent %q", listings, parent.ID)
+	}
+}
+
+// Delegated child sessions are fenced as well as hidden: neither owner
+// session selection nor the REPL chooser opens one by ID, so an owner turn
+// can never land in a child session and become its report.
+func TestOwnerSessionSelectionRefusesDelegatedChildSessions(t *testing.T) {
+	ctx := context.Background()
+	store := NewStore(newTestDB(t))
+	parent, err := store.CreateGlobalSession(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := store.CreateDelegatedSessionWithComposition(ctx, parent.ID, standardReceipt(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetActiveOwnerSession(ctx, child.ID); !errors.Is(err, ErrSessionDelegated) || !strings.Contains(err.Error(), string(child.ID)) {
+		t.Fatalf("owner selection of a child: %v", err)
+	}
+	cwd := t.TempDir()
+	if _, err := store.GetActiveSessionForChooser(ctx, child.ID, cwd, ""); !errors.Is(err, ErrSessionDelegated) {
+		t.Fatalf("chooser resume of a child: %v", err)
+	}
+	if got, err := store.GetActiveOwnerSession(ctx, parent.ID); err != nil || got.ID != parent.ID {
+		t.Fatalf("owner selection of the parent: %+v %v", got, err)
+	}
+	if got, err := store.GetActiveSessionForChooser(ctx, parent.ID, cwd, ""); err != nil || got.ID != parent.ID {
+		t.Fatalf("chooser resume of the parent: %+v %v", got, err)
 	}
 }
