@@ -16,24 +16,38 @@ func (e *providerContextRejection) Error() string { return e.err.Error() }
 func (e *providerContextRejection) Unwrap() error { return e.err }
 
 // contextRejection recognizes a context-length rejection that arrived before
-// any live output while the turn is still active.
-func contextRejection(coordinator *turnCoordinator, err error, callbackFired bool) *providerContextRejection {
+// any output streamed while the turn is still active.
+func contextRejection(coordinator *turnCoordinator, err error, outputStreamed bool) *providerContextRejection {
 	var streamErr *openrouter.StreamError
-	if callbackFired || coordinator.result().kind != causeNone || coordinator.ctx.Err() != nil ||
+	if outputStreamed || coordinator.result().kind != causeNone || coordinator.ctx.Err() != nil ||
 		!errors.As(err, &streamErr) || !streamErr.ContextLengthExceeded {
 		return nil
 	}
 	return &providerContextRejection{err: err}
 }
 
-// failContextRejection ends a turn whose compacted retry the provider also
-// rejected for context length: a context_overflow at the provider stage,
-// distinct from an ordinary provider_error.
+// failContextRejection ends a turn whose context-length rejection cannot be
+// recovered by compacting: the compacted retry was also rejected, or the
+// rejected request was already compacted in its iteration. It is a
+// context_overflow at the provider stage, distinct from provider_error.
 func (s *Session) failContextRejection(coordinator *turnCoordinator, rejection *providerContextRejection) error {
 	if cause := s.observeTurnContext(coordinator); cause != nil {
 		return cause
 	}
-	overflow := fmt.Errorf("%w: the provider rejected the compacted retry for context length (%v)", ErrContextOverflow, rejection.err)
+	overflow := fmt.Errorf("%w: the provider rejected an already compacted request for context length (%v)", ErrContextOverflow, rejection.err)
 	coordinator.selectCause(causeContextOverflow, overflow, 0)
 	return overflow
+}
+
+// closeReasoningPhase ends a visible reasoning phase left open by a rejected
+// attempt, as assistant acceptance and turn failure do, so the retry or the
+// failure that replaces it starts from a closed phase.
+func closeReasoningPhase(ev Events, rendered *renderedOutput) {
+	rendered.mu.Lock()
+	open := rendered.reasoningOpen
+	rendered.reasoningOpen = false
+	rendered.mu.Unlock()
+	if open {
+		ev.ReasoningDone()
+	}
 }

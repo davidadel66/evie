@@ -519,7 +519,8 @@
   leaves the request above the 60 percent target but within usable input
   proceeds, since the target is a planning preference (2026-09-29); the former
   post-compaction target check is removed. `/context` reports the request the
-  turn path would build: without pressure the exact composition, which names
+  turn path would build, including the working-folder note every turn sends:
+  without pressure the exact composition, which names
   any older turns it omits; under pressure the unchanged projection at the
   active summary frontier (headroom may be negative) with the planned
   compaction's covered and retained event IDs, or a warning that the next turn
@@ -549,7 +550,37 @@
   rejects the retry, the turn fails with `context_overflow` at the `provider`
   stage, now allowed for that classification and distinct from
   `provider_error`. A turn makes at most one compact-and-retry; an ordinary
-  400 is unchanged.
+  400 is unchanged. Amended by the harness review final pass: when the
+  rejected request's own iteration already ran a successful automatic
+  compaction, there is no retry and the turn fails the same way at once. A
+  second compaction would put two compactions and snapshots after one
+  trigger, which neither validator accepts, and the resulting snapshot
+  storage failure left the turn without terminal evidence. Widening both
+  validators to that five-event shape was rejected: it keeps one more retry
+  only in a rare case and loosens the single exception above. The terminal
+  still records what the rejection proved, because a request rejected for
+  context length is a calibration sample whether its turn retried or ended:
+  a `context_overflow` terminal at the `provider` stage samples the snapshot
+  pending for its trigger, as a retry snapshot does. A dispatch-time empty
+  reasoning signal is not output (see the 2026-10-01 provider robustness
+  decision), so Astra gets this recovery too; a reasoning phase it opened is
+  closed before the retry or the failure that replaces it.
+
+- **2026-10-01 - a superseded turn without terminal evidence does not block compaction.**
+  Harness review final pass. The 2026-08-30 compaction rules cover only
+  complete root turns, and 2026-08-23 rules give a turn no terminal after a
+  local storage failure, lease loss, heartbeat failure, or crash, and forbid
+  a later owner from synthesizing one. Automatic and manual compaction both
+  stopped at the first such turn, so every later over-budget turn failed with
+  `context_overflow` for the rest of the session. A root turn followed by a
+  later root turn is now closed: that root committed under a newer lease, and
+  fencing rejects the old owner's writes. Compaction covers a closed turn like
+  a complete one, rendering its committed events (incomplete tool groups
+  omitted) with no terminal marker. The covered frontier must still be the
+  final event of its turn: agent reconstruction and SQLite correlation both
+  reject a cut inside a turn, and SQLite allows only `context_compacted`
+  events between the frontier and the retained root. The newest root turn is
+  never closed by supersession, and no terminal is synthesized.
 
 - **2026-10-01 - conversational requests keep a stable prefix and mark explicit cache breakpoints.**
   Harness review Stage 6 (C4) amends the 2026-08-30 composition order below.
@@ -614,7 +645,8 @@
   2026-08-30 summary placement below. The accepted summary is no longer a
   system message. It is a user-role block after repository guidance, framed as
   `<conversation-summary>` with a label saying it summarizes earlier turns and
-  is data, not instructions; a closing marker inside the summary is escaped.
+  is data, not instructions; a closing marker inside the summary is escaped
+  in any letter case and with any whitespace around its slash.
   Each generation re-summarizes the prior summary, so a section could silently
   collapse to "None" or "unchanged from the prior summary". After validation,
   a section that was substantive in the prior generation and is now only a
@@ -1059,8 +1091,11 @@
   one then two seconds, or a longer `Retry-After`; a requested wait above 30
   seconds fails at once. Each retry is lease-authorized immediately before it
   starts, caller cancellation interrupts the backoff, and exhausted retries
-  record the last failure. Astra never retries because it opens reasoning
-  activity at dispatch, and compaction keeps its no-retry rule. Non-2xx
+  record the last failure. The empty reasoning signal Astra's Responses path
+  sends at dispatch only starts the visible wait and is not output, so it
+  does not prevent a retry (amended by the harness review final pass; Astra
+  previously never retried); only a nonempty reasoning or content fragment
+  does. Compaction keeps its no-retry rule. Non-2xx
   provider bodies are drained up to 64 KiB and never included in errors, so
   the browser and terminal see only the status.
 

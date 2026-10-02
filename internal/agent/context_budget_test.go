@@ -593,6 +593,147 @@ func TestSendContextRejectionRecoveryRespectsCompactionFailure(t *testing.T) {
 	}
 }
 
+// C8 final pass: an iteration that already ran automatic compaction does not
+// compact again after a provider context-length rejection. A second
+// compaction would put two compactions and snapshots after one trigger, a
+// shape neither validator accepts; the turn instead ends with durable
+// context_overflow at the provider stage, and the rejection still calibrates.
+func TestSendEndsWhenTheProviderRejectsAnAlreadyCompactedIteration(t *testing.T) {
+	const working = int64(131_072)
+	history := &fakeHistory{events: completedTurns(5, int(working*70/100))}
+	compactor := &fakeClient{steps: []step{assistantStep(validCompactionSummary(), nil), assistantStep(validCompactionSummary(), nil)}}
+	conversation := &fakeClient{steps: []step{contextLengthRejection(), assistantStep("must not run", nil)}}
+	session := NewWithCompactor(conversation, compactor, budgetTestProfile(t, "test/model", working, working), history,
+		memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+	err := session.Send(context.Background(), "continue", &recorder{}, nil)
+	if !IsContextOverflow(err) {
+		t.Fatalf("error=%v, want context overflow", err)
+	}
+	if len(compactor.reqs) != 1 || len(conversation.reqs) != 1 {
+		t.Fatalf("compactor requests=%d conversation requests=%d", len(compactor.reqs), len(conversation.reqs))
+	}
+	var shape []memory.EventType
+	for _, event := range history.allEvents()[len(completedTurns(5, 1)):] {
+		shape = append(shape, event.Type)
+	}
+	if fmt.Sprint(shape) != fmt.Sprint([]memory.EventType{
+		memory.EventUserMessage, memory.EventContextCompacted, memory.EventContextSnapshot, memory.EventTurnFailed,
+	}) {
+		t.Fatalf("durable shape=%v", shape)
+	}
+	events := history.allEvents()
+	terminal := terminalPayloadOf(t, events[len(events)-1])
+	if terminal.Classification != memory.ClassificationContextOverflow || terminal.Stage != memory.StageProvider {
+		t.Fatalf("terminal=%+v", terminal)
+	}
+	snapshots := snapshotPayloads(t, events)
+	rejected := snapshots[len(snapshots)-1]
+	bound := rejectionBytesPerTokenMilli(rejected.SerializedBytes, rejected.HardWindowTokens, rejected.OutputReserveTokens)
+	diagnostics, err := session.InspectContext(context.Background())
+	if err != nil {
+		t.Fatalf("/context after rejection: %v", err)
+	}
+	if diagnostics.Projection.BytesPerTokenMilli > bound || diagnostics.Projection.CalibrationSamples != 1 {
+		t.Fatalf("the durable rejection did not bound calibration: ratio=%d samples=%d, want <= %d from one sample",
+			diagnostics.Projection.BytesPerTokenMilli, diagnostics.Projection.CalibrationSamples, bound)
+	}
+}
+
+// C3 with C8: a request the provider rejected for context length is a
+// calibration sample whether the turn retried or ended on the rejection.
+func TestCalibrationCountsARejectedRequestThatEndedItsTurn(t *testing.T) {
+	snapshot := func(id, parent memory.EventID, bytes int64) memory.Event {
+		payload, err := json.Marshal(memory.ContextSnapshotPayload{
+			CanonicalModel: "test/model", SerializedBytes: bytes, HardWindowTokens: 100_000, OutputReserveTokens: 10_000,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return memory.Event{ID: id, ParentID: parent, Type: memory.EventContextSnapshot, Payload: payload}
+	}
+	terminal := func(id, parent memory.EventID, classification memory.TurnClassification, stage memory.TurnStage) memory.Event {
+		payload, err := json.Marshal(memory.TurnTerminalPayload{TurnID: "root", Classification: classification, Stage: stage})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return memory.Event{ID: id, ParentID: parent, Type: memory.EventTurnFailed, Payload: payload}
+	}
+	for _, test := range []struct {
+		name   string
+		events []memory.Event
+		want   tokenRatio
+	}{
+		{name: "rejection ended the turn", events: []memory.Event{
+			{ID: "root", Type: memory.EventUserMessage}, snapshot("s1", "root", 180_000),
+			terminal("failed", "root", memory.ClassificationContextOverflow, memory.StageProvider),
+		}, want: tokenRatio{milli: 2000, samples: 1}},
+		{name: "compacted retry also rejected", events: []memory.Event{
+			{ID: "root", Type: memory.EventUserMessage}, snapshot("s1", "root", 270_000), snapshot("s2", "root", 180_000),
+			terminal("failed", "root", memory.ClassificationContextOverflow, memory.StageProvider),
+		}, want: tokenRatio{milli: 2000, samples: 2}},
+		{name: "ordinary provider failure is no sample", events: []memory.Event{
+			{ID: "root", Type: memory.EventUserMessage}, snapshot("s1", "root", 180_000),
+			terminal("failed", "root", memory.ClassificationProviderError, memory.StageProvider),
+		}, want: tokenRatio{milli: 3000}},
+		{name: "context overflow before the provider is no sample", events: []memory.Event{
+			{ID: "root", Type: memory.EventUserMessage}, snapshot("s1", "root", 180_000),
+			terminal("failed", "root", memory.ClassificationContextOverflow, memory.StageContextCompose),
+		}, want: tokenRatio{milli: 3000}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := (CalibratedRequestEstimator{}).bytesPerToken(test.events, "test/model"); got != test.want {
+				t.Fatalf("ratio=%+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
+
+// C8 with Astra: the Responses path opens an empty reasoning phase at
+// dispatch. That signal shows no output, so a context-length rejection still
+// gets its compact-and-retry, and the visible reasoning phase is closed
+// before the retry or the failure that replaces it.
+func TestDispatchReasoningSignalDoesNotBlockContextRejectionRecovery(t *testing.T) {
+	rejected := contextLengthRejection()
+	rejected.reasoning = []string{""}
+	t.Run("retry succeeds", func(t *testing.T) {
+		history := &fakeHistory{events: completedTurns(3, 60_000)}
+		compactor := &fakeClient{steps: []step{assistantStep(validCompactionSummary(), nil)}}
+		answer := assistantStep("done", []string{"done"})
+		answer.reasoning = []string{""}
+		conversation := &fakeClient{steps: []step{rejected, answer}}
+		events := &recorder{}
+		session := NewWithCompactor(conversation, compactor, testContextProfile("test/model"), history,
+			memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+		if err := session.Send(context.Background(), "continue", events, nil); err != nil {
+			t.Fatal(err)
+		}
+		if len(compactor.reqs) != 1 || len(conversation.reqs) != 2 {
+			t.Fatalf("compactor requests=%d conversation requests=%d", len(compactor.reqs), len(conversation.reqs))
+		}
+		want := []string{"reasoning:", "reasoningdone", "reasoning:", "reasoningdone", "delta:done", "done:done"}
+		if fmt.Sprint(events.events) != fmt.Sprint(want) {
+			t.Fatalf("events=%q, want %q", events.events, want)
+		}
+	})
+	t.Run("recovery fails", func(t *testing.T) {
+		history := &fakeHistory{events: completedTurns(3, 60_000)}
+		compactor := &fakeClient{steps: []step{{err: errors.New("summary unavailable")}}}
+		conversation := &fakeClient{steps: []step{rejected, assistantStep("must not run", nil)}}
+		events := &recorder{}
+		session := NewWithCompactor(conversation, compactor, testContextProfile("test/model"), history,
+			memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session"}, newFakeTurnOwner())
+		if err := session.Send(context.Background(), "continue", events, nil); err == nil {
+			t.Fatal("Send unexpectedly succeeded")
+		}
+		if len(compactor.reqs) != 1 || len(conversation.reqs) != 1 {
+			t.Fatalf("compactor requests=%d conversation requests=%d", len(compactor.reqs), len(conversation.reqs))
+		}
+		if want := []string{"reasoning:", "reasoningdone"}; fmt.Sprint(events.events) != fmt.Sprint(want) {
+			t.Fatalf("events=%q, want %q", events.events, want)
+		}
+	})
+}
+
 func TestSendDoesNotRetryOrdinaryBadRequest(t *testing.T) {
 	history := &fakeHistory{events: completedTurns(3, 60_000)}
 	compactor := &fakeClient{}

@@ -213,7 +213,7 @@ func TestProviderFailureAfterAnyLiveCallbackIsNeverRetried(t *testing.T) {
 	}{
 		{name: "content delta", step: step{deltas: []string{"partial"}, err: providerFailure(http.StatusServiceUnavailable)}},
 		{name: "reasoning", step: step{reasoning: []string{"thinking"}, err: connectionFailure()}},
-		{name: "reasoning activity start", step: step{reasoning: []string{""}, err: providerFailure(http.StatusBadGateway)}},
+		{name: "reasoning after the dispatch signal", step: step{reasoning: []string{"", "thinking"}, err: providerFailure(http.StatusBadGateway)}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			history := &fakeHistory{}
@@ -228,6 +228,32 @@ func TestProviderFailureAfterAnyLiveCallbackIsNeverRetried(t *testing.T) {
 				t.Fatalf("events=%+v", history.events)
 			}
 		})
+	}
+}
+
+// L4 final pass: the Responses path (Astra) opens an empty reasoning phase at
+// dispatch to time the visible wait. It shows no output, so a transient
+// failure after it is retried like any other before output.
+func TestDispatchReasoningSignalDoesNotBlockProviderRetry(t *testing.T) {
+	history := &fakeHistory{}
+	events := &recorder{}
+	recovered := assistantStep("recovered", []string{"recovered"})
+	recovered.reasoning = []string{""}
+	client := &fakeClient{steps: []step{{reasoning: []string{""}, err: providerFailure(http.StatusBadGateway)}, recovered}}
+	s := ownedSession(client, history, &scriptedOwner{})
+	waits := recordProviderRetryWaits(s)
+	if err := s.Send(context.Background(), "go", events, nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !reflect.DeepEqual(*waits, []time.Duration{time.Second}) || len(client.reqs) != 2 {
+		t.Fatalf("waits=%v provider calls=%d", *waits, len(client.reqs))
+	}
+	if len(history.events) != 2 || history.events[1].Content != "recovered" {
+		t.Fatalf("events=%+v", history.events)
+	}
+	want := []string{"reasoning:", "reasoning:", "reasoningdone", "delta:recovered", "done:recovered"}
+	if !reflect.DeepEqual(events.events, want) {
+		t.Fatalf("events=%q, want %q", events.events, want)
 	}
 }
 

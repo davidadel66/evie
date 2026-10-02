@@ -152,15 +152,9 @@ func (s *Session) runOwnedTurn(
 	iteration := 0
 	recall := s.newRetrievalTurn()
 	modelTools := s.modelToolset()
-	workingFolder := s.scope.ProjectRoot
-	if provider, ok := s.history.(interface {
-		WorkingDirectory(context.Context) (string, error)
-	}); ok && s.workerInstructions == "" {
-		var err error
-		workingFolder, err = provider.WorkingDirectory(coordinator.ctx)
-		if err != nil {
-			return s.classifyLocalError(coordinator, fmt.Errorf("load working folder: %w", err))
-		}
+	workingFolder, err := s.workingFolder(coordinator.ctx)
+	if err != nil {
+		return s.classifyLocalError(coordinator, fmt.Errorf("load working folder: %w", err))
 	}
 	s.directory.SetRoot(workingFolder)
 	coordinator.setStage(memory.StageContextCompose)
@@ -228,13 +222,9 @@ func (s *Session) runOwnedTurn(
 		if iteration == 1 && !retrying && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
-		environmentNote := ""
-		if workingFolder != "" {
-			environmentNote = fmt.Sprintf("Local working folder: %q. Relative file paths and shell commands start in this session's working directory.", workingFolder)
-		}
 		memoryData, memoryReceipt := recall.renderProjection()
 		composeInput := ContextComposeInput{
-			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: environmentNote,
+			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: workingFolderNote(workingFolder),
 			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
@@ -421,11 +411,18 @@ func (s *Session) runOwnedTurn(
 			if !errors.As(err, &rejection) {
 				return err
 			}
-			if contextRetryUsed {
+			// The one durable recovery shape is trigger, rejected snapshot,
+			// automatic compaction, retry snapshot. An iteration that already
+			// compacted before its rejected request has no such shape left.
+			compactedThisIteration := required && failureCategory == memory.ContextCompactionFailureNone
+			if contextRetryUsed || compactedThisIteration {
 				return s.failContextRejection(coordinator, rejection)
 			}
 			contextRetryUsed = true
 			rejectedRequestBytes = composed.Snapshot.SerializedBytes
+			// A dispatch-time reasoning signal may have opened the visible
+			// phase; the retry or the failure replacing it starts closed.
+			closeReasoningPhase(ev, rendered)
 			continue
 		}
 		if err := s.observeTurnContext(coordinator); err != nil {
@@ -706,9 +703,10 @@ const (
 
 // callProvider streams one admitted request and returns either a response or
 // an already classified turn error. A transient failure is retried with the
-// identical request only while no live callback has fired, so nothing has
-// reached the user and no tool can have run. Each attempt is lease-authorized
-// immediately before it starts.
+// identical request only while no output has streamed, so nothing has reached
+// the user and no tool can have run. The empty reasoning signal the Responses
+// path sends at dispatch only starts the visible wait and is not output. Each
+// attempt is lease-authorized immediately before it starts.
 func (s *Session) callProvider(
 	coordinator *turnCoordinator,
 	lease memory.TurnLease,
@@ -743,9 +741,9 @@ func (s *Session) callProvider(
 	}
 }
 
-// streamProviderAttempt runs one provider call and reports whether any live
-// callback was admitted during it. The callback lifetime is closed and joined
-// before returning, so the report is final.
+// streamProviderAttempt runs one provider call and reports whether any
+// nonempty output fragment was admitted during it. The callback lifetime is
+// closed and joined before returning, so the report is final.
 func (s *Session) streamProviderAttempt(
 	coordinator *turnCoordinator,
 	req openrouter.ChatRequest,
@@ -757,7 +755,9 @@ func (s *Session) streamProviderAttempt(
 	handlers := openrouter.StreamHandlers{
 		OnReasoning: func(text string) {
 			callbackLifetime.invoke(func() {
-				callbackFired.Store(true)
+				if text != "" {
+					callbackFired.Store(true)
+				}
 				coordinator.emitIfActive(func() {
 					rendered.mu.Lock()
 					if rendered.content {
@@ -773,7 +773,9 @@ func (s *Session) streamProviderAttempt(
 		},
 		OnContent: func(text string) {
 			callbackLifetime.invoke(func() {
-				callbackFired.Store(true)
+				if text != "" {
+					callbackFired.Store(true)
+				}
 				coordinator.emitIfActive(func() {
 					rendered.mu.Lock()
 					closeReasoning := rendered.reasoningOpen

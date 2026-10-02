@@ -47,15 +47,24 @@ type CalibratedRequestEstimator struct{ CanonicalRequestEstimator }
 func (CalibratedRequestEstimator) Version() string { return CalibratedRequestEstimatorVersion }
 
 // bytesPerToken pairs each assistant message's reported input tokens with the
-// canonical bytes of the context snapshot sent for the same trigger. A second
-// snapshot for one trigger is the single compact-and-retry after a provider
-// context-length rejection; the rejected request proves at most
-// bytes/(hard window - output reserve) bytes per token and is a sample too.
-// Only requests to canonicalModel count. The ratio is the minimum over the
-// newest samples, capped at the uncalibrated floor until enough exist.
+// canonical bytes of the context snapshot sent for the same trigger. A
+// request the provider rejected for context length proves at most
+// bytes/(hard window - output reserve) bytes per token and is a sample too:
+// it is followed by a second snapshot for its trigger (the single
+// compact-and-retry) or by the turn's context_overflow terminal at the
+// provider stage. Only requests to canonicalModel count. The ratio is the
+// minimum over the newest samples, capped at the uncalibrated floor until
+// enough exist.
 func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonicalModel string) tokenRatio {
 	pending := make(map[memory.EventID]memory.ContextSnapshotPayload)
 	var samples []int64
+	rejectedSample := func(trigger memory.EventID) {
+		if rejected, ok := pending[trigger]; ok && rejected.CanonicalModel == canonicalModel {
+			samples = append(samples, rejectionBytesPerTokenMilli(
+				rejected.SerializedBytes, rejected.HardWindowTokens, rejected.OutputReserveTokens,
+			))
+		}
+	}
 	for _, event := range events {
 		switch event.Type {
 		case memory.EventContextSnapshot:
@@ -63,12 +72,15 @@ func (CalibratedRequestEstimator) bytesPerToken(events []memory.Event, canonical
 			if json.Unmarshal(event.Payload, &snapshot) != nil {
 				continue
 			}
-			if rejected, ok := pending[event.ParentID]; ok && rejected.CanonicalModel == canonicalModel {
-				samples = append(samples, rejectionBytesPerTokenMilli(
-					rejected.SerializedBytes, rejected.HardWindowTokens, rejected.OutputReserveTokens,
-				))
-			}
+			rejectedSample(event.ParentID)
 			pending[event.ParentID] = snapshot
+		case memory.EventTurnFailed:
+			var terminal memory.TurnTerminalPayload
+			if json.Unmarshal(event.Payload, &terminal) == nil &&
+				terminal.Classification == memory.ClassificationContextOverflow && terminal.Stage == memory.StageProvider {
+				rejectedSample(event.ParentID)
+			}
+			delete(pending, event.ParentID)
 		case memory.EventAssistantMessage:
 			snapshot, ok := pending[event.ParentID]
 			delete(pending, event.ParentID)

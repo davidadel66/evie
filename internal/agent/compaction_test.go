@@ -13,6 +13,7 @@ import (
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 func completedCompactionTurn(rootID string, sequence int64, user, assistant string) []memory.Event {
@@ -561,6 +562,88 @@ func TestManualCompactionSelectsMaximalPrefixAndRetainsTwoNewestCompletedTurns(t
 		if strings.Contains(transcript, excluded) {
 			t.Fatalf("transcript %q contains retained text %q", transcript, excluded)
 		}
+	}
+}
+
+// A root turn without terminal evidence (its owner failed locally, lost its
+// lease, or crashed) is closed once a later root turn exists: fencing rejects
+// its owner's writes and no owner synthesizes its terminal. Compaction covers
+// it like a completed turn, but never cuts inside it, and the newest root
+// turn is never closed by supersession.
+func TestCompactionCoversAnAbandonedTurnBeforeALaterRoot(t *testing.T) {
+	profile := testContextProfile("test/model")
+	abandoned := []memory.Event{
+		{ID: "turn-2", SessionID: "test-session", Sequence: 3, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "two", FormatVersion: 1},
+		{ID: "turn-2-assistant", SessionID: "test-session", Sequence: 4, ParentID: "turn-2", Type: memory.EventAssistantMessage, Role: memory.RoleAssistant,
+			Payload: json.RawMessage(`{"tool_calls":[{"id":"call-1","name":"echo","arguments":"{}"}]}`), FormatVersion: 1},
+	}
+	events := completedCompactionTurn("turn-1", 1, "one", "answer one")
+	events = append(events, abandoned...)
+	events = append(events, completedCompactionTurn("turn-3", 5, "three", "answer three")...)
+	events = append(events, completedCompactionTurn("turn-4", 7, "four", "answer four")...)
+	for i := range events {
+		events[i].SessionID, events[i].FormatVersion = "test-session", 1
+	}
+
+	plan, err := selectManualCompaction(events, profile, CanonicalRequestEstimator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.CoveredFirst.ID != "turn-1" || plan.CoveredLast.ID != "turn-2-assistant" || plan.FirstRetained.ID != "turn-3" {
+		t.Fatalf("manual cut covers %s..%s retaining %s, want turn-1..turn-2-assistant retaining turn-3",
+			plan.CoveredFirst.ID, plan.CoveredLast.ID, plan.FirstRetained.ID)
+	}
+	transcript := decodeCompactionTranscript(t, plan.Request)
+	if len(transcript.Turns) != 2 || transcript.Turns[1].RootEventID != "turn-2" || transcript.Turns[1].Terminal != nil {
+		t.Fatalf("transcript turns=%+v", transcript.Turns)
+	}
+
+	compacted := contextCompactionEvent(t, "compact-1", 9, 1, "", events[0], events[3], events[4],
+		validCompactionSummary(), "model", CompactionPromptVersion)
+	summary, _, err := reconstructCompactionChain(append(append([]memory.Event(nil), events...), compacted))
+	if err != nil || summary == nil || summary.FirstRetainedEventID != "turn-3" {
+		t.Fatalf("summary=%+v error=%v", summary, err)
+	}
+
+	// Cutting inside the abandoned turn is still illegal.
+	inside := contextCompactionEvent(t, "compact-1", 9, 1, "", events[0], events[2], events[4],
+		validCompactionSummary(), "model", CompactionPromptVersion)
+	if _, _, err := reconstructCompactionChain(append(append([]memory.Event(nil), events...), inside)); err == nil {
+		t.Fatal("a cut inside the abandoned turn was accepted")
+	}
+
+	// The newest root turn has no later root, so it stays incomplete and
+	// is neither counted nor covered.
+	trailing := append(append([]memory.Event(nil), events[:2]...), events[4:]...)
+	trailing = append(trailing, abandoned...)
+	for i := range trailing {
+		trailing[i].Sequence = int64(i + 1)
+	}
+	plan, err = selectManualCompaction(trailing, profile, CanonicalRequestEstimator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.CoveredLast.ID != "turn-1-assistant" || plan.FirstRetained.ID != "turn-3" {
+		t.Fatalf("manual cut with a trailing abandoned turn covers through %s retaining %s", plan.CoveredLast.ID, plan.FirstRetained.ID)
+	}
+}
+
+// Automatic compaction under pressure covers an abandoned turn instead of
+// stopping at it and leaving the session on context_overflow.
+func TestAutomaticCompactionCoversAnAbandonedTurn(t *testing.T) {
+	const working = int64(131_072)
+	events := []memory.Event{{ID: "abandoned", Sequence: 1, Type: memory.EventUserMessage, Role: memory.RoleUser, Content: "lost"}}
+	for i := 1; i <= 5; i++ {
+		events = append(events, completedCompactionTurn(fmt.Sprintf("turn-%d", i), int64(2*i),
+			strings.Repeat(string(rune('a'+i)), int(working*18/100)), "answer")...)
+	}
+	input := ContextComposeInput{
+		Profile: budgetTestProfile(t, "test/model", working, working), Events: withActiveRoot(events),
+		Tools: tools.BuiltinToolset().Schemas(), ActiveRootID: "active", TriggerEventID: "active", Iteration: 1,
+	}
+	plan, required, err := selectAutomaticCompaction(input, NewContextComposer(CanonicalRequestEstimator{}))
+	if err != nil || !required || plan.CoveredFirst.ID != "abandoned" {
+		t.Fatalf("plan covers from %q required=%v error=%v", plan.CoveredFirst.ID, required, err)
 	}
 }
 

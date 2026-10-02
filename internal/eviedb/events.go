@@ -437,15 +437,14 @@ func validateContextCompactionCorrelation(
 		role      memory.EventRole
 		parent    sql.NullString
 		sequence  int64
-		payload   json.RawMessage
 	}
 	load := func(id memory.EventID) (frontier, error) {
-		var eventType, role, payloadJSON string
+		var eventType, role string
 		var value frontier
 		err := executor.queryRowContext(ctx, `
-			SELECT event_type, COALESCE(role, ''), parent_id, sequence, payload_json
+			SELECT event_type, COALESCE(role, ''), parent_id, sequence
 			FROM events WHERE session_id = ? AND id = ?
-		`, sessionID, id).Scan(&eventType, &role, &value.parent, &value.sequence, &payloadJSON)
+		`, sessionID, id).Scan(&eventType, &role, &value.parent, &value.sequence)
 		if errors.Is(err, sql.ErrNoRows) {
 			return frontier{}, fmt.Errorf("context compaction frontier event %q is not accepted in session %q", id, sessionID)
 		}
@@ -454,7 +453,6 @@ func validateContextCompactionCorrelation(
 		}
 		value.typeValue = memory.EventType(eventType)
 		value.role = memory.EventRole(role)
-		value.payload = json.RawMessage(payloadJSON)
 		return value, nil
 	}
 	first, err := load(payload.CoveredFirstEventID)
@@ -501,16 +499,25 @@ func validateContextCompactionCorrelation(
 	if memory.EventID(nextRootID) != payload.FirstRetainedEventID || nextRootSequence != retained.sequence {
 		return errors.New("context compaction retained frontier is not the next root turn")
 	}
-	if last.typeValue == memory.EventAssistantMessage {
-		var assistant memory.AssistantMessagePayload
-		if err := json.Unmarshal(last.payload, &assistant); err != nil {
-			return fmt.Errorf("decode covered terminal assistant payload: %w", err)
-		}
-		if len(assistant.ToolCalls) != 0 {
-			return errors.New("context compaction covered frontier ends with an unfinished tool call")
-		}
-	} else if last.typeValue != memory.EventTurnFailed && last.typeValue != memory.EventTurnInterrupted {
-		return errors.New("context compaction covered frontier does not end at a completed turn")
+	// The covered frontier is the final event of its root turn. Only
+	// compaction events, which belong to no turn, may lie between it and the
+	// retained root. The retained root committed under a later lease, so the
+	// covered turn is closed even when it ended without terminal evidence
+	// (a local storage failure, lease loss, or a crash): fencing rejects the
+	// old owner's writes and no owner synthesizes the missing terminal.
+	if last.typeValue == memory.EventContextCompacted {
+		return errors.New("context compaction covered frontier is not a turn event")
+	}
+	var trailing int64
+	if err := executor.queryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM events
+		WHERE session_id = ? AND sequence > ? AND sequence < ? AND event_type != ?
+	`, sessionID, last.sequence, retained.sequence, memory.EventContextCompacted).Scan(&trailing); err != nil {
+		return fmt.Errorf("load covered turn tail: %w", err)
+	}
+	if trailing != 0 {
+		return errors.New("context compaction covered frontier does not end its root turn")
 	}
 	return nil
 }

@@ -59,6 +59,7 @@ func (c *Client) responses(ctx context.Context, r ChatRequest, h StreamHandlers)
 	if r.Stream && h.OnReasoning != nil {
 		// Astra always reasons, but OpenRouter may announce its reasoning
 		// item only after that work. Time the visible wait from dispatch.
+		// The empty fragment is not output and does not prevent a retry.
 		h.OnReasoning("")
 	}
 	resp, err := c.httpClient.Do(req)

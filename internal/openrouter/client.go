@@ -222,7 +222,8 @@ func newProviderHTTPClient() *http.Client {
 // arrive. A zero StreamHandlers streams nothing and assembles normally.
 type StreamHandlers struct {
 	OnContent func(string)
-	// An empty fragment starts the visible wait before any public summary.
+	// An empty fragment starts the visible wait before any public summary;
+	// it carries no output, so callers may still retry the request after it.
 	// Private reasoning and encrypted continuation never enter this callback.
 	OnReasoning func(string)
 }

@@ -271,7 +271,9 @@ type compactionTranscriptTerminal struct {
 }
 
 type compactionRootTurn struct {
-	events   []memory.Event
+	events []memory.Event
+	// complete reports a turn compaction may cover: it ended with terminal
+	// evidence or a final assistant, or a later root turn supersedes it.
 	complete bool
 }
 
@@ -410,7 +412,12 @@ func compactionRootTurns(events []memory.Event) ([]compactionRootTurn, error) {
 		if err != nil {
 			return nil, err
 		}
-		turns[i].complete = complete
+		// A turn that ended without terminal evidence (a local storage
+		// failure, lease loss, or a crash) is closed once a later root turn
+		// exists: that root committed under a newer lease, fencing rejects
+		// the old owner's writes, and no owner synthesizes the missing
+		// terminal. It must not block compaction for the rest of the session.
+		turns[i].complete = complete || i < len(turns)-1
 	}
 	return turns, nil
 }
