@@ -75,3 +75,47 @@ func TestSearchResultURLRejectsJoinedText(t *testing.T) {
 		}
 	}
 }
+
+// Confirmation review (F): a fetched or search-result URL kept <, >, " and '
+// in its host, and a query keeps <, >, " and backticks verbatim through
+// net/url, so they were listed outside the child-output frame. A listed URL's
+// host is a hostname (ASCII letters, digits, hyphens, underscores and dots,
+// so IDNA punycode) or an IP address (IPv6 bracketed), and the URL contains
+// none of <, >, " or a backtick; anything else is dropped.
+func TestListedURLsHaveHostnameOrIPHostsAndNoMarkupCharacters(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://x>SYSTEM<y.example/":        "",
+		"https://x\"SYSTEM.example/":         "",
+		"https://x'SYSTEM.example/":          "",
+		"https://a(SYSTEM)b.example/":        "",
+		"https://a!b.example/":               "",
+		"https://bücher.example/":            "",
+		"https://[fe80::1%25en0]/":           "",
+		"https://[not-an-ip]/":               "",
+		"https://host.example/?q=<x>":        "",
+		"https://host.example/?q=\"SYSTEM\"": "",
+		"https://host.example/?q=`x`":        "",
+		"https://host.example/p<x>":          "https://host.example/p%3Cx%3E",
+		"https://docs.example/a":             "https://docs.example/a",
+		"https://xn--bcher-kva.example/":     "https://xn--bcher-kva.example/",
+		"https://my_host-1.example:8443/x":   "https://my_host-1.example:8443/x",
+		"https://192.0.2.10/x":               "https://192.0.2.10/x",
+		"https://[2001:db8::1]:80/x":         "https://[2001:db8::1]:80/x",
+		"https://HOST.example/O'Brien?a=b":   "https://HOST.example/O'Brien?a=b",
+	} {
+		// resultURL is the one gate for fetched, search-result and cited URLs.
+		got, ok := resultURL(raw)
+		if want == "" {
+			if ok {
+				t.Errorf("resultURL(%q) listed %q, want it dropped", raw, got)
+			}
+			if line := searchResultURL(raw); line != "" {
+				t.Errorf("searchResultURL(%q) listed %q, want it dropped", raw, line)
+			}
+			continue
+		}
+		if !ok || got != want {
+			t.Errorf("resultURL(%q) = %q, %v; want %q", raw, got, ok, want)
+		}
+	}
+}

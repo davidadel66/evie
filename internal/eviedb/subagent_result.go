@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -150,22 +151,44 @@ func urlBreak(r rune) bool {
 }
 
 // resultURL is the form of a URL token the harness lists outside the child's
-// data frame: an http or https URL with a host, without any urlBreak
-// character, re-serialized by net/url and at most maxResultURLBytes. Anything
-// else is dropped.
+// data frame: an http or https URL whose host is a hostname or IP address
+// (listedHost), without any urlBreak character or <, >, " or backtick,
+// re-serialized by net/url and at most maxResultURLBytes. Anything else is
+// dropped. net/url keeps those characters in a host and verbatim in a query,
+// so they are checked after re-serialization (amended 2026-10-01).
 func resultURL(raw string) (string, bool) {
 	if len(raw) > maxResultURLBytes || !utf8.ValidString(raw) || strings.IndexFunc(raw, urlBreak) >= 0 {
 		return "", false
 	}
 	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !listedHost(u.Hostname()) {
 		return "", false
 	}
 	clean := u.String()
-	if len(clean) > maxResultURLBytes || strings.IndexFunc(clean, urlBreak) >= 0 {
+	if len(clean) > maxResultURLBytes || strings.IndexFunc(clean, urlBreak) >= 0 || strings.ContainsAny(clean, "<>\"`") {
 		return "", false
 	}
 	return clean, true
+}
+
+// listedHost reports whether host, as url.URL.Hostname returns it, is a
+// hostname of ASCII letters, digits, hyphens, underscores and dots (so an
+// IDNA name in punycode) or an IP address without a zone.
+func listedHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if strings.Contains(host, ":") {
+		addr, err := netip.ParseAddr(host)
+		return err == nil && addr.Zone() == ""
+	}
+	for i := 0; i < len(host); i++ {
+		c := host[i]
+		if !('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || c == '-' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // sourceKey compares URLs as citations: scheme and host case, a fragment and

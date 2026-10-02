@@ -191,10 +191,10 @@ func embeddedIPv4(addr netip.Addr) (netip.Addr, bool) {
 func refuseNonPublicDial(_, address string, _ syscall.RawConn) error {
 	addr, err := netip.ParseAddrPort(address)
 	if err != nil {
-		return fmt.Errorf("research workers may fetch only public addresses; cannot judge %q", address)
+		return &nonPublicAddressError{"the dialed address could not be judged"}
 	}
 	if !workerMayDial(addr) {
-		return fmt.Errorf("research workers may fetch only public addresses; %s is loopback, private, link-local, or reserved", addr.Addr())
+		return &nonPublicAddressError{addr.Addr().String() + " is loopback, private, link-local, or reserved"}
 	}
 	return nil
 }
@@ -471,7 +471,7 @@ func extractText(contentType string, body []byte, pageURL *url.URL) (string, err
 		strings.HasSuffix(mediaType, "+xml"):
 		return string(body), nil
 	default:
-		return "", fmt.Errorf("unsupported content type %q — web_fetch reads text, HTML, JSON, and XML", mediaType)
+		return "", unsupportedMediaType(mediaType)
 	}
 }
 
@@ -650,7 +650,7 @@ func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= maxRedirects {
-				return fmt.Errorf("too many redirects (%d) starting from %s", maxRedirects, via[0].URL)
+				return errTooManyRedirects
 			}
 			if !sameHost(via[0].URL, req.URL) {
 				return http.ErrUseLastResponse
@@ -672,7 +672,9 @@ func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("fetch %s: timed out after %s", u, fetchTimeout)
 		}
-		return "", fmt.Errorf("fetch %s: %w", u, err)
+		// Never the client's error text, which quotes server bytes: see
+		// transportFailure.
+		return "", fmt.Errorf("fetch %s: %s", u, transportFailure(err))
 	}
 	defer resp.Body.Close() // ErrUseLastResponse returns the 3xx with its body open
 
@@ -686,7 +688,8 @@ func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("fetch %s: %s", u, resp.Status)
+		// The code only: the reason phrase is the server's text.
+		return "", fmt.Errorf("fetch %s: %s", u, httpStatus(resp.StatusCode))
 	}
 
 	// Refuse oversized bodies rather than truncating them — half an HTML
@@ -701,7 +704,7 @@ func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("fetch %s: timed out after %s", u, fetchTimeout)
 		}
-		return "", fmt.Errorf("read %s: %w", u, err)
+		return "", fmt.Errorf("read %s: %s", u, bodyReadFailure(err))
 	}
 	if len(body) > maxFetchBytes {
 		return "", fmt.Errorf("fetch %s: response exceeds the %dMB limit", u, maxFetchBytes/(1024*1024))

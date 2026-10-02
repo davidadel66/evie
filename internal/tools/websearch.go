@@ -192,7 +192,9 @@ func webSearch(parent context.Context, args string) (string, error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("search timed out after %s", searchTimeout)
 		}
-		return "", fmt.Errorf("search: %w", err)
+		// Never the client's error text, which quotes server bytes: see
+		// transportFailure.
+		return "", fmt.Errorf("search: %s", transportFailure(err))
 	}
 	defer resp.Body.Close()
 
@@ -202,7 +204,7 @@ func webSearch(parent context.Context, args string) (string, error) {
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return "", errors.New("brave api rate limit hit (free tier is 1 request/second) — wait a moment and retry")
 	case resp.StatusCode != http.StatusOK:
-		return "", fmt.Errorf("brave api: %s", resp.Status)
+		return "", fmt.Errorf("brave api: %s", httpStatus(resp.StatusCode))
 	}
 
 	// Refuse an oversized body outright rather than parsing a truncated
@@ -216,7 +218,7 @@ func webSearch(parent context.Context, args string) (string, error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("search timed out after %s", searchTimeout)
 		}
-		return "", fmt.Errorf("read brave response: %w", err)
+		return "", fmt.Errorf("read brave response: %s", bodyReadFailure(err))
 	}
 	if len(body) > maxSearchBody {
 		return "", errors.New("brave api response exceeds 1MB")
@@ -224,7 +226,8 @@ func webSearch(parent context.Context, args string) (string, error) {
 
 	var parsed braveResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("parse brave response: %w", err)
+		// The decoder's error quotes response bytes.
+		return "", errors.New("parse brave response: the API did not return valid search JSON")
 	}
 
 	return formatResults(query, parsed), nil

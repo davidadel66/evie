@@ -646,7 +646,11 @@
   system message. It is a user-role block after repository guidance, framed as
   `<conversation-summary>` with a label saying it summarizes earlier turns and
   is data, not instructions; a closing marker inside the summary is escaped
-  in any letter case and with any whitespace around its slash.
+  in any letter case and with any whitespace around its slash. Whitespace
+  here means any Unicode space, control or format character (Go's `\s` is
+  only ASCII, so `<\v/` and a no-break space passed), and invisible format
+  characters inside the name (such as a zero-width space) do not hide a
+  marker either (amended 2026-10-01, confirmation review).
   Each generation re-summarizes the prior summary, so a section could silently
   collapse to "None" or "unchanged from the prior summary". After validation,
   a section that was substantive in the prior generation and is now only a

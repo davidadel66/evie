@@ -318,16 +318,16 @@ func (s *Supervisor) own(ctx context.Context, parent delegation.Parent, a delega
 			}
 			return *settled.Result, nil
 		case ctx.Err() != nil:
-			return s.finish(id, stopped(ctx))
+			return s.finish(ctx, id, stopped(ctx))
 		case errors.Is(err, delegation.ErrCapacity) || transientStoreError(err):
 		default:
-			return s.finish(id, refused(err))
+			return s.finish(ctx, id, refused(err))
 		}
 		select {
 		case <-ctx.Done():
-			return s.finish(id, stopped(ctx))
+			return s.finish(ctx, id, stopped(ctx))
 		case <-queued.C:
-			return s.finish(id, outcome{"failed", "queue_deadline"})
+			return s.finish(ctx, id, outcome{"failed", "queue_deadline"})
 		case <-time.After(capacityPollInterval):
 		}
 	}
@@ -354,7 +354,7 @@ func (s *Supervisor) join(ctx context.Context, parent delegation.Parent, a deleg
 		}
 		if err == nil {
 			if o, pending := s.pendingOutcome(a.ID); pending {
-				if _, err := s.settleOnce(a.ID, o); err != nil {
+				if _, err := s.settleOnce(ctx, a.ID, o); err != nil {
 					return delegation.Attempt{}, fmt.Errorf("execution %s has not settled: recording its outcome failed (%w); recovery keeps retrying, so repeat this request later", a.ID, err)
 				}
 				continue
@@ -438,43 +438,66 @@ const settleGrace = 5 * time.Second
 // terminalWriteTimeout bounds one attempt at recording a terminal outcome.
 const terminalWriteTimeout = 3 * time.Second
 
-// finish records the owner's terminal outcome for id. Lock contention, or a
-// write that outlives its timeout, is retried with bounded backoff for up to
-// settleWindow; like every other supervisor store call, contention proves
-// nothing. An outcome that still cannot be recorded is handed to recovery
-// (settlePending) and to same-key retries (join), so the attempt does not keep
-// its running slot until its parent turn ends (amended 2026-10-01).
-func (s *Supervisor) finish(id string, o outcome) (delegation.Result, error) {
+// finish records the owner's terminal outcome for id. call is the owning
+// Delegate or Continue call, which Stop cancels. While call is live, lock
+// contention, or a write that outlives its timeout, is retried with bounded
+// backoff for up to settleWindow; like every other supervisor store call,
+// contention proves nothing. Once call has ended (shutdown or a cancelled
+// parent), the owner makes only the one bounded write its outcome needs, and
+// a retry wait or write in progress stops at once. An outcome that cannot be
+// recorded is handed to recovery (settlePending) and to same-key retries
+// (join), so the attempt does not keep its running slot until its parent turn
+// ends (amended 2026-10-01).
+func (s *Supervisor) finish(call context.Context, id string, o outcome) (delegation.Result, error) {
+	// A stopped attempt still records why it stopped: when call has already
+	// ended, that one write is bounded only by its own timeout.
+	write := call
+	if call.Err() != nil {
+		write = context.WithoutCancel(call)
+	}
 	deadline := time.Now().Add(s.settleWindow)
 	delay := capacityPollInterval
 	for {
-		a, err := s.settleOnce(id, o)
+		a, err := s.settleOnce(write, id, o)
 		if err == nil {
 			return *a.Result, nil
 		}
-		if !retryableTerminalWrite(err) || time.Now().Add(delay).After(deadline) {
-			s.mu.Lock()
-			s.unsettled[id] = o
-			s.mu.Unlock()
-			return delegation.Result{}, fmt.Errorf("recording the outcome failed; recovery keeps retrying: %w", err)
+		if !retryableTerminalWrite(err) || call.Err() != nil || time.Now().Add(delay).After(deadline) {
+			return s.handOff(id, o, err)
 		}
-		time.Sleep(delay)
+		retry := time.NewTimer(delay)
+		select {
+		case <-call.Done():
+			retry.Stop()
+			return s.handOff(id, o, err)
+		case <-retry.C:
+		}
 		delay = min(2*delay, time.Second)
 	}
 }
 
-// settleOnce makes one bounded attempt to record o for id. Recording an
-// attempt that is already terminal returns it unchanged, so an outcome
-// recorded by recovery or another settler is never replaced.
-func (s *Supervisor) settleOnce(id string, o outcome) (delegation.Attempt, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), terminalWriteTimeout)
+// handOff keeps an outcome its owner could not record for recovery and
+// same-key retries to record.
+func (s *Supervisor) handOff(id string, o outcome, err error) (delegation.Result, error) {
+	s.mu.Lock()
+	s.unsettled[id] = o
+	s.mu.Unlock()
+	return delegation.Result{}, fmt.Errorf("recording the outcome failed; recovery keeps retrying: %w", err)
+}
+
+// settleOnce makes one attempt, bounded by terminalWriteTimeout and ended
+// with ctx, to record o for id. Recording an attempt that is already terminal
+// returns it unchanged, so an outcome recorded by recovery or another settler
+// is never replaced.
+func (s *Supervisor) settleOnce(ctx context.Context, id string, o outcome) (delegation.Attempt, error) {
+	write, cancel := context.WithTimeout(ctx, terminalWriteTimeout)
 	defer cancel()
-	a, err := s.store.FinishSubagent(ctx, id, o.state, o.reason)
+	a, err := s.store.FinishSubagent(write, id, o.state, o.reason)
 	if err == nil && a.Result == nil {
 		err = errors.New("terminal subagent result is missing")
 	}
 	if err != nil {
-		if ctx.Err() != nil {
+		if write.Err() != nil && ctx.Err() == nil {
 			err = fmt.Errorf("%w: %w", errTerminalWriteTimeout, err)
 		}
 		return delegation.Attempt{}, err
@@ -504,8 +527,9 @@ func (s *Supervisor) pendingOutcome(id string) (outcome, bool) {
 
 // settlePending makes one attempt to record every outcome an owner could not.
 // Recovery runs it on each pass, so an unsettled attempt is settled as soon as
-// the store accepts the write, while its parent turn is still live.
-func (s *Supervisor) settlePending() error {
+// the store accepts the write, while its parent turn is still live. It stops
+// when ctx ends, leaving the rest pending.
+func (s *Supervisor) settlePending(ctx context.Context) error {
 	s.mu.Lock()
 	pending := make(map[string]outcome, len(s.unsettled))
 	for id, o := range s.unsettled {
@@ -514,7 +538,10 @@ func (s *Supervisor) settlePending() error {
 	s.mu.Unlock()
 	var failures []error
 	for id, o := range pending {
-		if _, err := s.settleOnce(id, o); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if _, err := s.settleOnce(ctx, id, o); err != nil {
 			failures = append(failures, fmt.Errorf("settle subagent execution %q: %w", id, err))
 		}
 	}
@@ -559,6 +586,9 @@ func (s *Supervisor) watch(ctx context.Context, cancel context.CancelCauseFunc, 
 }
 
 func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client agent.Client, profile openrouter.ContextProfile, resolve Resolver) (delegation.Result, error) {
+	// The owning call outlives the attempt's own deadline and authority:
+	// recording the outcome is bounded by the call (see finish).
+	call := ctx
 	deadline := a.StartedAt.Add(a.Policy.Deadline)
 	ctx, stopDeadline := context.WithDeadlineCause(ctx, deadline, errAttemptDeadline)
 	defer stopDeadline()
@@ -572,15 +602,15 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	defer func() { cancel(nil); <-watchDone }()
 	resolved, err := resolve(ctx, &a.Receipt)
 	if err != nil {
-		return s.finish(a.ID, outcome{"failed", "composition_unavailable"})
+		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
 	}
 	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
-		return s.finish(a.ID, outcome{"failed", "composition_unavailable"})
+		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
 	}
 	if a.Policy.Validate() != nil {
 		// Policies pinned before the 2026-10-01 budgets cannot run. Distinct
 		// from a model profile that cannot take the policy (below).
-		return s.finish(a.ID, outcome{"failed", "pinned_policy_invalid"})
+		return s.finish(call, a.ID, outcome{"failed", "pinned_policy_invalid"})
 	}
 	metered := &budget{client: client, policy: a.Policy, now: s.now, started: s.now(),
 		authorize: func(ctx context.Context) error { return s.authorize(ctx, a.ID) },
@@ -589,7 +619,7 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 	// bytes are narrowed.
 	profile, err = profile.WithWorkerLimits(int64(a.Policy.RequestBytes), profile.OutputReserveTokens())
 	if err != nil {
-		return s.finish(a.ID, outcome{"failed", "invalid_model_policy"})
+		return s.finish(call, a.ID, outcome{"failed", "invalid_model_policy"})
 	}
 	holder := a.Child.ID
 	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), resolved.Toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
@@ -599,12 +629,12 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 			// Even the smallest wrap-up request could not fit.
 			failure.reason = delegation.ReasonWrapUpFailed
 		}
-		return s.finish(a.ID, failure)
+		return s.finish(call, a.ID, failure)
 	}
 	if reason := metered.wrapUpReason(); reason != "" {
-		return s.finish(a.ID, outcome{delegation.StatePartial, reason})
+		return s.finish(call, a.ID, outcome{delegation.StatePartial, reason})
 	}
-	return s.finish(a.ID, outcome{"succeeded", ""})
+	return s.finish(call, a.ID, outcome{"succeeded", ""})
 }
 
 // recordWrapUp persists the wrap-up before the child's final call. A failure

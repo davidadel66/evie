@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/openrouter"
@@ -512,10 +513,24 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 	}, true)
 }
 
+// maxToolErrorBytes bounds the error text one tool call hands the model. Tools
+// word their own errors, but an error can wrap text from elsewhere (a server,
+// a subprocess, a driver), and no error worth reading is this long; results
+// have their own limits.
+const maxToolErrorBytes = 16 * 1024
+
 func toolError(id string, err error) (openrouter.Message, bool) {
+	text := err.Error()
+	if len(text) > maxToolErrorBytes {
+		cut := maxToolErrorBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = fmt.Sprintf("%s\n[error text cut: %d of %d bytes shown]", text[:cut], cut, len(text))
+	}
 	return openrouter.Message{
 		Role:       "tool",
-		Content:    fmt.Sprintf("tool call came back with error %v", err),
+		Content:    "tool call came back with error " + text,
 		ToolCallID: id,
 	}, true
 }

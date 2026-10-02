@@ -1,5 +1,43 @@
 # Subagents implementation decisions
 
+## 2026-10-01 — Confirmation review fixes
+
+Source: the confirmation review of the final verification fixes below, which
+measured two latency regressions in settlement and one gap in listed URLs. No
+schema, migration, receipt, preset or tool-schema change.
+
+Superseded wording: in Settlement (D3, D5) below, that the terminal write is
+retried for up to 5 seconds whatever happens to the owning call; and, in
+Listed URLs (G3, G4), that a listed URL need only parse "with a host".
+
+- **Settlement stops for shutdown and cancellation (C).** The owner's retries
+  of its terminal write ignored shutdown: Stop during a contended write took
+  4.6 s (formerly 1.5 ms), and with the write lock held Stop spent its
+  whole 5-second budget while Delegate returned after 6 s. The retries are now
+  bounded by the owning Delegate or Continue call, which Stop and a cancelled
+  parent end. While that call is live, the 5-second retry window is
+  unchanged. Once it has ended, the owner makes only the one write its outcome
+  needs (a stopped attempt still records why it stopped), bounded by the
+  3-second write timeout. A retry wait or a write already in progress when the
+  call ends stops at once. Either way an outcome that is not recorded goes
+  straight to the recovery hand-off. Measured: Stop returns in about 1.5 ms
+  with the write refused and about 3.0 s with the lock held (one bounded
+  write, not two), within its 5-second budget.
+- **Recovery passes stop on cancellation (D).** Recording pending outcomes
+  made one context-free 3-second write per entry in turn, so RunRecovery,
+  which shutdown waits for, returned 8.9 s after cancellation with three
+  pending entries. Each write is now bounded by recovery's context, and a pass
+  stops at once when cancelled, leaving the rest pending. Measured: under
+  1 ms. Same-key joins bound their write by the joiner's context the same way.
+- **Listed hosts are hostnames or IP addresses (F).** `net/url` keeps `<`,
+  `>`, `"`, `'` and other punctuation in a host, and `<`, `>`, `"` and
+  backticks verbatim in a query, so `https://x>SYSTEM<y.example/` was listed
+  unchanged. A listed URL's host must now be ASCII letters, digits, hyphens,
+  underscores and dots (so an IDNA name only in punycode form) or an IP
+  address, with IPv6 bracketed and without a zone. The re-serialized URL must
+  contain none of `<`, `>`, `"` or a backtick. Anything else is dropped, as
+  before. The same check applies to report, search-result and fetched URLs.
+
 ## 2026-10-01 — Final verification fixes
 
 Source: the final verification pass of the 2026-09-30 harness review

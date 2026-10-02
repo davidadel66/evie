@@ -9,3 +9,10 @@ func SetClockForTest(s *Supervisor, now func() time.Time) { s.now = now }
 // SetSettleWindowForTest bounds how long an owner retries its attempt's
 // terminal write before handing the attempt to recovery.
 func SetSettleWindowForTest(s *Supervisor, d time.Duration) { s.settleWindow = d }
+
+// PendingForTest reports how many decided outcomes are waiting to be recorded.
+func PendingForTest(s *Supervisor) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.unsettled)
+}

@@ -17,7 +17,8 @@ const (
 // Each pass first records the outcomes this process's owners decided but
 // could not record, so such an attempt settles while its parent turn is still
 // live. A failed pass is reported and retried with exponential backoff
-// bounded by recoveryMaxBackoff; only cancellation stops recovery. Each
+// bounded by recoveryMaxBackoff; only cancellation stops recovery, and it
+// also ends a pass's store calls at once, so shutdown never waits on them. Each
 // distinct failure is reported once while it persists. report may be nil.
 func (s *Supervisor) RunRecovery(ctx context.Context, report func(error)) error {
 	delay := recoveryInterval
@@ -30,7 +31,7 @@ func (s *Supervisor) RunRecovery(ctx context.Context, report func(error)) error 
 			return ctx.Err()
 		case <-timer.C:
 		}
-		pendingErr := s.settlePending()
+		pendingErr := s.settlePending(ctx)
 		_, err := s.store.RecoverSubagents(ctx)
 		if ctx.Err() == nil {
 			err = errors.Join(pendingErr, err)

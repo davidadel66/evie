@@ -118,9 +118,21 @@ const (
 )
 
 // contextSummaryClosingMarker matches anything a reader could take for the
-// frame's closing tag: any letter case and whitespace around the slash.
-// Trailing whitespace or attributes need no match once the slash is escaped.
-var contextSummaryClosingMarker = regexp.MustCompile(`(?i)<\s*/\s*conversation-summary`)
+// frame's closing tag: any letter case, any Unicode space, control or format
+// character around the slash (Go's \s is ASCII only), and invisible format
+// characters inside the name (amended 2026-10-01). Trailing whitespace or
+// attributes need no match once the slash is escaped.
+var contextSummaryClosingMarker = func() *regexp.Regexp {
+	const gap = `[\p{Z}\p{Cc}\p{Cf}]*`
+	var name strings.Builder
+	for i, c := range "conversation-summary" {
+		if i > 0 {
+			name.WriteString(`\p{Cf}*`)
+		}
+		name.WriteString(regexp.QuoteMeta(string(c)))
+	}
+	return regexp.MustCompile(`(?i)<` + gap + `/` + gap + name.String())
+}()
 
 // contextSummaryMessage frames the accepted rolling summary as a labelled
 // user-role data block. The summary is model-written from untrusted

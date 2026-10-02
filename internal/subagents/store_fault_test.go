@@ -129,6 +129,13 @@ func (c *faultConn) QueryContext(ctx context.Context, query string, args []drive
 }
 func (c *faultConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if err := c.fault.inject(query); err != nil {
+		if blocked, ok := err.(slowBusy); ok {
+			select {
+			case <-time.After(blocked.d):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
 		return nil, err
 	}
 	return c.Conn.(driver.ExecerContext).ExecContext(ctx, query, args)
@@ -141,3 +148,10 @@ func (c *faultConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.
 func openFaultDB(path string, fault *storeFault) *sql.DB {
 	return sql.OpenDB(faultConnector{dsn: path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)", fault: fault})
 }
+
+// slowBusy models a statement blocked on the write lock for d, honoring its
+// context as SQLite's busy handler does, and then failing with SQLITE_BUSY.
+type slowBusy struct{ d time.Duration }
+
+func (slowBusy) Error() string { return "injected slow database is locked (SQLITE_BUSY)" }
+func (slowBusy) Code() int     { return 5 }
