@@ -18,7 +18,38 @@
     words. An Entity counts only through its canonical name, the request's
     Alias or an active Alias that appears in the message; owner, Evie and
     Context anchors are implied. Values found only inside a question still
-    match (the quote shows the question).
+    match (the quote shows the question), except a boolean.
+  - *Stating sentence* (final verification pass, same day). Containing the
+    value is necessary, not sufficient; the reviewer's probes bound
+    `home_city=Boston` to "My therapist in Boston says…" ahead of "Remember
+    that I live in Boston.", `kids=1` to "Read this one article…",
+    `has_peanut_allergy=true` to "Read this article about peanut allergy
+    treatments…" and `home_city=Boston` to "I don't live in Boston
+    anymore." Now a sentence (or window) qualifies only if it
+    (a) agrees in polarity: an affirmed value never binds where its clause is
+    negated ("not", "never", "no", "n't" and the closed contraction list; a
+    clause ends at `, ; : ( )`, a dash, "but", "although", "though",
+    "however", "whereas", "yet", "because", "since", "unless", "until",
+    "while", or "so" before a pronoun; "and"/"or" do not end one, so "not
+    allergic to peanuts and shellfish" stays negated; "don't/never forget"
+    is not a negation), and a denied Claim or a false boolean binds only to
+    a negated clause; (b) holds a Predicate word, names the subject (the
+    first person for the owner anchor; an ordinary subject is already a
+    required name) or carries an explicit memory cue ("remember", "note",
+    "save", "memorize", "correction"); (c) for a number word ("one" to
+    "twenty"), holds a Predicate word in the same sentence (digits count
+    anywhere); and (d) for a boolean or other wordless value, is a
+    statement, not a question, in the first person when the owner is the
+    subject. Among qualifying windows the narrowest wins,
+    then the most Predicate words, then the first person, then a statement
+    over a question, then a memory cue, then the latest in the message. With
+    no qualifying window the value is `evie_proposed`, never bound to an
+    unrelated sentence. The same selection narrows legacy whole sources. A
+    first-person sentence that merely mentions the value ("My therapist in
+    Boston…" alone) still qualifies; the rules choose between sentences and
+    reject non-statements, they do not parse meaning. The cards now say
+    "your message doesn't state this value" rather than "is not in your
+    message", since a mentioned but unstated value is also Evie-proposed.
   - *Span.* The sentence (Stage 13 splitter) holding the value, or every
     sentence a multi-sentence value touches; for an Entity Claim the sentence
     or two adjacent sentences naming both subject and object; trimmed of
@@ -62,9 +93,41 @@
     renders only the sentence holding its Claim's value, found with the same
     matcher; with no matching sentence it renders no text. Its locator, hash,
     authority and identity are unchanged. Readers in the Source's own scope
-    (and its own session) keep the whole message. This applies on every
-    rendering path: recall, identity matches, Claim queries, object and
-    Source Link inspection, and object listings.
+    (and its own session) keep the whole message. This applies to recall,
+    identity matches, Claim queries, object and Source Link inspection,
+    object listings and, since the final verification pass, operation
+    history.
+  - *Operation history* (final verification pass). Object inspection
+    (`memory_inspect_object`, the web inspector, REPL `/memory inspect`)
+    returns each operation's proposal and prepared JSON, which quote
+    Sources, compiler support and context, and the owner's lifecycle,
+    promotion or graph request message; Global operations were previously
+    shown whole to Workspace readers (Global is always an allowed scope).
+    At read time every quoted `evidence` field follows the Source rule for
+    the reader: text said in the reader's own Context Scope or session
+    stays; text from another Workspace, project or session is blanked; a
+    Global bound span stays; any other Global text narrows to the sentence
+    holding the value of the Claim it supports (a quoted Source Link's own
+    Claim, else the inspected Claim) or to no text (always no text for
+    Entity, Alias and Graph Link inspection). Members keep their order;
+    stored operations, hashes and replay are unchanged. Lifecycle and
+    promotion evidence is still stored as the whole request message: it is
+    the hashed, Apply-verified record of the owner's request, which rarely
+    contains the value, so citing a span at write time would add an
+    operation shape without changing what any reader sees.
+  - *Inspecting Evie-proposed evidence.* `InspectMemoryEvidence` treats an
+    `evie_proposed` Source with no text as visible, so a recall receipt for
+    an approved Evie-proposed memory is available and the UI shows "Evie
+    proposed this value; your words don't state it."
+  - *Not covered: the opt-in compiler.* Compiler support is still offered
+    and accepted as whole-message `owner_statement` without a value check
+    (`compiler_source.go`). Recording such a candidate as Evie-proposed needs
+    the Stage 4 review contract (preview version, Apply and history
+    validators that require owner authority for owner support) to change,
+    and rejecting it at validation changes frozen compiler fixtures; both
+    are a separate change. Rendering is partly covered: an accepted whole
+    compiler Source is narrowed for other scopes like any whole owner
+    Source, but a range the extractor chose is shown as that range.
 
 - **2026-10-01 — Entity reuse and ambiguous names are visible (harness
   review M6, Stage 14).** Applies the plan's M6 default. Resolution itself is

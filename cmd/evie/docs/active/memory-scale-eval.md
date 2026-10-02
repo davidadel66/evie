@@ -437,6 +437,50 @@ tests in `internal/eviedb/semantic_source_binding_test.go`.
 | M6: alias reuse is shown on the card | yes | `identities` on the proposal and card test |
 | M6: ambiguous aliases are marked in recall | yes | `ambiguous_names` and identifying text |
 
+**Final verification pass (same day).** A reviewer's probes found four gaps,
+now fixed (rules in the 2026-10-01 memory decision):
+
+- The span was the first sentence containing the value, not the one stating
+  it: "My therapist in Boston says the panic attacks are getting worse.
+  Remember that I live in Boston." cited the therapist sentence, a Workspace
+  search for "home city" received it, and retiring the memory left "I live in
+  Boston" recallable as current. The binder now picks the sentence that
+  states the Claim (polarity, Predicate word, subject or memory cue; ranked by
+  Predicate words, first person, statement, cue, recency) and otherwise
+  records Evie-proposed; legacy narrowing uses the same selection.
+- Number words bound anywhere ("Read this one article…" gave `kids=1`;
+  "No one told me. My floor is 4." gave `floor=1`), booleans bound on topic
+  words ("Read this article about peanut allergy treatments…"), and negation
+  was ignored ("I'm not allergic to peanuts.", "I don't live in Boston
+  anymore."). All are Evie-proposed now; a denied Claim or false boolean
+  binds only to a negated clause.
+- Operation history (`memory_inspect_object`, web and REPL inspection)
+  showed Global request and source text to Workspace readers, and a Global
+  Entity's history showed one Workspace's words to another. Quoted evidence
+  in operation JSON now follows the Source rule for the reader.
+- `InspectMemoryEvidence` reported every Evie-proposed receipt unavailable,
+  so the UI's "Evie proposed this value" text never rendered; it is now
+  available with the label and no quote.
+
+Tests: the probe messages are table cases in
+`semantic_source_binding_test.go`; `memory_authority_test.go` runs the
+therapist probe through a real Global remember, Workspace search and retire,
+and a Workspace `memory_inspect_object` of a retired Global memory;
+`semantic_operation_history_test.go` covers operation history for Claim,
+Source Link and Entity inspection and Evie-proposed receipt inspection. The
+opt-in compiler still accepts whole-message support as `owner_statement`
+without a value check (see the decision).
+
+Both tiers were re-run on this change: both reports are identical to the
+baseline (the ratchet passes without re-recording), and the frozen 24-case
+lexical workloads are unchanged (held-out 22/28 automatic, 26/28 deeper, 19
+non-gold of 48; development 23–24/27, the recorded dev11 random-ID tie, and
+25/27). Every corpus remember
+("Remember that my…" or "Remember that I…") and both corrections state their
+value in an un-negated first-person clause, so their sources are unchanged. Of the lexical workloads' 62 accepted records the
+same two held-out records as above are the only ones that are not
+whole-message owner statements.
+
 ## Decisions and spec relationship
 
 - **Synthetic, not derived.** `memory.spec.md` Stage 9 asks for fixtures

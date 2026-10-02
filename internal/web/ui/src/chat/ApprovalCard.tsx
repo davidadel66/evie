@@ -61,7 +61,7 @@ function Pending({ tool, onAnswer, compact }: Props) {
         </pre>
       )}
       {!compact && !preview && view.shape === "json" && view.evieProposed && (
-        <p className="text-amber-ink px-[14px] pt-3 text-sm">Evie’s proposal: this value is not in your message. Approving saves it as Evie-proposed, not as something you said.</p>
+        <p className="text-amber-ink px-[14px] pt-3 text-sm">Evie’s proposal: your message doesn’t state this value. Approving saves it as Evie-proposed, not as something you said.</p>
       )}
       {!compact && !preview && view.shape === "json" && (
         <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
@@ -189,7 +189,7 @@ function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArg
   const applies = applicabilityLabel(view.scopeKey,names);
   return <div className="space-y-4 px-4 py-4 text-sm"><p className="text-ink font-medium">{view.subject}</p><p className="text-teal">Applies to: {applies}</p>
     {view.evieProposed
-      ? <p className="text-amber-ink">Evie’s proposal: this value is not in your message. Approving saves it as Evie-proposed, not as something you said.</p>
+      ? <p className="text-amber-ink">Evie’s proposal: your message doesn’t state this value. Approving saves it as Evie-proposed, not as something you said.</p>
       : view.evidence && <div><p className="text-muted-text mb-1 text-xs">Your words</p><blockquote className="border-hair text-body border-l-2 pl-3 whitespace-pre-wrap">{view.evidence}</blockquote></div>}
     {view.identities.length > 0 && <ul className="text-body space-y-1 text-xs">{view.identities.map((line) => <li key={line}>{line}</li>)}</ul>}
     <details className="text-muted-text text-xs"><summary className="cursor-pointer">Exact change</summary><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all">{view.json}</pre></details></div>;

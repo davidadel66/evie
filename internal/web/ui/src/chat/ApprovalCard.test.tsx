@@ -18,7 +18,7 @@ describe("memory approval applicability", () => {
     const tool: Extract<Item, { kind: "tool" }> = { kind: "tool", key: "test", id: "call", name: "memory_remember_literal", args: JSON.stringify({ scope: { scope_key: "global" }, subject: { canonical_name: "owner", anchor_kind: "owner" }, predicate: { label: "preferred payee" }, literal: { value: "Acme Offshore" }, source: { authority: "evie_proposed", evidence: "" } }), startedAt: 0, approval: { state: "pending", reqId: "live" } };
     const html = renderToStaticMarkup(<ApprovalCard tool={tool} onAnswer={() => undefined} />);
     expect(html).toContain("Evie’s proposal");
-    expect(html).toContain("not in your message");
+    expect(html).toContain("doesn’t state this value");
     expect(html).not.toContain("<blockquote");
   });
 
@@ -26,7 +26,7 @@ describe("memory approval applicability", () => {
     const tool: Extract<Item, { kind: "tool" }> = { kind: "tool", key: "test", id: "call", name: "memory_correct_claim", args: JSON.stringify({ kind: "correct_claim", replacement_claim: { object: { literal: { kind: "text", value: "Acme Offshore" } } }, source: { authority: "evie_proposed", evidence: "" } }), startedAt: 0, approval: { state: "pending", reqId: "live" } };
     const html = renderToStaticMarkup(<ApprovalCard tool={tool} onAnswer={() => undefined} />);
     expect(html).toContain("Evie’s proposal");
-    expect(html).toContain("not in your message");
+    expect(html).toContain("doesn’t state this value");
   });
 
   it("labels the bound span as the owner's words and shows Entity reuse", () => {

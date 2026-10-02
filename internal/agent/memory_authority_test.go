@@ -237,6 +237,101 @@ func TestRetiringASpanBoundMemoryKeepsTheRestOfTheMessageRecallable(t *testing.T
 	}
 }
 
+// Harness review final pass (M5, finding 1): the source is the sentence that
+// states the value, so another scope never receives an unrelated sentence of
+// the message and retirement suppresses the right one.
+func TestRememberCitesTheSentenceThatStatesTheValueNotAnEarlierMention(t *testing.T) {
+	f := newRetrievalFixture(t)
+	ctx := context.Background()
+	global := f.global()
+	command := "My therapist in Boston says the panic attacks are getting worse. Remember that I live in Boston."
+	span := "Remember that I live in Boston."
+	proposal := f.prepareLiteral(global, command, "home_city", "Boston")
+	if proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Evidence != span {
+		t.Fatalf("proposal cites the wrong sentence: %+v", proposal.Source)
+	}
+	accepted := f.approveLiteral(global, proposal)
+	workspace, err := f.store.RegisterWorkspace(ctx, "Garden planning")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := standardManager(t, f.store).ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := f.store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.refresh()
+	client, _ := f.search(reader, "home city")
+	data := retrievalData(t, client.reqs[1])
+	if !strings.Contains(data, string(accepted.ClaimID)) || !strings.Contains(data, span) {
+		t.Fatalf("Workspace reader lost the memory or its stating sentence: %s", data)
+	}
+	for _, private := range []string{"therapist", "panic attacks"} {
+		if strings.Contains(data, private) {
+			t.Fatalf("Workspace reader received an unrelated Global sentence as the source (%q): %s", private, data)
+		}
+	}
+	f.lifecycle(global, "memory_retire", memory.SemanticObjectClaim, accepted.ClaimID)
+	f.refresh()
+	for _, item := range suppliedEvidence(t, f.searchConversations(f.global(), "live in Boston")) {
+		if !strings.Contains(item.Text, "I live in Boston") {
+			continue
+		}
+		linked := false
+		for _, link := range item.HistoricalClaims {
+			linked = linked || link.ClaimID == accepted.ClaimID
+		}
+		if !linked {
+			t.Fatalf("retired memory's own sentence is recalled as current: %+v", item)
+		}
+	}
+}
+
+// Harness review final pass (M5, finding 3): a Workspace session inspecting a
+// Global memory through memory_inspect_object receives no other Global text,
+// including the owner's lifecycle request in the operation history.
+func TestWorkspaceInspectionOfAGlobalMemoryCarriesNoOtherGlobalText(t *testing.T) {
+	f := newRetrievalFixture(t)
+	ctx := context.Background()
+	global := f.global()
+	accepted := f.approveLiteral(global, f.prepareLiteral(global, "My blood test came back. Remember that my favorite color is teal.", "favorite_color", "teal"))
+	retire, _ := json.Marshal(map[string]string{"idempotency_key": "idem:v1:" + uuid.NewString(), "object_kind": "claim", "object_id": string(accepted.ClaimID)})
+	client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("retire", "memory_retire", string(retire))), assistantStep("Done.", nil)}}
+	approve := func(context.Context, string, string, *tools.FileChangePreview) tools.Decision { return tools.Approved }
+	if err := f.session(global, client).Send(ctx, "My HIV test was negative. Please forget my favorite color.", &recorder{}, approve); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := f.store.RegisterWorkspace(ctx, "Garden planning")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := standardManager(t, f.store).ResolvePreset(plugins.StandardPresetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := f.store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspect, _ := json.Marshal(map[string]string{"object_kind": "claim", "object_id": string(accepted.ClaimID)})
+	client = &fakeClient{steps: []step{assistantStep("", nil, toolCall("inspect", "memory_inspect_object", string(inspect))), assistantStep("Seen.", nil)}}
+	if err := f.session(reader, client).Send(ctx, "Inspect that memory.", &recorder{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	sent, _ := json.Marshal(client.reqs[len(client.reqs)-1])
+	if !strings.Contains(string(sent), "retire_memory") || !strings.Contains(string(sent), "Remember that my favorite color is teal.") {
+		t.Fatalf("inspection lost the memory's history or bound span: %s", sent)
+	}
+	for _, private := range []string{"HIV", "blood test"} {
+		if strings.Contains(string(sent), private) {
+			t.Fatalf("Workspace inspection carried Global message text %q: %s", private, sent)
+		}
+	}
+}
+
 func (f *retrievalFixture) prepareEntity(record memory.Session, command string, request memory.RememberEntityRequest) memory.RememberEntityProposal {
 	f.t.Helper()
 	request.IdempotencyKey = "idem:v1:" + uuid.NewString()

@@ -17,11 +17,12 @@ func TestOwnerSpanBindingRules(t *testing.T) {
 		{"case and punctuation fold", "Long day. Remember: my favourite café is BLUE-BOTTLE! Thanks.", text("blue bottle"), "favorite_cafe", "Remember: my favourite café is BLUE-BOTTLE!"},
 		{"whitespace folds", "My parking spot is level 2\n  bay 14 now", text("level 2 bay 14"), "parking_spot", "My parking spot is level 2\n  bay 14 now"},
 		{"inflection folds", "I am allergic to peanuts.", text("peanut"), "allergy", "I am allergic to peanuts."},
-		{"-ves plural", "Hi. Selma likes indigo cotton scarves.", text("indigo cotton scarf"), "keepsake", "Selma likes indigo cotton scarves."},
+		{"-ves plural", "Hi. My keepsake is indigo cotton scarves.", text("indigo cotton scarf"), "keepsake", "My keepsake is indigo cotton scarves."},
 		{"-ies plural", "We love small cities. Ok.", text("small city"), "preference", "We love small cities."},
-		{"-ves plural of -ve", "Bring gloves. Thanks.", text("glove"), "packing", "Bring gloves."},
+		{"-ves plural of -ve", "Pack my gloves. Thanks.", text("glove"), "packing", "Pack my gloves."},
 		{"multi-sentence value", "Note this. Rule one! Rule two! Done", text("Rule one! Rule two!"), "rules", "Rule one! Rule two!"},
-		{"possessive keeps the name", "Sarah's birthday party is Friday.", text("Sarah"), "friend", "Sarah's birthday party is Friday."},
+		{"possessive keeps the name", "My friend Sarah's birthday party is Friday.", text("Sarah"), "friend", "My friend Sarah's birthday party is Friday."},
+		{"value in a sentence about someone else", "Selma likes indigo cotton scarves.", text("indigo cotton scarf"), "keepsake", ""},
 		{"value must be consecutive words", "I prefer the dark UI mode.", text("dark mode"), "theme", ""},
 		{"absent value is Evie-proposed", "Read this article and remember what matters.", text("Lisbon"), "home_city", ""},
 		{"thousands separators", "Our budget is $1,500 for the trip.", literal(memory.LiteralInteger, "1500"), "budget", "Our budget is $1,500 for the trip."},
@@ -41,7 +42,7 @@ func TestOwnerSpanBindingRules(t *testing.T) {
 		{"boolean without Predicate words", "Read this article.", literal(memory.LiteralBoolean, "true"), "is_vegetarian", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			binding := bindOwnerSource(tc.message, literalOccurrences(tc.message, tc.literal, tc.predicate, strings.ReplaceAll(tc.predicate, "_", " ")))
+			binding := bindLiteral(tc.message, tc.literal, tc.predicate, memory.PolarityAffirmed)
 			checkBinding(t, tc.message, binding, tc.span)
 		})
 	}
@@ -66,14 +67,14 @@ func TestOwnerSpanBindingForEntityNames(t *testing.T) {
 			for _, names := range tc.names {
 				needs = append(needs, phraseOccurrences(tokens, names...))
 			}
-			checkBinding(t, tc.message, bindOwnerSource(tc.message, needs), tc.span)
+			checkBinding(t, tc.message, bindOwnerSource(tc.message, bindingClaim{needs: needs}), tc.span)
 		})
 	}
 }
 
 func TestOwnerSpanBindingNarrowsLongSentences(t *testing.T) {
 	message := strings.Repeat("filler words without any stop ", 40) + "my locker code word is pelican " + strings.Repeat("and more trailing words here ", 40)
-	binding := bindOwnerSource(message, literalOccurrences(message, text("pelican"), "locker_code_word", "locker code word"))
+	binding := bindLiteral(message, text("pelican"), "locker_code_word", memory.PolarityAffirmed)
 	if binding.authority != memory.AuthorityOwnerStatement || len(binding.evidence) > 200 || !strings.Contains(binding.evidence, "pelican") {
 		t.Fatalf("long sentence was not narrowed around the value: %+v", binding)
 	}
@@ -117,7 +118,7 @@ func checkBinding(t *testing.T, message string, binding ownerSourceBinding, span
 
 func TestRememberSourceShapesAndEvidenceVerification(t *testing.T) {
 	message := "Noise first. Remember that my favorite color is teal."
-	owner := sourceFor(bindOwnerSource(message, literalOccurrences(message, text("teal"), "favorite_color", "favorite color")))
+	owner := sourceFor(bindLiteral(message, text("teal"), "favorite_color", memory.PolarityAffirmed))
 	legacy := memory.SemanticSource{EventPart: memory.EvidenceContent, LocatorKind: memory.LocatorWhole, EvidenceSHA256: evidenceHash(message),
 		Actor: memory.SemanticActorOwner, SourceType: memory.SourceTypeUserMessage, Authority: memory.AuthorityOwnerStatement,
 		Evidence: message, Eligibility: memory.EligibilityEligible}
@@ -136,15 +137,87 @@ func TestRememberSourceShapesAndEvidenceVerification(t *testing.T) {
 	laundered := owner
 	laundered.Authority = memory.AuthorityEvieProposed
 	rejected["Evie-proposed span"] = laundered
-	quoting := sourceFor(bindOwnerSource(message, nil))
+	quoting := sourceFor(bindOwnerSource(message, bindingClaim{}))
 	quoting.Evidence = message
 	rejected["Evie-proposed quoting the message"] = quoting
-	claimed := sourceFor(bindOwnerSource(message, nil))
+	claimed := sourceFor(bindOwnerSource(message, bindingClaim{}))
 	claimed.Authority = memory.AuthorityOwnerStatement
 	rejected["whole message claimed as owner words without its text"] = claimed
 	for name, source := range rejected {
 		if err := verifyRememberSourceEvidence(source, message); err == nil {
 			t.Fatalf("%s was accepted: %+v", name, source)
 		}
+	}
+}
+
+// bindLiteral binds a Typed Literal Claim about the owner the way a remember
+// proposal does.
+func bindLiteral(message string, value memory.TypedLiteral, predicate string, polarity memory.ClaimPolarity) ownerSourceBinding {
+	return bindOwnerSource(message, literalBindingClaim(message, value, polarity, predicate, strings.ReplaceAll(predicate, "_", " ")))
+}
+
+// Harness review final pass (M5, finding 1): the span is the sentence that
+// states the Claim, not the first sentence that happens to contain its value.
+func TestOwnerSpanBindingChoosesTheSentenceThatStatesTheClaim(t *testing.T) {
+	for _, tc := range []struct {
+		name, message string
+		literal       memory.TypedLiteral
+		predicate     string
+		span          string
+	}{
+		{"memory cue beats an earlier mention", "My therapist in Boston says the panic attacks are getting worse. Remember that I live in Boston.", text("Boston"), "home_city", "Remember that I live in Boston."},
+		{"memory cue beats a later mention", "Remember that I live in Boston. My therapist in Boston says the panic attacks are getting worse.", text("Boston"), "home_city", "Remember that I live in Boston."},
+		{"Predicate words beat an earlier mention", "I flew to Boston last week. My home city is Boston.", text("Boston"), "home_city", "My home city is Boston."},
+		{"Predicate words beat a later mention", "My home city is Boston. I flew to Boston yesterday.", text("Boston"), "home_city", "My home city is Boston."},
+		{"later statement wins a tie", "I was in Boston on Monday. I am in Boston again today.", text("Boston"), "home_city", "I am in Boston again today."},
+		{"statement beats a question", "Is Boston nice? I live in Boston.", text("Boston"), "home_city", "I live in Boston."},
+		{"no sentence states it", "The Boston office called. Lunch was fine.", text("Boston"), "home_city", ""},
+		{"topic mention without a cue", "Read this article about Boston.", text("Boston"), "home_city", ""},
+		{"explicit memory cue", "Good question. Remember: Blue Bottle.", text("Blue Bottle"), "favorite_cafe", "Remember: Blue Bottle."},
+		{"explicit correction cue", "Correction: it was Chicago.", text("Chicago"), "location_name", "Correction: it was Chicago."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkBinding(t, tc.message, bindLiteral(tc.message, tc.literal, tc.predicate, memory.PolarityAffirmed), tc.span)
+		})
+	}
+}
+
+// Harness review final pass (M5, finding 2): a stray number word, a topic
+// mention or a negated statement is not the owner stating the value.
+func TestOwnerSpanBindingDoesNotLaunderAuthority(t *testing.T) {
+	boolean := func(value string) memory.TypedLiteral { return literal(memory.LiteralBoolean, value) }
+	integer := func(value string) memory.TypedLiteral { return literal(memory.LiteralInteger, value) }
+	for _, tc := range []struct {
+		name, message string
+		literal       memory.TypedLiteral
+		predicate     string
+		polarity      memory.ClaimPolarity
+		span          string
+	}{
+		{"number word without quantity context", "Read this one article about school schedules.", integer("1"), "kids", memory.PolarityAffirmed, ""},
+		{"number word in an unrelated sentence", "No one told me. My floor is 4.", integer("1"), "floor", memory.PolarityAffirmed, ""},
+		{"digit with its Predicate", "No one told me. My floor is 4.", integer("4"), "floor", memory.PolarityAffirmed, "My floor is 4."},
+		{"number word with its Predicate", "One of my kids is sick today. I have two kids.", integer("2"), "kids", memory.PolarityAffirmed, "I have two kids."},
+		{"boolean topic mention", "Read this article about peanut allergy treatments and summarize it.", boolean("true"), "has_peanut_allergy", memory.PolarityAffirmed, ""},
+		{"boolean stated by the owner", "Note for later. I have a peanut allergy.", boolean("true"), "has_peanut_allergy", memory.PolarityAffirmed, "I have a peanut allergy."},
+		{"boolean asked about", "Am I vegetarian?", boolean("true"), "is_vegetarian", memory.PolarityAffirmed, ""},
+		{"negated boolean", "I'm not allergic to peanuts.", boolean("true"), "allergic", memory.PolarityAffirmed, ""},
+		{"negated text value", "I'm not allergic to peanuts.", text("peanuts"), "allergy", memory.PolarityAffirmed, ""},
+		{"negated home", "I don't live in Boston anymore.", text("Boston"), "home_city", memory.PolarityAffirmed, ""},
+		{"no longer", "I no longer live in Boston.", text("Boston"), "home_city", memory.PolarityAffirmed, ""},
+		{"denied Claim from a negated statement", "I don't live in Boston anymore.", text("Boston"), "home_city", memory.PolarityDenied, "I don't live in Boston anymore."},
+		{"denied Claim from a positive statement", "I live in Boston.", text("Boston"), "home_city", memory.PolarityDenied, ""},
+		{"false boolean from a negated statement", "I'm not vegetarian.", boolean("false"), "is_vegetarian", memory.PolarityAffirmed, "I'm not vegetarian."},
+		{"negation in another clause", "I'm vegetarian, not vegan.", boolean("true"), "is_vegetarian", memory.PolarityAffirmed, "I'm vegetarian, not vegan."},
+		{"negation in a clause after but", "I don't drive, but I live in Boston.", text("Boston"), "home_city", memory.PolarityAffirmed, "I don't drive, but I live in Boston."},
+		{"negation in a clause after so", "I prefer a printed errand list so I do not have to unlock a screen while I am out.", text("a printed errand list"), "errand_list_medium", memory.PolarityAffirmed, "I prefer a printed errand list so I do not have to unlock a screen while I am out."},
+		{"so as an adverb keeps the clause", "I'm not so sure I live in Boston.", text("Boston"), "home_city", memory.PolarityAffirmed, ""},
+		{"negation in a clause after because", "I live in Boston because I don't like driving.", text("Boston"), "home_city", memory.PolarityAffirmed, "I live in Boston because I don't like driving."},
+		{"don't forget is not a negation", "Don't forget that I live in Boston.", text("Boston"), "home_city", memory.PolarityAffirmed, "Don't forget that I live in Boston."},
+		{"negated sentence skipped for the stated one", "I don't live in Boston anymore. I live in Boston again now.", text("Boston"), "home_city", memory.PolarityAffirmed, "I live in Boston again now."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkBinding(t, tc.message, bindLiteral(tc.message, tc.literal, tc.predicate, tc.polarity), tc.span)
+		})
 	}
 }

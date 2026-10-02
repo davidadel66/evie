@@ -410,12 +410,12 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	// Identity details come only from the scopes this operation resolves
 	// Entities in, so a Global-target proposal never carries narrower text.
 	readable := []string{"global", referenceContext, targetKey}
-	needs, err := claimBindingNeeds(ctx, s.db, source.Evidence, request.Predicate, request.PredicateLabel, nil, readable,
+	binding, err := claimBindingNeeds(ctx, s.db, source.Evidence, request.Predicate, request.PredicateLabel, nil, request.Polarity, readable,
 		entityWithAlias{subject, subjectAlias}, entityWithAlias{object, objectAlias})
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
-	bindOwnerSource(source.Evidence, needs).apply(&source)
+	bindOwnerSource(source.Evidence, binding).apply(&source)
 	var identities []memory.ProposalEntityIdentity
 	for _, item := range []struct {
 		role     string

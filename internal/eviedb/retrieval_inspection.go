@@ -75,9 +75,11 @@ func (s *Store) InspectMemoryEvidence(ctx context.Context, scope memory.ScopeCon
 			return nil, err
 		}
 		if eligible && evidence.ID == ref.ID && evidence.ScopeKey == ref.ScopeKey && evidence.ClaimOperationID == ref.ClaimOperationID && sameRetrievalSources(evidence.Reference().Sources, ref.Sources) {
+			// An Evie-proposed Source never quotes its request message (harness
+			// review M5): its label is the whole inspectable evidence.
 			visible := true
 			for _, source := range evidence.Sources {
-				visible = visible && source.Evidence != ""
+				visible = visible && (source.Evidence != "" || source.Authority == memory.AuthorityEvieProposed)
 			}
 			if visible {
 				evidence.Intent = ref.Intent

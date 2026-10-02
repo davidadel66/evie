@@ -23,16 +23,23 @@
 - **2026-10-01 — Bound spans, Evie-proposed sources and ambiguous names in
   recall (harness review M5, M6, Stage 14).** Follows the 2026-10-01 memory
   decisions on owner-span binding and Entity identity.
-  - A Claim's source renders only its bound span on every path, so a Global
-    memory read in a Workspace or project session no longer carries the rest
-    of the Global message. A whole-message owner Source accepted before Stage
-    14 is narrowed at read time for such readers to the sentence holding its
-    Claim's value (same matcher), or to no text; its reference (locator and
-    hash) is unchanged, and Global readers still see the whole message.
+  - A Claim's source renders only its bound span in recall, identity
+    matches, Claim queries, object and Source Link inspection, object
+    listings and operation history, so a Global memory read in a Workspace
+    or project session no longer carries the rest of the Global message. A
+    whole-message owner Source accepted before Stage 14 is narrowed at read
+    time for such readers to the sentence holding its Claim's value (same
+    matcher, including the final pass's stating-sentence rules), or to no
+    text; its reference (locator and hash) is unchanged, and Global readers
+    still see the whole message. The bound span is the sentence that states
+    the value, so a retired memory suppresses and labels that sentence, not
+    an earlier one that only mentions the value (final verification pass).
   - An approved `evie_proposed` Claim stays retrievable (the owner approved
     it): the accepted-memory authority allowlist gains `evie_proposed`, its
     source carries the label and no text, and the cited message's hash is
-    still verified.
+    still verified. Inspecting its receipt (`InspectMemoryEvidence`) is
+    available with the label and no quote (final verification pass; it was
+    previously reported unavailable because the source had no text).
   - Conversation associations ignore `evie_proposed` Source Links: retiring
     such a Claim suppresses nothing in the request message, never labels it a
     historical source, and does not count it as represented provenance for

@@ -1207,6 +1207,20 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 	for operationID := range operationIDs {
 		ordered = append(ordered, operationID)
 	}
+	// Operation history quotes owner text: render it for this reader by the
+	// same rule as a Claim's Sources (harness review M5).
+	narrower := operationNarrower{ctx: ctx, q: query, reader: readerFromScope(scope), claim: result.Claim}
+	if result.Source != nil {
+		var claimID memory.SemanticID
+		if err := query.QueryRowContext(ctx, `SELECT claim_id FROM semantic_source_links WHERE source_link_id = ?`, id).Scan(&claimID); err != nil {
+			return result, err
+		}
+		claim, err := loadSemanticClaim(ctx, query, claimID)
+		if err != nil {
+			return result, err
+		}
+		narrower.claim = &claim
+	}
 	for _, operationID := range ordered {
 		operation, err := loadSemanticOperationInspection(ctx, query, operationID)
 		if err != nil {
@@ -1231,6 +1245,9 @@ func (s *Store) InspectSemanticObjectAtScopeAndTime(ctx context.Context, scope m
 			operation.ProposalJSON = ""
 			operation.PreparedJSON = ""
 			operation.ResultJSON = ""
+		}
+		if err := narrower.narrow(&operation); err != nil {
+			return result, err
 		}
 		result.Operations = append(result.Operations, operation)
 	}

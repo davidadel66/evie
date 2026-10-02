@@ -55,7 +55,7 @@ it("labels an Evie-proposed source instead of calling its text unavailable", () 
   const receipt: MemoryEvidenceReceipt = { sessionId: "session-1", snapshotId: "request-1", version: "retrieval-v1", status: "success", evidence: [{ reference: { id: "claim-1", kind: "accepted_memory", scope_key: "global", status: "active", as_known_at: "2026-09-10T10:00:00Z", valid_at: "2026-09-10T10:00:00Z", paths: ["exact"], sources: [] }, available: true, current_status: "active", evidence: { text: "owner — home city: Lisbon", sources: [{ event_id: "event-1", session_id: "source-session", source_scope_key: "global", actor: "owner", authority: "evie_proposed", observed_at: "2026-09-09T10:00:00Z", evidence: "", locator_kind: "whole", locator_value: "", evidence_sha256: "request-hash" }] } }] };
   receipt.requests = [{ snapshotId: receipt.snapshotId, requestStatus: "completed", iteration: 1, requestSHA256: "wire-hash", serializedBytes: 42, version: receipt.version, status: receipt.status, evidence: receipt.evidence }];
   const html = renderToStaticMarkup(<MemoryEvidenceView receipt={receipt} />);
-  expect(html).toContain("Evie proposed this value; it is not in your words.");
+  expect(html).toContain("Evie proposed this value; your words don’t state it.");
   expect(html).not.toContain("Source text unavailable.");
 });
 

@@ -130,7 +130,7 @@ function RequestEvidenceView({ receipt, requestStatus }: { receipt: MemoryEviden
           {item.reference.valid_at_constrained && <p>Valid at: {item.reference.valid_at}</p>}
         </details>}
         {item.evidence.sources.map((source) => <div key={`${source.event_id}:${source.locator_value}`} className="border-hair mt-4 border-l pl-3">
-          <blockquote className="text-body text-xs leading-5 whitespace-pre-wrap">{source.evidence || (source.authority === "evie_proposed" ? "Evie proposed this value; it is not in your words." : "Source text unavailable.")}</blockquote>
+          <blockquote className="text-body text-xs leading-5 whitespace-pre-wrap">{source.evidence || (source.authority === "evie_proposed" ? "Evie proposed this value; your words don’t state it." : "Source text unavailable.")}</blockquote>
           <p className="text-muted-text mt-2 text-xs">{source.actor && <>Speaker: {source.actor} · </>}Authority: {source.authority} · {source.observed_at}</p>
           <details className="text-muted-text mt-2 break-all text-[11px]"><summary className="cursor-pointer">Source reference</summary>
             <p>{source.event_id}<br />{source.session_id}<br />{source.source_scope_key}<br />{source.locator_kind}{source.locator_value && ` ${source.locator_value}`}<br />{source.evidence_sha256}</p>

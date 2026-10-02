@@ -1241,7 +1241,7 @@ func (s *Store) PrepareRememberLiteral(
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
-	binding := bindOwnerSource(content, literalOccurrences(content, request.Literal, request.Predicate, request.PredicateLabel))
+	binding := bindOwnerSource(content, literalBindingClaim(content, request.Literal, request.Polarity, request.Predicate, request.PredicateLabel))
 	var sourceLinkID memory.SemanticID
 	var sourceOperationID memory.SemanticID
 	sourceCreate := false

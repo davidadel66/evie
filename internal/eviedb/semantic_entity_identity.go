@@ -221,28 +221,34 @@ func proposalEntityIdentity(ctx context.Context, q semanticInspectionQueryer, ro
 // Entity may appear, and a literal object's value. Anchors are implied by the
 // speaker; a proposition with neither falls back to its Predicate's words. A
 // literal with no words of its own yields an unmatched item, so it is
-// Evie-proposed.
-func claimBindingNeeds(ctx context.Context, q semanticInspectionQueryer, content, predicateToken, predicateLabel string, literal *memory.TypedLiteral, scopes []string, entities ...entityWithAlias) ([]bindingOccurrences, error) {
+// Evie-proposed. entities lists the subject first; an owner-anchor subject is
+// stated in the first person.
+func claimBindingNeeds(ctx context.Context, q semanticInspectionQueryer, content, predicateToken, predicateLabel string, literal *memory.TypedLiteral, polarity memory.ClaimPolarity, scopes []string, entities ...entityWithAlias) (bindingClaim, error) {
+	claim := bindingClaim{predicate: newBindingPredicate(predicateToken, predicateLabel)}
+	claim.ownerSubject = len(entities) > 0 && entities[0].entity.AnchorKind == "owner"
+	claim.setPolarity(literal, polarity)
 	needs, err := entityNameNeeds(ctx, q, content, scopes, entities...)
 	if err != nil {
-		return nil, err
+		return claim, err
 	}
 	if literal != nil {
-		occurrences := literalOccurrences(content, *literal, predicateToken, predicateLabel)
+		occurrences := literalOccurrences(content, *literal, claim.predicate)
 		if occurrences == nil {
 			occurrences = []bindingOccurrences{nil}
 		}
 		needs = append(needs, occurrences...)
 	}
 	if len(needs) == 0 {
-		needs = append(needs, predicateOccurrences(content, predicateToken, predicateLabel))
+		needs = append(needs, predicateOccurrences(content, claim.predicate))
+		claim.explicit = true
 	}
-	return needs, nil
+	claim.needs = needs
+	return claim, nil
 }
 
 // claimValueNeeds is claimBindingNeeds for an accepted Claim, its Entities'
 // names read from the Claim's own scope.
-func claimValueNeeds(ctx context.Context, q semanticInspectionQueryer, content string, claim memory.SemanticClaim) ([]bindingOccurrences, error) {
+func claimValueNeeds(ctx context.Context, q semanticInspectionQueryer, content string, claim memory.SemanticClaim) (bindingClaim, error) {
 	var entities []entityWithAlias
 	for _, id := range []memory.SemanticID{claim.SubjectEntityID, claim.Object.EntityID} {
 		if id == "" {
@@ -250,11 +256,11 @@ func claimValueNeeds(ctx context.Context, q semanticInspectionQueryer, content s
 		}
 		entity, err := loadSemanticEntityForInspection(ctx, q, id)
 		if err != nil {
-			return nil, err
+			return bindingClaim{}, err
 		}
 		entities = append(entities, entityWithAlias{entity: entity})
 	}
-	return claimBindingNeeds(ctx, q, content, claim.Predicate.Token, claim.Predicate.Label, claim.Object.Literal,
+	return claimBindingNeeds(ctx, q, content, claim.Predicate.Token, claim.Predicate.Label, claim.Object.Literal, claim.Polarity,
 		[]string{"global", claim.ScopeKey}, entities...)
 }
 

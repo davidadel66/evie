@@ -318,12 +318,12 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 	}
 	// The replacement value binds to the owner's words exactly as a remembered
 	// value does (harness review M5).
-	needs, err := claimBindingNeeds(ctx, s.db, source.Evidence, predicate.Token, predicate.Label, request.Replacement.Object.Literal,
-		[]string{"global", targetKey}, replacementEntities...)
+	binding, err := claimBindingNeeds(ctx, s.db, source.Evidence, predicate.Token, predicate.Label, request.Replacement.Object.Literal,
+		request.Replacement.Polarity, []string{"global", targetKey}, replacementEntities...)
 	if err != nil {
 		return memory.CorrectClaimProposal{}, err
 	}
-	bindOwnerSource(source.Evidence, needs).apply(&source)
+	bindOwnerSource(source.Evidence, binding).apply(&source)
 	operationID, err := newSemanticID()
 	if err != nil {
 		return memory.CorrectClaimProposal{}, err
