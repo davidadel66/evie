@@ -190,6 +190,7 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 			return false, err
 		}
 		rows.Close()
+		var accepted []newerStatementCandidate
 		for _, id := range ids {
 			if eventsSeen[id] {
 				continue
@@ -218,10 +219,13 @@ func (s *Store) supplementAcceptedRetrieval(ctx context.Context, q *sql.Tx, scop
 			if err != nil {
 				return false, err
 			}
-			span, matched := family.window(e.content, spans)
-			if !matched {
-				continue
+			if span, matched := family.window(e.content, spans); matched {
+				accepted = append(accepted, newerStatementCandidate{evidence: e, span: span})
 			}
+		}
+		family.rankNewerStatements(accepted)
+		for _, candidate := range accepted {
+			e, span := candidate.evidence, candidate.span
 			if companions >= 2 || len(result.Evidence) >= query.Limit {
 				result.Truncated = true
 				continue

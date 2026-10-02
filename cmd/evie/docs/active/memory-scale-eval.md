@@ -6,7 +6,8 @@ Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
 current behavior, recorded as such; none is accepted as correct. Stage 12's
 and Stage 13's before/after results follow the Stage 11 baseline; the
-committed baselines are the Stage 13 report on corpus v2.
+committed baselines are the final verification pass report (version 4) on
+corpus v3.
 
 ## What runs
 
@@ -84,8 +85,8 @@ go test ./internal/memoryeval/ -run TestMemoryScaleReplayDefaultTier -v
 EVIE_MEMORY_SCALE_EVAL=large go test ./internal/memoryeval/ -run TestMemoryScaleReplayLargeTier -v -timeout 30m
 ```
 
-The default tier runs in the ordinary suite (about 7 s here) and skips under
-`-short`. The large tier (about 60 s) grows Global history past the former
+The default tier runs in the ordinary suite (about 9 s here) and skips under
+`-short`. The large tier (about 70 s) grows Global history past the former
 single-read 4,096-vector dense bound and enables a deterministic concept-hash
 embedder served on loopback, like the existing dense acceptance tests.
 
@@ -480,6 +481,162 @@ non-gold of 48; development 23–24/27, the recorded dev11 random-ID tie, and
 value in an un-negated first-person clause, so their sources are unchanged. Of the lexical workloads' 62 accepted records the
 same two held-out records as above are the only ones that are not
 whole-message owner statements.
+
+## Final verification pass: recall relevance and newer statements (M1, M3)
+
+The final review pass found four problems in the Stage 12 and 13 rules, each
+reproduced with probes before fixing:
+
+1. The excerpt floor's two-word rule dropped the only answer to ordinary
+   questions, because filler ("need", "know", "again", "remind", "ok so")
+   counted as content words.
+2. "got it, thanks", "that's it, thanks", "love it" and "ok do it" counted as
+   follow-ups (because of "it") and revived earlier topics, whose words then
+   pulled in other sessions' messages; "and when was it?" took the two
+   *oldest* earlier topics on a tie.
+3. The newer-statement rule linked "I left my umbrella in Boston." and "My
+   sister moved to Boston now." to `home city: Boston`, and, being newer,
+   they took both companion slots from the real update; the restatement rule
+   flagged third-party sentences against a retired owner Claim.
+4. The floor counted every occurrence of every request word, one query each:
+   at 40,000 messages a follow-up's search passed the 500 ms read deadline.
+
+The rules are recorded as amendments to the 2026-10-01 entries of
+[the retrieval decisions](memory-stage-5-retrieval.decisions.md). In short:
+conversational filler is not a content word; an acknowledgement or command
+with "it" and no question is low content; tied earlier topics resolve to the
+most recent; a request whose words history all knows may be explained by its
+uniquely rarest word alone if that word is in at most 3 messages; a word in
+256 or more messages is common and counting stops there; a change cue must
+govern the saved value or Predicate word in the same clause and the owner
+must speak in that clause, for newer statements and restatements alike;
+companions rank by strength before recency.
+
+The review proposed counting only words that occur in history toward the
+three-word threshold (with request words mostly unknown to history still
+needing two matches, to keep the ORM probe safe). That was measured and not
+adopted: on the default tier it raised automatic unwanted items from 5 to 10
+and private items from 0 to 3, failing the privacy target (two private "low
+energy" messages for "What's the energy rating of the dishwasher?"). Filler
+removal and the strong single match recover four of the reviewer's five
+questions without it. The strong single match itself first allowed a word
+tied for rarest; that let "...I didn't say anything" answer "What did the
+doctor say about my ferritin?" (a Stage 12 test), so the word must be
+uniquely rarest.
+
+**Corpus v3, report v4.** `memory-scale-replay-v3` (seed unchanged) adds the
+reviewer's probes: five one-word-answer needles and their questions (new
+family `one_word_answer`: "When do I need to renew my passport?" / "My
+passport expires in March 2029.", "Do you know where I parked the car?",
+"What's my sister's birthday again?", "Remind me which vet we use for the
+cat", "ok so what's my wifi password"); four low-content probes "got it,
+thanks", "that's it, thanks", "love it", "ok do it", each after a prelude;
+the follow-up "and when was it?" after three topics (Lisbon last); a privacy
+probe "What's the energy rating of the dishwasher?"; "Big news: I moved to
+Chicago last month, Boston is behind me." followed by "I left my umbrella in
+Boston." and "My sister moved to Boston now." (a link check and two
+over-link checks on `home_city`); and "My friend Sam says his favorite coffee
+is Blue Bottle." and "The Blue Bottle coffee shop on Main Street closed
+today." (over-flag checks on `coffee` and `blue_bottle`). Report version 4
+adds the target `M1.one_word_answers_recalled`. "Before" is the Stage 14 code
+on corpus v3; the v2 numbers above are not directly comparable.
+
+Default tier, before → after (unchanged cells show one value):
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 70 → 68 | 15 → 5 | 0 | 0.7857 → 0.9265 | 23/33 → 28/33 |
+| automatic | one-word answer | 3 → 9 | 0 | 0 | 1.0000 | 0/5 → 4/5 |
+| automatic | low-content | 8 → 0 | 8 → 0 | 0 | 0.0000 → n/a | n/a |
+| automatic | follow-up | 6 | 2 → 1 | 0 | 0.6667 → 0.8333 | 1/3 → 2/3 |
+| automatic | stale | 34 | 1 → 0 | 0 | 0.9706 → 1.0000 | 11/12 |
+| automatic | privacy | 4 | 2 | 0 | 0.5000 | n/a |
+| automatic | unrelated | 0 | 0 | 0 | n/a | n/a |
+| automatic | relevant | 15 | 2 | 0 | 0.8667 | 11/11 |
+| memory_search | all | 21 → 20 | 2 → 0 | 0 | 0.9048 → 1.0000 | 13/13 |
+| memory_search_conversations | all | 115 | 20 | 1 | 0.8261 | 10/12 |
+
+Large tier, before → after:
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 101 → 93 | 29 → 17 | 8 → 6 | 0.7129 → 0.8172 | 28/33 → 30/33 |
+| automatic | one-word answer | 10 | 2 → 0 | 2 → 0 | 0.8000 → 1.0000 | 3/5 → 4/5 |
+| automatic | low-content | 8 → 0 | 8 → 0 | 0 | 0.0000 → n/a | n/a |
+| automatic | follow-up | 6 | 3 → 2 | 1 | 0.5000 → 0.6667 | 1/3 → 2/3 |
+| automatic | stale | 37 | 4 → 3 | 2 | 0.8919 → 0.9189 | 11/12 |
+| automatic | privacy | 6 | 4 | 2 | 0.3333 | n/a |
+| automatic | unrelated | 6 | 6 | 0 | 0.0000 | n/a |
+| memory_search | all | 23 → 22 | 3 → 1 | 0 | 0.8696 → 0.9545 | 13/13 |
+| memory_search_conversations | all | 205 | 28 | 4 | 0.8634 | 36/36 |
+
+Stale-fact checks (both tiers): 11 misses of 54 → 2 of 54, 10/10 controls, no
+scope leaks.
+
+| Target | Default before → after | Large before → after |
+| --- | --- | --- |
+| M1: low-content follow-ups inject nothing unwanted | no → yes (8 → 0 items) | no → yes (8 → 0 items) |
+| M1: privacy probes inject no private item | yes (0 private) | no (2 private, unchanged) |
+| M1: one-word answers recalled | no → no (0/5 → 4/5) | no → no (3/5 → 4/5) |
+| M2: no over-flagging | no → yes (4 → 0 of 15) | no → yes (4 → 0 of 15) |
+| M3: different wording detected | no → no (4 → 2 of 8) | no → no (4 → 2 of 8) |
+| M3: no over-linking | no → yes (3 → 0 of 12) | no → yes (3 → 0 of 12) |
+| M2 corrected, M2 restated, M4 drift, M7 dense | yes | yes |
+
+Every per-probe change in both tiers is one of the targeted probes: the four
+acknowledgements now inject nothing (eight unwanted items, two each); four
+one-word answers are recalled; "and when was it?" now finds the Lisbon
+booking; `home_city` on the automatic and `memory_search` paths now delivers
+"Big news: ... Boston is behind me." linked, and neither distractor. Every
+other probe delivered exactly the same items, including all other relevant,
+privacy, unrelated, stale and control probes and all 24 dense targets.
+
+Remaining misses and known limits:
+
+- *"What's my sister's birthday again?"* misses its planted answer "My sister
+  Lena was born on June 13, 1994." in both tiers. After filler removal it is
+  the two-word request [sister, birthday]; `sister` is in 13 Global messages
+  and `birthday` in 7 (69 and 57 in the large tier), so only `birthday` is
+  distinctive (Stage 12's rarer-half rule, kept on purpose: "Book the car
+  service" must not answer "what dates did I book?"). The saved Claim
+  `sister's birthday: June 13` is delivered.
+- *"and when was it?"* still takes two earlier topics, so the second most
+  recent (tyres) contributes one unwanted item.
+- *The large tier's privacy target* is unmet only through the new energy
+  probe, and identically before and after: its two private items are dense
+  hits, because the concept-hash test embedder scores "energy rating" close
+  to "low energy". The lexical floor does not gate dense hits (Stage 12), and
+  the default (lexical) tier injects nothing for it.
+- *The strong single match* trades some privacy margin for recall: a request
+  whose words history all knows, whose rarest word is shared with one
+  private message in at most 3 messages and nowhere else ("What were the
+  results of the run today?" against a blood "test results" message), can
+  now inject it. Ties, unknown words and the 3-message ceiling bound it.
+- *M3* still misses "I moved to Chicago last month and I'm still unpacking
+  boxes." (no shared word), as recorded in Stage 13. The governing-cue test
+  also drops "I quit my job at Initech" against `employer: Initech` ("job"
+  sits between the cue and the value, as "umbrella" does); it is not in the
+  corpus.
+
+**Timing.** `TestRelevanceFrequenciesStayFastAtScale` builds 20,000 Global
+messages and checks that counts saturate at 256, are exact below it, and stay
+well inside the deadline (fastest of three runs: counting under 50 ms, search
+under 250 ms). Measured on this machine, fastest of three:
+
+| Messages | Counting before → after | Whole search before → after |
+| ---: | ---: | ---: |
+| 20,000 | 170 ms → 9 ms | about 265 ms → 104 ms |
+| 40,000 | 338 ms → 10 ms | about 520 ms (past the deadline) → 195 ms |
+
+The remaining search time is the candidate read itself (BM25 over every
+message matching any request word), which this pass does not change.
+
+**Frozen 24-case lexical workloads** (`EVIE_MEMORY_INTEGRATED_LEXICAL=1`):
+held-out 22/28 automatic, 26/28 with deeper search, 19 non-gold of 48
+first-dispatch items, before and after; development 23–24/27 automatic and
+25/27 with deeper search before and after. The development swing is the
+dev11 random-ID tie recorded in Stage 12: over 24 runs each it missed 13
+times before and 14 times after.
 
 ## Decisions and spec relationship
 

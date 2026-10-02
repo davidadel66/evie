@@ -162,3 +162,26 @@ func (f newerStatementFamily) window(content string, spans []conversationReadSpa
 	}
 	return conversationReadSpan{}, false
 }
+
+// newerStatementCandidate is one owner message the window accepted, with the
+// strength of its strongest sentence.
+type newerStatementCandidate struct {
+	evidence conversationEvidence
+	span     conversationReadSpan
+	strength wordingStrength
+}
+
+// rankNewerStatements orders accepted candidates by strength, keeping the
+// read's recency order among equals, so newer mentions that merely name the
+// Predicate cannot crowd an older update out of the bounded companion slots.
+func (f newerStatementFamily) rankNewerStatements(candidates []newerStatementCandidate) {
+	for i := range candidates {
+		c := &candidates[i]
+		for _, sentence := range wordingSentences(c.evidence.content[c.span.start:c.span.end]) {
+			if strength := f.wording.assess(sentence); strength.stronger(c.strength) {
+				c.strength = strength
+			}
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].strength.stronger(candidates[j].strength) })
+}

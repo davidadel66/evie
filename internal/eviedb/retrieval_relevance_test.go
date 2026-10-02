@@ -17,6 +17,9 @@ func TestRelevanceFloorThresholds(t *testing.T) {
 		"greenhouse": 1, "dates": 1, "book": 43, "work": 2, "days": 48,
 		"lisbon": 1, "plan": 50, "trip": 20, "test": 21, "results": 1,
 		"today": 11, "run": 42, "summarize": 15, "service": 37, "sunrise": 1,
+		"vet": 1, "use": 30, "cat": 12, "remind": 9, "dentist": 5, "passport": 1,
+		"energy": 1, "dishwasher": 6, "doctor": 1, "say": 1, "ferritin": 1,
+		"routine": relevanceCommonDocuments, "weekly": relevanceCommonDocuments,
 	}
 	for _, tc := range []struct {
 		name    string
@@ -38,6 +41,22 @@ func TestRelevanceFloorThresholds(t *testing.T) {
 		{"case and punctuation fold", "LISBON, again!", nil, [][]string{{"plan", "lisbon", "trip"}}, true},
 		{"inflection counts as the same word", "ownerorchid runs before sunrise", []string{"sunrise", "running", "club"}, nil, true},
 		{"inflection does not invent a second word", "ownerorchid walks before sunrise", []string{"sunrise", "running", "club"}, nil, false},
+		// Final verification pass. A word history never used still counts
+		// toward the request's size: dropping it would let one shared rare word
+		// through ("the energy rating of the dishwasher" against a private
+		// "low energy" message).
+		{"unknown word still counts toward the size", "I've had low energy for a few days.", []string{"energy", "rating", "dishwasher"}, nil, false},
+		{"mostly unknown request keeps two terms", "My passport is valid until March 2029.", []string{"renew", "expiring", "passport"}, nil, false},
+		// A request whose every word history knows may be explained by its
+		// uniquely rarest word alone when that word is nearly unique in history.
+		{"strong single distinctive match", "Our vet is Dr. Rivera at Oakwood.", []string{"vet", "use", "cat", "remind"}, nil, true},
+		{"single match above the strong ceiling", "Our dentist is Dr. Rivera at Oakwood.", []string{"dentist", "use", "cat", "remind"}, nil, false},
+		{"single match beside an unknown word", "My blood test results came back.", []string{"summarize", "today", "ci", "results"}, nil, false},
+		{"single match that is not the rarest word", "Book the car service before the check.", []string{"vet", "use", "cat", "book"}, nil, false},
+		{"single match on a word tied for rarest", "Sam forgot our plans and I didn't say anything.", []string{"doctor", "say", "ferritin"}, nil, false},
+		// Words counted in at least relevanceCommonDocuments messages are common:
+		// never distinctive, however the request's other words compare.
+		{"common words are never distinctive", "My weekly routine starts on Tuesday.", []string{"routine", "weekly"}, nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := relevantToRequest(tc.text, &memory.RetrievalRelevance{Current: tc.current, Context: tc.context}, frequency)

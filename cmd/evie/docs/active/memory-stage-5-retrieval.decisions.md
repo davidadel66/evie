@@ -79,6 +79,14 @@
   partial rather than shown unlabelled. `EVIE_MEMORY_DATA` lists superseded
   items in `historical_only` beside retired ones, and the projection version
   becomes `memory-retrieval-v3`.
+  - *Amended in the final verification pass (2026-10-01).* A restatement must
+    also be the subject speaking, by the subject rule of the newer-statement
+    entry below, applied to the clause holding the value: "My friend Sam says
+    his favorite coffee is Blue Bottle." and "The Blue Bottle coffee shop on
+    Main Street closed today." no longer restate the owner's retired
+    `favorite coffee shop: Blue Bottle`; "Honestly, Blue Bottle is still my
+    favorite coffee shop." still does. For a non-owner subject the sentence
+    must name it.
 
 - **2026-10-01 — Newer owner statements in different words (harness review
   M3, Stage 13).** Q18 and implementation decision 10 ask that newer owner
@@ -108,6 +116,42 @@
   is not linked; that needs meaning, which a topic dictionary or the real
   embedding model could supply and this rule deliberately does not.
   Measured on the scale corpus v2 (`memory-scale-eval.md`, Stage 13).
+  - *Amended in the final verification pass (2026-10-01).* Naming the value
+    and a cue somewhere in a first-person sentence over-linked: "I left my
+    umbrella in Boston." and "My sister moved to Boston now." were linked to
+    `home city: Boston`, and, being newer, took both companion slots from the
+    real update. The rule now requires:
+    - *Clauses.* A sentence splits into clauses at `, : ( )`, an en or em
+      dash, and a hyphen with spaces on both sides.
+    - *The cue governs the Claim's words.* The change cue (value rule) or
+      change or novelty cue (Predicate rule) sits in the same clause as the
+      saved value or one of the Predicate's words, with nothing between them
+      but light words (articles, prepositions and particles such as `to from
+      away back out`, `is are was were be been am`, contraction fragments,
+      `not no still just finally officially really also already then`,
+      `there here`, first-person pronouns), numbers, other cue words or the
+      Claim's own words. "Boston is behind me", "moved to Boston", "I dropped
+      Verizon" and "a size 10 now" qualify; "left my umbrella in Boston" and
+      "left it in Boston" do not. `dropped` joins the change cues. Known
+      limit: the same test drops "I quit my job at Initech" against
+      `employer: Initech` ("job" is a content word between), since nothing
+      lexical tells a job from an umbrella; "I quit Initech" or "I left
+      Initech" still qualify.
+    - *The subject speaks in that clause.* For the owner: a first-person
+      pronoun (`i me myself we us mine ours`) or a possessive `my`/`our` with
+      a Predicate or value word among the next three words ("my favorite
+      coffee shop", "my new barber"); or the clause names no third party (a
+      third-person pronoun, or a possessive like "my sister", "my friend Sam")
+      and the sentence speaks for the owner ("I'm in Chicago, and Boston is
+      no longer home."). For another subject: the sentence names it.
+    - *Ranking.* Candidates are ordered by strength before recency: an update
+      (a governed cue with the subject speaking) first, then the number of
+      the Claim's words the sentence names (a saved value counts one, plus
+      the Predicate words), then whether the subject speaks; recency breaks
+      the remaining ties. Phrase matches (the earlier rule) are ranked the
+      same way, so newer mentions of "home city" cannot crowd out an older
+      "Boston is behind me". The two-companion bound is unchanged.
+    Measured on the scale corpus v3 (`memory-scale-eval.md`, final pass).
 
 - **2026-10-01 — Automatic Recall relevance floor (harness review M1, Stage 12).**
   Implementation decisions 7 and 11 deferred the selection thresholds to
@@ -159,6 +203,58 @@
     recur in unrelated history (a CI "test results" question against a blood
     "test results" message) still qualifies; ranking, not the floor, kept the
     private message out of that probe.
+  - *Amended in the final verification pass (2026-10-01).* The two-word rule
+    dropped the only answer to ordinary questions ("When do I need to renew
+    my passport?" against "My passport expires in March 2029."), and
+    acknowledgements containing "it" revived earlier topics.
+    - *Filler.* The planner's noise list gains conversational filler: `so
+      again also just really actually maybe anyway oh um uh hmm btw remind
+      know need use`. "When do I need to renew my passport?", "Do you know
+      where I parked the car?", "What's my sister's birthday again?",
+      "Remind me which vet we use for the cat" and "ok so what's my wifi
+      password" become two-word requests.
+    - *Unknown words still count.* The review proposed counting only request
+      words that occur in history toward the three-word threshold. Measured
+      (with requests mostly unknown to history still needing two matches, so
+      the ORM question stays safe), that reopens the one-shared-word leak: on
+      the scale corpus's default tier automatic private items went from 0 to
+      3, two of them "low energy" messages for "What's the energy rating of
+      the dishwasher?" (`rating` unknown). An unknown word says the request
+      is about something history has not discussed, so it keeps counting.
+    - *Strong single match.* When every request word occurs in the
+      searchable history and the request has three or more, an excerpt
+      matching exactly one word qualifies if that word is the request's
+      uniquely rarest (no other word ties its count) and occurs in at most 3
+      searchable messages (`relevanceStrongDocuments`). "Remind me which vet
+      we use for the cat" (all words known) recalls "Our vet is Dr. Rivera".
+      A word tied for rarest does not qualify alone ("What did the doctor
+      say about my ferritin?" must not pull in "...I didn't say anything"),
+      nor does one beside an unknown word ("Summarize today's CI results."
+      against a blood "test results" message).
+    - *Common words.* A word counted in 256 or more searchable messages
+      (`relevanceCommonDocuments`) is common and never distinctive. Counting
+      stops there: each word is one prepared `count(*)` over at most 256 rows
+      instead of every occurrence. At 20,000 messages the frequency counts
+      fell from 170 ms to 9 ms and the whole search from about 265 ms to
+      104 ms; at 40,000 from 338 ms to 10 ms (search about 195 ms, where it
+      was about 520 ms, past the 500 ms read deadline, which maps to
+      `exhausted`).
+    - *Acknowledgements.* A message with no question mark, none of `what
+      which who whom whose how when where why tell remind recall remember
+      show explain find search look describe`, at most one content term and
+      the word "it" ("got it, thanks", "that's it, thanks", "love it", "ok do
+      it") is low content: no search and no earlier topic revived. Such
+      messages, and earlier roots with no content term, are never earlier
+      topics either. "And the basil?" (a question) and "her birthday" (no
+      "it") stay follow-ups. The other-session items these phrases injected
+      came from the search run with a revived topic's words; revived roots
+      are always the bound session's own messages.
+    - *Recency.* Earlier roots that tie on shared words and distinctiveness
+      now resolve to the most recent ("and when was it?" after three topics
+      takes the last two, not the first two).
+    Measured on the scale corpus v3 (`memory-scale-eval.md`, final pass): no
+    change outside the targeted probes in either tier; the frozen 24-case
+    lexical workloads are unchanged.
 
 - **2026-10-01 — Dense recall covers the whole vector table (harness review
   M7, Stage 12).** The single 4,096-row scan read vectors in random-UUID order

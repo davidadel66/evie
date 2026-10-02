@@ -173,6 +173,10 @@ func TestNewerOwnerStatementInDifferentWordsIsLinked(t *testing.T) {
 		"My Boston friends are visiting next week.",
 		"Should I move back to Boston now?",
 		"I need new running shoes before the 10k.",
+		// Final verification pass: newer than the real update, and before the
+		// fix both were linked and crowded it out of the two companion slots.
+		"I left my umbrella in Boston.",
+		"My sister moved to Boston now.",
 	} {
 		distractors = append(distractors, f.converse(source, text))
 	}
@@ -192,6 +196,47 @@ func TestNewerOwnerStatementInDifferentWordsIsLinked(t *testing.T) {
 			if currencyExcerpt(evidence, distractor.ID) != nil {
 				t.Fatalf("%q: an unrelated statement was linked as a possible update: %q", tc.query, distractor.Content)
 			}
+		}
+	}
+}
+
+// Final verification pass (M3): companions rank by how strongly they state an
+// update before recency, so newer mentions of the Predicate's phrase cannot
+// crowd an older real update out of the two companion slots.
+func TestNewerOwnerStatementRanksStrongUpdateFirst(t *testing.T) {
+	f := newRetrievalFixture(t)
+	source := f.global()
+	home := readerRemember(t, f, source, "home_city", "Remember that I live in Boston.", "Boston")
+	moved := f.converse(source, "Big news: I moved to Chicago last month, Boston is behind me.")
+	f.converse(source, "I keep forgetting my home city zip code.")
+	f.converse(source, "My home city has a marathon in April.")
+	f.refresh()
+	client, _ := f.search(f.global(), "home city")
+	evidence := currencyEvidence(t, client, 1)
+	if item := currencyExcerpt(evidence, moved.ID); item == nil || !reflect.DeepEqual(item.RelatedClaimIDs, []memory.SemanticID{home.ClaimID}) {
+		t.Fatalf("the real update was crowded out by newer phrase mentions: %+v", evidence)
+	}
+}
+
+// Final verification pass (M2): a restatement of a retired owner Claim must be
+// the owner speaking. A third party's preference and news about the value are
+// delivered unflagged; the owner's own restatement is still flagged.
+func TestThirdPartyMentionOfRetiredValueIsNotFlagged(t *testing.T) {
+	f := newRetrievalFixture(t)
+	source := f.global()
+	saved := readerRemember(t, f, source, "favorite_coffee_shop", "Remember that my favorite coffee shop is Blue Bottle.", "Blue Bottle")
+	f.lifecycle(source, "memory_retire", memory.SemanticObjectClaim, saved.ClaimID)
+	restated := f.converse(source, "Honestly, Blue Bottle is still my favorite coffee shop.")
+	friend := f.converse(source, "My friend Sam says his favorite coffee is Blue Bottle.")
+	news := f.converse(source, "The Blue Bottle coffee shop on Main Street closed today.")
+	f.refresh()
+	evidence := currencyEvidence(t, f.searchConversations(f.global(), "Blue Bottle"), 1)
+	if item := currencyExcerpt(evidence, restated.ID); item == nil || len(item.HistoricalClaims) != 1 || item.HistoricalClaims[0].ClaimID != saved.ClaimID {
+		t.Fatalf("the owner's restatement is not flagged against the retired Claim: %+v", item)
+	}
+	for _, event := range []memory.Event{friend, news} {
+		if item := currencyExcerpt(evidence, event.ID); item == nil || len(item.HistoricalClaims) != 0 {
+			t.Fatalf("%q was lost or flagged as the owner restating the retired Claim: %+v", event.Content, item)
 		}
 	}
 }

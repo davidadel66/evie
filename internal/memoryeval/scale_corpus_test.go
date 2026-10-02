@@ -36,7 +36,7 @@ func TestScaleCorpusIsDeterministicValidAndRealisticallySized(t *testing.T) {
 	for _, probe := range first.Probes {
 		families[probe.Family+"/"+probe.Path] = true
 	}
-	for _, want := range []string{"relevant/automatic", "low_content/automatic", "privacy/automatic", "stale/automatic", "stale/memory_search", "relevant/memory_search_conversations"} {
+	for _, want := range []string{"relevant/automatic", "one_word_answer/automatic", "low_content/automatic", "privacy/automatic", "stale/automatic", "stale/memory_search", "relevant/memory_search_conversations"} {
 		if !families[want] {
 			t.Fatalf("default corpus lacks %s probes", want)
 		}
@@ -274,7 +274,9 @@ func TestScaleScoreHistoricalLinksAndOverLinking(t *testing.T) {
 	if targets["M3.no_over_linking"].Met || targets["M2.no_over_flagging"].Met {
 		t.Fatalf("over-linking met its precision targets: %+v", targets)
 	}
-	if targets["M3.different_wording_detected"].Observed != "1 misses of 2 checks" {
+	// home_city carries two different-wording checks (corpus v3 adds the
+	// update that names the saved value) and carrier one.
+	if targets["M3.different_wording_detected"].Observed != "2 misses of 3 checks" {
 		t.Fatalf("M3 target does not cover every different-wording scenario: %+v", targets["M3.different_wording_detected"])
 	}
 	for _, probe := range c.Probes {

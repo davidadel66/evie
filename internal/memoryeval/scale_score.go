@@ -9,8 +9,9 @@ import (
 )
 
 // Version 2 adds the dense scan gap signal (Stage 12, M7). Version 3 adds the
-// historical-claim link (Stage 13, M2) and the over-linking checks.
-const ScaleReportVersion = 3
+// historical-claim link (Stage 13, M2) and the over-linking checks. Version 4
+// (harness review final pass) adds the one-word-answer recall target.
+const ScaleReportVersion = 4
 
 // ScaleGapDenseScan mirrors memory.RetrievalGapDenseScan: the model-visible
 // signal that a dense scan budget left vectors uncompared.
@@ -502,11 +503,14 @@ func ScaleTargetsFor(r ScaleReport) []ScaleTarget {
 	}
 	low := family(ScalePathAutomatic, ScaleFamilyLowContent)
 	privacy := family(ScalePathAutomatic, ScaleFamilyPrivacy)
+	oneWord := family(ScalePathAutomatic, ScaleFamilyOneWordAnswer)
 	targets := []ScaleTarget{
 		{ID: "M1.low_content_injects_nothing_unrelated", Issue: "M1", Description: "low-content follow-ups such as \"thanks!\" inject no unwanted items",
 			Met: low.Probes > 0 && low.Unwanted == 0, Observed: fmt.Sprintf("%d unwanted of %d injected items across %d probes", low.Unwanted, low.Items, low.Probes)},
 		{ID: "M1.privacy_injects_no_private_item", Issue: "M1", Description: "unrelated requests sharing a word with private history inject no private item",
 			Met: privacy.Probes > 0 && privacy.Private == 0, Observed: fmt.Sprintf("%d private items across %d probes", privacy.Private, privacy.Probes)},
+		{ID: "M1.one_word_answers_recalled", Issue: "M1", Description: "ordinary questions whose answer shares one of their words recall that answer",
+			Met: oneWord.Probes > 0 && oneWord.RequiredFound == oneWord.RequiredTotal, Observed: fmt.Sprintf("%d of %d answers recalled, %d unwanted items", oneWord.RequiredFound, oneWord.RequiredTotal, oneWord.Unwanted)},
 	}
 	for _, t := range []struct {
 		id, issue, description string

@@ -65,9 +65,10 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		plan.relevance.LiveFrom = summary.FirstRetainedEventID
 	}
 	refers := refersToEarlierSubject(current)
-	if len(terms) == 0 && !refers && len(plan.exact) == 0 {
+	if len(plan.exact) == 0 && (len(terms) == 0 && !refers || acknowledgesLiveContext(current, terms)) {
 		// Acknowledgements and other low-content messages ask for nothing, so
-		// they neither search history nor revive an earlier topic.
+		// they neither search history nor revive an earlier topic. "Got it",
+		// "love it" and "ok do it" refer to the live context, not to history.
 		return plan
 	}
 	// Only a follow-up may take its subject from an earlier topic it shares
@@ -96,6 +97,11 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		plan.diagnostics.ExaminedEarlierMessages++
 		plan.diagnostics.ExaminedEarlierBytes += len(text)
 		candidate := contextCandidate{text: text, terms: recallTerms(text, 32), index: i}
+		if len(candidate.terms) == 0 || acknowledgesLiveContext(text, candidate.terms) {
+			// An acknowledgement is not a topic; it must not take a slot
+			// from the subject a follow-up refers to.
+			continue
+		}
 		for _, word := range candidate.terms {
 			frequency[word]++
 			for _, term := range relevanceTerms {
@@ -132,9 +138,9 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		if candidates[i].distinctiveness != candidates[j].distinctiveness {
 			return candidates[i].distinctiveness > candidates[j].distinctiveness
 		}
-		// Keep an earlier subject in the bounded window when lexical overlap
-		// ties; recency alone cannot resolve an ambiguous reference.
-		return candidates[i].index < candidates[j].index
+		// When nothing else separates them, a reference ("and when was it?")
+		// most likely means the most recent topic.
+		return candidates[i].index > candidates[j].index
 	})
 	if len(candidates) > 2 {
 		candidates = candidates[:2]
@@ -222,12 +228,37 @@ func refersToEarlierSubject(text string) bool {
 	return false
 }
 
+// Words that ask for information. A message without one of them and without
+// a question mark is not asking about history.
+const recallInformationWords = " what which who whom whose how when where why tell remind recall remember show explain find search look describe "
+
+// acknowledgesLiveContext reports an acknowledgement or command about what is
+// already in the conversation: "got it, thanks", "that's it", "love it", "ok
+// do it". It says "it", asks no question, and carries at most one content
+// word, so it neither searches nor revives an earlier topic. "And the
+// basil?" (a question) and "her birthday" (no "it") remain follow-ups.
+func acknowledgesLiveContext(text string, terms []string) bool {
+	if len(terms) > 1 || strings.Contains(text, "?") {
+		return false
+	}
+	it := false
+	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if strings.Contains(recallInformationWords, " "+word+" ") {
+			return false
+		}
+		it = it || word == "it"
+	}
+	return it
+}
+
 func recallTerms(text string, limit int) []string {
-	// Function words, pronouns and acknowledgements are query noise, not a
-	// domain-specific preference or entity dictionary. Every content term still
-	// comes from the bounded conversation.
+	// Function words, pronouns, acknowledgements and conversational filler
+	// ("ok so", "again", "do you know", "remind me", "do I need to", "which
+	// one we use") are query noise, not a domain-specific preference or entity
+	// dictionary. Every content term still comes from the bounded conversation.
 	const noise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest" +
-		recallReferringPronouns + "thanks thank thx ok okay cool great perfect nice awesome good sounds yes yeah yep sure alright got lol haha hi hello hey bye cheers "
+		recallReferringPronouns + "thanks thank thx ok okay cool great perfect nice awesome good sounds yes yeah yep sure alright got lol haha hi hello hey bye cheers " +
+		"so again also just really actually maybe anyway oh um uh hmm btw remind know need use "
 	var terms []string
 	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
 		if len(word) < 2 || strings.Contains(noise, " "+word+" ") {

@@ -24,6 +24,13 @@ const (
 	// A request with this many content terms is not explained by one shared
 	// word; shorter requests may be, if the word is distinctive.
 	relevanceMultiTermRequest = 3
+	// A word counted in this many searchable messages is common: never
+	// distinctive. Counting stops here, which bounds the floor's work.
+	relevanceCommonDocuments = 256
+	// A request word in at most this many searchable messages is nearly
+	// unique: when every request word is known to history, one match on the
+	// rarest of them may explain the request on its own.
+	relevanceStrongDocuments = 3
 )
 
 func validRetrievalRelevance(relevance *memory.RetrievalRelevance) bool {
@@ -83,7 +90,9 @@ func relevanceTokens(text string) map[string]bool {
 // distinctiveTerms is the rarer half of a group's known vocabulary: terms
 // that occur in the searchable history no more often than the group's median
 // present term. A term absent from history cannot be matched, so it neither
-// qualifies evidence nor moves the median.
+// qualifies evidence nor moves the median. A common term (counted in at least
+// relevanceCommonDocuments messages) is never distinctive: counts stop there,
+// so common terms cannot be told apart, and matching one says little.
 func distinctiveTerms(group []string, frequency map[string]int) map[string]bool {
 	var counts []int
 	for _, term := range group {
@@ -98,17 +107,63 @@ func distinctiveTerms(group []string, frequency map[string]int) map[string]bool 
 	slices.Sort(counts)
 	median := counts[(len(counts)-1)/2]
 	for _, term := range group {
-		if count := frequency[term]; count > 0 && count <= median {
+		if count := frequency[term]; count > 0 && count <= median && count < relevanceCommonDocuments {
 			distinctive[term] = true
 		}
 	}
 	return distinctive
 }
 
+// relevanceShape describes a request group against the searchable history:
+// how many of its words (folded) history contains and how many it never saw,
+// and its rarest known word when exactly one word has the smallest count.
+type relevanceShape struct {
+	present, absent int
+	rarest          string // folded key; "" when no word is uniquely rarest
+	rarestCount     int
+}
+
+func relevanceGroupShape(group []string, frequency map[string]int) relevanceShape {
+	counts := map[string]int{} // folded key -> smallest positive count
+	order := []string{}
+	for _, term := range group {
+		key := relevanceKey(term)
+		if _, seen := counts[key]; !seen {
+			order = append(order, key)
+			counts[key] = 0
+		}
+		if count := frequency[term]; count > 0 && (counts[key] == 0 || count < counts[key]) {
+			counts[key] = count
+		}
+	}
+	var shape relevanceShape
+	tied := false
+	for _, key := range order {
+		count := counts[key]
+		if count == 0 {
+			shape.absent++
+			continue
+		}
+		shape.present++
+		switch {
+		case shape.rarestCount == 0 || count < shape.rarestCount:
+			shape.rarest, shape.rarestCount, tied = key, count, false
+		case count == shape.rarestCount:
+			tied = true
+		}
+	}
+	if tied {
+		shape.rarest = ""
+	}
+	return shape
+}
+
 // relevanceGroupMatched reports whether tokens cover at least need distinct
-// group terms, one of them distinctive.
-func relevanceGroupMatched(tokens map[string]bool, group []string, frequency map[string]int, need int) bool {
+// group terms, one of them distinctive, or exactly one term that is the
+// group's uniquely rarest word in at most strong messages (0 disables it).
+func relevanceGroupMatched(tokens map[string]bool, group []string, frequency map[string]int, need, strong int) bool {
 	distinctive := distinctiveTerms(group, frequency)
+	shape := relevanceGroupShape(group, frequency)
 	matched, anchored := 0, false
 	seen := map[string]bool{}
 	for _, term := range group {
@@ -120,24 +175,36 @@ func relevanceGroupMatched(tokens map[string]bool, group []string, frequency map
 		matched++
 		anchored = anchored || distinctive[term]
 	}
-	return anchored && matched >= need
+	if anchored && matched >= need {
+		return true
+	}
+	return matched == 1 && shape.rarest != "" && seen[shape.rarest] && shape.rarestCount <= strong
 }
 
 // relevantToRequest is the floor for one excerpt. It must match a distinctive
 // term of the current request, and two of its terms when the request has
-// three or more; or, for a follow-up, a distinctive term of an earlier topic
-// the request depends on.
+// three or more content words; or, for a follow-up, a distinctive term of an
+// earlier topic the request depends on. A word history never used still
+// counts toward the request's size: it says the request is about something
+// history has not discussed ("How do I model a many-to-many relationship in
+// the ORM?"), so one shared word does not explain it. When every request word
+// is known to history, one match on its rarest word qualifies if that word is
+// nearly unique (at most relevanceStrongDocuments messages): the request's
+// other words are then the common ones, and a unique fact is still recalled.
 func relevantToRequest(text string, relevance *memory.RetrievalRelevance, frequency map[string]int) bool {
 	tokens := relevanceTokens(text)
-	need := 1
-	if len(relevance.Current) >= relevanceMultiTermRequest {
+	need, strong := 1, 0
+	if shape := relevanceGroupShape(relevance.Current, frequency); shape.present+shape.absent >= relevanceMultiTermRequest {
 		need = 2
+		if shape.absent == 0 {
+			strong = relevanceStrongDocuments
+		}
 	}
-	if relevanceGroupMatched(tokens, relevance.Current, frequency, need) {
+	if relevanceGroupMatched(tokens, relevance.Current, frequency, need, strong) {
 		return true
 	}
 	for _, group := range relevance.Context {
-		if relevanceGroupMatched(tokens, group, frequency, 1) {
+		if relevanceGroupMatched(tokens, group, frequency, 1, 0) {
 			return true
 		}
 	}
@@ -146,8 +213,17 @@ func relevantToRequest(text string, relevance *memory.RetrievalRelevance, freque
 
 // relevanceFrequencies counts, for each relevance term, the documents this
 // search could return: the same scope, generation, observation bound and
-// live-context exclusion as the candidate read.
+// live-context exclusion as the candidate read. A count stops at
+// relevanceCommonDocuments, beyond which the floor treats every term alike,
+// so a common word costs a bounded read however large history grows.
 func relevanceFrequencies(ctx context.Context, tx *sql.Tx, relevance *memory.RetrievalRelevance, scopeKey string, known time.Time, session memory.SessionID, cutoff int64) (map[string]int, error) {
+	statement, err := tx.PrepareContext(ctx, `SELECT count(*) FROM (SELECT 1 FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
+ AND `+conversationObservedTimeSQL+`<=? AND (e.session_id!=? OR e.sequence<?) LIMIT ?)`)
+	if err != nil {
+		return nil, err
+	}
+	defer statement.Close()
 	frequency := map[string]int{}
 	for _, group := range append([][]string{relevance.Current}, relevance.Context...) {
 		for _, term := range group {
@@ -155,10 +231,7 @@ func relevanceFrequencies(ctx context.Context, tx *sql.Tx, relevance *memory.Ret
 				continue
 			}
 			var count int
-			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
- AND `+conversationObservedTimeSQL+`<=? AND (e.session_id!=? OR e.sequence<?)`,
-				`"`+term+`"`, conversationIndexGeneration, scopeKey, formatSemanticTime(known), session, cutoff).Scan(&count); err != nil {
+			if err := statement.QueryRowContext(ctx, `"`+term+`"`, conversationIndexGeneration, scopeKey, formatSemanticTime(known), session, cutoff, relevanceCommonDocuments).Scan(&count); err != nil {
 				return nil, err
 			}
 			frequency[term] = count

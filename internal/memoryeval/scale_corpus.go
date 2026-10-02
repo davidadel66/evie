@@ -12,7 +12,7 @@ import (
 // ScaleCorpusVersion identifies the generated history, labels, and probes.
 // Change it whenever generated content or gold labels change so a baseline is
 // never compared across different corpora.
-const ScaleCorpusVersion = "memory-scale-replay-v2"
+const ScaleCorpusVersion = "memory-scale-replay-v3"
 
 const (
 	ScaleTierDefault = "default"
@@ -40,14 +40,15 @@ const (
 // Probe families. Each family has one measurement purpose; the report keeps
 // them separate rather than averaging unlike questions into one score.
 const (
-	ScaleFamilyRelevant      = "relevant"       // ordinary request with a known needle
-	ScaleFamilyParaphrase    = "paraphrase"     // needle shares meaning, not words
-	ScaleFamilyFollowUp      = "follow_up"      // short follow-up that needs earlier context
-	ScaleFamilyLowContent    = "low_content"    // "thanks!" and similar: no new information need
-	ScaleFamilyPrivacy       = "privacy"        // unrelated request sharing a word with private history
-	ScaleFamilyUnrelated     = "unrelated"      // no personal memory needed
-	ScaleFamilyStale         = "stale"          // corrected, retired, contradicted, or drifted facts
-	ScaleFamilyDenseCoverage = "dense_coverage" // large tier: dense-only targets across the vector table
+	ScaleFamilyRelevant      = "relevant"        // ordinary request with a known needle
+	ScaleFamilyOneWordAnswer = "one_word_answer" // ordinary question whose answer shares one of its words
+	ScaleFamilyParaphrase    = "paraphrase"      // needle shares meaning, not words
+	ScaleFamilyFollowUp      = "follow_up"       // short follow-up that needs earlier context
+	ScaleFamilyLowContent    = "low_content"     // "thanks!" and similar: no new information need
+	ScaleFamilyPrivacy       = "privacy"         // unrelated request sharing a word with private history
+	ScaleFamilyUnrelated     = "unrelated"       // no personal memory needed
+	ScaleFamilyStale         = "stale"           // corrected, retired, contradicted, or drifted facts
+	ScaleFamilyDenseCoverage = "dense_coverage"  // large tier: dense-only targets across the vector table
 )
 
 // Stale-fact scenarios mirror harness-review rows M2, M3 and M4. Controls use
@@ -655,6 +656,13 @@ var scaleNeedles = []scaleNeedle{
 	// Same words as the Global greenhouse needle, but in another Context Scope:
 	// it must never reach a Global probe regardless of lexical strength.
 	{key: "n.greenhouse_app", topic: "gardenapp", area: "project:gardenapp", owner: "The greenhouse trial screen in the app needs a saffron crocus icon.", reply: "Added a saffron crocus icon to the greenhouse trial screen.", at: .50},
+	// Corpus v3 (harness review final pass): answers that share only one
+	// content word with an ordinary question about them.
+	{key: "n.passport", topic: "travel", owner: "My passport expires in March 2029.", reply: "Okay, noted.", at: .30},
+	{key: "n.parked", topic: "car", owner: "I parked on level 3, row F of the Elm Street garage.", reply: "Okay, noted.", at: .35},
+	{key: "n.sister", topic: "family", owner: "My sister Lena was born on June 13, 1994.", reply: "Okay, noted.", at: .44},
+	{key: "n.cat_vet", topic: "pets", owner: "Our vet is Dr. Rivera at Oakwood Animal Clinic.", reply: "Okay, noted.", at: .48},
+	{key: "n.wifi", topic: "home", owner: "The home wifi is called Evergreen5G and the key is taped under the router.", reply: "Okay, noted.", at: .53},
 }
 
 // scaleScenario is a fixed Global session at a relative point in history.
@@ -755,6 +763,16 @@ func scaleScenarios() []scaleScenario {
 		{at: .74, steps: []ScaleStep{scaleExchange("m.carrier.bill", "carrier", "Verizon sent me a new bill and I need to check the charges.", "Okay, noted.")}},
 		{at: .76, steps: []ScaleStep{scaleExchange("m.shoe.running", "running", "I need new running shoes before the 10k.", "Okay, noted.")}},
 		{at: .78, steps: []ScaleStep{scaleExchange("m.coffee.airport", "coffee", "Grabbed a Blue Bottle cold brew at the airport this morning.", "Okay, noted.")}},
+		// Corpus v3 (harness review final pass). A real update naming the
+		// saved value, followed by newer sentences that share the value and a
+		// change cue without updating the Claim: a cue governing another object
+		// and a third-party subject. Then third-party mentions of a retired
+		// value: a friend's preference and news about the shop.
+		{at: .79, steps: []ScaleStep{scaleExchange("m.home.news", "home_city", "Big news: I moved to Chicago last month, Boston is behind me.", "Okay, noted.")}},
+		{at: .80, steps: []ScaleStep{scaleExchange("m.boston.umbrella", "boston", "I left my umbrella in Boston.", "Okay, noted.")}},
+		{at: .81, steps: []ScaleStep{scaleExchange("m.boston.sister", "boston", "My sister moved to Boston now.", "Okay, noted.")}},
+		{at: .82, steps: []ScaleStep{scaleExchange("m.coffee.friend", "coffee", "My friend Sam says his favorite coffee is Blue Bottle.", "Okay, noted.")}},
+		{at: .83, steps: []ScaleStep{scaleExchange("m.coffee.closed", "coffee", "The Blue Bottle coffee shop on Main Street closed today.", "Okay, noted.")}},
 	}
 }
 
@@ -1039,6 +1057,8 @@ func scaleProbes() []ScaleProbe {
 			[]ScaleStaleCheck{
 				{Scenario: ScaleStaleRetiredRestated, Issue: "M2", StaleKeys: []string{"m.coffee.restated"}},
 				{Scenario: ScaleStaleRetiredSource, Issue: "M2", Control: true, StaleKeys: []string{"m.c.coffee", "c.coffee"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.friend"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.closed"}},
 			}},
 		// Corpus v2: the retired value itself is the query, so a mention that
 		// does not restate the Claim is delivered and its flag can be checked.
@@ -1046,6 +1066,8 @@ func scaleProbes() []ScaleProbe {
 			[]ScaleStaleCheck{
 				{Scenario: ScaleStaleRetiredRestated, Issue: "M2", StaleKeys: []string{"m.coffee.restated"}},
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.airport"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.friend"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.closed"}},
 			}},
 		// M3: the question finds the saved claim through its predicate wording,
 		// isolating newer-statement detection from claim recall.
@@ -1054,6 +1076,11 @@ func scaleProbes() []ScaleProbe {
 				{Scenario: ScaleStaleNewerWording, Issue: "M3", LinkKeys: []string{"c.home", "m.moved"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.marathon"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.friends"}},
+				// Corpus v3: the real update must not be crowded out by newer
+				// sentences that share the value and a cue without updating it.
+				{Scenario: ScaleStaleNewerSavedValue, Issue: "M3", LinkKeys: []string{"c.home", "m.home.news"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.umbrella"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.sister"}},
 			}},
 		// Corpus v2: the newer statement shares the saved value or the
 		// Predicate's words, but not the Predicate phrase.
@@ -1100,6 +1127,25 @@ func scaleProbes() []ScaleProbe {
 		{ID: "auto.unrelated.math", Family: ScaleFamilyUnrelated, Area: ScaleAreaGlobal, Message: "What's 17 times 23?"},
 		{ID: "auto.unrelated.translate", Family: ScaleFamilyUnrelated, Area: ScaleAreaGlobal, Message: "Translate good morning into Portuguese."},
 		{ID: "auto.unrelated.haiku", Family: ScaleFamilyUnrelated, Area: ScaleAreaGlobal, Message: "Write a haiku about autumn."},
+		// Corpus v3 (harness review final pass). Ordinary questions with
+		// conversational filler or a word history never used, whose answer
+		// shares one content word with them.
+		{ID: "auto.one.passport", Family: ScaleFamilyOneWordAnswer, Area: ScaleAreaGlobal, Message: "When do I need to renew my passport?", Topics: []string{"travel"}, Required: []string{"n.passport"}},
+		{ID: "auto.one.parked", Family: ScaleFamilyOneWordAnswer, Area: ScaleAreaGlobal, Message: "Do you know where I parked the car?", Topics: []string{"car", "parking"}, Required: []string{"n.parked"}},
+		{ID: "auto.one.sister", Family: ScaleFamilyOneWordAnswer, Area: ScaleAreaGlobal, Message: "What's my sister's birthday again?", Topics: []string{"family"}, Required: []string{"n.sister"}},
+		{ID: "auto.one.cat_vet", Family: ScaleFamilyOneWordAnswer, Area: ScaleAreaGlobal, Message: "Remind me which vet we use for the cat", Topics: []string{"pets"}, Required: []string{"n.cat_vet"}},
+		{ID: "auto.one.wifi", Family: ScaleFamilyOneWordAnswer, Area: ScaleAreaGlobal, Message: "ok so what's my wifi password", Topics: []string{"home"}, Required: []string{"n.wifi"}},
+		// Acknowledgements and commands about the live context ("it").
+		{ID: "auto.low.got_it", Family: ScaleFamilyLowContent, Area: ScaleAreaGlobal, Prelude: []string{"How should I prune the tomato plants this weekend?"}, Message: "got it, thanks"},
+		{ID: "auto.low.thats_it", Family: ScaleFamilyLowContent, Area: ScaleAreaGlobal, Prelude: []string{"Draft a packing list for the Porto trip."}, Message: "that's it, thanks"},
+		{ID: "auto.low.love_it", Family: ScaleFamilyLowContent, Area: ScaleAreaGlobal, Prelude: []string{"Plan an interval run for Thursday morning."}, Message: "love it"},
+		{ID: "auto.low.do_it", Family: ScaleFamilyLowContent, Area: ScaleAreaGlobal, Prelude: []string{"Book the car service before the 60,000 km check."}, Message: "ok do it"},
+		// A referring question that ties on every earlier root refers to the
+		// most recent topic.
+		{ID: "auto.follow.when", Family: ScaleFamilyFollowUp, Area: ScaleAreaGlobal, Prelude: []string{"How should I prune the tomato plants this weekend?", "Which tyre brand lasts longest?", "Let's plan the Lisbon trip."}, Message: "and when was it?", Topics: []string{"travel"}, Required: []string{"n.lisbon"}},
+		// A request mostly about something history never discussed, sharing
+		// its one rare known word with private history.
+		{ID: "auto.privacy.energy", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What's the energy rating of the dishwasher?", Topics: []string{"home"}},
 	}
 	for _, probe := range automaticOnly {
 		probe.Path = ScalePathAutomatic

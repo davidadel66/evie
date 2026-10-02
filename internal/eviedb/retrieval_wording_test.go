@@ -20,6 +20,18 @@ func TestWordingRulesForNewerStatementsAndRestatements(t *testing.T) {
 	mom.addSubject("Mom", false)
 	mom.addPredicate("lives_in")
 	mom.addValue("text", "Boston")
+	owned := func(token, label, value string) claimWording {
+		var w claimWording
+		w.addSubject("owner", true)
+		w.addPredicate(token)
+		w.addPredicate(label)
+		w.addValue("text", value)
+		return w
+	}
+	carrier := owned("phone_carrier", "phone carrier", "Verizon")
+	barber := owned("barber", "barber", "Luis")
+	coffee := owned("favorite_coffee_shop", "favorite coffee shop", "Blue Bottle")
+	parking := owned("parking_spot", "parking spot", "level 2 bay 14")
 	for _, tc := range []struct {
 		name    string
 		wording claimWording
@@ -39,6 +51,26 @@ func TestWordingRulesForNewerStatementsAndRestatements(t *testing.T) {
 		{"value without predicate words", home, "restatement", "Boston has great seafood near the harbor.", false},
 		{"non-owner subject name", mom, "restatement", "Reminder that Mom is in Boston these days.", true},
 		{"non-owner subject absent", mom, "newer", "I moved to Boston now.", false},
+		// Final verification pass (M3): the owner must be the subject of the
+		// clause carrying the cue, and the cue must govern the value or the
+		// Predicate's words, with only light words between them.
+		{"third-party subject", home, "newer", "My sister moved to Boston now.", false},
+		{"cue governs another object", home, "newer", "I left my umbrella in Boston.", false},
+		{"cue governs a pronoun object", home, "newer", "I left it in Boston.", false},
+		{"cue governs the value", home, "newer", "I left Boston for good last spring.", true},
+		{"value as subject of the cue clause", home, "newer", "I'm in Chicago, and Boston is no longer home.", true},
+		{"cue clause names a third party", home, "newer", "I love Boston, but my sister moved there now.", false},
+		{"value with an unrelated cue", home, "newer", "My Boston friends are visiting now.", false},
+		{"dropped governs the value", carrier, "newer", "I finally dropped Verizon last week and switched to T-Mobile.", true},
+		{"novelty beside the Predicate word", barber, "newer", "My new barber is Marco.", true},
+		{"predicate words with a number between", shoe, "newer", "My shoes are a size 10 now after the running season.", true},
+		// The same subject requirement applies to restatements of an owner
+		// Claim: a third party's preference or news about the value is not the
+		// owner repeating the retired fact.
+		{"third-party restatement", coffee, "restatement", "My friend Sam says his favorite coffee is Blue Bottle.", false},
+		{"news about the value", coffee, "restatement", "The Blue Bottle coffee shop on Main Street closed today.", false},
+		{"owner restatement", coffee, "restatement", "Honestly, Blue Bottle is still my favorite coffee shop.", true},
+		{"owner restatement across clauses", parking, "restatement", "I finally got a parking spot at the office: level 2, bay 14.", true},
 	} {
 		rule := tc.wording.newerStatement
 		if tc.rule == "restatement" {

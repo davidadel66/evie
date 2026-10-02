@@ -292,6 +292,13 @@ func TestAutomaticRecallPlanGatesEarlierTopics(t *testing.T) {
 		{"What would she like?", true, 2, "tomato", ""},
 		{"What tyre pressure does the car need?", true, 0, "brand", "tomato"},
 		{"Can you recommend a good novel for a long flight?", true, 0, "", "tomato"},
+		// Final verification pass: acknowledgements and commands about the
+		// live context ("it") ask for nothing and revive nothing.
+		{"got it, thanks", false, 0, "", ""},
+		{"that's it, thanks", false, 0, "", ""},
+		{"love it", false, 0, "", ""},
+		{"ok do it", false, 0, "", ""},
+		{"What was it again?", true, 2, "tomato", ""},
 	} {
 		events := append(append([]memory.Event(nil), earlier...), event("now", tc.message))
 		plan := planAutomaticRecall(events, nil, "now")
@@ -309,5 +316,120 @@ func TestAutomaticRecallPlanGatesEarlierTopics(t *testing.T) {
 	plan := planAutomaticRecall(append(append([]memory.Event(nil), earlier...), event("now", "What was it again?")), summary, "now")
 	if plan.relevance.LiveFrom != "e2" || len(plan.relevance.Context) == 0 || !slices.Contains(plan.relevance.Context[len(plan.relevance.Context)-1], "greenhouse") {
 		t.Fatalf("compacted follow-up lost continuity or its live frontier: %+v", plan.relevance)
+	}
+	// A referring question that ties on every earlier root resolves to the
+	// most recent ones, not the oldest.
+	three := append(append([]memory.Event(nil), earlier...), event("e3", "Let's plan the Lisbon trip."), event("now", "and when was it?"))
+	plan = planAutomaticRecall(three, nil, "now")
+	if len(plan.relevance.Context) != 2 || !slices.Contains(plan.relevance.Context[0], "lisbon") || !slices.Contains(plan.relevance.Context[1], "tyre") {
+		t.Fatalf("tied earlier roots did not prefer the most recent: %v", plan.relevance.Context)
+	}
+	// Conversational filler is not a content word: these requests keep only
+	// the words that say what they are about.
+	for message, want := range map[string][]string{
+		"When do I need to renew my passport?":   {"renew", "passport"},
+		"Do you know where I parked the car?":    {"parked", "car"},
+		"What's my sister's birthday again?":     {"sister", "birthday"},
+		"Remind me which vet we use for the cat": {"vet", "cat"},
+		"ok so what's my wifi password":          {"wifi", "password"},
+	} {
+		if plan := planAutomaticRecall([]memory.Event{event("now", message)}, nil, "now"); !slices.Equal(plan.relevance.Current, want) {
+			t.Errorf("%q: content terms %v, want %v", message, plan.relevance.Current, want)
+		}
+	}
+}
+
+// Final verification pass, finding 1: ordinary questions padded with
+// conversational filler, or with a word history never used, still recall the
+// one statement that answers them. Before, every such question counted its
+// filler and unknown words toward the two-term threshold and got nothing.
+func TestAutomaticMemoryRecallFindsAnswersSharingOneWord(t *testing.T) {
+	f := newRetrievalFixture(t)
+	history := f.global()
+	for _, text := range []string{
+		"I need new running shoes before the 10k.",
+		"Let me know when the parcel arrives.",
+		"Remind me to call my sister on Sunday.",
+		"What should I get my dad for his birthday?",
+		"Plan a small dinner for my niece's birthday.",
+		"What can I use instead of feta in the salad?",
+		"Can I use oat milk in the custard?",
+		"Use the blue mug for the tea.",
+		"The neighbour's cat keeps digging in the herb bed.",
+		"The cat next door sleeps on our porch.",
+		"Our cat knocked the plant off the shelf again.",
+		"The car makes a rattle at low speed; is it safe to drive?",
+		"Book the car service before the 60,000 km check.",
+		"So the plan is to leave early again on Friday.",
+		"The router password reset did not work.",
+		"Sam and I argued again last night; honestly I'm not sure our relationship is going to last.",
+		"My blood test results came back and my ferritin is low.",
+		"Log today's run: felt strong.",
+		"Summarize the themes of Piranesi.",
+		"I've had low energy for a few days; should I book the GP?",
+		"The dishwasher shows an error code.",
+		"The dishwasher makes a grinding noise.",
+		"Add checking the dishwasher to the weekend list.",
+	} {
+		f.converse(history, text)
+	}
+	answers := map[string]memory.Event{
+		"When do I need to renew my passport?":   f.converse(history, "My passport expires in March 2029."),
+		"Do you know where I parked the car?":    f.converse(history, "I parked on level 3, row F of the Elm Street garage."),
+		"What's my sister's birthday again?":     f.converse(history, "My sister Lena was born on June 13, 1994."),
+		"Remind me which vet we use for the cat": f.converse(history, "Our vet is Dr. Rivera at Oakwood Animal Clinic."),
+		"ok so what's my wifi password":          f.converse(history, "The home wifi is called Evergreen5G and the key is taped under the router."),
+	}
+	f.refresh()
+	for question, answer := range answers {
+		if _, evidence := f.automaticRecall(f.global(), question); !evidenceFromEvent(evidence, answer.ID) {
+			t.Errorf("%q did not recall %q: %q", question, answer.Content, evidenceTexts(evidence))
+		}
+	}
+	// The one-shared-word protections hold: a request whose words history
+	// mostly never used, or whose only match is one rare word beside a word
+	// history never used, injects nothing private.
+	for _, question := range []string{
+		"How do I model a many-to-many relationship in the ORM?",
+		"Summarize today's CI results.",
+		"What's the energy rating of the dishwasher?",
+	} {
+		if _, evidence := f.automaticRecall(f.global(), question); slices.ContainsFunc(evidence, func(item memory.RetrievalEvidence) bool {
+			return strings.Contains(item.Text, "relationship") || strings.Contains(item.Text, "ferritin") || strings.Contains(item.Text, "energy")
+		}) {
+			t.Errorf("%q injected private history: %q", question, evidenceTexts(evidence))
+		}
+	}
+}
+
+// Final verification pass, finding 2: acknowledgements and commands that
+// refer to the live context with "it" ask for nothing, so they neither search
+// nor revive an earlier topic (which then pulled in other sessions' messages).
+// A referring question still resolves, to the most recent earlier topics, and
+// only the current session's own roots are ever revived.
+func TestAutomaticMemoryRecallAcknowledgementsWithItAndRecentReferents(t *testing.T) {
+	f := newRetrievalFixture(t)
+	history := f.global()
+	booked := f.converse(history, "I booked the Lisbon hotel near Alfama for October 12 to 16.")
+	f.converse(history, "When should I prune the tomato plants?")
+	f.converse(history, "The basil on the balcony bolts every July unless I pinch off the flowers.")
+	f.converse(history, "Which tyre brand lasts longest on wet roads?")
+	reader := f.global()
+	for _, text := range []string{"How should I prune the tomato plants this weekend?", "Which tyre brand lasts longest?", "Let's plan the Lisbon trip."} {
+		f.converse(reader, text)
+	}
+	f.refresh()
+	for _, message := range []string{"got it, thanks", "that's it, thanks", "love it", "ok do it"} {
+		if status, evidence := f.automaticRecall(reader, message); len(evidence) != 0 || status != memory.RetrievalEmpty {
+			t.Errorf("%q injected %d items with status %s: %q", message, len(evidence), status, evidenceTexts(evidence))
+		}
+	}
+	if _, evidence := f.automaticRecall(reader, "and when was it?"); !evidenceFromEvent(evidence, booked.ID) {
+		t.Errorf("a referring question did not resolve to the most recent earlier topic: %q", evidenceTexts(evidence))
+	}
+	// A fresh session has no earlier roots of its own; another session's
+	// recent topics never stand in for them.
+	if status, evidence := f.automaticRecall(f.global(), "and when was it?"); len(evidence) != 0 || status != memory.RetrievalEmpty {
+		t.Errorf("a fresh session revived another session's topic: %s %q", status, evidenceTexts(evidence))
 	}
 }
