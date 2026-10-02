@@ -38,8 +38,18 @@ func validateEvieSelect(query string) error {
 	return validateEvieTableReferences(query)
 }
 
+// validateEvieTableReferences is the lexical half of the evie table fence:
+// every name in table position must be an allowed table. SQLite has two such
+// positions in a SELECT — after FROM, JOIN, or a FROM-clause comma, and after
+// IN, where `x IN t` is shorthand for `x IN (SELECT * FROM t)` and would
+// otherwise be an exact-match oracle on any table. After IN only a
+// parenthesized list or subquery, or an unquoted allowed table, passes.
+// Quoted and schema-qualified names are refused in both positions. It runs
+// before the database is opened; refuseUnlistedEvieReads is the engine-level
+// backstop.
 func validateEvieTableReferences(query string) error {
 	expectTable := false
+	expectInTarget := false
 	inFromClause := false
 	fromDepth := 0
 	parenDepth := 0
@@ -49,13 +59,13 @@ func validateEvieTableReferences(query string) error {
 		case isSQLSpace(query[i]):
 			i++
 		case query[i] == '\'' || query[i] == '"' || query[i] == '`':
-			if expectTable {
+			if expectTable || expectInTarget {
 				return errors.New("evie queries may not use quoted table names")
 			}
 			next, _ := skipSQLQuoted(query, i, query[i])
 			i = next
 		case query[i] == '[':
-			if expectTable {
+			if expectTable || expectInTarget {
 				return errors.New("evie queries may not use quoted table names")
 			}
 			end := strings.IndexByte(query[i+1:], ']')
@@ -75,8 +85,14 @@ func validateEvieTableReferences(query string) error {
 			if expectTable {
 				return errors.New("evie queries may not use derived tables")
 			}
+			// `x IN (...)` is a value list or a subquery, whose own FROM is
+			// checked like any other.
+			expectInTarget = false
 			parenDepth++
 			i++
+
+		case expectInTarget && !isSQLWordByte(query[i]):
+			return errors.New("evie query must follow IN with a parenthesized list, a subquery, or an allowed table")
 
 		case query[i] == ')':
 			if inFromClause && parenDepth == fromDepth {
@@ -100,18 +116,24 @@ func validateEvieTableReferences(query string) error {
 			}
 			token := strings.ToUpper(query[start:i])
 
-			if expectTable {
+			if expectTable || expectInTarget {
 				if _, allowed := evieQueryTables[token]; !allowed {
 					return fmt.Errorf("evie table %q is not available through query_db", query[start:i])
 				}
-				expectTable = false
-				inFromClause = true
-				fromDepth = parenDepth
+				if expectTable {
+					inFromClause = true
+					fromDepth = parenDepth
+				}
+				expectTable, expectInTarget = false, false
 				continue
 			}
 
 			if token == "FROM" || token == "JOIN" {
 				expectTable = true
+				continue
+			}
+			if token == "IN" {
+				expectInTarget = true
 				continue
 			}
 
@@ -131,7 +153,92 @@ func validateEvieTableReferences(query string) error {
 	if expectTable {
 		return errors.New("evie query is missing a table after FROM or JOIN")
 	}
+	if expectInTarget {
+		return errors.New("evie query is missing a list or table after IN")
+	}
 	return nil
+}
+
+// refuseUnlistedEvieReads is the engine-level half of the evie table fence.
+// modernc.org/sqlite exposes no authorizer, so the check asks SQLite itself:
+// EXPLAIN compiles the statement on the connection that will run it, and
+// every b-tree the program opens names its root page. Each root page must
+// belong to an allowed table (or one of its indexes) in the main schema.
+// Virtual tables, writes, other schemas, and any open opcode this check does
+// not know are refused, so a reference the lexical fence missed — in any
+// syntax — still cannot read a private table.
+func refuseUnlistedEvieReads(ctx context.Context, conn *sql.Conn, query string) error {
+	tables := map[int64]string{}
+	schema, err := conn.QueryContext(ctx, `SELECT tbl_name, rootpage FROM main.sqlite_schema WHERE rootpage > 0`)
+	if err != nil {
+		return fmt.Errorf("read evie schema: %w", err)
+	}
+	for schema.Next() {
+		var table string
+		var root int64
+		if err := schema.Scan(&table, &root); err != nil {
+			schema.Close()
+			return fmt.Errorf("read evie schema: %w", err)
+		}
+		tables[root] = table
+	}
+	err = schema.Err()
+	schema.Close()
+	if err != nil {
+		return fmt.Errorf("read evie schema: %w", err)
+	}
+
+	program, err := conn.QueryContext(ctx, "EXPLAIN "+query)
+	if err != nil {
+		return fmt.Errorf("run query: %w", err)
+	}
+	defer program.Close()
+	for program.Next() {
+		var address, p1, p2, p3, p5 int64
+		var opcode string
+		var p4, comment any
+		if err := program.Scan(&address, &opcode, &p1, &p2, &p3, &p4, &p5, &comment); err != nil {
+			return fmt.Errorf("inspect query: %w", err)
+		}
+		switch opcode {
+		case "OpenEphemeral", "OpenAutoindex", "OpenPseudo", "OpenDup", "SorterOpen":
+			// Scratch b-trees built by this statement from rows it already read.
+		case "IfNotOpen":
+			// Tests an existing cursor; opens nothing.
+		case "OpenRead", "ReopenIdx":
+			// P3 is the schema (0 = main); OPFLAG_P2ISREG in P5 means P2
+			// names a register rather than a root page.
+			table, known := tables[p2]
+			if p3 != 0 || p5&sqlite3.OPFLAG_P2ISREG != 0 || !known {
+				return errors.New("evie query reads a table that is not available through query_db")
+			}
+			if _, allowed := evieQueryTables[strings.ToUpper(table)]; !allowed {
+				return fmt.Errorf("evie table %q is not available through query_db", table)
+			}
+		default:
+			if strings.Contains(strings.ToLower(opcode), "open") {
+				return fmt.Errorf("evie query may not use %s", opcode)
+			}
+		}
+	}
+	if err := program.Err(); err != nil {
+		return fmt.Errorf("inspect query: %w", err)
+	}
+	return nil
+}
+
+// queryEvieDB runs an evie query on one connection, after
+// refuseUnlistedEvieReads has judged that connection's compiled program.
+func queryEvieDB(ctx context.Context, db *sql.DB, query string) ([]string, [][]string, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open connection: %w", err)
+	}
+	defer conn.Close()
+	if err := refuseUnlistedEvieReads(ctx, conn, query); err != nil {
+		return nil, nil, err
+	}
+	return queryConnTable(ctx, conn, query)
 }
 
 // queryDBTool describes query_db to the model: free-form read-only SQL
@@ -248,7 +355,7 @@ func queryDBWithEvieReader(ctx context.Context, args string, openEvie func(conte
 	if params.DB == "finance" {
 		columns, rows, err = queryFinanceDB(ctx, db, q)
 	} else {
-		columns, rows, err = finance.Query(ctx, db, q)
+		columns, rows, err = queryEvieDB(ctx, db, q)
 	}
 	if err != nil {
 		return "", err
@@ -277,7 +384,12 @@ func queryFinanceDB(ctx context.Context, db *sql.DB, query string) ([]string, []
 	if _, err := sqlite.Limit(conn, sqlite3.SQLITE_LIMIT_ATTACHED, 0); err != nil {
 		return nil, nil, fmt.Errorf("fence connection: %w", err)
 	}
+	return queryConnTable(ctx, conn, query)
+}
 
+// queryConnTable runs one query on a fenced connection and returns its
+// columns and rows as strings, NULL rendered as "NULL".
+func queryConnTable(ctx context.Context, conn *sql.Conn, query string) ([]string, [][]string, error) {
 	result, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, fmt.Errorf("run query: %w", err)

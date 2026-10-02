@@ -131,8 +131,10 @@ func PermitWorkerFetchesForTest(addr netip.AddrPort) (restore func()) {
 // nonPublicPrefixes are ranges netip's predicates do not already cover:
 // "this network" (0/8, which reaches the local host), shared CGNAT space
 // (100.64/10, which VPNs such as Tailscale use for private hosts), IETF
-// protocol assignments, benchmarking, reserved and broadcast space, and the
-// deprecated IPv6 site-local range.
+// protocol assignments, benchmarking, reserved and broadcast space, the
+// deprecated IPv6 site-local range, deprecated IPv4-compatible IPv6 (::/96,
+// which a stack may route to the IPv4 address it carries), and local-use
+// NAT64 (64:ff9b:1::/48, a site's own translator by definition).
 var nonPublicPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
 	netip.MustParsePrefix("100.64.0.0/10"),
@@ -140,14 +142,28 @@ var nonPublicPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("198.18.0.0/15"),
 	netip.MustParsePrefix("240.0.0.0/4"),
 	netip.MustParsePrefix("fec0::/10"),
+	netip.MustParsePrefix("::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
 }
+
+// Translation prefixes that carry an IPv4 destination inside an IPv6
+// address: well-known NAT64 (RFC 6052) embeds it in the last 32 bits, 6to4
+// (RFC 3056) in the 32 bits after the prefix.
+var (
+	nat64Prefix = netip.MustParsePrefix("64:ff9b::/96")
+	sixToFour   = netip.MustParsePrefix("2002::/16")
+)
 
 // isPublicAddress reports whether addr is an ordinary internet unicast
 // address: not unspecified, loopback, private (RFC 1918, ULA), link-local
-// (including 169.254.169.254 metadata), multicast, or reserved. IPv4-mapped
-// IPv6 addresses are judged as the IPv4 address they carry.
+// (including 169.254.169.254 metadata), multicast, or reserved. IPv4-mapped,
+// NAT64, and 6to4 IPv6 addresses are judged as the IPv4 address they carry,
+// so a translator cannot carry a worker to 127.0.0.1 or 169.254.169.254.
 func isPublicAddress(addr netip.Addr) bool {
 	addr = addr.Unmap().WithZone("")
+	if embedded, ok := embeddedIPv4(addr); ok {
+		return isPublicAddress(embedded)
+	}
 	if !addr.IsGlobalUnicast() || addr.IsPrivate() {
 		return false
 	}
@@ -157,6 +173,19 @@ func isPublicAddress(addr netip.Addr) bool {
 		}
 	}
 	return true
+}
+
+// embeddedIPv4 extracts the IPv4 destination of a well-known NAT64 or 6to4
+// address.
+func embeddedIPv4(addr netip.Addr) (netip.Addr, bool) {
+	b := addr.As16()
+	switch {
+	case nat64Prefix.Contains(addr):
+		return netip.AddrFrom4([4]byte(b[12:16])), true
+	case sixToFour.Contains(addr):
+		return netip.AddrFrom4([4]byte(b[2:6])), true
+	}
+	return netip.Addr{}, false
 }
 
 func refuseNonPublicDial(_, address string, _ syscall.RawConn) error {
@@ -555,6 +584,43 @@ func frameUntrustedWeb(source, text string) string {
 	return begin + "\n" + escaped + "\n" + end
 }
 
+// reportCrossHostRedirect tells the model where a cross-host redirect points
+// without letting the redirecting server speak. The Location header is
+// attacker-controlled, and Go's url.Parse keeps the spaces in a query or an
+// opaque URL verbatim, so echoed as plain tool text a target could close a
+// frame that never opened and address the model as the harness. The target
+// is re-serialized with userinfo stripped (a Location carrying a token would
+// otherwise leak it) and every byte outside RFC 3986's URI characters
+// percent-encoded, then framed as untrusted web content. A target longer than
+// web_fetch accepts as input could never be fetched, so it is reported
+// without being echoed.
+func reportCrossHostRedirect(source, loc *url.URL) (string, error) {
+	loc.User = nil
+	target := escapeURIText(loc.String())
+	if len(target) > maxURLLength {
+		return "", fmt.Errorf("fetch %s: redirects to a different host, but the target URL is %d characters; the limit is %d, so web_fetch cannot follow it", source, len(target), maxURLLength)
+	}
+	return "This URL redirects to a different host. The target URL below comes from the redirecting server; call web_fetch again with it if you want its content.\n" +
+		frameUntrustedWeb(source.String(), target), nil
+}
+
+// escapeURIText percent-encodes every byte that RFC 3986 does not allow in a
+// URI — spaces, controls, quotes, backticks, pipes, braces, and non-ASCII —
+// leaving unreserved, reserved, and existing percent-escapes as they are, so
+// the result still parses to the same URL.
+func escapeURIText(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("-._~:/?#[]@!$&'()*+,;=%", c) >= 0 {
+			b.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(&b, "%%%02X", c)
+	}
+	return b.String()
+}
+
 // Shared transport preserves the legacy fetch contract while allowing bounded
 // document excerpts without writing files a restricted worker cannot read.
 func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL, string) (string, error)) (string, error) {
@@ -615,11 +681,7 @@ func fetchWebContent(parent context.Context, rawURL string, render func(*url.URL
 	// to the status-code error below.
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		if loc, err := resp.Location(); err == nil {
-			// The redirect target is attacker-controlled and gets echoed to
-			// the model provider — strip userinfo the same way normalizeURL
-			// does for the input URL, or a Location carrying a token leaks it.
-			loc.User = nil
-			return fmt.Sprintf("This URL redirects to a different host: %s. Call web_fetch again with that URL if you want its content.", loc), nil
+			return reportCrossHostRedirect(u, loc)
 		}
 	}
 

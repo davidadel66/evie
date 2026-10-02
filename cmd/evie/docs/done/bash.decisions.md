@@ -100,6 +100,17 @@ call, so two oversized commands can't overwrite each other. The cut lands
 on a UTF-8 boundary. Spill files older than 24 hours are removed when a new
 one is created.
 
+The spill file is capped at 64 MiB (final verification pass). Without a cap,
+`yes` under the 10-minute timeout wrote 381 MB in under a second and could
+fill the volume that holds `~/.evie/evie.db`. Past the cap, evie stops
+writing but keeps draining the pipe. The command then runs to its normal end
+or timeout and reports its real exit status. Killing it was rejected: a
+command with a long log, such as a verbose install or sync, would die
+partway through its side effects. The cost is that a runaway writer burns
+CPU until its timeout, which is bounded anyway. The note says only the first
+64 MiB were saved and how many characters were discarded. The count of
+characters shown still covers everything the command wrote.
+
 ## Timeouts: 2 minutes default, 10 minutes maximum
 
 Originally 60s/300s. Raised to match Claude Code (`DEFAULT_TIMEOUT_MS`

@@ -172,6 +172,25 @@ func TestIsPublicAddress(t *testing.T) {
 		{"255.255.255.255", false},
 		{"::ffff:127.0.0.1", false},
 		{"::ffff:192.168.1.1", false},
+		// Final pass: deprecated IPv4-compatible IPv6 (::/96) is never an
+		// ordinary destination, whatever IPv4 address it carries.
+		{"::7f00:1", false},
+		{"::a9fe:a9fe", false},
+		{"::c0a8:101", false},
+		{"::808:808", false},
+		// NAT64 (64:ff9b::/96) and 6to4 (2002::/16) are judged by the IPv4
+		// address they embed; the local-use NAT64 prefix is never public.
+		{"64:ff9b::7f00:1", false},
+		{"64:ff9b::a9fe:a9fe", false},
+		{"64:ff9b::a00:1", false},
+		{"64:ff9b::808:808", true},
+		{"64:ff9b:1::7f00:1", false},
+		{"64:ff9b:1::808:808", false},
+		{"2002:7f00:1::", false},
+		{"2002:a9fe:a9fe::1", false},
+		{"2002:c0a8:101::1", false},
+		{"2002:6440:1::1", false},
+		{"2002:808:808::1", true},
 	} {
 		if got := isPublicAddress(netip.MustParseAddr(tc.addr)); got != tc.public {
 			t.Errorf("isPublicAddress(%s) = %t, want %t", tc.addr, got, tc.public)

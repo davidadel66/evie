@@ -30,6 +30,15 @@ const (
 	maxBashOutput = 30_000
 )
 
+// maxBashSpill caps the spill file. Without it, `yes` under the 10-minute
+// timeout writes until the volume holding ~/.evie/evie.db is full. 64 MiB is
+// far more than the model will slice with head/tail/grep, and past it the
+// collector stops saving but keeps draining the pipe: the command runs to
+// its normal end or timeout and reports its real exit status, rather than
+// dying mid-operation because its log was long. A var, not a const, only so
+// a test can shrink it.
+var maxBashSpill int64 = 64 << 20
+
 // sessionCwd is the working directory the next command starts in, updated
 // after every call from the shell's own `pwd`. This is deliberate shared
 // state: the model works in a project for a long stretch, and making it
@@ -281,18 +290,21 @@ func rememberCwd(pwdPath string) {
 //
 // The spill is unique per call, not per process: a second capped command
 // would otherwise overwrite the first one's file while the model was still
-// reading it.
+// reading it. It holds at most maxBashSpill bytes; output past that is
+// counted and discarded.
 type boundedOutput struct {
 	mu       sync.Mutex
 	head     []byte
 	total    int64
 	spill    *os.File
+	spilled  int64
 	spillErr error
 }
 
 // Write never reports an error: failing it would make exec stop copying and
-// the command die on a broken pipe because a spill file could not be written.
-// A spill failure is reported in the rendered note instead.
+// the command die on a broken pipe because a spill file could not be written
+// or reached its ceiling. A spill failure or a full spill is reported in the
+// rendered note instead.
 func (o *boundedOutput) Write(p []byte) (int, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -314,12 +326,28 @@ func (o *boundedOutput) Write(p []byte) (int, error) {
 		if o.spill, o.spillErr = createSpillFile("evie-output-"); o.spillErr != nil {
 			return written, nil
 		}
-		_, o.spillErr = o.spill.Write(o.head)
+		o.writeSpill(o.head)
 	}
-	if o.spillErr == nil {
-		_, o.spillErr = o.spill.Write(p)
-	}
+	o.writeSpill(p)
 	return written, nil
+}
+
+// writeSpill appends to the spill file up to maxBashSpill bytes and silently
+// drops the rest; render reports the drop from total and spilled.
+func (o *boundedOutput) writeSpill(p []byte) {
+	if o.spillErr != nil {
+		return
+	}
+	room := maxBashSpill - o.spilled
+	if room <= 0 {
+		return
+	}
+	if int64(len(p)) > room {
+		p = p[:room]
+	}
+	n, err := o.spill.Write(p)
+	o.spilled += int64(n)
+	o.spillErr = err
 }
 
 // finish closes the spill file once the command's output is complete. A file
@@ -349,7 +377,8 @@ func (o *boundedOutput) discard() {
 }
 
 // render returns the whole output when it fit under the cap, and otherwise
-// the head cut at a UTF-8 boundary plus a note naming the spill file.
+// the head cut at a UTF-8 boundary plus a note naming the spill file and,
+// when the spill reached its ceiling, how much output was not saved.
 func (o *boundedOutput) render() string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -359,9 +388,13 @@ func (o *boundedOutput) render() string {
 
 	cut := completeRunePrefix(o.head)
 	note := fmt.Sprintf("\n\n[output trimmed: %d of %d characters shown", cut, o.total)
-	if o.spill == nil || o.spillErr != nil {
+	switch {
+	case o.spill == nil || o.spillErr != nil:
 		note += "; the rest could not be saved]"
-	} else {
+	case o.spilled < o.total:
+		note += fmt.Sprintf("; only the first %d MiB saved to %s for %d hours — read it with head, tail, or grep; the last %d characters were discarded]",
+			maxBashSpill>>20, o.spill.Name(), int(spillRetention.Hours()), o.total-o.spilled)
+	default:
 		note += fmt.Sprintf("; full output saved to %s for %d hours — read it with head, tail, or grep]", o.spill.Name(), int(spillRetention.Hours()))
 	}
 	return string(o.head[:cut]) + note

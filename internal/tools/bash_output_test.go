@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -12,7 +13,7 @@ import (
 
 func bashSpillPath(t *testing.T, output string) string {
 	t.Helper()
-	_, rest, found := strings.Cut(output, "full output saved to ")
+	_, rest, found := strings.Cut(output, " saved to ")
 	if !found {
 		t.Fatalf("no spill path in %q", output[max(len(output)-300, 0):])
 	}
@@ -105,6 +106,68 @@ func TestRunBashSpillFilesAreUniquePerCall(t *testing.T) {
 	}
 	if string(data) != strings.Repeat("a", 40000) {
 		t.Fatalf("first spill was overwritten: starts %q", data[:min(len(data), 20)])
+	}
+}
+
+// Final pass: the spill file has a ceiling. Past it the collector stops
+// writing but keeps accepting output, so the command is drained rather than
+// blocked or killed, and the note says where saving stopped.
+func TestBashOutputSpillStopsAtTheCeiling(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	var collected boundedOutput
+	chunk := bytes.Repeat([]byte("a"), 1<<20)
+	written := int64(0)
+	for written <= maxBashSpill+4<<20 {
+		n, err := collected.Write(chunk)
+		if n != len(chunk) || err != nil {
+			t.Fatalf("Write past the ceiling = (%d, %v), want (%d, nil) so the command keeps draining", n, err, len(chunk))
+		}
+		written += int64(n)
+	}
+	collected.finish()
+	rendered := collected.render()
+	info, err := os.Stat(bashSpillPath(t, rendered))
+	if err != nil {
+		t.Fatalf("stat spill: %v", err)
+	}
+	if info.Size() != maxBashSpill {
+		t.Fatalf("spill holds %d bytes after %d written, want the %d-byte ceiling", info.Size(), written, maxBashSpill)
+	}
+	if !strings.Contains(rendered, "of "+strconv.FormatInt(written, 10)+" characters shown") {
+		t.Errorf("note does not count all %d bytes the command wrote: %q", written, rendered[maxBashOutput:])
+	}
+	if !strings.Contains(rendered, "first "+strconv.FormatInt(maxBashSpill>>20, 10)+" MiB") {
+		t.Errorf("note does not say the saved output stops at the ceiling: %q", rendered[maxBashOutput:])
+	}
+}
+
+// Final pass end to end: a command that writes past the ceiling still runs
+// to completion with its real exit status, and the spill is bounded.
+func TestRunBashSpillCeilingDrainsTheCommand(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	resetSessionCwd(t)
+	restore := maxBashSpill
+	maxBashSpill = 1 << 20
+	t.Cleanup(func() { maxBashSpill = restore })
+
+	got, err := runBashCommand(t, map[string]any{
+		"command": "head -c 5000000 /dev/zero | tr '\\0' a; exit 3",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.HasSuffix(got, "exit status: 3\n") {
+		t.Fatalf("command did not run to completion past the ceiling: %q", got[max(len(got)-300, 0):])
+	}
+	info, err := os.Stat(bashSpillPath(t, got))
+	if err != nil {
+		t.Fatalf("stat spill: %v", err)
+	}
+	if info.Size() != maxBashSpill {
+		t.Fatalf("spill holds %d bytes, want the %d-byte ceiling", info.Size(), maxBashSpill)
+	}
+	if !strings.Contains(got, "of 5000000 characters shown") {
+		t.Errorf("note does not count all output: %q", got[maxBashOutput:])
 	}
 }
 
