@@ -134,7 +134,12 @@ race detector. L2's malformed-argument check was dropped: David kept the
 2026-08-23 decision that argument syntax stays a model-visible tool error
 (truncated arguments are rejected via `finish_reason`). Stage 11's baseline
 and later before/after numbers are in `cmd/evie/docs/active/memory-scale-eval.md`.
-A final verification pass over all 47 issues is next.
+A final verification pass over all 47 issues, two fix rounds and a focused
+confirmation followed (2026-10-01); all confirmed fixed. Residual, documented
+limits: memory spans are whole sentences (a private clause in the stating
+sentence is quoted with the value); dense-only recall is not gated by the
+lexical privacy floor; the opt-in compiler still records candidates as owner
+statements; "I moved to Chicago" with no shared word is not linked.
 
 Each stage is one reviewable change: focused tests for every fixed issue
 (failing first), `gofmt`, then `./scripts/verify-change.sh`. A stage that
