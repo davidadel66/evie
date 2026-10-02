@@ -239,3 +239,64 @@ func TestInspectingEvieProposedEvidenceIsAvailableWithoutText(t *testing.T) {
 		t.Fatalf("Evie-proposed evidence is unavailable or quotes the request: %+v", item)
 	}
 }
+
+// Confirmation review (defect 6): free text in operation JSON that cites no
+// value (a review reason, a note, an approval card's identity details) is
+// shown only to a reader in the scope it was written in.
+func TestOperationHistoryBlanksFreeTextOutsideItsScope(t *testing.T) {
+	operation := `{"kind":"remember_entity_claim","source":{"scope_key":"workspace:a","evidence":"","locator_kind":"utf8_byte_range"},` +
+		`"identities":[{"role":"subject","scope_key":"global","selected_by":"alias","aliases":["Sis"],"example_claim":"Sarah — sees: the chemo clinic"}],` +
+		`"preview":{"scope_key":"global","candidates":[{"edit":{"reason":"Keep it; my oncologist approved cocoa.","notes":"private"}}]}}`
+	for _, tc := range []struct {
+		reader          sourceReader
+		identity, notes bool
+	}{
+		{sourceReader{context: "workspace:a", session: "session:x"}, true, false},
+		{sourceReader{context: "global", session: "session:y"}, false, true},
+		{sourceReader{context: "workspace:b", session: "session:z"}, false, false},
+	} {
+		n := operationNarrower{ctx: context.Background(), reader: tc.reader}
+		rewritten, _, err := n.rewrite(json.RawMessage(operation), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(rewritten)
+		if strings.Contains(got, "chemo clinic") != tc.identity || strings.Contains(got, `"Sis"`) != tc.identity {
+			t.Fatalf("%+v: identity details shown=%v, want %v: %s", tc.reader, !tc.identity, tc.identity, got)
+		}
+		if strings.Contains(got, "oncologist") != tc.notes || strings.Contains(got, `"private"`) != tc.notes {
+			t.Fatalf("%+v: review reason shown=%v, want %v: %s", tc.reader, !tc.notes, tc.notes, got)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(rewritten, &decoded); err != nil {
+			t.Fatalf("rewritten operation is not JSON: %v: %s", err, got)
+		}
+	}
+}
+
+// Confirmation review (defect 1): a Global retire request narrowed for a
+// Workspace reader renders the sentence stating the value, never a later
+// sentence about someone else that merely names it.
+func TestOperationHistoryNarrowsARequestToTheOwnersSentence(t *testing.T) {
+	ctx, store, global, reader := openOperationHistoryStore(t)
+	saved := rememberLiteralAt(t, ctx, store, global, "Remember that I live in Boston.", "home_city", text("Boston"), "71500000-0000-4000-8000-000000000301")
+	applyLifecycleAt(t, ctx, store, global, "Forget that I live in Boston. My therapist in Boston says the panic attacks are getting worse.",
+		memory.LifecycleRetire, memory.SemanticObjectClaim, saved.ClaimID, "71500000-0000-4000-8000-000000000302")
+	inspected, err := store.InspectSemanticObject(ctx, reader.ScopeContext(), memory.SemanticObjectClaim, saved.ClaimID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(inspected)
+	for _, private := range []string{"therapist", "panic attacks"} {
+		if strings.Contains(string(encoded), private) {
+			t.Fatalf("Workspace reader saw a Global sentence about someone else (%q): %s", private, encoded)
+		}
+	}
+	retired := false
+	for _, operation := range inspected.Operations {
+		retired = retired || operation.Kind == "retire_memory" && strings.Contains(operation.PreparedJSON, `"evidence":"Forget that I live in Boston."`)
+	}
+	if !retired {
+		t.Fatalf("retire request was not narrowed to the owner's sentence: %s", encoded)
+	}
+}

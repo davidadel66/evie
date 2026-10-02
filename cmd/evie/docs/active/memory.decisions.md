@@ -128,6 +128,106 @@
     are a separate change. Rendering is partly covered: an accepted whole
     compiler Source is narrowed for other scopes like any whole owner
     Source, but a range the extractor chose is shown as that range.
+  - *Confirmation review (same day).* A second review found the stating
+    rules still chose by word presence, not by who was speaking: the
+    tie-break preferred the latest sentence and counted a possessive "my" as
+    the owner, so "I live in Boston. My therapist in Boston says the panic
+    attacks are getting worse." cited the therapist sentence (and "My
+    manager at Initech put me on a performance plan", "My oncologist in
+    Boston..."); "My sister is vegetarian.", "My friend said 'I live in
+    Boston'.", "If I lived in Boston, I'd take the T.", "I wish I lived in
+    Boston.", "I left Boston for good." and "I used to live in Boston." kept
+    owner authority; and a negation in a later clause made plain answers
+    Evie-proposed ("I live in Boston and I don't plan to move.", "Alex works
+    at Initech and doesn't like it.", terse answers such as "Boston." or
+    "No, it's Chicago."). The rules now use one deterministic clause and
+    subject analysis shared with the retrieval wording rules
+    (`retrieval_wording_clauses.go`), so binding and newer-statement linking
+    agree on who said what:
+    - *Clauses.* A sentence splits at `, : ( )`, a dash, a quotation mark,
+      before `but although though however whereas yet because since unless
+      until while if whether`, before "so" with a subject, before "and"/"or"
+      followed by a subject, possessive, auxiliary or negation ("and I
+      don't", "and doesn't"), and after a reporting verb ("said", "says",
+      "told me", "thinks"; a base form only after a subject pronoun, modal
+      or "to"). A clause after "and" plus a verb keeps the previous clause's
+      subject.
+    - *Statements.* A clause holding the value must not be quoted or
+      reported (after someone other than "I"/"we" says, tells, thinks...;
+      after "heard"; any "according to"), conditional, wished or future
+      ("if", "whether", "unless", "wish", "would", "'d", "could", "might",
+      "should", lower-case "may", "will", "going to", "want to"; "would
+      like" and "'d prefer" are preferences, not conditions), or a question
+      (the last clause of a '?' sentence, or one led by a question word or
+      inverted auxiliary).
+    - *Polarity.* Negations are counted per clause. Two make it unsure
+      ("It's not that I don't live in Boston"), so neither polarity binds.
+      "hardly", "barely" and "scarcely" negate; "not only" and "no doubt"
+      do not; a "not" right after the value negates only what follows
+      ("I live in Cambridge not Boston" states Cambridge).
+    - *Change.* An affirmed value does not bind in a clause that says it no
+      longer holds: `used to`, `no longer`, `left`, `quit`, `dropped`,
+      `stopped`, `cancelled`, `former(ly)`, `previously`, `ex`, `behind
+      me`, or `moved`/`switched`/`relocated` followed by `from`, `out` or
+      `away` ("moved to Boston" still states Boston).
+    - *Subject.* For an owner Claim the value's clause must not be about
+      someone else. Its subject is the owner (`I`, `we`, or `my`/`our`
+      before the Predicate's words: "my home city", "my sister's birthday"
+      for sister_birthday), the Claim's own words ("Boston is behind me"),
+      nobody in particular ("it", an imperative, a fragment), or someone
+      else: he, she, they, you; `my`/`our` before a person or group from a
+      closed kinship-and-role list ("my sister", "my therapist", "my divorce
+      lawyer", "our team"); a possessive chain ("my dad's favorite color",
+      "Selma's"); "the" before words that are not the Claim's ("the
+      doctor"); or a capitalised name followed by a verb ("Selma likes").
+      For a Claim about another subject, a phrase naming that subject ("my
+      mother Maya", "Maya's sister") is its subject, and "he"/"she"/"they"
+      may refer to it.
+    - *Short answers.* A one-sentence message of at most six words that is
+      not a question, whose other words are answer words (`it's`, `please`,
+      `no`, `actually`, `correction`, ...) or a negated clause of their own,
+      is the owner answering: "Boston.", "It's Boston.", "Teal, please.",
+      "3", "June 13.", "No, it's Chicago.", "Chicago, not Boston.". A number
+      word counts there too ("Three, please.").
+    - *Ranking.* Among qualifying windows: fewest sentences, most Predicate
+      words, the owner as the clause's subject (over a first-person word
+      such as "me" or "my bank", or a short answer), a memory cue, the
+      *shortest span*, then the latest. Shortest before latest is the
+      privacy tie-break: the least extra text is quoted.
+    - *Safe failure.* These are heuristics and will be wrong sometimes; each
+      fails toward the cheaper error. Unsure authority is Evie-proposed
+      (approval is still required; the cost is the label), never owner
+      authority for words someone else said. Plainly stated owner answers
+      above stay owner statements. Legacy narrowing and operation-history
+      narrowing use the same rules, so when no clause states the value they
+      render no text rather than the wrong sentence.
+    - *Free text in operation history* (finding 6). A compiler review edit's
+      `reason` was never narrowed: "Keep it; my oncologist approved cocoa
+      during chemo." showed verbatim to a project reader. Free-text members
+      that cite no value (`reason`, `note(s)`, `comment(s)`, and an approval
+      card's review-only identity details `example_claim` and `aliases`) are
+      shown only to a reader in the Context Scope they were written in (the
+      nearest enclosing scope key; for identity details, the operation's own
+      Source scope) or its session, and are otherwise blanked. Machine
+      reason codes are blanked too; nothing that cites a value is lost.
+    - *Known limits.* "I lived in Boston until 2019" and "When I lived in
+      Boston, ..." keep owner authority (past tense is not detected; a
+      bounded interval is how an owner states a Claim with an ended valid
+      time, so "until" is not a change word). "I used to live in Boston"
+      bound to a Claim whose valid time has ended is Evie-proposed (the
+      binder does not see valid time). "My car is in Boston", "Visit Boston
+      with me" and other first-person mentions still qualify. "I have one
+      kid... wait, no, I have three kids." cites the first sentence for 1.
+      Pronoun reference is not resolved ("Alex doesn't work at Globex; he
+      works at Initech." is Evie-proposed). An explicit memory cue still
+      qualifies a topic mention ("Remember this article about Boston.",
+      "Save this page: ..."). "I have no doubt my favorite color is teal"
+      binds; "I'm not so sure I live in Boston" does not. People nouns
+      outside the closed list ("my plumber") read as the owner's thing.
+      The span is still a whole sentence, so another clause of the stating
+      sentence is quoted with it ("Restore my favorite color navy, my rehab
+      counselor likes it."); clause-level spans would change the Stage 14
+      span contract and are not part of this change.
 
 - **2026-10-01 — Entity reuse and ambiguous names are visible (harness
   review M6, Stage 14).** Applies the plan's M6 default. Resolution itself is

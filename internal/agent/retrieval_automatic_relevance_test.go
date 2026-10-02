@@ -333,8 +333,20 @@ func TestAutomaticRecallPlanGatesEarlierTopics(t *testing.T) {
 		"Remind me which vet we use for the cat": {"vet", "cat"},
 		"ok so what's my wifi password":          {"wifi", "password"},
 	} {
-		if plan := planAutomaticRecall([]memory.Event{event("now", message)}, nil, "now"); !slices.Equal(plan.relevance.Current, want) {
-			t.Errorf("%q: content terms %v, want %v", message, plan.relevance.Current, want)
+		if plan := planAutomaticRecall([]memory.Event{event("now", message)}, nil, "now"); !slices.Equal(plan.relevance.Current, want) || !plan.relevance.PersonalRecall {
+			t.Errorf("%q: content terms %v (personal recall %v), want %v as a personal recall", message, plan.relevance.Current, plan.relevance.PersonalRecall, want)
+		}
+	}
+	// Confirmation review: filler is dropped only from a request to recall
+	// something about the owner. Elsewhere "need" and "use" may be the only
+	// words that say what the request is about.
+	for message, want := range map[string][]string{
+		"Do I need to use a VPN for the bank?":                {"need", "use", "vpn", "bank"},
+		"Write a short poem about anxiety for my newsletter.": {"write", "short", "poem", "anxiety", "newsletter"},
+		"What were the results of the run today?":             {"results", "run", "today"},
+	} {
+		if plan := planAutomaticRecall([]memory.Event{event("now", message)}, nil, "now"); !slices.Equal(plan.relevance.Current, want) || plan.relevance.PersonalRecall {
+			t.Errorf("%q: content terms %v (personal recall %v), want %v and no personal recall", message, plan.relevance.Current, plan.relevance.PersonalRecall, want)
 		}
 	}
 }
@@ -431,5 +443,51 @@ func TestAutomaticMemoryRecallAcknowledgementsWithItAndRecentReferents(t *testin
 	// recent topics never stand in for them.
 	if status, evidence := f.automaticRecall(f.global(), "and when was it?"); len(evidence) != 0 || status != memory.RetrievalEmpty {
 		t.Errorf("a fresh session revived another session's topic: %s %q", status, evidenceTexts(evidence))
+	}
+}
+
+// Confirmation review (M1): one nearly unique shared word explains only a
+// request to recall something about the owner. Every other request, whose
+// words history all knows, still needs two matches, so a private message that
+// shares its rarest word is not injected (privacy fails toward not injecting;
+// the model can still search). Filler is dropped only from personal recall
+// requests, so "use" and "need" keep counting in "Do I need to use a VPN for
+// the bank?" and the VPN message answers it rather than the overdrawn bank
+// account. These are the reviewer's histories and questions.
+func TestAutomaticMemoryRecallStrongSingleMatchNeedsAPersonalRecall(t *testing.T) {
+	for _, tc := range []struct {
+		question, private, answer string
+		generic                   []string
+	}{
+		{"Explain technical debt to the new engineers.", "I owe forty thousand in credit card debt and haven't told Sam.", "", []string{
+			"Explain how a heat pump works.", "Explain the offside rule.", "The technical rider for the gig is ready.", "We need technical support for the printer.",
+			"I bought new running shoes.", "New tyres were fitted today.", "The engineers fixed the bridge.", "Our engineers are on strike."}},
+		{"Write a short poem about anxiety for my newsletter.", "I've been seeing a therapist about my anxiety since March.", "", []string{
+			"Write a toast for the wedding.", "Write a cover letter.", "A short haircut suits me.", "Keep the meeting short.",
+			"Read me a poem by Mary Oliver.", "This poem is lovely.", "The newsletter goes out Friday.", "Fix the newsletter header."}},
+		{"What were the results of the run today?", "My blood test results came back and my ferritin is low.", "", []string{
+			"Log today's run: felt strong.", "Today's run was slow.", "The run club meets today.", "Book the run route."}},
+		{"Suggest a playlist for a custody handover drive.", "My divorce lawyer wants the custody paperwork by Friday.", "", []string{
+			"Make a playlist for the gym.", "The playlist needs more jazz.", "The handover meeting is at noon.", "Plan the handover notes.",
+			"The drive to Maine takes five hours.", "Clean the hard drive."}},
+		{"Do I need to use a VPN for the bank?", "My bank account is overdrawn by two thousand dollars.", "The VPN client needs an update.", []string{
+			"Use the blue mug.", "I need new shoes.", "The VPN keeps dropping at the cafe.", "The VPN client needs an update."}},
+	} {
+		t.Run(tc.question, func(t *testing.T) {
+			f := newRetrievalFixture(t)
+			history := f.global()
+			for _, text := range tc.generic {
+				f.converse(history, text)
+			}
+			f.converse(history, tc.private)
+			f.refresh()
+			_, evidence := f.automaticRecall(f.global(), tc.question)
+			if slices.ContainsFunc(evidence, func(item memory.RetrievalEvidence) bool { return strings.Contains(item.Text, tc.private[:20]) }) {
+				t.Fatalf("a private message sharing one word was injected: %q", evidenceTexts(evidence))
+			}
+			if tc.answer != "" && !slices.ContainsFunc(evidence, func(item memory.RetrievalEvidence) bool { return strings.Contains(item.Text, tc.answer) }) {
+				t.Fatalf("the message that answers the request was not recalled: %q", evidenceTexts(evidence))
+			}
+		})
 	}
 }

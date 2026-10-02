@@ -49,6 +49,14 @@
   - A Claim whose Entity name is ambiguous among the reader's visible Entities
     carries `ambiguous_names` and identifies the Entity in its text; the
     lexical index and generators are unchanged.
+  - *Confirmation review (2026-10-01).* The stating sentence is chosen by
+    the clause's subject and the shortest span (see the memory decision),
+    so "I live in Boston. My therapist in Boston says..." binds and
+    renders "I live in Boston.", a Workspace search for "home city" no
+    longer receives the therapist sentence, and retiring the memory
+    suppresses the owner's own sentence. Operation history blanks free text
+    that cites no value (a review edit's reason) for readers outside the
+    scope it was written in.
   Measured on the scale corpus (`memory-scale-eval.md`, Stage 14): both tiers'
   reports are unchanged.
 
@@ -87,6 +95,12 @@
     `favorite coffee shop: Blue Bottle`; "Honestly, Blue Bottle is still my
     favorite coffee shop." still does. For a non-owner subject the sentence
     must name it.
+  - *Amended in the confirmation review (2026-10-01).* The subject rule now
+    comes from the clause analysis shared with the owner-span binder (see
+    the newer-statement amendment below): a possessive chain names whose
+    preference it is ("My dad's favorite coffee shop is Blue Bottle." and
+    "My mom's favorite coffee is Blue Bottle." are not the owner
+    restating), and a reported clause never restates.
 
 - **2026-10-01 — Newer owner statements in different words (harness review
   M3, Stage 13).** Q18 and implementation decision 10 ask that newer owner
@@ -152,6 +166,52 @@
       same way, so newer mentions of "home city" cannot crowd out an older
       "Boston is behind me". The two-companion bound is unchanged.
     Measured on the scale corpus v3 (`memory-scale-eval.md`, final pass).
+  - *Amended in the confirmation review (2026-10-01).* Any content word
+    between the cue and the value blocked the link, so "I no longer live in
+    Boston.", "I used to live in Boston.", "I no longer work at Initech.",
+    "I no longer use Verizon.", "I stopped using Verizon, switched to
+    Mint..." and "I quit my job at Initech." were lost, while someone
+    else's update still linked ("My ex left Boston.", "My boss quit
+    Initech.", "Our team left Boston yesterday.", "My dad dropped
+    Verizon.", and "My sister said, Boston is no longer an option.", whose
+    second clause names no third party); in an end-to-end probe the ex and
+    sister sentences took both companion slots from the real update. The
+    rule now uses the clause and subject analysis shared with the owner-span
+    binder (`retrieval_wording_clauses.go`, described in the 2026-10-01
+    memory decision's confirmation-review amendment), so both agree on who
+    said what:
+    - *Subject.* The clause carrying the cue is not reported speech, a
+      conditional or a question, and its subject is the owner ("I", "we",
+      "my"/"our" before the Predicate's words); or its subject is the
+      Claim's own words or nobody in particular, it names no third party,
+      and the owner speaks in it or in another clause of the sentence ("I'm
+      in Chicago, and Boston is no longer home"). A clause whose subject is
+      someone else ("my ex", "our team", "the train", "my flight", "my
+      dad's") never links; a possessive that does not own the Claim's words
+      is read up to its first verb or function word ("my flight left
+      Boston" is the flight's).
+    - *Governing.* Between the cue and the Claim's words the clause may also
+      hold a relation word: an ordinary verb of living, working or using
+      (`live`, `work`, `use`, `stay`, `shop`, `bank`, `go`, `attend`,
+      `rent`, `see`, `study`, `belong`, `call`, `have`, `based`, `reside` and
+      their forms) or a noun for the owner's tie to it (`job`, `role`,
+      `position`, `post`, `contract`, `plan`, `subscription`, `membership`,
+      `account`, `service`, `lease`, `apartment`, `flat`, `house`, `home`,
+      `place`, `office`, `company`, `firm`). "I left my umbrella in
+      Boston", "We switched hotels in Boston", "I'm no longer worried about
+      Boston traffic" and "I moved my car to Boston garage" still do not
+      link. `stopped` and `cancelled`/`canceled` join the change cues (and
+      the FTS candidate query).
+    - *Safe failure.* A wrong link is a visible but misleading companion
+      that can crowd out the real update, so an unsure subject does not
+      link. Known limits: "We left Boston for a week of vacation." links (a
+      trip and a move use the same words); "My home is Chicago now." does
+      not (it shares only "home" with `home city`, one of two Predicate
+      words); "I moved to Chicago last month..." still shares no word.
+      Relation words are a closed list, so "I no longer sing in the
+      Riverside choir" does not link.
+    Measured on the scale corpus v4 (`memory-scale-eval.md`, confirmation
+    review).
 
 - **2026-10-01 — Automatic Recall relevance floor (harness review M1, Stage 12).**
   Implementation decisions 7 and 11 deferred the selection thresholds to
@@ -255,6 +315,42 @@
     Measured on the scale corpus v3 (`memory-scale-eval.md`, final pass): no
     change outside the targeted probes in either tier; the frozen 24-case
     lexical workloads are unchanged.
+  - *Amended in the confirmation review (2026-10-01).* The strong single
+    match let one rare word explain any request whose words history knew:
+    "Explain technical debt to the new engineers." injected "I owe forty
+    thousand in credit card debt...", and likewise an anxiety poem (a
+    therapist message), a custody playlist (a divorce lawyer message) and
+    "What were the results of the run today?" (a blood test). Filler
+    removal had a related effect: "Do I need to use a VPN for the bank?"
+    became the two-word request [vpn, bank], and "bank" matched the
+    overdrawn-account message instead of the VPN message.
+    - *Personal recall.* The planner marks a request as a personal recall
+      (`RetrievalRelevance.PersonalRecall`) when it refers to the owner (`I
+      me my mine myself we us our ours`) and asks a recall question or
+      request (`what when where which who whom whose how`, `again`, `remind
+      me`, `do you know`, `do you remember`). Only such a request may be
+      explained by one nearly unique word, and only such a request has its
+      filler dropped; every other request keeps "need", "use", "know" and
+      the rest as content words, as before the final pass. The VPN question
+      now needs two matches and recalls "The VPN client needs an update."
+      (`vpn` and `need`); the four recovered one-word answers ("When do I
+      need to renew my passport?", "Do you know where I parked the car?",
+      "Remind me which vet we use for the cat", "ok so what's my wifi
+      password") are personal recalls and still recalled.
+    - *Safe failure.* Automatic recall fails toward not injecting: an
+      unrelated request that shares one rare word with private history gets
+      nothing for that word, and the model can still search explicitly. The
+      cost is a personal-sounding request without those markers ("Is my
+      passport still valid?" has no question word) or an impersonal recall
+      question ("What was the Lisbon hotel?"), which again needs two
+      matching words when it has three or more.
+    - *Known limits.* A personal recall request whose rarest word happens to
+      be shared with an unrelated private message can still inject it ("What
+      did I say about the debt?" against a private debt message is,
+      arguably, recall). The marker lists are closed English lists, not
+      intent detection.
+    Measured on the scale corpus v4 (`memory-scale-eval.md`, confirmation
+    review).
 
 - **2026-10-01 — Dense recall covers the whole vector table (harness review
   M7, Stage 12).** The single 4,096-row scan read vectors in random-UUID order

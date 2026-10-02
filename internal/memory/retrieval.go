@@ -72,11 +72,14 @@ type RetrievalQuery struct {
 // group can qualify evidence on its own. LiveFrom is the first event of the
 // bound session still in the provider request, empty when nothing has been
 // compacted; that session's messages from there on are already visible to the
-// model and are not recalled again.
+// model and are not recalled again. PersonalRecall marks a request that asks
+// to recall something about the owner ("when do I need to renew my
+// passport?"); only such a request may be answered by one nearly unique word.
 type RetrievalRelevance struct {
-	Current  []string
-	Context  [][]string
-	LiveFrom EventID
+	Current        []string
+	Context        [][]string
+	LiveFrom       EventID
+	PersonalRecall bool
 }
 
 type RetrievalCoverage struct {

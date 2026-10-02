@@ -169,7 +169,9 @@ func TestOwnerSpanBindingChoosesTheSentenceThatStatesTheClaim(t *testing.T) {
 		{"memory cue beats a later mention", "Remember that I live in Boston. My therapist in Boston says the panic attacks are getting worse.", text("Boston"), "home_city", "Remember that I live in Boston."},
 		{"Predicate words beat an earlier mention", "I flew to Boston last week. My home city is Boston.", text("Boston"), "home_city", "My home city is Boston."},
 		{"Predicate words beat a later mention", "My home city is Boston. I flew to Boston yesterday.", text("Boston"), "home_city", "My home city is Boston."},
-		{"later statement wins a tie", "I was in Boston on Monday. I am in Boston again today.", text("Boston"), "home_city", "I am in Boston again today."},
+		// Confirmation review: equal length, so recency decides; a shorter
+		// sentence would win first (TestOwnerSpanBindingFollowsTheClauseSubject).
+		{"later statement wins a tie", "I was in Boston on Monday. I'm in Boston again today.", text("Boston"), "home_city", "I'm in Boston again today."},
 		{"statement beats a question", "Is Boston nice? I live in Boston.", text("Boston"), "home_city", "I live in Boston."},
 		{"no sentence states it", "The Boston office called. Lunch was fine.", text("Boston"), "home_city", ""},
 		{"topic mention without a cue", "Read this article about Boston.", text("Boston"), "home_city", ""},
@@ -218,6 +220,100 @@ func TestOwnerSpanBindingDoesNotLaunderAuthority(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			checkBinding(t, tc.message, bindLiteral(tc.message, tc.literal, tc.predicate, tc.polarity), tc.span)
+		})
+	}
+}
+
+// Confirmation review (M5): the rules are deterministic heuristics, so each
+// fails in the safe direction. Unsure authority is Evie-proposed (approval is
+// still required; only the label changes), and among qualifying sentences the
+// shortest wins before the latest, so the least extra text is quoted. These
+// are the reviewer's messages.
+func TestOwnerSpanBindingFollowsTheClauseSubject(t *testing.T) {
+	boolean := func(value string) memory.TypedLiteral { return literal(memory.LiteralBoolean, value) }
+	integer := func(value string) memory.TypedLiteral { return literal(memory.LiteralInteger, value) }
+	affirmed, denied := memory.PolarityAffirmed, memory.PolarityDenied
+	for _, tc := range []struct {
+		name, message string
+		literal       memory.TypedLiteral
+		predicate     string
+		polarity      memory.ClaimPolarity
+		span          string
+	}{
+		// Defect 1: a later sentence about someone else that names the value is
+		// not the owner stating it, however recent.
+		{"therapist after the statement", "I live in Boston. My therapist in Boston says the panic attacks are getting worse.", text("Boston"), "home_city", affirmed, "I live in Boston."},
+		{"oncologist after the statement", "I'm based in Boston. My oncologist in Boston wants another scan next week.", text("Boston"), "home_city", affirmed, "I'm based in Boston."},
+		{"divorce lawyer after the statement", "We moved to Boston last year. My divorce lawyer in Boston says the hearing is in May.", text("Boston"), "home_city", affirmed, "We moved to Boston last year."},
+		{"psychiatrist after a cue", "Remember I live in Boston. My psychiatrist in Boston upped my Zoloft dose.", text("Boston"), "home_city", affirmed, "Remember I live in Boston."},
+		{"manager after the statement", "I work at Initech. My manager at Initech put me on a performance plan.", text("Initech"), "employer", affirmed, "I work at Initech."},
+		{"retire request with a later mention", "Forget that I live in Boston. My therapist in Boston says the panic attacks are getting worse.", text("Boston"), "home_city", affirmed, "Forget that I live in Boston."},
+		{"shortest span before the latest", "I am in Boston today. I was in Boston for the whole conference week.", text("Boston"), "home_city", affirmed, "I am in Boston today."},
+		{"possessor of the Predicate is someone else", "My dad's favorite color is teal.", text("teal"), "favorite_color", affirmed, ""},
+		{"named possessor", "Selma's favorite color is teal.", text("teal"), "favorite_color", affirmed, ""},
+		// Defect 4: plainly stated owner answers keep owner authority.
+		{"terse answer", "Boston.", text("Boston"), "home_city", affirmed, "Boston."},
+		{"terse answer with it", "It's Boston.", text("Boston"), "home_city", affirmed, "It's Boston."},
+		{"terse answer with please", "Teal, please.", text("teal"), "favorite_color", affirmed, "Teal, please."},
+		{"terse digit", "3", integer("3"), "kids", affirmed, "3"},
+		{"terse date", "June 13.", literal(memory.LiteralDate, "2026-06-13"), "sister_birthday", affirmed, "June 13."},
+		{"terse correction", "No, it's Chicago.", text("Chicago"), "home_city", affirmed, "No, it's Chicago."},
+		{"terse correction with the old value", "Chicago, not Boston.", text("Chicago"), "home_city", affirmed, "Chicago, not Boston."},
+		{"terse correction with actually", "Actually Chicago.", text("Chicago"), "home_city", affirmed, "Actually Chicago."},
+		{"negation after and I", "I live in Boston and I don't plan to move.", text("Boston"), "home_city", affirmed, "I live in Boston and I don't plan to move."},
+		{"negation after and I with Predicate words", "My favorite color is teal and I don't like red.", text("teal"), "favorite_color", affirmed, "My favorite color is teal and I don't like red."},
+		{"negation after and an auxiliary", "Remember that I'm allergic to peanuts and can't eat satay.", boolean("true"), "allergic_to_peanuts", affirmed, "Remember that I'm allergic to peanuts and can't eat satay."},
+		{"change word after and an auxiliary", "I work at Initech and haven't left yet.", text("Initech"), "employer", affirmed, "I work at Initech and haven't left yet."},
+		{"owner reports her own words", "I can't wait to tell you I live in Boston now.", text("Boston"), "home_city", affirmed, "I can't wait to tell you I live in Boston now."},
+		{"not X after the value", "I live in Cambridge not Boston.", text("Cambridge"), "home_city", affirmed, "I live in Cambridge not Boston."},
+		{"the negated value after it", "I live in Cambridge not Boston.", text("Boston"), "home_city", affirmed, ""},
+		// Defect 5: third-party, reported, conditional, wished, asked and past
+		// statements are not the owner stating a present value.
+		{"third-party boolean", "My sister is vegetarian.", boolean("true"), "is_vegetarian", affirmed, ""},
+		{"third-party value", "My sister lives in Boston.", text("Boston"), "home_city", affirmed, ""},
+		{"third party reporting a third party", "My sister says she is vegetarian.", boolean("true"), "is_vegetarian", affirmed, ""},
+		{"single-quoted reported speech", "My friend said 'I live in Boston'.", text("Boston"), "home_city", affirmed, ""},
+		{"double-quoted reported speech", "My friend said \"I live in Boston\" and laughed.", text("Boston"), "home_city", affirmed, ""},
+		{"reported without quotes", "The doctor says I'm allergic to peanuts.", boolean("true"), "allergic_to_peanuts", affirmed, ""},
+		{"reported by an article", "The article says I'm allergic to peanuts.", boolean("true"), "allergic_to_peanuts", affirmed, ""},
+		{"question then report", "Am I allergic to peanuts? The doctor says I'm allergic to peanuts.", boolean("true"), "allergic_to_peanuts", affirmed, ""},
+		{"conditional with a comma", "If I lived in Boston, I'd take the T.", text("Boston"), "home_city", affirmed, ""},
+		{"conditional without a comma", "If I lived in Boston I'd take the T.", text("Boston"), "home_city", affirmed, ""},
+		{"wish", "I wish I lived in Boston.", text("Boston"), "home_city", affirmed, ""},
+		{"question", "Should I move to Boston?", text("Boston"), "home_city", affirmed, ""},
+		{"might", "I might move to Boston.", text("Boston"), "home_city", affirmed, ""},
+		{"would never, denied", "I would never live in Boston.", text("Boston"), "home_city", denied, ""},
+		{"left for good", "I left Boston for good.", text("Boston"), "home_city", affirmed, ""},
+		{"used to", "I used to live in Boston.", text("Boston"), "home_city", affirmed, ""},
+		{"asked and denied", "I have 2 kids? No.", integer("2"), "kids", affirmed, ""},
+		{"hardly", "I'm hardly vegetarian.", boolean("true"), "is_vegetarian", affirmed, ""},
+		{"double negation, affirmed", "It's not that I don't live in Boston.", text("Boston"), "home_city", affirmed, ""},
+		{"double negation, denied", "It's not that I don't live in Boston.", text("Boston"), "home_city", denied, ""},
+		{"double negation with true, denied", "It isn't true that I don't live in Boston.", text("Boston"), "home_city", denied, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkBinding(t, tc.message, bindLiteral(tc.message, tc.literal, tc.predicate, tc.polarity), tc.span)
+		})
+	}
+}
+
+// Confirmation review (defect 4): an Entity Claim whose subject is the named
+// Entity binds when that name is its clause's subject; a negation in a later
+// clause does not reach it, and someone else reporting it is not the owner.
+func TestOwnerSpanBindingForEntityClaimsFollowsTheClauseSubject(t *testing.T) {
+	for _, tc := range []struct {
+		message, span string
+	}{
+		{"Alex works at Initech and doesn't like it.", "Alex works at Initech and doesn't like it."},
+		{"Alex works at Initech. He isn't happy there.", "Alex works at Initech."},
+		{"My sister says Alex works at Initech.", ""},
+		{"Bob said, Alex works at Initech.", ""},
+	} {
+		t.Run(tc.message, func(t *testing.T) {
+			tokens := bindingTokens(tc.message)
+			claim := bindingClaim{needs: []bindingOccurrences{phraseOccurrences(tokens, "Alex"), phraseOccurrences(tokens, "Initech")},
+				predicate: newBindingPredicate("employer", "employer")}
+			checkBinding(t, tc.message, bindOwnerSource(tc.message, claim), tc.span)
 		})
 	}
 }

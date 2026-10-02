@@ -6,8 +6,8 @@ Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
 current behavior, recorded as such; none is accepted as correct. Stage 12's
 and Stage 13's before/after results follow the Stage 11 baseline; the
-committed baselines are the final verification pass report (version 4) on
-corpus v3.
+committed baselines are the confirmation review report (version 4) on
+corpus v4.
 
 ## What runs
 
@@ -637,6 +637,203 @@ first-dispatch items, before and after; development 23–24/27 automatic and
 25/27 with deeper search before and after. The development swing is the
 dev11 random-ID tie recorded in Stage 12: over 24 runs each it missed 13
 times before and 14 times after.
+
+## Confirmation review: who is speaking (M1, M2, M3, M5)
+
+A confirmation review of the final verification pass reproduced six defects
+with probes, all fixed here (rules in the 2026-10-01 entries of
+[the memory decisions](memory.decisions.md) and
+[the retrieval decisions](memory-stage-5-retrieval.decisions.md), each
+amended "confirmation review"):
+
+1. *Binder tie-break (high).* "I live in Boston. My therapist in Boston says
+   the panic attacks are getting worse." cited the therapist sentence (the
+   latest qualifying one; a possessive "my" counted as the owner), a
+   Workspace search for "home city" received it, and after retirement "I live
+   in Boston." came back unlabelled. The oncologist, divorce-lawyer and
+   "My manager at Initech put me on a performance plan" variants did the
+   same, and a retire request "Forget that I live in Boston. My therapist in
+   Boston says..." leaked through operation history.
+2. *Strong single match (medium-high).* Requests that were not about the
+   owner injected private messages through one rare shared word
+   ("Explain technical debt to the new engineers." → credit card debt; an
+   anxiety poem → a therapist message; a custody playlist → a divorce
+   lawyer), and filler removal turned "Do I need to use a VPN for the bank?"
+   into [vpn, bank], which matched the overdrawn-account message.
+3. *Newer statements (medium).* Any content word between the cue and the
+   value blocked the link ("I no longer live in Boston.", "I quit my job at
+   Initech"), while someone else's update linked ("My ex left Boston.", "My
+   sister said, Boston is no longer an option.", "My dad dropped
+   Verizon.") and, being newer, took both companion slots.
+4. *Plain answers Evie-proposed (medium).* A later negated clause ("I live
+   in Boston and I don't plan to move.", "Alex works at Initech and doesn't
+   like it.") and terse answers ("Boston.", "Teal, please.", "No, it's
+   Chicago.", "Chicago, not Boston.") lost owner authority.
+5. *Others' words as the owner's (medium-low).* "My sister is vegetarian.",
+   "My friend said 'I live in Boston'.", "If I lived in Boston, I'd take the
+   T.", "I wish I lived in Boston.", "I left Boston for good.", "I used to
+   live in Boston." and the double negation "It's not that I don't live in
+   Boston." (denied) kept owner authority.
+6. *Review reason (medium-low).* A Global compiler review edit's free-text
+   reason ("Keep it; my oncologist approved cocoa during chemo.") showed
+   verbatim to a project reader in operation history.
+
+One deterministic clause and subject analysis
+(`internal/eviedb/retrieval_wording_clauses.go`) now serves both the source
+binder and the M2/M3 wording rules, so they agree: clause boundaries
+(including "and"/"but" before a new subject or verb, quotation marks and
+reporting verbs), reported speech, conditional, wish, future and question
+markers, per-clause negation scope, change words, and the clause's subject
+(the owner; someone else such as "my sister", "my therapist", "our team",
+"the doctor", "my dad's"; the Claim's own words; or nobody in particular).
+Every rule is a heuristic and is designed to fail in the safe direction:
+unsure authority is Evie-proposed (approval is still required; only the label
+changes), an unsure newer statement is not linked, automatic recall injects
+nothing on one shared word unless the request recalls something about the
+owner (the model can still search), the binder prefers the shortest
+qualifying span before the latest, and operation history blanks free text
+that cites no value outside the scope it was written in.
+
+**Corpus v4.** `memory-scale-replay-v4` (seed and report version 4
+unchanged; every addition is a fixed scenario session, so the generated
+filler history is unchanged) adds:
+
+- *Strong-match privacy probes* (family `privacy`): "Explain technical debt
+  to the new engineers.", "Write a short poem about anxiety for my
+  newsletter.", "Suggest a playlist for a custody handover drive.", "What
+  were the results of the run today?" and "Do I need to use a VPN for the
+  bank?", with ordinary messages that make every other word of each request
+  known to history (topics tolerated by the probe) and private messages
+  sharing its rarest word: credit card debt and an overdrawn bank account
+  (marked private, topic `money`), a therapist (health), a divorce lawyer
+  (relationship); the run probe uses the existing blood-test needle.
+- *M3 owner and third-party updates:* a new Claim `cloud storage: Dropbox`
+  ("Remember that I use Dropbox for cloud storage.") with the update "I no
+  longer use Dropbox." (a link check, probe `storage`); "My ex left Boston."
+  and "My sister said, Boston is no longer an option." after the real
+  `home_city` update (over-link checks); "My dad dropped Verizon." after the
+  carrier update (an over-link check).
+- *M2:* "My dad's favorite coffee shop is Blue Bottle." (over-flag checks on
+  `coffee` and `blue_bottle`).
+
+The binder cases (defects 1, 4, 5) and the review reason (defect 6) cannot
+be scored by this instrument, which records item keys, links and status, not
+source authority or source text (see Stage 14). They are table and
+end-to-end tests: `TestOwnerSpanBindingFollowsTheClauseSubject` and
+`TestOwnerSpanBindingForEntityClaimsFollowsTheClauseSubject`
+(`semantic_source_binding_test.go`), `TestWordingRulesFollowTheClauseSubject`
+(`retrieval_wording_test.go`), `TestRelevanceFloorThresholds`
+(`retrieval_relevance_test.go`), `TestOperationHistoryNarrowsARequestToTheOwnersSentence`
+and `TestOperationHistoryBlanksFreeTextOutsideItsScope`
+(`semantic_operation_history_test.go`),
+`TestCompilerReviewReasonIsNotShownOutsideItsScope`
+(`candidate_review_reason_narrowing_test.go`), and through real agent turns
+`TestRememberIgnoresLaterSentencesAboutSomeoneElse` and
+`TestTerseOwnerAnswersKeepOwnerAuthority` (`memory_authority_test.go`),
+`TestNewerOwnerStatementFollowsTheClauseSubject` and the extended
+`TestThirdPartyMentionOfRetiredValueIsNotFlagged`
+(`retrieval_currency_test.go`), and
+`TestAutomaticMemoryRecallStrongSingleMatchNeedsAPersonalRecall` and the
+extended `TestAutomaticRecallPlanGatesEarlierTopics`
+(`retrieval_automatic_relevance_test.go`). Each uses the reviewer's exact
+messages and failed before the fix.
+
+"Before" is the final-pass code (93bbe1a) on corpus v4; the v3 numbers above
+are not directly comparable (corpus v4 adds 1 automatic required item and
+14 stale checks). Default tier, before → after (unchanged cells show one
+value):
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 79 → 76 | 14 → 8 | 3 → 0 | 0.8228 → 0.8947 | 29/34 |
+| automatic | privacy | 13 → 9 | 9 → 4 | 3 → 0 | 0.3077 → 0.5556 | n/a |
+| automatic | stale | 36 → 37 | 1 → 0 | 0 | 0.9722 → 1.0000 | 12/13 |
+| automatic | one-word answer | 9 | 0 | 0 | 1.0000 | 4/5 |
+| automatic | low-content | 0 | 0 | 0 | n/a | n/a |
+| automatic | follow-up | 6 | 2 | 0 | 0.6667 | 2/3 |
+| automatic | relevant | 15 | 2 | 0 | 0.8667 | 11/11 |
+| memory_search | all | 23 → 22 | 2 → 0 | 0 | 0.9130 → 1.0000 | 14/14 |
+| memory_search_conversations | all | 119 | 22 | 2 | 0.8151 | 10/12 |
+
+Large tier, before → after:
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 107 → 108 | 26 → 22 | 10 → 8 | 0.7570 → 0.7963 | 31/34 |
+| automatic | privacy | 18 | 12 → 9 | 6 → 4 | 0.3333 → 0.5000 | n/a |
+| automatic | stale | 39 → 40 | 4 → 3 | 2 | 0.8974 → 0.9250 | 12/13 |
+| automatic | one-word answer | 10 | 0 | 0 | 1.0000 | 4/5 |
+| automatic | low-content | 0 | 0 | 0 | n/a | n/a |
+| memory_search | all | 25 → 24 | 3 → 1 | 0 | 0.8800 → 0.9583 | 14/14 |
+| memory_search_conversations | all | 209 | 30 | 5 | 0.8565 | 36/36 |
+
+Stale-fact checks (both tiers): 16 misses of 68 → 2 of 68 (the two
+`m.moved` checks, which share no word with the Claim), 10/10 controls, no
+scope leaks.
+
+| Target | Default before → after | Large before → after |
+| --- | --- | --- |
+| M1: low-content follow-ups inject nothing unwanted | yes | yes |
+| M1: privacy probes inject no private item | no → yes (3 → 0) | no → no (6 → 4) |
+| M1: one-word answers recalled | no (4/5, unchanged) | no (4/5, unchanged) |
+| M2: no over-flagging | no → yes (4 → 0 of 21) | no → yes (4 → 0 of 21) |
+| M3: different wording detected | no → no (7 → 2 of 10) | no → no (7 → 2 of 10) |
+| M3: no over-linking | no → yes (5 → 0 of 18) | no → yes (5 → 0 of 18) |
+| M2 corrected, M2 restated, M4 drift, M7 dense | yes | yes |
+
+Every per-probe change in both tiers is a targeted probe: the debt, anxiety
+and custody privacy probes no longer inject their private message (the run
+probe did not leak in this corpus before either); the VPN probe recalls "The
+VPN client needs an update." instead of the bank Claims' source messages;
+`home_city` (automatic and `memory_search`) delivers the real update "Big
+news: ... Boston is behind me." linked instead of the ex and sister
+sentences; `carrier` keeps "I finally dropped Verizon..." linked and no
+longer links "My dad dropped Verizon."; `storage` links "I no longer use
+Dropbox."; and the dad's coffee shop is no longer flagged. All other probes,
+including the four recalled one-word answers (passport, parked car, cat's
+vet, wifi password), deliver exactly the same items. Relative to the
+committed v3 report, the original 33 automatic required items are still
+28/33 recalled; the 34th is the new `storage` Claim.
+
+The large tier's privacy target stays unmet only through dense hits, which
+the lexical floor does not gate (Stage 12): the concept-hash test embedder
+scores "energy rating" close to "low energy" (two items, unchanged) and
+"short poem" close to the private "I'm feeling a bit lonely this week. Keep
+it short." (two items; the second replaced the lexical therapist leak).
+
+**Frozen 24-case lexical workloads** (`EVIE_MEMORY_INTEGRATED_LEXICAL=1`),
+before and after, with identical per-case lines: held-out 22/28 automatic,
+26/28 with deeper search, 19 non-gold of 48 first-dispatch items;
+development 24/27 automatic (within the recorded dev11 random-ID tie of
+23–24), 25/27 with deeper search, 19 non-gold of 51. The workloads' 62
+accepted records bind exactly as before (checked by binding every record's
+text with the old and new rules).
+
+Remaining misses and known limits (these are heuristics; the residual cases
+below were probed and are recorded, not fixed):
+
+- *Binder.* "I lived in Boston until 2019." and "When I lived in Boston,
+  ..." keep owner authority (past tense is not detected, and "until" is how
+  an owner states a Claim with an ended valid time, as the frozen workloads
+  do); "I used to live in Boston." is Evie-proposed even for a Claim whose
+  valid time has ended (the binder does not see valid time); "I have one
+  kid... wait, no, I have three kids." cites the first sentence for 1;
+  "Alex doesn't work at Globex; he works at Initech." is Evie-proposed
+  (no pronoun resolution); first-person mentions such as "My car is in
+  Boston." or "My plumber lives in Boston." (a person outside the closed
+  list) still qualify; a memory cue still qualifies a topic mention
+  ("Remember this article about Boston.", "Save this page: ..."); spans are
+  whole sentences, so another clause of the stating sentence is quoted with
+  it ("Restore my favorite color navy, my rehab counselor likes it.").
+- *M3.* "We left Boston for a week of vacation." links (a trip and a move
+  share their words); "My home is Chicago now." shares only one of the two
+  `home city` words and does not link; "I moved to Chicago last month and
+  I'm still unpacking boxes." shares no word; relation words are a closed
+  list ("I no longer sing in the Riverside choir" does not link).
+- *M1.* "What's my sister's birthday again?" still misses its needle (the
+  final pass's rarer-half reason). A personal recall request can still be
+  explained by a rare word it shares with an unrelated private message.
+  Dense excerpts are not gated by the lexical floor.
 
 ## Decisions and spec relationship
 

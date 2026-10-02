@@ -1,6 +1,7 @@
 package eviedb
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -11,8 +12,10 @@ import (
 // own words: its saved value, its Predicate token and labels, and a non-owner
 // subject's canonical name. The only fixed language data are the closed
 // English lists below (change cues, first-person pronouns, abbreviations that
-// do not end a sentence, function words) and relevanceKey's inflection
-// folding. No topic dictionary or learned score is involved.
+// do not end a sentence, function words, relation words), those of the clause
+// analysis shared with the owner-span binder (retrieval_wording_clauses.go),
+// and relevanceKey's inflection folding. No topic dictionary or learned score
+// is involved.
 
 // Change cues say a stated fact differs from before. They qualify a later
 // statement that names a saved value or the Predicate's words.
@@ -21,6 +24,7 @@ var wordingChangeCues = map[string]bool{
 	"moved": true, "moving": true, "relocated": true, "relocating": true,
 	"switched": true, "switching": true, "changed": true, "changing": true,
 	"left": true, "quit": true, "quitting": true, "dropped": true,
+	"stopped": true, "stopping": true, "cancelled": true, "canceled": true,
 	"former": true, "formerly": true, "previously": true,
 }
 
@@ -61,6 +65,22 @@ var wordingLightWords = map[string]bool{
 	"i": true, "me": true, "my": true, "we": true, "us": true, "our": true,
 }
 
+// A cue also governs the Claim's words across an ordinary verb of living,
+// working or using, and a noun for the owner's tie to it (confirmation
+// review): "I no longer live in Boston", "I stopped using Verizon", "I quit
+// my job at Initech". The clause's subject is checked separately, so "My boss
+// quit his job at Initech" still does not link. "Left my umbrella in Boston"
+// and "switched hotels in Boston" do not qualify.
+var wordingRelationWords = setOf(
+	"live", "lives", "living", "lived", "work", "works", "working", "worked", "use", "uses", "using", "used",
+	"stay", "stays", "staying", "stayed", "shop", "shops", "shopping", "shopped", "bank", "banks", "banking", "banked",
+	"go", "goes", "going", "went", "attend", "attends", "attending", "attended", "rent", "rents", "renting", "rented",
+	"see", "sees", "seeing", "saw", "study", "studies", "studying", "studied", "belong", "belongs", "belonging", "belonged",
+	"call", "calls", "calling", "called", "have", "has", "having", "had", "based", "reside", "resides", "residing", "resided",
+	"job", "role", "position", "post", "contract", "plan", "subscription", "membership", "account", "service", "lease",
+	"apartment", "flat", "house", "home", "place", "office", "company", "firm",
+)
+
 // A period after these words (or after a single letter) does not end a
 // sentence, so "Dr. Okafor" stays one value.
 var wordingAbbreviations = map[string]bool{"dr": true, "mr": true, "mrs": true, "ms": true, "st": true, "jr": true, "sr": true, "prof": true, "vs": true, "etc": true, "mt": true}
@@ -73,15 +93,24 @@ var wordingFunctionWords = map[string]bool{
 
 type wordingWord struct {
 	text, key string
-	// clause numbers the comma-, colon-, dash- or parenthesis-separated
-	// part of the sentence the word is in.
+	// start and end are the word's byte range in the analysed text.
+	start, end int
+	// clause numbers the clause of the sentence the word is in
+	// (retrieval_wording_clauses.go).
 	clause int
+	// quoted: inside quotation marks; apostrophe: directly after an
+	// apostrophe that follows a letter ("s" of "Sam's", "t" of "don't");
+	// capital: written with a leading capital.
+	quoted, apostrophe, capital bool
 }
 
 type wordingSentence struct {
 	start, end int
 	words      []wordingWord
+	clauses    []wordingClause
 	question   bool
+	// breaks[i]: punctuation or a quotation mark comes before word i.
+	breaks []bool
 }
 
 func wordingWords(text string) []wordingWord {
@@ -92,41 +121,16 @@ func wordingWords(text string) []wordingWord {
 	return words
 }
 
-// wordingClauseWords is wordingWords with clause numbers. Clauses end at
-// ',', ':', '(', ')', an en or em dash, or a hyphen with space on both sides
-// ("T-Mobile" stays one clause).
-func wordingClauseWords(text string) []wordingWord {
-	var words []wordingWord
-	clause, start := 0, 0
-	flush := func(end int) {
-		for _, word := range wordingWords(text[start:end]) {
-			word.clause = clause
-			words = append(words, word)
-		}
-		clause++
-	}
-	for i, r := range text {
-		boundary := strings.ContainsRune(",:()–—", r)
-		if r == '-' {
-			boundary = i > 0 && text[i-1] == ' ' && i+1 < len(text) && text[i+1] == ' '
-		}
-		if boundary {
-			flush(i)
-			start = i + utf8.RuneLen(r)
-		}
-	}
-	flush(len(text))
-	return words
-}
-
 // wordingSentences splits text at '.', '!', '?', ';' or a line break that is
-// followed by whitespace or the end. Byte ranges index the original text.
+// followed by whitespace or the end, and each sentence into clauses
+// (retrieval_wording_clauses.go). Byte ranges index the original text.
 func wordingSentences(text string) []wordingSentence {
 	var sentences []wordingSentence
 	start := 0
+	quoted := wordingQuoted(text)
 	flush := func(end int, question bool) {
-		if words := wordingClauseWords(text[start:end]); len(words) > 0 {
-			sentences = append(sentences, wordingSentence{start: start, end: end, words: words, question: question})
+		if sentence := analyseSentence(text, start, end, question, quoted); len(sentence.words) > 0 {
+			sentences = append(sentences, sentence)
 		}
 		start = end
 	}
@@ -351,6 +355,23 @@ func (w claimWording) predicateWord(key string) bool {
 	return false
 }
 
+// possessiveOwns reports whether the possessive at words[i] owns the Claim's
+// words: its noun phrase (up to the first verb or function word, and before
+// any possessive "'s") holds a Predicate or value word. "My dad's favorite
+// coffee shop" is dad's; in "my flight left Boston" the phrase is "flight".
+func (w claimWording) possessiveOwns(words []wordingWord, i int) bool {
+	end, possessive := phraseEnd(words, i+1, min(len(words), i+1+wordingPossessiveReach))
+	if possessive >= 0 {
+		return false
+	}
+	for _, word := range words[i+1 : end] {
+		if w.claimWord(word.key) {
+			return true
+		}
+	}
+	return false
+}
+
 // ownerSpeaks reports a first-person word that speaks for the owner: a
 // pronoun, or a possessive that owns the Claim's words ("my home city", not
 // "my sister").
@@ -359,13 +380,8 @@ func (w claimWording) ownerSpeaks(words []wordingWord) bool {
 		if !wordingFirstPerson[word.text] {
 			continue
 		}
-		if !wordingFirstPersonPossessives[word.text] {
+		if !wordingFirstPersonPossessives[word.text] || w.possessiveOwns(words, i) {
 			return true
-		}
-		for j := i + 1; j < len(words) && j <= i+wordingPossessiveReach; j++ {
-			if w.claimWord(words[j].key) {
-				return true
-			}
 		}
 	}
 	return false
@@ -379,34 +395,63 @@ func (w claimWording) thirdParty(words []wordingWord) bool {
 		if wordingThirdPerson[word.text] {
 			return true
 		}
-		if !wordingFirstPersonPossessives[word.text] {
-			continue
-		}
-		owns := false
-		for j := i + 1; j < len(words) && j <= i+wordingPossessiveReach; j++ {
-			owns = owns || w.claimWord(words[j].key)
-		}
-		if !owns {
+		if wordingFirstPersonPossessives[word.text] && !w.possessiveOwns(words, i) {
 			return true
 		}
 	}
 	return false
 }
 
-// subjectSpeaks is the subject requirement for one clause of a sentence. For
-// the owner: the clause speaks for the owner in the first person, or it names
-// no third party and the sentence does ("I moved to Chicago, so Boston is no
-// longer home"). For another subject: the sentence names it.
+// vocabulary is the Claim's words for the shared clause analysis.
+func (w claimWording) vocabulary() wordingVocabulary {
+	return wordingVocabulary{
+		owner:     w.owner,
+		predicate: func(word wordingWord) bool { return w.predicateWord(word.key) },
+		claim: func(word wordingWord) bool {
+			if w.claimWord(word.key) {
+				return true
+			}
+			for _, subject := range w.subjects {
+				if slices.Contains(subject, word.key) {
+					return true
+				}
+			}
+			return false
+		},
+	}
+}
+
+// subjectSpeaks is the subject requirement for one clause of a sentence,
+// using the clause analysis the owner-span binder also uses. A reported or
+// conditional clause never speaks for the subject. For the owner: the
+// clause's subject is the owner ("I", "my home city"); or its subject is the
+// Claim's own words or nobody in particular, it names no third party, and
+// the owner speaks in it ("Boston is behind me") or in another clause of the
+// sentence ("I moved to Chicago, so Boston is no longer home"). Someone
+// else's clause ("my sister", "our team", "the train") never does. For
+// another subject: the sentence names it.
 func (w claimWording) subjectSpeaks(s wordingSentence, clause int) bool {
+	c := s.clauses[clause]
+	if c.reported || c.conditional {
+		return false
+	}
 	if !w.owner {
 		return w.subjectNamedIn(s)
 	}
+	v := w.vocabulary()
+	switch s.subject(clause, v) {
+	case subjectOwner:
+		return true
+	case subjectOther, subjectPronoun:
+		return false
+	}
 	words := s.clauseWords(clause)
-	return w.ownerSpeaks(words) || !w.thirdParty(words) && w.ownerSpeaks(s.words)
+	return !w.thirdParty(words) && (w.ownerSpeaks(words) || s.ownerSubjectClause(v))
 }
 
 // governs reports whether a cue and the Claim words at target sit in one
-// clause with only light words, numbers, cue words or Claim words between.
+// clause with only light words, numbers, cue words, Claim words or relation
+// words between.
 func (w claimWording) governs(s wordingSentence, cue, target wordingSpan) bool {
 	if s.words[cue.start].clause != s.words[target.start].clause || s.words[cue.end].clause != s.words[target.end].clause {
 		return false
@@ -421,7 +466,7 @@ func (w claimWording) governs(s wordingSentence, cue, target wordingSpan) bool {
 			return false
 		}
 		number := strings.IndexFunc(word.text, func(r rune) bool { return !unicode.IsDigit(r) }) < 0
-		if !wordingLightWords[word.text] && !number && !wordingChangeCues[word.text] && word.text != wordingNoveltyCue && !w.claimWord(word.key) {
+		if !wordingLightWords[word.text] && !number && !wordingChangeCues[word.text] && word.text != wordingNoveltyCue && !w.claimWord(word.key) && !wordingRelationWords[word.text] {
 			return false
 		}
 	}
@@ -480,10 +525,14 @@ func (a wordingStrength) stronger(b wordingStrength) bool {
 // saved value ("Boston is behind me", "I dropped Verizon"), or a change or
 // novelty cue governs one of the Predicate's words when the sentence has
 // min(2, n) of a Predicate group's n words ("my shoes are a size 10 now",
-// "my new barber"), and the subject speaks in the clause carrying that cue.
-// "I left my umbrella in Boston" (the cue governs the umbrella) and "My sister
-// moved to Boston now" (a third-party subject) are not updates. It proposes a
-// candidate discrepancy only; it never accepts, corrects or supersedes memory.
+// "my new barber"), and the subject speaks in the clause carrying that cue,
+// which is not a question, conditional or reported speech. A relation word
+// may sit between the cue and the Claim's words ("I no longer live in
+// Boston", "I quit my job at Initech"). "I left my umbrella in Boston" (the
+// cue governs the umbrella), "My sister moved to Boston now" and "Our team
+// left Boston" (someone else's subject) and "My sister said, Boston is no
+// longer an option" (reported) are not updates. It proposes a candidate
+// discrepancy only; it never accepts, corrects or supersedes memory.
 func (w claimWording) assess(s wordingSentence) wordingStrength {
 	var strength wordingStrength
 	best, covered := w.predicateWordsIn(s)
@@ -509,6 +558,9 @@ func (w claimWording) assess(s wordingSentence) wordingStrength {
 		}
 	}
 	for _, cue := range s.cues() {
+		if c := s.clauses[s.words[cue.start].clause]; c.question {
+			continue
+		}
 		governed := false
 		if !cue.novelty {
 			for _, value := range values {

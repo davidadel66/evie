@@ -38,7 +38,8 @@ import (
 //     its US numeric form ("6/3"); a stated year must agree. A datetime
 //     matches by its UTC calendar date.
 //   - A number word ("one", "two") counts only in a sentence that also holds
-//     one of the Predicate's words; digits count anywhere.
+//     one of the Predicate's words, or in a short answer; digits count
+//     anywhere.
 //   - A boolean has no words of its own: it binds to a declarative sentence
 //     containing min(2, n) of a Predicate wording's n content words, in the
 //     first person when the owner is the subject.
@@ -46,25 +47,43 @@ import (
 //     message. Owner, Evie and Context anchors are implied by the speaker.
 //
 // Several sentences may hold the value; only one that states the Claim
-// qualifies (harness review final pass). A qualifying window
+// qualifies (harness review final pass, confirmation review). Clauses, their
+// subjects, negation scope, reported speech and conditionals come from the
+// clause analysis shared with the wording rules
+// (retrieval_wording_clauses.go). Each clause holding the value must
 //
-//   - agrees in polarity: an affirmed value never binds where the clause
-//     holding it is negated ("not", "never", "no", "n't"; "don't forget" and
-//     "never forget" are not negations), and a denied or false value binds
-//     only to a negated clause. A clause ends at , ; : ( ) or a dash, at
-//     "but", "although", "though", "however", "whereas", "yet", "because",
-//     "since", "unless", "until" or "while", or at "so" before a pronoun;
-//   - holds one of the Predicate's words, names the subject (the first
-//     person for the owner; an ordinary Entity subject is already a required
-//     name), or carries an explicit memory cue ("remember", "note", "save",
-//     "memorize", "correction"). A boolean or other wordless value needs the
-//     first person (owner subject) and a statement, not a question.
+//   - be a statement: not quoted or reported ("My friend said 'I live in
+//     Boston'", "The doctor says I'm allergic"), not conditional, wished or
+//     future ("If I lived in Boston", "I wish", "I might", "I'd"), and not a
+//     question;
+//   - agree in polarity: an affirmed value never binds where its clause is
+//     negated ("not", "never", "no", "n't", "hardly"; "don't forget", "never
+//     forget", "not only" and "no doubt" are not negations; a "not" right
+//     after the value negates only what follows, "Cambridge not Boston"), a
+//     denied or false value binds only to a negated clause, and a clause with
+//     two negations ("It's not that I don't live in Boston") binds neither;
+//   - not say an affirmed value no longer holds ("used to", "no longer",
+//     "left", "quit", "dropped", "former", "moved from");
+//   - for an owner Claim, not be about someone else: its subject is not
+//     "he", "she", "you", "my sister", "my therapist", "our team", "the
+//     doctor", "Selma likes" or a possessive chain ("my dad's").
+//
+// A window also needs one of the Predicate's words, the owner speaking (the
+// owner as the clause's subject, or a first-person word that is not someone
+// else's possessive, such as "me" or "my bank"), an explicit memory cue
+// ("remember", "note", "save", "memorize", "correction"), or, for the whole
+// message, a short answer: one sentence of at most bindingTerseWords words
+// whose other words are answer words or a negated clause ("Boston.", "Teal,
+// please.", "No, it's Chicago.", "Chicago, not Boston."). A boolean or other
+// wordless owner value needs the owner speaking.
 //
 // Among qualifying windows the narrowest wins, then the one with the most
-// Predicate words, then the first person (owner subject), then a statement
-// over a question, then a memory cue, then the latest in the message. With
-// none, the value is Evie-proposed rather than bound to an unrelated
-// sentence.
+// Predicate words, then the owner as subject over a first-person word or a
+// short answer, then a memory cue, then the shortest span (so the least
+// extra text is quoted), then the latest in the message. With none, the
+// value is Evie-proposed rather than bound to an unrelated sentence. Every
+// rule is a heuristic and fails safe: when unsure, the value is
+// Evie-proposed, which still needs approval and costs only the label.
 //
 // The span is the chosen window: the sentence containing the value (every
 // sentence it touches, when the value itself runs across sentences), or for
@@ -397,9 +416,14 @@ func bindingTokensIn(text string, start, end int) []bindingToken {
 
 // quantityContext drops a number-word occurrence ("one", "two") whose
 // sentence holds none of the Predicate's words: "No one told me" does not
-// state a floor of 1. Digits are deliberate and always count.
+// state a floor of 1. Digits are deliberate and always count, and so does a
+// number word in a short answer ("Three, please."), which the window must
+// still find to be one.
 func quantityContext(text string, found bindingOccurrences, predicate bindingPredicate) bindingOccurrences {
 	sentences := wordingSentences(text)
+	if len(sentences) == 1 && len(sentences[0].words) <= bindingTerseWords {
+		return found
+	}
 	kept := found[:0]
 	for _, occurrence := range found {
 		spelled := false
@@ -463,87 +487,200 @@ func literalOccurrences(text string, literal memory.TypedLiteral, predicate bind
 }
 
 // Closed English lists for choosing the sentence that states a Claim. No
-// topic dictionary or learned score is involved.
+// topic dictionary or learned score is involved. Clauses, negation scope,
+// reported speech, conditionals, change words and the clause's subject come
+// from the analysis shared with the wording rules
+// (retrieval_wording_clauses.go).
 var (
-	bindingNegations = map[string]bool{
-		"not": true, "never": true, "no": true, "cannot": true, "nor": true, "neither": true,
-		"dont": true, "doesnt": true, "didnt": true, "isnt": true, "arent": true, "wasnt": true, "werent": true,
-		"wont": true, "cant": true, "havent": true, "hasnt": true, "hadnt": true, "wouldnt": true, "shouldnt": true, "couldnt": true,
-	}
-	bindingClauseWords = map[string]bool{"but": true, "although": true, "though": true, "however": true, "whereas": true, "yet": true, "because": true, "since": true, "unless": true, "until": true, "while": true}
 	// "so" starts a clause only before its subject ("so I do not have to"),
 	// not as an adverb ("not so sure").
-	bindingSoSubjects   = map[string]bool{"i": true, "we": true, "you": true, "he": true, "she": true, "they": true, "it": true, "that": true}
-	bindingMemoryCues   = map[string]bool{"remember": true, "note": true, "save": true, "memorize": true, "memorise": true, "correction": true}
-	bindingFirstPerson  = map[string]bool{"i": true, "me": true, "my": true, "mine": true, "myself": true, "we": true, "us": true, "our": true, "ours": true, "im": true, "ive": true}
-	bindingClauseMarks  = []rune{',', ';', ':', '(', ')', '—', '–'}
-	bindingApostrophes  = []string{"'", "’"}
-	bindingForgetMarker = "forget"
+	bindingSoSubjects = map[string]bool{"i": true, "we": true, "you": true, "he": true, "she": true, "they": true, "it": true, "that": true}
+	bindingMemoryCues = map[string]bool{"remember": true, "note": true, "save": true, "memorize": true, "memorise": true, "correction": true}
+	// The other words of a short answer: "It's Boston.", "Teal, please.",
+	// "No, it's Chicago.", "Actually Chicago.", "Fix that: Chicago."
+	bindingAnswerWords = setOf("it", "its", "s", "is", "was", "that", "thats", "the", "a", "an", "please", "thanks", "thank", "you", "yes", "yeah",
+		"yep", "no", "nope", "actually", "correction", "wrong", "fix", "just", "ok", "okay", "sure", "oh", "so", "well", "now", "still", "definitely",
+		"mine", "here", "um", "hmm", "right")
 )
 
-func isClauseMark(content string, at int) (int, bool) {
-	r, size := utf8.DecodeRuneInString(content[at:])
-	for _, mark := range bindingClauseMarks {
-		if r == mark {
-			// A comma or period inside a number ("1,500") is not a boundary.
-			if r == ',' && at > 0 && at+1 < len(content) && isASCIIDigit(content[at-1]) && isASCIIDigit(content[at+1]) {
-				return size, false
+// A message of at most this many words, one sentence and one value, whose
+// other words are answer words, is the owner answering with the value.
+const bindingTerseWords = 6
+
+// vocabulary is the Claim's words for the shared clause analysis: its
+// Predicate words, and the words of every required item's occurrences (the
+// value, or an Entity's name).
+func (c bindingClaim) vocabulary() wordingVocabulary {
+	predicate := func(word wordingWord) bool {
+		keys := bindingKeySet(word.text)
+		for _, group := range c.predicate {
+			for _, groupKeys := range group {
+				if keysIntersect(keys, groupKeys) {
+					return true
+				}
 			}
-			return size, true
 		}
+		return false
 	}
-	return size, false
+	return wordingVocabulary{owner: c.ownerSubject, predicate: predicate, claim: func(word wordingWord) bool {
+		if predicate(word) {
+			return true
+		}
+		for _, need := range c.needs {
+			for _, occurrence := range need {
+				if word.start >= occurrence[0] && word.end <= occurrence[1] {
+					return true
+				}
+			}
+		}
+		return false
+	}}
 }
 
-// clauseNegated reports whether the clause holding occurrence, inside the
-// sentences [low,high), is negated. "don't forget" and "never forget" are
-// memory cues, not negations.
-func clauseNegated(content string, low, high int, occurrence [2]int) bool {
-	start, end := low, high
-	for at := low; at < occurrence[0]; {
-		size, mark := isClauseMark(content, at)
-		if mark {
-			start = at + size
-		}
-		at += size
-	}
-	for at := occurrence[1]; at < high; {
-		size, mark := isClauseMark(content, at)
-		if mark {
-			end = at
-			break
-		}
-		at += size
-	}
-	tokens := bindingTokensIn(content, low, high)
-	for i, token := range tokens {
-		word := strings.ToLower(content[token.start:token.end])
-		if !bindingClauseWords[word] && !(word == "so" && i+1 < len(tokens) && bindingSoSubjects[strings.ToLower(content[tokens[i+1].start:tokens[i+1].end])]) {
-			continue
-		}
-		if token.end <= occurrence[0] && token.end > start {
-			start = token.end
-		}
-		if token.start >= occurrence[1] && token.start < end {
-			end = token.start
+// occurrenceStates checks the clauses of sentence s holding an occurrence. A
+// clause states the Claim only if it is not reported, conditional or a
+// question; holds at most one negation that reaches the occurrence (two make
+// it unsure, so neither polarity binds); is not negated or a change ("used
+// to", "left", "no longer") for an affirmed value; and, for an owner Claim,
+// is not about someone else. ownerSubject reports that the owner is the
+// subject of every such clause.
+func (c bindingClaim) occurrenceStates(s wordingSentence, occurrence [2]int, v wordingVocabulary) (ok, negated, ownerSubject bool) {
+	from, to := -1, -1
+	for i, word := range s.words {
+		if word.end > occurrence[0] && word.start < occurrence[1] {
+			if from < 0 {
+				from = i
+			}
+			to = i + 1
 		}
 	}
-	for i, token := range tokens {
-		if token.start < start || token.end > end {
-			continue
+	if from < 0 {
+		return true, false, true // a separator only; the touched words decide
+	}
+	ownerSubject = true
+	for n := s.words[from].clause; n <= s.words[to-1].clause; n++ {
+		clause := s.clauses[n]
+		if clause.reported || clause.conditional || clause.question {
+			return false, false, false
 		}
-		word := strings.ToLower(content[token.start:token.end])
-		negation := bindingNegations[word]
-		if word == "t" && i > 0 && strings.HasSuffix(strings.ToLower(content[tokens[i-1].start:tokens[i-1].end]), "n") {
-			for _, apostrophe := range bindingApostrophes {
-				negation = negation || content[tokens[i-1].end:token.start] == apostrophe
+		count := s.negations(n, from, to)
+		if count > 1 || !c.negative && (count == 1 || clause.change) {
+			return false, false, false
+		}
+		negated = negated || count == 1
+		switch s.subject(n, v) {
+		case subjectOther:
+			return false, false, false
+		case subjectPronoun:
+			if c.ownerSubject {
+				return false, false, false
+			}
+			ownerSubject = false
+		case subjectOwner:
+		default:
+			ownerSubject = false
+		}
+	}
+	return true, negated, ownerSubject
+}
+
+// pickOccurrences chooses, for each required item, one occurrence inside
+// sentences [first,last] whose clauses state the Claim, preferring one with
+// the owner as subject. An affirmed Claim needs every chosen clause
+// un-negated; a negative one needs at least one negated.
+func (c bindingClaim) pickOccurrences(sentences []wordingSentence, first, last int, v wordingVocabulary) (chosen [][2]int, ownerSubject, ok bool) {
+	low, high := sentences[first].start, sentences[last].end
+	chosen = make([][2]int, 0, len(c.needs))
+	negated := false
+	ownerSubject = true
+	for _, need := range c.needs {
+		picked, found, pickedNegated, pickedOwner := [2]int{}, false, false, false
+		for _, occurrence := range need {
+			if occurrence[0] < low || occurrence[1] > high {
+				continue
+			}
+			states, isNegated, isOwner := true, false, true
+			for _, sentence := range sentences[first : last+1] {
+				if occurrence[1] <= sentence.start || occurrence[0] >= sentence.end {
+					continue
+				}
+				sentenceOK, sentenceNegated, sentenceOwner := c.occurrenceStates(sentence, occurrence, v)
+				states, isNegated, isOwner = states && sentenceOK, isNegated || sentenceNegated, isOwner && sentenceOwner
+			}
+			if !states {
+				continue
+			}
+			better := !found || c.negative && isNegated && !pickedNegated || isNegated == pickedNegated && isOwner && !pickedOwner
+			if better {
+				picked, found, pickedNegated, pickedOwner = occurrence, true, isNegated, isOwner
 			}
 		}
-		if negation && !(i+1 < len(tokens) && strings.ToLower(content[tokens[i+1].start:tokens[i+1].end]) == bindingForgetMarker) {
-			return true
+		if !found {
+			return nil, false, false
+		}
+		chosen = append(chosen, picked)
+		negated = negated || pickedNegated
+		ownerSubject = ownerSubject && pickedOwner
+	}
+	return chosen, ownerSubject, !c.negative || negated
+}
+
+// ownerReference reports a first-person word in a clause that is neither
+// reported nor about someone else: "me" in "Wake me at 6:30", "my" in "Save
+// my bank: Chase". A possessive naming a person ("my sister") does not
+// count.
+func ownerReference(sentences []wordingSentence, v wordingVocabulary) bool {
+	for _, s := range sentences {
+		for n, clause := range s.clauses {
+			if clause.reported {
+				continue
+			}
+			if subject := s.subject(n, v); subject == subjectOther || subject == subjectPronoun {
+				continue
+			}
+			for i := clause.first; i < clause.last; i++ {
+				word := s.words[i].text
+				if wordingOwnerPronouns[word] {
+					return true
+				}
+				if word == "my" || word == "our" {
+					if _, other := s.possessiveOwner(i, clause.last, v); !other {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false
+}
+
+// terse reports a short answer whose content is the value: the message is
+// one sentence of at most bindingTerseWords words, not a question, and each
+// of its other words is an answer word or sits in a negated clause of its own
+// ("Chicago, not Boston."). It is the owner answering, so it binds as the
+// owner's statement (confirmation review).
+func (c bindingClaim) terse(sentences []wordingSentence, chosen [][2]int) bool {
+	if len(sentences) != 1 || len(c.needs) != 1 || c.explicit || len(chosen) != 1 {
+		return false
+	}
+	s := sentences[0]
+	if len(s.words) > bindingTerseWords || s.question {
+		return false
+	}
+	for _, word := range s.words {
+		if word.end > chosen[0][0] && word.start < chosen[0][1] || bindingAnswerWords[word.text] {
+			continue
+		}
+		clause := s.clauses[word.clause]
+		valueClause := false
+		for _, other := range s.words[clause.first:clause.last] {
+			valueClause = valueClause || other.end > chosen[0][0] && other.start < chosen[0][1]
+		}
+		if valueClause || s.negations(word.clause, len(s.words), len(s.words)+1) == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // bindingWindow is one candidate span: the sentences [first,last] and the
@@ -564,66 +701,37 @@ func (w bindingWindow) better(other bindingWindow) bool {
 	return false
 }
 
-// pickOccurrences chooses, for each required item, one occurrence inside
-// [low,high) whose clause agrees with the Claim's polarity. An affirmed Claim
-// needs every chosen clause un-negated; a negative one needs at least one
-// negated.
-func (c bindingClaim) pickOccurrences(content string, sentences []wordingSentence, low, high int) ([][2]int, bool) {
-	chosen := make([][2]int, 0, len(c.needs))
-	negated := false
-	for _, need := range c.needs {
-		picked, found, pickedNegated := [2]int{}, false, false
-		for _, occurrence := range need {
-			if occurrence[0] < low || occurrence[1] > high {
-				continue
-			}
-			first, last := sentenceIndex(sentences, occurrence[0]), sentenceIndex(sentences, occurrence[1]-1)
-			if first < 0 || last < first {
-				continue
-			}
-			isNegated := clauseNegated(content, sentences[first].start, sentences[last].end, occurrence)
-			if !c.negative && isNegated {
-				continue
-			}
-			if !found || c.negative && isNegated && !pickedNegated {
-				picked, found, pickedNegated = occurrence, true, isNegated
-			}
-		}
-		if !found {
-			return nil, false
-		}
-		chosen = append(chosen, picked)
-		negated = negated || pickedNegated
-	}
-	return chosen, !c.negative || negated
-}
-
 // window ranks the sentences [first,last] as the statement of the Claim, or
-// reports that they do not state it.
-func (c bindingClaim) window(content string, sentences []wordingSentence, first, last int) (bindingWindow, bool) {
-	low, high := sentences[first].start, sentences[last].end
-	chosen, ok := c.pickOccurrences(content, sentences, low, high)
+// reports that they do not state it. Rank, in order: fewer sentences, more
+// Predicate words, the owner as the clause's subject (2) or a first-person
+// word or short answer (1), a memory cue, a shorter span, then the later
+// position. Shorter before later is the privacy tie-break: the least extra
+// text is quoted (confirmation review).
+func (c bindingClaim) window(content string, sentences []wordingSentence, first, last int, v wordingVocabulary) (bindingWindow, bool) {
+	chosen, ownerSubject, ok := c.pickOccurrences(sentences, first, last, v)
 	if !ok {
 		return bindingWindow{}, false
 	}
+	low, high := sentences[first].start, sentences[last].end
 	tokens := bindingTokensIn(content, low, high)
-	firstPerson, cue := false, false
+	cue := false
 	for _, token := range tokens {
-		word := strings.ToLower(content[token.start:token.end])
-		firstPerson = firstPerson || bindingFirstPerson[word]
-		cue = cue || bindingMemoryCues[word]
+		cue = cue || bindingMemoryCues[strings.ToLower(content[token.start:token.end])]
 	}
-	declarative := true
-	for _, sentence := range sentences[first : last+1] {
-		declarative = declarative && !sentence.question
+	owner := 0
+	switch {
+	case ownerSubject:
+		owner = 2
+	case ownerReference(sentences[first:last+1], v), len(sentences) == 1 && c.terse(sentences, chosen):
+		owner = 1
 	}
-	subject := firstPerson || !c.ownerSubject
 	predicateWords := c.predicate.words(tokens)
-	if c.explicit && (!declarative || !subject) || predicateWords == 0 && !subject && !cue {
+	if c.ownerSubject && (c.explicit && owner == 0 || predicateWords == 0 && owner == 0 && !cue) {
 		return bindingWindow{}, false
 	}
+	start, end := trimSpan(content, low, high)
 	return bindingWindow{first: first, last: last, chosen: chosen, rank: [6]int{
-		-(last - first), predicateWords, boolRank(firstPerson && c.ownerSubject), boolRank(declarative), boolRank(cue), low,
+		-(last - first), predicateWords, owner, boolRank(cue), -(end - start), low,
 	}}, true
 }
 
@@ -649,13 +757,14 @@ func bindOwnerSource(content string, claim bindingClaim) ownerSourceBinding {
 		}
 	}
 	sentences := wordingSentences(content)
+	vocabulary := claim.vocabulary()
 	var best bindingWindow
 	found := false
 	consider := func(first, last int) {
 		if first < 0 || last < first {
 			return
 		}
-		if window, ok := claim.window(content, sentences, first, last); ok && (!found || window.better(best)) {
+		if window, ok := claim.window(content, sentences, first, last, vocabulary); ok && (!found || window.better(best)) {
 			best, found = window, true
 		}
 	}
@@ -901,7 +1010,13 @@ func narrowForeignWholeSourceLink(ctx context.Context, q semanticInspectionQuery
 //     message, compiler support or context) narrows to the sentence holding
 //     the value of the Claim it supports (a quoted Source Link's own Claim,
 //     else the inspected Claim), found with the owner-span rules, or to no
-//     text when there is no such Claim or sentence.
+//     text when there is no such Claim or sentence;
+//   - free text that cites no value (a compiler review edit's "reason", any
+//     "note" or "comment", and an approval card's review-only identity
+//     details, "example_claim" and "aliases") stays only for a reader in the
+//     Context Scope it was written in (the nearest enclosing scope key; for
+//     identity details, the operation's own Source scope) or its session,
+//     and is otherwise blank (confirmation review).
 //
 // The stored operation is unchanged; only its rendering is narrowed.
 
@@ -918,12 +1033,20 @@ type jsonMember struct {
 	value json.RawMessage
 }
 
+// Free-text members of operation JSON that quote the owner or describe other
+// memories without citing a value.
+var operationFreeText = setOf("reason", "note", "notes", "comment", "comments", "example_claim", "aliases")
+
 func (n operationNarrower) narrow(operation *memory.SemanticOperationInspection) error {
 	for _, field := range []*string{&operation.ProposalJSON, &operation.PreparedJSON, &operation.ResultJSON} {
-		if !strings.Contains(*field, `"evidence"`) {
+		quotes := strings.Contains(*field, `"evidence"`)
+		for key := range operationFreeText {
+			quotes = quotes || strings.Contains(*field, `"`+key+`"`)
+		}
+		if !quotes {
 			continue
 		}
-		rewritten, changed, err := n.rewrite(json.RawMessage(*field))
+		rewritten, changed, err := n.rewrite(json.RawMessage(*field), "")
 		if err != nil {
 			return err
 		}
@@ -934,9 +1057,36 @@ func (n operationNarrower) narrow(operation *memory.SemanticOperationInspection)
 	return nil
 }
 
+// memberScope is the Context Scope an object's text was written in: its own
+// "source_scope_key" or "scope_key", or its quoted Source's scope. An
+// approval card's identity entry ("selected_by") names its Entity's scope,
+// not where its details came from, so it inherits.
+func memberScope(members []jsonMember) string {
+	if _, identity := memberString(members, "selected_by"); identity {
+		return ""
+	}
+	for _, key := range []string{"source_scope_key", "scope_key"} {
+		if scope, ok := memberString(members, key); ok && scope != "" {
+			return scope
+		}
+	}
+	for _, member := range members {
+		if member.key == "source" {
+			var source struct {
+				ScopeKey string `json:"scope_key"`
+			}
+			if json.Unmarshal(member.value, &source) == nil && source.ScopeKey != "" {
+				return source.ScopeKey
+			}
+		}
+	}
+	return ""
+}
+
 // rewrite re-emits raw JSON with each object's members in their original
-// order, narrowing quoted text on the way.
-func (n operationNarrower) rewrite(raw json.RawMessage) (json.RawMessage, bool, error) {
+// order, narrowing quoted text on the way. scope is the nearest enclosing
+// object's Context Scope, or "" when none is known.
+func (n operationNarrower) rewrite(raw json.RawMessage, scope string) (json.RawMessage, bool, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return raw, false, nil
@@ -950,7 +1100,7 @@ func (n operationNarrower) rewrite(raw json.RawMessage) (json.RawMessage, bool, 
 		changed := false
 		parts := make([][]byte, len(items))
 		for i := range items {
-			rewritten, itemChanged, err := n.rewrite(items[i])
+			rewritten, itemChanged, err := n.rewrite(items[i], scope)
 			if err != nil {
 				return nil, false, err
 			}
@@ -966,7 +1116,6 @@ func (n operationNarrower) rewrite(raw json.RawMessage) (json.RawMessage, bool, 
 			return nil, false, err
 		}
 		var members []jsonMember
-		changed := false
 		for decoder.More() {
 			token, err := decoder.Token()
 			if err != nil {
@@ -980,17 +1129,29 @@ func (n operationNarrower) rewrite(raw json.RawMessage) (json.RawMessage, bool, 
 			if err := decoder.Decode(&value); err != nil {
 				return nil, false, err
 			}
-			rewritten, valueChanged, err := n.rewrite(value)
+			members = append(members, jsonMember{key: key, value: value})
+		}
+		if own := memberScope(members); own != "" {
+			scope = own
+		}
+		changed := false
+		for i := range members {
+			rewritten, valueChanged, err := n.rewrite(members[i].value, scope)
 			if err != nil {
 				return nil, false, err
 			}
-			members = append(members, jsonMember{key: key, value: rewritten})
+			members[i].value = rewritten
 			changed = changed || valueChanged
 		}
 		objectChanged, err := n.narrowObject(members)
 		if err != nil {
 			return nil, false, err
 		}
+		freeTextChanged, err := n.narrowFreeText(members, scope)
+		if err != nil {
+			return nil, false, err
+		}
+		objectChanged = objectChanged || freeTextChanged
 		if !changed && !objectChanged {
 			return raw, false, nil
 		}
@@ -1099,4 +1260,38 @@ func (n operationNarrower) narrowObject(members []jsonMember) (bool, error) {
 	}
 	members[index].value = encoded
 	return true, nil
+}
+
+// narrowFreeText blanks one object's free-text members for a reader outside
+// the Context Scope (and session) they were written in. They cite no value,
+// so there is no sentence to narrow to: they are shown whole or not at all.
+func (n operationNarrower) narrowFreeText(members []jsonMember, scope string) (bool, error) {
+	if scope != "" && (scope == n.reader.context || scope == n.reader.session) {
+		return false, nil
+	}
+	changed := false
+	for i, member := range members {
+		if !operationFreeText[member.key] {
+			continue
+		}
+		var text string
+		var list []string
+		var blank string
+		switch {
+		case json.Unmarshal(member.value, &text) == nil:
+			if text == "" {
+				continue
+			}
+			blank = `""`
+		case json.Unmarshal(member.value, &list) == nil:
+			if len(list) == 0 {
+				continue
+			}
+			blank = `[]`
+		default:
+			continue
+		}
+		members[i].value, changed = json.RawMessage(blank), true
+	}
+	return changed, nil
 }

@@ -28,8 +28,8 @@ const (
 	// distinctive. Counting stops here, which bounds the floor's work.
 	relevanceCommonDocuments = 256
 	// A request word in at most this many searchable messages is nearly
-	// unique: when every request word is known to history, one match on the
-	// rarest of them may explain the request on its own.
+	// unique: when a personal recall request's every word is known to
+	// history, one match on the rarest of them may explain it on its own.
 	relevanceStrongDocuments = 3
 )
 
@@ -187,16 +187,21 @@ func relevanceGroupMatched(tokens map[string]bool, group []string, frequency map
 // earlier topic the request depends on. A word history never used still
 // counts toward the request's size: it says the request is about something
 // history has not discussed ("How do I model a many-to-many relationship in
-// the ORM?"), so one shared word does not explain it. When every request word
-// is known to history, one match on its rarest word qualifies if that word is
-// nearly unique (at most relevanceStrongDocuments messages): the request's
-// other words are then the common ones, and a unique fact is still recalled.
+// the ORM?"), so one shared word does not explain it. When the request asks
+// to recall something about the owner and every request word is known to
+// history, one match on its rarest word qualifies if that word is nearly
+// unique (at most relevanceStrongDocuments messages): the request's other
+// words are then the common ones, and a unique fact is still recalled. Any
+// other request ("Explain technical debt to the new engineers.") still needs
+// two matches, so a private message sharing its rarest word is not injected;
+// automatic recall fails toward injecting nothing, and the model can still
+// search (confirmation review).
 func relevantToRequest(text string, relevance *memory.RetrievalRelevance, frequency map[string]int) bool {
 	tokens := relevanceTokens(text)
 	need, strong := 1, 0
 	if shape := relevanceGroupShape(relevance.Current, frequency); shape.present+shape.absent >= relevanceMultiTermRequest {
 		need = 2
-		if shape.absent == 0 {
+		if shape.absent == 0 && relevance.PersonalRecall {
 			strong = relevanceStrongDocuments
 		}
 	}

@@ -22,44 +22,51 @@ func TestRelevanceFloorThresholds(t *testing.T) {
 		"routine": relevanceCommonDocuments, "weekly": relevanceCommonDocuments,
 	}
 	for _, tc := range []struct {
-		name    string
-		text    string
-		current []string
-		context [][]string
-		want    bool
+		name     string
+		text     string
+		current  []string
+		context  [][]string
+		want     bool
+		personal bool // the request asks to recall something about the owner
 	}{
-		{"one shared word of a four-term request", "Sam and I argued; I'm not sure our relationship will last.", []string{"model", "many", "relationship", "orm"}, nil, false},
-		{"one shared word of a tyre question", "The blood pressure reading was 128 over 84.", []string{"tyre", "pressure", "car", "need"}, nil, false},
-		{"the tyre statement", "The car's tyre pressure should be 2.4 bar.", []string{"tyre", "pressure", "car", "need"}, nil, true},
-		{"absent word does not block a two-term request", "The greenhouse has saffron crocuses.", []string{"plant", "greenhouse"}, nil, true},
-		{"rarer word of a two-term request", "The Alfama hotel dates are October 12 to 16.", []string{"dates", "book"}, nil, true},
-		{"common word of a two-term request", "Book the car service before the check.", []string{"dates", "book"}, nil, false},
-		{"distinctive pair of a long request", "My blood test results came back.", []string{"summarize", "test", "results", "today", "ci", "run", "payments", "service"}, nil, true},
-		{"common pair of a long request", "Keep the service on the run schedule.", []string{"summarize", "test", "results", "today", "ci", "run", "payments", "service"}, nil, false},
-		{"follow-up earlier topic", "I booked the Lisbon hotel near Alfama.", []string{"dates", "book"}, [][]string{{"plan", "lisbon", "trip"}}, true},
-		{"follow-up earlier topic's common word", "Plan the interval run for Tuesday.", []string{"dates", "book"}, [][]string{{"plan", "lisbon", "trip"}}, false},
-		{"case and punctuation fold", "LISBON, again!", nil, [][]string{{"plan", "lisbon", "trip"}}, true},
-		{"inflection counts as the same word", "ownerorchid runs before sunrise", []string{"sunrise", "running", "club"}, nil, true},
-		{"inflection does not invent a second word", "ownerorchid walks before sunrise", []string{"sunrise", "running", "club"}, nil, false},
+		{"one shared word of a four-term request", "Sam and I argued; I'm not sure our relationship will last.", []string{"model", "many", "relationship", "orm"}, nil, false, false},
+		{"one shared word of a tyre question", "The blood pressure reading was 128 over 84.", []string{"tyre", "pressure", "car", "need"}, nil, false, false},
+		{"the tyre statement", "The car's tyre pressure should be 2.4 bar.", []string{"tyre", "pressure", "car", "need"}, nil, true, false},
+		{"absent word does not block a two-term request", "The greenhouse has saffron crocuses.", []string{"plant", "greenhouse"}, nil, true, false},
+		{"rarer word of a two-term request", "The Alfama hotel dates are October 12 to 16.", []string{"dates", "book"}, nil, true, false},
+		{"common word of a two-term request", "Book the car service before the check.", []string{"dates", "book"}, nil, false, false},
+		{"distinctive pair of a long request", "My blood test results came back.", []string{"summarize", "test", "results", "today", "ci", "run", "payments", "service"}, nil, true, false},
+		{"common pair of a long request", "Keep the service on the run schedule.", []string{"summarize", "test", "results", "today", "ci", "run", "payments", "service"}, nil, false, false},
+		{"follow-up earlier topic", "I booked the Lisbon hotel near Alfama.", []string{"dates", "book"}, [][]string{{"plan", "lisbon", "trip"}}, true, false},
+		{"follow-up earlier topic's common word", "Plan the interval run for Tuesday.", []string{"dates", "book"}, [][]string{{"plan", "lisbon", "trip"}}, false, false},
+		{"case and punctuation fold", "LISBON, again!", nil, [][]string{{"plan", "lisbon", "trip"}}, true, false},
+		{"inflection counts as the same word", "ownerorchid runs before sunrise", []string{"sunrise", "running", "club"}, nil, true, false},
+		{"inflection does not invent a second word", "ownerorchid walks before sunrise", []string{"sunrise", "running", "club"}, nil, false, false},
 		// Final verification pass. A word history never used still counts
 		// toward the request's size: dropping it would let one shared rare word
 		// through ("the energy rating of the dishwasher" against a private
 		// "low energy" message).
-		{"unknown word still counts toward the size", "I've had low energy for a few days.", []string{"energy", "rating", "dishwasher"}, nil, false},
-		{"mostly unknown request keeps two terms", "My passport is valid until March 2029.", []string{"renew", "expiring", "passport"}, nil, false},
+		{"unknown word still counts toward the size", "I've had low energy for a few days.", []string{"energy", "rating", "dishwasher"}, nil, false, false},
+		{"mostly unknown request keeps two terms", "My passport is valid until March 2029.", []string{"renew", "expiring", "passport"}, nil, false, false},
 		// A request whose every word history knows may be explained by its
 		// uniquely rarest word alone when that word is nearly unique in history.
-		{"strong single distinctive match", "Our vet is Dr. Rivera at Oakwood.", []string{"vet", "use", "cat", "remind"}, nil, true},
-		{"single match above the strong ceiling", "Our dentist is Dr. Rivera at Oakwood.", []string{"dentist", "use", "cat", "remind"}, nil, false},
-		{"single match beside an unknown word", "My blood test results came back.", []string{"summarize", "today", "ci", "results"}, nil, false},
-		{"single match that is not the rarest word", "Book the car service before the check.", []string{"vet", "use", "cat", "book"}, nil, false},
-		{"single match on a word tied for rarest", "Sam forgot our plans and I didn't say anything.", []string{"doctor", "say", "ferritin"}, nil, false},
+		{"strong single distinctive match", "Our vet is Dr. Rivera at Oakwood.", []string{"vet", "use", "cat", "remind"}, nil, true, true},
+		{"single match above the strong ceiling", "Our dentist is Dr. Rivera at Oakwood.", []string{"dentist", "use", "cat", "remind"}, nil, false, true},
+		{"single match beside an unknown word", "My blood test results came back.", []string{"summarize", "today", "ci", "results"}, nil, false, true},
+		{"single match that is not the rarest word", "Book the car service before the check.", []string{"vet", "use", "cat", "book"}, nil, false, true},
+		{"single match on a word tied for rarest", "Sam forgot our plans and I didn't say anything.", []string{"doctor", "say", "ferritin"}, nil, false, true},
+		// Confirmation review: only a request to recall something about the
+		// owner may be explained by one nearly unique word. "What were the
+		// results of the run today?" is about a run, not a recall of the
+		// owner's private blood test results.
+		{"strong single match needs a personal recall request", "My blood test results came back.", []string{"results", "run", "today"}, nil, false, false},
+		{"the same request asked as a personal recall", "My blood test results came back.", []string{"results", "run", "today"}, nil, true, true},
 		// Words counted in at least relevanceCommonDocuments messages are common:
 		// never distinctive, however the request's other words compare.
-		{"common words are never distinctive", "My weekly routine starts on Tuesday.", []string{"routine", "weekly"}, nil, false},
+		{"common words are never distinctive", "My weekly routine starts on Tuesday.", []string{"routine", "weekly"}, nil, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := relevantToRequest(tc.text, &memory.RetrievalRelevance{Current: tc.current, Context: tc.context}, frequency)
+			got := relevantToRequest(tc.text, &memory.RetrievalRelevance{Current: tc.current, Context: tc.context, PersonalRecall: tc.personal}, frequency)
 			if got != tc.want {
 				t.Fatalf("relevantToRequest = %t, want %t", got, tc.want)
 			}

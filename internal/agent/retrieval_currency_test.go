@@ -229,15 +229,71 @@ func TestThirdPartyMentionOfRetiredValueIsNotFlagged(t *testing.T) {
 	restated := f.converse(source, "Honestly, Blue Bottle is still my favorite coffee shop.")
 	friend := f.converse(source, "My friend Sam says his favorite coffee is Blue Bottle.")
 	news := f.converse(source, "The Blue Bottle coffee shop on Main Street closed today.")
+	// Confirmation review: a possessive chain names whose preference it is.
+	dad := f.converse(source, "My dad's favorite coffee shop is Blue Bottle.")
 	f.refresh()
 	evidence := currencyEvidence(t, f.searchConversations(f.global(), "Blue Bottle"), 1)
 	if item := currencyExcerpt(evidence, restated.ID); item == nil || len(item.HistoricalClaims) != 1 || item.HistoricalClaims[0].ClaimID != saved.ClaimID {
 		t.Fatalf("the owner's restatement is not flagged against the retired Claim: %+v", item)
 	}
-	for _, event := range []memory.Event{friend, news} {
+	for _, event := range []memory.Event{friend, news, dad} {
 		if item := currencyExcerpt(evidence, event.ID); item == nil || len(item.HistoricalClaims) != 0 {
 			t.Fatalf("%q was lost or flagged as the owner restating the retired Claim: %+v", event.Content, item)
 		}
+	}
+}
+
+// Confirmation review (M3): a newer statement links when the owner is the
+// subject of the clause the change cue governs, with ordinary verbs,
+// prepositions and possessives between ("I no longer live in Boston", "I quit
+// my job at Initech"). Someone else's update or reported speech never links,
+// so it cannot take a companion slot from the owner's real update.
+func TestNewerOwnerStatementFollowsTheClauseSubject(t *testing.T) {
+	linked := func(item *memory.RetrievalEvidence, claim memory.SemanticID) bool {
+		return item != nil && reflect.DeepEqual(item.RelatedClaimIDs, []memory.SemanticID{claim})
+	}
+	t.Run("third parties do not crowd out the owner's update", func(t *testing.T) {
+		f := newRetrievalFixture(t)
+		source := f.global()
+		home := readerRemember(t, f, source, "home_city", "Remember that I live in Boston.", "Boston")
+		moved := f.converse(source, "Big news: I moved to Chicago last month, Boston is behind me.")
+		var others []memory.Event
+		for _, text := range []string{"My ex left Boston.", "My sister said, Boston is no longer an option.", "Our team left Boston yesterday."} {
+			others = append(others, f.converse(source, text))
+		}
+		f.refresh()
+		client, _ := f.search(f.global(), "home city")
+		evidence := currencyEvidence(t, client, 1)
+		if !linked(currencyExcerpt(evidence, moved.ID), home.ClaimID) {
+			t.Fatalf("the owner's update was crowded out or unlinked: %+v", evidence)
+		}
+		for _, other := range others {
+			if item := currencyExcerpt(evidence, other.ID); item != nil && len(item.RelatedClaimIDs) != 0 {
+				t.Fatalf("%q was linked as the owner's update: %+v", other.Content, item)
+			}
+		}
+	})
+	for _, tc := range []struct {
+		predicate, remember, value, query, update string
+	}{
+		{"home_city", "Remember that I live in Boston.", "Boston", "home city", "I no longer live in Boston."},
+		{"home_city", "Remember that I live in Boston.", "Boston", "home city", "I used to live in Boston."},
+		{"employer", "Remember that I work at Initech.", "Initech", "employer", "I no longer work at Initech."},
+		{"employer", "Remember that I work at Initech.", "Initech", "employer", "I quit my job at Initech."},
+		{"phone_carrier", "Remember that my phone carrier is Verizon.", "Verizon", "phone carrier", "I no longer use Verizon."},
+		{"phone_carrier", "Remember that my phone carrier is Verizon.", "Verizon", "phone carrier", "I stopped using Verizon, switched to Mint last week."},
+	} {
+		t.Run(tc.update, func(t *testing.T) {
+			f := newRetrievalFixture(t)
+			source := f.global()
+			saved := readerRemember(t, f, source, tc.predicate, tc.remember, tc.value)
+			update := f.converse(source, tc.update)
+			f.refresh()
+			client, _ := f.search(f.global(), tc.query)
+			if evidence := currencyEvidence(t, client, 1); !linked(currencyExcerpt(evidence, update.ID), saved.ClaimID) {
+				t.Fatalf("the owner's update in other words was not linked: %+v", evidence)
+			}
+		})
 	}
 }
 

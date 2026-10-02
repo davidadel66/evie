@@ -558,3 +558,90 @@ func TestModelProposedCorrectionFromFetchedTextIsLabelledOnTheApprovalCard(t *te
 		t.Fatalf("approval card presented an injected correction as the owner's statement: %s", shown)
 	}
 }
+
+// Confirmation review (defect 1): a later sentence about someone else that
+// names the value is never the cited source, however recent. Before, the
+// tie-break picked it, a Workspace search received it, and retiring the
+// memory left the owner's own statement recalled as current.
+func TestRememberIgnoresLaterSentencesAboutSomeoneElse(t *testing.T) {
+	for _, tc := range []struct {
+		command, predicate, value, query, stating string
+		private                                   []string
+	}{
+		{"I live in Boston. My therapist in Boston says the panic attacks are getting worse.", "home_city", "Boston", "home city", "I live in Boston.", []string{"therapist", "panic attacks"}},
+		{"I'm based in Boston. My oncologist in Boston wants another scan next week.", "home_city", "Boston", "home city", "I'm based in Boston.", []string{"oncologist", "scan"}},
+		{"I work at Initech. My manager at Initech put me on a performance plan.", "employer", "Initech", "employer", "I work at Initech.", []string{"manager", "performance plan"}},
+	} {
+		t.Run(tc.private[0], func(t *testing.T) {
+			f := newRetrievalFixture(t)
+			ctx := context.Background()
+			global := f.global()
+			proposal := f.prepareLiteral(global, tc.command, tc.predicate, tc.value)
+			if proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Evidence != tc.stating {
+				t.Fatalf("proposal cites the wrong sentence: %+v", proposal.Source)
+			}
+			accepted := f.approveLiteral(global, proposal)
+			workspace, err := f.store.RegisterWorkspace(ctx, "Garden planning")
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved, err := standardManager(t, f.store).ResolvePreset(plugins.StandardPresetID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader, err := f.store.CreateWorkspaceSessionWithComposition(ctx, workspace.ID, workspace.CurrentRevisionID, resolved.Receipt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.refresh()
+			client, _ := f.search(reader, tc.query)
+			data := retrievalData(t, client.reqs[1])
+			if !strings.Contains(data, string(accepted.ClaimID)) || !strings.Contains(data, tc.stating) {
+				t.Fatalf("Workspace reader lost the memory or its stating sentence: %s", data)
+			}
+			for _, private := range tc.private {
+				if strings.Contains(data, private) {
+					t.Fatalf("Workspace reader received a Global sentence about someone else (%q): %s", private, data)
+				}
+			}
+			// Retirement suppresses the bound span, so the owner's own sentence
+			// is either gone from ordinary recall or labelled; before the fix it
+			// came back unlabelled because the span was the other sentence.
+			f.lifecycle(global, "memory_retire", memory.SemanticObjectClaim, accepted.ClaimID)
+			f.refresh()
+			for _, item := range suppliedEvidence(t, f.searchConversations(f.global(), tc.value)) {
+				if !strings.Contains(item.Text, tc.stating) {
+					continue
+				}
+				linked := false
+				for _, link := range item.HistoricalClaims {
+					linked = linked || link.ClaimID == accepted.ClaimID
+				}
+				if !linked {
+					t.Fatalf("retired memory's own sentence is recalled as current: %+v", item)
+				}
+			}
+		})
+	}
+}
+
+// Confirmation review (defect 4): a terse answer or correction whose content
+// is the value is the owner answering, so it keeps owner authority.
+func TestTerseOwnerAnswersKeepOwnerAuthority(t *testing.T) {
+	for _, command := range []string{"No, it's Chicago.", "Chicago, not Boston.", "Actually Chicago."} {
+		t.Run(command, func(t *testing.T) {
+			f := newRetrievalFixture(t)
+			global := f.global()
+			saved := f.prepareLiteral(global, "Remember that I live in Boston.", "home_city", "Boston")
+			f.approveLiteral(global, saved)
+			proposal := f.prepareCorrection(global, saved, command, "Chicago")
+			if proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.LocatorKind != memory.LocatorWhole || proposal.Source.Evidence != command {
+				t.Fatalf("terse correction lost owner authority: %+v", proposal.Source)
+			}
+		})
+	}
+	f := newRetrievalFixture(t)
+	if proposal := f.prepareLiteral(f.global(), "Boston.", "home_city", "Boston"); proposal.Source.Authority != memory.AuthorityOwnerStatement || proposal.Source.Evidence != "Boston." {
+		t.Fatalf("terse answer lost owner authority: %+v", proposal.Source)
+	}
+}

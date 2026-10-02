@@ -58,6 +58,7 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 	}
 	terms := recallTerms(current, 16)
 	plan.diagnostics.CurrentBytes = len(current)
+	plan.relevance.PersonalRecall = personalRecallRequest(current)
 	plan.relevance.Current = append([]string(nil), terms...)
 	if summary != nil {
 		// Messages before the retained frontier left the provider request
@@ -70,6 +71,15 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 		// they neither search history nor revive an earlier topic. "Got it",
 		// "love it" and "ok do it" refer to the live context, not to history.
 		return plan
+	}
+	if !plan.relevance.PersonalRecall {
+		// Filler ("need", "use", "know") is dropped only from a request to
+		// recall something about the owner. Elsewhere it may be what the
+		// request is about ("Do I need to use a VPN for the bank?"), and
+		// dropping it would let one shared word ("bank") explain the request
+		// (confirmation review).
+		terms = recallTermsWithFiller(current, 16)
+		plan.relevance.Current = append([]string(nil), terms...)
 	}
 	// Only a follow-up may take its subject from an earlier topic it shares
 	// no word with. A standalone request keeps its own subject; earlier roots
@@ -251,14 +261,29 @@ func acknowledgesLiveContext(text string, terms []string) bool {
 	return it
 }
 
+// Function words, pronouns and acknowledgements are query noise, not a
+// domain-specific preference or entity dictionary. Every content term still
+// comes from the bounded conversation.
+const recallNoise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest" +
+	recallReferringPronouns + "thanks thank thx ok okay cool great perfect nice awesome good sounds yes yeah yep sure alright got lol haha hi hello hey bye cheers "
+
+// Conversational filler ("ok so", "again", "do you know", "remind me", "do I
+// need to", "which one we use") pads a request to recall something without
+// saying what it is about.
+const recallFiller = " so again also just really actually maybe anyway oh um uh hmm btw remind know need use "
+
+// recallTerms returns the content terms of text, without noise or filler.
 func recallTerms(text string, limit int) []string {
-	// Function words, pronouns, acknowledgements and conversational filler
-	// ("ok so", "again", "do you know", "remind me", "do I need to", "which
-	// one we use") are query noise, not a domain-specific preference or entity
-	// dictionary. Every content term still comes from the bounded conversation.
-	const noise = " a an the and or but if is are was were be been being am i me my mine you your yours we our us this that these those to of for from in on at with about as by do does did have has had can could would should will shall may might please tell find search look up recall remember saved memory original conversation statement evidence what which who how when where why now then suggest" +
-		recallReferringPronouns + "thanks thank thx ok okay cool great perfect nice awesome good sounds yes yeah yep sure alright got lol haha hi hello hey bye cheers " +
-		"so again also just really actually maybe anyway oh um uh hmm btw remind know need use "
+	return recallTermsExcept(text, limit, recallNoise+recallFiller)
+}
+
+// recallTermsWithFiller keeps the filler words: in a request that is not a
+// personal recall they may be its subject ("use a VPN").
+func recallTermsWithFiller(text string, limit int) []string {
+	return recallTermsExcept(text, limit, recallNoise)
+}
+
+func recallTermsExcept(text string, limit int, noise string) []string {
 	var terms []string
 	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
 		if len(word) < 2 || strings.Contains(noise, " "+word+" ") {
@@ -267,6 +292,40 @@ func recallTerms(text string, limit int) []string {
 		terms = appendRecallTerms(terms, []string{word}, limit)
 	}
 	return terms
+}
+
+// personalRecallRequest reports a request to recall something about the
+// owner: it refers to the owner ("I", "my", "we", "our") and asks a recall
+// question or request ("what", "when", "where", "which", "who", "how", "do
+// you know", "do you remember", "remind me", "again"). "When do I need to
+// renew my passport?" and "Remind me which vet we use for the cat" are;
+// "Explain technical debt to the new engineers." and "Write a short poem
+// about anxiety for my newsletter." are not. Only such a request has its
+// filler dropped and may be explained by one nearly unique word
+// (confirmation review).
+func personalRecallRequest(text string) bool {
+	words := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	owner, recall := false, false
+	for i, word := range words {
+		next, after := "", ""
+		if i+1 < len(words) {
+			next = words[i+1]
+		}
+		if i+2 < len(words) {
+			after = words[i+2]
+		}
+		switch word {
+		case "i", "me", "my", "mine", "myself", "we", "us", "our", "ours":
+			owner = true
+		case "what", "when", "where", "which", "who", "whom", "whose", "how", "again":
+			recall = true
+		case "remind":
+			recall = recall || next == "me" || next == "us"
+		case "do":
+			recall = recall || next == "you" && (after == "know" || after == "remember")
+		}
+	}
+	return owner && recall
 }
 
 func appendRecallTerms(terms, additions []string, limit int) []string {

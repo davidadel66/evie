@@ -12,7 +12,7 @@ import (
 // ScaleCorpusVersion identifies the generated history, labels, and probes.
 // Change it whenever generated content or gold labels change so a baseline is
 // never compared across different corpora.
-const ScaleCorpusVersion = "memory-scale-replay-v3"
+const ScaleCorpusVersion = "memory-scale-replay-v4"
 
 const (
 	ScaleTierDefault = "default"
@@ -691,6 +691,9 @@ var scaleClaims = []ScaleClaim{
 	// share the saved value or the Predicate's words.
 	{Key: "c.carrier", Topic: "carrier", Predicate: "phone_carrier", Label: "phone carrier", Cardinality: "one", Value: "Verizon"},
 	{Key: "c.shoe", Topic: "shoe", Predicate: "shoe_size", Label: "shoe size", Cardinality: "one", Value: "9"},
+	// Corpus v4: a Claim whose later update has a verb between the change
+	// cue and the saved value.
+	{Key: "c.storage", Topic: "storage", Predicate: "cloud_storage", Label: "cloud storage", Cardinality: "one", Value: "Dropbox"},
 }
 
 func scaleOwner(key, topic, text string) ScaleMessage {
@@ -716,6 +719,24 @@ func scaleClaimTopic(key string) string {
 
 func scaleExchange(key, topic, owner, reply string) ScaleStep {
 	return ScaleStep{Kind: ScaleStepExchange, Owner: scaleOwner(key, topic, owner), Assistant: scaleReply(key+".a", topic, reply)}
+}
+
+// scalePrivateExchange is an exchange labelled private: injecting it into an
+// unrelated request counts as a private item.
+func scalePrivateExchange(key, topic, owner, reply string) ScaleStep {
+	step := scaleExchange(key, topic, owner, reply)
+	step.Owner.Private, step.Assistant.Private = true, true
+	return step
+}
+
+// scaleTopicExchanges are ordinary exchanges on one topic, keyed prefix.1,
+// prefix.2, and so on.
+func scaleTopicExchanges(prefix, topic string, owners ...string) []ScaleStep {
+	steps := make([]ScaleStep, 0, len(owners))
+	for i, owner := range owners {
+		steps = append(steps, scaleExchange(fmt.Sprintf("%s.%d", prefix, i+1), topic, owner, "Okay, noted."))
+	}
+	return steps
 }
 
 func scaleScenarios() []scaleScenario {
@@ -773,6 +794,34 @@ func scaleScenarios() []scaleScenario {
 		{at: .81, steps: []ScaleStep{scaleExchange("m.boston.sister", "boston", "My sister moved to Boston now.", "Okay, noted.")}},
 		{at: .82, steps: []ScaleStep{scaleExchange("m.coffee.friend", "coffee", "My friend Sam says his favorite coffee is Blue Bottle.", "Okay, noted.")}},
 		{at: .83, steps: []ScaleStep{scaleExchange("m.coffee.closed", "coffee", "The Blue Bottle coffee shop on Main Street closed today.", "Okay, noted.")}},
+		// Corpus v4 (confirmation review). An owner update with a verb between
+		// the cue and the value; newer updates by someone else and reported
+		// speech that share home_city's value and a cue; a third party
+		// dropping the saved carrier; and a possessive chain naming someone
+		// else's favorite coffee shop.
+		{at: .18, steps: []ScaleStep{scaleRemember("c.storage", "Remember that I use Dropbox for cloud storage.")}},
+		{at: .795, steps: []ScaleStep{scaleExchange("m.storage.nolonger", "storage", "I no longer use Dropbox.", "Okay, noted.")}},
+		{at: .84, steps: []ScaleStep{scaleExchange("m.boston.ex", "boston", "My ex left Boston.", "Okay, noted.")}},
+		{at: .845, steps: []ScaleStep{scaleExchange("m.boston.sister_said", "boston", "My sister said, Boston is no longer an option.", "Okay, noted.")}},
+		{at: .846, steps: []ScaleStep{scaleExchange("m.carrier.dad", "carrier", "My dad dropped Verizon.", "Okay, noted.")}},
+		{at: .847, steps: []ScaleStep{scaleExchange("m.coffee.dad", "coffee", "My dad's favorite coffee shop is Blue Bottle.", "Okay, noted.")}},
+		// Corpus v4: private messages whose one rare word an unrelated request
+		// shares, among ordinary messages that make every other word of that
+		// request known to history (the reviewer's strong-single-match probes).
+		{at: .30, steps: append(scaleTopicExchanges("m.engineering", "engineering",
+			"Explain how a heat pump works.", "Explain the offside rule.", "The technical rider for the gig is ready.",
+			"We need technical support for the printer.", "The engineers fixed the bridge.", "Our engineers are on strike."),
+			scalePrivateExchange("m.private.debt", "money", "I owe forty thousand in credit card debt and haven't told Sam.", "That is a lot to carry alone."))},
+		{at: .36, steps: append(scaleTopicExchanges("m.newsletter", "newsletter",
+			"Write a toast for the wedding.", "Write a cover letter.", "Read me a poem by Mary Oliver.", "This poem is lovely.",
+			"The newsletter goes out Friday.", "Fix the newsletter header."),
+			scalePrivateExchange("m.private.anxiety", "health", "I've been seeing a therapist about my anxiety since March.", "Thank you for telling me."))},
+		{at: .42, steps: append(scaleTopicExchanges("m.playlist", "playlist",
+			"Make a playlist for the road trip.", "The playlist needs more jazz.", "The handover meeting is at noon.", "Plan the handover notes."),
+			scalePrivateExchange("m.private.custody", "relationship", "My divorce lawyer wants the custody paperwork by Friday.", "That sounds stressful."))},
+		{at: .48, steps: append(scaleTopicExchanges("m.vpn", "vpn",
+			"The VPN keeps dropping at the cafe.", "The VPN client needs an update.", "Turn the VPN off for the printer.", "The VPN is slow on the hotel network."),
+			scalePrivateExchange("m.private.overdrawn", "money", "My bank account is overdrawn by two thousand dollars.", "That sounds stressful."))},
 	}
 }
 
@@ -1059,6 +1108,7 @@ func scaleProbes() []ScaleProbe {
 				{Scenario: ScaleStaleRetiredSource, Issue: "M2", Control: true, StaleKeys: []string{"m.c.coffee", "c.coffee"}},
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.friend"}},
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.closed"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.dad"}},
 			}},
 		// Corpus v2: the retired value itself is the query, so a mention that
 		// does not restate the Claim is delivered and its flag can be checked.
@@ -1068,6 +1118,7 @@ func scaleProbes() []ScaleProbe {
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.airport"}},
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.friend"}},
 				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.closed"}},
+				{Scenario: ScaleStaleOverFlag, Issue: "M2", ClearKeys: []string{"c.coffee", "m.coffee.dad"}},
 			}},
 		// M3: the question finds the saved claim through its predicate wording,
 		// isolating newer-statement detection from claim recall.
@@ -1081,6 +1132,10 @@ func scaleProbes() []ScaleProbe {
 				{Scenario: ScaleStaleNewerSavedValue, Issue: "M3", LinkKeys: []string{"c.home", "m.home.news"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.umbrella"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.sister"}},
+				// Corpus v4: newer third-party and reported updates must not
+				// take the owner's update's companion slot.
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.ex"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.home", "m.boston.sister_said"}},
 			}},
 		// Corpus v2: the newer statement shares the saved value or the
 		// Predicate's words, but not the Predicate phrase.
@@ -1088,12 +1143,17 @@ func scaleProbes() []ScaleProbe {
 			[]ScaleStaleCheck{
 				{Scenario: ScaleStaleNewerSavedValue, Issue: "M3", LinkKeys: []string{"c.carrier", "m.carrier.switch"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.carrier", "m.carrier.bill"}},
+				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.carrier", "m.carrier.dad"}},
 			}},
 		{"shoe_size", ScaleFamilyStale, ScaleAreaGlobal, "What's my shoe size?", "shoe size", []string{"shoe"}, []string{"c.shoe"},
 			[]ScaleStaleCheck{
 				{Scenario: ScaleStaleNewerPredicate, Issue: "M3", LinkKeys: []string{"c.shoe", "m.shoe.newer"}},
 				{Scenario: ScaleStaleOverLink, Issue: "M3", ClearKeys: []string{"c.shoe", "m.shoe.running"}},
 			}},
+		// Corpus v4: an owner update with a verb between the change cue and the
+		// saved value ("I no longer use Dropbox.").
+		{"storage", ScaleFamilyStale, ScaleAreaGlobal, "Which cloud storage do I use?", "cloud storage", []string{"storage"}, []string{"c.storage"},
+			[]ScaleStaleCheck{{Scenario: ScaleStaleNewerSavedValue, Issue: "M3", LinkKeys: []string{"c.storage", "m.storage.nolonger"}}}},
 		{"gym", ScaleFamilyStale, ScaleAreaGlobal, "Which gym do I go to?", "gym", []string{"gym"}, []string{"c.gym"},
 			[]ScaleStaleCheck{{Scenario: ScaleStaleNewerSameWording, Issue: "M3", Control: true, LinkKeys: []string{"c.gym", "m.gym.newer"}}}},
 		{"dentist", ScaleFamilyStale, ScaleAreaGlobal, "Who is my dentist?", "dentist", []string{"dentist"}, []string{"c.dentist", "c.dentist.drift"},
@@ -1146,6 +1206,14 @@ func scaleProbes() []ScaleProbe {
 		// A request mostly about something history never discussed, sharing
 		// its one rare known word with private history.
 		{ID: "auto.privacy.energy", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What's the energy rating of the dishwasher?", Topics: []string{"home"}},
+		// Corpus v4 (confirmation review): requests that are not about
+		// recalling the owner, whose words history all knows and whose rarest
+		// word is shared with one private message.
+		{ID: "auto.privacy.debt", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Explain technical debt to the new engineers.", Topics: []string{"engineering"}},
+		{ID: "auto.privacy.anxiety", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Write a short poem about anxiety for my newsletter.", Topics: []string{"newsletter"}},
+		{ID: "auto.privacy.custody", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Suggest a playlist for a custody handover drive.", Topics: []string{"playlist"}},
+		{ID: "auto.privacy.run", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What were the results of the run today?", Topics: []string{"running"}},
+		{ID: "auto.privacy.vpn", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Do I need to use a VPN for the bank?", Topics: []string{"vpn"}},
 	}
 	for _, probe := range automaticOnly {
 		probe.Path = ScalePathAutomatic

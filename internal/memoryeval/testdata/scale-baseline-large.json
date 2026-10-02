@@ -1,7 +1,7 @@
 {
   "report_version": 4,
-  "corpus_version": "memory-scale-replay-v3",
-  "corpus_sha256": "sha256:9cc64635a70262bb7e892990f340f0a4d423f479b59486c914dda8c0df32a894",
+  "corpus_version": "memory-scale-replay-v4",
+  "corpus_sha256": "sha256:77b6869d863ece2c9957c85b040f3df45eb7c51aac71693a31d2ed697b96f840",
   "options": {
     "tier": "large",
     "seed": 20261001,
@@ -12,68 +12,68 @@
     "dense_targets": 24
   },
   "corpus": {
-    "sessions": 507,
-    "global_sessions": 435,
+    "sessions": 517,
+    "global_sessions": 445,
     "project_sessions": 72,
-    "owner_messages": 3851,
-    "assistant_messages": 3834,
+    "owner_messages": 3881,
+    "assistant_messages": 3863,
     "low_content_owner_messages": 712,
-    "private_messages": 450,
+    "private_messages": 458,
     "needles": 19,
-    "accepted_claims": 17,
+    "accepted_claims": 18,
     "corrections": 2,
     "retirements": 2,
     "areas": 4,
-    "topics": 28,
-    "probes": 124
+    "topics": 33,
+    "probes": 132
   },
   "paths": {
     "automatic": {
-      "probes": 50,
-      "probes_with_items": 39,
-      "probes_with_unwanted": 11,
-      "items": 93,
-      "required_items": 30,
-      "tolerated_items": 46,
-      "unwanted_items": 17,
-      "unwanted_private_items": 6,
+      "probes": 56,
+      "probes_with_items": 45,
+      "probes_with_unwanted": 13,
+      "items": 108,
+      "required_items": 31,
+      "tolerated_items": 55,
+      "unwanted_items": 22,
+      "unwanted_private_items": 8,
       "unwanted_same_session_items": 0,
-      "required_total": 33,
-      "required_found": 30,
-      "precision": 0.8172,
-      "unwanted_rate": 0.1828,
-      "recall": 0.9091
+      "required_total": 34,
+      "required_found": 31,
+      "precision": 0.7963,
+      "unwanted_rate": 0.2037,
+      "recall": 0.9118
     },
     "memory_search": {
-      "probes": 25,
-      "probes_with_items": 11,
+      "probes": 26,
+      "probes_with_items": 12,
       "probes_with_unwanted": 1,
-      "items": 22,
-      "required_items": 13,
-      "tolerated_items": 8,
+      "items": 24,
+      "required_items": 14,
+      "tolerated_items": 9,
       "unwanted_items": 1,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 13,
-      "required_found": 13,
-      "precision": 0.9545,
-      "unwanted_rate": 0.0455,
+      "required_total": 14,
+      "required_found": 14,
+      "precision": 0.9583,
+      "unwanted_rate": 0.0417,
       "recall": 1
     },
     "memory_search_conversations": {
-      "probes": 49,
-      "probes_with_items": 49,
-      "probes_with_unwanted": 8,
-      "items": 205,
+      "probes": 50,
+      "probes_with_items": 50,
+      "probes_with_unwanted": 10,
+      "items": 209,
       "required_items": 36,
-      "tolerated_items": 141,
-      "unwanted_items": 28,
-      "unwanted_private_items": 4,
+      "tolerated_items": 143,
+      "unwanted_items": 30,
+      "unwanted_private_items": 5,
       "unwanted_same_session_items": 0,
       "required_total": 36,
       "required_found": 36,
-      "precision": 0.8634,
-      "unwanted_rate": 0.1366,
+      "precision": 0.8565,
+      "unwanted_rate": 0.1435,
       "recall": 1
     }
   },
@@ -117,20 +117,20 @@
     {
       "path": "automatic",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 12,
+      "probes": 13,
+      "probes_with_items": 13,
       "probes_with_unwanted": 2,
-      "items": 37,
-      "required_items": 11,
-      "tolerated_items": 23,
+      "items": 40,
+      "required_items": 12,
+      "tolerated_items": 25,
       "unwanted_items": 3,
       "unwanted_private_items": 2,
       "unwanted_same_session_items": 0,
-      "required_total": 12,
-      "required_found": 11,
-      "precision": 0.9189,
-      "unwanted_rate": 0.0811,
-      "recall": 0.9167
+      "required_total": 13,
+      "required_found": 12,
+      "precision": 0.925,
+      "unwanted_rate": 0.075,
+      "recall": 0.9231
     },
     {
       "path": "automatic",
@@ -171,19 +171,19 @@
     {
       "path": "automatic",
       "family": "privacy",
-      "probes": 4,
-      "probes_with_items": 3,
-      "probes_with_unwanted": 2,
-      "items": 6,
+      "probes": 9,
+      "probes_with_items": 8,
+      "probes_with_unwanted": 4,
+      "items": 18,
       "required_items": 0,
-      "tolerated_items": 2,
-      "unwanted_items": 4,
-      "unwanted_private_items": 2,
+      "tolerated_items": 9,
+      "unwanted_items": 9,
+      "unwanted_private_items": 4,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.3333,
-      "unwanted_rate": 0.6667,
+      "precision": 0.5,
+      "unwanted_rate": 0.5,
       "recall": null
     },
     {
@@ -245,17 +245,17 @@
       "family": "relevant",
       "probes": 11,
       "probes_with_items": 11,
-      "probes_with_unwanted": 4,
+      "probes_with_unwanted": 5,
       "items": 69,
       "required_items": 10,
-      "tolerated_items": 52,
-      "unwanted_items": 7,
+      "tolerated_items": 51,
+      "unwanted_items": 8,
       "unwanted_private_items": 4,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 10,
-      "precision": 0.8986,
-      "unwanted_rate": 0.1014,
+      "precision": 0.8841,
+      "unwanted_rate": 0.1159,
       "recall": 1
     },
     {
@@ -297,17 +297,17 @@
     {
       "path": "memory_search",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 9,
+      "probes": 13,
+      "probes_with_items": 10,
       "probes_with_unwanted": 0,
-      "items": 17,
-      "required_items": 12,
-      "tolerated_items": 5,
+      "items": 19,
+      "required_items": 13,
+      "tolerated_items": 6,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 12,
-      "required_found": 12,
+      "required_total": 13,
+      "required_found": 13,
       "precision": 1,
       "unwanted_rate": 0,
       "recall": 1
@@ -315,19 +315,19 @@
     {
       "path": "memory_search_conversations",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 12,
-      "probes_with_unwanted": 3,
-      "items": 48,
+      "probes": 13,
+      "probes_with_items": 13,
+      "probes_with_unwanted": 4,
+      "items": 52,
       "required_items": 0,
-      "tolerated_items": 34,
-      "unwanted_items": 14,
-      "unwanted_private_items": 0,
+      "tolerated_items": 37,
+      "unwanted_items": 15,
+      "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.7083,
-      "unwanted_rate": 0.2917,
+      "precision": 0.7115,
+      "unwanted_rate": 0.2885,
       "recall": null
     },
     {
@@ -350,7 +350,7 @@
     }
   ],
   "stale": {
-    "checks": 54,
+    "checks": 68,
     "misses": 2,
     "control_checks": 10,
     "control_failures": 0,
@@ -422,18 +422,18 @@
         "miss": false
       },
       {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
+        "miss": false
+      },
+      {
         "probe_id": "auto.blue_bottle",
         "path": "automatic",
         "scenario": "retired_restatement",
         "issue": "M2",
-        "outcome": "labelled",
-        "miss": false
-      },
-      {
-        "probe_id": "auto.blue_bottle",
-        "path": "automatic",
-        "scenario": "unrelated_mention_not_flagged",
-        "issue": "M2",
         "outcome": "absent",
         "miss": false
       },
@@ -451,6 +451,22 @@
         "scenario": "unrelated_mention_not_flagged",
         "issue": "M2",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.blue_bottle",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.blue_bottle",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
         "miss": false
       },
       {
@@ -502,11 +518,35 @@
         "miss": false
       },
       {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "auto.carrier",
         "path": "automatic",
         "scenario": "contradiction_saved_value",
         "issue": "M3",
         "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.carrier",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
         "miss": false
       },
       {
@@ -531,6 +571,14 @@
         "scenario": "unrelated_statement_not_linked",
         "issue": "M3",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.storage",
+        "path": "automatic",
+        "scenario": "contradiction_saved_value",
+        "issue": "M3",
+        "outcome": "linked",
         "miss": false
       },
       {
@@ -667,6 +715,14 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search_conversations.coffee",
         "path": "memory_search_conversations",
         "scenario": "retired_restatement",
@@ -700,9 +756,25 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search.blue_bottle",
         "path": "memory_search",
         "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.blue_bottle",
+        "path": "memory_search",
+        "scenario": "unrelated_mention_not_flagged",
         "issue": "M2",
         "outcome": "absent",
         "miss": false
@@ -737,6 +809,14 @@
         "scenario": "retired_restatement",
         "issue": "M2",
         "outcome": "labelled",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.blue_bottle",
+        "path": "memory_search_conversations",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
         "miss": false
       },
       {
@@ -812,11 +892,35 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search.carrier",
         "path": "memory_search",
         "scenario": "contradiction_saved_value",
         "issue": "M3",
         "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.carrier",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
         "miss": false
       },
       {
@@ -841,6 +945,14 @@
         "scenario": "unrelated_statement_not_linked",
         "issue": "M3",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.storage",
+        "path": "memory_search",
+        "scenario": "contradiction_saved_value",
+        "issue": "M3",
+        "outcome": "linked",
         "miss": false
       },
       {
@@ -882,7 +994,7 @@
   "scope_leaks": 0,
   "unmapped_items": 0,
   "dense": {
-    "vectors_in_global_scope": 6465,
+    "vectors_in_global_scope": 6524,
     "scan_limit": 65536,
     "reachable_fraction": 1,
     "targets": 24,
@@ -907,7 +1019,7 @@
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
       "met": false,
-      "observed": "2 private items across 4 probes"
+      "observed": "4 private items across 9 probes"
     },
     {
       "id": "M1.one_word_answers_recalled",
@@ -935,21 +1047,21 @@
       "issue": "M2",
       "description": "a mention of a retired value that does not restate the claim is not flagged as its restatement",
       "met": true,
-      "observed": "0 misses of 15 checks"
+      "observed": "0 misses of 21 checks"
     },
     {
       "id": "M3.different_wording_detected",
       "issue": "M3",
       "description": "a later owner statement with different wording is linked to the saved claim it contradicts",
       "met": false,
-      "observed": "2 misses of 8 checks"
+      "observed": "2 misses of 10 checks"
     },
     {
       "id": "M3.no_over_linking",
       "issue": "M3",
       "description": "a later owner message sharing a saved value or Predicate word without updating the claim is not linked to it",
       "met": true,
-      "observed": "0 misses of 12 checks"
+      "observed": "0 misses of 18 checks"
     },
     {
       "id": "M4.drift_conflicts_warned",
@@ -963,7 +1075,7 @@
       "issue": "M7",
       "description": "dense recall finds targets anywhere in the vector table, or reports the scan gap",
       "met": true,
-      "observed": "24 of 24 targets found; 0 missed with a scan gap reported; 6465 of 6465 vectors inside the scan bound; 0 unreachable targets found"
+      "observed": "24 of 24 targets found; 0 missed with a scan gap reported; 6524 of 6524 vectors inside the scan bound; 0 unreachable targets found"
     }
   ],
   "probes": [
@@ -1045,7 +1157,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2751=tolerated",
+        "m.0563=tolerated",
         "n.vet=required"
       ]
     },
@@ -1055,7 +1167,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.0860.a(private)=unwanted",
+        "m.1006.a(private)=unwanted",
         "n.ferritin(private)=required"
       ]
     },
@@ -1085,7 +1197,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.2751=tolerated",
+        "m.0563=tolerated",
         "n.vet=required"
       ]
     },
@@ -1139,8 +1251,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.coffee.restated=tolerated",
-        "m.retire.coffee.a=tolerated"
+        "m.coffee.dad=tolerated",
+        "m.coffee.restated=tolerated"
       ]
     },
     {
@@ -1149,8 +1261,8 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.coffee.restated.a=tolerated",
-        "m.coffee.restated=tolerated"
+        "m.coffee.dad=tolerated",
+        "m.coffee.restated.a=tolerated"
       ]
     },
     {
@@ -1186,6 +1298,17 @@
         "c.shoe=required",
         "m.c.shoe=tolerated",
         "m.shoe.newer=tolerated"
+      ]
+    },
+    {
+      "id": "auto.storage",
+      "family": "stale",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.storage=required",
+        "m.c.storage=tolerated",
+        "m.storage.nolonger=tolerated"
       ]
     },
     {
@@ -1334,7 +1457,7 @@
       "status": "partial",
       "items": [
         "m.0468.a=unwanted",
-        "m.1801.a=unwanted"
+        "m.3448.a=unwanted"
       ]
     },
     {
@@ -1444,7 +1567,7 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.1331=unwanted",
+        "m.3241=unwanted",
         "n.lisbon=required"
       ]
     },
@@ -1454,8 +1577,60 @@
       "path": "automatic",
       "status": "partial",
       "items": [
-        "m.1071(private)=unwanted",
+        "m.1072(private)=unwanted",
         "m.1074(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.debt",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.engineering.5=tolerated",
+        "m.engineering.6=tolerated"
+      ]
+    },
+    {
+      "id": "auto.privacy.anxiety",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.1122(private)=unwanted",
+        "m.2801(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.custody",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.playlist.1=tolerated",
+        "m.playlist.3=tolerated"
+      ]
+    },
+    {
+      "id": "auto.privacy.run",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "m.3052=tolerated",
+        "m.3124=tolerated"
+      ]
+    },
+    {
+      "id": "auto.privacy.vpn",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "partial",
+      "items": [
+        "c.bank.drift=unwanted",
+        "c.bank=unwanted",
+        "m.2333=unwanted",
+        "m.vpn.2=tolerated"
       ]
     },
     {
@@ -1582,11 +1757,11 @@
       "status": "partial",
       "items": [
         "m.0656=tolerated",
+        "m.1176=tolerated",
         "m.1295=tolerated",
         "m.1907=tolerated",
-        "m.3501=tolerated",
-        "m.3504=tolerated",
         "m.3509=tolerated",
+        "m.vpn.4=unwanted",
         "n.lisbon.a=tolerated",
         "n.lisbon=required"
       ]
@@ -1606,7 +1781,7 @@
       "items": [
         "m.0497=tolerated",
         "m.0849=tolerated",
-        "m.1369=tolerated",
+        "m.1436=tolerated",
         "m.1898=tolerated",
         "m.3164=tolerated",
         "m.3322=tolerated",
@@ -1630,7 +1805,7 @@
         "m.0130(private)=unwanted",
         "m.0893(private)=unwanted",
         "m.1069(private)=unwanted",
-        "m.2751=tolerated",
+        "m.3206=tolerated",
         "m.3391=tolerated",
         "m.3392=tolerated",
         "n.cat_vet=tolerated",
@@ -1668,11 +1843,11 @@
       "items": [
         "m.3569.a=tolerated",
         "m.3597=tolerated",
-        "m.3670.a=tolerated",
-        "m.3724.a=tolerated",
+        "m.3612.a=tolerated",
         "m.3751=tolerated",
         "m.3760=tolerated",
         "m.3768=tolerated",
+        "m.3782.a=tolerated",
         "n.flaky=required"
       ]
     },
@@ -1690,7 +1865,7 @@
       "status": "partial",
       "items": [
         "m.4071=tolerated",
-        "m.4155=tolerated",
+        "m.4097=tolerated",
         "m.4198=tolerated",
         "m.4224=tolerated",
         "m.4233=tolerated",
@@ -1715,9 +1890,9 @@
         "m.0563=tolerated",
         "m.0579=tolerated",
         "m.0635=tolerated",
-        "m.0841=tolerated",
         "m.2447=tolerated",
         "m.2715=tolerated",
+        "m.2716=tolerated",
         "m.2751=tolerated",
         "n.vet=required"
       ]
@@ -1736,12 +1911,12 @@
       "status": "partial",
       "items": [
         "m.0990.a=unwanted",
-        "m.2561.a=unwanted",
         "m.2929=unwanted",
-        "m.2952.a=unwanted",
+        "m.2950.a=unwanted",
         "m.2972=unwanted",
         "m.3018=unwanted",
         "m.3306=unwanted",
+        "m.3360.a=unwanted",
         "n.pace=required"
       ]
     },
@@ -1828,6 +2003,7 @@
       "status": "partial",
       "items": [
         "m.coffee.closed=tolerated",
+        "m.coffee.dad=tolerated",
         "m.coffee.friend=tolerated",
         "m.coffee.restated=tolerated",
         "m.retire.coffee.a=tolerated",
@@ -1849,6 +2025,7 @@
       "items": [
         "m.coffee.airport=tolerated",
         "m.coffee.closed=tolerated",
+        "m.coffee.dad=tolerated",
         "m.coffee.friend=tolerated",
         "m.coffee.restated.a=tolerated",
         "m.coffee.restated=tolerated"
@@ -1920,6 +2097,25 @@
       ]
     },
     {
+      "id": "memory_search.storage",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "partial",
+      "items": [
+        "c.storage=required",
+        "m.storage.nolonger=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.storage",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "partial",
+      "items": [
+        "m.c.storage=tolerated"
+      ]
+    },
+    {
       "id": "memory_search.gym",
       "family": "stale",
       "path": "memory_search",
@@ -1976,7 +2172,8 @@
       "status": "partial",
       "items": [
         "m.c.bank.drift=tolerated",
-        "m.c.bank=tolerated"
+        "m.c.bank=tolerated",
+        "m.private.overdrawn(private)=unwanted"
       ]
     },
     {

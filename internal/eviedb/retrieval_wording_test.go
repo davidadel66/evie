@@ -85,3 +85,76 @@ func TestWordingRulesForNewerStatementsAndRestatements(t *testing.T) {
 		t.Fatalf("sentence split = %+v", sentences)
 	}
 }
+
+// Confirmation review (M3, M2): the newer-statement and restatement rules use
+// the same clause and subject analysis as the owner-span binder. A change cue
+// links when the owner is the clause's subject and the cue governs the clause
+// ("I no longer live in Boston", "I quit my job at Initech"); a clause about
+// someone else, or reported speech, never links. These are the reviewer's
+// messages.
+func TestWordingRulesFollowTheClauseSubject(t *testing.T) {
+	owned := func(token, label, value string) claimWording {
+		var w claimWording
+		w.addSubject("owner", true)
+		w.addPredicate(token)
+		w.addPredicate(label)
+		w.addValue("text", value)
+		return w
+	}
+	home := owned("home_city", "home city", "Boston")
+	employer := owned("employer", "employer", "Initech")
+	carrier := owned("phone_carrier", "phone carrier", "Verizon")
+	gym := owned("gym", "gym", "Equinox")
+	coffee := owned("favorite_coffee_shop", "favorite coffee shop", "Blue Bottle")
+	for _, tc := range []struct {
+		wording claimWording
+		rule    string
+		text    string
+		want    bool
+	}{
+		// Owner updates with a verb, preposition or possessive between the cue
+		// and the value.
+		{home, "newer", "I no longer live in Boston.", true},
+		{home, "newer", "I used to live in Boston.", true},
+		{employer, "newer", "I no longer work at Initech.", true},
+		{employer, "newer", "I used to work at Initech.", true},
+		{carrier, "newer", "I no longer use Verizon.", true},
+		{carrier, "newer", "I stopped using Verizon, switched to Mint last week.", true},
+		{employer, "newer", "I quit my job at Initech.", true},
+		{employer, "newer", "I left my job at Initech last Friday.", true},
+		{gym, "newer", "I cancelled Equinox and switched to the YMCA.", true},
+		{home, "newer", "We moved out of Boston in June.", true},
+		{home, "newer", "I don't live in Boston anymore.", true},
+		// Someone else's update, or reported speech, is not the owner's.
+		{home, "newer", "My ex left Boston.", false},
+		{employer, "newer", "My boss quit Initech.", false},
+		{home, "newer", "My sister said, Boston is no longer an option.", false},
+		{home, "newer", "Our team left Boston yesterday.", false},
+		{carrier, "newer", "My dad dropped Verizon.", false},
+		{employer, "newer", "My son left Initech.", false},
+		{carrier, "newer", "My wife switched from Verizon.", false},
+		{home, "newer", "My brother moved to Boston.", false},
+		{home, "newer", "My flight left Boston two hours late.", false},
+		{home, "newer", "The train left Boston now.", false},
+		{home, "newer", "my old roommate moved to Boston", false},
+		{home, "newer", "I think the Celtics moved to Boston Garden in 1946.", false},
+		// The cue still has to govern the value within the owner's clause.
+		{home, "newer", "I'm no longer worried about Boston traffic.", false},
+		{home, "newer", "We switched hotels in Boston.", false},
+		{home, "newer", "I moved my car to Boston garage", false},
+		{home, "newer", "Boston is no longer my favorite team.", false},
+		{home, "newer", "If I moved away from Boston, I would miss it.", false},
+		// Restatements: a possessive chain names whose preference it is.
+		{coffee, "restatement", "My dad's favorite coffee shop is Blue Bottle.", false},
+		{coffee, "restatement", "My mom's favorite coffee is Blue Bottle.", false},
+		{coffee, "restatement", "Blue Bottle is still my favorite coffee shop.", true},
+	} {
+		rule := tc.wording.newerStatement
+		if tc.rule == "restatement" {
+			rule = tc.wording.restatement
+		}
+		if _, got := firstSentence(tc.text, 0, len(tc.text), rule); got != tc.want {
+			t.Errorf("%s(%q) = %v, want %v", tc.rule, tc.text, got, tc.want)
+		}
+	}
+}

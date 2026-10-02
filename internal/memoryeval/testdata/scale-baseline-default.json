@@ -1,7 +1,7 @@
 {
   "report_version": 4,
-  "corpus_version": "memory-scale-replay-v3",
-  "corpus_sha256": "sha256:0065b112b5b6cbf6e0a2c6cde39f8f46b25dfd159c46fe3286510c21e53bc844",
+  "corpus_version": "memory-scale-replay-v4",
+  "corpus_sha256": "sha256:d641f2bdaa59317bacb4bef9294786ad1d0c9c8cd77fc22424f7d8850e7123ce",
   "options": {
     "tier": "default",
     "seed": 20261001,
@@ -12,68 +12,68 @@
     "dense_targets": 0
   },
   "corpus": {
-    "sessions": 185,
-    "global_sessions": 131,
+    "sessions": 195,
+    "global_sessions": 141,
     "project_sessions": 54,
-    "owner_messages": 1161,
-    "assistant_messages": 1144,
+    "owner_messages": 1191,
+    "assistant_messages": 1173,
     "low_content_owner_messages": 198,
-    "private_messages": 106,
+    "private_messages": 114,
     "needles": 19,
-    "accepted_claims": 17,
+    "accepted_claims": 18,
     "corrections": 2,
     "retirements": 2,
     "areas": 4,
-    "topics": 27,
-    "probes": 100
+    "topics": 32,
+    "probes": 108
   },
   "paths": {
     "automatic": {
-      "probes": 50,
-      "probes_with_items": 33,
-      "probes_with_unwanted": 3,
-      "items": 68,
-      "required_items": 28,
-      "tolerated_items": 35,
-      "unwanted_items": 5,
+      "probes": 56,
+      "probes_with_items": 36,
+      "probes_with_unwanted": 5,
+      "items": 76,
+      "required_items": 29,
+      "tolerated_items": 39,
+      "unwanted_items": 8,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 33,
-      "required_found": 28,
-      "precision": 0.9265,
-      "unwanted_rate": 0.0735,
-      "recall": 0.8485
+      "required_total": 34,
+      "required_found": 29,
+      "precision": 0.8947,
+      "unwanted_rate": 0.1053,
+      "recall": 0.8529
     },
     "memory_search": {
-      "probes": 25,
-      "probes_with_items": 11,
+      "probes": 26,
+      "probes_with_items": 12,
       "probes_with_unwanted": 0,
-      "items": 20,
-      "required_items": 13,
-      "tolerated_items": 7,
+      "items": 22,
+      "required_items": 14,
+      "tolerated_items": 8,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 13,
-      "required_found": 13,
+      "required_total": 14,
+      "required_found": 14,
       "precision": 1,
       "unwanted_rate": 0,
       "recall": 1
     },
     "memory_search_conversations": {
-      "probes": 25,
-      "probes_with_items": 23,
-      "probes_with_unwanted": 7,
-      "items": 115,
+      "probes": 26,
+      "probes_with_items": 24,
+      "probes_with_unwanted": 9,
+      "items": 119,
       "required_items": 10,
-      "tolerated_items": 85,
-      "unwanted_items": 20,
-      "unwanted_private_items": 1,
+      "tolerated_items": 87,
+      "unwanted_items": 22,
+      "unwanted_private_items": 2,
       "unwanted_same_session_items": 0,
       "required_total": 12,
       "required_found": 10,
-      "precision": 0.8261,
-      "unwanted_rate": 0.1739,
+      "precision": 0.8151,
+      "unwanted_rate": 0.1849,
       "recall": 0.8333
     }
   },
@@ -117,37 +117,37 @@
     {
       "path": "automatic",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 12,
+      "probes": 13,
+      "probes_with_items": 13,
       "probes_with_unwanted": 0,
-      "items": 34,
-      "required_items": 11,
-      "tolerated_items": 23,
+      "items": 37,
+      "required_items": 12,
+      "tolerated_items": 25,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 12,
-      "required_found": 11,
+      "required_total": 13,
+      "required_found": 12,
       "precision": 1,
       "unwanted_rate": 0,
-      "recall": 0.9167
+      "recall": 0.9231
     },
     {
       "path": "automatic",
       "family": "follow_up",
       "probes": 3,
       "probes_with_items": 3,
-      "probes_with_unwanted": 1,
+      "probes_with_unwanted": 2,
       "items": 6,
       "required_items": 2,
-      "tolerated_items": 3,
-      "unwanted_items": 1,
+      "tolerated_items": 2,
+      "unwanted_items": 2,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 3,
       "required_found": 2,
-      "precision": 0.8333,
-      "unwanted_rate": 0.1667,
+      "precision": 0.6667,
+      "unwanted_rate": 0.3333,
       "recall": 0.6667
     },
     {
@@ -171,19 +171,19 @@
     {
       "path": "automatic",
       "family": "privacy",
-      "probes": 4,
-      "probes_with_items": 2,
-      "probes_with_unwanted": 1,
-      "items": 4,
+      "probes": 9,
+      "probes_with_items": 4,
+      "probes_with_unwanted": 2,
+      "items": 9,
       "required_items": 0,
-      "tolerated_items": 2,
-      "unwanted_items": 2,
+      "tolerated_items": 5,
+      "unwanted_items": 4,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.5,
-      "unwanted_rate": 0.5,
+      "precision": 0.5556,
+      "unwanted_rate": 0.4444,
       "recall": null
     },
     {
@@ -245,17 +245,17 @@
       "family": "relevant",
       "probes": 11,
       "probes_with_items": 11,
-      "probes_with_unwanted": 3,
+      "probes_with_unwanted": 4,
       "items": 67,
       "required_items": 10,
-      "tolerated_items": 52,
-      "unwanted_items": 5,
+      "tolerated_items": 51,
+      "unwanted_items": 6,
       "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 10,
       "required_found": 10,
-      "precision": 0.9254,
-      "unwanted_rate": 0.0746,
+      "precision": 0.9104,
+      "unwanted_rate": 0.0896,
       "recall": 1
     },
     {
@@ -297,17 +297,17 @@
     {
       "path": "memory_search",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 9,
+      "probes": 13,
+      "probes_with_items": 10,
       "probes_with_unwanted": 0,
-      "items": 16,
-      "required_items": 12,
-      "tolerated_items": 4,
+      "items": 18,
+      "required_items": 13,
+      "tolerated_items": 5,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 12,
-      "required_found": 12,
+      "required_total": 13,
+      "required_found": 13,
       "precision": 1,
       "unwanted_rate": 0,
       "recall": 1
@@ -315,24 +315,24 @@
     {
       "path": "memory_search_conversations",
       "family": "stale",
-      "probes": 12,
-      "probes_with_items": 12,
-      "probes_with_unwanted": 4,
-      "items": 48,
+      "probes": 13,
+      "probes_with_items": 13,
+      "probes_with_unwanted": 5,
+      "items": 52,
       "required_items": 0,
-      "tolerated_items": 33,
-      "unwanted_items": 15,
-      "unwanted_private_items": 0,
+      "tolerated_items": 36,
+      "unwanted_items": 16,
+      "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.6875,
-      "unwanted_rate": 0.3125,
+      "precision": 0.6923,
+      "unwanted_rate": 0.3077,
       "recall": null
     }
   ],
   "stale": {
-    "checks": 54,
+    "checks": 68,
     "misses": 2,
     "control_checks": 10,
     "control_failures": 0,
@@ -404,18 +404,18 @@
         "miss": false
       },
       {
+        "probe_id": "auto.coffee",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
+        "miss": false
+      },
+      {
         "probe_id": "auto.blue_bottle",
         "path": "automatic",
         "scenario": "retired_restatement",
         "issue": "M2",
-        "outcome": "labelled",
-        "miss": false
-      },
-      {
-        "probe_id": "auto.blue_bottle",
-        "path": "automatic",
-        "scenario": "unrelated_mention_not_flagged",
-        "issue": "M2",
         "outcome": "absent",
         "miss": false
       },
@@ -433,6 +433,22 @@
         "scenario": "unrelated_mention_not_flagged",
         "issue": "M2",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.blue_bottle",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.blue_bottle",
+        "path": "automatic",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
         "miss": false
       },
       {
@@ -484,11 +500,35 @@
         "miss": false
       },
       {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.home_city",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "auto.carrier",
         "path": "automatic",
         "scenario": "contradiction_saved_value",
         "issue": "M3",
         "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.carrier",
+        "path": "automatic",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
         "miss": false
       },
       {
@@ -513,6 +553,14 @@
         "scenario": "unrelated_statement_not_linked",
         "issue": "M3",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.storage",
+        "path": "automatic",
+        "scenario": "contradiction_saved_value",
+        "issue": "M3",
+        "outcome": "linked",
         "miss": false
       },
       {
@@ -649,6 +697,14 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search.coffee",
+        "path": "memory_search",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search_conversations.coffee",
         "path": "memory_search_conversations",
         "scenario": "retired_restatement",
@@ -682,9 +738,25 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search_conversations.coffee",
+        "path": "memory_search_conversations",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search.blue_bottle",
         "path": "memory_search",
         "scenario": "retired_restatement",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.blue_bottle",
+        "path": "memory_search",
+        "scenario": "unrelated_mention_not_flagged",
         "issue": "M2",
         "outcome": "absent",
         "miss": false
@@ -719,6 +791,14 @@
         "scenario": "retired_restatement",
         "issue": "M2",
         "outcome": "labelled",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.blue_bottle",
+        "path": "memory_search_conversations",
+        "scenario": "unrelated_mention_not_flagged",
+        "issue": "M2",
+        "outcome": "clear",
         "miss": false
       },
       {
@@ -794,11 +874,35 @@
         "miss": false
       },
       {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.home_city",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
+        "miss": false
+      },
+      {
         "probe_id": "memory_search.carrier",
         "path": "memory_search",
         "scenario": "contradiction_saved_value",
         "issue": "M3",
         "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.carrier",
+        "path": "memory_search",
+        "scenario": "unrelated_statement_not_linked",
+        "issue": "M3",
+        "outcome": "absent",
         "miss": false
       },
       {
@@ -823,6 +927,14 @@
         "scenario": "unrelated_statement_not_linked",
         "issue": "M3",
         "outcome": "absent",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search.storage",
+        "path": "memory_search",
+        "scenario": "contradiction_saved_value",
+        "issue": "M3",
+        "outcome": "linked",
         "miss": false
       },
       {
@@ -876,7 +988,7 @@
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
       "met": true,
-      "observed": "0 private items across 4 probes"
+      "observed": "0 private items across 9 probes"
     },
     {
       "id": "M1.one_word_answers_recalled",
@@ -904,21 +1016,21 @@
       "issue": "M2",
       "description": "a mention of a retired value that does not restate the claim is not flagged as its restatement",
       "met": true,
-      "observed": "0 misses of 15 checks"
+      "observed": "0 misses of 21 checks"
     },
     {
       "id": "M3.different_wording_detected",
       "issue": "M3",
       "description": "a later owner statement with different wording is linked to the saved claim it contradicts",
       "met": false,
-      "observed": "2 misses of 8 checks"
+      "observed": "2 misses of 10 checks"
     },
     {
       "id": "M3.no_over_linking",
       "issue": "M3",
       "description": "a later owner message sharing a saved value or Predicate word without updating the claim is not linked to it",
       "met": true,
-      "observed": "0 misses of 12 checks"
+      "observed": "0 misses of 18 checks"
     },
     {
       "id": "M4.drift_conflicts_warned",
@@ -1092,8 +1204,8 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.coffee.restated=tolerated",
-        "m.retire.coffee.a=tolerated"
+        "m.coffee.dad=tolerated",
+        "m.coffee.restated=tolerated"
       ]
     },
     {
@@ -1102,8 +1214,8 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.coffee.restated.a=tolerated",
-        "m.coffee.restated=tolerated"
+        "m.coffee.dad=tolerated",
+        "m.coffee.restated.a=tolerated"
       ]
     },
     {
@@ -1136,6 +1248,17 @@
         "c.shoe=required",
         "m.c.shoe=tolerated",
         "m.shoe.newer=tolerated"
+      ]
+    },
+    {
+      "id": "auto.storage",
+      "family": "stale",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.storage=required",
+        "m.c.storage=tolerated",
+        "m.storage.nolonger=tolerated"
       ]
     },
     {
@@ -1204,7 +1327,7 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "m.0727=tolerated",
+        "m.playlist.1=unwanted",
         "n.lisbon=required"
       ]
     },
@@ -1384,8 +1507,8 @@
       "path": "automatic",
       "status": "success",
       "items": [
-        "n.lisbon=required",
-        "n.tyres=unwanted"
+        "m.playlist.1=unwanted",
+        "n.lisbon=required"
       ]
     },
     {
@@ -1394,6 +1517,48 @@
       "path": "automatic",
       "status": "empty",
       "items": []
+    },
+    {
+      "id": "auto.privacy.debt",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "auto.privacy.anxiety",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "auto.privacy.custody",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "auto.privacy.run",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "m.0002=tolerated",
+        "m.0710=tolerated"
+      ]
+    },
+    {
+      "id": "auto.privacy.vpn",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.bank.drift=unwanted",
+        "c.bank=unwanted",
+        "m.vpn.2=tolerated"
+      ]
     },
     {
       "id": "memory_search.dinner",
@@ -1517,12 +1682,12 @@
       "path": "memory_search_conversations",
       "status": "success",
       "items": [
-        "m.0170=tolerated",
         "m.0173=tolerated",
         "m.0220=tolerated",
         "m.0455=tolerated",
         "m.0481=tolerated",
         "m.0748=tolerated",
+        "m.vpn.4=unwanted",
         "n.lisbon.a=tolerated",
         "n.lisbon=required"
       ]
@@ -1749,6 +1914,7 @@
       "status": "success",
       "items": [
         "m.coffee.closed=tolerated",
+        "m.coffee.dad=tolerated",
         "m.coffee.friend=tolerated",
         "m.coffee.restated=tolerated",
         "m.retire.coffee.a=tolerated",
@@ -1770,6 +1936,7 @@
       "items": [
         "m.coffee.airport=tolerated",
         "m.coffee.closed=tolerated",
+        "m.coffee.dad=tolerated",
         "m.coffee.friend=tolerated",
         "m.coffee.restated.a=tolerated",
         "m.coffee.restated=tolerated"
@@ -1841,6 +2008,25 @@
       ]
     },
     {
+      "id": "memory_search.storage",
+      "family": "stale",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.storage=required",
+        "m.storage.nolonger=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.storage",
+      "family": "stale",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.storage=tolerated"
+      ]
+    },
+    {
       "id": "memory_search.gym",
       "family": "stale",
       "path": "memory_search",
@@ -1897,7 +2083,8 @@
       "status": "success",
       "items": [
         "m.c.bank.drift=tolerated",
-        "m.c.bank=tolerated"
+        "m.c.bank=tolerated",
+        "m.private.overdrawn(private)=unwanted"
       ]
     },
     {
