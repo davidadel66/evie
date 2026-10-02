@@ -127,11 +127,14 @@ in budgets, relevance heuristics, and result contracts.
 
 ## Plan
 
-**Progress:** stages 1, 2, 7, 11, 12 merged (2026-10-01). Stage 11's
-baseline is in `cmd/evie/docs/active/memory-scale-eval.md`; later memory
-stages re-record it. L2's malformed-argument check was dropped: David kept
-the 2026-08-23 decision that argument syntax stays a model-visible tool
-error (truncated arguments are rejected via `finish_reason`).
+**Progress:** all 14 stages merged (2026-10-01), plus three fixes found while
+validating: finance writes now wait on lock contention, a timing-sensitive
+sub-agent test is deterministic, and retrieval work budgets scale under the
+race detector. L2's malformed-argument check was dropped: David kept the
+2026-08-23 decision that argument syntax stays a model-visible tool error
+(truncated arguments are rejected via `finish_reason`). Stage 11's baseline
+and later before/after numbers are in `cmd/evie/docs/active/memory-scale-eval.md`.
+A final verification pass over all 47 issues is next.
 
 Each stage is one reviewable change: focused tests for every fixed issue
 (failing first), `gofmt`, then `./scripts/verify-change.sh`. A stage that
