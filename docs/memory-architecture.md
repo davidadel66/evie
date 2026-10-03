@@ -144,8 +144,23 @@ in `docs/context-management-comparison.md`):
 10. **Memory flush before compaction.** Trigger the Stage 4 background pass
     just before a compaction.
 
+Orchestration stages (after context management; modelled on how this
+review was run — isolated workers, verify, merge — and on Claude Code
+sub-agents and worktrees):
+
+11. **Build worker.** A general-purpose sub-agent whose writes are fenced to
+    its own git worktree and branch, with a Task grant for its claimed
+    subtree.
+12. **Verify-and-merge gate.** Run the project's check command on the
+    worker's branch; rebase, rerun; David approves the merge.
+13. **Task Tree orchestration.** Parallel workers driven from the Task Tree;
+    the orchestrator reconciles results and merges as each finishes.
+14. **Workflow Runtime.** Deterministic large fan-outs (like a 100-agent
+    research run), per `cmd/evie/docs/active/workflow-runtime.spec.md`.
+
 Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6; then 7–10 (7 first;
-8 and 9 in parallel; 10 once Stage 4 has landed).
+8 and 9 in parallel; 10 once Stage 4 has landed); then 11–14 in order (14 may
+start after 11).
 
 ### Acceptance criteria
 
@@ -229,6 +244,64 @@ Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6; then 7–10 (7 first;
   turns.
 - It doesn't block the turn: it runs asynchronously over stored events, which
   remain in SQLite.
+
+**11. Build worker** (decided 2026-10-03: free edits inside the worktree,
+approval once at merge)
+- New worker preset `build`. Its `edit_file`, file writes and bash run only
+  inside a git worktree on a fresh branch created for the task. The fence is
+  enforced in code: path resolution, symlinks and bash working directory.
+  Writes outside the worktree, to the owner's working tree, or to `master`
+  are refused.
+- No per-edit approval inside the worktree. Approval-gated tools outside the
+  fence (memory writes, finance edits, cron, network-changing actions) are
+  not available to the worker.
+- The worker gets a Task access grant scoped to its claimed task. It can
+  update that task's status and result and add children under it, using
+  revision checks. The orchestrator owns the rest of the tree.
+- Same budgets, wrap-up, framing, per-turn cap and result contract as other
+  workers. Its report lists the branch, commits and files changed.
+- Tests:
+  - fence escapes (`..`, symlinks, absolute paths, bash `cd`) are refused;
+  - the grant can't touch sibling or parent tasks;
+  - a crash mid-task leaves the worktree recoverable;
+  - old receipts still resume.
+
+**12. Verify-and-merge gate**
+- Projects declare a verification command. Repository instructions or
+  Workspace configuration can name it, for example
+  `./scripts/verify-change.sh`.
+- Before proposing a merge, Evie:
+  1. runs the command on the worker's branch;
+  2. rebases onto the target branch;
+  3. reruns the command;
+  4. shows David the diff summary and the results.
+- The merge (fast-forward or rebase) happens only on David's approval. The
+  worktree and branch are cleaned up after merge or abandon.
+- A failing check returns to the worker through continuation with the
+  failure output, bounded by budget.
+- Running agents are told when the target branch moves.
+
+**13. Task Tree orchestration**
+- Given a Task Tree, the orchestrator dispatches independent ready tasks to
+  build or explore workers in parallel, within the concurrency caps. Tasks
+  that conflict on files or have dependencies run in order.
+- Each worker claims its task. Results flow back as worker reports and Task
+  updates; workers don't talk to each other.
+- The orchestrator verifies, merges (through Stage 12) and moves to the next
+  ready task.
+- Progress is visible in the UI's task view.
+- Restart-safe: claims, leases and worktrees survive a crash and resume or
+  release cleanly.
+
+**14. Workflow Runtime**
+- Implement the reviewed, deterministic Workflow Runtime from
+  `workflow-runtime.spec.md` and its ADRs. Large fan-outs (dozens to
+  hundreds of AI nodes) run as a durable script with phases, bounded retries,
+  structured node outputs and aggregation, not as a chat turn.
+- AI nodes stay away from effects (ADR 0010). Concurrency is bounded by
+  provider rate limits and cost caps, and each run's cost is reported.
+- First workflow to ship: a deep-research workflow (search, fetch, verify,
+  synthesize) equivalent to the one used for this plan.
 
 ## Decisions (David, 2026-10-03)
 
