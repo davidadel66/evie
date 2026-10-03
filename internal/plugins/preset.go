@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
+	StandardPresetVersion                               = "sha256:bfd4eb42705bce9f2ab68b1b0832d224f11b1e5bbb1f0221768188cd2d322d4e"
+	preExploreStandardPresetVersion                     = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
 	preProactiveStandardPresetVersion                   = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
 	preStandingStandardPresetVersion                    = "sha256:983a77d1935c12e9165cba63b28bcfa4b035a9fe4e55ce37f4630bd17e26c654"
 	preEpisodesStandardPresetVersion                    = "sha256:3b3ef3ab00330870c95a752c4611b3ec765032ad545e63c2dd5e9862294df6ce"
@@ -340,6 +341,9 @@ func (m *Manager) ResolvePresetContext(ctx context.Context, id PresetID) (Resolv
 	if id == ResearchPresetID {
 		return m.resolvePreset(BuiltinResearchPreset())
 	}
+	if id == ExplorePresetID {
+		return m.resolvePreset(BuiltinExplorePreset())
+	}
 	if id != StandardPresetID {
 		return ResolvedComposition{}, fmt.Errorf("Agent Preset %q is not allowed; choose %q", id, StandardPresetID)
 	}
@@ -356,7 +360,7 @@ func (m *Manager) InspectPresetsContext(ctx context.Context) ([]PresetInspection
 	if err := m.RefreshEnabledState(ctx); err != nil {
 		return nil, err
 	}
-	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true), m.inspectPreset(BuiltinResearchPreset(), true)}, nil
+	return []PresetInspection{m.inspectPreset(BuiltinStandardPreset(), true), m.inspectPreset(BuiltinResearchPreset(), true), m.inspectPreset(BuiltinExplorePreset(), true)}, nil
 }
 
 // ValidatePreset validates exactly the requested built-in. Unknown IDs are
@@ -371,6 +375,9 @@ func (m *Manager) validatePresetCurrent(id PresetID) PresetInspection {
 	}
 	if id == ResearchPresetID {
 		return m.inspectPreset(BuiltinResearchPreset(), true)
+	}
+	if id == ExplorePresetID {
+		return m.inspectPreset(BuiltinExplorePreset(), true)
 	}
 	if id != StandardPresetID {
 		return PresetInspection{
@@ -463,8 +470,14 @@ func (m *Manager) resolvePreset(preset Preset) (ResolvedComposition, error) {
 	}
 
 	base := m.base
-	if preset.ID == ResearchPresetID {
+	switch preset.ID {
+	case ResearchPresetID:
 		base = tools.NewToolset(nil)
+	case ExplorePresetID:
+		// The explore worker's tools are the Kernel's read-only explore
+		// toolset, not the parent's base: no write, approval-gated, cron or
+		// memory tool is ever inherited.
+		base = tools.ExploreToolset()
 	}
 	definitions := make([]tools.Tool, 0, len(selected))
 	schemaOwner := make(map[string]string)
@@ -687,8 +700,14 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preProactiveStandardPresetVersion {
 		return m.resumePreset(preProactiveStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preExploreStandardPresetVersion {
+		return m.resumePreset(preExploreStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
+	}
+	if receipt.Preset.ID == string(ExplorePresetID) {
+		return m.resumePresetWithBase(BuiltinExplorePreset(), tools.ExploreToolset(), receipt)
 	}
 	switch receipt.Preset.Version {
 	case preMemoryStandardPresetVersion:
@@ -980,16 +999,38 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 // standardPresetContent is the current standard preset: every Memory
 // Capability including the stored tool result reader, past-session episode
 // search, the standing tier's memory_set_standing and memory_overview, then
-// delegation, its report reader and continuation. A later Memory Capability
-// must freeze this Memory list, as preProactiveMemoryCapabilityRequirements
-// does for the version before it.
+// delegation, its report reader and continuation, then explore delegation
+// (Stage 7, 2026-10-03). A later Memory Capability must freeze this Memory
+// list, as preProactiveMemoryCapabilityRequirements does for the version
+// before it.
 func standardPresetContent() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preExploreStandardPresetContent()
+	p.OptionalCapabilities = append(p.OptionalCapabilities,
+		CapabilityRequirement{ID: SubagentsExploreCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preExploreStandardPresetContent is the content of version 89664be6…, the
+// standard preset before explore delegation: the same Memory list as the
+// current preset (no Memory Capability was added since), then delegation,
+// its report reader and continuation.
+func preExploreStandardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preSubagentsStandardPresetContent()
 	p.OptionalCapabilities = append(memoryCapabilityRequirements(compatibility),
 		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preExploreStandardPreset is the standard preset before explore delegation
+// (version 89664be6…); sessions pinned to it keep research delegation,
+// reports and continuation without delegate_explore.
+func preExploreStandardPreset() Preset {
+	p := preExploreStandardPresetContent()
+	p.Version = preExploreStandardPresetVersion
 	return p
 }
 

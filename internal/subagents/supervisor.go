@@ -25,7 +25,12 @@ type Composition struct {
 	Instructions             string
 	CompatibilityResolutions []composition.CompatibilityResolution
 }
-type Resolver func(context.Context, *composition.Receipt) (Composition, error)
+
+// Resolver composes a worker child: the named worker preset ("research" or
+// "explore") freshly when receipt is nil, otherwise exactly the pinned
+// receipt, whose preset is that worker. Instructions are the worker preset's
+// pinned instructions.
+type Resolver func(ctx context.Context, worker string, receipt *composition.Receipt) (Composition, error)
 type Supervisor struct {
 	store   *eviedb.Store
 	policy  delegation.Policy
@@ -159,8 +164,26 @@ func (s *Supervisor) enter(ctx context.Context, parent delegation.Parent) (conte
 	return ctx, rt, leave, nil
 }
 
+// Delegate runs a delegate_research batch of web research children.
 func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
-	if err := s.policy.ValidateBatch(requests); err != nil {
+	return s.delegate(ctx, parent, delegation.WorkerResearch, requests)
+}
+
+// Explore runs a delegate_explore batch of read-only explore children (Stage
+// 7, 2026-10-03), each confined to a folder the harness resolves from the
+// parent's Workspace folder or project root and the assignment's path. They
+// are admitted, budgeted, wrapped up, settled, recovered and delivered exactly
+// like research children.
+func (s *Supervisor) Explore(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]delegation.Result, error) {
+	return s.delegate(ctx, parent, delegation.WorkerExplore, requests)
+}
+
+func (s *Supervisor) delegate(ctx context.Context, parent delegation.Parent, worker string, requests []delegation.Assignment) ([]delegation.Result, error) {
+	validate := s.policy.ValidateBatch
+	if worker == delegation.WorkerExplore {
+		validate = s.policy.ValidateExploreBatch
+	}
+	if err := validate(requests); err != nil {
 		return nil, err
 	}
 	ctx, rt, leave, err := s.enter(ctx, parent)
@@ -169,7 +192,7 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	}
 	defer leave()
 	client, profile, resolve := rt.client, rt.profile, rt.resolve
-	resolved, err := resolve(ctx, nil)
+	resolved, err := resolve(ctx, worker, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -177,16 +200,29 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 	if err != nil {
 		return nil, err
 	}
-	childReceipt, err := researchReceipt(resolved.Receipt, parentReceipt)
-	if err != nil {
+	var childReceipt composition.Receipt
+	var roots []string
+	if worker == delegation.WorkerExplore {
+		if childReceipt, err = exploreReceipt(resolved.Receipt, parentReceipt); err != nil {
+			return nil, err
+		}
+		if roots, err = s.exploreRoots(ctx, parent, requests); err != nil {
+			return nil, err
+		}
+	} else if childReceipt, err = researchReceipt(resolved.Receipt, parentReceipt); err != nil {
 		return nil, err
 	}
-	resolved, err = resolve(ctx, &childReceipt)
+	resolved, err = resolve(ctx, worker, &childReceipt)
 	if err != nil {
 		return nil, err
 	}
 	dispatchID := uuid.NewString()
-	attempts, err := s.store.AdmitSubagents(ctx, parent, requests, resolved.Receipt, s.policy, dispatchID)
+	var attempts []delegation.Attempt
+	if worker == delegation.WorkerExplore {
+		attempts, err = s.store.AdmitExploreSubagents(ctx, parent, requests, roots, resolved.Receipt, s.policy, dispatchID)
+	} else {
+		attempts, err = s.store.AdmitSubagents(ctx, parent, requests, resolved.Receipt, s.policy, dispatchID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +261,33 @@ func (s *Supervisor) Delegate(ctx context.Context, parent delegation.Parent, req
 		}
 	}
 	return results, nil
+}
+
+// exploreRoots resolves each explore assignment's folder: its path inside the
+// parent's Workspace folder or project root, or that folder itself; an
+// absolute path when the parent has neither. Admission checks each root
+// against the parent's current folder again under the write lock.
+func (s *Supervisor) exploreRoots(ctx context.Context, parent delegation.Parent, requests []delegation.Assignment) ([]string, error) {
+	base := parent.Scope.ProjectRoot
+	if parent.Scope.WorkspaceID != "" {
+		folder, err := s.store.WorkspaceFolder(ctx, parent.Scope.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+		if folder.Path == "" {
+			return nil, errors.New("delegate_explore needs a folder: attach one to this Workspace first")
+		}
+		base = folder.Path
+	}
+	roots := make([]string, len(requests))
+	for i, r := range requests {
+		root, err := tools.ResolveWorkerRoot(base, r.Path)
+		if err != nil {
+			return nil, fmt.Errorf("invalid delegate_explore request: assignment %q path: %w", r.Key, err)
+		}
+		roots[i] = root
+	}
+	return roots, nil
 }
 
 // undeliverable is the error entry of one batch member whose result could
@@ -600,9 +663,14 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		s.watch(ctx, cancel, a.ID)
 	}()
 	defer func() { cancel(nil); <-watchDone }()
-	resolved, err := resolve(ctx, &a.Receipt)
+	resolved, err := resolve(ctx, a.Worker(), &a.Receipt)
 	if err != nil {
 		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
+	}
+	toolset := resolved.Toolset
+	if a.Worker() == delegation.WorkerExplore {
+		// The explore tools read only inside the attempt's pinned root.
+		toolset = toolset.WithWorkerRoot(a.Root)
 	}
 	if err := s.store.AppendCompatibilityResolutions(ctx, a.Child.ID, resolved.CompatibilityResolutions); err != nil {
 		return s.finish(call, a.ID, outcome{"failed", "composition_unavailable"})
@@ -612,7 +680,7 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		// from a model profile that cannot take the policy (below).
 		return s.finish(call, a.ID, outcome{"failed", "pinned_policy_invalid"})
 	}
-	metered := &budget{client: client, policy: a.Policy, now: s.now, started: s.now(),
+	metered := &budget{client: client, policy: a.Policy, worker: a.Worker(), now: s.now, started: s.now(),
 		authorize: func(ctx context.Context) error { return s.authorize(ctx, a.ID) },
 		record:    func(reason string) { s.recordWrapUp(ctx, a.ID, reason) }}
 	// The child gets the model's normal output reserve; only its request
@@ -622,7 +690,7 @@ func (s *Supervisor) execute(ctx context.Context, a delegation.Attempt, client a
 		return s.finish(call, a.ID, outcome{"failed", "invalid_model_policy"})
 	}
 	holder := a.Child.ID
-	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), resolved.Toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
+	session := agent.NewDelegatedWithToolset(metered, profile, s.store.BindHistory(a.Child.ID, stringHolder(holder)), a.Child.ScopeContext(), s.store.BindTurnOwner(a.Child.ID, stringHolder(holder)), toolset, resolved.Instructions, agent.WithWrapUp(metered.wrapUp))
 	if err = session.Send(ctx, assignmentMessage(a), quietEvents{}, nil); err != nil {
 		failure := executionFailure(ctx, err, deadline)
 		if failure.reason == delegation.ReasonContextLimit && errors.Is(err, agent.ErrContextOverflow) && metered.wrapUpReason() != "" {

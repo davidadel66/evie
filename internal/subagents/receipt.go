@@ -39,3 +39,16 @@ func researchReceipt(template, parent composition.Receipt) (composition.Receipt,
 	}
 	return result, nil
 }
+
+// exploreReceipt is the explore preset's receipt once the parent's ceiling
+// allows it: the parent must itself hold read_file, query_db and bash, of
+// which the worker's tools are confined, read-only forms. The explore preset
+// selects no plugin Capability, so nothing is inherited from the parent.
+func exploreReceipt(template, parent composition.Receipt) (composition.Receipt, error) {
+	for _, name := range delegation.ExploreToolNames {
+		if !slices.ContainsFunc(parent.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == name }) {
+			return composition.Receipt{}, fmt.Errorf("%w: parent lacks %s, so it cannot delegate explore work", delegation.ErrAuthority, name)
+		}
+	}
+	return composition.Clone(template), nil
+}

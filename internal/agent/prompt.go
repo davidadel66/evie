@@ -11,7 +11,13 @@ import (
 const (
 	readSubagentReportTool = "read_subagent_report"
 	continueResearchTool   = "continue_research"
+	delegateExploreTool    = "delegate_explore"
 )
+
+// exploreGuidance is the Delegation line for a session that can delegate to
+// read-only explore workers (Stage 7, 2026-10-03). Sessions pinned before
+// delegate_explore existed keep their exact prompt.
+const exploreGuidance = "- Use " + delegateExploreTool + " for local work that needs many tool calls or large outputs you don't need to see, such as reading many files or investigating a repository or database; its workers can only read. Keep small lookups (a file or a query) yourself.\n"
 
 // delegationFollowUpAnchor starts the Delegation line that the follow-up
 // guidance precedes.
@@ -38,18 +44,21 @@ const (
 // primaryInstructions is the primary agent's system prompt for a session
 // whose toolset is tools: systemPrompt, plus the delegation follow-up line
 // naming only the follow-up tools the session has (amended 2026-10-01;
-// formerly every session was told to use both), plus the memory duties when
+// formerly every session was told to use both), preceded by the explore
+// guidance when the session has delegate_explore, plus the memory duties when
 // the session can queue proposals for review (2026-10-03). A session's
 // toolset is pinned, so its instructions stay stable and cacheable across
 // its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation, duties, overview bool
+	var report, continuation, explore, duties, overview bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case readSubagentReportTool:
 			report = true
 		case continueResearchTool:
 			continuation = true
+		case delegateExploreTool:
+			explore = true
 		case rememberLiteralTool:
 			_, duties = tool.Function.Parameters.Properties[requestedByOwnerFlag]
 		case memoryOverviewTool:
@@ -65,6 +74,9 @@ func primaryInstructions(tools []openrouter.Tool) string {
 		line = "- Use " + readSubagentReportTool + " when a summary is not enough.\n"
 	case continuation:
 		line = "- Use " + continueResearchTool + " to extend a partial child instead of starting over.\n"
+	}
+	if explore {
+		line = exploreGuidance + line
 	}
 	if line != "" {
 		prompt = strings.Replace(prompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)

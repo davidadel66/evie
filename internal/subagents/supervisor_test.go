@@ -96,16 +96,7 @@ func setupFixture(t *testing.T, policy delegation.Policy, fault *storeFault, web
 			t.Fatal(err)
 		}
 	}
-	f.supervisor.Configure(f.client, f.profile, func(ctx context.Context, receipt *composition.Receipt) (subagents.Composition, error) {
-		var r plugins.ResolvedComposition
-		var err error
-		if receipt == nil {
-			r, err = f.manager.ResolvePresetContext(ctx, plugins.ResearchPresetID)
-		} else {
-			r, err = f.manager.ResumeCompositionContext(ctx, *receipt)
-		}
-		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: r.CompatibilityResolutions}, err
-	})
+	f.supervisor.Configure(f.client, f.profile, f.resolver())
 	resolved, err := f.manager.ResolvePreset(plugins.StandardPresetID)
 	if err != nil {
 		t.Fatal(err)
@@ -196,16 +187,25 @@ func (p *gatedProvider) ChatStream(ctx context.Context, _ openrouter.ChatRequest
 }
 func configure(t *testing.T, f *fixture, client agent.Client) {
 	t.Helper()
-	f.supervisor.Configure(client, f.profile, func(ctx context.Context, receipt *composition.Receipt) (subagents.Composition, error) {
+	f.supervisor.Configure(client, f.profile, f.resolver())
+}
+
+// resolver composes worker children through the fixture's real Plugin
+// Manager, as the composition root does.
+func (f *fixture) resolver() subagents.Resolver {
+	return func(ctx context.Context, worker string, receipt *composition.Receipt) (subagents.Composition, error) {
+		instructions, err := plugins.WorkerInstructions(plugins.PresetID(worker))
+		if err != nil {
+			return subagents.Composition{}, err
+		}
 		var r plugins.ResolvedComposition
-		var err error
 		if receipt == nil {
-			r, err = f.manager.ResolvePresetContext(ctx, plugins.ResearchPresetID)
+			r, err = f.manager.ResolvePresetContext(ctx, plugins.PresetID(worker))
 		} else {
 			r, err = f.manager.ResumeCompositionContext(ctx, *receipt)
 		}
-		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: r.CompatibilityResolutions}, err
-	})
+		return subagents.Composition{Receipt: r.Receipt, Toolset: r.Toolset, Instructions: instructions, CompatibilityResolutions: r.CompatibilityResolutions}, err
+	}
 }
 func TestForegroundBatchActuallyOverlapsWithinConfiguredCapacity(t *testing.T) {
 	for _, limits := range []struct{ parent, runtime, want int }{{1, 3, 1}, {2, 3, 2}, {3, 2, 2}} {

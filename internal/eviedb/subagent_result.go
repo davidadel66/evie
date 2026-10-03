@@ -345,6 +345,9 @@ type subagentNextSteps struct {
 	continuable bool
 	readable    bool
 	continues   string
+	// local is set for an explore child: it has no Web tools, so its report
+	// cites no Web evidence to check (2026-10-03).
+	local bool
 }
 
 // limitNote states, with the attempt's pinned limit, which limit stopped an
@@ -385,7 +388,11 @@ func buildSubagentResult(r *delegation.Result, hasReport bool, report string, ev
 		key, _ := sourceKey(e.url)
 		known[key] = true
 	}
-	for _, raw := range citedURLs(report) {
+	var cites []string
+	if !next.local {
+		cites = citedURLs(report)
+	}
+	for _, raw := range cites {
 		key, _ := sourceKey(raw)
 		citedKeys[key] = true
 		if !known[key] {
@@ -569,7 +576,7 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 	err := s.withSubagentReadTransaction(ctx, func(conn *sql.Conn) error {
 		a, err := s.inspectSubagent(ctx, conn, p, id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("no delegated research execution %q belongs to this session", id)
+			return fmt.Errorf("no delegated execution %q belongs to this session", id)
 		}
 		if err != nil {
 			return err
@@ -585,6 +592,9 @@ func (s *Store) ReadSubagentReport(ctx context.Context, p delegation.Parent, id 
 			return fmt.Errorf("read_subagent_report offset %s is not a UTF-8 boundary within the %s-byte report; use 0 or a next_offset", delegation.Grouped(offset), delegation.Grouped(len(report)))
 		}
 		page = delegation.ReportPage{ExecutionID: a.ID, Status: a.State, TotalBytes: len(report), Offset: offset}
+		if a.Worker() == delegation.WorkerExplore {
+			page.Worker = delegation.WorkerExplore
+		}
 		end := offset + len(utf8Prefix(report[offset:], limit))
 		for {
 			page.End, page.Text, page.NextOffset = end, report[offset:end], nil

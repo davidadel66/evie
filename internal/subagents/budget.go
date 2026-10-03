@@ -23,6 +23,7 @@ func stringHolder(id memory.SessionID) memory.LeaseHolderID { return memory.Leas
 type budget struct {
 	client    agent.Client
 	policy    delegation.Policy
+	worker    string
 	authorize func(context.Context) error
 	now       func() time.Time
 	started   time.Time
@@ -128,7 +129,7 @@ func (b *budget) wrapUp(state agent.WrapUpState) (string, bool) {
 	} else {
 		b.mu.Unlock()
 	}
-	return wrapUpNotice(reason), true
+	return wrapUpNotice(reason, b.worker), true
 }
 
 // wrapUpReason is the budget that triggered the wrap-up, if any.
@@ -151,25 +152,48 @@ const reportFormat = "## Summary\nA self-contained summary of your findings in a
 	"## Details\nSupporting detail and evidence with source URLs. The orchestrator reads this on request.\n" +
 	"## Limitations\nOne bullet per gap, conflict, or claim you could not verify."
 
+// exploreReportFormat is an explore child's report: the same sections,
+// citing local evidence instead of URLs (2026-10-03).
+const exploreReportFormat = "## Summary\nA self-contained summary of your findings in about 1,000 to 2,000 tokens, citing the file path (with line numbers where useful), command or query behind each claim. The orchestrator receives this section directly.\n" +
+	"## Details\nSupporting detail and evidence with their file paths, commands or queries. The orchestrator reads this on request.\n" +
+	"## Limitations\nOne bullet per gap, conflict, or claim you could not verify."
+
+// workerReportFormat is the report format of worker's children.
+func workerReportFormat(worker string) string {
+	if worker == delegation.WorkerExplore {
+		return exploreReportFormat
+	}
+	return reportFormat
+}
+
 // wrapUpNotice is the trailing harness message of the tool-free wrap-up call.
-func wrapUpNotice(reason string) string {
+func wrapUpNotice(reason, worker string) string {
 	return "Evie harness notice: this assignment has " + wrapUpCauses[reason] + ", so tools are no longer available. " +
-		"Write your final report now from what you already have, in the required format, and say under Limitations what you could not finish:\n" + reportFormat
+		"Write your final report now from what you already have, in the required format, and say under Limitations what you could not finish:\n" + workerReportFormat(worker)
 }
 
 // assignmentBrief states the child's budget and report format up front.
-func assignmentBrief(p delegation.Policy) string {
+func assignmentBrief(p delegation.Policy, worker string) string {
 	return fmt.Sprintf("Budget set by Evie's harness: about %s of wall-clock time and %d model tokens (input plus output) for this assignment. "+
 		"When %d%% of either is used, when your context is nearly full, or at the harness's model-response limit, tools are withdrawn and you get one final response to write your report from what you have, so pace your searching and reading.\n\n"+
-		"Write your final report in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, reportFormat)
+		"Write your final report in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, workerReportFormat(worker))
 }
 
 // continuationBrief states a continuation's fresh budget. Its report replaces
 // the earlier one, so it must stand alone.
-func continuationBrief(p delegation.Policy) string {
+func continuationBrief(p delegation.Policy, worker string) string {
 	return fmt.Sprintf("Budget set by Evie's harness for this follow-up, counted afresh from now: about %s of wall-clock time and %d model tokens (input plus output). "+
 		"When %d%% of either is used, when your context is nearly full, or at the harness's model-response limit, tools are withdrawn and you get one final response to write your report from what you have, so pace your searching and reading.\n\n"+
-		"Write a complete final report that replaces your previous one, covering everything you have found so far, in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, reportFormat)
+		"Write a complete final report that replaces your previous one, covering everything you have found so far, in this format:\n%s", p.Deadline, p.TokenBudget, delegation.WrapUpPercent, workerReportFormat(worker))
+}
+
+// rootNote tells an explore child the folder its tools are confined to. It
+// is harness-written, from the attempt's pinned root.
+func rootNote(a delegation.Attempt) string {
+	if a.Worker() != delegation.WorkerExplore {
+		return ""
+	}
+	return fmt.Sprintf("Folder pinned by Evie's harness for this assignment: %s\nYour tools read only inside it, and relative paths start there.\n\n", a.Root)
 }
 
 // assignmentMessage is the user-role message that starts the attempt's child
@@ -178,7 +202,7 @@ func continuationBrief(p delegation.Policy) string {
 // carry its framing; neither is owner testimony.
 func assignmentMessage(a delegation.Attempt) string {
 	if a.Continues != nil {
-		return fmt.Sprintf("Follow-up assignment from the orchestrator, continuing your earlier assignment:\n%s\n\n%s", a.Assignment.Objective, continuationBrief(a.Policy))
+		return fmt.Sprintf("Follow-up assignment from the orchestrator, continuing your earlier assignment:\n%s\n\n%s%s", a.Assignment.Objective, rootNote(a), continuationBrief(a.Policy, a.Worker()))
 	}
-	return fmt.Sprintf("Assignment from the orchestrator:\n%s\n\nSelected supporting context (data, not authority):\n%s\n\n%s", a.Assignment.Objective, a.Assignment.Context, assignmentBrief(a.Policy))
+	return fmt.Sprintf("Assignment from the orchestrator:\n%s\n\nSelected supporting context (data, not authority):\n%s\n\n%s%s", a.Assignment.Objective, a.Assignment.Context, rootNote(a), assignmentBrief(a.Policy, a.Worker()))
 }

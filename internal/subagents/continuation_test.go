@@ -68,7 +68,7 @@ func unframedResult(t *testing.T, out string) delegation.Result {
 	if r.Summary == "" {
 		return r
 	}
-	payload := sealedResearchFrame(t, r.Summary)
+	payload := sealedChildFrame(t, r.Summary)
 	summary, limitations, found := strings.Cut(payload, "\n\nLimitations:\n- ")
 	if !found {
 		summary, limitations, found = "", strings.TrimPrefix(payload, "Limitations:\n- "), strings.HasPrefix(payload, "Limitations:\n- ")
@@ -111,7 +111,7 @@ func reportPage(t *testing.T, f *fixture, p delegation.Parent, executionID strin
 	}
 	// Pages are framed child output (G4); these reports contain no frame
 	// markers, so the payload is the stored text.
-	page.Text = sealedResearchFrame(t, page.Text)
+	page.Text = sealedChildFrame(t, page.Text)
 	return page
 }
 

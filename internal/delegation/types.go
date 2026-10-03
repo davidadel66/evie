@@ -29,9 +29,41 @@ const ReportToolName = "read_subagent_report"
 const ContinueCapabilityID = "subagents.continue"
 const ContinueToolName = "continue_research"
 
+// ExploreCapabilityID lets a parent delegate local, read-heavy work to
+// read-only explore workers (Stage 7 of docs/memory-architecture.md, added
+// 2026-10-03). Their results use the delegate_research contract; reports are
+// paged with read_subagent_report and children extended with
+// continue_research.
+const ExploreCapabilityID = "subagents.explore"
+const ExploreToolName = "delegate_explore"
+
+// Worker presets a child can be composed from. A child's worker is its pinned
+// receipt's preset identity.
+const (
+	WorkerResearch = "research"
+	WorkerExplore  = "explore"
+)
+
+// ExploreToolNames are the explore preset's tools in schema order: read_file
+// confined to the worker's root, the Kernel's read-only query_db, and a bash
+// that runs only vetted read-only commands. Each is a narrower form of a
+// parent tool of the same name.
+var ExploreToolNames = []string{"read_file", "query_db", "bash"}
+
+// DelegationToolName is the tool whose committed intent admits a fresh child
+// of worker.
+func DelegationToolName(worker string) string {
+	if worker == WorkerExplore {
+		return ExploreToolName
+	}
+	return ToolName
+}
+
 // AdmitsChildren reports whether a committed parent tool intent can authorize
 // child execution: a delegation batch or a continuation.
-func AdmitsChildren(tool string) bool { return tool == ToolName || tool == ContinueToolName }
+func AdmitsChildren(tool string) bool {
+	return tool == ToolName || tool == ExploreToolName || tool == ContinueToolName
+}
 
 var ErrConflict = errors.New("subagent idempotency key conflicts with an existing assignment")
 var ErrCapacity = errors.New("subagent concurrency capacity is occupied")
@@ -40,7 +72,7 @@ var ErrPolicy = errors.New("subagent execution policy limit")
 
 // ErrNotFound is an execution that does not exist or belongs to another
 // session; the two are deliberately indistinguishable.
-var ErrNotFound = errors.New("no delegated research execution with this ID belongs to this session")
+var ErrNotFound = errors.New("no delegated execution with this ID belongs to this session")
 
 // ErrNotResumable refuses a continuation of an attempt that is still running
 // or has no report to continue from.
@@ -87,6 +119,11 @@ type Assignment struct {
 	Objective string `json:"objective"`
 	Context   string `json:"context,omitempty"`
 	TaskID    string `json:"task_id,omitempty"`
+	// Path is an explore assignment's declared folder: inside the parent's
+	// Workspace folder or project root, or absolute when the parent has
+	// neither. Research assignments have none, so their digests are
+	// unchanged (added 2026-10-03).
+	Path string `json:"path,omitempty"`
 }
 
 type Policy struct {
@@ -152,20 +189,32 @@ const (
 	BatchEnvelopeBytes = 96 * 1024
 	// MaxKeyBytes bounds idempotency keys, Task identities and execution IDs.
 	MaxKeyBytes = 128
+	// MaxPathBytes bounds an explore assignment's declared path.
+	MaxPathBytes = 1024
 )
 
 // ValidateBatch checks a delegate_research request before any child or model
 // provider is touched. Every violation names its assignment (by key, or by
 // position when the key itself is unusable), the field and the limit.
 func (p Policy) ValidateBatch(a []Assignment) error {
+	return p.validateBatch(ToolName, a)
+}
+
+// ValidateExploreBatch checks a delegate_explore request like ValidateBatch,
+// and bounds each declared path.
+func (p Policy) ValidateExploreBatch(a []Assignment) error {
+	return p.validateBatch(ExploreToolName, a)
+}
+
+func (p Policy) validateBatch(tool string, a []Assignment) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
 	if len(a) == 0 {
-		return errors.New("delegate_research requires at least one assignment")
+		return fmt.Errorf("%s requires at least one assignment", tool)
 	}
 	if len(a) > p.MaxBatch {
-		return fmt.Errorf("delegate_research has %d assignments; limit %d per call", len(a), p.MaxBatch)
+		return fmt.Errorf("%s has %d assignments; limit %d per call", tool, len(a), p.MaxBatch)
 	}
 	var problems []string
 	first := map[string]int{}
@@ -192,9 +241,15 @@ func (p Policy) ValidateBatch(a []Assignment) error {
 		if len(v.TaskID) > MaxKeyBytes {
 			problems = append(problems, fmt.Sprintf("%s task_id is %s bytes; limit %d", name, Grouped(len(v.TaskID)), MaxKeyBytes))
 		}
+		switch {
+		case tool != ExploreToolName && v.Path != "":
+			problems = append(problems, fmt.Sprintf("%s path is not supported by %s", name, tool))
+		case len(v.Path) > MaxPathBytes:
+			problems = append(problems, fmt.Sprintf("%s path is %s bytes; limit %s", name, Grouped(len(v.Path)), Grouped(MaxPathBytes)))
+		}
 	}
 	if len(problems) > 0 {
-		return fmt.Errorf("invalid delegate_research request: %s", strings.Join(problems, "; "))
+		return fmt.Errorf("invalid %s request: %s", tool, strings.Join(problems, "; "))
 	}
 	return nil
 }
@@ -278,6 +333,10 @@ type Parent struct {
 type Result struct {
 	ExecutionID    string           `json:"execution_id"`
 	ChildSessionID memory.SessionID `json:"child_session_id"`
+	// Worker names a child that is not a research child ("explore"); results
+	// of research children leave it empty, as stored before it existed
+	// (added 2026-10-03).
+	Worker string `json:"worker,omitempty"`
 	// ContinuesExecutionID is the attempt a continuation extended.
 	ContinuesExecutionID string `json:"continues_execution_id,omitempty"`
 	Status               string `json:"status"`
@@ -367,12 +426,14 @@ type Usage struct {
 // ReportPage is one bounded page of a child's stored final report.
 type ReportPage struct {
 	ExecutionID string `json:"execution_id"`
-	Status      string `json:"status"`
-	TotalBytes  int    `json:"total_bytes"`
-	Offset      int    `json:"offset"`
-	End         int    `json:"end"`
-	NextOffset  *int   `json:"next_offset,omitempty"`
-	Text        string `json:"text"`
+	// Worker is set for a child that is not a research child, as in Result.
+	Worker     string `json:"worker,omitempty"`
+	Status     string `json:"status"`
+	TotalBytes int    `json:"total_bytes"`
+	Offset     int    `json:"offset"`
+	End        int    `json:"end"`
+	NextOffset *int   `json:"next_offset,omitempty"`
+	Text       string `json:"text"`
 }
 
 // WrapUp records, before the child's tool-free wrap-up call, which budget
@@ -408,8 +469,14 @@ type Attempt struct {
 	FinalEventID memory.EventID      `json:"final_event_id,omitempty"`
 	WrapUp       *WrapUp             `json:"wrap_up,omitempty"`
 	Continues    *Continues          `json:"continues,omitempty"`
-	Result       *Result             `json:"result,omitempty"`
+	// Root is an explore attempt's pinned folder, resolved by the harness at
+	// admission and confining its read-only tools (added 2026-10-03).
+	Root   string  `json:"root,omitempty"`
+	Result *Result `json:"result,omitempty"`
 }
+
+// Worker is the attempt's worker preset, from its pinned receipt.
+func (a Attempt) Worker() string { return a.Receipt.Preset.ID }
 
 // Resumable reports whether a continuation may extend this attempt: it
 // finished with an accepted report, as succeeded or partial.

@@ -1,5 +1,130 @@
 # Subagents implementation decisions
 
+## 2026-10-03 — Explore workers (general delegation, Stage 7)
+
+Source: Stage 7 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md),
+with the toolset the owner decided on 2026-10-03 (`read_file`, read-only
+`query_db`, and a bash restricted to vetted read-only commands, enforced in
+code) and the rationale in
+[docs/context-management-comparison.md](../../../../docs/context-management-comparison.md):
+local work could not be delegated, so its output flooded the orchestrator.
+
+Superseded wording: the spec's "One fixed child preset is supported", the
+out-of-scope "shell access" insofar as it covers a bash that cannot write, and
+the error text "no delegated research execution" (now "no delegated
+execution", for either worker).
+
+- **Preset.** A second immutable worker preset, `explore`
+  (`sha256:17806556…`), selects no plugin Capability. Its tools are the
+  Kernel's explore toolset in this order: `read_file` confined to the
+  attempt's root (the existing denylist and symlink checks, plus
+  containment), the existing `query_db` with its existing fences, and the
+  read-only bash below. Its base is that toolset, never the parent's, so no
+  `edit_file`, `edit_db`, cron, Todo, Memory, Finance, Web, delegation or
+  approval-gated tool exists in an explore child; a receipt claiming any other
+  tool or a plugin Capability does not reopen. Its pinned instructions
+  (`evie.explore-role`) make it a read-only local explorer that cites file
+  paths, commands and queries. The research preset is unchanged.
+- **Delegation tool.** A new optional Standard capability `subagents.explore`
+  (`delegate_explore`, contract 1.0.0) rather than a `worker` field on
+  `delegate_research`: every tool schema is hashed into Composition Receipts,
+  so changing `delegate_research` would have broken every pinned session.
+  `delegate_explore` takes `delegate_research`'s assignment fields plus an
+  optional `path`. Its results, `read_subagent_report` and `continue_research`
+  are the existing contract, unchanged in schema; continuation and paging
+  work by execution ID for either worker. `delegate_research` still refuses a
+  `path` argument as an unknown field.
+- **Versioning.** The Standard preset becomes `sha256:bfd4eb42…`, adding
+  `subagents.explore` after `subagents.continue`; `sha256:89664be6…` joins the
+  historical definitions, so every existing session reopens with exactly its
+  tools and needs a new chat to explore. The Subagents Plugin keeps
+  implementation version 1.0.0 with one more capability, as when report and
+  continuation were added. Every earlier Standard version still reopens
+  unchanged (preset history test `combined_before_explore`).
+- **Root.** The harness resolves each assignment's folder: `path` inside the
+  parent's Workspace folder (its latest attached folder) or project root, or
+  that folder itself; a parent with neither must declare an absolute path. The
+  root is canonical (symlinks resolved), an existing directory, and neither is
+  nor contains a secret location (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.evie`),
+  because a worker can search it recursively. It is pinned on the attempt
+  (`root`) and inherited by continuations. Admission, start, every child
+  mutation (through the child fence) and continuation re-check it against the
+  parent's current folder, so a Workspace whose folder moves ends the child's
+  authority. Each tool call re-checks that the root still exists and is still
+  canonical.
+- **Read-only bash.** It never starts a shell. A command line is parsed by
+  Evie into argument vectors (words, single and double quotes, backslash
+  escapes, unquoted globs, pipelines joined by `|`, `&&`, `||`, `;`), every
+  stage is checked, and only then are the programs run directly with pipes in
+  Go. Refused before anything runs: redirections (`<`, `>`, `>>`, `2>&1`,
+  `&>`), `&`, `$` in any form (variables, `$(...)`, also in double quotes),
+  backticks, `( )`, `{ }`, comments, `~`, newlines, control characters, a
+  leading `NAME=value` (environment assignment), commands given by path, and
+  any command or flag not on the allowlist. Allowed: `ls` (no `-L`), `cat`,
+  `head`, `tail` (no `-f`/`-F`/`--follow`), `wc` (no `--files0-from`), `find`
+  (only listed primaries: no `-exec`, `-execdir`, `-ok`, `-okdir`, `-delete`,
+  `-fprint*`, `-fls`, `-follow`, `-L`/`-H`), `rg` (no `--pre`, `--pre-glob`,
+  `-z`/`--search-zip`, `-L`/`--follow`, `--hostname-bin`), `grep` (no
+  `-R`/`-S`/`-O`/`--dereference-recursive`), `git log`/`diff`/`show`/`status`/
+  `blame`/`ls-files` (no global option but `--no-pager`; no `-c`, `-C`,
+  `--exec-path`, `--git-dir`, `--work-tree`, `--config-env`, `--output`,
+  `--ext-diff`, `--textconv`, `--no-index`, `-O`, `--show-signature`, blame
+  `--contents`/`-S`/`--ignore-revs-file`, and no other subcommand), `sqlite3
+  -readonly` with exactly one database file and one statement (a single
+  SELECT as `query_db` validates it, or `.tables`/`.schema`/`.indexes`; no
+  `-cmd`, `-init`, `-A` or other option), `pwd`, and a leading `cd` inside the
+  root followed by `&&` or `;`. Flags are checked exactly, so abbreviations
+  are refused; a flag's value is checked as a path unless the flag is known
+  to take a pattern. Every path argument, flag path, glob match, `cwd` and
+  `cd` target must stay inside the root after `..` and symlinks are resolved,
+  and be off the secrets denylist.
+- **Hardening the allowed commands.** The environment is built, not
+  inherited: `PATH`, `HOME`, `TMPDIR` and locale only, so `GIT_DIR`,
+  `GIT_EXTERNAL_DIFF`, `RIPGREP_CONFIG_PATH` and the like cannot steer a
+  command. git runs with `--no-pager -c core.fsmonitor=false -c core.pager=cat
+  -c log.showSignature=false`, `--no-ext-diff --no-textconv` for
+  log/diff/show, `GIT_OPTIONAL_LOCKS=0` (status does not rewrite the index)
+  and `GIT_CEILING_DIRECTORIES` at the root's parent (no repository above the
+  root is used). rg runs with `--no-config`; rg and grep get the denylist's
+  secret file names as trailing exclusions. sqlite3 runs `-readonly -safe
+  -nofollow -batch -bail -init /dev/null`, so `readfile`, `writefile`,
+  `load_extension`, `.shell` and `.output` fail even inside a SELECT. Output
+  is capped at 30,000 bytes inline with no spill file (it would sit outside
+  the root); the worker narrows the command instead.
+- **Authority.** Explore children are admitted, started, fenced, watched,
+  wrapped up, settled, recovered and delivered by the same supervisor and
+  store code as research children, with the same budgets, per-turn cap
+  (shared across both workers), framing, replay, hidden child sessions and
+  memory-compilation exclusion. The parent must hold `subagents.explore` and
+  its own `read_file`, `query_db` and `bash` (the worker's tools are
+  confined, read-only forms of them). Only Subagents must be enabled (no
+  Web). A fresh explore child is admitted only by a `delegate_explore` intent
+  and a research child only by `delegate_research`; `continue_research`
+  continues either. An idempotency key belongs to one worker.
+- **Workspaces.** A Workspace must allow the `explore` preset separately from
+  `research` (`SetWorkspaceExplore`, the same new-revision, new-chats-only and
+  durable-revocation rules as `SetWorkspaceResearch`); a research allowance
+  never implies explore. There is no settings toggle for it yet: that owner
+  control is deferred to a UI change, so Workspace explore is refused with a
+  "reviewed permission" explanation until it exists.
+- **Result.** The research contract with `worker: "explore"` (left out for
+  research results, which therefore stay byte-identical), an explore frame
+  (`[begin untrusted explore child output from execution …]`), and no
+  `sources` or `unverified_urls`: an explore child has no Web evidence, and
+  URLs it quotes from files are not citations to verify. Report pages carry
+  the same `worker` and frame.
+- **Guidance.** A session that has `delegate_explore` gets one more Delegation
+  line: use it for local work that needs many tool calls or large outputs it
+  does not need to see (reading many files, investigating a repository or
+  database), and keep small lookups itself. Sessions without the tool keep
+  their exact prompt.
+- **Known limits.** The repository's own git configuration still applies
+  beyond what the harness turns off (for example `core.worktree`, clean and
+  smudge filters, blame's textconv), as does content already committed to
+  git (`git show HEAD:.env`); both are the owner's own configuration and data.
+  Hard links and mount points inside the root are not detected. A FIFO read by
+  `cat` blocks until the command times out.
+
 ## 2026-10-01 — Confirmation review fixes
 
 Source: the confirmation review of the final verification fixes below, which

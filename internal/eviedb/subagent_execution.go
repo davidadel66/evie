@@ -29,6 +29,9 @@ func (s *Store) StartSubagent(ctx context.Context, id string) (delegation.Attemp
 		if err = s.authorizeSubagentParent(ctx, conn, a.Parent, a.Receipt); err != nil {
 			return err
 		}
+		if err = authorizeAttemptRoot(ctx, conn, a); err != nil {
+			return err
+		}
 		var runtime, parent int
 		if err = conn.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(parent_session_id=?),0) FROM subagent_executions WHERE state='running'`, a.Parent.Scope.SessionID).Scan(&runtime, &parent); err != nil {
 			return err
@@ -92,7 +95,12 @@ func (s *Store) authorizeSubagentChildWith(ctx context.Context, conn *sql.Conn, 
 	if a.State != "running" || a.StartedAt == nil || !s.now().Before(a.StartedAt.Add(a.Policy.Deadline)) {
 		return delegation.ErrAuthority
 	}
-	return s.authorizeSubagentParentWith(ctx, conn, a.Parent, a.Receipt, fence)
+	if err := s.authorizeSubagentParentWith(ctx, conn, a.Parent, a.Receipt, fence); err != nil {
+		return err
+	}
+	// An explore child loses its authority when its folder leaves the
+	// parent's current folder, for example when the Workspace folder changes.
+	return authorizeAttemptRoot(ctx, conn, a)
 }
 
 // AuthorizeSubagent reports whether a running child still holds authority.
@@ -183,6 +191,10 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 	var after int64
 	next := subagentParentNextSteps(ctx, conn, a.Parent.Scope.SessionID)
 	result := delegation.Result{ExecutionID: a.ID, ChildSessionID: a.Child.ID, Status: state, Reason: reason}
+	explore := a.Worker() == delegation.WorkerExplore
+	if explore {
+		result.Worker = delegation.WorkerExplore
+	}
 	if a.Continues != nil {
 		after = a.Continues.AfterSequence
 		next.continues = a.Continues.ExecutionID
@@ -235,17 +247,22 @@ func (s *Store) finishSubagent(ctx context.Context, conn *sql.Conn, a *delegatio
 			return err
 		}
 	}
-	// Usage and the Web evidence are reported for every outcome.
+	// Usage and the Web evidence are reported for every outcome. An explore
+	// child has no Web tools, so it lists no sources and its citations are
+	// not checked against Web evidence.
 	if result.Usage, err = subagentUsage(ctx, conn, a.Child.ID, after); err != nil {
 		return err
 	}
-	evidence, err := subagentWebEvidence(ctx, conn, a.Child.ID, after)
-	if err != nil {
-		return err
+	var evidence []webURL
+	if !explore {
+		if evidence, err = subagentWebEvidence(ctx, conn, a.Child.ID, after); err != nil {
+			return err
+		}
 	}
 	if !hasReport {
 		report = ""
 	}
+	next.local = explore
 	buildSubagentResult(&result, hasReport, report, evidence, a.Policy, next)
 	now := s.now().UTC()
 	a.EndedAt = &now

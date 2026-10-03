@@ -57,15 +57,20 @@ func configuredSubagentPolicy(getenv func(string) string) (delegation.Policy, er
 	return p, p.Validate()
 }
 func configureSubagentRuntime(supervisor *subagents.Supervisor, manager *plugins.Manager, client agent.Client, profile openrouter.ContextProfile) {
-	supervisor.Configure(client, profile, func(ctx context.Context, receipt *composition.Receipt) (subagents.Composition, error) {
+	supervisor.Configure(client, profile, func(ctx context.Context, worker string, receipt *composition.Receipt) (subagents.Composition, error) {
+		instructions, err := plugins.WorkerInstructions(plugins.PresetID(worker))
+		if err != nil {
+			return subagents.Composition{}, err
+		}
 		var resolved plugins.ResolvedComposition
-		var err error
 		if receipt == nil {
-			resolved, err = manager.ResolvePresetContext(ctx, plugins.ResearchPresetID)
+			resolved, err = manager.ResolvePresetContext(ctx, plugins.PresetID(worker))
+		} else if receipt.Preset.ID != worker {
+			return subagents.Composition{}, fmt.Errorf("pinned receipt is preset %q, not worker %q", receipt.Preset.ID, worker)
 		} else {
 			resolved, err = manager.ResumeCompositionContext(ctx, *receipt)
 		}
-		return subagents.Composition{Receipt: resolved.Receipt, Toolset: resolved.Toolset, Instructions: plugins.ResearchInstructions, CompatibilityResolutions: resolved.CompatibilityResolutions}, err
+		return subagents.Composition{Receipt: resolved.Receipt, Toolset: resolved.Toolset, Instructions: instructions, CompatibilityResolutions: resolved.CompatibilityResolutions}, err
 	})
 }
 

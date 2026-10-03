@@ -473,3 +473,71 @@ before recovery settles it (interrupted, or succeeded from an accepted
 report). A non-ASCII host in a listed URL is shown percent-encoded. A wrap-up
 whose full earlier turns do not fit the compactor proceeds without
 compaction.
+
+## Explore workers — 2026-10-03
+
+Stage 7 of [docs/memory-architecture.md](../../../../docs/memory-architecture.md);
+the binding record is the 2026-10-03 entry in
+[subagents.decisions.md](subagents.decisions.md).
+
+`delegate_explore(assignments)` takes `delegate_research`'s assignment fields
+plus an optional `path`, and returns results in the same format with
+`worker: "explore"`. Each child reads only inside its pinned folder, with
+`read_file`, `query_db` and the read-only bash; `read_subagent_report` and
+`continue_research` work on explore children unchanged.
+
+Review entry points: `internal/tools/readonly_shell.go` (the parser) and
+`readonly_bash.go` (allowlist, flag tables, hardening, execution),
+`internal/tools/explore.go` (toolset, root binding and resolution, confined
+`read_file`), `internal/plugins/explore.go` and the explore cases in
+`preset.go`, `delegate_explore` in `internal/plugins/subagents.go`,
+`delegate`/`exploreRoots`/`execute` in `internal/subagents/supervisor.go`,
+`exploreReceipt` in `receipt.go`, the explore report format in `budget.go`,
+`AdmitExploreSubagents`, `authorizeExploreComposition` and
+`authorizeExploreRoot` in `internal/eviedb/subagents.go`, the root re-checks
+in `subagent_execution.go`, `authorizeWorkspacePreset` and
+`SetWorkspaceExplore` in `workspace_research.go`, the explore frame in
+`internal/delegation/parent_view.go`, and the guidance line in
+`internal/agent/prompt.go`.
+
+Schema and versions: no table or migration change; attempts gain an optional
+`root` and results an optional `worker` in their JSON records, absent for
+research. The Standard preset becomes `sha256:bfd4eb42…` (`89664be6…` is
+historical); the explore preset is `sha256:17806556…`; the research preset
+and the Subagents Plugin implementation version (1.0.0) are unchanged.
+
+Regression tests: `internal/tools/readonly_bash_test.go` (the allowed and
+refused command table, execution without a shell, refusal before anything
+runs, confined working folders, the output cap, git and sqlite3 against a
+repository whose configuration names a hook, rg ignoring a configured
+preprocessor), `internal/tools/explore_test.go`,
+`internal/subagents/explore_test.go` (the composed parent exploring a project
+and receiving only the framed summary; continuation, paging, replay and the
+shared per-turn cap; wrap-up; folder confinement; the Workspace allowance and
+folder change; a parent pinned before explore),
+`internal/eviedb/subagent_explore_test.go`,
+`internal/plugins/explore_preset_test.go`, the preset history case
+`combined_before_explore`, and `TestExploreGuidanceOnlyWhenTheSessionCanExplore`.
+
+Demonstration, after enabling Subagents and starting a new chat in a project
+(`go run ./cmd/evie` from a repository): ask Evie to survey the repository's
+packages and summarize how they fit together. Observe one `delegate_explore`
+call whose result has `worker: "explore"` and a framed summary, and no file
+contents in the conversation; ask for the full report to see
+`read_subagent_report`.
+
+Verification passed:
+
+- `./scripts/verify-change.sh` — UI lint/build, full Go tests and vet, both
+  whitespace checks; only the existing UI lint and Vite chunk-size warnings.
+- `go test -race -count=1 -timeout 60m ./internal/subagents/ ./internal/plugins/ ./internal/tools/`
+- `go test -race -count=1 -run 'Explore|Subagent|Workspace' ./internal/eviedb ./internal/delegation`
+
+The git and rg tests include controls: the same repository hook and rg
+preprocessor do run when the command is run directly, and do not run through
+the worker bash. Live model execution was not exercised.
+
+Known limits: a Workspace cannot yet be given the explore allowance from the
+settings UI, so Workspace chats refuse explore until that control exists.
+The repository's own git configuration (for example `core.worktree` or a
+clean filter) still applies beyond what the harness turns off.

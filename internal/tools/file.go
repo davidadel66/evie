@@ -247,7 +247,12 @@ func readFile(ctx context.Context, args string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return readFileAt(ctx, abs)
+}
 
+// readFileAt reads one already-fenced absolute path for read_file and the
+// explore worker's confined read_file.
+func readFileAt(ctx context.Context, abs string) (string, error) {
 	info, err := os.Stat(abs)
 	if err != nil {
 		return "", fmt.Errorf("stat %s: %w", abs, err)

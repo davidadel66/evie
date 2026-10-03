@@ -93,3 +93,27 @@ func TestDelegationGuidanceNamesOnlyToolsTheSessionHas(t *testing.T) {
 		t.Fatal("a session without follow-up tools does not get the shared prefix unchanged")
 	}
 }
+
+// Stage 7 (2026-10-03): a session that has delegate_explore is told when to
+// use it: for local work whose many tool calls or large outputs it does not
+// need to see, keeping small lookups itself. Sessions without the tool keep
+// their exact prompt, so their cached prefix is unchanged.
+func TestExploreGuidanceOnlyWhenTheSessionCanExplore(t *testing.T) {
+	without := primaryInstructions(delegationTools)
+	with := primaryInstructions(append(append([]openrouter.Tool(nil), delegationTools...), toolNamed("delegate_explore")))
+	if strings.Contains(without, "delegate_explore") {
+		t.Fatal("a session without delegate_explore is told to use it")
+	}
+	for _, want := range []string{"delegate_explore", "many tool calls or large outputs", "reading many files", "repository or database", "small lookups"} {
+		if !strings.Contains(with, want) {
+			t.Fatalf("explore guidance lacks %q:\n%s", want, with)
+		}
+	}
+	// The guidance adds one line to the Delegation section and nothing else.
+	if strings.Replace(with, exploreGuidance, "", 1) != without || strings.Count(with, exploreGuidance) != 1 {
+		t.Fatal("explore guidance changed more than its own line")
+	}
+	if !strings.Contains(with, exploreGuidance+"- Use read_subagent_report") {
+		t.Fatal("explore guidance is not in the Delegation section before the follow-up line")
+	}
+}

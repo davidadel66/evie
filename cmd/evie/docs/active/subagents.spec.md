@@ -37,6 +37,17 @@
 > compaction summarizes stored events. Amended text below is marked
 > "Verification fixes"; the binding record is the "Final verification fixes"
 > entry in [subagents.decisions.md](subagents.decisions.md).
+>
+> Amended 2026-10-03 by the owner's decision for Stage 7 (general delegation)
+> of [docs/memory-architecture.md](../../../../docs/memory-architecture.md).
+> A second immutable worker preset, `explore`, takes local, read-heavy work
+> through a new `delegate_explore` capability: `read_file` confined to a
+> folder the harness pins, the existing read-only `query_db`, and a bash that
+> runs only vetted read-only commands. Explore children use the research
+> children's admission, budgets, wrap-up, per-turn cap, framing, result
+> contract, report paging, continuation, recovery and hidden child sessions.
+> Amended text below is marked "Stage 7"; the binding record is the
+> 2026-10-03 entry in [subagents.decisions.md](subagents.decisions.md).
 
 ## Problem Statement
 
@@ -71,6 +82,13 @@ scheduling, arbitrary shell, filesystem, finance, or delegation capabilities,
 and no automatic retrieval of memory. This establishes explicit composition
 without implementing every possible worker preset. Later presets may select
 additional plugin capabilities under the same Kernel authority rules.
+
+(Stage 7.) The second worker preset, `explore`, investigates locally for the
+parent: reading many files, searching a repository, inspecting databases. Its
+only tools are `read_file` and a read-only bash, both confined to one folder
+pinned at admission, and the Kernel's existing read-only `query_db`. It has
+no write, approval-gated, Memory, Todo, scheduling, finance, Web or
+delegation capability, and no automatic retrieval of memory.
 
 Foreground delegation waits for bounded results. A bounded batch runs independent
 children concurrently under configurable finite per-parent and runtime limits.
@@ -132,6 +150,7 @@ allowances produce an explicit refusal rather than a change of scope.
 49. As a maintainer, I want deterministic admission and recovery tests with real SQLite, so that duplicate, interrupted, and stale-owner behavior is verified without live models.
 50. As a maintainer, I want restricted composition and foreground execution delivered as focused changes, so that authorization and persistence decisions remain inspectable.
 51. As Evie's owner, I want the primary agent to continue a child that stopped at a limit, or whose findings need a follow-up, with its history intact and a fresh budget, so that bounded research is extended instead of restarted. (Added 2026-10-01, Stage 9.)
+52. As Evie's owner, I want the primary agent to delegate local, read-heavy investigation (many files, a repository, a database) to a read-only worker with a clean context, so that tool output the primary agent does not need never fills its context, while writes, approvals and memory stay with it. (Added 2026-10-03, Stage 7.)
 
 ## Implementation Decisions
 
@@ -152,6 +171,17 @@ allowances produce an explicit refusal rather than a change of scope.
   append the primary session's built-in capability set or remove capabilities
   after generating a broader receipt. Preserve exact reconstruction and
   compatibility checks for both new and existing compositions.
+- **Explore composition.** (Stage 7.) The immutable built-in `explore` preset
+  selects no plugin Capability. Its tools are the Kernel's explore toolset,
+  exactly `read_file`, `query_db` and `bash` in that order, pinned in its
+  receipt's tool schemas: `read_file` with the existing denylist and symlink
+  checks plus confinement to the attempt's root, the existing `query_db` with
+  its existing fences, and a bash that parses each command line itself, runs
+  only allowlisted read-only commands and flags without a shell, and refuses
+  anything else before it runs (the rules are in the 2026-10-03 decisions
+  entry). Nothing of the parent's base toolset is inherited, so no write,
+  approval-gated, cron or memory tool exists in an explore child. A receipt
+  that claims any other tool or a plugin Capability does not reopen.
 - **Parent rollout.** Include delegation in the new version of the standard
   parent preset as an optional capability supplied by an enabled Subagents
   Plugin. A disabled or unavailable optional Plugin produces the normal
@@ -173,7 +203,11 @@ allowances produce an explicit refusal rather than a change of scope.
   expected output in each assignment, and points to the report reader and
   continuation when those capabilities exist; child findings are data to
   verify. This guidance does not add worker capabilities or appear in the
-  child's pinned instructions.
+  child's pinned instructions. (Stage 7.) A session that has
+  `delegate_explore` is also told to use it for local work that needs many
+  tool calls or large outputs it does not need to see (reading many files,
+  investigating a repository or database), and to keep small lookups itself;
+  sessions without the tool keep their exact prompt.
 - **Capability and scope ceilings.** Admission verifies that the child
   composition is permitted by the parent's pinned capabilities, inherited
   Context Scope, and current applicable access restrictions. Required research
@@ -183,12 +217,26 @@ allowances produce an explicit refusal rather than a change of scope.
   arguments. A Workspace's allowed Agent Presets must explicitly permit the
   research preset. Older revisions that do not permit it reject delegation
   with an actionable explanation; this feature does not silently rewrite their
-  allowlists or add an exemption for children.
+  allowlists or add an exemption for children. (Stage 7.) An explore child's
+  ceiling is the parent's own `read_file`, `query_db` and `bash`, of which its
+  tools are confined, read-only forms, plus the parent's `subagents.explore`
+  capability; a parent without them is refused. A Workspace must allow the
+  `explore` preset separately from `research`, with the same pinned-revision
+  and revocation rules. The explore root is resolved by the harness from the
+  parent's Workspace folder or project root (or, for a parent with neither,
+  from a declared absolute path), must be an existing directory that neither
+  is nor contains a secret location, is pinned on the attempt, and is
+  re-checked against the parent's current folder at admission, start, every
+  child mutation and continuation.
 - **Assignment interface.** Foreground delegation accepts a bounded objective,
   optional explicitly selected context, an optional existing Task identity, and
   an idempotency key. One fixed child preset is supported, so no model-selected
   preset, provider, credentials, parent identity, or authority fields are
-  accepted. The current parent invocation supplies the durable source intent,
+  accepted. (Stage 7.) Each worker preset has its own delegation capability:
+  `delegate_research` is unchanged, and `delegate_explore` takes the same
+  assignment fields plus an optional `path` for the folder to explore. An
+  idempotency key belongs to one worker: reusing a research key for explore
+  work, or the reverse, conflicts. The current parent invocation supplies the durable source intent,
   session, Context Scope, and live execution ownership. Validate the request
   before starting a child or contacting a model provider.
 - **Selected context and instructions.** The child starts with the trusted
@@ -314,6 +362,10 @@ allowances produce an explicit refusal rather than a change of scope.
   transcript. (Stage 9.) A continuation's result also names the attempt it
   extended; its summary, report, usage and uncited sources are its own turn's,
   while its citations are verified against every turn of the child.
+  (Stage 7.) An explore result has the same shape with `worker: "explore"`,
+  lists no Web sources or unverified URLs (it has no Web tools), and frames
+  its text as explore child output; its report cites local paths, commands
+  and queries.
   (Stage 10.) Everything the child wrote (the summary, the report's
   limitations, and report pages) reaches the parent inside an escaped,
   collision-safe untrusted-data frame, as fetched web content does; status,
@@ -438,6 +490,19 @@ allowances produce an explicit refusal rather than a change of scope.
   field, key and limit; one undeliverable child yields an error entry while
   its sibling is delivered; running and reopened child sessions are not
   listed while the parent is.
+- (Stage 7.) The explore bash vets an exhaustive table of allowed and
+  refused command lines (option-embedded execution such as `git -c` and
+  `--output`, find's write and exec primaries, redirections, sequences into
+  writers, `$(...)` and backticks, environment assignments, `..`, `~` and
+  symlinks out of the root) before anything runs, and runs git without the
+  repository's hooks or pagers, rg without its config, and sqlite3 in safe
+  mode. Through the composed parent loop, an explore child reads several
+  files, its writes are refused, and the parent receives only the framed
+  summary, with the report pageable and none of the files in its history.
+  Explore children wrap up, continue, replay, recover and share the per-turn
+  cap like research children; explore paths stay inside the parent's folder;
+  a Workspace needs its own explore allowance; older Standard receipts reopen
+  with exactly their tools and cannot admit explore children.
 - (Verification fixes.) One lock-contention error on a terminal write still
   settles the attempt; a write refused past its retries yields an error entry,
   a same-key retry that fails at once while the store refuses and replays the
@@ -486,6 +551,8 @@ allowances produce an explicit refusal rather than a change of scope.
   continuation of its own finished child is in scope.)
 - Write-enabled workers, approval forwarding to unattended children, file
   mutation, worktree isolation, shell access, or a coding-worker preset.
+  (Amended 2026-10-03, Stage 7: the explore worker's read-only bash, which
+  runs no shell, is in scope; any shell that can write is not.)
 - Memory-enabled worker presets, automatic retrieval for workers, semantic
   memory writes, or compiling worker transcripts into accepted knowledge.
 - Child Todo capabilities, Task Access Grants, Task Focus, Task Claims, child Task

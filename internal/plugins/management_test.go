@@ -383,7 +383,9 @@ func TestBuiltinPresetValidationReportsEveryRequirementWithoutFallback(t *testin
 	}
 
 	presets := mustInspectPresets(t, manager)
-	if len(presets) != 2 || presets[1].ID != ResearchPresetID || presets[0].ID != StandardPresetID ||
+	// The explore worker selects no plugin Capability, so it stays valid.
+	if len(presets) != 3 || presets[1].ID != ResearchPresetID || presets[0].ID != StandardPresetID ||
+		presets[2].ID != ExplorePresetID || !presets[2].Valid || !presets[2].Immutable ||
 		presets[0].Version != StandardPresetVersion || !presets[0].Immutable || presets[0].Valid {
 		t.Fatalf("built-in presets = %+v", presets)
 	}

@@ -214,3 +214,42 @@ login shell. A missing alias is a degraded shell, not a broken tool.
   command to stop malicious filenames expanding past their command
   validator. evie has no validator to bypass, so there's nothing to
   protect.
+
+## 2026-10-03 — A separate read-only bash for explore workers
+
+Everything above still describes the owner's `bash`: a real login shell,
+ungated, with no fence. Stage 7 of `docs/memory-architecture.md` gives
+delegated explore workers a *different* tool, also named `bash`, in
+`internal/tools/readonly_bash.go` and `readonly_shell.go`. The binding
+record, with the full allowlist, is the 2026-10-03 entry in
+`cmd/evie/docs/active/subagents.decisions.md`.
+
+The argument against a fence above was that a shell walks around one. The
+worker bash answers that by not running a shell at all:
+
+- **Parsed by evie, executed directly.** The command line is parsed into
+  argument vectors (quotes, escapes, unquoted globs, `|`, `&&`, `||`, `;`)
+  and every other shell construct is refused: redirections, `$` in any form,
+  backticks, `( )`, `{ }`, `&`, comments, `~`, newlines, `NAME=value`
+  prefixes. The vetted programs are then started with `exec` and connected
+  with pipes in Go. With no shell there are no aliases, functions, profiles,
+  snapshot, expansions or extglob, so what was checked is exactly what runs;
+  that is why the extglob concern above still has nothing to protect.
+- **Allowlist, not denylist.** Only `ls`, `cat`, `head`, `tail`, `wc`,
+  `find`, `rg`, `grep`, `git log/diff/show/status/blame/ls-files`, `sqlite3
+  -readonly`, `pwd` and a leading `cd` run, each with an exact flag table.
+  An unknown flag, an abbreviation, or a flag that writes, follows links out
+  or runs another program (`find -exec`, `git -c`, `--output`, `rg --pre`)
+  refuses the whole line before anything runs.
+- **Fenced paths.** Unlike the owner's bash, every path argument, glob match
+  and working directory must resolve, through `..` and symlinks, inside the
+  worker's pinned root and off `read_file`'s denylist; the root itself may
+  not contain `~/.ssh`, `~/.aws`, `~/.gnupg` or `~/.evie`. The fence is
+  meaningful here only because no shell can step around it.
+- **Built environment.** Commands get `PATH`, `HOME`, `TMPDIR` and locale
+  only. git's pager, fsmonitor hook, signature program, external diff and
+  textconv are turned off and it may not discover a repository above the
+  root; rg ignores its config; sqlite3 runs in safe mode.
+- **No spill file.** Output past 30,000 bytes is cut with a note to narrow
+  the command, because a spill file would sit outside the root, where the
+  worker's own tools cannot read it. Timeouts match the owner's bash.

@@ -90,3 +90,28 @@ func TestPolicyValidationNamesTheInvalidSetting(t *testing.T) {
 		t.Fatalf("envelope error: %v", err)
 	}
 }
+
+// Stage 7: only explore assignments declare a path, bounded like a key; an
+// assignment without one keeps its pre-Stage 7 digest.
+func TestExploreBatchValidationAndUnchangedResearchDigests(t *testing.T) {
+	p := DefaultPolicy()
+	if err := p.ValidateExploreBatch([]Assignment{{Key: "e", Objective: "look", Path: "docs"}}); err != nil {
+		t.Fatalf("explore path refused: %v", err)
+	}
+	err := p.ValidateExploreBatch([]Assignment{{Key: "e", Objective: "look", Path: strings.Repeat("p", MaxPathBytes+1)}})
+	if err == nil || !strings.Contains(err.Error(), `invalid delegate_explore request: assignment "e" path is 1,025 bytes; limit 1,024`) {
+		t.Fatalf("long path: %v", err)
+	}
+	if err := p.ValidateBatch([]Assignment{{Key: "r", Objective: "look", Path: "docs"}}); err == nil || !strings.Contains(err.Error(), `assignment "r" path is not supported by delegate_research`) {
+		t.Fatalf("research path: %v", err)
+	}
+	if err := p.ValidateExploreBatch(nil); err == nil || !strings.Contains(err.Error(), "delegate_explore requires at least one assignment") {
+		t.Fatalf("empty explore batch: %v", err)
+	}
+	if got := Digest(Assignment{Key: "k", Objective: "o"}); got != Digest(struct {
+		Key       string `json:"idempotency_key"`
+		Objective string `json:"objective"`
+	}{"k", "o"}) {
+		t.Fatal("an assignment without a path no longer digests as before")
+	}
+}

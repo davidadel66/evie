@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,10 +94,36 @@ func ensureSubagentSchema(ctx context.Context, db *sql.DB) error {
 // AdmitSubagents validates the entire batch and atomically reserves every new
 // child, receipt and attempt. Retained keys never create runnable work again.
 func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, requests []delegation.Assignment, receipt composition.Receipt, policy delegation.Policy, dispatchID string) ([]delegation.Attempt, error) {
+	if receipt.Preset.ID != delegation.WorkerResearch {
+		return nil, errors.New("only the restricted research preset is allowed")
+	}
+	return s.admitSubagents(ctx, p, requests, nil, receipt, policy, dispatchID)
+}
+
+// AdmitExploreSubagents admits a delegate_explore batch like AdmitSubagents.
+// roots[i] is the folder the harness resolved for requests[i]; each must be
+// inside the parent's current Workspace folder or project root, and is pinned
+// on the attempt (Stage 7, 2026-10-03).
+func (s *Store) AdmitExploreSubagents(ctx context.Context, p delegation.Parent, requests []delegation.Assignment, roots []string, receipt composition.Receipt, policy delegation.Policy, dispatchID string) ([]delegation.Attempt, error) {
+	if receipt.Preset.ID != delegation.WorkerExplore {
+		return nil, errors.New("only the read-only explore preset is allowed")
+	}
+	if len(roots) != len(requests) {
+		return nil, errors.New("every explore assignment needs a resolved root")
+	}
+	return s.admitSubagents(ctx, p, requests, roots, receipt, policy, dispatchID)
+}
+
+func (s *Store) admitSubagents(ctx context.Context, p delegation.Parent, requests []delegation.Assignment, roots []string, receipt composition.Receipt, policy delegation.Policy, dispatchID string) ([]delegation.Attempt, error) {
 	if dispatchID == "" {
 		return nil, errors.New("subagent dispatch identity is required")
 	}
-	if err := policy.ValidateBatch(requests); err != nil {
+	worker := receipt.Preset.ID
+	validate := policy.ValidateBatch
+	if worker == delegation.WorkerExplore {
+		validate = policy.ValidateExploreBatch
+	}
+	if err := validate(requests); err != nil {
 		return nil, err
 	}
 	encoded, err := composition.Marshal(receipt)
@@ -107,7 +135,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 		if err := s.authorizeSubagentParent(ctx, conn, p, receipt); err != nil {
 			return err
 		}
-		intent, err := committedSubagentIntent(ctx, conn, p, delegation.ToolName)
+		intent, err := committedSubagentIntent(ctx, conn, p, delegation.DelegationToolName(worker))
 		if err != nil {
 			return err
 		}
@@ -130,7 +158,9 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 			}
 			a, err := readSubagent(conn.QueryRowContext(ctx, `SELECT record_json FROM subagent_executions WHERE parent_session_id=? AND idempotency_key=?`, p.Scope.SessionID, r.Key))
 			if err == nil {
-				if a.Digest != delegation.Digest(r) {
+				// A key names one assignment of one worker: reusing a
+				// research key for explore work, or the reverse, conflicts.
+				if a.Digest != delegation.Digest(r) || a.Worker() != worker {
 					conflicts = append(conflicts, fmt.Sprintf("%q", r.Key))
 				}
 				retained[i] = &a
@@ -143,7 +173,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 		}
 		if len(conflicts) > 0 {
 			// The whole batch is refused, so name every key that caused it.
-			return fmt.Errorf("%w: idempotency_key %s already ran in this conversation with a different objective, context or task_id; reuse a key only to retrieve that result, and give a new assignment a new key", delegation.ErrConflict, strings.Join(conflicts, ", "))
+			return fmt.Errorf("%w: idempotency_key %s already ran in this conversation with a different objective, context, task_id, path or worker; reuse a key only to retrieve that result, and give a new assignment a new key", delegation.ErrConflict, strings.Join(conflicts, ", "))
 		}
 		if fresh > 0 {
 			if err := admitWithinTurnLimit(ctx, conn, p, policy, fresh); err != nil {
@@ -155,6 +185,13 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 				attempts = append(attempts, *retained[i])
 				continue
 			}
+			var root string
+			if worker == delegation.WorkerExplore {
+				root = roots[i]
+				if err := authorizeExploreRoot(ctx, conn, p.Scope, root); err != nil {
+					return fmt.Errorf("assignment %q: %w", r.Key, err)
+				}
+			}
 			now := s.now().UTC()
 			child := memory.Session{ID: memory.SessionID(uuid.NewString()), ParentSessionID: p.Scope.SessionID, Status: memory.SessionActive, CreatedAt: now, UpdatedAt: now,
 				WorkspaceID: p.Scope.WorkspaceID, WorkspaceRevisionSnapshot: p.Scope.WorkspaceRevision, ProjectID: p.Scope.ProjectID, ProjectRootSnapshot: p.Scope.ProjectRoot}
@@ -165,7 +202,7 @@ func (s *Store) AdmitSubagents(ctx context.Context, p delegation.Parent, request
 			if err := insertCompositionReceipt(ctx, conn, child.ID, encoded, now); err != nil {
 				return err
 			}
-			a := delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now}
+			a := delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: r, Digest: delegation.Digest(r), Child: child, Receipt: receipt, Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Root: root}
 			data, err := json.Marshal(a)
 			if err != nil {
 				return err
@@ -241,6 +278,9 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 			if err = s.authorizeSubagentParent(ctx, conn, p, retained.Receipt); err != nil {
 				return err
 			}
+			if err = authorizeAttemptRoot(ctx, conn, retained); err != nil {
+				return err
+			}
 			if _, err = s.inspectSubagent(ctx, conn, p, retained.ID); err != nil {
 				return err
 			}
@@ -258,6 +298,11 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 			return err
 		}
 		if err = s.authorizeSubagentParent(ctx, conn, p, original.Receipt); err != nil {
+			return err
+		}
+		// An explore child resumes in its pinned folder, which must still be
+		// inside the parent's current folder.
+		if err = authorizeAttemptRoot(ctx, conn, original); err != nil {
 			return err
 		}
 		intent, err := committedSubagentIntent(ctx, conn, p, delegation.ContinueToolName)
@@ -281,7 +326,7 @@ func (s *Store) AdmitSubagentContinuation(ctx context.Context, p delegation.Pare
 		now := s.now().UTC()
 		assignment := delegation.Assignment{Key: key, Objective: message, TaskID: original.Assignment.TaskID}
 		a = delegation.Attempt{ID: uuid.NewString(), DispatchID: dispatchID, Parent: p, Assignment: assignment, Digest: digest, Child: original.Child, Receipt: original.Receipt,
-			Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Continues: &delegation.Continues{ExecutionID: original.ID, AfterSequence: after}}
+			Policy: policy, PolicyID: delegation.Digest(policy), State: "admitted", CreatedAt: now, Continues: &delegation.Continues{ExecutionID: original.ID, AfterSequence: after}, Root: original.Root}
 		data, err := json.Marshal(a)
 		if err != nil {
 			return err
@@ -382,15 +427,25 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 		}
 	}
 
+	worker := child.Preset.ID
+	if worker != delegation.WorkerResearch && worker != delegation.WorkerExplore {
+		return errors.New("only the restricted research and read-only explore presets are allowed")
+	}
 	if p.Scope.WorkspaceID != "" {
-		if err := authorizeWorkspaceResearch(ctx, conn, p.Scope); err != nil {
+		if err := authorizeWorkspacePreset(ctx, conn, p.Scope, worker); err != nil {
 			return err
 		}
 	}
 	if err := fence(ctx, conn, p.Scope.SessionID, p.Lease.HolderID, p.Lease.FencingToken, s.now().UTC().Format(turnLeaseTimeFormat)); err != nil {
 		return err
 	}
-	for _, plugin := range []string{"subagents", "web"} {
+	// An explore worker uses no Web capability, so only Subagents must stay
+	// enabled for it.
+	required := []string{"subagents", "web"}
+	if worker == delegation.WorkerExplore {
+		required = []string{"subagents"}
+	}
+	for _, plugin := range required {
 		var enabled bool
 		err := conn.QueryRowContext(ctx, `SELECT enabled FROM plugin_enabled_configuration WHERE plugin_id=?`, plugin).Scan(&enabled)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -408,19 +463,28 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	for _, c := range receipt.Capabilities {
 		caps[c.ID] = c
 	}
-	if _, ok := caps[delegation.CapabilityID]; !ok {
-		return errors.New("parent composition does not permit delegation")
-	}
-	if child.Preset.ID != "research" || len(child.Capabilities) != 2 {
-		return errors.New("only the restricted research preset is allowed")
-	}
-	for _, c := range child.Capabilities {
-		if c.ID != "web.search" && c.ID != "web.fetch" {
-			return delegation.ErrAuthority
+	if worker == delegation.WorkerExplore {
+		if _, ok := caps[delegation.ExploreCapabilityID]; !ok {
+			return errors.New("parent composition does not permit explore delegation")
 		}
-		parent, ok := caps[c.ID]
-		if !ok || parent.ContractVersion != c.ContractVersion || parent.SchemaSHA256 != c.SchemaSHA256 {
-			return errors.New("required research capability exceeds parent composition")
+		if err := authorizeExploreComposition(receipt, child); err != nil {
+			return err
+		}
+	} else {
+		if _, ok := caps[delegation.CapabilityID]; !ok {
+			return errors.New("parent composition does not permit delegation")
+		}
+		if len(child.Capabilities) != 2 {
+			return errors.New("only the restricted research preset is allowed")
+		}
+		for _, c := range child.Capabilities {
+			if c.ID != "web.search" && c.ID != "web.fetch" {
+				return delegation.ErrAuthority
+			}
+			parent, ok := caps[c.ID]
+			if !ok || parent.ContractVersion != c.ContractVersion || parent.SchemaSHA256 != c.SchemaSHA256 {
+				return errors.New("required research capability exceeds parent composition")
+			}
 		}
 	}
 	var payload string
@@ -429,6 +493,10 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 	}
 	var intent memory.ToolIntentPayload
 	if err = json.Unmarshal([]byte(payload), &intent); err != nil || !delegation.AdmitsChildren(intent.Call.Name) {
+		return delegation.ErrAuthority
+	}
+	// A fresh child is admitted only by its own worker's delegation tool.
+	if intent.Call.Name != delegation.ContinueToolName && intent.Call.Name != delegation.DelegationToolName(worker) {
 		return delegation.ErrAuthority
 	}
 	// A continuation is delegated work too: it needs both capabilities.
@@ -459,6 +527,71 @@ func (s *Store) authorizeSubagentParentWith(ctx context.Context, conn *sql.Conn,
 		return delegation.ErrAuthority
 	}
 	return nil
+}
+
+// authorizeExploreComposition proves an explore child within the parent's
+// ceiling: the explore preset selects no plugin capability, its tools are
+// exactly the read-only explore tools, and the parent itself holds read_file,
+// query_db and bash, of which the worker's tools are confined, read-only
+// forms. A parent without them cannot delegate explore work.
+func authorizeExploreComposition(parent, child composition.Receipt) error {
+	if len(child.Capabilities) != 0 || len(child.Providers) != 0 {
+		return errors.New("the read-only explore preset selects no plugin capabilities")
+	}
+	names := make([]string, len(child.ToolSchemas))
+	for i, schema := range child.ToolSchemas {
+		names[i] = schema.Name
+	}
+	if !slices.Equal(names, delegation.ExploreToolNames) {
+		return errors.New("only the read-only explore tools are allowed")
+	}
+	for _, name := range delegation.ExploreToolNames {
+		if !slices.ContainsFunc(parent.ToolSchemas, func(s composition.ToolSchema) bool { return s.Name == name }) {
+			return fmt.Errorf("%w: parent lacks %s, so explore work would exceed its composition", delegation.ErrAuthority, name)
+		}
+	}
+	return nil
+}
+
+// authorizeExploreRoot proves an explore attempt's pinned root is inside the
+// parent's current folder: its Workspace's latest attached folder, or its
+// project root. A parent with neither has no ceiling beyond the root it
+// declared, which the harness resolved at admission.
+func authorizeExploreRoot(ctx context.Context, conn *sql.Conn, scope memory.ScopeContext, root string) error {
+	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return fmt.Errorf("%w: an explore attempt needs a pinned absolute root", delegation.ErrAuthority)
+	}
+	base := scope.ProjectRoot
+	if scope.WorkspaceID != "" {
+		if err := conn.QueryRowContext(ctx, `SELECT COALESCE((SELECT path FROM workspace_folder_revisions WHERE workspace_id=? ORDER BY revision DESC LIMIT 1),'')`, scope.WorkspaceID).Scan(&base); err != nil {
+			return err
+		}
+		if base == "" {
+			return fmt.Errorf("%w: the Workspace has no attached folder for explore workers to read", delegation.ErrAuthority)
+		}
+	}
+	if base == "" || pathWithin(base, root) {
+		return nil
+	}
+	if canonical, err := filepath.EvalSymlinks(base); err == nil && pathWithin(canonical, root) {
+		return nil
+	}
+	return fmt.Errorf("%w: explore root %q is outside the conversation's folder %q", delegation.ErrAuthority, root, base)
+}
+
+// authorizeAttemptRoot applies authorizeExploreRoot to an explore attempt;
+// research attempts have no root.
+func authorizeAttemptRoot(ctx context.Context, conn *sql.Conn, a delegation.Attempt) error {
+	if a.Worker() != delegation.WorkerExplore {
+		return nil
+	}
+	return authorizeExploreRoot(ctx, conn, a.Parent.Scope, a.Root)
+}
+
+// pathWithin reports whether p is root or below it.
+func pathWithin(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func authorizeSubagentTask(ctx context.Context, conn *sql.Conn, p delegation.Parent, id string) error {

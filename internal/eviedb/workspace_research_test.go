@@ -80,7 +80,7 @@ func TestWorkspaceResearchOptInPreservesPinsAndRejectsStaleChanges(t *testing.T)
 		wantAllowed bool
 	}{{enabled.CurrentRevisionID, false}, {reenabled.CurrentRevisionID, true}} {
 		err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-			return authorizeWorkspaceResearch(ctx, conn, memory.ScopeContext{WorkspaceID: w.ID, WorkspaceRevision: tc.revision})
+			return authorizeWorkspacePreset(ctx, conn, memory.ScopeContext{WorkspaceID: w.ID, WorkspaceRevision: tc.revision}, delegation.WorkerResearch)
 		})
 		if tc.wantAllowed && err != nil || !tc.wantAllowed && !errors.Is(err, delegation.ErrAuthority) {
 			t.Fatalf("reopened revision allowed=%v: %v", tc.wantAllowed, err)
