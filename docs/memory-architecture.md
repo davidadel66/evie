@@ -132,7 +132,20 @@ supersession by invalidation.
 6. **Recall quality.** Fact-augmented keys and time-aware query expansion,
    gated on `internal/memoryeval` gains.
 
-Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6.
+Context-management stages (after the memory stages; rationale and sources
+in `docs/context-management-comparison.md`):
+
+7. **General delegation.** Worker presets beyond web research: a read-only
+   explore worker, optionally a task worker for long tool-heavy jobs.
+8. **In-turn compaction.** Compact completed tool groups inside the active
+   turn when clearing isn't enough.
+9. **Tighter tool output.** Lower per-result admission and protect memory,
+   todo and task results from clearing.
+10. **Memory flush before compaction.** Trigger the Stage 4 background pass
+    just before a compaction.
+
+Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6; then 7–10 (7 first;
+8 and 9 in parallel; 10 once Stage 4 has landed).
 
 ### Acceptance criteria
 
@@ -170,6 +183,48 @@ Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6.
   as data.
 - No model call happens just to create an episode: it reuses the existing
   compaction summary or the background pass's output.
+
+**7. General delegation**
+- The orchestrator can delegate local, read-heavy work (reading many files,
+  querying databases, investigating a repository) to an explore worker with a
+  clean context.
+- The worker returns the Stage 8 sub-agent result contract: summary inline,
+  full report through `read_subagent_report`, `continue_research`-style
+  continuation.
+- Workers get only read-only capabilities. Writes, approvals and memory writes
+  stay with the orchestrator.
+- The same budgets, wrap-up, per-turn cap, framing and authority checks apply
+  as for research workers.
+- Prompt guidance: delegate when a task needs many tool calls or large outputs
+  the orchestrator doesn't need to see.
+- **Decision needed:** the explore worker's exact toolset, especially whether
+  it gets bash (ungated today) or a read-only command subset.
+
+**8. In-turn compaction**
+- When tool-result clearing can't bring the active turn under budget, the
+  completed tool groups of the active turn are summarized. The turn's user
+  message stays verbatim.
+- The cut never splits a tool call from its result.
+- Persistence validators accept the new shape. Recovery and the C8 retry still
+  hold.
+- A test: one long agentic turn on a 128k model keeps working past the point
+  where clearing alone would overflow.
+
+**9. Tighter tool output**
+- The per-result admission limit drops from 100 KiB (target set by
+  measurement). Oversized outputs go to files with an excerpt plus paging,
+  as bash and web_fetch already do.
+- Results from memory, todo/task and sub-agent report tools are never cleared
+  by projection (an `exclude_tools` equivalent).
+- Cache stability is unchanged.
+
+**10. Memory flush before compaction**
+- Just before an automatic or manual compaction, the Stage 4 background pass
+  runs over the turns about to be summarized.
+- Its proposals land in the review inbox before the summary replaces those
+  turns.
+- It doesn't block the turn: it runs asynchronously over stored events, which
+  remain in SQLite.
 
 ## Decisions (David, 2026-10-03)
 
