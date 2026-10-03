@@ -325,6 +325,14 @@ execute again.
     budget fails with "memory full" and nothing renders truncated. Standing
     memory is memory egress: with `EVIE_REMOTE_MEMORY` off it is not sent.
     See [Standing Memory](#standing-memory).
+18. A memory the owner did not explicitly ask for never interrupts the
+    conversation with an approval card and never applies on its own. It is
+    queued, exactly as prepared, in the owner's review inbox and applies only
+    when the owner approves it there, through the same durable approval and
+    Apply path as an approval card, after revalidation against current
+    memory. A remember call shows the card only when the model says the owner
+    asked (`requested_by_owner`) and the harness finds an explicit memory cue
+    in the current owner message. See [Proactive Memory](#proactive-memory).
 
 ## Scope And Authority
 
@@ -1290,6 +1298,88 @@ truncated at render; another session's conversation-scoped standing memories
 are not counted when a Global memory is approved, so a later session can
 render slightly over budget until its next approval.
 
+## Proactive Memory
+
+Stages 2 and 3 of the [memory architecture plan](../../../../docs/memory-architecture.md)
+(decision 3) make Evie keep two memories without being told "remember this",
+and answer "what do you know about me / this project" in one call.
+
+**Duties.** The system prompt of a session whose remember tools carry
+`requested_by_owner` states both duties, briefly because it is resident in
+every request: notice and propose, sparingly, only durable, important,
+non-derivable memories, never transient task details or secrets; *Profile*:
+the owner's preferences, standing instructions and stable facts (kinds
+`preference`, `instruction`, `profile_fact`); *Workspace memory*: in a
+Workspace or project, its brief (`workspace_brief`) and key decisions and
+conventions (`fact`). Scope is still chosen by meaning (the destination
+rules). Sessions pinned to earlier memory tools keep their exact prompt.
+
+**Explicit-request rule.** `memory_remember_literal` and
+`memory_remember_entity` require `requested_by_owner`. The proposal shows the
+approval card only when the model sets it true **and**
+`memory.HasExplicitMemoryCue` finds an explicit cue in the turn's owner
+message, the same message the memory's source binds to: "remember",
+"memorize"/"memorise", "save", "note", "jot", "store", "keep in mind",
+"don't forget"/"do not forget", or "to (your) memory"/"in your memory". Any
+other call, including a `requested_by_owner` the message does not support
+(reason `no_explicit_cue`), goes to the inbox. A cue alone is not a request:
+"Do you remember…?" carries a cue the model does not treat as one. Other
+memory mutations (correction, promotion, standing, lifecycle) keep the card.
+
+**Queueing.** The prepared tool carries `tools.PreparedTool.Review` instead of
+asking for approval: the dispatcher records no approval, authorizes the start
+under the turn lease, and stores the exact prepared proposal with its hashes
+and "Always applies" alternative in `memory_proposal_inbox`, citing the
+proposing session, source message and tool intent. The tool result says
+`queued_for_review` with `saved: false`. Nothing in Semantic Memory changes.
+An identical pending memory (same target scope, Predicate, value or Entity
+selectors, polarity and valid time) is not queued twice, and a proposal whose
+JSON holds a detected secret is refused rather than queued.
+
+**Review.** The web Memory view's Review tab lists pending proposals first,
+each with the approval card's own rendering (claim, scope, the owner's words
+or the Evie-proposed notice, Entity identities), kind and "Always applies"
+switch, and Approve and Decline. A count badge on the Review tab and on the
+sidebar's Data entry shows how many wait. A proposal is pending until it is
+declined (`memory_proposal_inbox_declines`, append-only) or an operation with
+its idempotency key is accepted; no other state marks it resolved.
+
+**Approval path.** Approving names the exact prepared hash the owner saw and
+the switch position. The store takes the source conversation's turn lease (it
+refuses as busy while that conversation runs a turn), appends the semantic
+approval event
+(parent the source message, execution the operation ID, the applied hashes)
+to that conversation, and runs the ordinary Apply, so scope, source binding,
+`evie_proposed` authority and the standing budget ("memory full") are enforced
+exactly as for a card. An archived conversation's proposal cannot apply until
+the conversation is restored.
+
+**Revalidation.** A prepared proposal pins its scopes' revisions. When the
+inbox is read, and again before an approval applies, a proposal whose scopes
+have moved is prepared again from its exact request (same source message,
+kind and budget ratio) and stored as its next revision; an approval of the
+older revision is refused as changed, and the owner reviews the refreshed
+proposal. A proposal that can no longer be prepared is listed as not
+approvable, with the reason, and can still be declined.
+
+### Memory overview
+
+`memory_overview(section?)` (`memory.overview`; `section` is `profile`,
+`workspace` or `all`, default all) is one bounded read: the standing set
+visible to the reader in the selected sections, in rendering order; then the
+other current memories of the profile (Global and this conversation, Claims
+about the owner first, then newest) and of the conversation's Workspace or
+project (newest first), at most 30 each with an `omitted` count; each item
+with Claim ID, scope key, applicability, kind (unclassified reads as `fact`),
+standing flag and the Claim's own text, never source text, shortened visibly
+past 400 bytes. Current means active, valid now, with an eligible source,
+outside quarantined scopes, in the reader's own scopes only. It also counts
+pending inbox proposals in those scopes (`pending_review`) without their
+content. Items the secret fence flags are withheld and counted. The result is
+framed as untrusted semantic memory data, needs `EVIE_REMOTE_MEMORY=on`
+(absent from compositions without it), takes no scope or session argument and
+is removed from delegated workers with the other model-directed reads.
+
 ## Explicit Memory Operations
 
 | Operation | Authority | Effect |
@@ -1297,7 +1387,9 @@ render slightly over budget until its next approval.
 | `memory_search` | read-only | sourced scoped retrieval |
 | `memory_inspect` | read-only | entities, claims, paths, and provenance |
 | `memory_search_episodes` | read-only | scoped search of earlier sessions' compaction summaries |
+| `memory_overview` | read-only | standing set plus current profile and Workspace memories, with the pending review count |
 | `/remember` or approved `remember` | local user command/approval | active claim in harness-bound default Context Scope or explicit local session scope |
+| unrequested `remember` | review inbox approval | queued exact proposal; applies only when the owner approves it in the inbox |
 | `correct_memory` | local user command/approval | mode/effective-time correction plus supersession |
 | `promote_memory` | local user command/approval | new global claim linked to Workspace or project evidence |
 | `memory_set_standing` | approval | mark an existing claim standing or not (standing tier) |
@@ -1335,6 +1427,11 @@ receive that authority.
 - standing memory sends only approved Claim text, JSON-escaped inside its
   labelled `<standing-memory>` frame, secret-scanned, and only with
   `EVIE_REMOTE_MEMORY=on`; it cannot change rules, permissions, or approvals.
+- `memory_overview` returns only approved Claim text from the reader's own
+  scopes, secret-scanned and framed as data, and only with
+  `EVIE_REMOTE_MEMORY=on`; pending inbox proposals are counted, never sent.
+- a model-set `requested_by_owner` cannot force an approval card: the harness
+  also requires an explicit memory cue in the owner's own message.
 - retrieved memory, Skills, and free-form procedural text cannot authorize tools
   or change approval requirements. The separate Workflow Approval path may grant
   only code-enforced Standing Authority declared by one typed definition.

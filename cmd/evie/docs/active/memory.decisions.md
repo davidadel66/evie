@@ -1,5 +1,88 @@
 # memory - decisions
 
+- **2026-10-03 — Proactive proposals go to the review inbox; one call says
+  what Evie knows (memory architecture Stages 2 and 3).** Implements David's
+  2026-10-03 decision 3 in
+  [the memory architecture plan](../../../../docs/memory-architecture.md); the
+  spec section is [Proactive Memory](memory.spec.md#proactive-memory) and
+  invariant 18. Implementation choices:
+  - *Duties in the prompt.* The `# Memory` section gains three lines (Profile,
+    Workspace memory, and the `requested_by_owner` rule) plus a fourth naming
+    `memory_overview` when the session has it. They are stated only to a
+    session whose pinned `memory_remember_literal` has `requested_by_owner`
+    (the delegation follow-up pattern), so sessions pinned to earlier memory
+    tools keep their exact system prompt and are never told to propose
+    memories that would interrupt them with cards.
+  - *Explicit-request rule.* A remember call shows the card only when the
+    model sets `requested_by_owner` (required in 1.6.0) and
+    `memory.HasExplicitMemoryCue` finds a closed-list cue ("remember",
+    "memorize"/"memorise", "save", "note", "jot", "store", "keep in mind",
+    "don't/do not forget", "to (your) memory", "in your memory") in the turn's
+    owner message, the message the source binds to. Both halves are needed:
+    the model's flag distinguishes "Do you remember…?" from a request, and the
+    cue keeps a forged or injected flag from forcing a card. A forged flag is
+    queued with reason `no_explicit_cue` and the model is told why. Only the
+    two remember tools route to the inbox; correction, promotion, standing and
+    lifecycle changes keep the card, since they change existing memory and are
+    normally asked for.
+  - *Queueing.* `tools.PreparedTool` gains `Review`: the dispatcher asks no
+    approval, records no approval event, authorizes the start like any tool
+    and returns Review's result. The Memory Plugin's Review stores the
+    identical prepared proposal (the approval card's JSON), both hashes and
+    the "Always applies" alternative's hashes in `memory_proposal_inbox`,
+    fenced by the turn lease and citing the tool intent. An identical pending
+    memory is reported as a duplicate instead of queued twice; a proposal
+    whose JSON trips the secret fence is refused.
+  - *Resolution is derived.* A proposal is approved exactly when an operation
+    with its idempotency key exists, and declined by an append-only
+    `memory_proposal_inbox_declines` row. Approval therefore needs no second
+    write after Apply and cannot be half-recorded by a crash.
+  - *Approval path.* `ApproveMemoryProposal` acquires the source
+    conversation's turn lease under a `memory-inbox:` holder (busy while a
+    turn runs; refused while the conversation is archived), appends the
+    semantic approval event there (parent the source message, execution the
+    operation ID, the applied hashes) and runs the ordinary
+    `ApplyRememberLiteral`/`ApplyRememberEntity`. Scope, source binding,
+    `evie_proposed` authority and the standing budget apply unchanged; memory
+    full leaves the proposal pending so the owner can approve it with Always
+    applies off.
+  - *Revalidation.* Prepared proposals pin exact scope revisions, so a second
+    approval in the same scope is always stale. Rather than apply against
+    newer memory or ask the model again, the inbox prepares the stored
+    request again (same source message, kind and budget ratio) whenever a
+    proposal's scopes have moved, on listing and before applying, and stores
+    it as the proposal's next revision with a compare-and-set. An approval
+    names the prepared hash it saw; an older revision is refused as changed
+    and the UI reloads, so the owner always approves exactly what applies.
+    Refusal leaves an approval event without an operation, as a failed card
+    approval does.
+  - *UI.* The Review tab lists Evie's proposals above compiler candidates,
+    reusing the card's `MemoryApproval` and `AlwaysApplies` components, with
+    Approve and Decline. A count badge (polled every 30 seconds, on focus and
+    after each turn) marks the Review tab and the sidebar's Data entry.
+  - *Overview.* `memory_overview(section?)` (`memory.overview`) returns the
+    standing set, then up to 30 other current memories each for the profile
+    (Global plus this conversation, owner Claims first) and the Workspace or
+    project, with Claim ID, scope, kind, standing flag and Claim text
+    (shortened past 400 bytes), `omitted` and `withheld` counts, and the
+    pending review count without content. It reads only the session's own
+    scopes, requires `EVIE_REMOTE_MEMORY=on`, is framed as untrusted semantic
+    memory data, and is narrowed from delegated workers. The argument is
+    `section`, not `scope`, because model-facing Memory arguments never name
+    harness scope.
+  - *Versioning.* Memory Plugin implementation 1.6.0 adds
+    `requested_by_owner` to both remember schemas and the `memory.overview`
+    Capability. 1.5.0 is resumable with byte-identical schemas (golden hashes
+    in `memory_proactive_test.go`) and rejects the new flag; earlier versions
+    are unchanged. The standard preset becomes `sha256:89664be6…`;
+    `sha256:eda7e097…` is frozen as the pre-proactive preset, and every older
+    preset resumes with exactly its tools. The new schema and prompt text
+    cost 2,268 request bytes; the byte-budgeted investigation test's profile
+    was raised by exactly that amount.
+  - *Not in this stage.* A REPL view of the inbox; inbox routing for
+    corrections and other mutations; the Stage 4 background pass, which will
+    queue into the same inbox.
+
 - **2026-10-03 — Standing tier: approved standing memories reach every
   request by rule (memory architecture Stage 1).** Implements David's
   2026-10-03 decisions 1 (standing by type, visible on approval) and 2 (hard

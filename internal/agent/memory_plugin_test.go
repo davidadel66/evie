@@ -23,6 +23,11 @@ type agentMemoryKernel struct {
 	appliedAfterApproval bool
 }
 
+// The owner's message in this fixture asks to remember, so the card shows.
+func (*agentMemoryKernel) OwnerRequestsMemory(context.Context, memory.ScopeContext, memory.EventID) (bool, error) {
+	return true, nil
+}
+
 func agentMemoryTool(t *testing.T, plugin *plugins.Memory, name string) tools.Tool {
 	t.Helper()
 	for _, capability := range plugin.ToolCapabilities() {
@@ -132,7 +137,7 @@ func TestMemoryPluginMutationUsesExistingActionApprovalRecordBeforeApply(t *test
 	kernel := &agentMemoryKernel{history: history}
 	definition := agentMemoryTool(t, plugins.NewMemory(kernel), "memory_remember_literal")
 	client := &fakeClient{steps: []step{
-		assistantStep("", nil, toolCall("memory-call", "memory_remember_literal", `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000011","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed","kind":"fact"}`)),
+		assistantStep("", nil, toolCall("memory-call", "memory_remember_literal", `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000011","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed","kind":"fact","requested_by_owner":true}`)),
 		assistantStep("done", nil),
 	}}
 	scope := memory.ScopeContext{OwnerID: memory.LocalOwnerID, SessionID: "test-session", ProjectID: "project-1"}

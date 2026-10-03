@@ -47,19 +47,20 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 	beforeSubagents := preSubagentsStandardPresetContent()
 	beforeSubagents.Version = preSubagentsStandardPresetVersion
 	for _, tc := range []struct {
-		name                                                                  string
-		preset                                                                Preset
-		retrieval, delegation, report, read, continuation, episodes, standing int
+		name                                                                            string
+		preset                                                                          Preset
+		retrieval, delegation, report, read, continuation, episodes, standing, overview int
 	}{
-		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0},
-		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0},
-		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0},
-		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0},
-		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0},
-		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0},
-		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0},
-		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0},
-		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1},
+		{"baseline", preRetrievalStandardPreset(), 0, 0, 0, 0, 0, 0, 0, 0},
+		{"retrieval_only", beforeSubagents, 1, 0, 0, 0, 0, 0, 0, 0},
+		{"subagents_only", preRetrievalSubagentsStandardPreset(), 0, 1, 0, 0, 0, 0, 0, 0},
+		{"combined_before_reports", preReportStandardPreset(), 1, 1, 0, 0, 0, 0, 0, 0},
+		{"combined_before_stored_tool_results", preReadToolResultStandardPreset(), 1, 1, 1, 0, 0, 0, 0, 0},
+		{"combined_before_continuation", preContinueStandardPreset(), 1, 1, 1, 1, 0, 0, 0, 0},
+		{"combined_before_episodes", preEpisodesStandardPreset(), 1, 1, 1, 1, 1, 0, 0, 0},
+		{"combined_before_standing", preStandingStandardPreset(), 1, 1, 1, 1, 1, 1, 0, 0},
+		{"combined_before_proactive", preProactiveStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 0},
+		{"combined", BuiltinStandardPreset(), 1, 1, 1, 1, 1, 1, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := canonicalPresetVersion(tc.preset); got != tc.preset.Version {
@@ -81,7 +82,8 @@ func TestParallelAndRetrievalPresetHistoriesReopenWithoutCapabilityChanges(t *te
 				countSchema(reopened.Toolset, "read_tool_result") != tc.read ||
 				countSchema(reopened.Toolset, delegation.ContinueToolName) != tc.continuation ||
 				countSchema(reopened.Toolset, "memory_search_episodes") != tc.episodes ||
-				countSchema(reopened.Toolset, "memory_set_standing") != tc.standing {
+				countSchema(reopened.Toolset, "memory_set_standing") != tc.standing ||
+				countSchema(reopened.Toolset, "memory_overview") != tc.overview {
 				t.Fatalf("historical capabilities changed: %v", schemaNames(reopened.Toolset))
 			}
 		})
@@ -189,7 +191,7 @@ func TestPreRetrievalStandardReceiptKeepsExactToolsWhenMemoryProviderUpgrades(t 
 	if countSchema(resumed.Toolset, "memory_search") != 0 {
 		t.Fatal("old conversation gained relevance search")
 	}
-	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.1.0" || resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
 	}
 	fresh, err := current.ResolvePreset(StandardPresetID)
@@ -235,7 +237,7 @@ func TestPreReadToolResultStandardReceiptResumesWithoutTheReader(t *testing.T) {
 		t.Fatalf("pinned conversation tools changed: %v", schemaNames(resumed.Toolset))
 	}
 	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.2.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
 	}
 }
@@ -289,7 +291,7 @@ func TestPreEpisodeStandardReceiptResumesWithoutEpisodeSearch(t *testing.T) {
 		t.Fatalf("pinned conversation tools changed: %v", schemaNames(resumed.Toolset))
 	}
 	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.3.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
 	}
 	fresh, err := current.ResolvePreset(StandardPresetID)

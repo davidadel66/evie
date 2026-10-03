@@ -184,9 +184,10 @@ func TestRememberValueAbsentFromOwnerWordsIsEvieProposed(t *testing.T) {
 func TestModelProposedMemoryFromFetchedTextIsLabelledOnTheApprovalCard(t *testing.T) {
 	f := newRetrievalFixture(t)
 	global := f.global()
-	args, _ := json.Marshal(map[string]string{
+	args, _ := json.Marshal(map[string]any{
 		"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "preferred_payee", "predicate_label": "preferred payee",
 		"cardinality": "one", "literal_kind": "text", "literal_value": "Acme Offshore Holdings", "polarity": "affirmed", "kind": "fact",
+		"requested_by_owner": true,
 	})
 	client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("remember", "memory_remember_literal", string(args))), assistantStep("Saved.", nil)}}
 	var shown string

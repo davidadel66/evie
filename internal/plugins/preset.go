@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
+	StandardPresetVersion                               = "sha256:89664be6462d10c5f9d6adb09589533a388f753a31edef3986bc513165c0ef6a"
+	preProactiveStandardPresetVersion                   = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
 	preStandingStandardPresetVersion                    = "sha256:983a77d1935c12e9165cba63b28bcfa4b035a9fe4e55ce37f4630bd17e26c654"
 	preEpisodesStandardPresetVersion                    = "sha256:3b3ef3ab00330870c95a752c4611b3ec765032ad545e63c2dd5e9862294df6ce"
 	preContinueStandardPresetVersion                    = "sha256:a42624b010eede75f2befb6bc42c88d237b03b0da21dad8a07852ab8e5e8ded6"
@@ -228,22 +229,28 @@ func memoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequir
 	return requirements
 }
 
+// preProactiveMemoryCapabilityRequirements freezes the Memory list of presets
+// created before proactive proposals and memory_overview, in its exact order.
+func preProactiveMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
+	return memoryCapabilityRequirementsWithout(compatibility, MemoryOverviewCapabilityID)
+}
+
 // preStandingMemoryCapabilityRequirements freezes the Memory list of presets
 // created before the standing tier, in its exact order.
 func preStandingMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
-	return memoryCapabilityRequirementsWithout(compatibility, MemorySetStandingCapabilityID)
+	return memoryCapabilityRequirementsWithout(compatibility, MemorySetStandingCapabilityID, MemoryOverviewCapabilityID)
 }
 
 // preReadToolResultMemoryCapabilityRequirements freezes the Memory list of
 // presets created before the stored tool result reader, in its exact order.
 func preReadToolResultMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
-	return memoryCapabilityRequirementsWithout(compatibility, MemoryReadToolResultCapabilityID, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID)
+	return memoryCapabilityRequirementsWithout(compatibility, MemoryReadToolResultCapabilityID, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID, MemoryOverviewCapabilityID)
 }
 
 // preEpisodesMemoryCapabilityRequirements freezes the Memory list of presets
 // created before past-session episode search, in its exact order.
 func preEpisodesMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
-	return memoryCapabilityRequirementsWithout(compatibility, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID)
+	return memoryCapabilityRequirementsWithout(compatibility, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID, MemoryOverviewCapabilityID)
 }
 
 // memoryCapabilityRequirementsWithout is the current Memory list in its exact
@@ -677,6 +684,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preStandingStandardPresetVersion {
 		return m.resumePreset(preStandingStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preProactiveStandardPresetVersion {
+		return m.resumePreset(preProactiveStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -969,10 +979,10 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 
 // standardPresetContent is the current standard preset: every Memory
 // Capability including the stored tool result reader, past-session episode
-// search and the standing tier's memory_set_standing, then delegation, its
-// report reader and continuation. A later Memory Capability must freeze this
-// Memory list, as preStandingMemoryCapabilityRequirements does for the
-// version before it.
+// search, the standing tier's memory_set_standing and memory_overview, then
+// delegation, its report reader and continuation. A later Memory Capability
+// must freeze this Memory list, as preProactiveMemoryCapabilityRequirements
+// does for the version before it.
 func standardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preSubagentsStandardPresetContent()
@@ -980,6 +990,21 @@ func standardPresetContent() Preset {
 		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preProactiveStandardPreset is the standard preset before proactive
+// proposals (version eda7e097…); sessions pinned to it keep their exact
+// capabilities: Memory 1.5.0 tools whose remember calls always show the
+// approval card, and no memory_overview.
+func preProactiveStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preSubagentsStandardPresetContent()
+	p.OptionalCapabilities = append(preProactiveMemoryCapabilityRequirements(compatibility),
+		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: compatibility})
+	p.Version = preProactiveStandardPresetVersion
 	return p
 }
 

@@ -4,6 +4,7 @@ import type {
   Workspace,
 } from "../api/contextSessions";
 import { Archive, Database, Folder, MessageSquare, Plus, Settings, Sidebar as SidebarIcon } from "../ui/Icon";
+import { ReviewBadge } from "../candidateInbox/MemoryReviewTabs";
 
 export type SidebarDestination = "chat" | "data" | "workspaces" | `workspace:${string}`;
 
@@ -12,6 +13,8 @@ type Props = {
   instructions?: React.ReactNode;
   destination: SidebarDestination;
   busy: boolean;
+  /** Memories Evie proposed that await review in Data → Memory → Review. */
+  memoryReviewPending?: number;
   mobileOpen: boolean;
   collapsed?: boolean;
   onSettings: () => void;
@@ -29,6 +32,7 @@ export function Sidebar({
   instructions,
   destination,
   busy,
+  memoryReviewPending = 0,
   mobileOpen,
   collapsed = false,
   onSettings,
@@ -67,6 +71,7 @@ export function Sidebar({
           active={destination === "data"}
           icon={<Database size={15} />}
           label="Data"
+          badge={<ReviewBadge pending={memoryReviewPending} />}
           onClick={onData}
         />
 
@@ -188,12 +193,14 @@ function SidebarButton({
   active,
   icon,
   label,
+  badge,
   disabled,
   onClick,
 }: {
   active: boolean;
   icon: React.ReactNode;
   label: string;
+  badge?: React.ReactNode;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -207,6 +214,7 @@ function SidebarButton({
     >
       {icon}
       <span className="text-[13px] font-medium">{label}</span>
+      {badge}
     </button>
   );
 }

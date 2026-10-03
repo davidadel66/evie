@@ -169,6 +169,11 @@ type PreparedTool struct {
 	// Alternative is a second fully prepared effect the owner may approve
 	// instead, chosen on the approval card before approving.
 	Alternative *PreparedAlternative
+	// Review, when set, sends the prepared effect to the owner's review
+	// inbox instead of the approval card: the dispatcher asks for no
+	// approval, records none, and returns Review's result, which tells the
+	// model the proposal was queued, not applied. Execute never runs.
+	Review func(ctx context.Context) (string, error)
 }
 
 // PreparedAlternative is exact approval metadata and execution for the one
@@ -429,6 +434,9 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 						msg, isErr := toolError(call.ID, errors.New("prepared semantic mutation requires a durable approval observer"))
 						return complete(msg, isErr)
 					}
+					if prepared.Review != nil {
+						return queueForReview(ctx, prepared.Review, authorize, call.ID, complete)
+					}
 				}
 
 				var preview *FileChangePreview
@@ -541,6 +549,36 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 		Content:    fmt.Sprintf("Unknown Tool Call: %s", call.Function.Name),
 		ToolCallID: call.ID,
 	}, true)
+}
+
+// queueForReview runs a prepared tool's Review instead of asking for
+// approval. Queueing is a durable write, so it passes the same execution
+// authorization as any tool start; no approval decision is recorded because
+// none was made.
+func queueForReview(
+	ctx context.Context,
+	review func(context.Context) (string, error),
+	authorize LifecycleAuthorizer,
+	callID string,
+	complete func(openrouter.Message, bool) (openrouter.Message, bool, error),
+) (openrouter.Message, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return openrouter.Message{}, false, err
+	}
+	if authorize != nil {
+		if err := authorize(ctx, AuthorizeExecution); err != nil {
+			return openrouter.Message{}, false, fmt.Errorf("authorize tool execution: %w", err)
+		}
+	}
+	response, err := review(ctx)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+			return openrouter.Message{}, false, ctxErr
+		}
+		msg, isErr := toolError(callID, err)
+		return complete(msg, isErr)
+	}
+	return complete(openrouter.Message{Role: "tool", Content: response, ToolCallID: callID}, false)
 }
 
 // maxToolErrorBytes bounds the error text one tool call hands the model. Tools

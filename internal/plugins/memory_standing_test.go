@@ -141,7 +141,7 @@ func TestPreStandingStandardReceiptResumesWithItsExactMemoryTools(t *testing.T) 
 		t.Fatalf("pinned conversation tools changed: %v", schemaNames(resumed.Toolset))
 	}
 	if len(resumed.CompatibilityResolutions) != 1 || resumed.CompatibilityResolutions[0].OriginalProvider.ImplementationVersion != "1.4.0" ||
-		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.5.0" {
+		resumed.CompatibilityResolutions[0].ReplacementImplementationVersion != "1.6.0" {
 		t.Fatalf("missing exact provider compatibility audit: %+v", resumed.CompatibilityResolutions)
 	}
 	fresh, err := current.ResolvePreset(StandardPresetID)
@@ -188,6 +188,10 @@ func (k *standingKernel) ApplyClaimStanding(_ context.Context, _ memory.TurnLeas
 	return memory.ClaimStandingResult{OperationID: proposal.OperationID, ClaimID: proposal.Request.ClaimID}, nil
 }
 
+func (*standingKernel) OwnerRequestsMemory(context.Context, memory.ScopeContext, memory.EventID) (bool, error) {
+	return true, nil
+}
+
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
@@ -219,7 +223,7 @@ func TestStandingMemoryToolsProposeKindAndOfferTheAlwaysAppliesSwitch(t *testing
 		}
 		return message, isErr, observed
 	}
-	base := `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000050","predicate":"answer_style","predicate_label":"answer style","cardinality":"one","literal_kind":"text","literal_value":"concise","polarity":"affirmed"`
+	base := `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000050","predicate":"answer_style","predicate_label":"answer style","cardinality":"one","literal_kind":"text","literal_value":"concise","polarity":"affirmed","requested_by_owner":true`
 	if message, isErr, _ := remember(base+`}`, tools.Approved); !isErr || !strings.Contains(message.Content, "kind") {
 		t.Fatalf("remember without a kind = %+v", message)
 	}

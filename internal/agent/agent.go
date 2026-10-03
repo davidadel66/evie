@@ -384,7 +384,7 @@ func WithModelMemoryRetrieval(enabled bool) SessionOption {
 
 func (s *Session) modelToolset() tools.Toolset {
 	if s.modelMemoryReadsDisabled {
-		return s.toolset.WithoutTools("memory_search", "memory_search_conversations", "memory_expand_conversation", "memory_search_episodes")
+		return s.toolset.WithoutTools("memory_search", "memory_search_conversations", "memory_expand_conversation", "memory_search_episodes", "memory_overview")
 	}
 	return s.toolset
 }

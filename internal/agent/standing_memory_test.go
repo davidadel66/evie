@@ -41,9 +41,10 @@ func standingBlock(t *testing.T, request openrouter.ChatRequest) string {
 // it proposes the kind, the approval card shows it, and the owner approves.
 func rememberThroughTheModel(t *testing.T, f *retrievalFixture, record memory.Session, kind, predicate, label, value string, decision tools.Decision) string {
 	t.Helper()
-	args, _ := json.Marshal(map[string]string{
+	args, _ := json.Marshal(map[string]any{
 		"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": predicate, "predicate_label": label,
 		"cardinality": "one", "literal_kind": "text", "literal_value": value, "polarity": "affirmed", "kind": kind,
+		"requested_by_owner": true,
 	})
 	client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("remember", "memory_remember_literal", string(args))), assistantStep("Saved.", nil)}}
 	var card string

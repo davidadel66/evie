@@ -18,6 +18,7 @@ import { selectedToolInspection, selectedMemoryTools, type ToolSelection } from 
 import { Chat } from "./chat/Chat";
 import { Composer } from "./chat/Composer";
 import { DataHub, type DataSource } from "./data/DataHub";
+import { usePendingMemoryProposals } from "./candidateInbox/pendingProposals";
 import { Sidebar, type SidebarDestination } from "./shell/Sidebar";
 import { useContextSessions } from "./store/useContextSessions";
 import { useSession } from "./store/useSession";
@@ -72,6 +73,8 @@ export default function App() {
   const fileTrigger = useRef<HTMLButtonElement | null>(null);
   const activityTrigger = useRef<HTMLButtonElement | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("memory");
+  // Memories Evie proposed on her own wait for review; recount after each turn.
+  const memoryReviewPending = usePendingMemoryProposals(status);
 
   const activeView = views.find((view) => view.id === activeViewId) ?? views[0];
   const activeWorkspace = activeView.kind === "workspace"
@@ -252,6 +255,7 @@ export default function App() {
         instructions={scopeWorkspace&&<InstructionBadge workspace={scopeWorkspace} refresh={status} onOpen={trigger=>openInstructions(scopeWorkspace,trigger)}/>}
         destination={sidebarDestination(activeView)}
         busy={contextSessions.busy || working}
+        memoryReviewPending={memoryReviewPending}
         mobileOpen={mobileNavOpen}
         collapsed={sidebarCollapsed}
         onSettings={() => setSettingsOpen(true)}

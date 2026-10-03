@@ -17,21 +17,46 @@ const (
 // guidance precedes.
 const delegationFollowUpAnchor = "- Worker findings"
 
+// Memory duties (docs/memory-architecture.md, Stage 2) are stated only to a
+// session whose pinned remember tool says whether the owner asked
+// (requested_by_owner, Memory implementation 1.6.0): its unrequested
+// proposals wait in the review inbox instead of interrupting with a card.
+// Sessions pinned to earlier memory tools keep their exact prompt.
+const (
+	rememberLiteralTool  = "memory_remember_literal"
+	requestedByOwnerFlag = "requested_by_owner"
+	memoryOverviewTool   = "memory_overview"
+	// memoryDutiesAnchor starts the Memory line the duties precede.
+	memoryDutiesAnchor = "- When David asks you to remember something"
+	memoryDuties       = "- Keep two memories for David without being asked, sparingly: propose only what is durable, important and not derivable from files or tools; never transient task details, one-off requests or secrets.\n" +
+		"  - Profile: his preferences, standing instructions and stable facts about him (kind preference, instruction or profile_fact).\n" +
+		"  - Workspace memory: in a Workspace or project, its brief (kind workspace_brief: what the area is for and how it works) and its key decisions and conventions (kind fact).\n" +
+		"- Set " + requestedByOwnerFlag + " true only when David's current message explicitly asks you to remember or save it; he then approves it on a card. Otherwise set it false: the proposal waits in his review inbox and nothing is saved yet, so mention it in one short line and carry on.\n"
+	memoryOverviewLine = "- When David asks what you know or remember about him or this area, call " + memoryOverviewTool + "; check it before proposing so you don't repeat a memory.\n"
+)
+
 // primaryInstructions is the primary agent's system prompt for a session
 // whose toolset is tools: systemPrompt, plus the delegation follow-up line
 // naming only the follow-up tools the session has (amended 2026-10-01;
-// formerly every session was told to use both). A session's toolset is
-// pinned, so its instructions stay stable and cacheable across its turns.
+// formerly every session was told to use both), plus the memory duties when
+// the session can queue proposals for review (2026-10-03). A session's
+// toolset is pinned, so its instructions stay stable and cacheable across
+// its turns.
 func primaryInstructions(tools []openrouter.Tool) string {
-	var report, continuation bool
+	var report, continuation, duties, overview bool
 	for _, tool := range tools {
 		switch tool.Function.Name {
 		case readSubagentReportTool:
 			report = true
 		case continueResearchTool:
 			continuation = true
+		case rememberLiteralTool:
+			_, duties = tool.Function.Parameters.Properties[requestedByOwnerFlag]
+		case memoryOverviewTool:
+			overview = true
 		}
 	}
+	prompt := systemPrompt
 	var line string
 	switch {
 	case report && continuation:
@@ -40,10 +65,18 @@ func primaryInstructions(tools []openrouter.Tool) string {
 		line = "- Use " + readSubagentReportTool + " when a summary is not enough.\n"
 	case continuation:
 		line = "- Use " + continueResearchTool + " to extend a partial child instead of starting over.\n"
-	default:
-		return systemPrompt
 	}
-	return strings.Replace(systemPrompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)
+	if line != "" {
+		prompt = strings.Replace(prompt, delegationFollowUpAnchor, line+delegationFollowUpAnchor, 1)
+	}
+	if duties {
+		block := memoryDuties
+		if overview {
+			block += memoryOverviewLine
+		}
+		prompt = strings.Replace(prompt, memoryDutiesAnchor, block+memoryDutiesAnchor, 1)
+	}
+	return prompt
 }
 
 // systemPrompt is the stable, session-independent prefix. Runtime facts,

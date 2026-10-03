@@ -18,7 +18,7 @@ import (
 const (
 	MemoryPluginID              PluginID = "memory"
 	MemoryContractVersion                = "1.0.0"
-	memoryImplementationVersion          = "1.5.0"
+	memoryImplementationVersion          = "1.6.0"
 	memoryReadOutputLimit                = 64 * 1024
 )
 
@@ -47,24 +47,31 @@ const (
 	// MemorySetStandingCapabilityID marks an existing Claim as always
 	// applying, or not, through the normal approval path (standing tier).
 	MemorySetStandingCapabilityID CapabilityID = "memory.set_standing"
+	// MemoryOverviewCapabilityID reads the standing set plus the current
+	// profile and Workspace memories in one bounded call (Stage 3).
+	MemoryOverviewCapabilityID CapabilityID = "memory.overview"
 )
 
 // memoryContract selects a tool's model-facing contract. Implementation 1.5.0
 // added the standing tier: remember, correct and promote propose a memory
-// kind, and memory_set_standing exists. Earlier contracts stay byte-identical
-// for conversations whose receipts pin them.
+// kind, and memory_set_standing exists. Implementation 1.6.0 added proactive
+// proposals: the remember tools say whether the owner asked
+// (requested_by_owner), and memory_overview exists. Earlier contracts stay
+// byte-identical for conversations whose receipts pin them.
 type memoryContract int
 
 const (
 	memoryContractPreStanding memoryContract = iota
 	memoryContractStanding
+	memoryContractProactive
 )
 
 type memoryCapabilityDescriptor struct {
-	id           CapabilityID
-	read         bool
-	standingOnly bool
-	build        func(*Memory, memoryContract) tools.Tool
+	id   CapabilityID
+	read bool
+	// since is the first contract offering the Capability.
+	since memoryContract
+	build func(*Memory, memoryContract) tools.Tool
 }
 
 func ignoringContract(build func(*Memory) tools.Tool) func(*Memory, memoryContract) tools.Tool {
@@ -98,7 +105,8 @@ var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
 	// Not gated by remote-memory opt-in: it returns only tool output this
 	// conversation already sent to its provider.
 	{id: MemoryReadToolResultCapabilityID, build: ignoringContract(func(*Memory) tools.Tool { return tools.ReadToolResultTool() })},
-	{id: MemorySetStandingCapabilityID, standingOnly: true, build: ignoringContract((*Memory).setStandingTool)},
+	{id: MemorySetStandingCapabilityID, since: memoryContractStanding, build: ignoringContract((*Memory).setStandingTool)},
+	{id: MemoryOverviewCapabilityID, read: true, since: memoryContractProactive, build: ignoringContract((*Memory).overviewTool)},
 }
 
 func allMemoryCapabilityIDs() []CapabilityID {
@@ -133,6 +141,12 @@ type SemanticMemoryKernel interface {
 	ApplyMemoryLifecycle(context.Context, memory.TurnLease, memory.MemoryLifecycleProposal) (memory.MemoryLifecycleResult, error)
 	PrepareClaimStanding(context.Context, memory.ScopeContext, memory.ClaimStandingRequest) (memory.ClaimStandingProposal, error)
 	ApplyClaimStanding(context.Context, memory.TurnLease, memory.ClaimStandingProposal) (memory.ClaimStandingResult, error)
+	// OwnerRequestsMemory reports whether the bound owner message carries an
+	// explicit memory cue; QueueMemoryProposal stores a proposal the owner did
+	// not explicitly ask for in the review inbox, fenced by the turn lease.
+	OwnerRequestsMemory(context.Context, memory.ScopeContext, memory.EventID) (bool, error)
+	QueueMemoryProposal(context.Context, memory.TurnLease, memory.QueuedMemoryProposal) (memory.MemoryProposalQueued, error)
+	MemoryOverview(context.Context, memory.ScopeContext, memory.MemoryOverviewQuery) (memory.MemoryOverview, error)
 }
 
 type Memory struct {
@@ -158,7 +172,7 @@ func (p *Memory) Manifest() Manifest {
 		contracts[i] = CapabilityContract{ID: capability.ID, Version: MemoryContractVersion}
 	}
 	var compatibility []ImplementationCompatibility
-	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"} {
+	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"} {
 		legacy := p.ResumableToolCapabilities(version)
 		evidence := make([]CapabilityCompatibility, len(legacy))
 		for i, c := range legacy {
@@ -175,13 +189,13 @@ func (p *Memory) Manifest() Manifest {
 }
 
 func (p *Memory) ToolCapabilities() []ToolCapability {
-	return p.capabilities(memoryContractStanding)
+	return p.capabilities(memoryContractProactive)
 }
 
 func (p *Memory) capabilities(contract memoryContract) []ToolCapability {
 	capabilities := make([]ToolCapability, 0, len(memoryCapabilityDescriptors))
 	for _, descriptor := range memoryCapabilityDescriptors {
-		if (descriptor.read && !p.remoteReads) || (descriptor.standingOnly && contract != memoryContractStanding) {
+		if (descriptor.read && !p.remoteReads) || descriptor.since > contract {
 			continue
 		}
 		capabilities = append(capabilities, ToolCapability{ID: descriptor.id, ContractVersion: MemoryContractVersion, Tool: descriptor.build(p, contract)})
@@ -192,6 +206,11 @@ func (p *Memory) capabilities(contract memoryContract) []ToolCapability {
 // Existing sessions retain their exact pre-applicability schemas and behavior.
 // New sessions use the current capabilities; no saved receipt is rewritten.
 func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
+	// Version 1.6.0 added proactive proposals and memory_overview; 1.5.0
+	// keeps the standing tier's tools exactly.
+	if version == "1.5.0" {
+		return p.capabilities(memoryContractStanding)
+	}
 	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" && version != "1.4.0" {
 		return nil
 	}
@@ -647,9 +666,13 @@ func (p *Memory) rememberLiteralTool(contract memoryContract) tools.Tool {
 	properties["valid_from"] = stringProperty("Optional RFC3339 Valid Time start.")
 	properties["valid_to"] = stringProperty("Optional RFC3339 Valid Time end.")
 	required := []string{"idempotency_key", "predicate", "predicate_label", "cardinality", "literal_kind", "literal_value", "polarity"}
-	if contract == memoryContractStanding {
+	if contract >= memoryContractStanding {
 		properties["kind"] = memoryKindProperty(true)
 		required = append(required, "kind")
+	}
+	if contract >= memoryContractProactive {
+		properties["requested_by_owner"] = requestedByOwnerProperty()
+		required = append(required, "requested_by_owner")
 	}
 	return tools.Tool{Schema: toolSchema("memory_remember_literal", "Prepare one exact owner-subject Typed Literal Claim and require Action Approval before acceptance.", properties,
 		required...), NeedsApproval: true,
@@ -665,12 +688,16 @@ func (p *Memory) rememberLiteralTool(contract memoryContract) tools.Tool {
 				LiteralValue   string `json:"literal_value"`
 				Polarity       string
 				Kind           memory.ClaimKind `json:"kind"`
+				RequestedBy    *bool            `json:"requested_by_owner"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			invocation, err := mutationInvocation(ctx)
 			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			if err := requestedByOwnerArgument(contract, args.RequestedBy); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			kind, ratio, err := memoryKindArgument(contract, args.Kind, true, invocation)
@@ -691,14 +718,18 @@ func (p *Memory) rememberLiteralTool(contract memoryContract) tools.Tool {
 				})
 			}
 			prepared, err := prepare(proposal)
-			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
-				return prepared, err
+			if err == nil && proposal.Classification != nil && proposal.StandingAlternative != nil {
+				switched := proposal
+				switched.Classification = switchedStanding(proposal.Classification)
+				switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+				switched.StandingAlternative = nil
+				prepared, err = withPreparedAlternative(prepared)(prepare(switched))
 			}
-			switched := proposal
-			switched.Classification = switchedStanding(proposal.Classification)
-			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
-			switched.StandingAlternative = nil
-			return withPreparedAlternative(prepared)(prepare(switched))
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			return p.routeToInbox(ctx, contract, args.RequestedBy, invocation, prepared,
+				memory.QueuedMemoryProposal{ToolName: memory.RememberLiteralToolName, Literal: &proposal})
 		},
 	}
 }
@@ -722,7 +753,7 @@ func memoryKindProperty(required bool) openrouter.Property {
 // returns it with the session's calibrated ratio for the standing budget.
 // Tools pinned before the standing tier propose no kind.
 func memoryKindArgument(contract memoryContract, kind memory.ClaimKind, required bool, invocation tools.InvocationContext) (memory.ClaimKind, int64, error) {
-	if contract != memoryContractStanding {
+	if contract < memoryContractStanding {
 		if kind != "" {
 			return "", 0, errors.New("this conversation uses the earlier memory tools, which have no memory kind; start a new conversation to classify memories")
 		}
@@ -774,9 +805,13 @@ func (p *Memory) rememberEntityTool(contract memoryContract) tools.Tool {
 		properties[name] = property
 	}
 	required := []string{"idempotency_key", "predicate", "predicate_label", "cardinality", "polarity"}
-	if contract == memoryContractStanding {
+	if contract >= memoryContractStanding {
 		properties["kind"] = memoryKindProperty(true)
 		required = append(required, "kind")
+	}
+	if contract >= memoryContractProactive {
+		properties["requested_by_owner"] = requestedByOwnerProperty()
+		required = append(required, "requested_by_owner")
 	}
 	return tools.Tool{Schema: toolSchema("memory_remember_entity", "Prepare one exact Entity-to-Entity Claim and require Action Approval before acceptance.", properties,
 		required...), NeedsApproval: true,
@@ -799,12 +834,16 @@ func (p *Memory) rememberEntityTool(contract memoryContract) tools.Tool {
 				ObjectType            string           `json:"object_type"`
 				ObjectAlias           string           `json:"object_alias"`
 				Kind                  memory.ClaimKind `json:"kind"`
+				RequestedBy           *bool            `json:"requested_by_owner"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			invocation, err := mutationInvocation(ctx)
 			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			if err := requestedByOwnerArgument(contract, args.RequestedBy); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			kind, ratio, err := memoryKindArgument(contract, args.Kind, true, invocation)
@@ -826,14 +865,18 @@ func (p *Memory) rememberEntityTool(contract memoryContract) tools.Tool {
 				})
 			}
 			prepared, err := prepare(proposal)
-			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
-				return prepared, err
+			if err == nil && proposal.Classification != nil && proposal.StandingAlternative != nil {
+				switched := proposal
+				switched.Classification = switchedStanding(proposal.Classification)
+				switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+				switched.StandingAlternative = nil
+				prepared, err = withPreparedAlternative(prepared)(prepare(switched))
 			}
-			switched := proposal
-			switched.Classification = switchedStanding(proposal.Classification)
-			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
-			switched.StandingAlternative = nil
-			return withPreparedAlternative(prepared)(prepare(switched))
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			return p.routeToInbox(ctx, contract, args.RequestedBy, invocation, prepared,
+				memory.QueuedMemoryProposal{ToolName: memory.RememberEntityToolName, Entity: &proposal})
 		},
 	}
 }
@@ -849,7 +892,7 @@ func (p *Memory) correctClaimTool(contract memoryContract) tools.Tool {
 	} {
 		properties[name] = property
 	}
-	if contract == memoryContractStanding {
+	if contract >= memoryContractStanding {
 		properties["kind"] = memoryKindProperty(false)
 	}
 	return tools.Tool{Schema: toolSchema("memory_correct_claim", "Prepare an exact error correction or real-world change and require Action Approval.", properties,
@@ -963,7 +1006,7 @@ func (p *Memory) createGraphLinkTool() tools.Tool {
 func (p *Memory) promoteClaimTool(contract memoryContract) tools.Tool {
 	properties := mutationProperties()
 	properties["claim_id"] = stringProperty("Exact narrower-scope Claim ID. The harness derives the next broader scope.")
-	if contract == memoryContractStanding {
+	if contract >= memoryContractStanding {
 		properties["kind"] = memoryKindProperty(false)
 	}
 	return tools.Tool{Schema: toolSchema("memory_promote_claim", "Prepare promotion of one exact Claim to the next harness-derived broader scope and require Action Approval.", properties, "idempotency_key", "claim_id"), NeedsApproval: true,

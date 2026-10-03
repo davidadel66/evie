@@ -194,7 +194,7 @@ function Key({ label, dark }: { label: string; dark?: boolean }) {
   );
 }
 
-function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArgs>, {shape: "memory"}>}) {
+export function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArgs>, {shape: "memory"}>}) {
   const {names} = useMemoryPresentation();
   const applies = applicabilityLabel(view.scopeKey,names);
   const change = view.standingChange;
@@ -209,7 +209,7 @@ function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArg
 
 /** AlwaysApplies is the standing-tier switch: on, Evie sees the memory on
  *  every request; off, it is recalled only when relevant. */
-function AlwaysApplies({ classification, checked, onChange }: { classification: MemoryClassification; checked: boolean; onChange?: (value: boolean) => void }) {
+export function AlwaysApplies({ classification, checked, onChange }: { classification: MemoryClassification; checked: boolean; onChange?: (value: boolean) => void }) {
   return (
     <div className="border-amber-hair flex items-start gap-3 border-t px-4 py-3 text-sm">
       <button

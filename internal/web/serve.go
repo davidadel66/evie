@@ -239,6 +239,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	s.registerSpendingAccountRoutes(mux)
 	s.registerCandidateReviewRoutes(mux)
+	s.registerMemoryProposalRoutes(mux)
 	s.registerFolderRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)

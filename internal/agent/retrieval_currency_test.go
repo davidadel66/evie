@@ -342,7 +342,7 @@ func TestHeldClaimRefreshesWhenDriftedConflictIsAccepted(t *testing.T) {
 	readerRemember(t, f, source, "live_in", "Remember that I live in Boston.", "Boston")
 	f.refresh()
 	initial, _ := json.Marshal(map[string]any{"query": "Boston"})
-	remember, _ := json.Marshal(map[string]any{"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "live_in", "predicate_label": "cities I live in", "cardinality": "many", "literal_kind": "text", "literal_value": "Portland", "polarity": "affirmed", "destination": "everywhere", "kind": "fact"})
+	remember, _ := json.Marshal(map[string]any{"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "live_in", "predicate_label": "cities I live in", "cardinality": "many", "literal_kind": "text", "literal_value": "Portland", "polarity": "affirmed", "destination": "everywhere", "kind": "fact", "requested_by_owner": true})
 	client := &fakeClient{steps: []step{
 		assistantStep("", nil, toolCall("initial", "memory_search", string(initial))),
 		assistantStep("", nil, toolCall("new-fact", "memory_remember_literal", string(remember))),

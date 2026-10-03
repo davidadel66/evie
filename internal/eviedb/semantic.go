@@ -296,7 +296,10 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureSemanticObjectScopeColumns(ctx, db); err != nil {
 		return err
 	}
-	return ensureSemanticClaimClassifications(ctx, db)
+	if err := ensureSemanticClaimClassifications(ctx, db); err != nil {
+		return err
+	}
+	return ensureMemoryProposalInbox(ctx, db)
 }
 
 func ensureSemanticCursorAuth(ctx context.Context, db *sql.DB) error {
