@@ -1,5 +1,97 @@
 # memory - decisions
 
+- **2026-10-03 — Standing tier: approved standing memories reach every
+  request by rule (memory architecture Stage 1).** Implements David's
+  2026-10-03 decisions 1 (standing by type, visible on approval) and 2 (hard
+  cap) in [the memory architecture plan](../../../../docs/memory-architecture.md);
+  the spec section is [Standing Memory](memory.spec.md#standing-memory) and
+  invariant 17. Implementation choices:
+  - *Kind.* A closed `ClaimKind`: `preference`, `instruction`,
+    `profile_fact`, `workspace_brief`, `fact`. Remember tools require it;
+    correction and promotion take it optionally and otherwise carry the
+    Claim's classification over (a same-kind proposal keeps the prior
+    standing flag, so an owner's earlier switch is not undone). Standing
+    defaults to true for every kind but `fact`. The model proposes the kind;
+    it never proposes the standing flag.
+  - *Data model.* An append-only `semantic_claim_classifications` projection
+    (`claim_id`, `scope_id`, `kind`, `standing`, `operation_id`,
+    `scope_revision`, `transaction_time`; latest row per Claim is current)
+    written by the accepting operation. Remember, correction and promotion
+    proposals gain an optional `classification` (`kind`, `standing`,
+    `bytes_per_token_milli`) and their canonical effects an omitted-when-empty
+    `classifications` entry, so pre-standing proposals keep their exact
+    hashes and schema versions. A new `classify_claim` operation (schema
+    version 7) changes an existing Claim's classification; it requires the
+    exact durable approval and compare-and-sets the Claim's current
+    classification operation. Migration: the `semantic_operations` CHECK is
+    rebuilt to admit version 7 (the V2-V6 migrations recognize it as newer)
+    and the new table is created; no row is rewritten, and Claims accepted
+    before this tier read as unclassified facts. Replay reproduces
+    classifications from the operations; the table joins the projection
+    snapshot, contributing to a scope's hash only when the scope has rows, so
+    every recorded fixture hash is unchanged.
+  - *Switch before approving.* Prepare computes the exact hashes of the
+    alternative proposal (standing switched). The prepared tool carries it as
+    `tools.PreparedAlternative`, and the approver may return
+    `tools.ApprovedAlternative` (web: `{"alternative": true}` on
+    `/api/approve`; REPL: answer `s`). The dispatcher then records and runs
+    that alternative as an ordinary approval, so the durable approval names
+    the hashes of what was applied. A tool without an alternative treats it
+    as declined. The card's switch state lives in the session store, so the
+    Approve button and the Y shortcut approve the same proposal.
+  - *Rendering.* Each conversational request of a root session (never a
+    delegated worker), with `EVIE_REMOTE_MEMORY=on`, carries one user-role
+    `<standing-memory>` block after the system prompt, working-folder note
+    and repository guidance and before the summary and history; one JSON line
+    per item (Go's encoder escapes quotes, line breaks and `<`), ordered
+    Global → Workspace or project → session, then by when each became
+    standing; Claim text only; a promoted duplicate renders once; secret-flagged
+    items are withheld. The set is re-read for every request, so an approval
+    applies to the turn's next request, and its bytes change only with the
+    set. Composer version `context-composer-v4`. This amends the 2026-10-01
+    C4 breakpoint rule: the block's end is a breakpoint when it is the last
+    leading block; with a summary, the block takes the system prompt's mark
+    (its prefix covers the system prompt), keeping four. Snapshots gain a
+    content-free `standing_memory` receipt (Claim IDs shown, bytes, SHA-256).
+    `/context` composes the same block. A failed standing read fails the turn
+    locally rather than silently dropping standing memory.
+  - *Budgets.* 500 tokens for the profile (Global plus the approving
+    session's own standing memories) and 500 per Workspace or project brief,
+    each rendered line measured with the session's calibrated bytes-per-token
+    ratio from its latest request snapshot (C3; 3 when uncalibrated). The ratio
+    is recorded in the proposal, and Apply measures inside the accepting
+    transaction, so concurrent approvals cannot both pass. Past the budget the
+    operation rolls back with "memory full", listing each current item's Claim
+    ID, scope, kind, text and tokens, and suggesting `memory_set_standing`
+    false, retire, correction, or Always applies off. Replay never re-runs the
+    budget. Known limits: a Global approval does not count other sessions'
+    conversation-scoped standing memories, and a Claim whose Valid Time starts
+    later is not counted until it renders; render never truncates, so either
+    can show slightly over budget until the next approval.
+  - *Versioning.* Built on Stage 5's implementation 1.4.0, Memory Plugin
+    implementation 1.5.0 adds `kind` to the remember, correct and promote
+    schemas and the `memory.set_standing` Capability. Implementations 1.4.0
+    (with episode search) and 1.3.0 stay resumable with byte-identical
+    schemas (pinned by golden schema hashes in the plugin tests) and reject
+    a `kind`; earlier versions are unchanged. The standard preset becomes
+    `sha256:eda7e097…`; Stage 5's `sha256:983a77d1…` is frozen as the
+    pre-standing preset and `sha256:3b3ef3ab…` stays the pre-episodes preset;
+    both resume exactly. The added schema text costs
+    2,964 request bytes; one byte-budgeted investigation test's profile was
+    raised by exactly that amount. The memory scale eval's default-tier report
+    and the integrated lexical recall check are unchanged: their corpora save
+    no standing memories, so no request gains a block, and recall is untouched.
+  - *Migrating existing preferences.* Claims saved before this tier (David's
+    two General-workspace preferences) join it only through approval: in a
+    General Workspace session, ask Evie to make the memory always apply; it
+    finds the Claim ID (`memory_query_claims` or `memory_search`) and proposes
+    `memory_set_standing` with `standing: true` and `kind: preference`; the
+    card shows "Preference · Always applies: Off → On".
+  - *Not in this stage.* System-prompt memory duties and review-inbox routing
+    (Stage 2), the memory UI's standing view and the standing read tool
+    (Stages 2-3), and a local REPL command for standing changes. Claim
+    inspection does not yet show a classification.
+
 - **2026-10-03 — Episodic session summaries (memory architecture Stage 5).**
   This applies David's decision 6 (project history) in
   [memory-architecture.md](../../../../docs/memory-architecture.md): store one

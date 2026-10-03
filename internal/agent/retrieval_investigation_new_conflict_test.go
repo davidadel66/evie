@@ -27,7 +27,7 @@ func TestMemoryInvestigationRefreshesNewConflictButPreservesExplicitKnowledgePin
 				query["as_known_at"] = time.Now().UTC().Format(time.RFC3339Nano)
 			}
 			initial, _ := json.Marshal(query)
-			remember, _ := json.Marshal(map[string]any{"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "live_in", "predicate_label": "live in", "cardinality": "one", "literal_kind": "text", "literal_value": "Portland", "polarity": "affirmed", "destination": "everywhere"})
+			remember, _ := json.Marshal(map[string]any{"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "live_in", "predicate_label": "live in", "cardinality": "one", "literal_kind": "text", "literal_value": "Portland", "polarity": "affirmed", "destination": "everywhere", "kind": "fact"})
 			client := &fakeClient{steps: []step{
 				assistantStep("", nil, toolCall("initial", "memory_search", string(initial))),
 				assistantStep("", nil, toolCall("new-fact", "memory_remember_literal", string(remember))),

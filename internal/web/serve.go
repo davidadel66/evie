@@ -19,6 +19,7 @@ import (
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/plugins"
+	"github.com/davidadel66/evie/internal/tools"
 )
 
 // Serve runs the web frontend until the process exits. Loopback only:
@@ -102,7 +103,7 @@ type Server struct {
 	folderPickerClosed bool
 
 	mu      sync.Mutex
-	pending map[string]chan bool
+	pending map[string]chan tools.Decision
 
 	// turns holds the stop control of each running web turn, keyed by its
 	// conversation. Guarded by sessionMu.
@@ -122,7 +123,7 @@ type ReceiptInspector interface {
 func NewServer(session *agent.Session) *Server {
 	return &Server{
 		session:   session,
-		pending:   make(map[string]chan bool),
+		pending:   make(map[string]chan tools.Decision),
 		terminals: make(map[string]*terminalEntry),
 		turns:     make(map[memory.SessionID]*webTurn),
 	}

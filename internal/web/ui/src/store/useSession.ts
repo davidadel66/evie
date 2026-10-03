@@ -8,8 +8,9 @@ import { answerApproval } from "../api/approve";
 import { ApiError, StreamTruncated, streamChat } from "../api/stream";
 import { cancelTurn, compactSession, compactionNotice, type ComposerNotice } from "../api/turnControls";
 import { composerCommand } from "../chat/composerCommand";
+import { approvalAlternative } from "../chat/approvalArgs";
 import { isOwnerStop, type ServerEvent } from "./events";
-import { appendUser, reduce, setApprovalState, type Item } from "./reducer";
+import { appendUser, reduce, setApprovalAlwaysApplies, setApprovalState, type Item } from "./reducer";
 
 export type Status = "idle" | "streaming" | "error";
 
@@ -66,6 +67,8 @@ export type Session = {
    *  place: nothing was sent, queued, or started. */
   send: (text: string) => boolean;
   answer: (reqId: string, approve: boolean) => void;
+  /** Records a memory card's "Always applies" switch before it is answered. */
+  setAlwaysApplies: (reqId: string, alwaysApplies: boolean) => void;
   /** Asks the server to stop the running turn; its stream reports the end. */
   stop: () => void;
   stopping: boolean;
@@ -92,6 +95,10 @@ export function useSession(sessionId?: string, model?: string): Session {
   const historyReady = useRef(false);
   const epoch = useRef(0);
   const [items, setItems] = useState<Item[]>([]);
+  // answer reads the latest card state (the "Always applies" switch) whether
+  // it comes from the card's button or the keyboard shortcut.
+  const latestItems = useRef(items);
+  latestItems.current = items;
   const [status, setStatus] = useState<Status>("idle");
   const [queue, setQueue] = useState<string[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -258,11 +265,13 @@ export function useSession(sessionId?: string, model?: string): Session {
 
   const answer = useCallback((reqId: string, approve: boolean) => {
     const generation = epoch.current;
+    const tool = latestItems.current.find((item) => item.kind === "tool" && item.approval?.reqId === reqId);
+    const alternative = approve && tool?.kind === "tool" && approvalAlternative(tool.name, tool.args, tool.approval?.alwaysApplies);
     // Optimistic: the click is the decision, the request only relays it.
     setItems((prev) =>
       setApprovalState(prev, reqId, approve ? "approved" : "declined"),
     );
-    answerApproval(reqId, approve)
+    answerApproval(reqId, approve, alternative)
       .then((accepted) => {
         if (generation !== epoch.current) return;
         // 404 means the id was already gone — the turn moved on without this
@@ -272,6 +281,10 @@ export function useSession(sessionId?: string, model?: string): Session {
         }
       })
       .catch((err: unknown) => { if (generation === epoch.current) setProblem(describe(err)); });
+  }, []);
+
+  const setAlwaysApplies = useCallback((reqId: string, alwaysApplies: boolean) => {
+    setItems((prev) => setApprovalAlwaysApplies(prev, reqId, alwaysApplies));
   }, []);
 
   const dismissProblem = useCallback(() => {
@@ -339,7 +352,7 @@ export function useSession(sessionId?: string, model?: string): Session {
     send(next);
   }, [status, compacting, queue, send, sessionId]);
 
-  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
+  return { items: historySession.current === sessionId ? items : [], status, queue, clearQueue: () => setQueue([]), problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, reset, historyLoading, historyProblem, hasOlder: !!before, loadOlder: () => void loadHistory(before), retryHistory: () => void loadHistory(historyCursor.current) };
 }
 
 /** describe turns a thrown value into banner text. The two typed failures get

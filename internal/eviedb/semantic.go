@@ -267,6 +267,9 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureSemanticOperationSchemaV6(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureSemanticOperationSchemaV7(ctx, db); err != nil {
+		return err
+	}
 	present, err := tableHasColumn(ctx, db, "semantic_claims", "object_kind")
 	if err != nil {
 		return err
@@ -290,7 +293,10 @@ func ensureSemanticSchema(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
-	return ensureSemanticObjectScopeColumns(ctx, db)
+	if err := ensureSemanticObjectScopeColumns(ctx, db); err != nil {
+		return err
+	}
+	return ensureSemanticClaimClassifications(ctx, db)
 }
 
 func ensureSemanticCursorAuth(ctx context.Context, db *sql.DB) error {
@@ -410,7 +416,7 @@ func ensureSemanticOperationSchemaV2(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
+	if strings.Contains(definition, semanticOperationsV7Constraint) || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") ||
 		strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
@@ -465,7 +471,7 @@ func ensureSemanticOperationSchemaV3(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, semanticOperationsV7Constraint) || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -519,7 +525,7 @@ func ensureSemanticOperationSchemaV4(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, semanticOperationsV7Constraint) || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -573,7 +579,7 @@ func ensureSemanticOperationSchemaV5(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
+	if strings.Contains(definition, semanticOperationsV7Constraint) || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5)") {
 		return nil
 	}
 	conn, err := db.Conn(ctx)
@@ -1113,7 +1119,8 @@ func (s *Store) PrepareRememberLiteral(
 		if proposal.Source.Eligibility == "" {
 			proposal.Source.Eligibility = memory.EligibilityEligible
 		}
-		if proposal.Request.Destination != request.Destination {
+		if proposal.Request.Destination != request.Destination || proposal.Request.Kind != request.Kind ||
+			proposal.Request.StandingBytesPerTokenMilli != request.StandingBytesPerTokenMilli {
 			return memory.RememberLiteralProposal{}, ErrIdempotencyConflict
 		}
 		proposal.Request = request
@@ -1241,6 +1248,18 @@ func (s *Store) PrepareRememberLiteral(
 	if err != nil {
 		return memory.RememberLiteralProposal{}, err
 	}
+	var classification *memory.ClaimClassification
+	if request.Kind != "" {
+		prior, priorPresent := memory.ClaimClassification{}, false
+		if !claimCreate {
+			if prior, _, priorPresent, err = loadClaimClassification(ctx, dbLifecycleQueryer{s.db}, claimID); err != nil {
+				return memory.RememberLiteralProposal{}, err
+			}
+		}
+		if classification, err = deriveClaimClassification(request.Kind, prior, priorPresent, request.StandingBytesPerTokenMilli); err != nil {
+			return memory.RememberLiteralProposal{}, err
+		}
+	}
 	binding := bindOwnerSource(content, literalBindingClaim(content, request.Literal, request.Polarity, request.Predicate, request.PredicateLabel))
 	var sourceLinkID memory.SemanticID
 	var sourceOperationID memory.SemanticID
@@ -1302,7 +1321,7 @@ func (s *Store) PrepareRememberLiteral(
 			OperationID: sourceOperationID, EventID: request.SourceEventID, SessionID: scope.SessionID, ScopeKey: sourceKey,
 			EventPart: "content", Actor: "owner", SourceType: "user_message", ObservedAt: formatSemanticTime(observed),
 			Eligibility: memory.EligibilityEligible, Create: sourceCreate,
-		}, Request: request,
+		}, Request: request, Classification: classification,
 	}
 	binding.apply(&proposal.Source)
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalRememberLiteralProposal(proposal))
@@ -1312,6 +1331,12 @@ func (s *Store) PrepareRememberLiteral(
 	proposal.PreparedSHA256, _, err = semanticHash(proposal)
 	if err != nil {
 		return memory.RememberLiteralProposal{}, fmt.Errorf("hash prepared proposal: %w", err)
+	}
+	proposal.StandingAlternative, err = standingAlternative(proposal,
+		func(p *memory.RememberLiteralProposal) **memory.ClaimClassification { return &p.Classification },
+		func(p memory.RememberLiteralProposal) any { return canonicalRememberLiteralProposal(p) })
+	if err != nil {
+		return memory.RememberLiteralProposal{}, fmt.Errorf("hash standing alternative: %w", err)
 	}
 	return proposal, nil
 }
@@ -1597,6 +1622,9 @@ func validateRememberLiteralProposal(proposal memory.RememberLiteralProposal) er
 	}
 	if err := validateRememberSourceShape(proposal.Source); err != nil {
 		return fmt.Errorf("remember literal proposal source attributes are invalid: %w", err)
+	}
+	if err := validateProposalClassification(proposal.Classification, proposal.Request.Kind, proposal.Request.StandingBytesPerTokenMilli, false); err != nil {
+		return fmt.Errorf("remember literal proposal: %w", err)
 	}
 	if proposal.Source.Create {
 		if proposal.Source.OperationID != proposal.OperationID {
@@ -1888,6 +1916,10 @@ func (s *Store) ApplyRememberLiteral(
 			`, proposal.Scope.ID, proposal.SourceLinkID, proposal.OperationID, result.ScopeRevision, transactionText); err != nil {
 				return fmt.Errorf("create semantic source state event: %w", err)
 			}
+		}
+		if err := s.applyClaimClassification(ctx, writer, proposal.SessionID, proposal.Classification, proposal.ClaimID,
+			proposal.Scope.ID, proposal.OperationID, result.ScopeRevision, transactionText); err != nil {
+			return err
 		}
 		for _, revision := range result.ResultingRevisions {
 			if revision.Revision == byKey[revision.ScopeKey].Revision {

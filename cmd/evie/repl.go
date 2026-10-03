@@ -655,7 +655,14 @@ func runREPLContextIOWithMemory(
 	// what they're about to run and wait for a y/yes before executing.
 	// It shares the REPL's scanner — stdin has exactly one reader.
 	approve := func(approvalCtx context.Context, name, args string, _ *tools.FileChangePreview) tools.Decision {
-		_, _ = fmt.Fprintf(out, "\n[%s wants to run]\n%s\napprove? [y/N] ", name, args)
+		// A memory with a standing classification can be approved with its
+		// "Always applies" flag switched, exactly as the web card offers.
+		switchable := strings.Contains(args, `"classification":{`)
+		prompt := "approve? [y/N] "
+		if switchable {
+			prompt = "approve? [y/N; s = approve with Always applies switched] "
+		}
+		_, _ = fmt.Fprintf(out, "\n[%s wants to run]\n%s\n%s", name, args, prompt)
 		if !scanner.Scan() {
 			return tools.Declined
 		}
@@ -665,6 +672,9 @@ func runREPLContextIOWithMemory(
 		answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
 		if answer == "y" || answer == "yes" {
 			return tools.Approved
+		}
+		if switchable && answer == "s" {
+			return tools.ApprovedAlternative
 		}
 		return tools.Declined
 	}

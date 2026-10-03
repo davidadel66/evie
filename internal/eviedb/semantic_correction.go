@@ -52,15 +52,16 @@ type canonicalTransition struct {
 }
 
 type canonicalCorrectionEffect struct {
-	Scopes      []string                   `json:"scopes"`
-	Predicates  []struct{}                 `json:"predicates"`
-	Entities    []struct{}                 `json:"entities"`
-	Aliases     []struct{}                 `json:"aliases"`
-	Claims      []canonicalCorrectionClaim `json:"claims"`
-	SourceLinks []canonicalSourceLink      `json:"source_links"`
-	GraphLinks  []struct{}                 `json:"graph_links"`
-	Transitions []canonicalTransition      `json:"transitions"`
-	Corrections []canonicalCorrection      `json:"corrections"`
+	Scopes          []string                   `json:"scopes"`
+	Predicates      []struct{}                 `json:"predicates"`
+	Entities        []struct{}                 `json:"entities"`
+	Aliases         []struct{}                 `json:"aliases"`
+	Claims          []canonicalCorrectionClaim `json:"claims"`
+	SourceLinks     []canonicalSourceLink      `json:"source_links"`
+	GraphLinks      []struct{}                 `json:"graph_links"`
+	Transitions     []canonicalTransition      `json:"transitions"`
+	Corrections     []canonicalCorrection      `json:"corrections"`
+	Classifications []canonicalClassification  `json:"classifications,omitempty"`
 }
 
 type canonicalCorrectionProposal struct {
@@ -116,6 +117,7 @@ func canonicalCorrectClaimProposal(proposal memory.CorrectClaimProposal) canonic
 					Replacement: encodeCanonicalValidTime(proposal.ValidTimeEffect.Replacement),
 				},
 			}},
+			Classifications: canonicalClassifications(proposal.Classification, claim.ID, proposal.Scope.Key),
 		},
 	}
 }
@@ -337,6 +339,14 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 		return memory.CorrectClaimProposal{}, err
 	}
 	source.OperationID, source.Eligibility, source.Create = operationID, memory.EligibilityEligible, true
+	prior, _, priorPresent, err := loadClaimClassification(ctx, dbLifecycleQueryer{s.db}, oldClaim.ID)
+	if err != nil {
+		return memory.CorrectClaimProposal{}, err
+	}
+	classification, err := deriveClaimClassification(request.Kind, prior, priorPresent, request.StandingBytesPerTokenMilli)
+	if err != nil {
+		return memory.CorrectClaimProposal{}, err
+	}
 	replacement := memory.SemanticClaim{
 		ID: replacementID, ScopeKey: targetKey, SubjectEntityID: request.Replacement.SubjectEntityID,
 		Predicate: predicate, Object: request.Replacement.Object, Polarity: request.Replacement.Polarity,
@@ -362,13 +372,19 @@ func (s *Store) PrepareCorrectClaim(ctx context.Context, scope memory.ScopeConte
 			{ObjectKind: "claim", ObjectID: replacement.ID, State: memory.SemanticStateActive},
 			{ObjectKind: "source_link", ObjectID: source.ID, State: memory.SemanticStateEligible},
 		},
-		Request: request,
+		Request: request, Classification: classification,
 	}
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalCorrectClaimProposal(proposal))
 	if err != nil {
 		return proposal, err
 	}
 	proposal.PreparedSHA256, _, err = semanticHash(proposal)
+	if err != nil {
+		return proposal, err
+	}
+	proposal.StandingAlternative, err = standingAlternative(proposal,
+		func(p *memory.CorrectClaimProposal) **memory.ClaimClassification { return &p.Classification },
+		func(p memory.CorrectClaimProposal) any { return canonicalCorrectClaimProposal(p) })
 	return proposal, err
 }
 
@@ -420,6 +436,9 @@ func validateCorrectClaimProposal(proposal memory.CorrectClaimProposal) error {
 	if proposal.Source.EventID != request.SourceEventID || validateRememberSourceShape(proposal.Source) != nil || !proposal.Source.Create ||
 		proposal.Source.OperationID != proposal.OperationID {
 		return errors.New("correction proposal source is invalid")
+	}
+	if err := validateProposalClassification(proposal.Classification, request.Kind, request.StandingBytesPerTokenMilli, true); err != nil {
+		return err
 	}
 	return validateClaimObject(proposal.ReplacementClaim.Object)
 }
@@ -607,6 +626,10 @@ func (s *Store) ApplyCorrectClaim(ctx context.Context, lease memory.TurnLease, p
 				proposal.OperationID, result.ScopeRevision, formatSemanticTime(now)); err != nil {
 				return err
 			}
+		}
+		if err := s.applyClaimClassification(ctx, writer, proposal.SessionID, proposal.Classification, proposal.ReplacementClaim.ID,
+			proposal.Scope.ID, proposal.OperationID, result.ScopeRevision, formatSemanticTime(now)); err != nil {
+			return err
 		}
 		update, err := writer.execContext(ctx, `UPDATE semantic_scopes SET revision = ? WHERE scope_id = ? AND revision = ?`, result.ScopeRevision, proposal.Scope.ID, proposal.Scope.Revision)
 		if err != nil {

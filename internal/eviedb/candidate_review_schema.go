@@ -68,7 +68,7 @@ func ensureSemanticOperationSchemaV6(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='semantic_operations'`).Scan(&definition); err != nil {
 		return err
 	}
-	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") {
+	if strings.Contains(definition, "schema_version IN (1, 2, 3, 4, 5, 6)") || strings.Contains(definition, semanticOperationsV7Constraint) {
 		return nil
 	}
 	conn, err := db.Conn(ctx)

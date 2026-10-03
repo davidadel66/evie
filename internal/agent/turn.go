@@ -219,6 +219,12 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, fmt.Errorf("load working context: %w", err))
 			}
 		}
+		// The standing set is read for every request, so an approval later in
+		// this turn applies to its next request; unchanged, its bytes are too.
+		standing, standingReceipt, err := s.standingMemory(coordinator.ctx)
+		if err != nil {
+			return s.classifyLocalError(coordinator, fmt.Errorf("load standing memory: %w", err))
+		}
 		if iteration == 1 && !retrying && !s.automaticRecallDisabled {
 			recall.automatic(coordinator.ctx, events, summary, rootTurnID, s.toolset.Schemas())
 		}
@@ -226,6 +232,7 @@ func (s *Session) runOwnedTurn(
 		composeInput := ContextComposeInput{
 			MemoryData: memoryData, MemoryReceipt: memoryReceipt, EnvironmentNote: workingFolderNote(workingFolder),
 			RepositoryInstructions: repoinstructions.Render(repository), RepositoryInstructionsTurnID: repository.TurnID,
+			StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 			Profile: s.profile, Summary: summary, Events: events, ActiveRootID: rootTurnID,
 			TriggerEventID: requestParentID, Iteration: iteration,
 			Tools: modelTools.Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
@@ -636,7 +643,8 @@ func (s *Session) runOwnedTurn(
 				Profile:   s.profile,
 				Directory: &s.directory,
 				Scope:     s.scope, Lease: lease, SourceEventID: rootTurnID, IntentEventID: intentEvent.ID, SearchMemory: recall.searchForTool(call.ID),
-				ReadToolResult: s.readStoredToolResult,
+				ReadToolResult:             s.readStoredToolResult,
+				StandingBytesPerTokenMilli: composed.Snapshot.BytesPerTokenMilli,
 			})
 			toolCtx := task.WithMutationAttribution(invocationCtx, task.MutationAttribution{
 				ActorID: string(s.scope.OwnerID), SessionID: string(s.scope.SessionID), RunID: string(executionID),

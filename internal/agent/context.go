@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ContextComposerVersion            = "context-composer-v3"
+	ContextComposerVersion            = "context-composer-v4"
 	CanonicalRequestEstimatorVersion  = "canonical-provider-json-bytes-v2"
 	CalibratedRequestEstimatorVersion = "calibrated-provider-json-bytes-v3"
 )
@@ -100,6 +100,12 @@ type ContextComposeInput struct {
 	// one recovery request assumes no more bytes per token than that
 	// rejection proved and always plans an automatic compaction.
 	RejectedRequestBytes int64
+
+	// StandingMemory is the owner's rendered standing set (memory standing
+	// tier). It follows repository guidance and precedes the summary and all
+	// history, so it stays in the stable cached prefix of every request.
+	StandingMemory        string
+	StandingMemoryReceipt *memory.StandingMemoryReceipt
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -322,6 +328,11 @@ func (c *ContextComposer) projectAtStart(
 		if input.RepositoryInstructions != "" {
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.RepositoryInstructions})
 		}
+		standingIndex := -1
+		if input.StandingMemory != "" {
+			standingIndex = len(messages)
+			messages = append(messages, openrouter.Message{Role: "user", Content: input.StandingMemory})
+		}
 		projection.summaryIndex = -1
 		if input.Summary != nil {
 			projection.summaryIndex = len(messages)
@@ -337,7 +348,7 @@ func (c *ContextComposer) projectAtStart(
 			messages = append(messages, openrouter.Message{Role: "user", Content: input.FinalStepNote})
 		}
 		if openrouter.UsesExplicitCacheBreakpoints(profile.ConfiguredModel) {
-			markContextCacheBreakpoints(messages, leadingEnd, leadingEnd+1+activeStart, conversationEnd)
+			markContextCacheBreakpoints(messages, standingIndex, leadingEnd, leadingEnd+1+activeStart, conversationEnd)
 		}
 		projection.request = openrouter.ChatRequest{
 			Model:      profile.ConfiguredModel,
@@ -444,6 +455,7 @@ func (c *ContextComposer) projectionSnapshot(
 	}
 	snapshot := memory.ContextSnapshotPayload{
 		Memory:                       input.MemoryReceipt,
+		StandingMemory:               input.StandingMemoryReceipt,
 		RepositoryInstructionsTurnID: input.RepositoryInstructionsTurnID,
 		SchemaVersion:                memory.ContextSnapshotSchemaVersion,
 		ComposerVersion:              ContextComposerVersion,
@@ -599,8 +611,13 @@ func (s *Session) InspectContext(ctx context.Context) (ContextDiagnostics, error
 	if err != nil {
 		return ContextDiagnostics{}, fmt.Errorf("load working folder: %w", err)
 	}
+	standing, standingReceipt, err := s.standingMemory(ctx)
+	if err != nil {
+		return ContextDiagnostics{}, fmt.Errorf("load standing memory: %w", err)
+	}
 	projection, compaction, planWarnings, err := s.composer.inspectNextRequest(ContextComposeInput{
 		EnvironmentNote: workingFolderNote(folder), RepositoryInstructions: repository,
+		StandingMemory: standing, StandingMemoryReceipt: standingReceipt,
 		Profile: s.profile, Summary: summary, Events: projectionEvents, ActiveRootID: hypothetical.ID,
 		TriggerEventID: hypothetical.ID, Iteration: iteration,
 		Tools: s.modelToolset().Schemas(), Reasoning: s.reasoning, WorkingContext: workingContext, WorkerInstructions: s.workerInstructions,
@@ -836,14 +853,17 @@ func contextByteBreakdown(
 // markContextCacheBreakpoints places at most four explicit prompt-cache
 // breakpoints, each on the last block of a region whose content is stable
 // for longer than what follows it: the system prompt (with tool schemas
-// before it), the leading guidance and summary blocks ending at leadingEnd,
-// history before the active turn starting at activeStart, and the
-// conversation through conversationEnd. Task Focus and the final-step note
-// trail the last breakpoint, so their changes never invalidate it. Blank text
-// cannot carry a marker, and assistant messages, often tool calls only, are
-// skipped so markers stay on the system, user, and tool content OpenRouter
-// documents.
-func markContextCacheBreakpoints(messages []openrouter.Message, leadingEnd, activeStart, conversationEnd int) {
+// before it), the standing memory block at standingIndex (-1 when absent),
+// the leading guidance and summary blocks ending at leadingEnd, history
+// before the active turn starting at activeStart, and the conversation
+// through conversationEnd. When all five exist the system prompt's mark is
+// dropped: the standing block's mark caches the same prefix and more, and it
+// changes only when the owner approves a standing change. Task Focus and the
+// final-step note trail the last breakpoint, so their changes never
+// invalidate it. Blank text cannot carry a marker, and assistant messages,
+// often tool calls only, are skipped so markers stay on the system, user, and
+// tool content OpenRouter documents.
+func markContextCacheBreakpoints(messages []openrouter.Message, standingIndex, leadingEnd, activeStart, conversationEnd int) {
 	lastMarkable := func(after, through int) int {
 		for i := through; i > after; i-- {
 			if messages[i].Role != "assistant" && strings.TrimSpace(messages[i].Content) != "" {
@@ -854,11 +874,18 @@ func markContextCacheBreakpoints(messages []openrouter.Message, leadingEnd, acti
 	}
 	points := []int{0}
 	floor := 0
-	for _, through := range []int{leadingEnd, activeStart - 1, conversationEnd} {
+	boundaries := []int{leadingEnd, activeStart - 1, conversationEnd}
+	if standingIndex > 0 && standingIndex < leadingEnd {
+		boundaries = append([]int{standingIndex}, boundaries...)
+	}
+	for _, through := range boundaries {
 		if point := lastMarkable(floor, through); point >= 0 {
 			points = append(points, point)
 			floor = point
 		}
+	}
+	if len(points) > 4 {
+		points = points[1:]
 	}
 	for _, point := range points {
 		messages[point].CacheControl = &openrouter.CacheControl{Type: "ephemeral"}

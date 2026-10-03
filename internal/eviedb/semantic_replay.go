@@ -123,7 +123,13 @@ var semanticProjectionTableDescriptors = []struct{ name string }{
 	{"semantic_promotions"},
 	{"semantic_promotion_entities"},
 	{"semantic_state_events"},
+	{"semantic_claim_classifications"},
 }
+
+// semanticOptionalProjectionTables contribute to a scope's projection hash
+// only when the scope has rows in them, so adding one leaves the hash of every
+// scope that never used it, and every recorded fixture hash, unchanged.
+var semanticOptionalProjectionTables = map[string]bool{"semantic_claim_classifications": true}
 
 func semanticProjectionTableNames() []string {
 	names := []string{"semantic_scopes"}
@@ -521,6 +527,27 @@ func semanticReplayHandler(operation semanticAcceptedReplayOperation) (semanticR
 				candidate.PreparedSHA256, _, _ = semanticHash(candidate)
 				return store.ApplyPromotion(withHistoricalPromotionReview(ctx), replayLease(candidate.SessionID), candidate)
 			}), nil
+	case operation.SchemaVersion == 7 && operation.Kind == "classify_claim":
+		var proposal memory.ClaimStandingProposal
+		if err := strictSemanticProposal(operation.PreparedJSON, &proposal); err != nil {
+			return semanticReplayPreparedHandler{}, err
+		}
+		canonical := canonicalClaimStanding(proposal)
+		return base(proposal.SchemaVersion, proposal.Kind, proposal.OperationID, proposal.IdempotencyKey, proposal.Actor, proposal.SessionID,
+			proposal.Scope, proposal.Scopes, proposal.PriorRevisions, proposal.Evidence.EventID, proposal, canonical, canonical.Effect,
+			func(operation semanticAcceptedReplayOperation) error {
+				return validateConcreteReplayResult(operation, &memory.ClaimStandingResult{},
+					func(value memory.ClaimStandingResult) (memory.SemanticID, time.Time, []memory.ScopeRevision) {
+						return value.OperationID, value.TransactionTime, value.ResultingRevisions
+					}, func(value memory.ClaimStandingResult) bool {
+						return value.ClaimID == proposal.Claim.ID && value.ScopeRevision == replayResultRevision(operation, proposal.Scope.Key)
+					})
+			}, func(ctx context.Context, store *Store, operation semanticAcceptedReplayOperation) (any, error) {
+				candidate := proposal
+				candidate.ProposalSHA256 = operation.ProposalHash
+				candidate.PreparedSHA256, _, _ = semanticHash(candidate)
+				return store.ApplyClaimStanding(ctx, replayLease(candidate.SessionID), candidate)
+			}), nil
 	case operation.SchemaVersion == 5 && operation.Kind == "create_graph_link":
 		var proposal memory.CreateGraphLinkProposal
 		if err := strictSemanticProposal(operation.PreparedJSON, &proposal); err != nil {
@@ -798,7 +825,7 @@ func (s *Store) replaySemanticOperation(ctx context.Context, operation semanticA
 	if err != nil {
 		return err
 	}
-	result, err := handler.Replay(ctx, s, operation)
+	result, err := handler.Replay(withSemanticReplay(ctx), s, operation)
 	if err != nil {
 		return err
 	}
@@ -880,6 +907,9 @@ func snapshotSemanticProjection(ctx context.Context, db *sql.DB) (map[string]sem
 				return nil, err
 			}
 			snapshot.Tables[table] = tableSnapshot
+			if semanticOptionalProjectionTables[table] && tableSnapshot.Rows == 0 {
+				continue
+			}
 			fmt.Fprintf(hash, "%d:%s:%s:%d;", len(table), table, tableSnapshot.Hash, tableSnapshot.Rows)
 		}
 		snapshot.Hash = fmt.Sprintf("sha256:%x", hash.Sum(nil))
@@ -893,6 +923,17 @@ func snapshotSemanticProjection(ctx context.Context, db *sql.DB) (map[string]sem
 }
 
 func snapshotSemanticProjectionTable(ctx context.Context, db *sql.DB, table string, scopeID memory.SemanticID) (semanticProjectionTableSnapshot, error) {
+	if semanticOptionalProjectionTables[table] {
+		// A database not yet reopened by this version has no optional table,
+		// which is the same projection as an empty one.
+		var present int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&present); err != nil {
+			return semanticProjectionTableSnapshot{}, err
+		}
+		if present == 0 {
+			return semanticProjectionTableSnapshot{Hash: fmt.Sprintf("sha256:%x", sha256.Sum256(nil))}, nil
+		}
+	}
 	columns, err := semanticTableColumns(ctx, db, table)
 	if err != nil {
 		return semanticProjectionTableSnapshot{}, err
@@ -1262,8 +1303,8 @@ func semanticForeignKeyFailureScopes(ctx context.Context, db *sql.DB, failure se
 			LEFT JOIN semantic_scopes AS scopes ON scopes.scope_id = projection.scope_id WHERE projection.rowid = ?`, &scopeKey, &operationID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
-	case "semantic_state_events":
-		if err := collect(`SELECT scopes.scope_key, projection.operation_id FROM semantic_state_events AS projection
+	case "semantic_state_events", "semantic_claim_classifications":
+		if err := collect(`SELECT scopes.scope_key, projection.operation_id FROM `+failure.Table+` AS projection
 			LEFT JOIN semantic_scopes AS scopes ON scopes.scope_id = projection.scope_id WHERE projection.rowid = ?`, &scopeKey, &operationID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
@@ -1449,7 +1490,8 @@ func checkSemanticProjectionStartup(ctx context.Context, db *sql.DB) error {
 			(operations.schema_version = 3 AND operations.operation_kind IN ('retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
 			(operations.schema_version = 4 AND operations.operation_kind = 'promote_claim') OR
 			(operations.schema_version = 5 AND operations.operation_kind IN ('create_graph_link', 'retire_memory', 'restore_memory', 'retract_source', 'restore_source')) OR
-			(operations.schema_version = 6 AND operations.operation_kind = 'owner_candidate_review')
+			(operations.schema_version = 6 AND operations.operation_kind = 'owner_candidate_review') OR
+			(operations.schema_version = 7 AND operations.operation_kind = 'classify_claim')
 		)
 	`)
 	if err != nil {

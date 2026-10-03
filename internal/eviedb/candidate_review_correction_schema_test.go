@@ -65,6 +65,10 @@ func newStage3CorrectionMigrationFixture(t *testing.T) (*sql.DB, string) {
 	if err := ensureSemanticObjectScopeColumns(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	// Current corrections read a corrected Claim's standing classification.
+	if err := ensureSemanticClaimClassifications(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	// Current public event writes maintain derived indexes. Populate through
 	// those APIs, then remove the later retrieval schema before migration.
 	if err := ensureRetrievalSchema(ctx, db); err != nil {
@@ -173,6 +177,11 @@ func correctionMigrationBytes(t *testing.T, db *sql.DB) map[string][]string {
 		}
 		if err := rows.Close(); err != nil {
 			t.Fatal(err)
+		}
+		if len(cells) == 0 {
+			// A table added after this fixture's schema (the standing tier's
+			// classifications) holds no historical bytes.
+			continue
 		}
 		rows, err = db.Query(`SELECT ` + strings.Join(cells, ",") + ` FROM ` + table)
 		if err != nil {

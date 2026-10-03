@@ -13,8 +13,9 @@ import (
 
 // Resending delivered evidence no longer draws on the cumulative memory
 // budget (harness review C2), so trimming here comes from the request's
-// actual headroom: each check returns about 3 KB, and the 39,500-byte profile
-// fits the full three-item projection on the third request but not later.
+// actual headroom: each check returns about 3 KB, and the 42,464-byte profile
+// (39,500 plus the 2,964 schema bytes the standing tier added to the Memory
+// tools) fits the full three-item projection on the third request but not later.
 func TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations(t *testing.T) {
 	t.Setenv(TurnStepLimitEnv, "12")
 	f := newRetrievalFixture(t)
@@ -65,7 +66,7 @@ func TestMemoryInvestigationBudgetTrimmingKeepsOnlySupportedRelations(t *testing
 		return assistantStep("", nil, toolCall(fmt.Sprintf("check-%d", call), "continue_check", `{}`))
 	}}
 	session := withByteBudgets(f.session(f.global(), client, check))
-	session.profile = automaticTestProfile(t, 39_500)
+	session.profile = automaticTestProfile(t, 42_464)
 	err := session.Send(context.Background(), "Investigate the conflicting city records.", &recorder{}, nil)
 	if !IsContextOverflow(err) || !sawRelations || !sawTrim {
 		t.Fatalf("fixture failed to exercise bounded relation trimming: err=%v relations=%v trimmed=%v", err, sawRelations, sawTrim)

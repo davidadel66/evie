@@ -6,12 +6,14 @@ import { AssistantMessage, UserMessage } from "./Message";
 import { Activity } from "./Activity";
 import { activityTurns } from "./activityModel";
 import type { MemoryOpener } from "./MemoryActivity";
+import { AlwaysAppliesContext, type AlwaysAppliesSetter } from "./alwaysApplies";
 
 type Props = {
   items: Item[];
   queued: string[];
   streaming: boolean;
   onAnswer: (reqId: string, approve: boolean) => void;
+  onAlwaysApplies?: AlwaysAppliesSetter;
   onOpenFile?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenTool?: (key: string, trigger: HTMLButtonElement) => void;
   onOpenMemory?: MemoryOpener;
@@ -23,7 +25,7 @@ type Props = {
   onRetry?: () => void;
 };
 
-export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
+export function Chat({ items, queued, streaming, onAnswer, onAlwaysApplies, onOpenFile, onOpenTool, onOpenMemory, onOpenInstructions, historyLoading, historyProblem, hasOlder, onOlder, onRetry }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const prependHeight = useRef<number | null>(null);
@@ -39,6 +41,7 @@ export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenToo
   }, [items, queued, streaming]);
 
   return (
+    <AlwaysAppliesContext.Provider value={onAlwaysApplies}>
     <div
       ref={scroller}
       onScroll={(e) => {
@@ -66,6 +69,7 @@ export function Chat({ items, queued, streaming, onAnswer, onOpenFile, onOpenToo
       ))}
       <div className="h-2 flex-none" />
     </div>
+    </AlwaysAppliesContext.Provider>
   );
 }
 

@@ -186,7 +186,7 @@ func TestModelProposedMemoryFromFetchedTextIsLabelledOnTheApprovalCard(t *testin
 	global := f.global()
 	args, _ := json.Marshal(map[string]string{
 		"idempotency_key": "idem:v1:" + uuid.NewString(), "predicate": "preferred_payee", "predicate_label": "preferred payee",
-		"cardinality": "one", "literal_kind": "text", "literal_value": "Acme Offshore Holdings", "polarity": "affirmed",
+		"cardinality": "one", "literal_kind": "text", "literal_value": "Acme Offshore Holdings", "polarity": "affirmed", "kind": "fact",
 	})
 	client := &fakeClient{steps: []step{assistantStep("", nil, toolCall("remember", "memory_remember_literal", string(args))), assistantStep("Saved.", nil)}}
 	var shown string

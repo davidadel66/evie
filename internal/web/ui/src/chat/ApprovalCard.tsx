@@ -3,10 +3,12 @@
 // record and stays in the transcript: what was approved is history worth
 // keeping (docs/decisions.md, "reads wide, writes gated").
 
+import { useContext } from "react";
 import { useMemoryPresentation, applicabilityLabel } from "../memory/presentation";
 import { Check, Cross } from "../ui/Icon";
 import type { Item } from "../store/reducer";
-import { readApprovalArgs } from "./approvalArgs";
+import { AlwaysAppliesContext } from "./alwaysApplies";
+import { kindLabel, readApprovalArgs, type MemoryClassification } from "./approvalArgs";
 import { Diff } from "./Diff";
 
 type Tool = Extract<Item, { kind: "tool" }>;
@@ -31,6 +33,11 @@ function Pending({ tool, onAnswer, compact }: Props) {
   const preview = tool.approval!.preview;
   const reqId = tool.approval!.reqId;
   const subject = preview?.path || view.subject;
+  const setAlwaysApplies = useContext(AlwaysAppliesContext);
+  // The switch defaults to the proposal's own standing flag; changing it
+  // approves the prepared alternative (see approvalAlternative).
+  const classification = view.shape === "memory" || view.shape === "json" ? view.classification : undefined;
+  const alwaysApplies = tool.approval!.alwaysApplies ?? classification?.standing ?? false;
 
   return (
     <div
@@ -67,6 +74,9 @@ function Pending({ tool, onAnswer, compact }: Props) {
         <pre className="text-muted-text m-0 overflow-x-auto px-[14px] py-3 font-mono text-[11.5px] leading-[1.6]">
           {view.json}
         </pre>
+      )}
+      {!compact && classification && (
+        <AlwaysApplies classification={classification} checked={alwaysApplies} onChange={setAlwaysApplies ? (value) => setAlwaysApplies(reqId, value) : undefined} />
       )}
 
       <div className="border-amber-hair flex items-center gap-[10px] border-t px-[13px] py-[10px]">
@@ -187,10 +197,36 @@ function Key({ label, dark }: { label: string; dark?: boolean }) {
 function MemoryApproval({view}: {view: Extract<ReturnType<typeof readApprovalArgs>, {shape: "memory"}>}) {
   const {names} = useMemoryPresentation();
   const applies = applicabilityLabel(view.scopeKey,names);
+  const change = view.standingChange;
   return <div className="space-y-4 px-4 py-4 text-sm"><p className="text-ink font-medium">{view.subject}</p><p className="text-teal">Applies to: {applies}</p>
+    {change && <p className="text-body">{kindLabel(change.to.kind)} · Always applies: {change.from.standing ? "On" : "Off"} → {change.to.standing ? "On" : "Off"}{change.from.kind !== change.to.kind ? ` (was ${kindLabel(change.from.kind).toLowerCase()})` : ""}</p>}
     {view.evieProposed
       ? <p className="text-amber-ink">Evie’s proposal: your message doesn’t state this value. Approving saves it as Evie-proposed, not as something you said.</p>
       : view.evidence && <div><p className="text-muted-text mb-1 text-xs">Your words</p><blockquote className="border-hair text-body border-l-2 pl-3 whitespace-pre-wrap">{view.evidence}</blockquote></div>}
     {view.identities.length > 0 && <ul className="text-body space-y-1 text-xs">{view.identities.map((line) => <li key={line}>{line}</li>)}</ul>}
     <details className="text-muted-text text-xs"><summary className="cursor-pointer">Exact change</summary><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all">{view.json}</pre></details></div>;
+}
+
+/** AlwaysApplies is the standing-tier switch: on, Evie sees the memory on
+ *  every request; off, it is recalled only when relevant. */
+function AlwaysApplies({ classification, checked, onChange }: { classification: MemoryClassification; checked: boolean; onChange?: (value: boolean) => void }) {
+  return (
+    <div className="border-amber-hair flex items-start gap-3 border-t px-4 py-3 text-sm">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label="Always applies"
+        disabled={!onChange}
+        onClick={() => onChange?.(!checked)}
+        className={`mt-[2px] flex h-[18px] w-[32px] flex-none cursor-pointer items-center rounded-full border-none p-[2px] ${checked ? "bg-teal justify-end" : "bg-hair-strong justify-start"}`}
+      >
+        <span className="bg-app h-[14px] w-[14px] rounded-full" />
+      </button>
+      <div className="min-w-0">
+        <p className="text-ink font-medium">Always applies <span className="text-muted-text font-normal">· {kindLabel(classification.kind)}</span></p>
+        <p className="text-muted-text text-xs">{checked ? "Evie sees this memory on every request." : "Evie recalls this memory only when it’s relevant."}</p>
+      </div>
+    </div>
+  );
 }

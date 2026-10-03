@@ -31,7 +31,7 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	plugin := NewMemory(&stubSemanticKernel{})
 	manifest := plugin.Manifest()
-	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.4.0" {
+	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.5.0" {
 		t.Fatalf("manifest identity = %s@%s", manifest.ID, manifest.ImplementationVersion)
 	}
 	if err := plugin.Start(context.Background()); err != nil {
@@ -61,14 +61,14 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 		"memory.list_scopes", "memory.list_objects", "memory.inspect_object", "memory.query_claims",
 		"memory.lookup_alias", "memory.traverse", "memory.remember_literal", "memory.remember_entity",
 		"memory.correct_claim", "memory.create_graph_link", "memory.promote_claim", "memory.retire",
-		"memory.restore", "memory.retract_source", "memory.restore_source", "memory.read_tool_result",
+		"memory.restore", "memory.retract_source", "memory.restore_source", "memory.read_tool_result", "memory.set_standing",
 	}
 	wantSchemas := []string{
 		"memory_search", "memory_search_conversations", "memory_expand_conversation", "memory_search_episodes",
 		"memory_list_scopes", "memory_list_objects", "memory_inspect_object", "memory_query_claims",
 		"memory_lookup_alias", "memory_traverse", "memory_remember_literal", "memory_remember_entity",
 		"memory_correct_claim", "memory_create_graph_link", "memory_promote_claim", "memory_retire",
-		"memory_restore", "memory_retract_source", "memory_restore_source", "read_tool_result",
+		"memory_restore", "memory_retract_source", "memory_restore_source", "read_tool_result", "memory_set_standing",
 	}
 	if !reflect.DeepEqual(gotIDs, wantIDs) || !reflect.DeepEqual(gotSchemas, wantSchemas) {
 		t.Fatalf("focused capabilities = %v / %v", gotIDs, gotSchemas)
@@ -362,8 +362,8 @@ func TestEveryMemoryMutationAdapterPreservesTypedRequestApprovalAndCancellation(
 		args     string
 		want     any
 	}{
-		{name: "remember literal", toolName: "memory_remember_literal", args: `{"idempotency_key":"` + idempotencyKey + `","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed"}`, want: memory.RememberLiteralRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, Predicate: "home_city", PredicateLabel: "home city", PredicateCardinality: memory.CardinalityOne, Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "Detroit"}, Polarity: memory.PolarityAffirmed}},
-		{name: "remember entity", toolName: "memory_remember_entity", args: `{"idempotency_key":"` + idempotencyKey + `","predicate":"works_with","predicate_label":"works with","cardinality":"many","polarity":"affirmed","subject_entity_id":"entity-1","object_create":true,"object_name":"Acme","object_type":"company","object_alias":"ACME"}`, want: memory.RememberEntityRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, Predicate: "works_with", PredicateLabel: "works with", PredicateCardinality: memory.CardinalityMany, Polarity: memory.PolarityAffirmed, Subject: memory.EntitySelector{EntityID: "entity-1"}, Object: memory.EntitySelector{Create: true, CanonicalName: "Acme", EntityType: "company", Alias: "ACME"}, UseSessionScope: false}},
+		{name: "remember literal", toolName: "memory_remember_literal", args: `{"idempotency_key":"` + idempotencyKey + `","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed","kind":"fact"}`, want: memory.RememberLiteralRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, Predicate: "home_city", PredicateLabel: "home city", PredicateCardinality: memory.CardinalityOne, Literal: memory.TypedLiteral{Kind: memory.LiteralText, Value: "Detroit"}, Polarity: memory.PolarityAffirmed, Kind: memory.ClaimKindFact}},
+		{name: "remember entity", toolName: "memory_remember_entity", args: `{"idempotency_key":"` + idempotencyKey + `","predicate":"works_with","predicate_label":"works with","cardinality":"many","polarity":"affirmed","subject_entity_id":"entity-1","object_create":true,"object_name":"Acme","object_type":"company","object_alias":"ACME","kind":"fact"}`, want: memory.RememberEntityRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, Predicate: "works_with", PredicateLabel: "works with", PredicateCardinality: memory.CardinalityMany, Polarity: memory.PolarityAffirmed, Subject: memory.EntitySelector{EntityID: "entity-1"}, Object: memory.EntitySelector{Create: true, CanonicalName: "Acme", EntityType: "company", Alias: "ACME"}, UseSessionScope: false, Kind: memory.ClaimKindFact}},
 		{name: "correct claim", toolName: "memory_correct_claim", args: `{"idempotency_key":"` + idempotencyKey + `","claim_id":"claim-1","subject_entity_id":"entity-1","predicate_id":"predicate-1","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed","mode":"error"}`, want: memory.CorrectClaimRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, OldClaimID: "claim-1", Replacement: memory.ClaimProposition{SubjectEntityID: "entity-1", PredicateID: "predicate-1", Object: memory.ClaimObject{Literal: &memory.TypedLiteral{Kind: memory.LiteralText, Value: "Detroit"}}, Polarity: memory.PolarityAffirmed}, Mode: memory.CorrectionError}},
 		{name: "create graph link", toolName: "memory_create_graph_link", args: `{"idempotency_key":"` + idempotencyKey + `","relation":"derivation","source_kind":"claim","source_id":"claim-1","target_kind":"claim","target_id":"claim-2"}`, want: memory.CreateGraphLinkRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, Relation: memory.GraphRelationDerivation, Source: memory.GraphEndpoint{Kind: memory.SemanticObjectClaim, ID: "claim-1"}, Target: memory.GraphEndpoint{Kind: memory.SemanticObjectClaim, ID: "claim-2"}, UseSessionScope: false}},
 		{name: "promote claim", toolName: "memory_promote_claim", args: `{"idempotency_key":"` + idempotencyKey + `","claim_id":"claim-1"}`, want: memory.PromotionRequest{IdempotencyKey: idempotencyKey, SourceEventID: sourceEventID, SourceClaimID: "claim-1", DestinationScopeKey: "global"}},
@@ -488,7 +488,7 @@ func TestMemoryMutationUsesHarnessScopeEvidenceFenceAndExactPreparedApproval(t *
 	scope := memory.ScopeContext{SessionID: "session-1", WorkspaceID: "workspace-1"}
 	lease := memory.TurnLease{SessionID: scope.SessionID, HolderID: "holder", FencingToken: 8, Generation: 8}
 	ctx := tools.WithInvocationContext(context.Background(), tools.InvocationContext{Scope: scope, Lease: lease, SourceEventID: "owner-event"})
-	call := openrouter.ToolCall{ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: "memory_remember_literal", Arguments: `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000011","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed"}`}}
+	call := openrouter.ToolCall{ID: "call", Type: "function", Function: openrouter.FunctionCall{Name: "memory_remember_literal", Arguments: `{"idempotency_key":"idem:v1:60000000-0000-4000-8000-000000000011","predicate":"home_city","predicate_label":"home city","cardinality":"one","literal_kind":"text","literal_value":"Detroit","polarity":"affirmed","kind":"fact"}`}}
 	observed := false
 	result, isErr, err := set.ExecuteWithApprovalAuthorizedCompletion(ctx, call,
 		func(_ context.Context, _ string, args string, _ *tools.FileChangePreview) tools.Decision {

@@ -252,29 +252,35 @@ type CorrectClaimRequest struct {
 	Mode                 CorrectionMode
 	EffectiveTime        *time.Time
 	ReplacementValidTime *ValidTime
+	// Kind has the PromotionRequest meaning for the replacement Claim,
+	// inheriting from the corrected Claim.
+	Kind                       ClaimKind `json:",omitempty"`
+	StandingBytesPerTokenMilli int64     `json:",omitempty"`
 }
 
 type CorrectClaimProposal struct {
-	SchemaVersion    int                       `json:"schema_version"`
-	Kind             string                    `json:"kind"`
-	OperationID      SemanticID                `json:"operation_id"`
-	IdempotencyKey   string                    `json:"idempotency_key"`
-	Actor            SemanticActor             `json:"actor"`
-	SessionID        SessionID                 `json:"session_id"`
-	Scope            SemanticScope             `json:"scope"`
-	Scopes           []SemanticScope           `json:"scopes"`
-	PriorRevisions   []ScopeRevision           `json:"prior_revisions"`
-	ExpectedRevision int64                     `json:"expected_revision"`
-	OldClaim         SemanticClaim             `json:"old_claim"`
-	ReplacementClaim SemanticClaim             `json:"replacement_claim"`
-	Source           SemanticSource            `json:"source"`
-	Mode             CorrectionMode            `json:"mode"`
-	EffectiveTime    *time.Time                `json:"effective_time"`
-	ValidTimeEffect  CorrectionValidTimeEffect `json:"valid_time_effect"`
-	Transitions      []SemanticTransition      `json:"transitions"`
-	Request          CorrectClaimRequest       `json:"request"`
-	ProposalSHA256   string                    `json:"-"`
-	PreparedSHA256   string                    `json:"-"`
+	SchemaVersion       int                       `json:"schema_version"`
+	Kind                string                    `json:"kind"`
+	OperationID         SemanticID                `json:"operation_id"`
+	IdempotencyKey      string                    `json:"idempotency_key"`
+	Actor               SemanticActor             `json:"actor"`
+	SessionID           SessionID                 `json:"session_id"`
+	Scope               SemanticScope             `json:"scope"`
+	Scopes              []SemanticScope           `json:"scopes"`
+	PriorRevisions      []ScopeRevision           `json:"prior_revisions"`
+	ExpectedRevision    int64                     `json:"expected_revision"`
+	OldClaim            SemanticClaim             `json:"old_claim"`
+	ReplacementClaim    SemanticClaim             `json:"replacement_claim"`
+	Source              SemanticSource            `json:"source"`
+	Mode                CorrectionMode            `json:"mode"`
+	EffectiveTime       *time.Time                `json:"effective_time"`
+	ValidTimeEffect     CorrectionValidTimeEffect `json:"valid_time_effect"`
+	Transitions         []SemanticTransition      `json:"transitions"`
+	Request             CorrectClaimRequest       `json:"request"`
+	Classification      *ClaimClassification      `json:"classification,omitempty"`
+	ProposalSHA256      string                    `json:"-"`
+	PreparedSHA256      string                    `json:"-"`
+	StandingAlternative *ProposalHashes           `json:"-"`
 }
 
 type CorrectClaimResult struct {
@@ -444,6 +450,12 @@ type RememberLiteralRequest struct {
 	Literal              TypedLiteral
 	Polarity             ClaimPolarity
 	ValidTime            ValidTime
+	// Kind classifies the Claim (standing tier). Empty is the pre-standing
+	// request: the Claim stays an unclassified fact.
+	Kind ClaimKind `json:",omitempty"`
+	// StandingBytesPerTokenMilli is the session's calibrated ratio for the
+	// standing budget; zero uses the conservative floor.
+	StandingBytesPerTokenMilli int64 `json:",omitempty"`
 }
 
 type RememberLiteralProposal struct {
@@ -468,8 +480,13 @@ type RememberLiteralProposal struct {
 	ValidTime        ValidTime              `json:"valid_time"`
 	Source           SemanticSource         `json:"source"`
 	Request          RememberLiteralRequest `json:"request"`
-	ProposalSHA256   string                 `json:"-"`
-	PreparedSHA256   string                 `json:"-"`
+	// Classification is the kind and standing flag this approval sets on the
+	// Claim; absent for pre-standing requests.
+	Classification *ClaimClassification `json:"classification,omitempty"`
+	ProposalSHA256 string               `json:"-"`
+	PreparedSHA256 string               `json:"-"`
+	// StandingAlternative hashes the same proposal with standing switched.
+	StandingAlternative *ProposalHashes `json:"-"`
 }
 
 type RememberLiteralResult struct {
@@ -632,6 +649,10 @@ type RememberEntityRequest struct {
 	Subject              EntitySelector
 	Object               EntitySelector
 	UseSessionScope      bool
+	// Kind and StandingBytesPerTokenMilli have the RememberLiteralRequest
+	// meaning.
+	Kind                       ClaimKind `json:",omitempty"`
+	StandingBytesPerTokenMilli int64     `json:",omitempty"`
 }
 
 type SemanticEntityClaim struct {
@@ -669,9 +690,11 @@ type RememberEntityProposal struct {
 	// approval card (harness review M6): whether each is reused or created,
 	// how it was selected, and details that tell same-named Entities apart.
 	// It is review context, not part of the accepted effect.
-	Identities     []ProposalEntityIdentity `json:"identities,omitempty"`
-	ProposalSHA256 string                   `json:"-"`
-	PreparedSHA256 string                   `json:"-"`
+	Identities          []ProposalEntityIdentity `json:"identities,omitempty"`
+	Classification      *ClaimClassification     `json:"classification,omitempty"`
+	ProposalSHA256      string                   `json:"-"`
+	PreparedSHA256      string                   `json:"-"`
+	StandingAlternative *ProposalHashes          `json:"-"`
 }
 
 // ProposalEntityIdentity is one ordinary Entity a remember proposal names.
@@ -716,6 +739,12 @@ type PromotionRequest struct {
 	SourceEventID       EventID
 	SourceClaimID       SemanticID
 	DestinationScopeKey string
+	// Kind, when set, classifies the promoted Claim (keeping a same-kind
+	// source's standing flag, else the kind's default). When empty, a
+	// classified source Claim's kind and standing carry over and an
+	// unclassified one stays unclassified, as before the standing tier.
+	Kind                       ClaimKind `json:",omitempty"`
+	StandingBytesPerTokenMilli int64     `json:",omitempty"`
 }
 
 type PromotionProposal struct {
@@ -736,8 +765,10 @@ type PromotionProposal struct {
 	Sources                []SemanticSource          `json:"sources"`
 	Evidence               SemanticOperationEvidence `json:"evidence"`
 	Request                PromotionRequest          `json:"request"`
+	Classification         *ClaimClassification      `json:"classification,omitempty"`
 	ProposalSHA256         string                    `json:"-"`
 	PreparedSHA256         string                    `json:"-"`
+	StandingAlternative    *ProposalHashes           `json:"-"`
 }
 
 type PromotionResult struct {

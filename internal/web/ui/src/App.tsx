@@ -46,7 +46,7 @@ const initialViews: WorkbenchView[] = [{ id: "chat", kind: "chat" }];
 export default function App() {
   const contextSessions = useContextSessions();
   const chatModels = useChatModels(contextSessions.snapshot?.activeSession?.id);
-  const { items, status, queue, clearQueue, problem, send, answer, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
+  const { items, status, queue, clearQueue, problem, send, answer, setAlwaysApplies, stop, stopping, compacting, notice, dismissProblem, historyLoading, historyProblem, hasOlder, loadOlder, retryHistory } = useSession(contextSessions.snapshot?.activeSession?.id, chatModels.catalog?.model);
   // A running compaction holds the conversation like a turn: the server
   // refuses session and model changes until it finishes.
   const working = status === "streaming" || compacting;
@@ -298,7 +298,7 @@ export default function App() {
               {activeView.kind === "chat" && (
                 contextSessions.snapshot?.activeScope ? (
                   <>
-                    <Chat onOpenInstructions={scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
+                    <Chat onOpenInstructions={scopeWorkspace?(turnId,trigger)=>openInstructions(scopeWorkspace,trigger,turnId):undefined} key={contextSessions.snapshot.activeSession?.id} items={items} queued={queue} streaming={status === "streaming"} onAnswer={answer} onAlwaysApplies={setAlwaysApplies} onOpenFile={openTool} onOpenTool={openTool} onOpenMemory={(snapshotId, trigger) => {
                       const sessionId = contextSessions.snapshot?.activeSession?.id;
                       if (!sessionId) return;
                       fileTrigger.current = trigger;

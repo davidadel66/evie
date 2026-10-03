@@ -21,7 +21,8 @@ import (
 const (
 	EvieVersion                                         = "1.0.0"
 	StandardPresetID                           PresetID = "standard"
-	StandardPresetVersion                               = "sha256:983a77d1935c12e9165cba63b28bcfa4b035a9fe4e55ce37f4630bd17e26c654"
+	StandardPresetVersion                               = "sha256:eda7e097e22cc327d7f8091c0aed225d96926ef3b6752a094de0baaa564b7ead"
+	preStandingStandardPresetVersion                    = "sha256:983a77d1935c12e9165cba63b28bcfa4b035a9fe4e55ce37f4630bd17e26c654"
 	preEpisodesStandardPresetVersion                    = "sha256:3b3ef3ab00330870c95a752c4611b3ec765032ad545e63c2dd5e9862294df6ce"
 	preContinueStandardPresetVersion                    = "sha256:a42624b010eede75f2befb6bc42c88d237b03b0da21dad8a07852ab8e5e8ded6"
 	preReadToolResultStandardPresetVersion              = "sha256:adeb2e7be36e4ce573154b8a2b7cb6d95c84039f78275e8c3f8ce43cda9e30cc"
@@ -227,16 +228,22 @@ func memoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequir
 	return requirements
 }
 
+// preStandingMemoryCapabilityRequirements freezes the Memory list of presets
+// created before the standing tier, in its exact order.
+func preStandingMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
+	return memoryCapabilityRequirementsWithout(compatibility, MemorySetStandingCapabilityID)
+}
+
 // preReadToolResultMemoryCapabilityRequirements freezes the Memory list of
 // presets created before the stored tool result reader, in its exact order.
 func preReadToolResultMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
-	return memoryCapabilityRequirementsWithout(compatibility, MemoryReadToolResultCapabilityID, MemorySearchEpisodesCapabilityID)
+	return memoryCapabilityRequirementsWithout(compatibility, MemoryReadToolResultCapabilityID, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID)
 }
 
 // preEpisodesMemoryCapabilityRequirements freezes the Memory list of presets
 // created before past-session episode search, in its exact order.
 func preEpisodesMemoryCapabilityRequirements(compatibility VersionRange) []CapabilityRequirement {
-	return memoryCapabilityRequirementsWithout(compatibility, MemorySearchEpisodesCapabilityID)
+	return memoryCapabilityRequirementsWithout(compatibility, MemorySearchEpisodesCapabilityID, MemorySetStandingCapabilityID)
 }
 
 // memoryCapabilityRequirementsWithout is the current Memory list in its exact
@@ -667,6 +674,9 @@ func (m *Manager) ResumeCompositionContext(
 	if receipt.Preset.Version == preEpisodesStandardPresetVersion {
 		return m.resumePreset(preEpisodesStandardPreset(), receipt)
 	}
+	if receipt.Preset.Version == preStandingStandardPresetVersion {
+		return m.resumePreset(preStandingStandardPreset(), receipt)
+	}
 	if receipt.Preset.ID == string(ResearchPresetID) {
 		return m.resumePresetWithBase(BuiltinResearchPreset(), tools.NewToolset(nil), receipt)
 	}
@@ -958,10 +968,11 @@ func compatibleImplementation(manifest Manifest, version string) (Implementation
 }
 
 // standardPresetContent is the current standard preset: every Memory
-// Capability including the stored tool result reader and past-session episode
-// search, then delegation, its report reader and continuation. A later Memory
-// Capability must freeze this Memory list, as
-// preEpisodesMemoryCapabilityRequirements does for the version before it.
+// Capability including the stored tool result reader, past-session episode
+// search and the standing tier's memory_set_standing, then delegation, its
+// report reader and continuation. A later Memory Capability must freeze this
+// Memory list, as preStandingMemoryCapabilityRequirements does for the
+// version before it.
 func standardPresetContent() Preset {
 	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
 	p := preSubagentsStandardPresetContent()
@@ -969,6 +980,20 @@ func standardPresetContent() Preset {
 		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility},
 		CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: compatibility})
+	return p
+}
+
+// preStandingStandardPreset is the standard preset before the standing tier
+// (version 983a77d1…); sessions pinned to it keep their exact capabilities,
+// with Memory tools that propose no memory kind.
+func preStandingStandardPreset() Preset {
+	compatibility := VersionRange{Minimum: "1.0.0", MaximumExclusive: "2.0.0"}
+	p := preSubagentsStandardPresetContent()
+	p.OptionalCapabilities = append(preStandingMemoryCapabilityRequirements(compatibility),
+		CapabilityRequirement{ID: SubagentsResearchCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: SubagentsReportCapabilityID, Compatibility: compatibility},
+		CapabilityRequirement{ID: SubagentsContinueCapabilityID, Compatibility: compatibility})
+	p.Version = preStandingStandardPresetVersion
 	return p
 }
 

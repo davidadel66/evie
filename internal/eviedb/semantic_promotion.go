@@ -184,6 +184,16 @@ func (s *Store) PreparePromotion(
 	if err != nil {
 		return memory.PromotionProposal{}, err
 	}
+	// The promoted Claim carries its source's kind and standing unless a new
+	// kind is proposed (standing tier).
+	prior, _, priorPresent, err := loadClaimClassification(ctx, dbLifecycleQueryer{s.db}, sourceClaim.ID)
+	if err != nil {
+		return memory.PromotionProposal{}, err
+	}
+	classification, err := deriveClaimClassification(request.Kind, prior, priorPresent, request.StandingBytesPerTokenMilli)
+	if err != nil {
+		return memory.PromotionProposal{}, err
+	}
 	scopes := []memory.SemanticScope{sourceScope.SemanticScope, destinationScope.SemanticScope}
 	sort.Slice(scopes, func(i, j int) bool { return scopes[i].Key < scopes[j].Key })
 	priors := make([]memory.ScopeRevision, len(scopes))
@@ -196,13 +206,19 @@ func (s *Store) PreparePromotion(
 		SourceScope: sourceScope.SemanticScope, DestinationScope: destinationScope.SemanticScope,
 		Scopes: scopes, PriorRevisions: priors, SourceClaim: sourceClaim, DestinationClaim: destinationClaim,
 		DestinationClaimCreate: destinationClaimCreate, PromotedEntities: promoted,
-		Sources: promotedSources, Evidence: evidence, Request: request,
+		Sources: promotedSources, Evidence: evidence, Request: request, Classification: classification,
 	}
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalPromoteClaimProposal(proposal))
 	if err != nil {
 		return proposal, err
 	}
 	proposal.PreparedSHA256, _, err = semanticHash(proposal)
+	if err != nil {
+		return proposal, err
+	}
+	proposal.StandingAlternative, err = standingAlternative(proposal,
+		func(p *memory.PromotionProposal) **memory.ClaimClassification { return &p.Classification },
+		func(p memory.PromotionProposal) any { return canonicalPromoteClaimProposal(p) })
 	return proposal, err
 }
 
@@ -327,6 +343,9 @@ func (s *Store) ApplyPromotion(
 		proposal.SourceClaim.ID != proposal.Request.SourceClaimID || proposal.DestinationScope.Key != proposal.Request.DestinationScopeKey ||
 		proposal.SourceClaim.ID == proposal.DestinationClaim.ID || len(proposal.Scopes) != 2 || len(proposal.PriorRevisions) != 2 {
 		return result, errors.New("invalid Promotion proposal")
+	}
+	if err := validateProposalClassification(proposal.Classification, proposal.Request.Kind, proposal.Request.StandingBytesPerTokenMilli, true); err != nil {
+		return result, err
 	}
 	for _, id := range []memory.SemanticID{proposal.OperationID, proposal.SourceScope.ID, proposal.DestinationScope.ID,
 		proposal.SourceClaim.ID, proposal.DestinationClaim.ID} {
@@ -534,6 +553,10 @@ func (s *Store) ApplyPromotion(
 			`, proposal.OperationID, promoted.SourceEntityID, promoted.DestinationEntity.ID); err != nil {
 				return err
 			}
+		}
+		if err := s.applyClaimClassification(ctx, writer, proposal.SessionID, proposal.Classification, proposal.DestinationClaim.ID,
+			proposal.DestinationScope.ID, proposal.OperationID, result.DestinationRevision, transactionText); err != nil {
+			return err
 		}
 		updated, err := writer.execContext(ctx, `
 			UPDATE semantic_scopes SET revision = ? WHERE scope_id = ? AND revision = ?

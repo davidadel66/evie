@@ -5,15 +5,18 @@ import { ApiError } from "./stream";
 
 /** answerApproval resolves one pending approval. Returns true when the server
  *  accepted it (204), false on 404 — the id already expired or was answered,
- *  which is a state the UI corrects rather than an error it reports. */
+ *  which is a state the UI corrects rather than an error it reports.
+ *  alternative approves the card's prepared alternative, such as a memory
+ *  with "Always applies" switched. */
 export async function answerApproval(
   id: string,
   approve: boolean,
+  alternative = false,
 ): Promise<boolean> {
   const res = await fetch("/api/approve", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, approve }),
+    body: JSON.stringify(alternative ? { id, approve, alternative } : { id, approve }),
   });
 
   if (res.status === 404) return false;

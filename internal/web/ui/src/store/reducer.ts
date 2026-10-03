@@ -16,6 +16,9 @@ export type Approval = {
   state: ApprovalState;
   /** Complete before/after files generated server-side before execution. */
   preview?: FilePreview;
+  /** The owner's "Always applies" switch on a memory card, when touched.
+   *  Approving with it changed approves the prepared alternative. */
+  alwaysApplies?: boolean;
 };
 
 export type Item = { turn?: ActivityTurn } & (
@@ -324,6 +327,20 @@ export function setApprovalState(
   return items.map((it) =>
     it.kind === "tool" && it.approval?.reqId === reqId
       ? { ...it, approval: { ...it.approval, state } }
+      : it,
+  );
+}
+
+/** setApprovalAlwaysApplies records the "Always applies" switch of one
+ *  pending memory approval; answered approvals keep what was approved. */
+export function setApprovalAlwaysApplies(
+  items: Item[],
+  reqId: string,
+  alwaysApplies: boolean,
+): Item[] {
+  return items.map((it) =>
+    it.kind === "tool" && it.approval?.reqId === reqId && it.approval.state === "pending"
+      ? { ...it, approval: { ...it.approval, alwaysApplies } }
       : it,
   );
 }

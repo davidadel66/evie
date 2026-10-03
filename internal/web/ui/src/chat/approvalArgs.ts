@@ -2,11 +2,37 @@
 // Two tools are gated today (internal/tools/registry.go): edit_file and
 // edit_db. Anything else gets pretty-printed JSON — correct, if plain.
 
+/** A memory's kind and whether it always applies (the standing tier). */
+export type MemoryClassification = { kind: string; standing: boolean };
+
 export type ApprovalView =
-  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string }
+  | { shape: "memory"; subject: string; scopeKey: string; evidence: string; evieProposed: boolean; identities: string[]; json: string; classification?: MemoryClassification; standingChange?: { from: MemoryClassification; to: MemoryClassification } }
   | { shape: "diff"; subject: string; oldText: string; newText: string }
   | { shape: "statement"; subject: string; statement: string }
-  | { shape: "json"; subject: string; json: string; evieProposed?: boolean };
+  | { shape: "json"; subject: string; json: string; evieProposed?: boolean; classification?: MemoryClassification };
+
+const kindLabels: Record<string, string> = { preference: "Preference", instruction: "Instruction", profile_fact: "Profile fact", workspace_brief: "Workspace brief", fact: "Fact" };
+
+/** kindLabel names a memory kind for the approval card. */
+export function kindLabel(kind: string): string {
+  return kindLabels[kind] ?? kind;
+}
+
+function readClassification(value: unknown): MemoryClassification | undefined {
+  const classification = object(value);
+  if (!classification || typeof classification.standing !== "boolean" || !str(classification.kind)) return undefined;
+  return { kind: str(classification.kind), standing: classification.standing };
+}
+
+/** approvalAlternative says whether approving with the card's "Always
+ *  applies" switch at alwaysApplies approves the prepared alternative (the
+ *  same memory with standing switched) rather than the proposal as shown.
+ *  An untouched switch (undefined) approves the proposal as shown. */
+export function approvalAlternative(name: string, args: string, alwaysApplies: boolean | undefined): boolean {
+  const view = readApprovalArgs(name, args);
+  const classification = view.shape === "memory" || view.shape === "json" ? view.classification : undefined;
+  return classification !== undefined && alwaysApplies !== undefined && alwaysApplies !== classification.standing;
+}
 
 export function readApprovalArgs(name: string, args: string, ownerName = "You"): ApprovalView {
   const parsed = parseObject(args);
@@ -27,12 +53,31 @@ export function readApprovalArgs(name: string, args: string, ownerName = "You"):
     // same-named Entities apart.
     const evieProposed = str(source?.authority) === "evie_proposed";
     const identities = Array.isArray(parsed.identities) ? parsed.identities.map(object).filter((identity) => identity !== null).map(identityLine) : [];
-    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args) };
+    const classification = readClassification(parsed.classification);
+    if (scope && str(scope.scope_key) && subject) return { shape: "memory", subject: `${polarity === "denied" ? "Not: " : ""}${subject}`, scopeKey: str(scope.scope_key), evidence: evieProposed ? "" : str(source?.evidence), evieProposed, identities, json: pretty(args), ...(classification ? { classification } : {}) };
   }
 
   if (name === "memory_correct_claim" && parsed) {
     // A replacement value not in the owner's words is Evie-proposed (M5).
-    return { shape: "json", subject: "", json: pretty(args), evieProposed: str(object(parsed.source)?.authority) === "evie_proposed" };
+    const classification = readClassification(parsed.classification);
+    return { shape: "json", subject: "", json: pretty(args), evieProposed: str(object(parsed.source)?.authority) === "evie_proposed", ...(classification ? { classification } : {}) };
+  }
+
+  if (name === "memory_promote_claim" && parsed) {
+    const classification = readClassification(parsed.classification);
+    if (classification) return { shape: "json", subject: "", json: pretty(args), classification };
+  }
+
+  if (name === "memory_set_standing" && parsed) {
+    // Marking an existing memory standing: the change itself is the decision.
+    const from = readClassification(parsed.prior);
+    const to = readClassification(parsed.classification);
+    const text = str(parsed.claim_text);
+    const scopeKey = str(object(parsed.scope)?.scope_key);
+    if (from && to && text && scopeKey) {
+      const subject = text.startsWith("owner — ") ? `${ownerName} — ${text.slice("owner — ".length)}` : text;
+      return { shape: "memory", subject, scopeKey, evidence: "", evieProposed: false, identities: [], json: pretty(args), standingChange: { from, to } };
+    }
   }
 
   if (name === "edit_file" && parsed) {

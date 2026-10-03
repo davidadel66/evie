@@ -22,6 +22,11 @@ const (
 	Declined Decision = iota
 	Approved
 	Expired
+	// ApprovedAlternative approves a prepared tool's alternative, such as a
+	// memory with "Always applies" switched on the approval card. The
+	// dispatcher records and runs exactly that alternative as an ordinary
+	// approval; a tool without one treats it as declined.
+	ApprovedAlternative
 )
 
 type Tool struct {
@@ -161,6 +166,16 @@ type PreparedTool struct {
 	Preview  *FileChangePreview
 	Approval ApprovalMetadata
 	Execute  func(ctx context.Context) (string, error)
+	// Alternative is a second fully prepared effect the owner may approve
+	// instead, chosen on the approval card before approving.
+	Alternative *PreparedAlternative
+}
+
+// PreparedAlternative is exact approval metadata and execution for the one
+// alternative a prepared tool offers.
+type PreparedAlternative struct {
+	Approval ApprovalMetadata
+	Execute  func(ctx context.Context) (string, error)
 }
 
 // InvocationContext is the harness-owned authority supplied to a tool call.
@@ -177,6 +192,10 @@ type InvocationContext struct {
 	// ReadToolResult returns one durable tool outcome of the current session.
 	// It cannot address another session's history.
 	ReadToolResult func(context.Context, memory.EventID) (StoredToolResult, error)
+	// StandingBytesPerTokenMilli is the calibrated bytes-per-token ratio of
+	// the session's latest request (zero when uncalibrated), which measures
+	// the standing-memory budget an approval checks.
+	StandingBytesPerTokenMilli int64
 }
 
 type invocationContextKey struct{}
@@ -432,6 +451,17 @@ func (t Toolset) ExecuteWithApprovalAuthorizedCompletion(
 				)
 				if err := ctx.Err(); err != nil {
 					return openrouter.Message{}, false, err
+				}
+				if decision == ApprovedAlternative {
+					decision = Declined
+					if prepared != nil && prepared.Alternative != nil {
+						if err := prepared.Alternative.Approval.validate(); err != nil {
+							msg, isErr := toolError(call.ID, err)
+							return complete(msg, isErr)
+						}
+						prepared = &PreparedTool{Preview: prepared.Preview, Approval: prepared.Alternative.Approval, Execute: prepared.Alternative.Execute}
+						decision = Approved
+					}
 				}
 			}
 

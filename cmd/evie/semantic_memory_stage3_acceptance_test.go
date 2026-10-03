@@ -385,7 +385,7 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		toolCtx,
 		openrouter.ToolCall{ID: "stage3-entity", Type: "function", Function: openrouter.FunctionCall{
 			Name:      "memory_remember_entity",
-			Arguments: fmt.Sprintf(`{"idempotency_key":"idem:v1:ba000000-0000-4000-8000-000000000001","predicate":"works_with","predicate_label":"works with","cardinality":"many","polarity":"affirmed","subject_entity_id":%q,"object_create":true,"object_name":"Acme","object_type":"organization","object_alias":"ACME"}`, ownerID),
+			Arguments: fmt.Sprintf(`{"idempotency_key":"idem:v1:ba000000-0000-4000-8000-000000000001","predicate":"works_with","predicate_label":"works with","cardinality":"many","polarity":"affirmed","subject_entity_id":%q,"object_create":true,"object_name":"Acme","object_type":"organization","object_alias":"ACME","kind":"fact"}`, ownerID),
 		}},
 		func(_ context.Context, name, arguments string, _ *tools.FileChangePreview) tools.Decision {
 			if name != "memory_remember_entity" || !strings.Contains(arguments, `"operation_id"`) {

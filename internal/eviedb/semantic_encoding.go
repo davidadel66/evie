@@ -90,14 +90,15 @@ type canonicalSourceLink struct {
 }
 
 type canonicalEffect struct {
-	Scopes      []string              `json:"scopes"`
-	Predicates  []canonicalPredicate  `json:"predicates"`
-	Entities    []canonicalEntity     `json:"entities"`
-	Aliases     []struct{}            `json:"aliases"`
-	Claims      []canonicalClaim      `json:"claims"`
-	SourceLinks []canonicalSourceLink `json:"source_links"`
-	GraphLinks  []struct{}            `json:"graph_links"`
-	Transitions []struct{}            `json:"transitions"`
+	Scopes          []string                  `json:"scopes"`
+	Predicates      []canonicalPredicate      `json:"predicates"`
+	Entities        []canonicalEntity         `json:"entities"`
+	Aliases         []struct{}                `json:"aliases"`
+	Claims          []canonicalClaim          `json:"claims"`
+	SourceLinks     []canonicalSourceLink     `json:"source_links"`
+	GraphLinks      []struct{}                `json:"graph_links"`
+	Transitions     []struct{}                `json:"transitions"`
+	Classifications []canonicalClassification `json:"classifications,omitempty"`
 }
 
 type canonicalProposal struct {
@@ -137,14 +138,15 @@ type canonicalEntityClaim struct {
 }
 
 type canonicalEntityEffect struct {
-	Scopes      []string               `json:"scopes"`
-	Predicates  []canonicalPredicate   `json:"predicates"`
-	Entities    []canonicalEntity      `json:"entities"`
-	Aliases     []canonicalAlias       `json:"aliases"`
-	Claims      []canonicalEntityClaim `json:"claims"`
-	SourceLinks []canonicalSourceLink  `json:"source_links"`
-	GraphLinks  []struct{}             `json:"graph_links"`
-	Transitions []struct{}             `json:"transitions"`
+	Scopes          []string                  `json:"scopes"`
+	Predicates      []canonicalPredicate      `json:"predicates"`
+	Entities        []canonicalEntity         `json:"entities"`
+	Aliases         []canonicalAlias          `json:"aliases"`
+	Claims          []canonicalEntityClaim    `json:"claims"`
+	SourceLinks     []canonicalSourceLink     `json:"source_links"`
+	GraphLinks      []struct{}                `json:"graph_links"`
+	Transitions     []struct{}                `json:"transitions"`
+	Classifications []canonicalClassification `json:"classifications,omitempty"`
 }
 
 type canonicalEntityProposal struct {
@@ -204,6 +206,7 @@ func canonicalRememberLiteralProposal(proposal memory.RememberLiteralProposal) c
 	} else {
 		effect.SourceLinks = []canonicalSourceLink{}
 	}
+	effect.Classifications = canonicalClassifications(proposal.Classification, proposal.ClaimID, proposal.Scope.Key)
 	return canonicalProposal{
 		Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey, Actor: proposal.Actor,
 		SessionID: proposal.SessionID, PriorRevisions: proposal.PriorRevisions,
@@ -264,6 +267,7 @@ func canonicalRememberEntityProposal(proposal memory.RememberEntityProposal) can
 			Authority: proposal.Source.Authority, ObservedAt: proposal.Source.ObservedAt, Eligibility: memory.EligibilityEligible,
 		})
 	}
+	effect.Classifications = canonicalClassifications(proposal.Classification, proposal.Claim.ID, proposal.Claim.ScopeKey)
 	return canonicalEntityProposal{
 		Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey, Actor: proposal.Actor,
 		SessionID: proposal.SessionID, PriorRevisions: proposal.PriorRevisions,
@@ -285,15 +289,16 @@ type canonicalPromotionRecord struct {
 }
 
 type canonicalPromotionEffect struct {
-	Scopes      []string                   `json:"scopes"`
-	Predicates  []struct{}                 `json:"predicates"`
-	Entities    []canonicalEntity          `json:"entities"`
-	Aliases     []struct{}                 `json:"aliases"`
-	Claims      []canonicalCorrectionClaim `json:"claims"`
-	SourceLinks []canonicalSourceLink      `json:"source_links"`
-	GraphLinks  []struct{}                 `json:"graph_links"`
-	Transitions []struct{}                 `json:"transitions"`
-	Promotions  []canonicalPromotionRecord `json:"promotions"`
+	Scopes          []string                   `json:"scopes"`
+	Predicates      []struct{}                 `json:"predicates"`
+	Entities        []canonicalEntity          `json:"entities"`
+	Aliases         []struct{}                 `json:"aliases"`
+	Claims          []canonicalCorrectionClaim `json:"claims"`
+	SourceLinks     []canonicalSourceLink      `json:"source_links"`
+	GraphLinks      []struct{}                 `json:"graph_links"`
+	Transitions     []struct{}                 `json:"transitions"`
+	Promotions      []canonicalPromotionRecord `json:"promotions"`
+	Classifications []canonicalClassification  `json:"classifications,omitempty"`
 }
 
 type canonicalPromotionProposal struct {
@@ -351,6 +356,7 @@ func canonicalPromoteClaimProposal(proposal memory.PromotionProposal) canonicalP
 		SourceClaimID: proposal.SourceClaim.ID, DestinationClaimID: proposal.DestinationClaim.ID,
 		EntityMappings: mappings,
 	}}
+	effect.Classifications = canonicalClassifications(proposal.Classification, proposal.DestinationClaim.ID, proposal.DestinationScope.Key)
 	return canonicalPromotionProposal{
 		Kind: proposal.Kind, IdempotencyKey: proposal.IdempotencyKey, Actor: proposal.Actor,
 		SessionID: proposal.SessionID, PriorRevisions: proposal.PriorRevisions,

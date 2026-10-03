@@ -44,7 +44,8 @@ func entityRequestsEqual(left, right memory.RememberEntityRequest) bool {
 		left.Predicate == right.Predicate && left.PredicateLabel == right.PredicateLabel &&
 		left.PredicateCardinality == right.PredicateCardinality && left.Polarity == right.Polarity &&
 		validTimesEqual(left.ValidTime, right.ValidTime) && left.Subject == right.Subject && left.Object == right.Object &&
-		left.UseSessionScope == right.UseSessionScope && left.Destination == right.Destination
+		left.UseSessionScope == right.UseSessionScope && left.Destination == right.Destination &&
+		left.Kind == right.Kind && left.StandingBytesPerTokenMilli == right.StandingBytesPerTokenMilli
 }
 
 func loadOwnerSource(row rowScanner, sessionID memory.SessionID, eventID memory.EventID, scopeKey string) (memory.SemanticSource, error) {
@@ -482,6 +483,18 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
 	}
+	var classification *memory.ClaimClassification
+	if request.Kind != "" {
+		prior, priorPresent := memory.ClaimClassification{}, false
+		if !claim.Create {
+			if prior, _, priorPresent, err = loadClaimClassification(ctx, dbLifecycleQueryer{s.db}, claim.ID); err != nil {
+				return memory.RememberEntityProposal{}, err
+			}
+		}
+		if classification, err = deriveClaimClassification(request.Kind, prior, priorPresent, request.StandingBytesPerTokenMilli); err != nil {
+			return memory.RememberEntityProposal{}, err
+		}
+	}
 	operationID, err := newSemanticID()
 	if err != nil {
 		return memory.RememberEntityProposal{}, err
@@ -506,7 +519,7 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 		IdempotencyKey: request.IdempotencyKey, Actor: memory.SemanticActorOwner, SessionID: scope.SessionID,
 		Scope: target.SemanticScope, Scopes: scopes, PriorRevisions: priors, Predicate: predicate,
 		Entities: entities, Aliases: aliases, Claim: claim, Source: source,
-		ResultingRevision: target.Revision + 1, Request: request, Identities: identities,
+		ResultingRevision: target.Revision + 1, Request: request, Identities: identities, Classification: classification,
 	}
 	writeGlobal := entityProposalWritesGlobal(proposal)
 	for _, semanticScope := range proposal.Scopes {
@@ -521,6 +534,11 @@ func (s *Store) PrepareRememberEntity(ctx context.Context, scope memory.ScopeCon
 	proposal.ProposalSHA256, _, err = semanticHash(canonicalRememberEntityProposal(proposal))
 	if err == nil {
 		proposal.PreparedSHA256, _, err = semanticHash(proposal)
+	}
+	if err == nil {
+		proposal.StandingAlternative, err = standingAlternative(proposal,
+			func(p *memory.RememberEntityProposal) **memory.ClaimClassification { return &p.Classification },
+			func(p memory.RememberEntityProposal) any { return canonicalRememberEntityProposal(p) })
 	}
 	return proposal, err
 }
@@ -721,6 +739,9 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 		return result, err
 	}
 	if err := validateEntityProposalRelations(proposal); err != nil {
+		return result, err
+	}
+	if err := validateProposalClassification(proposal.Classification, proposal.Request.Kind, proposal.Request.StandingBytesPerTokenMilli, false); err != nil {
 		return result, err
 	}
 
@@ -966,6 +987,10 @@ func (s *Store) ApplyRememberEntity(ctx context.Context, lease memory.TurnLease,
 				proposal.Scope.ID, proposal.Source.ID, proposal.OperationID, stateRevision, transactionText); err != nil {
 				return err
 			}
+		}
+		if err := s.applyClaimClassification(ctx, writer, proposal.SessionID, proposal.Classification, proposal.Claim.ID,
+			proposal.Scope.ID, proposal.OperationID, stateRevision, transactionText); err != nil {
+			return err
 		}
 		for _, revision := range result.ResultingRevisions {
 			scope := byKey[revision.ScopeKey]

@@ -307,6 +307,7 @@ type ContextPlaceholderManifest struct {
 type ContextSnapshotPayload struct {
 	RepositoryInstructionsTurnID EventID                          `json:"repository_instructions_turn_id,omitempty"`
 	Memory                       *RetrievalReceipt                `json:"memory,omitempty"`
+	StandingMemory               *StandingMemoryReceipt           `json:"standing_memory,omitempty"`
 	SchemaVersion                int                              `json:"schema_version"`
 	ComposerVersion              string                           `json:"composer_version"`
 	EstimatorVersion             string                           `json:"estimator_version"`
@@ -405,6 +406,9 @@ func (p ContextSnapshotPayload) Validate() error {
 		ContextCompactionSummaryInvalid, ContextCompactionSummaryPersistence:
 	default:
 		return fmt.Errorf("invalid context compaction failure category %q", p.CompactionFailureCategory)
+	}
+	if err := p.StandingMemory.Validate(); err != nil {
+		return err
 	}
 	seenPlaceholders := make(map[EventID]struct{}, len(p.Placeholders))
 	for i, placeholder := range p.Placeholders {

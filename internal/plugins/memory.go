@@ -18,7 +18,7 @@ import (
 const (
 	MemoryPluginID              PluginID = "memory"
 	MemoryContractVersion                = "1.0.0"
-	memoryImplementationVersion          = "1.4.0"
+	memoryImplementationVersion          = "1.5.0"
 	memoryReadOutputLimit                = 64 * 1024
 )
 
@@ -44,41 +44,61 @@ const (
 	// MemoryReadToolResultCapabilityID rereads this conversation's own durable
 	// tool output, which context projection and compaction may have shortened.
 	MemoryReadToolResultCapabilityID CapabilityID = "memory.read_tool_result"
+	// MemorySetStandingCapabilityID marks an existing Claim as always
+	// applying, or not, through the normal approval path (standing tier).
+	MemorySetStandingCapabilityID CapabilityID = "memory.set_standing"
+)
+
+// memoryContract selects a tool's model-facing contract. Implementation 1.5.0
+// added the standing tier: remember, correct and promote propose a memory
+// kind, and memory_set_standing exists. Earlier contracts stay byte-identical
+// for conversations whose receipts pin them.
+type memoryContract int
+
+const (
+	memoryContractPreStanding memoryContract = iota
+	memoryContractStanding
 )
 
 type memoryCapabilityDescriptor struct {
-	id    CapabilityID
-	read  bool
-	build func(*Memory) tools.Tool
+	id           CapabilityID
+	read         bool
+	standingOnly bool
+	build        func(*Memory, memoryContract) tools.Tool
+}
+
+func ignoringContract(build func(*Memory) tools.Tool) func(*Memory, memoryContract) tools.Tool {
+	return func(p *Memory, _ memoryContract) tools.Tool { return build(p) }
 }
 
 var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
-	{id: MemorySearchCapabilityID, read: true, build: (*Memory).searchTool},
-	{id: MemorySearchConversationsCapabilityID, read: true, build: (*Memory).searchConversationsTool},
-	{id: MemoryExpandConversationCapabilityID, read: true, build: (*Memory).expandConversationTool},
-	{id: MemorySearchEpisodesCapabilityID, read: true, build: (*Memory).searchEpisodesTool},
-	{id: MemoryListScopesCapabilityID, read: true, build: (*Memory).listScopesTool},
-	{id: MemoryListObjectsCapabilityID, read: true, build: (*Memory).listObjectsTool},
-	{id: MemoryInspectObjectCapabilityID, read: true, build: (*Memory).inspectObjectTool},
-	{id: MemoryQueryClaimsCapabilityID, read: true, build: (*Memory).queryClaimsTool},
-	{id: MemoryLookupAliasCapabilityID, read: true, build: (*Memory).lookupAliasTool},
-	{id: MemoryTraverseCapabilityID, read: true, build: (*Memory).traverseTool},
+	{id: MemorySearchCapabilityID, read: true, build: ignoringContract((*Memory).searchTool)},
+	{id: MemorySearchConversationsCapabilityID, read: true, build: ignoringContract((*Memory).searchConversationsTool)},
+	{id: MemoryExpandConversationCapabilityID, read: true, build: ignoringContract((*Memory).expandConversationTool)},
+	{id: MemorySearchEpisodesCapabilityID, read: true, build: ignoringContract((*Memory).searchEpisodesTool)},
+	{id: MemoryListScopesCapabilityID, read: true, build: ignoringContract((*Memory).listScopesTool)},
+	{id: MemoryListObjectsCapabilityID, read: true, build: ignoringContract((*Memory).listObjectsTool)},
+	{id: MemoryInspectObjectCapabilityID, read: true, build: ignoringContract((*Memory).inspectObjectTool)},
+	{id: MemoryQueryClaimsCapabilityID, read: true, build: ignoringContract((*Memory).queryClaimsTool)},
+	{id: MemoryLookupAliasCapabilityID, read: true, build: ignoringContract((*Memory).lookupAliasTool)},
+	{id: MemoryTraverseCapabilityID, read: true, build: ignoringContract((*Memory).traverseTool)},
 	{id: MemoryRememberLiteralCapabilityID, build: (*Memory).rememberLiteralTool},
 	{id: MemoryRememberEntityCapabilityID, build: (*Memory).rememberEntityTool},
 	{id: MemoryCorrectClaimCapabilityID, build: (*Memory).correctClaimTool},
-	{id: MemoryCreateGraphLinkCapabilityID, build: (*Memory).createGraphLinkTool},
+	{id: MemoryCreateGraphLinkCapabilityID, build: ignoringContract((*Memory).createGraphLinkTool)},
 	{id: MemoryPromoteClaimCapabilityID, build: (*Memory).promoteClaimTool},
-	{id: MemoryRetireCapabilityID, build: func(p *Memory) tools.Tool { return p.lifecycleTool("memory_retire", memory.LifecycleRetire) }},
-	{id: MemoryRestoreCapabilityID, build: func(p *Memory) tools.Tool { return p.lifecycleTool("memory_restore", memory.LifecycleRestore) }},
-	{id: MemoryRetractSourceCapabilityID, build: func(p *Memory) tools.Tool {
+	{id: MemoryRetireCapabilityID, build: ignoringContract(func(p *Memory) tools.Tool { return p.lifecycleTool("memory_retire", memory.LifecycleRetire) })},
+	{id: MemoryRestoreCapabilityID, build: ignoringContract(func(p *Memory) tools.Tool { return p.lifecycleTool("memory_restore", memory.LifecycleRestore) })},
+	{id: MemoryRetractSourceCapabilityID, build: ignoringContract(func(p *Memory) tools.Tool {
 		return p.sourceLifecycleTool("memory_retract_source", memory.LifecycleRetractSource)
-	}},
-	{id: MemoryRestoreSourceCapabilityID, build: func(p *Memory) tools.Tool {
+	})},
+	{id: MemoryRestoreSourceCapabilityID, build: ignoringContract(func(p *Memory) tools.Tool {
 		return p.sourceLifecycleTool("memory_restore_source", memory.LifecycleRestoreSource)
-	}},
+	})},
 	// Not gated by remote-memory opt-in: it returns only tool output this
 	// conversation already sent to its provider.
-	{id: MemoryReadToolResultCapabilityID, build: func(*Memory) tools.Tool { return tools.ReadToolResultTool() }},
+	{id: MemoryReadToolResultCapabilityID, build: ignoringContract(func(*Memory) tools.Tool { return tools.ReadToolResultTool() })},
+	{id: MemorySetStandingCapabilityID, standingOnly: true, build: ignoringContract((*Memory).setStandingTool)},
 }
 
 func allMemoryCapabilityIDs() []CapabilityID {
@@ -111,6 +131,8 @@ type SemanticMemoryKernel interface {
 	ApplyPromotion(context.Context, memory.TurnLease, memory.PromotionProposal) (memory.PromotionResult, error)
 	PrepareMemoryLifecycle(context.Context, memory.ScopeContext, memory.MemoryLifecycleRequest) (memory.MemoryLifecycleProposal, error)
 	ApplyMemoryLifecycle(context.Context, memory.TurnLease, memory.MemoryLifecycleProposal) (memory.MemoryLifecycleResult, error)
+	PrepareClaimStanding(context.Context, memory.ScopeContext, memory.ClaimStandingRequest) (memory.ClaimStandingProposal, error)
+	ApplyClaimStanding(context.Context, memory.TurnLease, memory.ClaimStandingProposal) (memory.ClaimStandingResult, error)
 }
 
 type Memory struct {
@@ -136,7 +158,7 @@ func (p *Memory) Manifest() Manifest {
 		contracts[i] = CapabilityContract{ID: capability.ID, Version: MemoryContractVersion}
 	}
 	var compatibility []ImplementationCompatibility
-	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0"} {
+	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"} {
 		legacy := p.ResumableToolCapabilities(version)
 		evidence := make([]CapabilityCompatibility, len(legacy))
 		for i, c := range legacy {
@@ -153,12 +175,16 @@ func (p *Memory) Manifest() Manifest {
 }
 
 func (p *Memory) ToolCapabilities() []ToolCapability {
+	return p.capabilities(memoryContractStanding)
+}
+
+func (p *Memory) capabilities(contract memoryContract) []ToolCapability {
 	capabilities := make([]ToolCapability, 0, len(memoryCapabilityDescriptors))
 	for _, descriptor := range memoryCapabilityDescriptors {
-		if descriptor.read && !p.remoteReads {
+		if (descriptor.read && !p.remoteReads) || (descriptor.standingOnly && contract != memoryContractStanding) {
 			continue
 		}
-		capabilities = append(capabilities, ToolCapability{ID: descriptor.id, ContractVersion: MemoryContractVersion, Tool: descriptor.build(p)})
+		capabilities = append(capabilities, ToolCapability{ID: descriptor.id, ContractVersion: MemoryContractVersion, Tool: descriptor.build(p, contract)})
 	}
 	return capabilities
 }
@@ -166,20 +192,22 @@ func (p *Memory) ToolCapabilities() []ToolCapability {
 // Existing sessions retain their exact pre-applicability schemas and behavior.
 // New sessions use the current capabilities; no saved receipt is rewritten.
 func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
-	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" {
+	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" && version != "1.4.0" {
 		return nil
 	}
 	var capabilities []ToolCapability
-	for _, capability := range p.ToolCapabilities() {
+	// Version 1.5.0 added the standing tier; every earlier version keeps the
+	// tools without a memory kind or memory_set_standing.
+	for _, capability := range p.capabilities(memoryContractPreStanding) {
 		// Version 1.4.0 added past-session episode search.
-		if capability.ID == MemorySearchEpisodesCapabilityID {
+		if capability.ID == MemorySearchEpisodesCapabilityID && version != "1.4.0" {
 			continue
 		}
 		// Version 1.3.0 added the stored tool result reader.
-		if capability.ID == MemoryReadToolResultCapabilityID && version != "1.3.0" {
+		if capability.ID == MemoryReadToolResultCapabilityID && version != "1.3.0" && version != "1.4.0" {
 			continue
 		}
-		if version == "1.2.0" || version == "1.3.0" || (capability.ID != MemorySearchCapabilityID &&
+		if version == "1.2.0" || version == "1.3.0" || version == "1.4.0" || (capability.ID != MemorySearchCapabilityID &&
 			capability.ID != MemorySearchConversationsCapabilityID && capability.ID != MemoryExpandConversationCapabilityID) {
 			capabilities = append(capabilities, capability)
 		}
@@ -607,7 +635,7 @@ func mutationProperties() map[string]openrouter.Property {
 	return map[string]openrouter.Property{"idempotency_key": stringProperty("Required idem:v1:<canonical UUIDv4> retry identity.")}
 }
 
-func (p *Memory) rememberLiteralTool() tools.Tool {
+func (p *Memory) rememberLiteralTool(contract memoryContract) tools.Tool {
 	properties := mutationProperties()
 	properties["destination"] = openrouter.Property{Type: "string", Enum: []string{"everywhere", "workspace", "session"}, Description: "Recommend where this memory applies: everywhere for general owner preferences, workspace for this area, session for temporary conversational instructions. Approval confirms the exact scope; omit only to retain the current context default."}
 	properties["predicate"] = stringProperty("Canonical Predicate token.")
@@ -618,8 +646,13 @@ func (p *Memory) rememberLiteralTool() tools.Tool {
 	properties["polarity"] = enumProperty("affirmed", "denied")
 	properties["valid_from"] = stringProperty("Optional RFC3339 Valid Time start.")
 	properties["valid_to"] = stringProperty("Optional RFC3339 Valid Time end.")
+	required := []string{"idempotency_key", "predicate", "predicate_label", "cardinality", "literal_kind", "literal_value", "polarity"}
+	if contract == memoryContractStanding {
+		properties["kind"] = memoryKindProperty(true)
+		required = append(required, "kind")
+	}
 	return tools.Tool{Schema: toolSchema("memory_remember_literal", "Prepare one exact owner-subject Typed Literal Claim and require Action Approval before acceptance.", properties,
-		"idempotency_key", "predicate", "predicate_label", "cardinality", "literal_kind", "literal_value", "polarity"), NeedsApproval: true,
+		required...), NeedsApproval: true,
 		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
 			var args struct {
 				temporalArgs
@@ -631,6 +664,7 @@ func (p *Memory) rememberLiteralTool() tools.Tool {
 				LiteralKind    string `json:"literal_kind"`
 				LiteralValue   string `json:"literal_value"`
 				Polarity       string
+				Kind           memory.ClaimKind `json:"kind"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
@@ -639,18 +673,85 @@ func (p *Memory) rememberLiteralTool() tools.Tool {
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
+			kind, ratio, err := memoryKindArgument(contract, args.Kind, true, invocation)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
 			valid, err := args.temporalArgs.validTime()
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			proposal, err := p.semantic.PrepareRememberLiteral(ctx, invocation.Scope, memory.RememberLiteralRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Literal: memory.TypedLiteral{Kind: memory.LiteralKind(args.LiteralKind), Value: args.LiteralValue}, Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid})
+			proposal, err := p.semantic.PrepareRememberLiteral(ctx, invocation.Scope, memory.RememberLiteralRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Literal: memory.TypedLiteral{Kind: memory.LiteralKind(args.LiteralKind), Value: args.LiteralValue}, Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid, Kind: kind, StandingBytesPerTokenMilli: ratio})
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
-				return p.semantic.ApplyRememberLiteral(applyCtx, invocation.Lease, proposal)
-			})
+			prepare := func(proposal memory.RememberLiteralProposal) (tools.PreparedTool, error) {
+				return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
+					return p.semantic.ApplyRememberLiteral(applyCtx, invocation.Lease, proposal)
+				})
+			}
+			prepared, err := prepare(proposal)
+			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
+				return prepared, err
+			}
+			switched := proposal
+			switched.Classification = switchedStanding(proposal.Classification)
+			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+			switched.StandingAlternative = nil
+			return withPreparedAlternative(prepared)(prepare(switched))
 		},
+	}
+}
+
+// memoryKindProperty is the closed memory kind the model proposes. It decides
+// whether the memory applies to every request by default.
+func memoryKindProperty(required bool) openrouter.Property {
+	kinds := memory.ClaimKinds()
+	values := make([]string, len(kinds))
+	for i, kind := range kinds {
+		values[i] = string(kind)
+	}
+	description := "preference: how the owner wants you to work or answer. instruction: a standing directive. profile_fact: a stable fact about the owner. workspace_brief: what this Workspace is and how it works. fact: anything else. All but fact apply to every request by default; the owner can switch that on the approval card."
+	if !required {
+		description += " Omit to keep the memory's kind."
+	}
+	return openrouter.Property{Type: "string", Enum: values, Description: description}
+}
+
+// memoryKindArgument validates the proposed kind for the tool's contract and
+// returns it with the session's calibrated ratio for the standing budget.
+// Tools pinned before the standing tier propose no kind.
+func memoryKindArgument(contract memoryContract, kind memory.ClaimKind, required bool, invocation tools.InvocationContext) (memory.ClaimKind, int64, error) {
+	if contract != memoryContractStanding {
+		if kind != "" {
+			return "", 0, errors.New("this conversation uses the earlier memory tools, which have no memory kind; start a new conversation to classify memories")
+		}
+		return "", 0, nil
+	}
+	if kind == "" && required {
+		return "", 0, errors.New("kind is required: preference, instruction, profile_fact, workspace_brief or fact")
+	}
+	if kind != "" && !kind.Valid() {
+		return "", 0, fmt.Errorf("unsupported memory kind %q; use preference, instruction, profile_fact, workspace_brief or fact", kind)
+	}
+	return kind, max(0, invocation.StandingBytesPerTokenMilli), nil
+}
+
+func switchedStanding(classification *memory.ClaimClassification) *memory.ClaimClassification {
+	switched := *classification
+	switched.Standing = !switched.Standing
+	return &switched
+}
+
+// withPreparedAlternative attaches the prepared "Always applies" switch to a
+// prepared mutation, so the approval card can approve either exact proposal.
+func withPreparedAlternative(prepared tools.PreparedTool) func(tools.PreparedTool, error) (tools.PreparedTool, error) {
+	return func(alternative tools.PreparedTool, err error) (tools.PreparedTool, error) {
+		if err != nil {
+			return tools.PreparedTool{}, err
+		}
+		prepared.Alternative = &tools.PreparedAlternative{Approval: alternative.Approval, Execute: alternative.Execute}
+		return prepared, nil
 	}
 }
 
@@ -658,7 +759,7 @@ func selector(id string, create bool, name, entityType, alias string) memory.Ent
 	return memory.EntitySelector{EntityID: memory.SemanticID(id), Create: create, CanonicalName: name, EntityType: entityType, Alias: alias}
 }
 
-func (p *Memory) rememberEntityTool() tools.Tool {
+func (p *Memory) rememberEntityTool(contract memoryContract) tools.Tool {
 	properties := mutationProperties()
 	properties["destination"] = openrouter.Property{Type: "string", Enum: []string{"everywhere", "workspace", "session"}, Description: "Recommend where this memory applies: everywhere for general owner preferences, workspace for this area, session for temporary conversational instructions. Approval confirms the exact scope; omit only to retain the current context default."}
 	for name, property := range map[string]openrouter.Property{
@@ -672,8 +773,13 @@ func (p *Memory) rememberEntityTool() tools.Tool {
 	} {
 		properties[name] = property
 	}
+	required := []string{"idempotency_key", "predicate", "predicate_label", "cardinality", "polarity"}
+	if contract == memoryContractStanding {
+		properties["kind"] = memoryKindProperty(true)
+		required = append(required, "kind")
+	}
 	return tools.Tool{Schema: toolSchema("memory_remember_entity", "Prepare one exact Entity-to-Entity Claim and require Action Approval before acceptance.", properties,
-		"idempotency_key", "predicate", "predicate_label", "cardinality", "polarity"), NeedsApproval: true,
+		required...), NeedsApproval: true,
 		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
 			var args struct {
 				temporalArgs
@@ -682,16 +788,17 @@ func (p *Memory) rememberEntityTool() tools.Tool {
 				Predicate             string
 				PredicateLabel        string `json:"predicate_label"`
 				Cardinality, Polarity string
-				SubjectEntityID       string `json:"subject_entity_id"`
-				SubjectCreate         bool   `json:"subject_create"`
-				SubjectName           string `json:"subject_name"`
-				SubjectType           string `json:"subject_type"`
-				SubjectAlias          string `json:"subject_alias"`
-				ObjectEntityID        string `json:"object_entity_id"`
-				ObjectCreate          bool   `json:"object_create"`
-				ObjectName            string `json:"object_name"`
-				ObjectType            string `json:"object_type"`
-				ObjectAlias           string `json:"object_alias"`
+				SubjectEntityID       string           `json:"subject_entity_id"`
+				SubjectCreate         bool             `json:"subject_create"`
+				SubjectName           string           `json:"subject_name"`
+				SubjectType           string           `json:"subject_type"`
+				SubjectAlias          string           `json:"subject_alias"`
+				ObjectEntityID        string           `json:"object_entity_id"`
+				ObjectCreate          bool             `json:"object_create"`
+				ObjectName            string           `json:"object_name"`
+				ObjectType            string           `json:"object_type"`
+				ObjectAlias           string           `json:"object_alias"`
+				Kind                  memory.ClaimKind `json:"kind"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
@@ -700,23 +807,38 @@ func (p *Memory) rememberEntityTool() tools.Tool {
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
+			kind, ratio, err := memoryKindArgument(contract, args.Kind, true, invocation)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
 			valid, err := args.temporalArgs.validTime()
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			request := memory.RememberEntityRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid, Subject: selector(args.SubjectEntityID, args.SubjectCreate, args.SubjectName, args.SubjectType, args.SubjectAlias), Object: selector(args.ObjectEntityID, args.ObjectCreate, args.ObjectName, args.ObjectType, args.ObjectAlias), UseSessionScope: false}
+			request := memory.RememberEntityRequest{Destination: args.Destination, IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, Predicate: args.Predicate, PredicateLabel: args.PredicateLabel, PredicateCardinality: memory.PredicateCardinality(args.Cardinality), Polarity: memory.ClaimPolarity(args.Polarity), ValidTime: valid, Subject: selector(args.SubjectEntityID, args.SubjectCreate, args.SubjectName, args.SubjectType, args.SubjectAlias), Object: selector(args.ObjectEntityID, args.ObjectCreate, args.ObjectName, args.ObjectType, args.ObjectAlias), UseSessionScope: false, Kind: kind, StandingBytesPerTokenMilli: ratio}
 			proposal, err := p.semantic.PrepareRememberEntity(ctx, invocation.Scope, request)
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
-				return p.semantic.ApplyRememberEntity(applyCtx, invocation.Lease, proposal)
-			})
+			prepare := func(proposal memory.RememberEntityProposal) (tools.PreparedTool, error) {
+				return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
+					return p.semantic.ApplyRememberEntity(applyCtx, invocation.Lease, proposal)
+				})
+			}
+			prepared, err := prepare(proposal)
+			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
+				return prepared, err
+			}
+			switched := proposal
+			switched.Classification = switchedStanding(proposal.Classification)
+			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+			switched.StandingAlternative = nil
+			return withPreparedAlternative(prepared)(prepare(switched))
 		},
 	}
 }
 
-func (p *Memory) correctClaimTool() tools.Tool {
+func (p *Memory) correctClaimTool(contract memoryContract) tools.Tool {
 	properties := mutationProperties()
 	for name, property := range map[string]openrouter.Property{
 		"claim_id": stringProperty("Exact Claim ID being corrected."), "subject_entity_id": stringProperty("Replacement subject Entity ID."),
@@ -726,6 +848,9 @@ func (p *Memory) correctClaimTool() tools.Tool {
 		"replacement_valid_from": stringProperty("Optional replacement Valid Time start."), "replacement_valid_to": stringProperty("Optional replacement Valid Time end."),
 	} {
 		properties[name] = property
+	}
+	if contract == memoryContractStanding {
+		properties["kind"] = memoryKindProperty(false)
 	}
 	return tools.Tool{Schema: toolSchema("memory_correct_claim", "Prepare an exact error correction or real-world change and require Action Approval.", properties,
 		"idempotency_key", "claim_id", "subject_entity_id", "predicate_id", "polarity", "mode"), NeedsApproval: true,
@@ -739,14 +864,19 @@ func (p *Memory) correctClaimTool() tools.Tool {
 				LiteralKind          string `json:"literal_kind"`
 				LiteralValue         string `json:"literal_value"`
 				Polarity, Mode       string
-				EffectiveTime        string `json:"effective_time"`
-				ReplacementValidFrom string `json:"replacement_valid_from"`
-				ReplacementValidTo   string `json:"replacement_valid_to"`
+				EffectiveTime        string           `json:"effective_time"`
+				ReplacementValidFrom string           `json:"replacement_valid_from"`
+				ReplacementValidTo   string           `json:"replacement_valid_to"`
+				Kind                 memory.ClaimKind `json:"kind"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			invocation, err := mutationInvocation(ctx)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			kind, ratio, err := memoryKindArgument(contract, args.Kind, false, invocation)
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
@@ -770,13 +900,24 @@ func (p *Memory) correctClaimTool() tools.Tool {
 			if args.LiteralKind != "" || args.LiteralValue != "" {
 				object.Literal = &memory.TypedLiteral{Kind: memory.LiteralKind(args.LiteralKind), Value: args.LiteralValue}
 			}
-			proposal, err := p.semantic.PrepareCorrectClaim(ctx, invocation.Scope, memory.CorrectClaimRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, OldClaimID: memory.SemanticID(args.ClaimID), Replacement: memory.ClaimProposition{SubjectEntityID: memory.SemanticID(args.SubjectEntityID), PredicateID: memory.SemanticID(args.PredicateID), Object: object, Polarity: memory.ClaimPolarity(args.Polarity)}, Mode: memory.CorrectionMode(args.Mode), EffectiveTime: effective, ReplacementValidTime: replacementValid})
+			proposal, err := p.semantic.PrepareCorrectClaim(ctx, invocation.Scope, memory.CorrectClaimRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, OldClaimID: memory.SemanticID(args.ClaimID), Replacement: memory.ClaimProposition{SubjectEntityID: memory.SemanticID(args.SubjectEntityID), PredicateID: memory.SemanticID(args.PredicateID), Object: object, Polarity: memory.ClaimPolarity(args.Polarity)}, Mode: memory.CorrectionMode(args.Mode), EffectiveTime: effective, ReplacementValidTime: replacementValid, Kind: kind, StandingBytesPerTokenMilli: ratio})
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
-			return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
-				return p.semantic.ApplyCorrectClaim(applyCtx, invocation.Lease, proposal)
-			})
+			prepare := func(proposal memory.CorrectClaimProposal) (tools.PreparedTool, error) {
+				return preparedSemanticMutation(proposal, proposal.Source.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
+					return p.semantic.ApplyCorrectClaim(applyCtx, invocation.Lease, proposal)
+				})
+			}
+			prepared, err := prepare(proposal)
+			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
+				return prepared, err
+			}
+			switched := proposal
+			switched.Classification = switchedStanding(proposal.Classification)
+			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+			switched.StandingAlternative = nil
+			return withPreparedAlternative(prepared)(prepare(switched))
 		},
 	}
 }
@@ -819,19 +960,27 @@ func (p *Memory) createGraphLinkTool() tools.Tool {
 	}
 }
 
-func (p *Memory) promoteClaimTool() tools.Tool {
+func (p *Memory) promoteClaimTool(contract memoryContract) tools.Tool {
 	properties := mutationProperties()
 	properties["claim_id"] = stringProperty("Exact narrower-scope Claim ID. The harness derives the next broader scope.")
+	if contract == memoryContractStanding {
+		properties["kind"] = memoryKindProperty(false)
+	}
 	return tools.Tool{Schema: toolSchema("memory_promote_claim", "Prepare promotion of one exact Claim to the next harness-derived broader scope and require Action Approval.", properties, "idempotency_key", "claim_id"), NeedsApproval: true,
 		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
 			var args struct {
-				IdempotencyKey string `json:"idempotency_key"`
-				ClaimID        string `json:"claim_id"`
+				IdempotencyKey string           `json:"idempotency_key"`
+				ClaimID        string           `json:"claim_id"`
+				Kind           memory.ClaimKind `json:"kind"`
 			}
 			if err := decodeMemoryArgs(raw, &args); err != nil {
 				return tools.PreparedTool{}, err
 			}
 			invocation, err := mutationInvocation(ctx)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			kind, ratio, err := memoryKindArgument(contract, args.Kind, false, invocation)
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
@@ -843,12 +992,64 @@ func (p *Memory) promoteClaimTool() tools.Tool {
 			if inspection.Scope.Key == "session:"+string(invocation.Scope.SessionID) && contextScopeKey(invocation.Scope) != "global" {
 				destination = contextScopeKey(invocation.Scope)
 			}
-			proposal, err := p.semantic.PreparePromotion(ctx, invocation.Scope, memory.PromotionRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, SourceClaimID: memory.SemanticID(args.ClaimID), DestinationScopeKey: destination})
+			proposal, err := p.semantic.PreparePromotion(ctx, invocation.Scope, memory.PromotionRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, SourceClaimID: memory.SemanticID(args.ClaimID), DestinationScopeKey: destination, Kind: kind, StandingBytesPerTokenMilli: ratio})
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			prepare := func(proposal memory.PromotionProposal) (tools.PreparedTool, error) {
+				return preparedSemanticMutation(proposal, proposal.Evidence.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
+					return p.semantic.ApplyPromotion(applyCtx, invocation.Lease, proposal)
+				})
+			}
+			prepared, err := prepare(proposal)
+			if err != nil || proposal.Classification == nil || proposal.StandingAlternative == nil {
+				return prepared, err
+			}
+			switched := proposal
+			switched.Classification = switchedStanding(proposal.Classification)
+			switched.ProposalSHA256, switched.PreparedSHA256 = proposal.StandingAlternative.ProposalSHA256, proposal.StandingAlternative.PreparedSHA256
+			switched.StandingAlternative = nil
+			return withPreparedAlternative(prepared)(prepare(switched))
+		},
+	}
+}
+
+// setStandingTool marks one existing Claim as always applying, or stops it,
+// through the normal approval path. It is how a memory saved before the
+// standing tier, or saved as an ordinary fact, joins every request.
+func (p *Memory) setStandingTool() tools.Tool {
+	properties := mutationProperties()
+	properties["claim_id"] = stringProperty("Exact Claim ID of an existing memory.")
+	properties["standing"] = openrouter.Property{Type: "boolean", Description: "true: the memory applies to every request. false: it is recalled only when relevant."}
+	properties["kind"] = memoryKindProperty(false)
+	return tools.Tool{Schema: toolSchema("memory_set_standing", "Prepare marking one existing memory as always applying to every request, or no longer, and require Action Approval. Use it when the owner asks for an existing memory to always apply or to stop applying everywhere.", properties, "idempotency_key", "claim_id", "standing"), NeedsApproval: true,
+		Prepare: func(ctx context.Context, raw string) (tools.PreparedTool, error) {
+			var args struct {
+				IdempotencyKey string           `json:"idempotency_key"`
+				ClaimID        string           `json:"claim_id"`
+				Standing       *bool            `json:"standing"`
+				Kind           memory.ClaimKind `json:"kind"`
+			}
+			if err := decodeMemoryArgs(raw, &args); err != nil {
+				return tools.PreparedTool{}, err
+			}
+			if args.Standing == nil {
+				return tools.PreparedTool{}, errors.New("standing is required: true to always apply the memory, false to stop")
+			}
+			invocation, err := mutationInvocation(ctx)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			kind, ratio, err := memoryKindArgument(memoryContractStanding, args.Kind, false, invocation)
+			if err != nil {
+				return tools.PreparedTool{}, err
+			}
+			proposal, err := p.semantic.PrepareClaimStanding(ctx, invocation.Scope, memory.ClaimStandingRequest{IdempotencyKey: args.IdempotencyKey, SourceEventID: invocation.SourceEventID, ClaimID: memory.SemanticID(args.ClaimID), Kind: kind, Standing: *args.Standing, StandingBytesPerTokenMilli: ratio})
 			if err != nil {
 				return tools.PreparedTool{}, err
 			}
 			return preparedSemanticMutation(proposal, proposal.Evidence.EventID, proposal.OperationID, proposal.ProposalSHA256, proposal.PreparedSHA256, func(applyCtx context.Context) (any, error) {
-				return p.semantic.ApplyPromotion(applyCtx, invocation.Lease, proposal)
+				return p.semantic.ApplyClaimStanding(applyCtx, invocation.Lease, proposal)
 			})
 		},
 	}

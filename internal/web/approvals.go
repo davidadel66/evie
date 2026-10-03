@@ -19,13 +19,13 @@ import (
 // channel its answer will arrive on. The channel is buffered so the
 // approve handler can send without waiting for the approver to be at
 // the receive — they race when a context cancels at the same moment.
-func (s *Server) newPending() (string, chan bool) {
+func (s *Server) newPending() (string, chan tools.Decision) {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
 		panic("crypto/rand unavailable: " + err.Error())
 	}
 	id := hex.EncodeToString(b)
-	ch := make(chan bool, 1)
+	ch := make(chan tools.Decision, 1)
 
 	s.mu.Lock()
 	s.pending[id] = ch
@@ -35,7 +35,7 @@ func (s *Server) newPending() (string, chan bool) {
 
 // claimPending is the single first-claimant transition shared by approval POST,
 // visibility loss, and lifecycle cancellation.
-func (s *Server) claimPending(id string) (chan bool, bool) {
+func (s *Server) claimPending(id string) (chan tools.Decision, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ch, ok := s.pending[id]
@@ -56,22 +56,15 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 		ev.ApprovalRequest(id, name, args, preview)
 
 		select {
-		case approved := <-ch:
-			if approved {
-				return tools.Approved
-			}
-			return tools.Declined
+		case decision := <-ch:
+			return decision
 		case <-visibilityCtx.Done():
 			if _, ok := s.claimPending(id); ok {
 				return tools.Expired
 			}
 			// A POST removed the entry first under the same lock. Honor that
 			// already-claimed decision even though the disconnect is now visible.
-			approved := <-ch
-			if approved {
-				return tools.Approved
-			}
-			return tools.Declined
+			return <-ch
 		case <-lifecycleCtx.Done():
 			if _, ok := s.claimPending(id); ok {
 				return tools.Expired
@@ -79,11 +72,7 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 			// A POST claimed the approval first. Return its decision; the
 			// dispatcher resamples lifecycleCtx and still reports cancellation
 			// before observation or execution.
-			approved := <-ch
-			if approved {
-				return tools.Approved
-			}
-			return tools.Declined
+			return <-ch
 		}
 	}
 }
@@ -91,11 +80,13 @@ func (s *Server) approver(visibilityCtx context.Context, ev *sseEvents) tools.Ap
 // handleApprove resolves one pending approval. Taking the channel out
 // of the map under the lock means exactly one answer can ever win; a
 // second POST for the same id finds nothing and 404s, same as an id
-// that already expired.
+// that already expired. Alternative approves the prepared alternative the
+// card offered, such as a memory with "Always applies" switched.
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID      string `json:"id"`
-		Approve bool   `json:"approve"`
+		ID          string `json:"id"`
+		Approve     bool   `json:"approve"`
+		Alternative bool   `json:"alternative"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "body must be JSON with id and approve fields")
@@ -109,6 +100,13 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch <- req.Approve
+	decision := tools.Declined
+	if req.Approve {
+		decision = tools.Approved
+		if req.Alternative {
+			decision = tools.ApprovedAlternative
+		}
+	}
+	ch <- decision
 	w.WriteHeader(http.StatusNoContent)
 }
