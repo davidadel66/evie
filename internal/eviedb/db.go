@@ -1215,6 +1215,10 @@ func openDBAtContextWithHooks(ctx context.Context, path string, hooks openDBAtHo
 		db.Close()
 		return nil, fmt.Errorf("create memory retrieval schema: %w", err)
 	}
+	if err := ensureSessionEpisodes(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("upgrade session episodes: %w", err)
+	}
 	if err := checkSemanticProjectionStartup(ctx, db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("check Semantic Memory projection: %w", err)

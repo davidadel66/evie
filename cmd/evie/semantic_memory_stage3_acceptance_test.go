@@ -724,14 +724,16 @@ func TestSemanticMemoryStage3CrossSurfaceAcceptance(t *testing.T) {
 		t.Fatalf("verify/rebuild changed Episodic Memory: before=%d after=%d error=%v", len(eventsBeforeRestart), len(eventsAfterRebuild), err)
 	}
 	var laterStageObjects int
-	// Stage 4 owns candidate storage and Stage 5 owns retrieval projections.
-	// The original explicit-memory capability contract remains unchanged.
+	// Stage 4 owns candidate storage and Stage 5 owns retrieval projections,
+	// including the session episode index. The original explicit-memory
+	// capability contract remains unchanged.
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM sqlite_schema
 		WHERE name NOT LIKE 'sqlite_%'
 		  AND name NOT GLOB 'memory_retrieval_fts*'
 		  AND name NOT GLOB 'memory_retrieval_event_fts*'
+		  AND name NOT GLOB 'memory_session_episode_fts*'
 		  AND name NOT IN ('memory_dense_vectors','memory_dense_event_vectors')
 		  AND ((lower(name) LIKE '%candidate%' AND
 		        name NOT GLOB 'memory_compiler_*' AND name NOT GLOB 'memory_review_*') OR lower(name) LIKE '%fts%' OR

@@ -393,6 +393,9 @@ func (s *Store) appendEvent(
 	if err := appendConversationProjection(ctx, executor, event); err != nil {
 		return memory.Event{}, fmt.Errorf("project conversation evidence: %w", err)
 	}
+	if err := appendSessionEpisode(ctx, executor, event); err != nil {
+		return memory.Event{}, fmt.Errorf("project session episode: %w", err)
+	}
 	return event, nil
 }
 

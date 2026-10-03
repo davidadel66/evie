@@ -31,7 +31,7 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 	t.Setenv("EVIE_REMOTE_MEMORY", "on")
 	plugin := NewMemory(&stubSemanticKernel{})
 	manifest := plugin.Manifest()
-	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.3.0" {
+	if manifest.ID != MemoryPluginID || manifest.ImplementationVersion != "1.4.0" {
 		t.Fatalf("manifest identity = %s@%s", manifest.ID, manifest.ImplementationVersion)
 	}
 	if err := plugin.Start(context.Background()); err != nil {
@@ -57,14 +57,14 @@ func TestMemoryPluginLifecycleAndFocusedToolCapabilities(t *testing.T) {
 		}
 	}
 	wantIDs := []string{
-		"memory.search", "memory.search_conversations", "memory.expand_conversation",
+		"memory.search", "memory.search_conversations", "memory.expand_conversation", "memory.search_episodes",
 		"memory.list_scopes", "memory.list_objects", "memory.inspect_object", "memory.query_claims",
 		"memory.lookup_alias", "memory.traverse", "memory.remember_literal", "memory.remember_entity",
 		"memory.correct_claim", "memory.create_graph_link", "memory.promote_claim", "memory.retire",
 		"memory.restore", "memory.retract_source", "memory.restore_source", "memory.read_tool_result",
 	}
 	wantSchemas := []string{
-		"memory_search", "memory_search_conversations", "memory_expand_conversation",
+		"memory_search", "memory_search_conversations", "memory_expand_conversation", "memory_search_episodes",
 		"memory_list_scopes", "memory_list_objects", "memory_inspect_object", "memory_query_claims",
 		"memory_lookup_alias", "memory_traverse", "memory_remember_literal", "memory_remember_entity",
 		"memory_correct_claim", "memory_create_graph_link", "memory_promote_claim", "memory_retire",
@@ -153,7 +153,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, schema := range resolved.Toolset.Schemas() {
-		if schema.Function.Name == "memory_search" || schema.Function.Name == "memory_search_conversations" || schema.Function.Name == "memory_expand_conversation" || schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
+		if schema.Function.Name == "memory_search" || schema.Function.Name == "memory_search_conversations" || schema.Function.Name == "memory_expand_conversation" || schema.Function.Name == "memory_search_episodes" || schema.Function.Name == "memory_list_scopes" || schema.Function.Name == "memory_list_objects" ||
 			schema.Function.Name == "memory_inspect_object" || schema.Function.Name == "memory_query_claims" ||
 			schema.Function.Name == "memory_lookup_alias" || schema.Function.Name == "memory_traverse" {
 			t.Fatalf("remote-memory opt-out exposed read schema %q", schema.Function.Name)
@@ -161,7 +161,7 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	}
 	for _, capability := range resolved.Receipt.Capabilities {
 		switch CapabilityID(capability.ID) {
-		case MemorySearchCapabilityID, MemorySearchConversationsCapabilityID, MemoryExpandConversationCapabilityID, MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
+		case MemorySearchCapabilityID, MemorySearchConversationsCapabilityID, MemoryExpandConversationCapabilityID, MemorySearchEpisodesCapabilityID, MemoryListScopesCapabilityID, MemoryListObjectsCapabilityID, MemoryInspectObjectCapabilityID,
 			MemoryQueryClaimsCapabilityID, MemoryLookupAliasCapabilityID, MemoryTraverseCapabilityID:
 			t.Fatalf("remote-memory opt-out pinned read Capability %q", capability.ID)
 		}
@@ -174,8 +174,8 @@ func TestRemoteMemoryOptOutRemovesReadCapabilitiesFromComposition(t *testing.T) 
 	if !containsSchema(resolved.Toolset, "read_tool_result") {
 		t.Fatal("remote-memory opt-out removed the stored tool result reader")
 	}
-	// Nine Memory reads plus the uncompiled Subagents delegation, report and continuation capabilities.
-	if len(resolved.Warnings) != 12 {
+	// Ten Memory reads plus the uncompiled Subagents delegation, report and continuation capabilities.
+	if len(resolved.Warnings) != 13 {
 		t.Fatalf("remote-memory opt-out warnings = %v, want one per unavailable read Capability", resolved.Warnings)
 	}
 }

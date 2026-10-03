@@ -31,7 +31,7 @@ func TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch(t 
 	client := &expansionBoundaryClient{reply: func(request openrouter.ChatRequest, call int) step {
 		for _, schema := range request.Tools {
 			switch schema.Function.Name {
-			case "memory_search", "memory_search_conversations", "memory_expand_conversation":
+			case "memory_search", "memory_search_conversations", "memory_expand_conversation", "memory_search_episodes":
 				t.Fatalf("disabled model read was advertised before dispatch: %s", schema.Function.Name)
 			}
 		}
@@ -59,6 +59,7 @@ func TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch(t 
 				toolCall("omitted-accepted", "memory_search", `{"query":"vegetarian"}`),
 				toolCall("omitted-conversation", "memory_search_conversations", `{"query":"vegetarian"}`),
 				toolCall("omitted-expansion", "memory_expand_conversation", `{"anchor_id":"unavailable","before":1,"after":1}`),
+				toolCall("omitted-episodes", "memory_search_episodes", `{"query":"vegetarian"}`),
 				toolCall("allowed-check", "check_request", `{}`))
 		}
 		return assistantStep("The supplied preference supports a vegetarian dinner.", nil)
@@ -71,7 +72,7 @@ func TestAutomaticMemoryRecallCanNarrowModelReadsBeforeCompositionAndDispatch(t 
 	if len(client.reqs) != 2 || checks != 1 {
 		t.Fatalf("unrelated capability was changed: provider requests=%d checks=%d", len(client.reqs), checks)
 	}
-	for _, id := range []string{"omitted-accepted", "omitted-conversation", "omitted-expansion"} {
+	for _, id := range []string{"omitted-accepted", "omitted-conversation", "omitted-expansion", "omitted-episodes"} {
 		found := false
 		for _, message := range client.reqs[1].Messages {
 			if message.Role == "tool" && message.ToolCallID == id {

@@ -18,7 +18,7 @@ import (
 const (
 	MemoryPluginID              PluginID = "memory"
 	MemoryContractVersion                = "1.0.0"
-	memoryImplementationVersion          = "1.3.0"
+	memoryImplementationVersion          = "1.4.0"
 	memoryReadOutputLimit                = 64 * 1024
 )
 
@@ -56,6 +56,7 @@ var memoryCapabilityDescriptors = []memoryCapabilityDescriptor{
 	{id: MemorySearchCapabilityID, read: true, build: (*Memory).searchTool},
 	{id: MemorySearchConversationsCapabilityID, read: true, build: (*Memory).searchConversationsTool},
 	{id: MemoryExpandConversationCapabilityID, read: true, build: (*Memory).expandConversationTool},
+	{id: MemorySearchEpisodesCapabilityID, read: true, build: (*Memory).searchEpisodesTool},
 	{id: MemoryListScopesCapabilityID, read: true, build: (*Memory).listScopesTool},
 	{id: MemoryListObjectsCapabilityID, read: true, build: (*Memory).listObjectsTool},
 	{id: MemoryInspectObjectCapabilityID, read: true, build: (*Memory).inspectObjectTool},
@@ -135,7 +136,7 @@ func (p *Memory) Manifest() Manifest {
 		contracts[i] = CapabilityContract{ID: capability.ID, Version: MemoryContractVersion}
 	}
 	var compatibility []ImplementationCompatibility
-	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+	for _, version := range []string{"1.0.0", "1.1.0", "1.2.0", "1.3.0"} {
 		legacy := p.ResumableToolCapabilities(version)
 		evidence := make([]CapabilityCompatibility, len(legacy))
 		for i, c := range legacy {
@@ -165,16 +166,20 @@ func (p *Memory) ToolCapabilities() []ToolCapability {
 // Existing sessions retain their exact pre-applicability schemas and behavior.
 // New sessions use the current capabilities; no saved receipt is rewritten.
 func (p *Memory) ResumableToolCapabilities(version string) []ToolCapability {
-	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" {
+	if version != "1.0.0" && version != "1.1.0" && version != "1.2.0" && version != "1.3.0" {
 		return nil
 	}
 	var capabilities []ToolCapability
 	for _, capability := range p.ToolCapabilities() {
-		// Version 1.3.0 added the stored tool result reader.
-		if capability.ID == MemoryReadToolResultCapabilityID {
+		// Version 1.4.0 added past-session episode search.
+		if capability.ID == MemorySearchEpisodesCapabilityID {
 			continue
 		}
-		if version == "1.2.0" || (capability.ID != MemorySearchCapabilityID &&
+		// Version 1.3.0 added the stored tool result reader.
+		if capability.ID == MemoryReadToolResultCapabilityID && version != "1.3.0" {
+			continue
+		}
+		if version == "1.2.0" || version == "1.3.0" || (capability.ID != MemorySearchCapabilityID &&
 			capability.ID != MemorySearchConversationsCapabilityID && capability.ID != MemoryExpandConversationCapabilityID) {
 			capabilities = append(capabilities, capability)
 		}
