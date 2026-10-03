@@ -89,6 +89,58 @@ func (o *Ollama) Extract(ctx context.Context, g memory.CompilerGeneration, reque
 	result.Raw = []byte(*response.Response)
 	return result, nil
 }
+
+// ErrRuntimeOutputInvalid reports a chat reply the runtime did not finish
+// (truncated at its output limit, wrong model, or an error field). With a
+// pinned seed and temperature the same request fails the same way again.
+var ErrRuntimeOutputInvalid = errors.New("invalid or truncated runtime output")
+
+// Chat runs one JSON-format chat request on the pinned local model for the
+// memory background pass (Stage 4). It verifies the pinned configuration
+// first (metadata only), bounds input and output, and returns the reply
+// with the runtime's prompt and output token counts. The endpoint remains
+// explicit literal loopback HTTP, with no redirects.
+func (o *Ollama) Chat(ctx context.Context, g memory.CompilerGeneration, system, user string, maxTokens int64) (string, int64, int64, error) {
+	id, _, err := memory.CompilerGenerationIdentity(g)
+	if err != nil || id != o.generationID {
+		return "", 0, 0, fmt.Errorf("%w: compiler generation identity mismatch", eviedb.ErrCompilerConfiguration)
+	}
+	if err := o.VerifyCompilerConfiguration(ctx, g); err != nil {
+		return "", 0, 0, err
+	}
+	if maxTokens <= 0 || maxTokens > int64(g.Decoding.OutputTokens) {
+		maxTokens = int64(g.Decoding.OutputTokens)
+	}
+	body := map[string]any{"model": g.ModelArtifact, "stream": false, "format": "json",
+		"messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": user}},
+		"options":  map[string]any{"num_ctx": g.Decoding.ContextTokens, "num_predict": maxTokens, "seed": g.Decoding.Seed, "temperature": g.Decoding.Temperature}}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	if len(encoded) > memory.CompilerMaxBytes {
+		return "", 0, 0, errors.New("serialized transport input limit")
+	}
+	var response struct {
+		Model   string `json:"model"`
+		Message *struct {
+			Content string `json:"content"`
+		} `json:"message"`
+		Done            bool   `json:"done"`
+		DoneReason      string `json:"done_reason"`
+		Error           string `json:"error"`
+		PromptEvalCount int64  `json:"prompt_eval_count"`
+		EvalCount       int64  `json:"eval_count"`
+	}
+	if err := o.call(ctx, "POST", "/api/chat", body, &response); err != nil {
+		return "", 0, 0, err
+	}
+	if !response.Done || response.Model != g.ModelArtifact || response.Message == nil || response.Error != "" || response.DoneReason != "stop" {
+		return "", response.PromptEvalCount, response.EvalCount, ErrRuntimeOutputInvalid
+	}
+	return response.Message.Content, response.PromptEvalCount, response.EvalCount, nil
+}
+
 func (o *Ollama) call(ctx context.Context, method, path string, body any, target any) error {
 	var encoded []byte
 	if body != nil {

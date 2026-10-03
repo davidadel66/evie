@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { BackgroundPassStatus } from "./BackgroundPassStatus";
 import { CandidateInbox } from "./CandidateInbox";
 import { ProposalInbox } from "./ProposalInbox";
 import { pendingLabel, usePendingMemoryProposals } from "./pendingProposals";
@@ -16,7 +17,7 @@ export function MemoryReviewTabs({ children }: { children: ReactNode }) {
       <details className="relative py-2"><summary aria-label="Memory tools" className="text-muted-text hover:text-body cursor-pointer rounded px-2 py-1 text-sm">More</summary><div className="border-hair bg-sidebar absolute right-0 top-full z-40 w-52 rounded-lg border p-1 shadow-lg"><button type="button" className="text-body hover:bg-hover w-full rounded px-3 py-2 text-left text-sm" onClick={(event) => { setView("health"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Background activity</button></div></details>
     </nav>
     {view === "review"
-      ? <div className="flex min-h-0 flex-1 flex-col overflow-auto"><ProposalInbox onChanged={() => setReviewed((count) => count + 1)} /><CandidateInbox /></div>
+      ? <div className="flex min-h-0 flex-1 flex-col overflow-auto"><BackgroundPassStatus refreshKey={reviewed} /><ProposalInbox onChanged={() => setReviewed((count) => count + 1)} /><CandidateInbox /></div>
       : view === "health" ? <CompilerHealth /> : children}
   </section>;
 }

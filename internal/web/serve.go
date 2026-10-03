@@ -90,6 +90,7 @@ type Server struct {
 	memoryEvidence    MemoryEvidenceInspector
 	databaseInspector DatabaseInspector
 	candidateReview   CandidateReviewKernel
+	memoryBackground  MemoryBackgroundStatus
 	usageReader       UsageReader
 	spendingService   SpendingService
 	terminalMu        sync.Mutex
@@ -240,6 +241,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerSpendingAccountRoutes(mux)
 	s.registerCandidateReviewRoutes(mux)
 	s.registerMemoryProposalRoutes(mux)
+	s.registerMemoryBackgroundRoutes(mux)
 	s.registerFolderRoutes(mux)
 	s.registerRepositoryInstructionRoutes(mux)
 	s.registerTerminalRoutes(mux)

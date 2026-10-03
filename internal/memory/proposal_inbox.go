@@ -25,11 +25,13 @@ const (
 )
 
 func (r MemoryProposalReason) Valid() bool {
-	return r == MemoryProposalNotRequested || r == MemoryProposalNoExplicitCue
+	return r == MemoryProposalNotRequested || r == MemoryProposalNoExplicitCue || r == MemoryProposalBackground
 }
 
 // Inbox tools: only the two remember tools create new memories, so only
-// they route proactive proposals to the inbox.
+// they route proactive in-turn proposals to the inbox. The background pass
+// also queues corrections and retirements (CorrectClaimToolName,
+// RetireToolName).
 const (
 	RememberLiteralToolName = "memory_remember_literal"
 	RememberEntityToolName  = "memory_remember_entity"
@@ -86,14 +88,19 @@ func explicitCueWords(message string) []string {
 	return strings.FieldsFunc(folded, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
-// QueuedMemoryProposal is one exact prepared remember proposal routed to the
-// review inbox. Exactly one of Literal and Entity is set.
+// QueuedMemoryProposal is one exact prepared proposal routed to the review
+// inbox. Exactly one of Literal, Entity, Correction and Lifecycle is set, the
+// one ToolName prepares. In-turn proposals are remembers citing their tool
+// intent; background proposals (Reason MemoryProposalBackground) cite no
+// intent and may also be a correction or a retirement.
 type QueuedMemoryProposal struct {
 	ToolName      string
 	IntentEventID EventID
 	Reason        MemoryProposalReason
 	Literal       *RememberLiteralProposal
 	Entity        *RememberEntityProposal
+	Correction    *CorrectClaimProposal
+	Lifecycle     *MemoryLifecycleProposal
 }
 
 // MemoryProposalQueued is what queueing reports to the model. Duplicate means
@@ -120,7 +127,30 @@ type MemoryProposalItem struct {
 	PreparedSHA256 string               `json:"prepared_sha256"`
 	Approvable     bool                 `json:"approvable"`
 	Problem        string               `json:"problem,omitempty"`
+	// Change describes what approving does in plain terms: add a memory,
+	// update (correct) an existing one, or retire one.
+	Change *MemoryProposalChange `json:"change,omitempty"`
 }
+
+// MemoryProposalChange is the owner-facing summary of an inbox proposal.
+// Current is the existing memory's Claim text for an update or retirement;
+// Replacement the new Claim text of an update. Evidence is the owner's words
+// the change cites (the bound span, or the whole request message for a
+// retirement), empty when the value is Evie-proposed.
+type MemoryProposalChange struct {
+	Action       string `json:"action"`
+	Current      string `json:"current,omitempty"`
+	Replacement  string `json:"replacement,omitempty"`
+	Evidence     string `json:"evidence,omitempty"`
+	EvieProposed bool   `json:"evie_proposed,omitempty"`
+}
+
+// Inbox change actions.
+const (
+	MemoryChangeAdd    = "add"
+	MemoryChangeUpdate = "update"
+	MemoryChangeRetire = "retire"
+)
 
 // MemoryProposalPage lists pending proposals, oldest first. Pending counts
 // every pending proposal, including any beyond the listed bound.

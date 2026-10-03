@@ -3,7 +3,20 @@
 // proposal, the same document an approval card shows; approving it applies
 // exactly that proposal, or its "Always applies" alternative.
 
-export type MemoryProposalReason = "not_requested" | "no_explicit_cue";
+/** background: the always-on background pass found it in the owner's
+ *  conversations (memory architecture Stage 4); the others were proposed by
+ *  Evie during a turn. */
+export type MemoryProposalReason = "not_requested" | "no_explicit_cue" | "background";
+
+/** What approving does: add a memory, update (correct) one, or retire one.
+ *  current and replacement are Claim text; evidence is the owner's words. */
+export type MemoryProposalChange = {
+  action: "add" | "update" | "retire";
+  current?: string;
+  replacement?: string;
+  evidence?: string;
+  evie_proposed?: boolean;
+};
 
 export type MemoryProposalItem = {
   proposal_id: string;
@@ -18,6 +31,7 @@ export type MemoryProposalItem = {
   prepared_sha256: string;
   approvable: boolean;
   problem?: string;
+  change?: MemoryProposalChange;
 };
 
 export type MemoryProposalPage = { items: MemoryProposalItem[]; pending: number };

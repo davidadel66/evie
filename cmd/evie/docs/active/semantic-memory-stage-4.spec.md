@@ -1,3 +1,12 @@
+> **2026-10-03:** the always-on
+> [background memory pass](memory.spec.md#background-memory-pass) (memory
+> architecture plan Stage 4, decision 4) now covers automatic extraction for
+> every root conversation and queues exact prepared proposals in the review
+> inbox. Per-conversation activation is retired; this specification's
+> compiler, candidate and review contracts remain for existing activations,
+> explicit `memory-compile` runs and their candidates. See the
+> [2026-10-03 decision](memory.decisions.md).
+
 ## Problem Statement
 
 Evie preserves conversations as Episodic Memory and supports explicit, approved

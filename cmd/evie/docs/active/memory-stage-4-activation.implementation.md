@@ -1,5 +1,16 @@
 # New-evidence compiler activation
 
+> **Retired 2026-10-03.** The always-on
+> [background memory pass](memory.spec.md#background-memory-pass) (memory
+> architecture Stage 4) replaced per-conversation activation: it reads every
+> root conversation's new owner messages and queues proposals in the review
+> inbox. `memory-compiler activate` and `resume` now refuse with a pointer to
+> `evie memory-background status`. `memory-compiler status` and `disable`
+> remain, so activations made before the change stay readable and can be
+> closed; they keep running under `EVIE_COMPILER_CONFIG` until disabled, and
+> their candidates stay reviewable. The record below describes the retired
+> commands as built.
+
 Engineering record for [#138](https://github.com/davidadel66/evie/issues/138),
 under the binding [work contract](memory-stage-4-work-contract.decisions.md)
 and [closure contract](memory-stage-4-evidence-contract.decisions.md).

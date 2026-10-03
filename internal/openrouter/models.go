@@ -3,7 +3,9 @@ package openrouter
 import (
 	"context"
 	"errors"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,6 +62,44 @@ func (c *Client) ListChatModels(ctx context.Context) ([]Model, error) {
 		return models[i].ID < models[j].ID
 	})
 	return models, nil
+}
+
+// ModelPricing is a model's catalog price in USD per token.
+type ModelPricing struct {
+	Prompt     float64
+	Completion float64
+}
+
+// ModelPricing reads one model's per-token prices from the public model
+// catalog. It fails when the model is not listed or its prices are not
+// non-negative numbers, so a caller can fall back to a conservative price.
+func (c *Client) ModelPricing(ctx context.Context, model string) (ModelPricing, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var response struct {
+		Data []struct {
+			ID      string `json:"id"`
+			Pricing struct {
+				Prompt     string `json:"prompt"`
+				Completion string `json:"completion"`
+			} `json:"pricing"`
+		} `json:"data"`
+	}
+	if err := c.getMetadata(ctx, "/models", &response, 8<<20); err != nil {
+		return ModelPricing{}, err
+	}
+	for _, entry := range response.Data {
+		if entry.ID != model {
+			continue
+		}
+		prompt, promptErr := strconv.ParseFloat(entry.Pricing.Prompt, 64)
+		completion, completionErr := strconv.ParseFloat(entry.Pricing.Completion, 64)
+		if promptErr != nil || completionErr != nil || prompt < 0 || completion < 0 || math.IsNaN(prompt) || math.IsNaN(completion) {
+			return ModelPricing{}, errors.New("model catalog price is not a non-negative number")
+		}
+		return ModelPricing{Prompt: prompt, Completion: completion}, nil
+	}
+	return ModelPricing{}, errors.New("model is not in the catalog")
 }
 
 // ResolveChatContextProfile keeps explicit limits strict. The default working

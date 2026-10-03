@@ -4,7 +4,7 @@
 // is saved until the owner approves it.
 
 import { useCallback, useEffect, useState } from "react";
-import { memoryProposalAPI, type MemoryProposalAPI, type MemoryProposalItem, type MemoryProposalPage } from "../api/memoryProposals";
+import { memoryProposalAPI, type MemoryProposalAPI, type MemoryProposalChange, type MemoryProposalItem, type MemoryProposalPage } from "../api/memoryProposals";
 import { AlwaysApplies, MemoryApproval } from "../chat/ApprovalCard";
 import { readApprovalArgs } from "../chat/approvalArgs";
 import { useMemoryPresentation } from "../memory/presentation";
@@ -87,7 +87,7 @@ export function ProposalInboxView({ state, onAlwaysApplies, onApprove, onDecline
       <div className="flex-1" />
       <button type="button" className={button} disabled={state.busy} onClick={onRefresh}>Refresh</button>
     </div>
-    <p className="text-muted-text mt-1 text-xs">Evie noticed these herself. Nothing is saved until you approve it.</p>
+    <p className="text-muted-text mt-1 text-xs">Evie noticed these herself, during a chat or later in your conversations. Nothing is saved until you approve it.</p>
     {state.problem && <p role="alert" className="border-danger-hair bg-danger-bg text-danger-ink my-3 rounded border p-3 whitespace-pre-wrap">{state.problem}</p>}
     {state.notice && <p role="status" className="text-ok-ink my-3">{state.notice}</p>}
     {items.length > 0 && <ul className="mt-3 space-y-3">
@@ -96,6 +96,30 @@ export function ProposalInboxView({ state, onAlwaysApplies, onApprove, onDecline
     </ul>}
     {pending > items.length && <p className="text-muted-text mt-3 text-xs">{pending - items.length} more after these.</p>}
   </section>;
+}
+
+/** ownerText shows a Claim's owner anchor as the owner's name. */
+function ownerText(text: string | undefined, ownerName: string): string {
+  if (!text) return "";
+  for (const prefix of ["owner — ", "Denied: owner — "]) {
+    if (text.startsWith(prefix)) return `${prefix.startsWith("Denied") ? "Not: " : ""}${ownerName} — ${text.slice(prefix.length)}`;
+  }
+  return text;
+}
+
+/** ChangeSummary shows a background update or retirement of an existing
+ *  memory in plain terms, with the owner's words it cites. */
+function ChangeSummary({ change, ownerName }: { change: MemoryProposalChange; ownerName: string }) {
+  return <div className="px-4 py-3 text-sm">
+    <p className="text-ink font-medium">{change.action === "update" ? "Update" : "Retire"}</p>
+    <p className={change.action === "update" ? "text-muted-text line-through" : "text-body"}>{ownerText(change.current, ownerName) || "a memory that can no longer be read"}</p>
+    {change.action === "update" && <p className="text-body">→ {ownerText(change.replacement, ownerName)}</p>}
+    {change.evidence
+      ? <><p className="text-muted-text mt-2 text-xs">Your words</p><blockquote className="border-hair text-body mt-1 border-l-2 pl-3 whitespace-pre-wrap">{change.evidence}</blockquote></>
+      : change.evie_proposed
+        ? <p className="text-amber-ink mt-2 text-xs">Evie’s proposal: your words don’t state this value. Approving saves it as Evie-proposed, not as something you said.</p>
+        : null}
+  </div>;
 }
 
 function ProposalItem({ item, busy, chosen, onAlwaysApplies, onApprove, onDecline }: {
@@ -111,15 +135,19 @@ function ProposalItem({ item, busy, chosen, onAlwaysApplies, onApprove, onDeclin
   const classification = view.shape === "memory" || view.shape === "json" ? view.classification : undefined;
   const alwaysApplies = chosen ?? classification?.standing ?? false;
   const queued = new Date(item.queued_at);
+  const change = item.change?.action === "update" || item.change?.action === "retire" ? item.change : undefined;
   return <li className="border-hair bg-card overflow-hidden rounded border" aria-label="Memory proposal">
     <p className="text-muted-text px-4 pt-3 text-xs">
+      {item.reason === "background" && <span className="text-teal mr-2 font-medium">Found in your conversations</span>}
       From {item.session_title || "a conversation"}{Number.isNaN(queued.getTime()) ? "" : ` · ${queued.toLocaleString()}`}
       {item.revision > 1 && " · Updated against newer memory since Evie proposed it"}
     </p>
     {item.reason === "no_explicit_cue" && <p className="text-amber-ink px-4 pt-2 text-xs">Evie said you asked for this, but your message didn’t ask her to remember anything, so it waits here.</p>}
-    {view.shape === "memory"
-      ? <MemoryApproval view={view} />
-      : <pre className="text-muted-text m-0 overflow-x-auto px-4 py-3 font-mono text-[11.5px] leading-[1.6]">{item.proposal}</pre>}
+    {change
+      ? <ChangeSummary change={change} ownerName={ownerName} />
+      : view.shape === "memory"
+        ? <MemoryApproval view={view} />
+        : <pre className="text-muted-text m-0 overflow-x-auto px-4 py-3 font-mono text-[11.5px] leading-[1.6]">{item.proposal}</pre>}
     {classification && <AlwaysApplies classification={classification} checked={alwaysApplies}
       onChange={item.approvable && !busy ? (value) => onAlwaysApplies(item, value) : undefined} />}
     {!item.approvable && item.problem && <p className="text-amber-ink px-4 py-2 text-xs">This can’t be approved now: {item.problem}</p>}

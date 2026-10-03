@@ -333,6 +333,16 @@ execute again.
     memory. A remember call shows the card only when the model says the owner
     asked (`requested_by_owner`) and the harness finds an explicit memory cue
     in the current owner message. See [Proactive Memory](#proactive-memory).
+19. The background pass reads only owner messages of root conversations,
+    new since each conversation's durable cursor, and only proposes: every
+    ADD, UPDATE (correction) or INVALIDATE (retirement) is an exact prepared
+    proposal in the review inbox, prepared through the approval card's own
+    paths, and nothing applies without the owner's approval. It sends owner
+    messages to a remote model only with `EVIE_REMOTE_MEMORY=on`, never
+    sends a message with a detected secret, never commits while a live turn
+    holds the conversation, and never makes a model call that would pass
+    its pass budget or daily caps. See
+    [Background Memory Pass](#background-memory-pass).
 
 ## Scope And Authority
 
@@ -859,6 +869,12 @@ cannot write another Workspace or project scope.
 
 ### Local inference boundary
 
+Amended 2026-10-03: the always-on [background pass](#background-memory-pass)
+may extract from owner messages with a pinned remote model, but only with
+`EVIE_REMOTE_MEMORY=on` (David's decision 4 is the explicit policy the
+paragraph below anticipated); it proposes inbox items, never candidates or
+accepted memory. The rest of this section describes the opt-in compiler.
+
 The memory compiler has no silent remote fallback. It uses an explicitly
 configured loopback or Unix-socket OpenAI-compatible endpoint such as Ollama, LM
 Studio, or llama.cpp; redirects and non-loopback endpoints are rejected. Stage 4
@@ -1380,6 +1396,151 @@ framed as untrusted semantic memory data, needs `EVIE_REMOTE_MEMORY=on`
 (absent from compositions without it), takes no scope or session argument and
 is removed from delegated workers with the other model-directed reads.
 
+## Background Memory Pass
+
+Stage 4 of the [memory architecture plan](../../../../docs/memory-architecture.md)
+(decision 4) replaces per-conversation compiler activation with an always-on
+background pass (Letta sleep-time, LangMem background formation, Mem0's
+update operations). It proposes; the owner approves. Code:
+`internal/memorybackground` (pass, prompts, models) and
+`internal/eviedb/memory_background.go` (cursors, runs, commit).
+
+**What it reads.** Only owner user messages of root conversations, never
+assistant, tool, web, compaction, compiler or delegated-child text, so
+third-party text cannot plant a fact about the owner. A message with a
+detected secret and a local slash command are covered (the cursor passes
+them) but never sent. Each message sent is cut at 4 KiB with a visible
+marker; a batch holds at most 30 messages and 24 KiB.
+
+**When.** A conversation is due when it has new owner messages since its
+durable cursor and either has been idle for 10 minutes
+(`EVIE_MEMORY_BACKGROUND_IDLE_MINUTES`) or has 20 new owner messages
+(`EVIE_MEMORY_BACKGROUND_TURNS`), is active, is not held by a live turn, and
+is not backing off after a failure. Long-lived REPL and `evie serve`
+processes tick every minute and serve at most four conversations per tick,
+one pass at a time; cooperating processes share one durable runner lease.
+Activation (the first enabled start) captures a frontier: conversations that
+existed then are read only from their latest event on, newer ones from their
+start. Historical backfill stays a separate explicit choice.
+
+**Pipeline.** For each batch:
+1. *Extract* (one call): candidate owner-subject literal memories with kind
+   (`preference`, `instruction`, `profile_fact`, `workspace_brief`, `fact`),
+   applicability (`profile` or `workspace`), Predicate token and label, one
+   typed value, polarity, and the index of the stating message. The prompt
+   lists the Predicate vocabulary already in use so tokens are reused.
+2. *Route* by meaning: profile memories go to Global; Workspace memories to
+   the conversation's own Workspace or project; a Workspace memory in a
+   Global conversation, a `workspace_brief` for the profile or a
+   `profile_fact` for the Workspace is dropped.
+3. *Compare* each candidate with the current memories the conversation can
+   read (Global, its Workspace or project, itself) and the pending inbox
+   remembers in those scopes: a deterministic lexical score (same Predicate
+   token, label, value and text overlap) plus a boost for Claims the
+   full-text and dense retriever returns, top 8.
+4. *Decide*: an exact match (same token or label, value and polarity) is a
+   NOOP and a candidate with nothing similar an ADD, both without a model
+   call; the rest go to one decision call choosing ADD, UPDATE (mode
+   `changed` or `error`), INVALIDATE or NOOP against the memories shown with
+   it under short handles.
+5. *Prepare* every non-NOOP result through the approval card's own paths:
+   ADD is `PrepareRememberLiteral`, UPDATE is `PrepareCorrectClaim` (old
+   Claim's subject and Predicate, the candidate's value; `changed` takes
+   the stating message's time as effective time), INVALIDATE is
+   `PrepareMemoryLifecycle` retire (never deletion). Source binding to the
+   exact owner span, `evie_proposed` for a value the message does not
+   state, kind and standing default, scope rules and the standing budget at
+   approval all apply unchanged. A correction or retirement may target only
+   a Claim in the conversation's own Context Scope (the card tools' fence);
+   a pending proposal is never changed; one Claim gets one change per pass;
+   an identical current Claim is a NOOP, and an identical retired or
+   superseded one is skipped (restoring is the owner's explicit action).
+6. *Commit* under the conversation's turn lease (holder
+   `memory-background:…`, 10-second expiry, never held during model calls,
+   released right after one short transaction): the proposals and the
+   cursor move commit together with a compare-and-set on the cursor. A live
+   turn makes the commit wait up to a minute, then the run is deferred and
+   the batch runs again later. A pass whose batch another process committed
+   first is recorded as `superseded`, for its spend only.
+
+**Inbox.** Every non-NOOP result is an exact prepared proposal in
+`memory_proposal_inbox` with reason `background` and no tool intent;
+`memory_correct_claim` and `memory_retire` join the two remember tools
+there, with the target Claim recorded. It is labelled "Found in your
+conversations" and shows, for an update or retirement, the current memory,
+the replacement and the owner's words. Queueing reports duplicates of a
+pending proposal, skips a memory the owner declined before (same dedupe
+key), skips a second pending change to the same Claim, and refuses any
+proposal the secret fence flags. Revalidation and approval are the Stage 2
+paths: a stale proposal is prepared again from its exact request, approval
+records the durable approval in the source conversation and runs the
+ordinary Apply (memory full applies). Idempotency keys are derived from the
+conversation, source message and proposed change, so a repeated batch
+proposes the identical change under the identical key.
+
+**Model.** Default `deepseek/deepseek-v4.1-flash` through OpenRouter Chat
+Completions, pinned: `EVIE_MEMORY_BACKGROUND_MODEL` must be
+`vendor/model`, never a `~` or `latest` alias, the auto router, or the
+`:batch` variant (OpenRouter serves `:batch` only through its asynchronous
+Batch API). Requests use `response_format: json_object`, temperature 0, low
+reasoning effort, no tools. A remote model requires `EVIE_REMOTE_MEMORY=on`
+and `OPENROUTER_API_KEY`; otherwise, or with
+`EVIE_MEMORY_BACKGROUND=local`, the pass uses the pinned loopback extractor
+of `EVIE_COMPILER_CONFIG` (Ollama `/api/chat`, JSON format, metadata
+verification first). With neither, or with `EVIE_MEMORY_BACKGROUND=off`,
+it is disabled and says why.
+
+**Output contract.** Both replies are decoded strictly
+(`memory.DecodeCompilerJSON`: one object, no duplicate or unknown keys,
+every field present). Shape, closed values, message and candidate indexes,
+the 8-candidate bound and decision targets are hard requirements: any
+violation rejects the whole reply as malformed. An item whose content cannot
+become a memory (non-canonical value, invalid token, secret, wrong scope) is
+dropped and counted. The prompts are `memory-background-v1`, recorded with
+every run's model identity.
+
+**Costs and robustness.** Before every call the pass reserves its estimated
+input (three bytes per token) plus its whole output allowance (4,000 tokens
+to extract, 3,000 to decide) against a 32,000-token pass budget
+(`EVIE_MEMORY_BACKGROUND_PASS_TOKENS`) and today's caps since midnight UTC:
+300,000 tokens (`EVIE_MEMORY_BACKGROUND_DAILY_TOKENS`) and $0.25
+(`EVIE_MEMORY_BACKGROUND_DAILY_USD`, priced from the OpenRouter catalog,
+else a conservative $2 / $8 per million fallback; local models cost
+nothing). Neither token setting may be below 32,000: the decision request
+lists each compared memory once and cuts Claim text at 200 bytes and the
+owner's words at 300, so the largest batch and decision fit the default
+pass budget together. A call that would pass a cap is not made. Spend is
+recorded from reported usage, or the estimate when usage is missing or a
+failed call may have billed. A failure that proved nothing was generated
+(no response, 429, 502, 503, 504) is retried twice with backoff honoring
+Retry-After (the Stage 2 provider rule); any other failure keeps the cursor
+and backs the conversation off from 1 minute doubling to 1 hour. After
+three consecutive failures that would repeat identically (a malformed
+reply, a call beyond the pass budget, a truncated local reply) the batch is
+skipped: the cursor moves past it and the skipped run stays visible.
+Provider and network failures never skip a batch. Shutdown cancels the
+in-flight call and commits nothing; the cursor lets the next process redo
+the batch.
+
+**Status.** `evie memory-background status` and the web Memory → Review tab
+show whether the pass is on (or why not), provider and model, triggers,
+caps, today's spend and what remains, the last run and last problem, skipped
+batches, pending background proposals and each recent conversation's cursor,
+pending owner messages, failures and next attempt. Status carries no
+message, proposal or memory text (conversation titles only), and a run's
+recorded error never quotes model output.
+
+**Compaction seam.** `Runner.PassThrough(sessionID, through)` runs passes
+over the owner messages up to an event sequence regardless of triggers, for
+Stage 10 (memory flush before compaction). It is not wired yet.
+
+**Per-conversation activation retired.** `memory-compiler activate` and
+`resume` refuse and point here. `memory-compiler status` and `disable` stay,
+existing activations keep running under a configured compiler host until
+disabled, and their candidates stay reviewable in the Review tab. Entity
+(Entity-to-Entity) memories are not extracted by the pass; the in-turn
+`memory_remember_entity` remains the way to propose them.
+
 ## Explicit Memory Operations
 
 | Operation | Authority | Effect |
@@ -1390,6 +1551,7 @@ is removed from delegated workers with the other model-directed reads.
 | `memory_overview` | read-only | standing set plus current profile and Workspace memories, with the pending review count |
 | `/remember` or approved `remember` | local user command/approval | active claim in harness-bound default Context Scope or explicit local session scope |
 | unrequested `remember` | review inbox approval | queued exact proposal; applies only when the owner approves it in the inbox |
+| background pass ADD / UPDATE / INVALIDATE | review inbox approval | queued exact remember, correction or retirement found in owner messages; applies only when approved in the inbox |
 | `correct_memory` | local user command/approval | mode/effective-time correction plus supersession |
 | `promote_memory` | local user command/approval | new global claim linked to Workspace or project evidence |
 | `memory_set_standing` | approval | mark an existing claim standing or not (standing tier) |
@@ -1432,6 +1594,10 @@ receive that authority.
   `EVIE_REMOTE_MEMORY=on`; pending inbox proposals are counted, never sent.
 - a model-set `requested_by_owner` cannot force an approval card: the harness
   also requires an explicit memory cue in the owner's own message.
+- the background pass sends only owner messages of root conversations
+  (secret-bearing ones withheld) and only with `EVIE_REMOTE_MEMORY=on` for a
+  remote model; its replies are strictly validated data, and everything it
+  finds waits in the review inbox.
 - retrieved memory, Skills, and free-form procedural text cannot authorize tools
   or change approval requirements. The separate Workflow Approval path may grant
   only code-enforced Standing Authority declared by one typed definition.
@@ -1578,6 +1744,15 @@ snapshot without model, Capability, network, or external-effect calls.
 accepted design choices and defines the prerequisite contracts, standalone
 model spike, integrated pilot, and independently reviewable delivery outcomes.
 Published as [issue #131](https://github.com/davidadel66/evie/issues/131).
+
+**Status (2026-10-03):** per-conversation activation is retired in favour of
+the always-on [Background Memory Pass](#background-memory-pass) (memory
+architecture Stage 4), which queues exact prepared proposals in the review
+inbox instead of compiler candidates. The opt-in compiler below stays for
+existing activations and explicit `memory-compile` runs. Real-model
+proposal precision and recall on the scale corpus remain to be measured
+live; the deterministic probe in `internal/memorybackground` measures only
+the filtering layers.
 
 **Goal:** derive useful sourced candidates asynchronously without awaiting
 extraction in the user turn, with measured foreground overhead within an agreed

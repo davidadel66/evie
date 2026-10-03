@@ -92,6 +92,12 @@ func main() {
 		}
 		return
 	}
+	if handled, err := runMemoryBackgroundManagement(context.Background(), os.Args[1:], os.Stdout, kernelStore, os.Getenv); handled {
+		if err != nil {
+			log.Fatalf("memory background pass: %v", err)
+		}
+		return
+	}
 	if _, err := kernelStore.ImportDefaultLegacyTodoList(context.Background()); err != nil {
 		log.Fatalf("failed to import legacy Todo list: %v", err)
 	}
@@ -211,6 +217,9 @@ func main() {
 			resolvedComposition.Resolved.Toolset,
 		)
 	}
+	// The always-on background memory pass (memory architecture Stage 4)
+	// runs in long-lived REPL and web processes only.
+	memoryBackground := newMemoryBackgroundHost(os.Getenv, kernelStore)
 	startMemoryForRuntime := func(ctx context.Context) func() {
 		ctx, cancel := context.WithCancel(ctx)
 		stopRetrieval := startMemoryRetrievalHost(ctx, kernelStore)
@@ -219,6 +228,10 @@ func main() {
 			log.Printf("memory compiler unavailable: %v", err)
 			stopCompiler = func() error { return nil }
 		}
+		if config := memoryBackground.runner.Config(); !config.Enabled {
+			log.Printf("memory background pass off: %s", config.Reason)
+		}
+		stopBackground := memoryBackground.Start(ctx)
 		return func() {
 			cancel()
 			if err := stopRetrieval(); err != nil {
@@ -226,6 +239,9 @@ func main() {
 			}
 			if err := stopCompiler(); err != nil {
 				log.Printf("memory compiler shutdown: %v", err)
+			}
+			if err := stopBackground(); err != nil {
+				log.Printf("memory background pass shutdown: %v", err)
 			}
 		}
 	}
@@ -272,7 +288,7 @@ func main() {
 		if !presetReport.Valid {
 			log.Printf("starting management-only web server: default Agent Preset is invalid: %v", presetReport.Errors)
 			stopMemory := startMemoryForRuntime(runtimeCtx)
-			serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), usageReader), spendingService))
+			serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewManagedServer(nil, pluginManager, kernelStore), kernelStore), memoryBackground), usageReader), spendingService))
 			stopMemory()
 			if err := serveErr; err != nil {
 				log.Fatalf("serve degraded management: %v", err)
@@ -319,7 +335,7 @@ func main() {
 			return agent.NewWithToolset(client, selectedProfile, kernelStore.BindHistory(session.ID, holderID), session.ScopeContext(), kernelStore.BindTurnOwnerWithModelRevision(session.ID, holderID, revision), composition.Toolset), nil
 		}
 		stopMemory := startMemoryForRuntime(runtimeCtx)
-		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), usageReader), spendingService))
+		serveErr := web.ServeWithContext(runtimeCtx, web.WithSpending(web.WithUsage(web.WithMemoryBackground(web.WithCandidateReview(web.NewContextDataServer(nil, pluginManager, kernelStore, controller, kernelStore, kernelStore), kernelStore), memoryBackground), usageReader), spendingService))
 		stopMemory()
 		if err := serveErr; err != nil {
 			log.Fatalf("serve: %v", err)

@@ -154,7 +154,17 @@ type ChatRequest struct {
 	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 	Temperature *float64         `json:"temperature,omitempty"`
 	MaxTokens   int64            `json:"max_tokens,omitempty"`
-	prepared    *responseEncoding
+	// ResponseFormat asks for structured output ({"type":"json_object"}).
+	// Nil omits the key, so conversational requests are byte-identical to
+	// before. The caller still validates the output; this is a request, not
+	// a guarantee.
+	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
+	prepared       *responseEncoding
+}
+
+// ResponseFormat is the OpenAI-compatible response_format parameter.
+type ResponseFormat struct {
+	Type string `json:"type"`
 }
 
 // streamChunk is one SSE "data:" event in a streaming response. Deltas

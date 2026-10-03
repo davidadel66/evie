@@ -15,9 +15,7 @@ import (
 
 type compilerActivationKernel interface {
 	GetSession(context.Context, memory.SessionID) (memory.Session, error)
-	ActivateCompiler(context.Context, memory.ScopeContext, memory.CompilerActivationRequest, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerActivation, error)
 	DisableCompilerActivation(context.Context, memory.ScopeContext, memory.CompilerActivationRequest) (memory.CompilerActivation, error)
-	ResumeCompilerActivation(context.Context, memory.ScopeContext, memory.CompilerActivationRequest, memory.CompilerGeneration, eviedb.CompilerExtractor) (memory.CompilerActivation, error)
 	InspectCompilerActivations(context.Context, memory.ScopeContext) (memory.CompilerActivationStatus, error)
 }
 
@@ -42,17 +40,27 @@ func readCompilerHostConfiguration(path string) (localextractor.Config, *localex
 	return config, extractor, err
 }
 
+// errCompilerActivationRetired: the always-on background pass (memory
+// architecture Stage 4) replaced per-session compiler activation.
+var errCompilerActivationRetired = errors.New("per-conversation compiler activation is retired: the memory background pass now reads every conversation " +
+	"(see `evie memory-background status`); existing activations stay readable with `memory-compiler status` and can be closed with `memory-compiler disable`")
+
 // Short activation commands never construct a conversational provider or drain
-// extraction. The owner supplies a complete pinned local configuration.
+// extraction. Since the background pass, only status and disable remain:
+// existing activations stay readable and closable, and no new per-session
+// activation is opened or resumed.
 func runCompilerActivationManagement(ctx context.Context, args []string, out io.Writer, kernel compilerActivationKernel) (bool, error) {
 	if len(args) == 0 || args[0] != "memory-compiler" {
 		return false, nil
 	}
 	if len(args) < 2 {
-		return true, errors.New("usage: memory-compiler activate|status|disable|resume --session ID")
+		return true, errors.New("usage: memory-compiler status|disable --session ID")
 	}
 	action := args[1]
-	if action != "activate" && action != "status" && action != "disable" && action != "resume" {
+	if action == "activate" || action == "resume" {
+		return true, errCompilerActivationRetired
+	}
+	if action != "status" && action != "disable" {
 		return true, errors.New("unknown compiler activation action")
 	}
 	flags := flag.NewFlagSet("memory-compiler", flag.ContinueOnError)
@@ -95,21 +103,11 @@ func runCompilerActivationManagement(ctx context.Context, args []string, out io.
 			return true, errors.New("status accepts only --session")
 		}
 		result, err = kernel.InspectCompilerActivations(ctx, owner)
-	} else if action == "disable" {
+	} else {
 		if *configPath != "" {
 			return true, errors.New("disable does not accept configuration")
 		}
 		result, err = kernel.DisableCompilerActivation(ctx, owner, req)
-	} else {
-		config, extractor, readErr := readCompilerHostConfiguration(*configPath)
-		if readErr != nil {
-			return true, readErr
-		}
-		if action == "activate" {
-			result, err = kernel.ActivateCompiler(ctx, owner, req, config.Generation, extractor)
-		} else {
-			result, err = kernel.ResumeCompilerActivation(ctx, owner, req, config.Generation, extractor)
-		}
 	}
 	if err != nil {
 		return true, err

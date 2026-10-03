@@ -113,10 +113,20 @@ func (f *compilerRuntimeFixture) command(t *testing.T, action string, args ...st
 	return out.Bytes()
 }
 
+// activate opens a legacy per-session activation through the Kernel. The
+// CLI no longer offers it (the background pass replaced activation), but
+// activations made before the change stay readable, can be disabled, and
+// keep running under a configured compiler host.
 func (f *compilerRuntimeFixture) activate(t *testing.T) memory.CompilerActivation {
 	t.Helper()
-	var result memory.CompilerActivation
-	if err := json.Unmarshal(f.command(t, "activate", "--request", "activate", "--config", f.configPath), &result); err != nil {
+	extractor, err := localextractor.New(localextractor.Config{Endpoint: f.server.URL, Generation: f.generation})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := f.store.ActivateCompiler(context.Background(), f.session.ScopeContext(), memory.CompilerActivationRequest{
+		RequestID: "activate", Selector: memory.CompilerLiveSelector{SourceScope: "global", Destination: "global", SessionID: f.session.ID},
+	}, f.generation, extractor)
+	if err != nil {
 		t.Fatal(err)
 	}
 	return result
@@ -138,7 +148,9 @@ func (f *compilerRuntimeFixture) appendOwnerEvent(t *testing.T, content string) 
 	return event
 }
 
-func TestCompilerActivationCLIFrontierDisableResumeWithoutInference(t *testing.T) {
+// Existing activations stay readable and closable from the CLI after the
+// background pass replaced per-session activation.
+func TestLegacyCompilerActivationStaysReadableAndClosableFromTheCLI(t *testing.T) {
 	f := newCompilerRuntimeFixture(t, nil)
 	f.appendOwnerEvent(t, "private source before activation")
 	active := f.activate(t)
@@ -146,9 +158,6 @@ func TestCompilerActivationCLIFrontierDisableResumeWithoutInference(t *testing.T
 		t.Fatalf("activation did not pin exact new selection: %+v", active)
 	}
 	f.appendOwnerEvent(t, "private source inside selection")
-	if replay := f.activate(t); replay.ID != active.ID || replay.AfterPosition != active.AfterPosition {
-		t.Fatalf("request replay moved frontier: %+v", replay)
-	}
 	var disabled memory.CompilerActivation
 	if err := json.Unmarshal(f.command(t, "disable", "--request", "disable", "--id", active.ID, "--revision", "1"), &disabled); err != nil {
 		t.Fatal(err)
@@ -157,13 +166,6 @@ func TestCompilerActivationCLIFrontierDisableResumeWithoutInference(t *testing.T
 		t.Fatalf("disable did not close captured selection: %+v", disabled)
 	}
 	f.appendOwnerEvent(t, "private source while disabled")
-	var resumed memory.CompilerActivation
-	if err := json.Unmarshal(f.command(t, "resume", "--request", "resume", "--id", active.ID, "--revision", strconv.FormatInt(disabled.Revision, 10), "--config", f.configPath), &resumed); err != nil {
-		t.Fatal(err)
-	}
-	if resumed.WorkPaused || resumed.ThroughPosition == nil || *resumed.ThroughPosition != 2 || resumed.ID != active.ID {
-		t.Fatalf("resume reopened live selection: %+v", resumed)
-	}
 	var status memory.CompilerActivationStatus
 	if err := json.Unmarshal(f.command(t, "status"), &status); err != nil {
 		t.Fatal(err)
@@ -180,19 +182,26 @@ func TestCompilerActivationCLIFrontierDisableResumeWithoutInference(t *testing.T
 	}
 }
 
-func TestCompilerActivationCLIRequiresExplicitConfiguration(t *testing.T) {
+// Activating or resuming per-session compilation is retired: the background
+// pass covers every root conversation. The command says so and changes
+// nothing.
+func TestCompilerActivationAndResumeAreRetiredInFavorOfTheBackgroundPass(t *testing.T) {
 	f := newCompilerRuntimeFixture(t, nil)
-	handled, err := runCompilerActivationManagement(context.Background(), []string{
-		"memory-compiler", "activate", "--session", string(f.session.ID), "--request", "unconfigured",
-	}, io.Discard, f.store)
-	if !handled || !errors.Is(err, eviedb.ErrCompilerNotConfigured) {
-		t.Fatalf("unconfigured activation handled=%v error=%v", handled, err)
+	for _, args := range [][]string{
+		{"memory-compiler", "activate", "--session", string(f.session.ID), "--request", "new", "--config", f.configPath},
+		{"memory-compiler", "resume", "--session", string(f.session.ID), "--request", "again", "--id", "x", "--revision", strconv.Itoa(1), "--config", f.configPath},
+		{"memory-compiler", "activate", "--session", string(f.session.ID), "--request", "unconfigured"},
+	} {
+		handled, err := runCompilerActivationManagement(context.Background(), args, io.Discard, f.store)
+		if !handled || !errors.Is(err, errCompilerActivationRetired) || !strings.Contains(err.Error(), "memory-background status") {
+			t.Fatalf("%v handled=%v error=%v", args[1], handled, err)
+		}
 	}
 	var status memory.CompilerActivationStatus
 	if err := json.Unmarshal(f.command(t, "status"), &status); err != nil {
 		t.Fatal(err)
 	}
 	if len(status.Activations) != 0 || f.inferences.Load() != 0 {
-		t.Fatalf("unconfigured activation created work: %+v", status)
+		t.Fatalf("a retired command created work: %+v", status)
 	}
 }
