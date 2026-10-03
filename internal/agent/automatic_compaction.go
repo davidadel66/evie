@@ -38,7 +38,7 @@ func selectAutomaticCompaction(
 	input ContextComposeInput,
 	composer *ContextComposer,
 ) (compactionPlan, bool, error) {
-	return selectAutomaticCompactionFrom(input, input.Events, composer)
+	return selectAutomaticCompactionFrom(input, input.Events, composer, true)
 }
 
 // selectAutomaticCompactionFrom plans like selectAutomaticCompaction when
@@ -47,10 +47,16 @@ func selectAutomaticCompaction(
 // are measured on input, the request actually sent, while the covered turns
 // the compactor summarizes come from stored, so a summary never records
 // excerpts or omission markers as the conversation (amended 2026-10-01).
+//
+// When no whole-turn prefix reaches the target and the projected request
+// cannot be sent (or is a C8 retry), an in-turn compaction of the active
+// turn's oldest completed tool groups is planned if inTurn allows it (Stage
+// 8). A fitting request still proceeds without the compactor (2026-09-29).
 func selectAutomaticCompactionFrom(
 	input ContextComposeInput,
 	stored []memory.Event,
 	composer *ContextComposer,
+	inTurn bool,
 ) (compactionPlan, bool, error) {
 	if len(stored) != len(input.Events) {
 		return compactionPlan{}, true, errors.New("automatic compaction source does not match the projected history")
@@ -149,8 +155,19 @@ func selectAutomaticCompactionFrom(
 	}
 	// Pressure and the preferred compaction target are not hard input limits.
 	// Keep the full projected history when it fits, even if the active turn or
-	// reserved summary size makes the target unreachable.
-	if projection.estimate.SerializedBytes <= prepared.usable {
+	// reserved summary size makes the target unreachable. Only a request that
+	// cannot be sent, or a C8 retry, compacts the active turn itself.
+	fits := projection.estimate.SerializedBytes <= prepared.usable
+	if inTurn && (!fits || input.RejectedRequestBytes > 0) {
+		plan, ok, err := composer.planTurnCompaction(input, stored, prepared, compactorUsable, target)
+		if err != nil {
+			return compactionPlan{}, true, err
+		}
+		if ok {
+			return plan, true, nil
+		}
+	}
+	if fits {
 		return compactionPlan{}, false, nil
 	}
 	return compactionPlan{}, true, ErrNoLegalAutomaticCompaction
@@ -277,6 +294,11 @@ func (s *Session) performAutomaticCompaction(
 		}
 	}
 	coordinator.finishCommitBoundary(memory.StageContextCompose)
+	if plan.turn != nil {
+		// An in-turn summary is reconstructed from its durable event by every
+		// projection; the rolling summary is unchanged.
+		return nil, compacted, nil
+	}
 	return &ContextSummary{
 		CompactionEventID: compacted.ID, FirstRetainedEventID: plan.FirstRetained.ID, Content: summary,
 	}, compacted, nil

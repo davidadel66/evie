@@ -1180,6 +1180,9 @@ func writeContextDiagnostics(out io.Writer, diagnostics agent.ContextDiagnostics
 			contextDiagnosticValue(string(manifest.ActiveCompactionEventID)),
 			contextDiagnosticValue(string(manifest.CompactionFailureCategory)),
 		)
+		if manifest.ActiveTurnCompactionEventID != "" {
+			_, _ = fmt.Fprintf(out, "latest snapshot in-turn compaction: %s\n", manifest.ActiveTurnCompactionEventID)
+		}
 		writePlaceholderDiagnostics(out, "latest snapshot", manifest.Placeholders)
 	}
 	projection := diagnostics.Projection

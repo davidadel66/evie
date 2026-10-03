@@ -167,13 +167,19 @@ func messagesFromEventsWithContinuation(events []memory.Event, continuation map[
 				ToolCallID: payload.ToolCallID,
 			})
 
+		case turnSummaryViewEvent:
+			// An in-turn summary, already framed, in the position the turn
+			// view placed it.
+			messages = append(messages, openrouter.Message{Role: "user", Content: event.Content})
+
 		case memory.EventToolIntent,
 			memory.EventApproval,
 			memory.EventExecutionResolved,
 			memory.EventTurnFailed,
 			memory.EventTurnInterrupted,
 			memory.EventContextSnapshot,
-			memory.EventContextCompacted:
+			memory.EventContextCompacted,
+			memory.EventContextTurnCompacted:
 			continue
 
 		default:

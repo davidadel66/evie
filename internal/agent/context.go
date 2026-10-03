@@ -106,6 +106,10 @@ type ContextComposeInput struct {
 	// history, so it stays in the stable cached prefix of every request.
 	StandingMemory        string
 	StandingMemoryReceipt *memory.StandingMemoryReceipt
+
+	// plannedTurnSummary, set only while planning an in-turn compaction,
+	// replaces the active turn's durable in-turn summary with a candidate.
+	plannedTurnSummary *contextTurnSummary
 }
 
 // ContextSummary is the validated rolling summary selected by the later
@@ -128,25 +132,33 @@ const (
 // character around the slash (Go's \s is ASCII only), and invisible format
 // characters inside the name (amended 2026-10-01). Trailing whitespace or
 // attributes need no match once the slash is escaped.
-var contextSummaryClosingMarker = func() *regexp.Regexp {
+var contextSummaryClosingMarker = closingMarkerPattern("conversation-summary")
+
+// closingMarkerPattern matches the closing tag of the data frame named tag
+// in every variant described above.
+func closingMarkerPattern(tag string) *regexp.Regexp {
 	const gap = `[\p{Z}\p{Cc}\p{Cf}]*`
 	var name strings.Builder
-	for i, c := range "conversation-summary" {
+	for i, c := range tag {
 		if i > 0 {
 			name.WriteString(`\p{Cf}*`)
 		}
 		name.WriteString(regexp.QuoteMeta(string(c)))
 	}
 	return regexp.MustCompile(`(?i)<` + gap + `/` + gap + name.String())
-}()
+}
+
+func escapeClosingMarkers(marker *regexp.Regexp, text string) string {
+	return marker.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.Replace(match, "/", `\/`, 1)
+	})
+}
 
 // contextSummaryMessage frames the accepted rolling summary as a labelled
 // user-role data block. The summary is model-written from untrusted
 // transcript text, so every closing-marker variant inside it is escaped.
 func contextSummaryMessage(summary string) string {
-	escaped := contextSummaryClosingMarker.ReplaceAllStringFunc(summary, func(marker string) string {
-		return strings.Replace(marker, "/", `\/`, 1)
-	})
+	escaped := escapeClosingMarkers(contextSummaryClosingMarker, summary)
 	return contextSummaryOpen + "\n" + contextSummaryLabel + "\n\n" + escaped + "\n" + contextSummaryClose
 }
 
@@ -196,6 +208,9 @@ type contextProjection struct {
 	summaryIndex      int
 	selectedOriginal  []memory.Event
 	selectedProjected []memory.Event
+	// turnCompactionID names the in-turn summary rendered for the active
+	// turn, or is empty.
+	turnCompactionID memory.EventID
 }
 
 // pressureProjectionBandPercent quantizes how far pressure projection reaches
@@ -212,6 +227,9 @@ type contextPreparation struct {
 	activeIndex int
 	trigger     memory.Event
 	start       int
+	// turnCompactions holds each turn's latest accepted in-turn compaction,
+	// aligned with turns; nil where a turn has none.
+	turnCompactions []*acceptedTurnCompaction
 }
 
 // workingBytes is the working ceiling in canonical request bytes, the base of
@@ -233,7 +251,8 @@ func (c *ContextComposer) prepare(
 		return contextPreparation{}, errors.New("context summary identity and content must be present")
 	}
 	profile := input.Profile.Diagnostics()
-	if err := validateDurableContextHistory(input.Events); err != nil {
+	turnCompactions, err := durableTurnCompactions(input.Events)
+	if err != nil {
 		return contextPreparation{}, err
 	}
 	ratio := contextTokenRatio(c.estimator, input.Events, profileCanonicalModel(profile),
@@ -263,9 +282,41 @@ func (c *ContextComposer) prepare(
 			return contextPreparation{}, errors.New("context summary retained frontier is after the active turn")
 		}
 	}
-	return contextPreparation{
+	prepared := contextPreparation{
 		profile: profile, ratio: ratio, usable: usable, turns: turns, activeIndex: activeIndex, trigger: trigger, start: start,
-	}, nil
+		turnCompactions: make([]*acceptedTurnCompaction, len(turns)),
+	}
+	for i, turn := range turns {
+		prepared.turnCompactions[i] = turnCompactions[turn[0].ID]
+	}
+	return prepared, nil
+}
+
+// selectedTurns is the projection's durable view of turns from start on:
+// each turn with an in-turn compaction shows its summary in place of its
+// covered tool groups, and a planning candidate replaces the active turn's.
+func (c *ContextComposer) selectedTurns(
+	input ContextComposeInput,
+	prepared contextPreparation,
+	start int,
+) ([]memory.Event, memory.EventID, error) {
+	var selected []memory.Event
+	var active memory.EventID
+	for i := start; i < len(prepared.turns); i++ {
+		summary := prepared.turnCompactions[i].summary()
+		if i == prepared.activeIndex && input.plannedTurnSummary != nil {
+			summary = input.plannedTurnSummary
+		}
+		view, err := turnCompactionView(prepared.turns[i], summary)
+		if err != nil {
+			return nil, "", err
+		}
+		if i == prepared.activeIndex && summary != nil {
+			active = summary.compactionEventID
+		}
+		selected = append(selected, view...)
+	}
+	return selected, active, nil
 }
 
 func (c *ContextComposer) projectAtStart(
@@ -273,9 +324,13 @@ func (c *ContextComposer) projectAtStart(
 	prepared contextPreparation,
 	start int,
 ) (contextProjection, error) {
-	profile, usable, turns := prepared.profile, prepared.usable, prepared.turns
-	projection := contextProjection{selectedOriginal: flattenContextTurns(turns[start:])}
+	profile, usable := prepared.profile, prepared.usable
+	var projection contextProjection
 	var err error
+	projection.selectedOriginal, projection.turnCompactionID, err = c.selectedTurns(input, prepared, start)
+	if err != nil {
+		return contextProjection{}, err
+	}
 	projection.selectedProjected, err = applyToolResultGroupLimits(projection.selectedOriginal)
 	if err != nil {
 		return contextProjection{}, fmt.Errorf("bound durable tool-result groups: %w", err)
@@ -494,6 +549,7 @@ func (c *ContextComposer) projectionSnapshot(
 	if input.Summary != nil {
 		snapshot.ActiveCompactionEventID = input.Summary.CompactionEventID
 	}
+	snapshot.ActiveTurnCompactionEventID = projection.turnCompactionID
 	return snapshot, nil
 }
 
@@ -893,6 +949,14 @@ func markContextCacheBreakpoints(messages []openrouter.Message, standingIndex, l
 }
 
 func validateDurableContextHistory(events []memory.Event) error {
+	_, err := durableTurnCompactions(events)
+	return err
+}
+
+// durableTurnCompactions validates every context snapshot and in-turn
+// compaction of a durable history and returns each root turn's latest
+// accepted in-turn compaction by root event ID.
+func durableTurnCompactions(events []memory.Event) (map[memory.EventID]*acceptedTurnCompaction, error) {
 	type indexedEvent struct {
 		event memory.Event
 		index int
@@ -900,23 +964,47 @@ func validateDurableContextHistory(events []memory.Event) error {
 	byID := make(map[memory.EventID]indexedEvent, len(events))
 	for i, event := range events {
 		if event.ID == "" {
-			return fmt.Errorf("durable history event at index %d has no ID", i)
+			return nil, fmt.Errorf("durable history event at index %d has no ID", i)
 		}
 		if _, exists := byID[event.ID]; exists {
-			return fmt.Errorf("durable history repeats event ID %q", event.ID)
+			return nil, fmt.Errorf("durable history repeats event ID %q", event.ID)
 		}
 		byID[event.ID] = indexedEvent{event: event, index: i}
 	}
+	accepted := make(map[memory.EventID]*acceptedTurnCompaction)
+	for _, turn := range rootTurnSlices(events) {
+		latest, err := latestTurnCompaction(turn)
+		if err != nil {
+			return nil, err
+		}
+		if latest != nil {
+			accepted[turn[0].ID] = latest
+		}
+	}
+	// A snapshot names the latest in-turn compaction of its own root turn
+	// that precedes it: the summary its request carried in place of that
+	// turn's covered tool groups.
+	var turnCompaction memory.EventID
+	rooted := false
 	for i, event := range events {
+		switch {
+		case event.Type == memory.EventUserMessage && event.Role == memory.RoleUser && event.ParentID == "":
+			turnCompaction, rooted = "", true
+		case event.Type == memory.EventContextTurnCompacted:
+			if !rooted {
+				return nil, fmt.Errorf("in-turn compaction event %q precedes the first root turn", event.ID)
+			}
+			turnCompaction = event.ID
+		}
 		if event.Type != memory.EventContextSnapshot {
 			continue
 		}
 		if err := validateSnapshotEvent(event); err != nil {
-			return err
+			return nil, err
 		}
 		var payload memory.ContextSnapshotPayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			return fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
+			return nil, fmt.Errorf("decode context snapshot event %q: %w", event.ID, err)
 		}
 		parent, ok := byID[event.ParentID]
 		// The single compact-and-retry after a provider context-length
@@ -924,33 +1012,48 @@ func validateDurableContextHistory(events []memory.Event) error {
 		retry := ok && parent.index == i-3 && events[i-2].Type == memory.EventContextSnapshot &&
 			events[i-2].ParentID == event.ParentID
 		if !ok || (parent.index != i-1 && parent.index != i-2 && !retry) {
-			return fmt.Errorf("context snapshot event %q does not immediately follow its durable parent", event.ID)
+			return nil, fmt.Errorf("context snapshot event %q does not immediately follow its durable parent", event.ID)
 		}
 		if parent.index < i-1 {
 			compaction := events[i-1]
-			if compaction.Type != memory.EventContextCompacted || payload.ActiveCompactionEventID != compaction.ID {
-				return fmt.Errorf("context snapshot event %q has an invalid intervening compaction", event.ID)
+			switch compaction.Type {
+			case memory.EventContextCompacted:
+				if payload.ActiveCompactionEventID != compaction.ID {
+					return nil, fmt.Errorf("context snapshot event %q has an invalid intervening compaction", event.ID)
+				}
+				compactionPayload, err := decodeContextCompactionEvent(compaction)
+				if err != nil || compactionPayload.Trigger != memory.ContextCompactionAutomatic {
+					return nil, fmt.Errorf("context snapshot event %q does not follow a valid automatic compaction", event.ID)
+				}
+				if payload.RetainedFirstEventID != compactionPayload.FirstRetainedEventID {
+					return nil, fmt.Errorf("context snapshot event %q retained frontier does not match its automatic compaction", event.ID)
+				}
+			case memory.EventContextTurnCompacted:
+				// The in-turn compaction made for this trigger; the
+				// active-compaction check below requires the snapshot to
+				// name it.
+				if compaction.ParentID != event.ParentID {
+					return nil, fmt.Errorf("context snapshot event %q follows another trigger's in-turn compaction", event.ID)
+				}
+			default:
+				return nil, fmt.Errorf("context snapshot event %q has an invalid intervening compaction", event.ID)
 			}
-			compactionPayload, err := decodeContextCompactionEvent(compaction)
-			if err != nil || compactionPayload.Trigger != memory.ContextCompactionAutomatic {
-				return fmt.Errorf("context snapshot event %q does not follow a valid automatic compaction", event.ID)
-			}
-			if payload.RetainedFirstEventID != compactionPayload.FirstRetainedEventID {
-				return fmt.Errorf("context snapshot event %q retained frontier does not match its automatic compaction", event.ID)
-			}
+		}
+		if payload.ActiveTurnCompactionEventID != turnCompaction {
+			return nil, fmt.Errorf("context snapshot event %q does not name its turn's active in-turn compaction", event.ID)
 		}
 		if parent.event.Type != memory.EventUserMessage && parent.event.Type != memory.EventToolSucceeded &&
 			parent.event.Type != memory.EventToolFailed && parent.event.Type != memory.EventToolCancelled {
-			return fmt.Errorf("context snapshot event %q parent is not a provider trigger", event.ID)
+			return nil, fmt.Errorf("context snapshot event %q parent is not a provider trigger", event.ID)
 		}
 		if payload.RetainedLastEventID != parent.event.ID || payload.RetainedLastSequence != parent.event.Sequence {
-			return fmt.Errorf("context snapshot event %q retained endpoint does not match its parent", event.ID)
+			return nil, fmt.Errorf("context snapshot event %q retained endpoint does not match its parent", event.ID)
 		}
 		first, ok := byID[payload.RetainedFirstEventID]
 		if !ok || first.index >= i || first.event.Sequence != payload.RetainedFirstSequence ||
 			first.event.Type != memory.EventUserMessage || first.event.Role != memory.RoleUser || first.event.ParentID != "" ||
 			first.event.Sequence > parent.event.Sequence {
-			return fmt.Errorf("context snapshot event %q retained starting frontier is not a root user turn", event.ID)
+			return nil, fmt.Errorf("context snapshot event %q retained starting frontier is not a root user turn", event.ID)
 		}
 		seenPlaceholders := make(map[memory.EventID]struct{}, len(payload.Placeholders))
 		var previousSequence int64
@@ -960,21 +1063,21 @@ func validateDurableContextHistory(events []memory.Event) error {
 				projected.event.Sequence > parent.event.Sequence ||
 				(projected.event.Type != memory.EventToolSucceeded && projected.event.Type != memory.EventToolFailed &&
 					projected.event.Type != memory.EventToolCancelled) {
-				return fmt.Errorf("context snapshot event %q has an invalid placeholder event %q", event.ID, placeholder.EventID)
+				return nil, fmt.Errorf("context snapshot event %q has an invalid placeholder event %q", event.ID, placeholder.EventID)
 			}
 			if _, duplicate := seenPlaceholders[placeholder.EventID]; duplicate || projected.event.Sequence <= previousSequence {
-				return fmt.Errorf("context snapshot event %q has unordered or repeated placeholders", event.ID)
+				return nil, fmt.Errorf("context snapshot event %q has unordered or repeated placeholders", event.ID)
 			}
 			digest := sha256.Sum256([]byte(projected.event.Content))
 			if placeholder.OriginalBytes != int64(len(projected.event.Content)) ||
 				placeholder.SHA256 != hex.EncodeToString(digest[:]) {
-				return fmt.Errorf("context snapshot event %q placeholder %q does not match durable content", event.ID, placeholder.EventID)
+				return nil, fmt.Errorf("context snapshot event %q placeholder %q does not match durable content", event.ID, placeholder.EventID)
 			}
 			seenPlaceholders[placeholder.EventID] = struct{}{}
 			previousSequence = projected.event.Sequence
 		}
 	}
-	return nil
+	return accepted, nil
 }
 
 func validateSnapshotEvent(event memory.Event) error {

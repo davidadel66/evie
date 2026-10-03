@@ -1,6 +1,9 @@
 # Context management — Evie vs current harnesses
 
-Status: comparison for planning (2026-10-03). Nothing here is decided yet.
+Status: comparison for planning (2026-10-03). In-turn compaction (memory
+architecture Stage 8) is implemented; see the 2026-10-03 entry in
+`cmd/evie/docs/active/memory.decisions.md`. The other recommendations are
+not decided yet.
 
 ## Techniques the leading harnesses use
 
@@ -32,7 +35,7 @@ Status: comparison for planning (2026-10-03). Nothing here is decided yet.
 |---|---|---|
 | Delegation | Research workers only (`web_search`, `web_fetch`), with budgets, wrap-up, pageable reports and continuation | **Large.** Local work (reading files, querying databases, long bash investigations) can't be delegated, so its output floods the orchestrator. |
 | Tool-result clearing | Above 60% of the budget, older groups shrink to 1 KiB head/tail placeholders in bands, keeping the newest 3; `read_tool_result` re-reads them | Small. No per-tool exclusions; a single result may still take 100 KiB before projection. |
-| Compaction | Rolling summary of whole completed turns, carry-forward sections, calibrated budget, retry when the provider rejects for context length | **Medium.** The active turn is never compacted, so one long agentic turn relies on clearing alone. |
+| Compaction | Rolling summary of whole completed turns, carry-forward sections, calibrated budget, retry when the provider rejects for context length; since Stage 8, the active turn's oldest completed tool groups are summarized when a request cannot fit | Small. Retained tool-call arguments are never shortened. |
 | Save before forgetting | Not yet; planned as the background memory pass at idle or compaction (memory Stage 4) | Small, once Stage 4 lands. Run the pass *before* compaction, not after. |
 | Structured notes | Task Trees and Task Focus; summary sections carried forward | Covered. |
 | Just-in-time | Memory tools, conversation and episode search, `read_tool_result`, `read_subagent_report` | Covered. |

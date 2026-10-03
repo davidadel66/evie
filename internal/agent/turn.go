@@ -279,8 +279,11 @@ func (s *Session) runOwnedTurn(
 			return s.classifyLocalError(coordinator, err)
 		}
 		// A wrap-up fit may have shortened composeInput's tool results; the
-		// compactor summarizes the stored events, not that projection.
-		plan, required, err := selectAutomaticCompactionFrom(composeInput, events, s.composer)
+		// compactor summarizes the stored events, not that projection. The
+		// wrap-up is decided first and its request is fitted by its own
+		// reduction, so it is never compacted in-turn (Stage 8).
+		wrapUpFitted := finalStep && s.wrapUp != nil
+		plan, required, err := selectAutomaticCompactionFrom(composeInput, events, s.composer, !wrapUpFitted)
 		if err != nil {
 			if errors.Is(err, ErrNoLegalAutomaticCompaction) || IsContextOverflow(err) {
 				overflow := fmt.Errorf("%w: %v", ErrContextOverflow, err)
@@ -296,7 +299,10 @@ func (s *Session) runOwnedTurn(
 			return overflow
 		}
 		failureCategory := memory.ContextCompactionFailureNone
+		var compactedID memory.EventID
 		if required {
+			// One remembered failure covers whole-turn and in-turn compaction:
+			// no later iteration of the turn calls the compactor again.
 			failure := compactionFailure
 			if failure == nil {
 				if s.compactor == nil {
@@ -309,9 +315,12 @@ func (s *Session) runOwnedTurn(
 				var compacted memory.Event
 				newSummary, compacted, failure = s.performAutomaticCompaction(coordinator, lease, plan)
 				if failure == nil {
-					summary = newSummary
+					compactedID = compacted.ID
+					if plan.turn == nil {
+						summary = newSummary
+						composeInput.Summary = summary
+					}
 					events = append(events, compacted)
-					composeInput.Summary = summary
 					composeInput.Events = events
 					if err := fitWrapUp(); err != nil {
 						return s.classifyLocalError(coordinator, err)
@@ -372,11 +381,17 @@ func (s *Session) runOwnedTurn(
 				return s.classifyLocalError(coordinator, err)
 			}
 		}
-		if required && failureCategory == memory.ContextCompactionFailureNone &&
-			composed.Snapshot.RetainedFirstEventID != plan.FirstRetained.ID {
-			overflow := fmt.Errorf("%w: accepted automatic summary did not preserve its retained frontier", ErrContextOverflow)
-			coordinator.selectCause(causeContextOverflow, overflow, 0)
-			return overflow
+		if required && failureCategory == memory.ContextCompactionFailureNone {
+			preserved := composed.Snapshot.RetainedFirstEventID == plan.FirstRetained.ID
+			if plan.turn != nil {
+				preserved = composed.Snapshot.RetainedFirstEventID == plan.turn.retainedRootID &&
+					composed.Snapshot.ActiveTurnCompactionEventID == compactedID
+			}
+			if !preserved {
+				overflow := fmt.Errorf("%w: accepted automatic summary did not preserve its retained frontier", ErrContextOverflow)
+				coordinator.selectCause(causeContextOverflow, overflow, 0)
+				return overflow
+			}
 		}
 		if wrapUpOriginal != nil {
 			composed.Snapshot.Placeholders = wrapUpPlaceholders(wrapUpOriginal, composeInput.Events, composed.Snapshot)

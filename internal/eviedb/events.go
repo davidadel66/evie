@@ -86,9 +86,42 @@ func normalizeEventInput(input memory.EventInput) (memory.EventInput, error) {
 		}
 		input.Payload = canonical
 	}
+	if input.Type == memory.EventContextTurnCompacted {
+		compacted, canonical, err := decodeCanonicalContextTurnCompactedPayload(input.Payload)
+		if err != nil {
+			return memory.EventInput{}, fmt.Errorf("decode in-turn compaction payload: %w", err)
+		}
+		if err := compacted.Validate(input.Content); err != nil {
+			return memory.EventInput{}, err
+		}
+		if input.ParentID == "" || input.Role != "" || input.ExecutionID != "" {
+			return memory.EventInput{}, errors.New("in-turn compactions require their provider trigger as parent and cannot carry a role or execution ID")
+		}
+		input.Payload = canonical
+	}
 
 	input.Payload = append(json.RawMessage(nil), input.Payload...)
 	return input, nil
+}
+
+func decodeCanonicalContextTurnCompactedPayload(raw json.RawMessage) (memory.ContextTurnCompactedPayload, json.RawMessage, error) {
+	if err := rejectDuplicateTopLevelJSONFields(raw); err != nil {
+		return memory.ContextTurnCompactedPayload{}, nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var compacted memory.ContextTurnCompactedPayload
+	if err := decoder.Decode(&compacted); err != nil {
+		return memory.ContextTurnCompactedPayload{}, nil, err
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return memory.ContextTurnCompactedPayload{}, nil, err
+	}
+	canonical, err := json.Marshal(compacted)
+	if err != nil {
+		return memory.ContextTurnCompactedPayload{}, nil, err
+	}
+	return compacted, canonical, nil
 }
 
 func decodeCanonicalContextCompactedPayload(raw json.RawMessage) (memory.ContextCompactedPayload, json.RawMessage, error) {
@@ -308,6 +341,15 @@ func (s *Store) appendEvent(
 			return memory.Event{}, fmt.Errorf("decode canonical context compaction payload: %w", err)
 		}
 		if err := validateContextCompactionCorrelation(ctx, executor, sessionID, compacted); err != nil {
+			return memory.Event{}, err
+		}
+	}
+	if input.Type == memory.EventContextTurnCompacted {
+		var compacted memory.ContextTurnCompactedPayload
+		if err := json.Unmarshal(input.Payload, &compacted); err != nil {
+			return memory.Event{}, fmt.Errorf("decode canonical in-turn compaction payload: %w", err)
+		}
+		if err := validateContextTurnCompactionCorrelation(ctx, executor, sessionID, input.ParentID, compacted); err != nil {
 			return memory.Event{}, err
 		}
 	}
@@ -553,21 +595,22 @@ func validateContextSnapshotCorrelation(
 	if snapshot.RetainedLastEventID != parentID || snapshot.RetainedLastSequence != parentSequence {
 		return errors.New("context snapshot retained endpoint does not match its provider trigger")
 	}
-	var latestEventID, latestEventType, latestPayloadJSON string
+	var latestEventID, latestEventType, latestPayloadJSON, latestParentID string
 	var latestSequence int64
 	err = executor.queryRowContext(ctx, `
-		SELECT id, event_type, sequence, payload_json
+		SELECT id, event_type, sequence, payload_json, COALESCE(parent_id, '')
 		FROM events
 		WHERE session_id = ?
 		ORDER BY sequence DESC
 		LIMIT 1
-	`, sessionID).Scan(&latestEventID, &latestEventType, &latestSequence, &latestPayloadJSON)
+	`, sessionID).Scan(&latestEventID, &latestEventType, &latestSequence, &latestPayloadJSON, &latestParentID)
 	if err != nil {
 		return fmt.Errorf("validate latest context snapshot trigger: %w", err)
 	}
 	if memory.EventID(latestEventID) != parentID {
 		// After a provider context-length rejection, the single retry follows
-		// the rejected request's snapshot and its automatic compaction.
+		// the rejected request's snapshot and its automatic compaction, whole
+		// turn or in-turn.
 		retry := false
 		if latestSequence == parentSequence+2 {
 			var betweenType string
@@ -583,18 +626,51 @@ func validateContextSnapshotCorrelation(
 			retry = err == nil && memory.EventType(betweenType) == memory.EventContextSnapshot &&
 				betweenParent.Valid && memory.EventID(betweenParent.String) == parentID
 		}
-		if memory.EventID(latestEventID) != snapshot.ActiveCompactionEventID ||
-			memory.EventType(latestEventType) != memory.EventContextCompacted ||
-			(latestSequence != parentSequence+1 && !retry) {
+		if latestSequence != parentSequence+1 && !retry {
 			return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
 		}
-		compacted, _, err := decodeCanonicalContextCompactedPayload(json.RawMessage(latestPayloadJSON))
-		if err != nil || compacted.Trigger != memory.ContextCompactionAutomatic {
-			return errors.New("context snapshot intervening compaction is invalid")
+		switch memory.EventType(latestEventType) {
+		case memory.EventContextCompacted:
+			if memory.EventID(latestEventID) != snapshot.ActiveCompactionEventID {
+				return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
+			}
+			compacted, _, err := decodeCanonicalContextCompactedPayload(json.RawMessage(latestPayloadJSON))
+			if err != nil || compacted.Trigger != memory.ContextCompactionAutomatic {
+				return errors.New("context snapshot intervening compaction is invalid")
+			}
+			if snapshot.RetainedFirstEventID != compacted.FirstRetainedEventID {
+				return errors.New("context snapshot retained frontier does not match its automatic compaction")
+			}
+		case memory.EventContextTurnCompacted:
+			if memory.EventID(latestEventID) != snapshot.ActiveTurnCompactionEventID ||
+				memory.EventID(latestParentID) != parentID {
+				return errors.New("context snapshot does not follow the in-turn compaction of its provider trigger")
+			}
+		default:
+			return errors.New("context snapshot does not immediately follow its provider trigger or active automatic compaction")
 		}
-		if snapshot.RetainedFirstEventID != compacted.FirstRetainedEventID {
-			return errors.New("context snapshot retained frontier does not match its automatic compaction")
-		}
+	}
+	// The request carried the latest in-turn compaction of its own turn, the
+	// newest root turn, or none (Stage 8).
+	var activeTurnCompaction string
+	err = executor.queryRowContext(ctx, `
+		SELECT COALESCE((
+			SELECT c.id
+			FROM events AS c
+			WHERE c.session_id = ? AND c.event_type = ? AND c.sequence > (
+				SELECT MAX(r.sequence)
+				FROM events AS r
+				WHERE r.session_id = ? AND r.event_type = ? AND r.role = ? AND r.parent_id IS NULL
+			)
+			ORDER BY c.sequence DESC
+			LIMIT 1
+		), '')
+	`, sessionID, memory.EventContextTurnCompacted, sessionID, memory.EventUserMessage, memory.RoleUser).Scan(&activeTurnCompaction)
+	if err != nil {
+		return fmt.Errorf("validate context snapshot in-turn compaction: %w", err)
+	}
+	if memory.EventID(activeTurnCompaction) != snapshot.ActiveTurnCompactionEventID {
+		return errors.New("context snapshot does not name its turn's active in-turn compaction")
 	}
 	var firstType, firstRole string
 	var firstParent sql.NullString

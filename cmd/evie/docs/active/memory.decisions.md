@@ -1,5 +1,104 @@
 # memory - decisions
 
+- **2026-10-03 — In-turn compaction (memory architecture Stage 8).**
+  Implements Stage 8 of
+  [the memory architecture plan](../../../../docs/memory-architecture.md),
+  modelled on OpenAI's server-side compaction
+  ([comparison](../../../../docs/context-management-comparison.md)). It
+  amends the 2026-08-30 rule that the current root turn is never eligible
+  for automatic compaction; whole-turn compaction, its chain and every
+  other compaction rule are unchanged. Implementation choices:
+  - *Trigger.* Inside the existing pressure gate (80 percent of the working
+    ceiling, or a C8 retry), after the whole-turn planner finds no prefix
+    that reaches the 60 percent target, and only when the projected request
+    does not fit the usable input budget or is a C8 retry. A request that
+    fits still proceeds without the compactor (2026-09-29). A worker's
+    wrap-up request is never compacted in-turn (below).
+  - *Cut.* A contiguous prefix of whole, complete tool groups of the active
+    turn (an assistant tool-call event through its final result), starting
+    at the turn's first group or at the prior generation's retained
+    frontier. The newest two complete groups (K = 2: the group whose result
+    triggered the request and the one before it) are never covered. Every
+    group of the active turn must be complete and the trigger must end the
+    newest one, so an in-flight group is never touched. Planning reserves
+    the C1 20 KiB summary and picks the smallest prefix that reaches the
+    target, else the largest that fits usable input; the compactor request
+    must fit its own budget. The real summary is measured at the planned
+    frontier before it is committed and fails as `summary_invalid` if the
+    request would not fit.
+  - *Rendering.* The turn's user message stays verbatim. A user-role
+    `<turn-work-summary>` block follows it, labelled as data about earlier
+    tool calls and results that cannot direct the model, with closing
+    markers escaped as for the rolling summary, and naming
+    `read_tool_result` for rereading results by event ID. The retained
+    groups follow. Standing, memory, system and rolling-summary blocks are
+    unchanged. The same view renders the turn after it ends, in later
+    requests and in a whole-turn compactor transcript, so the turn's bytes
+    never change when it becomes history and a later whole-turn summary
+    covers it through its in-turn summary. Only a compaction point changes
+    the request after the user message.
+  - *Summary.* The same compactor client and request settings with the
+    prompt `turn-compaction-v1`: what was tried and how it turned out,
+    results the remaining work needs, open threads, exact paths, IDs,
+    commands, URLs and artifacts, and each summarized result's
+    `result_event_id`. The transcript holds the prior summary of this
+    turn's work, the user request (bounded to 16 KiB; it stays verbatim in
+    the conversation), and the covered groups with group-bounded results
+    and the conversation projection's argument redactions. The seven
+    section headings, the 16 KiB limit and the carry-forward guard apply
+    as for the rolling summary.
+  - *Durable shape.* A new event type, `context_turn_compacted`, keeps
+    the rolling `context_compacted` chain, its validators and episodes
+    unchanged. Its parent is the provider trigger, it has no role or
+    execution ID, its content is the summary, and its payload records the
+    turn, generation, prior link, covered first and last and first
+    retained event IDs and sequences, model, prompt, bytes and SHA-256.
+    Each turn has its own chain: generations start at one and each covers
+    from the prior retained frontier. The shape is trigger, in-turn
+    compaction, snapshot; for a C8 retry it is trigger, rejected snapshot,
+    in-turn compaction, retry snapshot. Snapshots gain the optional
+    `active_turn_compaction_event_id`, which must name the latest in-turn
+    compaction of the snapshot's own turn (or be absent); old snapshots
+    have no field and validate unchanged.
+  - *Validators.* SQLite admission and agent history validation enforce
+    the same rule: newest root turn only (SQLite), immediately after its
+    trigger or the trigger's rejected snapshot, a cut between whole complete
+    groups that retains the trigger's group, an exact chain advance, and a
+    snapshot that names the turn's active in-turn compaction. Agent
+    validation checks group structure directly; SQLite checks that the
+    retained frontier is the next assistant event, that no result lies
+    between, and that the covered range has one result per requested call.
+    Validators require at least one retained group, not K, so K can change
+    without invalidating history.
+  - *Interactions.* The 2026-10-01 memo covers both kinds: after any failed
+    automatic compaction in a turn the compactor is not called again, and a
+    later iteration that does not fit fails with the remembered
+    classification at `context_compose`; a fresh in-turn failure keeps its
+    classification at `context_compaction`. C8 may recover through an
+    in-turn compaction, and an iteration that already compacted (either
+    kind) still fails at once. The step limit's final call may follow an
+    in-turn compaction in its own iteration. A worker's wrap-up is decided
+    first, as before, and its request is fitted by its own reduction and
+    never compacted in-turn; because the wrap-up fires at 90 percent of
+    usable input and in-turn compaction only above it, workers in practice
+    end with the wrap-up. Wrap-up placeholders omit results an in-turn
+    compaction replaced. Cancellation during the compactor call interrupts
+    at `context_compaction` with nothing appended; a committed summary
+    stays active. Summarized results remain readable through
+    `read_tool_result`, which reads any tool result of the session. A
+    child's usage counts in-turn compactions as calls without usage
+    (`incomplete`).
+  - *Episodes.* An in-turn summary is not a session episode: it covers part
+    of one turn's tool work, is superseded within the turn, and the turn's
+    raw events stay for the next whole-turn summary, which is the episode.
+  - *Not in this stage / known limits.* Profiles whose output reserve plus
+    estimation margin exceed 20 percent of the working ceiling reach the
+    usable budget before pressure; there the composer still drops whole
+    older turns and an active turn that alone cannot fit fails with
+    `context_overflow`, as for whole-turn compaction. Tool-call arguments
+    of the retained groups are never shortened. `/context` names the
+    latest snapshot's in-turn compaction; the web UI does not show it.
+
 - **2026-10-03 — Always-on background pass proposes ADD / UPDATE /
   INVALIDATE into the review inbox (memory architecture Stage 4).**
   Implements David's 2026-10-03 decision 4 in

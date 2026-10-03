@@ -439,4 +439,23 @@ func TestContextDiagnosticsPrintLatestSnapshotCounts(t *testing.T) {
 			t.Fatalf("output %q omitted %q", got, want)
 		}
 	}
+	if strings.Contains(got, "in-turn compaction") {
+		t.Fatalf("output %q reports an in-turn compaction the snapshot did not name", got)
+	}
+}
+
+// Stage 8: /context names the in-turn compaction whose summary the latest
+// request carried.
+func TestContextDiagnosticsPrintLatestSnapshotInTurnCompaction(t *testing.T) {
+	var out strings.Builder
+	writeContextDiagnostics(&out, agent.ContextDiagnostics{
+		Profile: evieTestContextProfile("test/model").Diagnostics(),
+		LatestSnapshot: &agent.DurableContextSnapshotDiagnostics{
+			EventID: "snapshot-1", Sequence: 9,
+			Manifest: memory.ContextSnapshotPayload{ActiveTurnCompactionEventID: "turn-compaction-1"},
+		},
+	})
+	if got := out.String(); !strings.Contains(got, "latest snapshot in-turn compaction: turn-compaction-1\n") {
+		t.Fatalf("output %q omitted the in-turn compaction", got)
+	}
 }

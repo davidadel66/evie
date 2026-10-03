@@ -299,13 +299,14 @@ func subagentParentNextSteps(ctx context.Context, conn *sql.Conn, parent memory.
 }
 
 // subagentUsage sums the usage of the child's committed responses after the
-// sequence where the attempt began, including compactions. A response without
+// sequence where the attempt began, including whole-turn and in-turn
+// compactions, which record no usage. A response without
 // usage, or a turn that ended inside a provider or compaction call, makes the
 // total a lower bound (Incomplete). With no reported usage at all it stays
 // unknown (nil).
 func subagentUsage(ctx context.Context, conn *sql.Conn, child memory.SessionID, after int64) (*delegation.Usage, error) {
 	rows, err := conn.QueryContext(ctx, `SELECT event_type,payload_json FROM events WHERE session_id=? AND sequence>?
- AND event_type IN ('assistant_message','context_compacted','turn_failed','turn_interrupted') ORDER BY sequence`, child, after)
+ AND event_type IN ('assistant_message','context_compacted','context_turn_compacted','turn_failed','turn_interrupted') ORDER BY sequence`, child, after)
 	if err != nil {
 		return nil, err
 	}

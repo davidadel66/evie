@@ -202,6 +202,9 @@ func compactionEventInput(
 	summary string,
 	trigger memory.ContextCompactionTrigger,
 ) (memory.EventInput, error) {
+	if plan.turn != nil {
+		return turnCompactionEventInput(profile, plan, summary)
+	}
 	diagnostics := profile.Diagnostics()
 	canonicalModel := diagnostics.CanonicalModel
 	if canonicalModel == "" {
@@ -245,6 +248,10 @@ type compactionPlan struct {
 	// summaryFits, set by automatic planning, reports whether the request
 	// with the generated summary at the planned frontier fits usable input.
 	summaryFits func(summary string) (bool, error)
+	// turn, when set, makes this an in-turn compaction of the active turn's
+	// oldest completed tool groups; the frontier events are then tool-group
+	// boundaries and the chain is the turn's own.
+	turn *turnCompactionTarget
 }
 
 type acceptedCompaction struct {
@@ -468,7 +475,17 @@ func renderCompactionRequest(
 		transcript.PriorSummary = &content
 	}
 	for _, turn := range turns {
-		projected, err := applyToolResultGroupLimits(turn.events)
+		// A turn with an in-turn compaction is summarized as the conversation
+		// saw it: its accepted in-turn summary in place of the covered groups.
+		accepted, err := latestTurnCompaction(turn.events)
+		if err != nil {
+			return openrouter.ChatRequest{}, err
+		}
+		view, err := turnCompactionView(turn.events, accepted.summary())
+		if err != nil {
+			return openrouter.ChatRequest{}, err
+		}
+		projected, err := applyToolResultGroupLimits(view)
 		if err != nil {
 			return openrouter.ChatRequest{}, fmt.Errorf("bound compactor tool results: %w", err)
 		}
@@ -497,13 +514,21 @@ func renderCompactionRequest(
 	if err != nil {
 		return openrouter.ChatRequest{}, fmt.Errorf("serialize compactor transcript: %w", err)
 	}
+	return compactorRequest(profile, compactionSystemPrompt, encoded)
+}
+
+// compactorRequest is the shared compactor call shape: the configured model
+// with tools and reasoning disabled (low reasoning for Responses models),
+// temperature zero, and the compactor output reserve, given a system prompt
+// and the delimited untrusted transcript.
+func compactorRequest(profile openrouter.ContextProfile, systemPrompt string, transcript []byte) (openrouter.ChatRequest, error) {
 	profileDiagnostics := profile.Diagnostics()
 	temperature := 0.0
 	request := openrouter.ChatRequest{
 		Model: profileDiagnostics.ConfiguredModel,
 		Messages: []openrouter.Message{
-			{Role: "system", Content: compactionSystemPrompt},
-			{Role: "user", Content: CompactionTranscriptOpen + "\n" + string(encoded) + "\n" + CompactionTranscriptClose},
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: CompactionTranscriptOpen + "\n" + string(transcript) + "\n" + CompactionTranscriptClose},
 		},
 		Stream: true, Temperature: &temperature, MaxTokens: CompactionOutputReserveTokens,
 	}

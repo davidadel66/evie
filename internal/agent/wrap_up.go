@@ -133,10 +133,17 @@ func wrapUpMarker(event memory.Event) string {
 // wrapUpPlaceholders describes, against durable content, every retained tool
 // result the wrap-up reduced. The composer saw only reduced content, which is
 // below its projection threshold, so these are all of the request's
-// placeholders.
+// placeholders. Results an in-turn compaction replaced are not in the
+// request and are not described.
 func wrapUpPlaceholders(original, reduced []memory.Event, snapshot memory.ContextSnapshotPayload) []memory.ContextPlaceholderManifest {
+	// The history was validated before composition, so this cannot fail;
+	// without it every retained result is described, as before Stage 8.
+	hidden, _ := turnCompactionHiddenEvents(original)
 	var retainedOriginal, retainedReduced []memory.Event
 	for i := range original {
+		if hidden[original[i].ID] {
+			continue
+		}
 		if original[i].Sequence >= snapshot.RetainedFirstSequence && original[i].Sequence <= snapshot.RetainedLastSequence {
 			retainedOriginal = append(retainedOriginal, original[i])
 			retainedReduced = append(retainedReduced, reduced[i])

@@ -305,42 +305,46 @@ type ContextPlaceholderManifest struct {
 // CalibrationSamples counts the recorded provider measurements behind it; a
 // zero ratio is the original one-byte-per-token estimator.
 type ContextSnapshotPayload struct {
-	RepositoryInstructionsTurnID EventID                          `json:"repository_instructions_turn_id,omitempty"`
-	Memory                       *RetrievalReceipt                `json:"memory,omitempty"`
-	StandingMemory               *StandingMemoryReceipt           `json:"standing_memory,omitempty"`
-	SchemaVersion                int                              `json:"schema_version"`
-	ComposerVersion              string                           `json:"composer_version"`
-	EstimatorVersion             string                           `json:"estimator_version"`
-	Iteration                    int                              `json:"iteration"`
-	ConfiguredModel              string                           `json:"configured_model"`
-	CanonicalModel               string                           `json:"canonical_model"`
-	AdvertisedModel              string                           `json:"advertised_model,omitempty"`
-	ProfileSource                string                           `json:"profile_source"`
-	AdvertisedWindowTokens       int64                            `json:"advertised_window_tokens,omitempty"`
-	HardWindowTokens             int64                            `json:"hard_window_tokens"`
-	WorkingCeilingTokens         int64                            `json:"working_ceiling_tokens"`
-	OutputReserveTokens          int64                            `json:"output_reserve_tokens"`
-	EstimationMarginTokens       int64                            `json:"estimation_margin_tokens"`
-	BytesPerTokenMilli           int64                            `json:"bytes_per_token_milli,omitempty"`
-	CalibrationSamples           int                              `json:"calibration_samples,omitempty"`
-	UsableInputBytes             int64                            `json:"usable_input_bytes"`
-	SerializedBytes              int64                            `json:"serialized_bytes"`
-	RoughTokenEstimate           int64                            `json:"rough_token_estimate"`
-	RequestSHA256                string                           `json:"request_sha256"`
-	RetainedFirstEventID         EventID                          `json:"retained_first_event_id"`
-	RetainedFirstSequence        int64                            `json:"retained_first_sequence"`
-	RetainedLastEventID          EventID                          `json:"retained_last_event_id"`
-	RetainedLastSequence         int64                            `json:"retained_last_sequence"`
-	ActiveCompactionEventID      EventID                          `json:"active_compaction_event_id,omitempty"`
-	CompactionFailureCategory    ContextCompactionFailureCategory `json:"compaction_failure_category,omitempty"`
-	MessageCount                 int                              `json:"message_count"`
-	ToolSchemaCount              int                              `json:"tool_schema_count"`
-	SystemMessageBytes           int64                            `json:"system_message_bytes"`
-	SummaryMessageBytes          int64                            `json:"summary_message_bytes"`
-	HistoryMessageBytes          int64                            `json:"history_message_bytes"`
-	ToolSchemaBytes              int64                            `json:"tool_schema_bytes"`
-	RequestSettingsBytes         int64                            `json:"request_settings_bytes"`
-	Placeholders                 []ContextPlaceholderManifest     `json:"placeholders,omitempty"`
+	RepositoryInstructionsTurnID EventID                `json:"repository_instructions_turn_id,omitempty"`
+	Memory                       *RetrievalReceipt      `json:"memory,omitempty"`
+	StandingMemory               *StandingMemoryReceipt `json:"standing_memory,omitempty"`
+	SchemaVersion                int                    `json:"schema_version"`
+	ComposerVersion              string                 `json:"composer_version"`
+	EstimatorVersion             string                 `json:"estimator_version"`
+	Iteration                    int                    `json:"iteration"`
+	ConfiguredModel              string                 `json:"configured_model"`
+	CanonicalModel               string                 `json:"canonical_model"`
+	AdvertisedModel              string                 `json:"advertised_model,omitempty"`
+	ProfileSource                string                 `json:"profile_source"`
+	AdvertisedWindowTokens       int64                  `json:"advertised_window_tokens,omitempty"`
+	HardWindowTokens             int64                  `json:"hard_window_tokens"`
+	WorkingCeilingTokens         int64                  `json:"working_ceiling_tokens"`
+	OutputReserveTokens          int64                  `json:"output_reserve_tokens"`
+	EstimationMarginTokens       int64                  `json:"estimation_margin_tokens"`
+	BytesPerTokenMilli           int64                  `json:"bytes_per_token_milli,omitempty"`
+	CalibrationSamples           int                    `json:"calibration_samples,omitempty"`
+	UsableInputBytes             int64                  `json:"usable_input_bytes"`
+	SerializedBytes              int64                  `json:"serialized_bytes"`
+	RoughTokenEstimate           int64                  `json:"rough_token_estimate"`
+	RequestSHA256                string                 `json:"request_sha256"`
+	RetainedFirstEventID         EventID                `json:"retained_first_event_id"`
+	RetainedFirstSequence        int64                  `json:"retained_first_sequence"`
+	RetainedLastEventID          EventID                `json:"retained_last_event_id"`
+	RetainedLastSequence         int64                  `json:"retained_last_sequence"`
+	ActiveCompactionEventID      EventID                `json:"active_compaction_event_id,omitempty"`
+	// ActiveTurnCompactionEventID names the latest in-turn compaction of the
+	// request's own root turn, whose summary the request carried in place of
+	// that turn's covered tool groups (Stage 8). Empty when it has none.
+	ActiveTurnCompactionEventID EventID                          `json:"active_turn_compaction_event_id,omitempty"`
+	CompactionFailureCategory   ContextCompactionFailureCategory `json:"compaction_failure_category,omitempty"`
+	MessageCount                int                              `json:"message_count"`
+	ToolSchemaCount             int                              `json:"tool_schema_count"`
+	SystemMessageBytes          int64                            `json:"system_message_bytes"`
+	SummaryMessageBytes         int64                            `json:"summary_message_bytes"`
+	HistoryMessageBytes         int64                            `json:"history_message_bytes"`
+	ToolSchemaBytes             int64                            `json:"tool_schema_bytes"`
+	RequestSettingsBytes        int64                            `json:"request_settings_bytes"`
+	Placeholders                []ContextPlaceholderManifest     `json:"placeholders,omitempty"`
 }
 
 func (p ContextSnapshotPayload) Validate() error {
