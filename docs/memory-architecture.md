@@ -197,8 +197,12 @@ Order: 1 and 5 in parallel; then 2 and 3; then 4; then 6; then 7–10 (7 first;
   as for research workers.
 - Prompt guidance: delegate when a task needs many tool calls or large outputs
   the orchestrator doesn't need to see.
-- **Decision needed:** the explore worker's exact toolset, especially whether
-  it gets bash (ungated today) or a read-only command subset.
+- **Decided (David, 2026-10-03):** the explore worker gets `read_file`,
+  read-only `query_db`, and a bash restricted to vetted read-only commands
+  (for example `ls`, `rg`, `cat`, `git log`/`diff`/`show`,
+  `sqlite3 -readonly`), enforced in code. The allowlist must reject
+  write-capable flags and option-embedded execution (`git -c`, `--output`,
+  pipes into writers, redirections).
 
 **8. In-turn compaction**
 - When tool-result clearing can't bring the active turn under budget, the
