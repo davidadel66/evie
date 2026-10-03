@@ -102,14 +102,14 @@ func TestRelevanceFrequenciesStayFastAtScale(t *testing.T) {
 	var frequency map[string]int
 	for i := 0; i < 3; i++ {
 		started := time.Now()
-		frequency, err = relevanceFrequencies(ctx, tx, &relevance, "global", time.Now().UTC(), reader.ID, 0)
+		frequency, err = relevanceFrequencies(ctx, tx, &relevance, "global", time.Now().UTC(), reader.ID, 0, false, nil)
 		counting = min(counting, time.Since(started))
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	var exact int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM memory_retrieval_event_fts_v3 WHERE memory_retrieval_event_fts_v3 MATCH '"ferritin"'`).Scan(&exact); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM memory_retrieval_event_fts_v4 WHERE memory_retrieval_event_fts_v4 MATCH '"ferritin"'`).Scan(&exact); err != nil {
 		t.Fatal(err)
 	}
 	tx.Rollback()
@@ -134,10 +134,53 @@ func TestRelevanceFrequenciesStayFastAtScale(t *testing.T) {
 	// Race instrumentation slows the pure-Go SQLite driver far more than the
 	// budget scale assumes, so wall-clock margins are only asserted in
 	// ordinary builds; the status check above still runs under -race.
+	if raceTimeScale == 1 && (counting > retrievalDeadline/10 || searching > retrievalDeadline/2) {
+		t.Fatalf("at 20k messages counting took %s and search %s; the read deadline is %s", counting, searching, retrievalDeadline)
+	}
+	timeWindowSearchesStayFast(t, store, reader)
+}
+
+// timeWindowSearchesStayFast is Stage 6 on the same 20k-message history: a
+// request that names a past time reads the window first and, when nothing
+// there qualifies, reads all history as before; a personal recall may match
+// fact keys. Both stay well inside the read deadline, including the worst
+// case of an empty window and a second read.
+func timeWindowSearchesStayFast(t *testing.T, store *Store, reader memory.Session) {
+	t.Helper()
+	// These reads measure time only. Under -race, whose wall clock means
+	// nothing here, the window and fallback outcomes are covered by the agent
+	// acceptance tests, and the package's race run stays inside its budget.
 	if raceTimeScale > 1 {
 		return
 	}
-	if counting > retrievalDeadline/10 || searching > retrievalDeadline/2 {
-		t.Fatalf("at 20k messages counting took %s and search %s; the read deadline is %s", counting, searching, retrievalDeadline)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, when string
+		matched    bool
+	}{
+		{"empty window, then all history", "yesterday", false},
+		{"window holding the history", "today", true},
+	} {
+		relevance := memory.RetrievalRelevance{Current: []string{"plan", "run", "dinner", "lisbon", tc.when}, PersonalRecall: true}
+		reference, _ := memory.FindRecallTimeReference("What did I plan " + tc.when + "?")
+		query := memory.RetrievalQuery{Kind: memory.RetrievalConversationExcerpt, Text: "plan run dinner lisbon " + tc.when, Limit: 2, MaxBytes: 6 * 1024,
+			ExcludeCurrentRequestCopies: true, Relevance: &relevance, RecallTime: &reference}
+		searching := time.Duration(1<<63 - 1)
+		for i := 0; i < 3; i++ {
+			started := time.Now()
+			result, err := store.SearchMemory(ctx, reader.ScopeContext(), query)
+			elapsed := time.Since(started)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Status == memory.RetrievalExhausted || result.Status == memory.RetrievalFailed || result.TimeWindow == nil || result.TimeWindow.Matched != tc.matched {
+				t.Fatalf("%s: search ended %s with window %+v after %s", tc.name, result.Status, result.TimeWindow, elapsed)
+			}
+			searching = min(searching, elapsed)
+		}
+		t.Logf("20k messages, %s: search %s (deadline %s)", tc.name, searching, retrievalDeadline)
+		if searching > retrievalDeadline/2 {
+			t.Fatalf("%s: at 20k messages the search took %s; the read deadline is %s", tc.name, searching, retrievalDeadline)
+		}
 	}
 }

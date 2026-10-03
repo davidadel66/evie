@@ -14,16 +14,19 @@ import (
 	"github.com/google/uuid"
 )
 
-const automaticRecallVersion = "bounded-reference-lexical-v3"
+const automaticRecallVersion = "bounded-reference-lexical-v4"
 
 const automaticReferenceReadingGuide = "Resolve references using relevant earlier discussion and eligible original sources; compaction continuity and proposed identities are hypotheses, not new facts. Use a targeted memory read if useful. When remaining recipient ambiguity materially changes the answer, ask one focused question before giving person-specific recommendations. Do not ask merely because multiple people are known when context already identifies the recipient."
 
 // This plan selects interpretation input, not additional source evidence. Only
 // the Kernel's subsequent scoped search can supply a source-bearing result.
 type automaticRecallPlan struct {
-	query       string
-	exact       []string
-	relevance   memory.RetrievalRelevance
+	query     string
+	exact     []string
+	relevance memory.RetrievalRelevance
+	// time is the request's explicit past time, read from its own words
+	// ("what did I book last week?"); the zero reference when it names none.
+	time        memory.RecallTimeReference
 	diagnostics memory.RetrievalInterpretation
 }
 
@@ -58,6 +61,10 @@ func planAutomaticRecall(events []memory.Event, summary *ContextSummary, root me
 	}
 	terms := recallTerms(current, 16)
 	plan.diagnostics.CurrentBytes = len(current)
+	// The time reference is read from the request itself; its words stay in
+	// the query, and the Kernel decides whether they name a past window.
+	plan.time, _ = memory.FindRecallTimeReference(current)
+	plan.diagnostics.TimeReference = plan.time.Kind
 	plan.relevance.PersonalRecall = personalRecallRequest(current)
 	plan.relevance.Current = append([]string(nil), terms...)
 	if summary != nil {
@@ -383,7 +390,8 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 		if !kinds[kind] {
 			continue
 		}
-		query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true}
+		reference := plan.time
+		query := memory.RetrievalQuery{Kind: kind, Text: plan.query, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true, RecallTime: &reference}
 		if kind == memory.RetrievalConversationExcerpt {
 			// Raw conversation is the noisy kind: its excerpts must clear the
 			// relevance floor and not repeat what the request already shows.
@@ -395,7 +403,7 @@ func (r *retrievalTurn) automatic(ctx context.Context, events []memory.Event, su
 	}
 	if kinds[memory.RetrievalAcceptedMemory] {
 		for _, selector := range plan.exact {
-			result, _ := r.search(ctx, memory.RetrievalQuery{Kind: memory.RetrievalAcceptedMemory, Text: selector, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true})
+			result, _ := r.search(ctx, memory.RetrievalQuery{Kind: memory.RetrievalAcceptedMemory, Text: selector, Limit: 2, MaxBytes: 6 * 1024, ExcludeCurrentRequestCopies: true, RecallTime: &memory.RecallTimeReference{}})
 			outcomes = append(outcomes, result.Status)
 		}
 	}

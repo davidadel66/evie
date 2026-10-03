@@ -5,9 +5,9 @@ a fix: it records how today's recall behaves at realistic history size so that
 Stage 12 (recall relevance, M1/M7) and Stage 13 (currency and conflicts,
 M2/M3/M4) are measured rather than guessed. Every unmet target below is
 current behavior, recorded as such; none is accepted as correct. Stage 12's
-and Stage 13's before/after results follow the Stage 11 baseline; the
-committed baselines are the confirmation review report (version 4) on
-corpus v4.
+and Stage 13's before/after results follow the Stage 11 baseline. The
+committed baselines are the memory architecture Stage 6 report (version 5)
+on corpus v5; see [Stage 6: recall quality](#stage-6-recall-quality-memory-architecture).
 
 ## What runs
 
@@ -46,6 +46,13 @@ identical under a different UUID seed, so only the large tier's dense
 reachability depends on ID order. Per-probe item lists are sorted because rank
 order is not measured. Stage 12 made the dense scan cover every vector, so
 dense reachability no longer depends on ID order either.
+
+Since corpus v5 the replay runs on a synthetic timeline (`ScaleClock`): ten
+months of sessions from 1 December 2025 to 30 September 2026, some scenarios
+pinned to exact times, and every probe at 18:00 on Thursday 1 October 2026,
+all in a fixed UTC-4 owner zone. The driver gives the Store that clock and
+zone (`Store.UseClock`); a session's clock is its start time plus the real
+time elapsed in it, so events, leases and memory times share one timeline.
 
 ## Paths and labels
 
@@ -834,6 +841,178 @@ below were probed and are recorded, not fixed):
   final pass's rarer-half reason). A personal recall request can still be
   explained by a rare word it shares with an unrelated private message.
   Dense excerpts are not gated by the lexical floor.
+
+## Stage 6: recall quality (memory architecture)
+
+Stage 6 of `docs/memory-architecture.md` adds LongMemEval's fact-augmented
+keys and time-aware query expansion to relevance recall. The rules are the
+2026-10-03 entry of [the retrieval decisions](memory-stage-5-retrieval.decisions.md).
+In short: a message that is the Source of an accepted, current Claim is also
+indexed under the Claim's words (Predicate label and token, value, Entity
+names and aliases from scopes its readers may read), which a model-directed
+search and a personal-recall Automatic Recall may match; a request naming a
+past time ("yesterday", "last week", "three days ago", "on Friday", "in
+March", "2026-09-14") reads the messages recorded in that window first and
+falls back to all history when nothing there qualifies, ranks Claims valid
+in it first (reading a since-superseded one valid-at constrained when the
+window has ended), and selects episodes overlapping it.
+
+**Corpus v5, report v5.** `memory-scale-replay-v5` (seed unchanged) puts the
+replay on the synthetic timeline described under "What runs" and adds:
+
+- *Named-time probes* (family `temporal`, automatic and both tools): eight
+  owner messages pinned on the clock, each among same-subject messages from
+  before and after the named time, at least one of them newer or a stronger
+  lexical match: "What did I book with Marek yesterday?", "Which hallway paint
+  did we pick last week?", "What did I send Mrs. Okoro three days ago?",
+  "Which restaurant did Priya recommend on Friday?", "Which company did I
+  renew the car insurance with in March?", "How much was the electricity bill
+  I paid on 2026-09-14?", "Which class did I sign up for last month?" and
+  "Where did I leave the parcel earlier today?". Tool queries name the time
+  as a model would ("Priya restaurant last Friday", "car insurance renew
+  March 2026"). A ninth, "Who was my employer in March?", requires the
+  employer Claim valid in March, which the corpus corrects (`changed`) in
+  May; it also checks that the superseded Claim and its source are not
+  presented as current (M2).
+- *Fact-phrasing probes* (family `fact_key`): five Claims remembered in other
+  words than their Predicate ("Remember that I'm O negative, and my donor card
+  is in the red wallet." as `blood type`; "...the 7:42 ferry to the office..."
+  as `commute`; "...my locker code at Equinox is 3-1-4." as `locker
+  combination`; "...a green Brompton..." as `bicycle`; "...we're in 4B, the
+  flat on the fourth floor..." as `apartment number`) and a question phrased
+  like each Claim ("What's my blood type?", "What's my gym locker
+  combination?"). The source message is required on the automatic and
+  conversation-search paths, the Claim on the automatic and `memory_search`
+  paths.
+- *Privacy probes:* two private Claims remembered in private messages
+  (`therapist`, `daily medication`) and unrelated requests sharing their
+  Predicate labels ("Write a short story about a therapist and a lighthouse
+  keeper.", "Explain how daily medication reminders work in phone apps."),
+  and a private message pinned yesterday that shares one word with "What were
+  the results of the lottery yesterday?".
+- Report version 5 adds the targets `S6.named_time_recalled` and
+  `S6.fact_phrasing_finds_source` (automatic and conversation-search recall
+  of those families).
+
+"Before" is the code this change was based on (fd10002, and again after
+rebasing onto 5463249, 5ec2a41 and a82bb8f, with identical reports in both
+tiers each time) with only the evaluation seam added (`Store.UseClock`; event append reads the Store's
+clock), on corpus v5.
+Replaying corpus v4 on the synthetic clock reproduced the committed v4 report
+exactly, and the v5 additions left every v4 probe's items unchanged in the
+default tier. In the large tier the new vectors change some dense-only items
+of v4 probes, identically before and after (the concept-hash proxy scores
+"Translate good morning into Portuguese." close to the private "I take
+sertraline every morning with breakfast.", for example).
+
+Default tier, before → after (unchanged cells show one value):
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 109 → 104 | 19 → 13 | 3 → 1 | 0.8257 → 0.8750 | 37/53 → 48/53 |
+| automatic | temporal | 18 → 11 | 2 → 0 | 0 | 0.8889 → 1.0000 | 3/9 → 9/9 |
+| automatic | fact_key | 10 → 11 | 4 → 0 | 2 → 0 | 0.6000 → 1.0000 | 5/10 → 10/10 |
+| automatic | stale | 37 → 38 | 0 | 0 | 1.0000 | 12/13 |
+| automatic | privacy | 14 | 9 | 1 | 0.3571 | n/a |
+| automatic | relevant | 15 | 2 | 0 | 0.8667 | 11/11 |
+| automatic | one-word answer | 9 | 0 | 0 | 1.0000 | 4/5 |
+| automatic | follow-up | 6 | 2 | 0 | 0.6667 | 2/3 |
+| automatic | low-content, unrelated | 0 | 0 | 0 | n/a | n/a |
+| memory_search | all | 30 → 31 | 0 | 0 | 1.0000 | 19/20 → 20/20 |
+| memory_search | temporal | 1 → 2 | 0 | 0 | 1.0000 | 0/1 → 1/1 |
+| memory_search_conversations | all | 195 → 150 | 67 → 35 | 7 → 5 | 0.6564 → 0.7667 | 19/25 → 23/25 |
+| memory_search_conversations | temporal | 70 → 20 | 42 → 10 | 3 → 1 | 0.4000 → 0.5000 | 8/8 |
+| memory_search_conversations | fact_key | 6 → 10 | 3 | 2 | 0.5000 → 0.7000 | 1/5 → 5/5 |
+
+Large tier, before → after:
+
+| Path | Family | Items | Unwanted | Private | Precision | Recall |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| automatic | all | 147 → 142 | 42 → 34 | 12 → 9 | 0.7143 → 0.7606 | 38/53 → 50/53 |
+| automatic | temporal | 19 → 12 | 5 → 1 | 1 → 0 | 0.7368 → 0.9167 | 2/9 → 9/9 |
+| automatic | fact_key | 12 → 14 | 5 → 2 | 2 → 1 | 0.5833 → 0.8571 | 5/10 → 10/10 |
+| automatic | stale | 40 | 3 → 2 | 2 → 1 | 0.9250 → 0.9500 | 12/13 |
+| automatic | privacy | 26 | 17 | 5 | 0.3462 | n/a |
+| automatic | unrelated | 6 | 6 | 1 | 0.0000 | n/a |
+| memory_search | all | 32 → 33 | 1 | 0 | 0.9688 → 0.9697 | 19/20 → 20/20 |
+| memory_search_conversations | all | 285 → 245 | 76 → 42 | 15 → 7 | 0.7333 → 0.8286 | 45/49 → 49/49 |
+| memory_search_conversations | temporal | 70 → 25 | 43 → 9 | 8 → 0 | 0.3857 → 0.6400 | 8/8 |
+| memory_search_conversations | fact_key | 6 → 10 | 3 | 2 | 0.5000 → 0.7000 | 1/5 → 5/5 |
+
+Automatic unwanted-item rate 0.1743 → 0.1250 (default) and 0.2857 → 0.2394
+(large). Stale-fact checks are unchanged in both tiers: 2 misses of 71 (the
+two `m.moved` checks), 10/10 controls, no scope leaks or unmapped items; the
+employer probe's M2 check reads `labelled`.
+
+| Target | Default before → after | Large before → after |
+| --- | --- | --- |
+| S6: named time recalled | no → yes (automatic 3/9 → 9/9; search 8/8) | no → yes (2/9 → 9/9; 8/8) |
+| S6: fact phrasing finds source | no → yes (automatic 5/10 → 10/10; search 1/5 → 5/5) | no → yes (5/10 → 10/10; 1/5 → 5/5) |
+| M1: privacy probes inject no private item | no (1, unchanged) | no (5, unchanged) |
+| M1: low-content, M2, M3 over-linking, M4, M7 | yes, unchanged | yes, unchanged |
+| M1: one-word answers, M3 different wording | no, unchanged (4/5; 2 misses) | no, unchanged |
+
+Every per-probe change in the default tier is a targeted probe or one of
+these: "When is my sister's birthday?" and "What's my sister's birthday
+again?" now receive the correction message ("Correction: my sister's birthday
+is June 13, not June 3.", found through its current Claim's words) instead of
+the labelled original; "What's my home city these days?" adds the Claim's
+own source ("Remember that I live in Boston."); conversation search for the
+mother's present swaps one tolerated item for the birthday correction, and
+for the home city adds the Claim's source. No v4 probe gained an unwanted or
+private item. Among the targeted probes: six
+named-time questions now recall their target where they did not; the other
+three drop an out-of-window companion; "Which class did I sign up for last
+month?" no longer receives the two "I moved to Chicago last month..."
+messages (the time words were their only match); "What's my blood type?" no longer injects
+the private blood-test and blood-pressure messages (before, "blood" was the
+only word history knew); "How do I commute to work?" no longer receives two
+employer messages; and the conversation tool's named-time reads drop from 42
+unwanted items to 10, because only the window's messages match.
+
+*Privacy.* The v4 privacy probes still inject no private item in the default
+tier. The one private item in the v5 default tier is the new therapist
+probe, identical before and after: accepted recall matches the private Claim
+`therapist` by its label (accepted Claims are not floored, Stage 12) and the
+newer-statement companion search then adds the owner's later "I've been
+seeing a therapist about my anxiety since March." through the Predicate
+phrase. Neither path is a Stage 6 path, and fact keys did not add the
+Claim's own private message to either Predicate-label probe; the
+medication probe shows the personal-recall gate at work (its two label
+words would otherwise clear the two-word floor). It is recorded for
+follow-up. In the large tier the same probe adds one item to the four dense
+proxy hits recorded in the confirmation review.
+
+**Frozen 24-case lexical workloads** (`EVIE_MEMORY_INTEGRATED_LEXICAL=1`),
+before and after, with identical per-case lines: held-out 22/28 automatic,
+26/28 with deeper search, 19 non-gold of 48 first-dispatch items; development
+24/27 automatic, 25/27 with deeper search, 19 non-gold of 51. (One run of
+5463249 gave development 23/27 through the dev11 random-ID tie recorded in
+Stage 12; it flips between runs of the same code.)
+
+**Timing.** `TestRelevanceFrequenciesStayFastAtScale` now also searches its
+20,000 Global messages with a personal recall that names a time. Fastest of three on this
+machine: an empty window followed by the ordinary read 82 ms, a window holding
+the history 58 ms; the existing follow-up search (`TestRelevanceFrequenciesStayFastAtScale`)
+97 → 101 ms with counting 8.7 → 9.3 ms (the second FTS column). Whole-tier
+probe time is unchanged (default about 4.6 s, large 18.0 → 17.1 s); the large
+tier's index backfill rose from 42.2 s to 43.8 s, the key read for cited
+messages. Under `-race` the eviedb package took 1700 s, against 1735 s and
+1767 s for master in the same command (it runs close to the 30-minute bound
+either way).
+
+Remaining misses and known limits:
+
+- *Keys need a Claim.* "When is my pup's yearly checkup?" and "How fast am I
+  aiming to jog the 21k?" stay missed in the default tier: their needles
+  were never remembered, so no Claim's words key them; dense embeddings do
+  not include keys.
+- *Calendar windows.* "Last week" is the previous Monday-to-Sunday week in the
+  owner's zone, not the last seven days; a past-tense cue is needed for a
+  weekday or month name, and "What's booked on Friday?" reads Friday as past.
+- *Valid time.* Only Claims with a recorded Valid Time (here the corrected
+  employer) take part; most remembered Claims have none.
+- *The therapist probe* above, and the dense proxy hits of the large tier.
 
 ## Decisions and spec relationship
 

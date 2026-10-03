@@ -22,6 +22,11 @@ type SessionEpisodeQuery struct {
 	Intent string
 }
 
+// An explicit past time in the query text ("last week", "on 2026-09-14")
+// selects the episodes whose covered range overlaps it; the other words still
+// match the summary. A query that names only a time lists that range's
+// episodes, most recent first.
+
 // SessionEpisodeSource is the provenance of an episode: the accepted
 // context_compacted event whose summary it is and the contiguous range of the
 // session's events that summary covers.
@@ -62,4 +67,7 @@ type SessionEpisodeResult struct {
 	// could not be verified as the session's latest summary.
 	Withheld  int  `json:"withheld,omitempty"`
 	Truncated bool `json:"truncated,omitempty"`
+	// TimeWindow is the past range the query named, if any. When no episode
+	// inside it matched, the search fell back to all episodes of the area.
+	TimeWindow *RetrievalTimeWindow `json:"time_window,omitempty"`
 }

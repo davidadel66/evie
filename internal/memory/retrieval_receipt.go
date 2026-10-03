@@ -25,4 +25,7 @@ type RetrievalInterpretation struct {
 	EarlierBytes            int    `json:"earlier_bytes"`
 	SummaryBytes            int    `json:"summary_bytes"`
 	QueryBytes              int    `json:"query_bytes"`
+	// TimeReference is the kind of explicit past time the request named
+	// ("last_week", "weekday", "date"), never its words.
+	TimeReference string `json:"time_reference,omitempty"`
 }

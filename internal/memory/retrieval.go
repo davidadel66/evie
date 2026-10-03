@@ -64,6 +64,10 @@ type RetrievalQuery struct {
 	// Relevance is set only by Automatic Recall, never from model arguments.
 	// The Kernel applies it to conversation excerpts.
 	Relevance *RetrievalRelevance `json:"-"`
+	// RecallTime is Automatic Recall's reading of an explicit past time in
+	// the request; the zero reference means the request named none. When it
+	// is nil the Kernel reads the query text itself (model-directed reads).
+	RecallTime *RecallTimeReference `json:"-"`
 }
 
 // RetrievalRelevance is Automatic Recall's deterministic relevance contract.
@@ -213,6 +217,20 @@ type RetrievalResult struct {
 	SerializedBytes int                 `json:"serialized_bytes"`
 	// Gaps names coverage a budget cut short, such as RetrievalGapDenseScan.
 	Gaps []string `json:"gaps,omitempty"`
+	// TimeWindow is the past range the request named, if any.
+	TimeWindow *RetrievalTimeWindow `json:"time_window,omitempty"`
+}
+
+// RetrievalTimeWindow reports the past range a request named ("last week")
+// and whether evidence from inside it was found. Conversation search prefers
+// messages recorded inside the window and falls back to all eligible history
+// when none matches; accepted memory ranks Claims valid inside it first. The
+// window never widens what a reader may see.
+type RetrievalTimeWindow struct {
+	Expression string    `json:"expression"`
+	From       time.Time `json:"from"`
+	To         time.Time `json:"to"`
+	Matched    bool      `json:"matched"`
 }
 
 type RetrievalInspection struct {

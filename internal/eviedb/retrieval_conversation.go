@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -174,6 +175,43 @@ func chooseConversationExcerpt(content, query string, spans []evidenceSpan) (evi
 	return evidenceSpan{}, false
 }
 
+// conversationPass is one candidate read of conversation search: the
+// ordinary read, or the same read restricted to a requested time window.
+type conversationPass struct {
+	match     string // FTS expression
+	text      string // query words, for choosing the excerpt
+	relevance *memory.RetrievalRelevance
+	// size is the request's content-word count when relevance omits its
+	// time words; zero otherwise.
+	size   int
+	keys   bool // fact keys may match (retrieval_fact_keys.go)
+	window *memory.RecallTimeWindow
+}
+
+type conversationPassResult struct {
+	evidence                []memory.RetrievalEvidence
+	candidates              int
+	truncated, unclassified bool
+}
+
+// conversationMatchExpression restricts an FTS expression to the message's
+// own words unless fact keys may match.
+func conversationMatchExpression(fts string, keys bool) string {
+	if keys {
+		return fts
+	}
+	return "body : (" + fts + ")"
+}
+
+// conversationKeysAllowed reports whether fact keys may match. A
+// model-directed search may always use them. Automatic Recall uses them only
+// for a request to recall something about the owner: a Claim's words describe
+// the owner's world, and a general request that shares a Predicate label
+// ("Explain how daily medication reminders work") is not asking about it.
+func conversationKeysAllowed(query memory.RetrievalQuery) bool {
+	return query.Relevance == nil || query.Relevance.PersonalRecall
+}
+
 func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeContext, query memory.RetrievalQuery, fts string) (memory.RetrievalResult, error) {
 	result := memory.RetrievalResult{Status: memory.RetrievalFailed, Evidence: []memory.RetrievalEvidence{}}
 	ctx, cancel := context.WithTimeout(ctx, retrievalDeadline)
@@ -223,88 +261,48 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 	if err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT f.event_id FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
- AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=f.generation AND g.state='active')
- AND `+conversationObservedTimeSQL+`<=?
- AND (e.session_id!=? OR e.sequence<?)
- AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
- ORDER BY bm25(memory_retrieval_event_fts_v3),e.recorded_at DESC,f.event_id LIMIT ?`, fts, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known), scope.SessionID, cutoff, query.ExcludeCurrentRequestCopies, scope.SessionID, lexicalLimit+1)
-	if err != nil {
-		return retrievalReadFailure(ctx, result, err)
-	}
-	var ids []memory.EventID
-	for rows.Next() {
-		var id memory.EventID
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+	keys := conversationKeysAllowed(query)
+	ordinary := conversationPass{match: conversationMatchExpression(fts, keys), text: query.Text, relevance: query.Relevance, keys: keys}
+	var pass conversationPassResult
+	windowed, unclassified := false, false
+	if timed, ok := s.conversationTimePass(query, ordinary); ok {
+		// A named past time ("last week") is read first: the request without
+		// its time words, among messages recorded inside the window. Only
+		// when nothing there qualifies does the ordinary read run, so a time
+		// word that named the topic rather than the moment loses nothing.
+		result.TimeWindow = &memory.RetrievalTimeWindow{Expression: timed.window.Expression, From: timed.window.From, To: timed.window.To}
+		if pass, err = s.readConversationPass(ctx, tx, scope, query, timed, known, cutoff, lexicalLimit); err != nil {
 			return retrievalReadFailure(ctx, result, err)
 		}
-		if len(ids) == lexicalLimit {
-			result.Truncated = true
-			break
-		}
-		ids = append(ids, id)
+		windowed, unclassified = len(pass.evidence) > 0, pass.unclassified
+		result.TimeWindow.Matched = windowed
 	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return retrievalReadFailure(ctx, result, err)
-	}
-	rows.Close()
-	unclassified := false
-	var frequency map[string]int
-	if query.Relevance != nil && len(ids) > 0 {
-		if frequency, err = relevanceFrequencies(ctx, tx, query.Relevance, scopeKeyForContext(scope), known, scope.SessionID, cutoff); err != nil {
+	if !windowed {
+		if pass, err = s.readConversationPass(ctx, tx, scope, query, ordinary, known, cutoff, lexicalLimit); err != nil {
 			return retrievalReadFailure(ctx, result, err)
 		}
 	}
-	for _, id := range ids {
-		e, eligible, err := loadConversationEvidence(ctx, tx, id)
+	// An excerpt withheld as unclassifiable in either read leaves coverage
+	// incomplete.
+	unclassified = unclassified || pass.unclassified
+	result.Evidence, result.Truncated = pass.evidence, pass.truncated
+	denseIncomplete := false
+	if !windowed {
+		// Dense hits join the ordinary read only; the window applies to
+		// lexical excerpts, whose recorded time it compares.
+		dense, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-pass.candidates, prepared, cutoff)
 		if err != nil {
 			return retrievalReadFailure(ctx, result, err)
 		}
-		if !eligible || e.scope != scopeKeyForContext(scope) {
-			continue
+		result.DenseCoverage = dense.coverage
+		denseIncomplete = dense.incomplete
+		if dense.cut {
+			result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
 		}
-		spans, err := conversationReadSpans(ctx, tx, e, query.Intent, known)
-		if err != nil {
-			return retrievalReadFailure(ctx, result, err)
-		}
-		span, matched := chooseConversationReadExcerpt(e.content, query.Text, spans)
-		if !matched {
-			continue
-		}
-		if query.Relevance != nil && !relevantToRequest(e.content[span.start:span.end], query.Relevance, frequency) {
-			continue
-		}
-		if len(result.Evidence) >= query.Limit {
-			result.Truncated = true
-			break
-		}
-		evidence, err := annotatedConversationExcerpt(ctx, tx, scope, e, span, known, known, query.Intent)
-		if errors.Is(err, ErrConversationAssociation) {
-			// An excerpt that cannot be classified is withheld, never shown as current.
-			unclassified = true
-			continue
-		}
-		if err != nil {
-			return retrievalReadFailure(ctx, result, err)
-		}
-		result.Truncated = result.Truncated || span.start > 0 || span.end < len(e.content)
-		result.Evidence = append(result.Evidence, evidence)
+		var fusedTruncated bool
+		result.Evidence, fusedTruncated = fuseConversationEvidence(result.Evidence, dense.evidence, query.Limit)
+		result.Truncated = result.Truncated || dense.truncated || fusedTruncated
 	}
-	dense, err := s.denseConversationCandidates(ctx, tx, scope, query, known, retrievalCandidateLimit-len(ids), prepared, cutoff)
-	if err != nil {
-		return retrievalReadFailure(ctx, result, err)
-	}
-	result.DenseCoverage = dense.coverage
-	denseIncomplete, denseTruncated := dense.incomplete, dense.truncated
-	if dense.cut {
-		result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
-	}
-	var fusedTruncated bool
-	result.Evidence, fusedTruncated = fuseConversationEvidence(result.Evidence, dense.evidence, query.Limit)
-	result.Truncated = result.Truncated || denseTruncated || fusedTruncated
 	if err = tx.Commit(); err != nil {
 		return retrievalReadFailure(ctx, result, err)
 	}
@@ -339,6 +337,187 @@ func (s *Store) searchConversations(ctx context.Context, scope memory.ScopeConte
 			result.Status = memory.RetrievalExhausted
 		}
 	}
+}
+
+// readConversationPass fetches lexical candidates for one pass and keeps
+// those that are eligible now, readable for the intent, matched by the
+// message's words or (when allowed) a fact key, and above the relevance floor.
+func (s *Store) readConversationPass(ctx context.Context, tx *sql.Tx, scope memory.ScopeContext, query memory.RetrievalQuery, pass conversationPass, known time.Time, cutoff int64, limit int) (conversationPassResult, error) {
+	var out conversationPassResult
+	from, to := "", ""
+	if pass.window != nil {
+		from, to = formatSemanticTime(pass.window.From), formatSemanticTime(pass.window.To)
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT f.event_id FROM memory_retrieval_event_fts_v4 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v4 MATCH ? AND f.generation=? AND f.scope_key=?
+ AND EXISTS(SELECT 1 FROM memory_retrieval_generations g WHERE g.generation=f.generation AND g.state='active')
+ AND `+conversationObservedTimeSQL+`<=?
+ AND (?='' OR `+conversationObservedTimeSQL+`>=?) AND (?='' OR `+conversationObservedTimeSQL+`<?)
+ AND (e.session_id!=? OR e.sequence<?)
+ AND (?=0 OR e.content!=COALESCE((SELECT content FROM events WHERE session_id=? AND event_type='user_message' ORDER BY sequence DESC LIMIT 1),''))
+ ORDER BY `+conversationRankSQL+`,e.recorded_at DESC,f.event_id LIMIT ?`, pass.match, conversationIndexGeneration, scopeKeyForContext(scope), formatSemanticTime(known),
+		from, from, to, to, scope.SessionID, cutoff, query.ExcludeCurrentRequestCopies, scope.SessionID, limit+1)
+	if err != nil {
+		return out, err
+	}
+	var ids []memory.EventID
+	for rows.Next() {
+		var id memory.EventID
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if len(ids) == limit {
+			out.truncated = true
+			break
+		}
+		ids = append(ids, id)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return out, err
+	}
+	rows.Close()
+	out.candidates = len(ids)
+	var frequency map[string]int
+	if pass.relevance != nil && len(ids) > 0 {
+		if frequency, err = relevanceFrequencies(ctx, tx, pass.relevance, scopeKeyForContext(scope), known, scope.SessionID, cutoff, pass.keys, pass.window); err != nil {
+			return out, err
+		}
+	}
+	for _, id := range ids {
+		e, eligible, err := loadConversationEvidence(ctx, tx, id)
+		if err != nil {
+			return out, err
+		}
+		if !eligible || e.scope != scopeKeyForContext(scope) {
+			continue
+		}
+		spans, err := conversationReadSpans(ctx, tx, e, query.Intent, known)
+		if err != nil {
+			return out, err
+		}
+		// Keys are read from accepted state now, never trusted from the index.
+		var keys []conversationFactKey
+		keysRead := false
+		readKeys := func() error {
+			if keysRead || !pass.keys {
+				return nil
+			}
+			keysRead = true
+			keys, err = conversationFactKeys(ctx, tx, e, known)
+			return err
+		}
+		span, matched := chooseConversationReadExcerpt(e.content, pass.text, spans)
+		byKey := false
+		if !matched {
+			if err = readKeys(); err != nil {
+				return out, err
+			}
+			span, matched = chooseFactKeyExcerpt(e.content, pass.text, spans, keys)
+			byKey = matched
+		}
+		if !matched {
+			continue
+		}
+		if pass.relevance != nil {
+			tokens := relevanceTokens(e.content[span.start:span.end])
+			if !relevantTokens(tokens, pass.relevance, frequency, pass.size) {
+				if err = readKeys(); err != nil {
+					return out, err
+				}
+				var added bool
+				if tokens, added = factKeyTokens(tokens, span.evidenceSpan, keys); !added || !relevantTokens(tokens, pass.relevance, frequency, pass.size) {
+					continue
+				}
+				byKey = true
+			}
+		}
+		if len(out.evidence) >= query.Limit {
+			out.truncated = true
+			break
+		}
+		evidence, err := annotatedConversationExcerpt(ctx, tx, scope, e, span, known, known, query.Intent)
+		if errors.Is(err, ErrConversationAssociation) {
+			// An excerpt that cannot be classified is withheld, never shown as current.
+			out.unclassified = true
+			continue
+		}
+		if err != nil {
+			return out, err
+		}
+		if byKey {
+			evidence.Paths = append(evidence.Paths, "conversation_fact_key")
+		}
+		if pass.window != nil {
+			evidence.Paths = append(evidence.Paths, "time_window")
+		}
+		out.truncated = out.truncated || span.start > 0 || span.end < len(e.content)
+		out.evidence = append(out.evidence, evidence)
+	}
+	return out, nil
+}
+
+// recallTimeWindow resolves the request's explicit past time: Automatic
+// Recall's reading of the request when it supplied one, otherwise the query
+// text a model wrote. The window is resolved at the Store's clock in the
+// owner's zone.
+func (s *Store) recallTimeWindow(query memory.RetrievalQuery) (memory.RecallTimeReference, memory.RecallTimeWindow, bool) {
+	var reference memory.RecallTimeReference
+	if query.RecallTime != nil {
+		reference = *query.RecallTime
+	} else {
+		reference, _ = memory.FindRecallTimeReference(query.Text)
+	}
+	window, ok := reference.Window(s.now(), s.location)
+	return reference, window, ok
+}
+
+// withoutTimeWords returns the words of text that are not the reference's
+// time words, in order.
+func withoutTimeWords(words []string, reference memory.RecallTimeReference) []string {
+	var kept []string
+	for _, word := range words {
+		if !slices.Contains(reference.Words, strings.ToLower(word)) {
+			kept = append(kept, word)
+		}
+	}
+	return kept
+}
+
+// conversationTimePass is the ordinary pass restricted to the request's
+// past window, without the time words themselves. It reports false when the
+// request names no past window, or nothing besides the time.
+func (s *Store) conversationTimePass(query memory.RetrievalQuery, ordinary conversationPass) (conversationPass, bool) {
+	reference, window, ok := s.recallTimeWindow(query)
+	if !ok {
+		return conversationPass{}, false
+	}
+	kept := withoutTimeWords(strings.FieldsFunc(query.Text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }), reference)
+	if len(kept) == 0 {
+		return conversationPass{}, false
+	}
+	quoted := make([]string, len(kept))
+	for i, word := range kept {
+		quoted[i] = `"` + word + `"`
+	}
+	timed := ordinary
+	timed.match = conversationMatchExpression(strings.Join(quoted, " OR "), ordinary.keys)
+	timed.text = strings.Join(kept, " ")
+	timed.window = &window
+	if ordinary.relevance != nil {
+		relevance := *ordinary.relevance
+		relevance.Current = withoutTimeWords(relevance.Current, reference)
+		if len(relevance.Current) == 0 && len(relevance.Context) == 0 {
+			return conversationPass{}, false
+		}
+		folded := map[string]bool{}
+		for _, term := range ordinary.relevance.Current {
+			folded[relevanceKey(term)] = true
+		}
+		timed.relevance, timed.size = &relevance, len(folded)
+	}
+	return timed, true
 }
 
 func (s *Store) resolveConversationReference(ctx context.Context, q semanticInspectionQueryer, scope memory.ScopeContext, ref memory.RetrievalReference) (memory.RetrievalEvidence, bool, error) {

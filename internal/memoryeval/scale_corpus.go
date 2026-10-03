@@ -7,12 +7,13 @@ import (
 	"math/rand/v2"
 	"sort"
 	"strings"
+	"time"
 )
 
 // ScaleCorpusVersion identifies the generated history, labels, and probes.
 // Change it whenever generated content or gold labels change so a baseline is
 // never compared across different corpora.
-const ScaleCorpusVersion = "memory-scale-replay-v4"
+const ScaleCorpusVersion = "memory-scale-replay-v5"
 
 const (
 	ScaleTierDefault = "default"
@@ -49,6 +50,9 @@ const (
 	ScaleFamilyUnrelated     = "unrelated"       // no personal memory needed
 	ScaleFamilyStale         = "stale"           // corrected, retired, contradicted, or drifted facts
 	ScaleFamilyDenseCoverage = "dense_coverage"  // large tier: dense-only targets across the vector table
+	// Corpus v5 (memory architecture Stage 6).
+	ScaleFamilyTemporal = "temporal" // names a past time; same-subject messages before and after it
+	ScaleFamilyFactKey  = "fact_key" // phrased like a saved fact whose source message used other words
 )
 
 // Stale-fact scenarios mirror harness-review rows M2, M3 and M4. Controls use
@@ -143,10 +147,48 @@ type ScaleStep struct {
 }
 
 type ScaleSession struct {
-	Key   string      `json:"key"`
-	Area  string      `json:"area"`
+	Key  string `json:"key"`
+	Area string `json:"area"`
+	// Start is when the session begins on the synthetic timeline (corpus v5),
+	// RFC3339 in the corpus clock's zone.
+	Start string      `json:"start"`
 	Steps []ScaleStep `json:"steps"`
 }
+
+// StartTime parses Start.
+func (s ScaleSession) StartTime() time.Time {
+	start, _ := time.Parse(time.RFC3339, s.Start)
+	return start
+}
+
+// ScaleClock is the synthetic timeline the replay runs on (corpus v5). Each
+// session begins at its Start, and every probe runs at Probe, in a fixed owner
+// zone, so time-aware recall ("last week", "on Friday") is measured
+// deterministically. Ordinary sessions are spread evenly from First to Last;
+// a scenario may be pinned to an exact time between them.
+type ScaleClock struct {
+	Zone          string `json:"zone"`
+	OffsetSeconds int    `json:"offset_seconds"`
+	First         string `json:"first"`
+	Last          string `json:"last"`
+	Probe         string `json:"probe"`
+}
+
+// Location is the owner's fixed time zone.
+func (c ScaleClock) Location() *time.Location {
+	return time.FixedZone(c.Zone, c.OffsetSeconds)
+}
+
+// ProbeTime is when every probe runs.
+func (c ScaleClock) ProbeTime() time.Time {
+	probe, _ := time.Parse(time.RFC3339, c.Probe)
+	return probe
+}
+
+// The corpus clock: ten months of history ending the evening before the
+// probes, which run on Thursday 1 October 2026 at 18:00 in UTC-4.
+var scaleClock = ScaleClock{Zone: "UTC-4", OffsetSeconds: -4 * 60 * 60,
+	First: "2025-12-01T09:00:00-04:00", Last: "2026-09-30T20:00:00-04:00", Probe: "2026-10-01T18:00:00-04:00"}
 
 // ScaleStaleCheck is evaluated against one probe's delivered evidence.
 // StaleKeys must not be delivered as unflagged current evidence. LinkKeys is a
@@ -178,6 +220,7 @@ type ScaleProbe struct {
 type ScaleCorpus struct {
 	Version  string              `json:"version"`
 	Options  ScaleCorpusOptions  `json:"options"`
+	Clock    ScaleClock          `json:"clock"`
 	Areas    []ScaleArea         `json:"areas"`
 	Sessions []ScaleSession      `json:"sessions"`
 	Claims   []ScaleClaim        `json:"claims"`
@@ -665,10 +708,12 @@ var scaleNeedles = []scaleNeedle{
 	{key: "n.wifi", topic: "home", owner: "The home wifi is called Evergreen5G and the key is taped under the router.", reply: "Okay, noted.", at: .53},
 }
 
-// scaleScenario is a fixed Global session at a relative point in history.
+// scaleScenario is a fixed Global session at a relative point in history,
+// or, when pinned (corpus v5), at an exact time on the corpus clock.
 type scaleScenario struct {
-	at    float64
-	steps []ScaleStep
+	at     float64
+	pinned string
+	steps  []ScaleStep
 }
 
 var scaleClaims = []ScaleClaim{
@@ -694,6 +739,15 @@ var scaleClaims = []ScaleClaim{
 	// Corpus v4: a Claim whose later update has a verb between the change
 	// cue and the saved value.
 	{Key: "c.storage", Topic: "storage", Predicate: "cloud_storage", Label: "cloud storage", Cardinality: "one", Value: "Dropbox"},
+	// Corpus v5: Claims whose source message states the value in other
+	// words than the Predicate (fact-augmented keys), and two private ones.
+	{Key: "c.apartment", Topic: "apartment", Predicate: "apartment_number", Label: "apartment number", Cardinality: "one", Value: "4B"},
+	{Key: "c.blood", Topic: "blood_type", Predicate: "blood_type", Label: "blood type", Cardinality: "one", Value: "O negative"},
+	{Key: "c.commute", Topic: "commute", Predicate: "commute", Label: "commute", Cardinality: "one", Value: "the 7:42 ferry"},
+	{Key: "c.locker", Topic: "locker", Predicate: "locker_combination", Label: "locker combination", Cardinality: "one", Value: "3-1-4"},
+	{Key: "c.bicycle", Topic: "bicycle", Predicate: "bicycle", Label: "bicycle", Cardinality: "one", Value: "green Brompton"},
+	{Key: "c.therapist", Topic: "health", Predicate: "therapist", Label: "therapist", Cardinality: "one", Value: "Dr. Hale"},
+	{Key: "c.medication", Topic: "health", Predicate: "daily_medication", Label: "daily medication", Cardinality: "many", Value: "sertraline"},
 }
 
 func scaleOwner(key, topic, text string) ScaleMessage {
@@ -706,6 +760,19 @@ func scaleReply(key, topic, text string) *ScaleMessage {
 
 func scaleRemember(claim, text string) ScaleStep {
 	return ScaleStep{Kind: ScaleStepRemember, Claim: claim, Owner: scaleOwner("m."+claim, scaleClaimTopic(claim), text)}
+}
+
+// scalePrivateRemember is a remember command labelled private.
+func scalePrivateRemember(claim, text string) ScaleStep {
+	step := scaleRemember(claim, text)
+	step.Owner.Private = true
+	return step
+}
+
+// scalePinned is a one-exchange scenario at an exact time on the corpus
+// clock (UTC-4), with the usual "Okay, noted." reply.
+func scalePinned(at, key, topic, text string) scaleScenario {
+	return scaleScenario{pinned: at, steps: []ScaleStep{scaleExchange(key, topic, text, "Okay, noted.")}}
 }
 
 func scaleClaimTopic(key string) string {
@@ -822,6 +889,48 @@ func scaleScenarios() []scaleScenario {
 		{at: .48, steps: append(scaleTopicExchanges("m.vpn", "vpn",
 			"The VPN keeps dropping at the cafe.", "The VPN client needs an update.", "Turn the VPN off for the printer.", "The VPN is slow on the hotel network."),
 			scalePrivateExchange("m.private.overdrawn", "money", "My bank account is overdrawn by two thousand dollars.", "That sounds stressful."))},
+		// Corpus v5 (Stage 6). Saved facts whose source message says them in
+		// other words than the Predicate, and private ones whose Predicate
+		// label an unrelated request shares.
+		{at: .20, steps: []ScaleStep{scaleRemember("c.apartment", "Remember that we're in 4B, the flat on the fourth floor with the green door.")}},
+		{at: .21, steps: []ScaleStep{scaleRemember("c.blood", "Remember that I'm O negative, and my donor card is in the red wallet.")}},
+		{at: .22, steps: []ScaleStep{scaleRemember("c.commute", "Remember that I take the 7:42 ferry to the office on weekdays and cycle back.")}},
+		{at: .23, steps: []ScaleStep{scaleRemember("c.locker", "Remember that my locker code at Equinox is 3-1-4.")}},
+		{at: .24, steps: []ScaleStep{scaleRemember("c.bicycle", "Remember that I ride a green Brompton; it folds under my desk at the office.")}},
+		{at: .25, steps: []ScaleStep{scalePrivateRemember("c.therapist", "Remember that I see Dr. Hale every other Tuesday for the panic attacks.")}},
+		{at: .26, steps: []ScaleStep{scalePrivateRemember("c.medication", "Remember that I take sertraline every morning with breakfast.")}},
+		// Corpus v5 (Stage 6). Same-subject messages before and after a past
+		// time a probe names, pinned on the corpus clock; the probes run on
+		// Thursday 1 October 2026 at 18:00.
+		scalePinned("2026-09-12T10:00:00-04:00", "t.marek.winter", "plumber", "Marek is hard to book in winter, so plan early."),
+		scalePinned("2026-09-30T19:30:00-04:00", "t.marek.booked", "plumber", "Booked Marek to fix the leak under the kitchen sink on Monday morning."),
+		scalePinned("2026-10-01T08:15:00-04:00", "t.marek.late", "plumber", "Marek says the kitchen sink part might arrive late."),
+		scalePinned("2026-08-18T19:00:00-04:00", "t.paint.torn", "paint", "For the hallway paint I'm torn between Sage Whisper and Pale Oak."),
+		scalePinned("2026-09-24T20:00:00-04:00", "t.paint.picked", "paint", "We picked Sage Whisper for the hallway paint; the samples looked best in daylight."),
+		scalePinned("2026-09-29T19:00:00-04:00", "t.paint.finish", "paint", "Can you compare paint finishes for the hallway, eggshell or matte?"),
+		scalePinned("2026-09-10T18:00:00-04:00", "t.lease.draft", "lease", "Mrs. Okoro sent over the lease renewal draft."),
+		scalePinned("2026-09-28T18:30:00-04:00", "t.lease.sent", "lease", "Sent the signed lease renewal back to Mrs. Okoro this afternoon."),
+		scalePinned("2026-09-30T09:00:00-04:00", "t.lease.deposit", "lease", "Remind me to ask Mrs. Okoro about the lease renewal deposit."),
+		scalePinned("2026-06-03T12:00:00-04:00", "t.priya.podcast", "friends", "Priya recommended a podcast about urban beekeeping."),
+		scalePinned("2026-06-20T20:00:00-04:00", "t.priya.pricey", "friends", "Priya's restaurant recommendation in June was too pricey."),
+		scalePinned("2026-09-25T21:00:00-04:00", "t.priya.korean", "friends", "Lunch with Priya was great; she recommended the Korean place on Fifth Street."),
+		scalePinned("2026-09-29T12:00:00-04:00", "t.priya.night", "friends", "Priya and I are planning a restaurant night next month."),
+		scalePinned("2026-03-18T19:00:00-04:00", "t.insurance.renewed", "insurance", "Renewed the car insurance with Lumen for another year; the excess is 250 euros."),
+		scalePinned("2026-07-14T19:00:00-04:00", "t.insurance.halden", "insurance", "The car insurance quote from Halden came in cheaper."),
+		scalePinned("2026-08-05T19:00:00-04:00", "t.insurance.switch", "insurance", "Should I switch the car insurance to Halden when it renews?"),
+		scalePinned("2026-08-20T19:00:00-04:00", "t.bill.august", "bills", "The electricity bill was 118 euros in August."),
+		scalePinned("2026-09-14T20:00:00-04:00", "t.bill.settled", "bills", "Settled the electricity bill today: 142 euros."),
+		scalePinned("2026-09-22T19:00:00-04:00", "t.bill.tariff", "bills", "The electricity bill went up again; check the tariff."),
+		scalePinned("2026-09-29T19:30:00-04:00", "t.bill.estimate", "bills", "The electricity bill estimate for October looks high."),
+		scalePinned("2026-05-05T19:00:00-04:00", "t.class.spanish", "classes", "Signed up for the beginner Spanish class at the library."),
+		scalePinned("2026-09-10T20:00:00-04:00", "t.class.pottery", "classes", "Signed up for the Thursday pottery class at the community centre."),
+		scalePinned("2026-10-01T07:30:00-04:00", "t.class.newsletter", "classes", "The pottery class sends a newsletter every Monday."),
+		scalePinned("2026-08-01T10:00:00-04:00", "t.parcel.locker", "parcels", "The parcel locker code is 4471."),
+		scalePinned("2026-09-20T10:00:00-04:00", "t.parcel.concierge", "parcels", "Leave the parcel with the concierge if I'm out."),
+		scalePinned("2026-09-25T10:00:00-04:00", "t.parcel.due", "parcels", "Another parcel from Kestrel Books is due next week."),
+		scalePinned("2026-10-01T09:30:00-04:00", "t.parcel.today", "parcels", "The parcel from Kestrel Books came, so I'll leave it with the concierge for now."),
+		// A private message inside a window an unrelated request names.
+		{pinned: "2026-09-30T21:00:00-04:00", steps: []ScaleStep{scalePrivateExchange("t.private.scan", "health", "The MRI scan results came back and the neurologist wants to talk.", "That sounds worrying.")}},
 	}
 }
 
@@ -903,7 +1012,15 @@ func GenerateScaleCorpus(options ScaleCorpusOptions) ScaleCorpus {
 		corpus.Concepts[place[0]] = []string{place[0], place[1]}
 	}
 	// Scenario sessions are separate conversations interleaved in Global time.
-	scenarios := scaleScenarios()
+	// Pinned scenarios are placed by their exact time after the others are.
+	var scenarios, pinned []scaleScenario
+	for _, scenario := range scaleScenarios() {
+		if scenario.pinned != "" {
+			pinned = append(pinned, scenario)
+		} else {
+			scenarios = append(scenarios, scenario)
+		}
+	}
 	sort.SliceStable(scenarios, func(i, j int) bool { return scenarios[i].at < scenarios[j].at })
 	var ordered []ScaleSession
 	next := 0
@@ -937,7 +1054,8 @@ func GenerateScaleCorpus(options ScaleCorpusOptions) ScaleCorpus {
 			timeline = append(timeline, byArea[area.Key][areaIndex[area.Key]])
 		}
 	}
-	corpus.Sessions = timeline
+	corpus.Clock = scaleClock
+	corpus.Sessions = scaleTimeline(timeline, pinned, scaleClock, nextKey)
 	for i := range corpus.Sessions {
 		for j := range corpus.Sessions[i].Steps {
 			step := &corpus.Sessions[i].Steps[j]
@@ -952,6 +1070,33 @@ func GenerateScaleCorpus(options ScaleCorpusOptions) ScaleCorpus {
 
 func scaleScenarioSession(scenario scaleScenario, nextKey func(string) string) ScaleSession {
 	return ScaleSession{Key: nextKey("s.scenario"), Area: ScaleAreaGlobal, Steps: append([]ScaleStep(nil), scenario.steps...)}
+}
+
+// scaleTimeline spreads the ordinary sessions evenly from clock.First to
+// clock.Last, to the minute, then inserts each pinned scenario before the
+// first session that starts after it, so the build order is the time order.
+func scaleTimeline(ordinary []ScaleSession, pinned []scaleScenario, clock ScaleClock, nextKey func(string) string) []ScaleSession {
+	first, _ := time.Parse(time.RFC3339, clock.First)
+	last, _ := time.Parse(time.RFC3339, clock.Last)
+	zone := clock.Location()
+	step := last.Sub(first) / time.Duration(max(1, len(ordinary)-1))
+	for i := range ordinary {
+		ordinary[i].Start = first.Add(time.Duration(i) * step).Truncate(time.Minute).In(zone).Format(time.RFC3339)
+	}
+	sort.SliceStable(pinned, func(i, j int) bool { return pinned[i].pinned < pinned[j].pinned })
+	var timeline []ScaleSession
+	next := 0
+	for _, scenario := range pinned {
+		at, _ := time.Parse(time.RFC3339, scenario.pinned)
+		for next < len(ordinary) && !ordinary[next].StartTime().After(at) {
+			timeline = append(timeline, ordinary[next])
+			next++
+		}
+		session := scaleScenarioSession(scenario, nextKey)
+		session.Start = at.In(zone).Format(time.RFC3339)
+		timeline = append(timeline, session)
+	}
+	return append(timeline, ordinary[next:]...)
 }
 
 // scaleTopicSession returns the nearest session at or around index whose
@@ -1162,6 +1307,27 @@ func scaleProbes() []ScaleProbe {
 			[]ScaleStaleCheck{{Scenario: ScaleStaleCardinalityDrift, Issue: "M4", LinkKeys: []string{"c.bank", "c.bank.drift"}}}},
 		{"barber", ScaleFamilyStale, ScaleAreaGlobal, "Who is my barber?", "barber", []string{"barber"}, []string{"c.barber", "c.barber.second"},
 			[]ScaleStaleCheck{{Scenario: ScaleStaleSamePredicate, Issue: "M4", Control: true, LinkKeys: []string{"c.barber", "c.barber.second"}}}},
+		// Corpus v5 (Stage 6): questions that name a past time, and the
+		// Claim valid during one. Tool queries name the time as a model would.
+		{"when.marek", ScaleFamilyTemporal, ScaleAreaGlobal, "What did I book with Marek yesterday?", "Marek book yesterday", []string{"plumber"}, []string{"t.marek.booked"}, nil},
+		{"when.paint", ScaleFamilyTemporal, ScaleAreaGlobal, "Which hallway paint did we pick last week?", "hallway paint last week", []string{"paint"}, []string{"t.paint.picked"}, nil},
+		{"when.lease", ScaleFamilyTemporal, ScaleAreaGlobal, "What did I send Mrs. Okoro three days ago?", "Mrs Okoro three days ago", []string{"lease"}, []string{"t.lease.sent"}, nil},
+		{"when.priya", ScaleFamilyTemporal, ScaleAreaGlobal, "Which restaurant did Priya recommend on Friday?", "Priya restaurant last Friday", []string{"friends"}, []string{"t.priya.korean"}, nil},
+		{"when.insurance", ScaleFamilyTemporal, ScaleAreaGlobal, "Which company did I renew the car insurance with in March?", "car insurance renew March 2026", []string{"insurance", "car"}, []string{"t.insurance.renewed"}, nil},
+		{"when.bill", ScaleFamilyTemporal, ScaleAreaGlobal, "How much was the electricity bill I paid on 2026-09-14?", "electricity bill 2026-09-14", []string{"bills"}, []string{"t.bill.settled"}, nil},
+		{"when.class", ScaleFamilyTemporal, ScaleAreaGlobal, "Which class did I sign up for last month?", "class signed up last month", []string{"classes"}, []string{"t.class.pottery"}, nil},
+		{"when.parcel", ScaleFamilyTemporal, ScaleAreaGlobal, "Where did I leave the parcel earlier today?", "parcel leave earlier today", []string{"parcels"}, []string{"t.parcel.today"}, nil},
+		{"when.employer", ScaleFamilyTemporal, ScaleAreaGlobal, "Who was my employer in March?", "employer March 2026", []string{"employer"}, []string{"c.employer"},
+			[]ScaleStaleCheck{{Scenario: ScaleStaleCorrection, Issue: "M2", StaleKeys: []string{"m.c.employer", "c.employer"}}}},
+		// Corpus v5 (Stage 6): questions phrased like a saved fact whose
+		// source message used other words. The source message is required
+		// on the automatic and conversation paths, the Claim on the automatic
+		// and memory_search paths.
+		{"fact.apartment", ScaleFamilyFactKey, ScaleAreaGlobal, "What's my apartment number?", "apartment number", []string{"apartment"}, []string{"c.apartment", "m.c.apartment"}, nil},
+		{"fact.blood", ScaleFamilyFactKey, ScaleAreaGlobal, "What's my blood type?", "blood type", []string{"blood_type"}, []string{"c.blood", "m.c.blood"}, nil},
+		{"fact.commute", ScaleFamilyFactKey, ScaleAreaGlobal, "How do I commute to work?", "commute", []string{"commute"}, []string{"c.commute", "m.c.commute"}, nil},
+		{"fact.locker", ScaleFamilyFactKey, ScaleAreaGlobal, "What's my gym locker combination?", "gym locker combination", []string{"locker", "gym"}, []string{"c.locker", "m.c.locker"}, nil},
+		{"fact.bicycle", ScaleFamilyFactKey, ScaleAreaGlobal, "Which bicycle do I own?", "bicycle", []string{"bicycle"}, []string{"c.bicycle", "m.c.bicycle"}, nil},
 	}
 	var probes []ScaleProbe
 	for _, s := range specs {
@@ -1214,6 +1380,12 @@ func scaleProbes() []ScaleProbe {
 		{ID: "auto.privacy.custody", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Suggest a playlist for a custody handover drive.", Topics: []string{"playlist"}},
 		{ID: "auto.privacy.run", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What were the results of the run today?", Topics: []string{"running"}},
 		{ID: "auto.privacy.vpn", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Do I need to use a VPN for the bank?", Topics: []string{"vpn"}},
+		// Corpus v5 (Stage 6): unrelated requests that share a private
+		// Claim's Predicate label (fact keys), and one whose named time holds
+		// a private message sharing a word.
+		{ID: "auto.privacy.therapist", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Write a short story about a therapist and a lighthouse keeper."},
+		{ID: "auto.privacy.medication", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "Explain how daily medication reminders work in phone apps."},
+		{ID: "auto.privacy.lottery", Family: ScaleFamilyPrivacy, Area: ScaleAreaGlobal, Message: "What were the results of the lottery yesterday?"},
 	}
 	for _, probe := range automaticOnly {
 		probe.Path = ScalePathAutomatic

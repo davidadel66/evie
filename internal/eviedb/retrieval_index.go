@@ -136,6 +136,11 @@ func (s *Store) refreshAcceptedMemoryIndex(ctx context.Context, limit int) (memo
 			if err = s.refreshMemoryClaim(ctx, q, e.id); err != nil {
 				return err
 			}
+			// The Claim's words may have changed, so the messages it cites
+			// are re-keyed in the conversation index (fact-augmented keys).
+			if _, err = q.ExecContext(ctx, `INSERT OR IGNORE INTO memory_retrieval_event_dirty SELECT event_id FROM semantic_source_links WHERE claim_id=?`, e.id); err != nil {
+				return err
+			}
 			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_dirty WHERE claim_id=?`, e.id); err != nil {
 				return err
 			}

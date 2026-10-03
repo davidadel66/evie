@@ -1,5 +1,157 @@
 # Memory Stage 5 retrieval — decisions
 
+- **2026-10-03 — Recall quality: fact-augmented keys and time-aware query
+  expansion (memory architecture Stage 6).** Applies the two LongMemEval
+  findings that `docs/memory-architecture.md` adopts for relevance recall.
+  Both are deterministic, read existing durable data, add no model call to
+  the hot path, and never widen what a reader may see; a key or a window only
+  changes which eligible evidence is preferred. Measured on the scale corpus
+  v5 (`memory-scale-eval.md`, Stage 6).
+  - *Granularity.* Conversation excerpts are already message-level (one
+    index row per user or assistant message), finer than LongMemEval's round.
+    That is kept; nothing is indexed per session. Episodes stay one per
+    session and are searched on demand only.
+  - *Fact-augmented keys.* The conversation index moves to generation
+    `conversation-fts-unicode61-v4`, whose rows gain a `keys` column: for a
+    message that is the cited Source of an accepted Claim, the Claim's
+    Predicate label and token, its literal value, and the canonical names and
+    aliases of its Entities. Only Claims that are currently active, whose
+    Source Link is eligible and not `evie_proposed`, and whose scope every
+    reader of the message may read (Global, or the message's own Workspace or
+    project; never a session scope) key a message. Entity names and aliases
+    join only from those same scopes, and the owner's and Evie's own anchors
+    never do. Keys are matching text only: the excerpt still renders the
+    message's own words under the existing span, retirement and source rules.
+    A hit is rechecked on read: keys are recomputed from accepted state at
+    the read's knowledge time, so a stale index cannot match through a
+    retired, corrected or retracted Claim, and a key-only match starts its
+    excerpt at the cited span (up to 200 bytes before it, as a word match
+    does). Ranking is `bm25` with weight 1 for the message's words and 0.5 for
+    its keys. The new generation backfills every retained event before it
+    serves queries; the v3 table is left unread so an older binary can still
+    resume it. Claim and Source Link changes already mark the cited message
+    for refresh; a change to a Claim's other words (an alias added, an Entity
+    or alias retired) already marks the Claim dirty in the accepted index,
+    and refreshing that Claim now marks the messages it cites, so key upkeep
+    adds no trigger work to memory writes. A refresh reads keys only for the
+    messages some Claim cites. Evidence matched through a key carries the
+    path `conversation_fact_key`.
+  - *Keys and Automatic Recall.* A model-directed conversation search always
+    matches keys. Automatic Recall matches them only for a personal recall
+    (`RetrievalRelevance.PersonalRecall`, the 2026-10-01 rule): a Claim's
+    words describe the owner's world, and a general request sharing a
+    Predicate label ("Explain how daily medication reminders work in phone
+    apps.") is not asking about it. Otherwise the read, its relevance floor
+    frequencies and its ranking use the message's own words exactly as
+    before (an FTS column filter). For a personal recall the floor counts the
+    words of the keys whose span the excerpt overlaps, and its frequencies
+    count both columns, the population the read could return.
+    Newer-statement companions and refresh validity still match the
+    message's own words only.
+  - *Time-aware query expansion.* `memory.FindRecallTimeReference` reads one
+    explicit past time from a request; `Window` resolves it at the request
+    time (the Store's clock) in the owner's zone (the process time zone,
+    `time.Local`), as a half-open UTC range. Weeks start on Monday; the first
+    supported expression in the text wins. Supported, read as past without
+    further cues: `yesterday` (with or without a part of the day), `the day
+    before yesterday`, `last night` (18:00 yesterday to 06:00 today),
+    `earlier today`, `this morning`; `N days|weeks|months|years ago` with N a
+    number 1–99 or a word `a`/`an`/`one`–`twelve` (that local day, calendar
+    week, month or year), `a couple of days|weeks ago` (2–3 back) and `a few
+    days|weeks ago` (2–5 back); `last|previous week|weekend|month|year` (the
+    previous calendar unit; the weekend is its Saturday and Sunday);
+    `earlier this week|month|year`; `last <weekday>` (that day of the
+    previous calendar week); `last <month>` (the latest such month before the
+    current one); `<month> <year>` and `in|during|early|late|mid <month>
+    <year>`; `in|during <year>`; ISO `yyyy-mm-dd`; and `[on] <month> <day>
+    [<year>]` or `[on] <day> <month> [<year>]` with a year (month names in
+    full, or abbreviated beside a day or year, such as `Sept 14th`).
+    Ambiguous names are read as past only when the request also speaks in
+    the past (a closed list of past forms such as `did was were said told
+    mentioned booked paid sent`, or a word of five or more letters ending in
+    `ed`, not `-eed`) and the word before them is not a future marker (`next
+    coming upcoming for by until till before after from`): `today`, `this
+    week|month|year`, `on|this <weekday>` (the latest such day before today,
+    or this week's if already past), `in|during|early|late|mid <month>` (the
+    latest such month that has begun), and a month and day without a year
+    (its latest past occurrence). A full month name is a time only after one
+    of those prepositions or beside a day or year, so "I may have mentioned"
+    and "Jan said" are not times. Not supported, and so never a window:
+    future references (`tomorrow`, `next week`, `in two days`, `this
+    weekend` before it starts, any range that has not begun), `since`,
+    `recently`, `the other day`, `these days`, `nowadays`, bare weekday or
+    month names, numeric dates other than ISO (`9/14` is ambiguous), and more
+    than one expression per request.
+  - *Windows on conversation excerpts.* Automatic Recall reads the reference
+    from the raw request (its words stay in the query) and passes it to the
+    Kernel (`RetrievalQuery.RecallTime`); a model-directed search has its
+    query text read the same way. With a past window the Kernel first reads
+    the query without its time words among messages recorded inside the
+    window. If any excerpt there qualifies, only those are returned, each
+    with the path `time_window`; otherwise the ordinary read runs unchanged,
+    so a time word that named the topic rather than the moment loses
+    nothing. Inside the window the relevance floor counts the request's
+    dropped time words toward its size (as words history has not seen), so
+    "What were the results of the run today?" still needs two matching words
+    and a private message sharing one word is not injected; frequencies are
+    counted inside the window. A request that names only a time is not
+    searched by time in Automatic Recall. Dense hits join only the ordinary
+    read; the window applies to lexical excerpts, whose recorded time it
+    compares. The tool outcome carries `time_window` (expression, range,
+    whether it matched).
+  - *Windows on accepted Claims (valid time).* Among Claims matching the
+    request's other words, those whose recorded Valid Time (their own, or
+    the interval a `changed` correction closed) overlaps the window gain the
+    path `valid_during` and rank first. When the window has ended, a Claim
+    that was valid inside it but is not current now is read exactly as a
+    model-directed `valid_at` read would read it: at the latest instant of the
+    overlap, valid-at constrained, with its status (`superseded`) shown.
+    Retired and erroneous Claims stay excluded, and a Claim without a
+    recorded Valid Time is neither boosted nor excluded (observation time
+    cannot stand in for an unknown fact date). An explicit `valid_at` wins.
+  - *Windows on episodes.* `memory_search_episodes` reads the reference from
+    its query text: episodes whose covered range overlaps the window are
+    selected, the query's other words still match the summary, and a query
+    that names only a time lists that range's episodes, most recent first.
+    With nothing in the window the ordinary search runs. The result carries
+    `time_window`.
+  - *Diagnostics.* The automatic plan is `bounded-reference-lexical-v4`; its
+    content-free interpretation records only the reference's kind
+    (`time_reference`, such as `last_week`), never its words.
+  - *Evaluation seam.* `Store.UseClock` sets the Store's clock and the
+    owner's zone before the Store is shared, and event append now reads the
+    Store's clock (production keeps the wall clock and process zone). The
+    scale replay uses it to run the corpus on a synthetic timeline; replaying
+    corpus v4 on it reproduced the committed v4 report exactly.
+  - *Measured effect* (scale corpus v5, before → after; the full tables are
+    in `memory-scale-eval.md`). Default tier: automatic recall 37/53 → 48/53,
+    unwanted items 19 → 13, private items 3 → 1 (the one left is the new
+    therapist probe, identical before and after; see the known limits);
+    named-time probes 3/9 → 9/9 and fact-phrasing probes 5/10 → 10/10;
+    conversation search recall 19/25 → 23/25 with unwanted items 67 → 35;
+    stale misses 2 of 71 with 10/10 controls and no scope leaks, before and
+    after. Large tier: automatic recall 38/53 → 50/53, unwanted 42 → 34,
+    private 12 → 9. The frozen 24-case lexical workloads are unchanged,
+    per case: held-out 22/28 automatic, 26/28 with deeper search;
+    development 24/27 and 25/27.
+  - *Known limits.* Keys come only from accepted Claims, so an uncompiled
+    paraphrase ("When is my pup's yearly checkup?") is still not found
+    lexically; they are not added to dense embeddings (that would need a new
+    vector generation). An unrelated request that names a past time can
+    prefer an in-window message that clears the floor over a stronger
+    out-of-window one; the floor and fallback bound this. The past-tense test
+    is a closed list plus an `-ed` rule ("What's booked on Friday?" reads
+    Friday as past). Windows are calendar ranges in the owner's zone, so
+    "last week" on a Monday means the previous Monday to Sunday, not the
+    last seven days. A Claim's Valid Time is known only when recorded, and
+    most remembered Claims have none. The new privacy probe "Write a short
+    story about a therapist and a lighthouse keeper." injects one private
+    message before and after: accepted recall matches the private Claim
+    `therapist` (accepted Claims are not floored, decision of 2026-10-01) and
+    its newer-statement companion search adds the owner's later therapist
+    message through the Predicate phrase. That path is outside this change
+    and is recorded for follow-up.
+
 - **2026-10-01 — The cumulative memory budget charges each delivered byte once
   per turn (harness review C2, Stage 4).** The 36 KiB per-turn bound still
   limits new memory evidence, but admission no longer charges a request's

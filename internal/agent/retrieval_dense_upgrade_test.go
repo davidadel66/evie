@@ -20,8 +20,8 @@ func TestRetrievalUpgradeIsolatesObsoleteFTSStatisticsAndReconcilesRetainedSourc
 	_, err := f.db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_fts USING fts5(generation UNINDEXED,claim_id UNINDEXED,scope_key UNINDEXED,body,tokenize='unicode61');
 INSERT INTO memory_retrieval_fts(generation,claim_id,scope_key,body) VALUES('accepted-fts-unicode61-v1','obsolete-derived-id','global','saffron saffron saffron saffron');
 DROP TABLE IF EXISTS memory_retrieval_fts_v3;
-DROP TABLE IF EXISTS memory_retrieval_event_fts_v3;
-DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v3');`)
+DROP TABLE IF EXISTS memory_retrieval_event_fts_v4;
+DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v4');`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unic
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(coverage.Generation, "accepted-fts-unicode61-v3+conversation-fts-unicode61-v3") || coverage.State != "building" {
+	if !strings.Contains(coverage.Generation, "accepted-fts-unicode61-v3+conversation-fts-unicode61-v4") || coverage.State != "building" {
 		t.Fatalf("upgrade reused statistics/coverage from obsolete projections: %+v", coverage)
 	}
 	f.refresh()
@@ -99,7 +99,7 @@ func TestDenseActiveGenerationRemainsUsableDuringIndependentLexicalRebuild(t *te
 	f := newRetrievalFixture(t)
 	target := f.remember(f.global(), memory.MemoryEverywhere, "runs before sunrise")
 	f.refresh()
-	_, err := f.db.Exec(`DROP TABLE memory_retrieval_fts_v3; DROP TABLE memory_retrieval_event_fts_v3; DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v3');`)
+	_, err := f.db.Exec(`DROP TABLE memory_retrieval_fts_v3; DROP TABLE memory_retrieval_event_fts_v4; DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v4');`)
 	if err != nil {
 		t.Fatal(err)
 	}

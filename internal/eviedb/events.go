@@ -359,7 +359,7 @@ func (s *Store) appendEvent(
 		return memory.Event{}, fmt.Errorf("generate event ID: %w", err)
 	}
 
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	event := memory.Event{
 		ID:            memory.EventID(id.String()),
 		SessionID:     sessionID,

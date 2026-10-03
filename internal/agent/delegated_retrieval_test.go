@@ -61,7 +61,7 @@ func TestConversationRetrievalExcludesDelegatedAssignmentsAcrossReopenAndRebuild
 				}
 			}
 			var indexed int
-			if err = f.db.QueryRow(`SELECT COUNT(*) FROM memory_retrieval_event_fts_v3 i JOIN events e ON e.id=i.event_id WHERE e.session_id=?`, child.ID).Scan(&indexed); err != nil {
+			if err = f.db.QueryRow(`SELECT COUNT(*) FROM memory_retrieval_event_fts_v4 i JOIN events e ON e.id=i.event_id WHERE e.session_id=?`, child.ID).Scan(&indexed); err != nil {
 				t.Fatal(err)
 			}
 			if indexed != 0 {
@@ -167,7 +167,7 @@ func TestConversationRetrievalExcludesDelegatedAssignmentsAcrossReopenAndRebuild
 			check("append")
 			reopen()
 			check("reopen")
-			if _, err = f.db.Exec(`DROP TABLE memory_retrieval_fts_v3; DROP TABLE memory_retrieval_event_fts_v3; DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v3')`); err != nil {
+			if _, err = f.db.Exec(`DROP TABLE memory_retrieval_fts_v3; DROP TABLE memory_retrieval_event_fts_v4; DELETE FROM memory_retrieval_generations WHERE generation IN ('accepted-fts-unicode61-v3','conversation-fts-unicode61-v4')`); err != nil {
 				t.Fatal(err)
 			}
 			reopen()

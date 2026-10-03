@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -285,46 +286,85 @@ func (s *Store) SearchSessionEpisodes(ctx context.Context, scope memory.ScopeCon
 		return sessionEpisodeReadFailure(ctx, result, err)
 	}
 	// The bound session's own summary is already in its request.
-	rows, err := tx.QueryContext(ctx, `SELECT ep.session_id FROM memory_session_episode_fts f JOIN memory_session_episodes ep ON ep.episode_rowid=f.rowid
- WHERE memory_session_episode_fts MATCH ? AND ep.scope_key=? AND ep.session_id<>?
- ORDER BY bm25(memory_session_episode_fts),ep.summarized_at DESC,ep.session_id LIMIT ?`, fts, scopeKey, scope.SessionID, sessionEpisodeCandidateLimit+1)
-	if err != nil {
-		return sessionEpisodeReadFailure(ctx, result, err)
-	}
-	var candidates []memory.SessionID
-	for rows.Next() {
-		var session memory.SessionID
-		if err = rows.Scan(&session); err != nil {
-			rows.Close()
-			return sessionEpisodeReadFailure(ctx, result, err)
+	collect := func(statement string, args ...any) error {
+		rows, err := tx.QueryContext(ctx, statement, append(args, sessionEpisodeCandidateLimit+1)...)
+		if err != nil {
+			return err
 		}
-		candidates = append(candidates, session)
-	}
-	if err = rows.Err(); err != nil {
+		var candidates []memory.SessionID
+		for rows.Next() {
+			var session memory.SessionID
+			if err = rows.Scan(&session); err != nil {
+				rows.Close()
+				return err
+			}
+			candidates = append(candidates, session)
+		}
+		if err = rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
 		rows.Close()
-		return sessionEpisodeReadFailure(ctx, result, err)
+		if len(candidates) > sessionEpisodeCandidateLimit {
+			candidates, result.Truncated = candidates[:sessionEpisodeCandidateLimit], true
+		}
+		for _, session := range candidates {
+			episode, state, err := loadSessionEpisode(ctx, tx, scope, session, normalized.Intent)
+			if err != nil {
+				return err
+			}
+			if state == sessionEpisodeWithheld {
+				result.Withheld++
+				continue
+			}
+			if state != sessionEpisodeEligible {
+				continue
+			}
+			if len(result.Episodes) == limit {
+				result.Truncated = true
+				break
+			}
+			result.Episodes = append(result.Episodes, episode)
+		}
+		return nil
 	}
-	rows.Close()
-	if len(candidates) > sessionEpisodeCandidateLimit {
-		candidates, result.Truncated = candidates[:sessionEpisodeCandidateLimit], true
-	}
-	for _, session := range candidates {
-		episode, state, err := loadSessionEpisode(ctx, tx, scope, session, normalized.Intent)
+	if reference, window, ok := s.recallTimeWindow(memory.RetrievalQuery{Text: query.Text}); ok {
+		// An explicit past time selects the episodes whose covered range
+		// overlaps it (memory architecture Stage 6); the query's other words
+		// still match the summary, and a query that names only a time lists
+		// the range's episodes, most recent first. When no episode there
+		// matches, the ordinary search below runs, so a time word that named
+		// the topic loses nothing.
+		result.TimeWindow = &memory.RetrievalTimeWindow{Expression: window.Expression, From: window.From, To: window.To}
+		overlap := ` AND ` + normalizedTimeSQL("ep.started_at") + `<? AND ` + normalizedTimeSQL("ep.ended_at") + `>=?`
+		from, to := formatSemanticTime(window.From), formatSemanticTime(window.To)
+		words := withoutTimeWords(strings.FieldsFunc(query.Text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }), reference)
+		if len(words) == 0 {
+			err = collect(`SELECT ep.session_id FROM memory_session_episodes ep WHERE ep.scope_key=? AND ep.session_id<>?`+overlap+`
+ ORDER BY `+normalizedTimeSQL("ep.ended_at")+` DESC,ep.session_id LIMIT ?`, scopeKey, scope.SessionID, to, from)
+		} else {
+			quoted := make([]string, len(words))
+			for i, word := range words {
+				quoted[i] = `"` + word + `"`
+			}
+			err = collect(`SELECT ep.session_id FROM memory_session_episode_fts f JOIN memory_session_episodes ep ON ep.episode_rowid=f.rowid
+ WHERE memory_session_episode_fts MATCH ? AND ep.scope_key=? AND ep.session_id<>?`+overlap+`
+ ORDER BY bm25(memory_session_episode_fts),ep.summarized_at DESC,ep.session_id LIMIT ?`, strings.Join(quoted, " OR "), scopeKey, scope.SessionID, to, from)
+		}
 		if err != nil {
 			return sessionEpisodeReadFailure(ctx, result, err)
 		}
-		if state == sessionEpisodeWithheld {
-			result.Withheld++
-			continue
+		result.TimeWindow.Matched = len(result.Episodes) > 0
+		if !result.TimeWindow.Matched {
+			result.Withheld, result.Truncated = 0, false
 		}
-		if state != sessionEpisodeEligible {
-			continue
+	}
+	if result.TimeWindow == nil || !result.TimeWindow.Matched {
+		if err = collect(`SELECT ep.session_id FROM memory_session_episode_fts f JOIN memory_session_episodes ep ON ep.episode_rowid=f.rowid
+ WHERE memory_session_episode_fts MATCH ? AND ep.scope_key=? AND ep.session_id<>?
+ ORDER BY bm25(memory_session_episode_fts),ep.summarized_at DESC,ep.session_id LIMIT ?`, fts, scopeKey, scope.SessionID); err != nil {
+			return sessionEpisodeReadFailure(ctx, result, err)
 		}
-		if len(result.Episodes) == limit {
-			result.Truncated = true
-			break
-		}
-		result.Episodes = append(result.Episodes, episode)
 	}
 	if err = tx.Commit(); err != nil {
 		return sessionEpisodeReadFailure(ctx, result, err)

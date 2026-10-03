@@ -79,7 +79,7 @@ func runScaleTier(t *testing.T, options memoryeval.ScaleCorpusOptions, baselineP
 	if dense {
 		t.Setenv("EVIE_MEMORY_EMBEDDING_ENDPOINT", newScaleEmbedder(t, corpus.ConceptOf()).URL)
 	}
-	replay := newScaleReplay(t)
+	replay := newScaleReplay(t, corpus.Clock)
 	started := time.Now()
 	replay.build(corpus)
 	built := time.Since(started)
@@ -188,6 +188,9 @@ func compareScaleBaseline(t *testing.T, path string, report memoryeval.ScaleRepo
 type scaleReplay struct {
 	t        *testing.T
 	ctx      context.Context
+	clock    *scaleTestClock
+	zone     *time.Location
+	probeAt  time.Time
 	path     string // built history; frozen before probing
 	probes   int
 	db       *sql.DB
@@ -204,13 +207,14 @@ type scaleReplay struct {
 	denseVectors  int
 }
 
-func newScaleReplay(t *testing.T) *scaleReplay {
+func newScaleReplay(t *testing.T, clock memoryeval.ScaleClock) *scaleReplay {
 	t.Helper()
 	profile, err := openrouter.NewExplicitContextProfile("test-model", 300000, 262144, 16384)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := &scaleReplay{t: t, ctx: context.Background(), path: filepath.Join(t.TempDir(), "history.db"), profile: profile,
+		clock: &scaleTestClock{}, zone: clock.Location(), probeAt: clock.ProbeTime(),
 		projects: map[string]memory.ProjectID{}, areas: map[string]string{memoryeval.ScaleAreaGlobal: memoryeval.ScaleAreaGlobal},
 		sessions: map[memory.SessionID]string{}, events: map[memory.EventID]string{}, claims: map[memory.SemanticID]string{},
 		claimIDs: map[string]memory.RememberLiteralProposal{}}
@@ -226,6 +230,9 @@ func (r *scaleReplay) open(path string) {
 	}
 	r.t.Cleanup(func() { db.Close() })
 	r.db, r.store = db, eviedb.NewStore(db)
+	// Events, leases and memory times all come from the corpus timeline, and
+	// calendar words resolve in the corpus owner's zone.
+	r.store.UseClock(r.clock.now, r.zone)
 }
 
 // freeze checkpoints and closes the built history. Every probe then runs on
@@ -308,6 +315,7 @@ func (r *scaleReplay) build(corpus memoryeval.ScaleCorpus) {
 		r.areas["project:"+string(project.ID)] = area.Key
 	}
 	for _, spec := range corpus.Sessions {
+		r.clock.start(spec.StartTime(), false)
 		record := r.newSession(spec.Area)
 		client := &scaleClient{}
 		// History is built without automatic recall: its injections are not
@@ -341,7 +349,7 @@ func (r *scaleReplay) build(corpus memoryeval.ScaleCorpus) {
 				// inherits the old validity interval and takes no effective time.
 				var effective *time.Time
 				if step.Mode == string(memory.CorrectionChanged) {
-					now := time.Now().UTC()
+					now := r.clock.now().UTC()
 					effective = &now
 				}
 				proposal, err := session.PrepareCorrectClaim(r.ctx, r.store, step.Owner.Text, memory.CorrectClaimRequest{
@@ -421,6 +429,8 @@ func (r *scaleReplay) refresh() {
 func (r *scaleReplay) probe(probe memoryeval.ScaleProbe) memoryeval.ScaleObservation {
 	r.t.Helper()
 	defer r.thaw()()
+	// Every probe runs at the same moment on its own copy of the history.
+	r.clock.start(r.probeAt, true)
 	record := r.newSession(probe.Area)
 	client := &scaleClient{}
 	session := r.agent(record, client, probe.Path == memoryeval.ScalePathAutomatic)
@@ -623,6 +633,41 @@ func scaleMemoryData(request openrouter.ChatRequest) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// scaleTestClock is the synthetic timeline: a session's base time plus the
+// real time elapsed since it began, never moving backwards within one built
+// history. Only day-scale windows are measured, so the milliseconds of real
+// elapsed time cannot change an outcome.
+type scaleTestClock struct {
+	mu         sync.Mutex
+	base, real time.Time
+	last       time.Time
+}
+
+// start moves the clock to base. A probe resets it, because every probe runs
+// on its own copy of the history at the same moment.
+func (c *scaleTestClock) start(base time.Time, reset bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if reset {
+		c.last = time.Time{}
+	}
+	if !base.After(c.last) {
+		base = c.last.Add(time.Millisecond)
+	}
+	c.base, c.real = base, time.Now()
+}
+
+func (c *scaleTestClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := c.base.Add(time.Since(c.real))
+	if !now.After(c.last) {
+		now = c.last.Add(time.Microsecond)
+	}
+	c.last = now
+	return now
 }
 
 type scaleClient struct {

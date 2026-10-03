@@ -4,8 +4,39 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 )
+
+// Corpus v5: the replay runs on a synthetic timeline. Sessions start in build
+// order, pinned scenarios start at their exact times, and every probe runs
+// after the whole history.
+func TestScaleCorpusTimelineIsOrderedAndPinsScenarios(t *testing.T) {
+	for _, options := range []ScaleCorpusOptions{DefaultScaleCorpusOptions(), LargeScaleCorpusOptions()} {
+		corpus := GenerateScaleCorpus(options)
+		probe := corpus.Clock.ProbeTime()
+		if probe.IsZero() {
+			t.Fatalf("%s corpus has no clock: %+v", options.Tier, corpus.Clock)
+		}
+		var previous time.Time
+		starts := map[string]time.Time{}
+		for _, session := range corpus.Sessions {
+			start := session.StartTime()
+			if start.IsZero() || !start.After(previous) || !start.Before(probe) {
+				t.Fatalf("%s session %s starts at %q after %s (probe %s)", options.Tier, session.Key, session.Start, previous, probe)
+			}
+			previous = start
+			for _, step := range session.Steps {
+				starts[step.Owner.Key] = start
+			}
+		}
+		for key, want := range map[string]string{"t.marek.booked": "2026-09-30T19:30:00-04:00", "t.parcel.today": "2026-10-01T09:30:00-04:00", "t.insurance.renewed": "2026-03-18T19:00:00-04:00"} {
+			if at, _ := time.Parse(time.RFC3339, want); !starts[key].Equal(at) {
+				t.Fatalf("%s pinned %s starts at %s, want %s", options.Tier, key, starts[key], want)
+			}
+		}
+	}
+}
 
 func TestScaleCorpusIsDeterministicValidAndRealisticallySized(t *testing.T) {
 	options := DefaultScaleCorpusOptions()

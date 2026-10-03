@@ -197,9 +197,23 @@ func relevanceGroupMatched(tokens map[string]bool, group []string, frequency map
 // automatic recall fails toward injecting nothing, and the model can still
 // search (confirmation review).
 func relevantToRequest(text string, relevance *memory.RetrievalRelevance, frequency map[string]int) bool {
-	tokens := relevanceTokens(text)
+	return relevantTokens(relevanceTokens(text), relevance, frequency, 0)
+}
+
+// relevantTokens is relevantToRequest for an excerpt's folded words, which may
+// include the words of the fact keys its span states (Stage 6). size is the
+// request's own number of content words when relevance.Current omits some of
+// them: a time-window read drops its time words ("today") from matching, but
+// they still make the request a long one, so one shared word does not explain
+// "What were the results of the run today?" inside today any more than it
+// does outside it. Those omitted words count as words history has not seen.
+func relevantTokens(tokens map[string]bool, relevance *memory.RetrievalRelevance, frequency map[string]int, size int) bool {
 	need, strong := 1, 0
-	if shape := relevanceGroupShape(relevance.Current, frequency); shape.present+shape.absent >= relevanceMultiTermRequest {
+	shape := relevanceGroupShape(relevance.Current, frequency)
+	if missing := size - shape.present - shape.absent; missing > 0 {
+		shape.absent += missing
+	}
+	if shape.present+shape.absent >= relevanceMultiTermRequest {
 		need = 2
 		if shape.absent == 0 && relevance.PersonalRecall {
 			strong = relevanceStrongDocuments
@@ -217,14 +231,20 @@ func relevantToRequest(text string, relevance *memory.RetrievalRelevance, freque
 }
 
 // relevanceFrequencies counts, for each relevance term, the documents this
-// search could return: the same scope, generation, observation bound and
-// live-context exclusion as the candidate read. A count stops at
+// search could return: the same scope, generation, observation bound,
+// live-context exclusion, matched columns (fact keys or only the message's
+// words) and time window as the candidate read. A count stops at
 // relevanceCommonDocuments, beyond which the floor treats every term alike,
 // so a common word costs a bounded read however large history grows.
-func relevanceFrequencies(ctx context.Context, tx *sql.Tx, relevance *memory.RetrievalRelevance, scopeKey string, known time.Time, session memory.SessionID, cutoff int64) (map[string]int, error) {
-	statement, err := tx.PrepareContext(ctx, `SELECT count(*) FROM (SELECT 1 FROM memory_retrieval_event_fts_v3 f JOIN events e ON e.id=f.event_id
- WHERE memory_retrieval_event_fts_v3 MATCH ? AND f.generation=? AND f.scope_key=?
- AND `+conversationObservedTimeSQL+`<=? AND (e.session_id!=? OR e.sequence<?) LIMIT ?)`)
+func relevanceFrequencies(ctx context.Context, tx *sql.Tx, relevance *memory.RetrievalRelevance, scopeKey string, known time.Time, session memory.SessionID, cutoff int64, keys bool, window *memory.RecallTimeWindow) (map[string]int, error) {
+	from, to := "", ""
+	if window != nil {
+		from, to = formatSemanticTime(window.From), formatSemanticTime(window.To)
+	}
+	statement, err := tx.PrepareContext(ctx, `SELECT count(*) FROM (SELECT 1 FROM memory_retrieval_event_fts_v4 f JOIN events e ON e.id=f.event_id
+ WHERE memory_retrieval_event_fts_v4 MATCH ? AND f.generation=? AND f.scope_key=?
+ AND `+conversationObservedTimeSQL+`<=? AND (e.session_id!=? OR e.sequence<?)
+ AND (?='' OR `+conversationObservedTimeSQL+`>=?) AND (?='' OR `+conversationObservedTimeSQL+`<?) LIMIT ?)`)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +256,8 @@ func relevanceFrequencies(ctx context.Context, tx *sql.Tx, relevance *memory.Ret
 				continue
 			}
 			var count int
-			if err := statement.QueryRowContext(ctx, `"`+term+`"`, conversationIndexGeneration, scopeKey, formatSemanticTime(known), session, cutoff, relevanceCommonDocuments).Scan(&count); err != nil {
+			if err := statement.QueryRowContext(ctx, conversationMatchExpression(`"`+term+`"`, keys), conversationIndexGeneration, scopeKey, formatSemanticTime(known), session, cutoff,
+				from, from, to, to, relevanceCommonDocuments).Scan(&count); err != nil {
 				return nil, err
 			}
 			frequency[term] = count

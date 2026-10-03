@@ -46,6 +46,7 @@ type retrievalCandidates struct {
 	seen             map[memory.SemanticID]bool
 	eligible         map[memory.SemanticID]*retrievalCandidate
 	truncated        bool
+	timeWindow       *memory.RetrievalTimeWindow
 	denseCoverage    *memory.RetrievalCoverage
 	denseIncomplete  bool
 	denseCut         bool
@@ -169,6 +170,9 @@ func (s *Store) acceptedRetrievalCandidates(ctx context.Context, tx *sql.Tx, sco
 		return nil, err
 	}
 	if err := c.directGenerator(ctx, ids, "lexical"); err != nil {
+		return nil, err
+	}
+	if err := c.validDuringGenerator(ctx); err != nil {
 		return nil, err
 	}
 	if query.ValidAt != nil {

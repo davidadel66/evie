@@ -3,6 +3,7 @@ package eviedb
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -20,6 +21,12 @@ type conversationReadSpan struct {
 const conversationObservedTimeSQL = `(substr(e.recorded_at,1,19) || CASE WHEN substr(e.recorded_at,20,1)='.'
  THEN substr(substr(e.recorded_at,20,length(e.recorded_at)-20) || '000000000',1,10)
  ELSE '.000000000' END || 'Z')`
+
+// normalizedTimeSQL pads another stored event time column the same way, so
+// it compares with formatSemanticTime values.
+func normalizedTimeSQL(column string) string {
+	return strings.ReplaceAll(conversationObservedTimeSQL, "e.recorded_at", column)
+}
 
 func conversationReadSpans(ctx context.Context, q semanticInspectionQueryer, e conversationEvidence, intent string, known time.Time) ([]conversationReadSpan, error) {
 	knownAt := ""

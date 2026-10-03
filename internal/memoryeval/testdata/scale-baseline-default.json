@@ -1,7 +1,7 @@
 {
-  "report_version": 4,
-  "corpus_version": "memory-scale-replay-v4",
-  "corpus_sha256": "sha256:d641f2bdaa59317bacb4bef9294786ad1d0c9c8cd77fc22424f7d8850e7123ce",
+  "report_version": 5,
+  "corpus_version": "memory-scale-replay-v5",
+  "corpus_sha256": "sha256:a4736e1aa15f2b9825531c7c9e736331c8831514f30a7564dcb2da6b1a0f14e4",
   "options": {
     "tier": "default",
     "seed": 20261001,
@@ -12,69 +12,69 @@
     "dense_targets": 0
   },
   "corpus": {
-    "sessions": 195,
-    "global_sessions": 141,
+    "sessions": 230,
+    "global_sessions": 176,
     "project_sessions": 54,
-    "owner_messages": 1191,
-    "assistant_messages": 1173,
+    "owner_messages": 1226,
+    "assistant_messages": 1201,
     "low_content_owner_messages": 198,
-    "private_messages": 114,
+    "private_messages": 118,
     "needles": 19,
-    "accepted_claims": 18,
+    "accepted_claims": 25,
     "corrections": 2,
     "retirements": 2,
     "areas": 4,
-    "topics": 32,
-    "probes": 108
+    "topics": 45,
+    "probes": 153
   },
   "paths": {
     "automatic": {
-      "probes": 56,
-      "probes_with_items": 36,
-      "probes_with_unwanted": 5,
-      "items": 76,
-      "required_items": 29,
-      "tolerated_items": 39,
-      "unwanted_items": 8,
-      "unwanted_private_items": 0,
+      "probes": 73,
+      "probes_with_items": 52,
+      "probes_with_unwanted": 7,
+      "items": 104,
+      "required_items": 48,
+      "tolerated_items": 43,
+      "unwanted_items": 13,
+      "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
-      "required_total": 34,
-      "required_found": 29,
-      "precision": 0.8947,
-      "unwanted_rate": 0.1053,
-      "recall": 0.8529
+      "required_total": 53,
+      "required_found": 48,
+      "precision": 0.875,
+      "unwanted_rate": 0.125,
+      "recall": 0.9057
     },
     "memory_search": {
-      "probes": 26,
-      "probes_with_items": 12,
+      "probes": 40,
+      "probes_with_items": 18,
       "probes_with_unwanted": 0,
-      "items": 22,
-      "required_items": 14,
-      "tolerated_items": 8,
+      "items": 31,
+      "required_items": 20,
+      "tolerated_items": 11,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
-      "required_total": 14,
-      "required_found": 14,
+      "required_total": 20,
+      "required_found": 20,
       "precision": 1,
       "unwanted_rate": 0,
       "recall": 1
     },
     "memory_search_conversations": {
-      "probes": 26,
-      "probes_with_items": 24,
-      "probes_with_unwanted": 9,
-      "items": 119,
-      "required_items": 10,
-      "tolerated_items": 87,
-      "unwanted_items": 22,
-      "unwanted_private_items": 2,
+      "probes": 40,
+      "probes_with_items": 38,
+      "probes_with_unwanted": 13,
+      "items": 150,
+      "required_items": 23,
+      "tolerated_items": 92,
+      "unwanted_items": 35,
+      "unwanted_private_items": 5,
       "unwanted_same_session_items": 0,
-      "required_total": 12,
-      "required_found": 10,
-      "precision": 0.8151,
-      "unwanted_rate": 0.1849,
-      "recall": 0.8333
+      "required_total": 25,
+      "required_found": 23,
+      "precision": 0.7667,
+      "unwanted_rate": 0.2333,
+      "recall": 0.92
     }
   },
   "families": [
@@ -120,9 +120,9 @@
       "probes": 13,
       "probes_with_items": 13,
       "probes_with_unwanted": 0,
-      "items": 37,
+      "items": 38,
       "required_items": 12,
-      "tolerated_items": 25,
+      "tolerated_items": 26,
       "unwanted_items": 0,
       "unwanted_private_items": 0,
       "unwanted_same_session_items": 0,
@@ -131,6 +131,42 @@
       "precision": 1,
       "unwanted_rate": 0,
       "recall": 0.9231
+    },
+    {
+      "path": "automatic",
+      "family": "temporal",
+      "probes": 9,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 0,
+      "items": 11,
+      "required_items": 9,
+      "tolerated_items": 2,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 9,
+      "required_found": 9,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "automatic",
+      "family": "fact_key",
+      "probes": 5,
+      "probes_with_items": 5,
+      "probes_with_unwanted": 0,
+      "items": 11,
+      "required_items": 10,
+      "tolerated_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 10,
+      "required_found": 10,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
     },
     {
       "path": "automatic",
@@ -171,19 +207,19 @@
     {
       "path": "automatic",
       "family": "privacy",
-      "probes": 9,
-      "probes_with_items": 4,
-      "probes_with_unwanted": 2,
-      "items": 9,
+      "probes": 12,
+      "probes_with_items": 6,
+      "probes_with_unwanted": 4,
+      "items": 14,
       "required_items": 0,
       "tolerated_items": 5,
-      "unwanted_items": 4,
-      "unwanted_private_items": 0,
+      "unwanted_items": 9,
+      "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.5556,
-      "unwanted_rate": 0.4444,
+      "precision": 0.3571,
+      "unwanted_rate": 0.6429,
       "recall": null
     },
     {
@@ -318,21 +354,93 @@
       "probes": 13,
       "probes_with_items": 13,
       "probes_with_unwanted": 5,
-      "items": 52,
+      "items": 53,
       "required_items": 0,
-      "tolerated_items": 36,
+      "tolerated_items": 37,
       "unwanted_items": 16,
       "unwanted_private_items": 1,
       "unwanted_same_session_items": 0,
       "required_total": 0,
       "required_found": 0,
-      "precision": 0.6923,
-      "unwanted_rate": 0.3077,
+      "precision": 0.6981,
+      "unwanted_rate": 0.3019,
       "recall": null
+    },
+    {
+      "path": "memory_search",
+      "family": "temporal",
+      "probes": 9,
+      "probes_with_items": 1,
+      "probes_with_unwanted": 0,
+      "items": 2,
+      "required_items": 1,
+      "tolerated_items": 1,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 1,
+      "required_found": 1,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "temporal",
+      "probes": 9,
+      "probes_with_items": 9,
+      "probes_with_unwanted": 2,
+      "items": 20,
+      "required_items": 8,
+      "tolerated_items": 2,
+      "unwanted_items": 10,
+      "unwanted_private_items": 1,
+      "unwanted_same_session_items": 0,
+      "required_total": 8,
+      "required_found": 8,
+      "precision": 0.5,
+      "unwanted_rate": 0.5,
+      "recall": 1
+    },
+    {
+      "path": "memory_search",
+      "family": "fact_key",
+      "probes": 5,
+      "probes_with_items": 5,
+      "probes_with_unwanted": 0,
+      "items": 7,
+      "required_items": 5,
+      "tolerated_items": 2,
+      "unwanted_items": 0,
+      "unwanted_private_items": 0,
+      "unwanted_same_session_items": 0,
+      "required_total": 5,
+      "required_found": 5,
+      "precision": 1,
+      "unwanted_rate": 0,
+      "recall": 1
+    },
+    {
+      "path": "memory_search_conversations",
+      "family": "fact_key",
+      "probes": 5,
+      "probes_with_items": 5,
+      "probes_with_unwanted": 2,
+      "items": 10,
+      "required_items": 5,
+      "tolerated_items": 2,
+      "unwanted_items": 3,
+      "unwanted_private_items": 2,
+      "unwanted_same_session_items": 0,
+      "required_total": 5,
+      "required_found": 5,
+      "precision": 0.7,
+      "unwanted_rate": 0.3,
+      "recall": 1
     }
   ],
   "stale": {
-    "checks": 68,
+    "checks": 71,
     "misses": 2,
     "control_checks": 10,
     "control_failures": 0,
@@ -350,7 +458,7 @@
         "path": "automatic",
         "scenario": "correction_old_source",
         "issue": "M2",
-        "outcome": "labelled",
+        "outcome": "absent",
         "miss": false
       },
       {
@@ -595,6 +703,14 @@
         "issue": "M4",
         "control": true,
         "outcome": "linked",
+        "miss": false
+      },
+      {
+        "probe_id": "auto.when.employer",
+        "path": "automatic",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "labelled",
         "miss": false
       },
       {
@@ -970,6 +1086,22 @@
         "control": true,
         "outcome": "linked",
         "miss": false
+      },
+      {
+        "probe_id": "memory_search.when.employer",
+        "path": "memory_search",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "labelled",
+        "miss": false
+      },
+      {
+        "probe_id": "memory_search_conversations.when.employer",
+        "path": "memory_search_conversations",
+        "scenario": "correction_old_source",
+        "issue": "M2",
+        "outcome": "absent",
+        "miss": false
       }
     ]
   },
@@ -987,8 +1119,8 @@
       "id": "M1.privacy_injects_no_private_item",
       "issue": "M1",
       "description": "unrelated requests sharing a word with private history inject no private item",
-      "met": true,
-      "observed": "0 private items across 9 probes"
+      "met": false,
+      "observed": "1 private items across 12 probes"
     },
     {
       "id": "M1.one_word_answers_recalled",
@@ -998,11 +1130,25 @@
       "observed": "4 of 5 answers recalled, 0 unwanted items"
     },
     {
+      "id": "S6.named_time_recalled",
+      "issue": "S6",
+      "description": "a request naming a past time recalls what was said or valid then, among same-subject evidence from before and after it",
+      "met": true,
+      "observed": "automatic 9 of 9 (0 unwanted items), conversation search 8 of 8"
+    },
+    {
+      "id": "S6.fact_phrasing_finds_source",
+      "issue": "S6",
+      "description": "a question phrased like a saved fact recalls the message it came from, which used other words",
+      "met": true,
+      "observed": "automatic 10 of 10 (0 unwanted, 0 private items), conversation search 5 of 5"
+    },
+    {
       "id": "M2.corrected_source_not_current",
       "issue": "M2",
       "description": "after a correction the old source is not delivered as an unqualified current statement",
       "met": true,
-      "observed": "0 misses of 6 checks"
+      "observed": "0 misses of 9 checks"
     },
     {
       "id": "M2.retired_restatement_flagged",
@@ -1185,7 +1331,7 @@
       "items": [
         "c.birthday.fixed=required",
         "m.0169=tolerated",
-        "m.c.birthday=tolerated"
+        "m.c.birthday.fixed=tolerated"
       ]
     },
     {
@@ -1225,6 +1371,7 @@
       "status": "success",
       "items": [
         "c.home=required",
+        "m.c.home=tolerated",
         "m.home.news=tolerated"
       ]
     },
@@ -1306,6 +1453,140 @@
         "c.barber=required",
         "m.c.barber.second=tolerated",
         "m.c.barber=tolerated"
+      ]
+    },
+    {
+      "id": "auto.when.marek",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.marek.booked=required"
+      ]
+    },
+    {
+      "id": "auto.when.paint",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.paint.picked=required"
+      ]
+    },
+    {
+      "id": "auto.when.lease",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.lease.sent=required"
+      ]
+    },
+    {
+      "id": "auto.when.priya",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.priya.korean=required"
+      ]
+    },
+    {
+      "id": "auto.when.insurance",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.insurance.renewed=required"
+      ]
+    },
+    {
+      "id": "auto.when.bill",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.bill.settled=required"
+      ]
+    },
+    {
+      "id": "auto.when.class",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.class.pottery=required"
+      ]
+    },
+    {
+      "id": "auto.when.parcel",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "t.parcel.today=required"
+      ]
+    },
+    {
+      "id": "auto.when.employer",
+      "family": "temporal",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.employer.new=tolerated",
+        "c.employer=required",
+        "m.c.employer.new=tolerated"
+      ]
+    },
+    {
+      "id": "auto.fact.apartment",
+      "family": "fact_key",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.apartment=required",
+        "m.c.apartment=required"
+      ]
+    },
+    {
+      "id": "auto.fact.blood",
+      "family": "fact_key",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.blood=required",
+        "m.c.blood=required"
+      ]
+    },
+    {
+      "id": "auto.fact.commute",
+      "family": "fact_key",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.commute=required",
+        "m.c.commute=required"
+      ]
+    },
+    {
+      "id": "auto.fact.locker",
+      "family": "fact_key",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.gym=tolerated",
+        "c.locker=required",
+        "m.c.locker=required"
+      ]
+    },
+    {
+      "id": "auto.fact.bicycle",
+      "family": "fact_key",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.bicycle=required",
+        "m.c.bicycle=required"
       ]
     },
     {
@@ -1448,7 +1729,7 @@
       "items": [
         "c.birthday.fixed=tolerated",
         "m.0169=tolerated",
-        "m.c.birthday=tolerated"
+        "m.c.birthday.fixed=tolerated"
       ],
       "required_missing": [
         "n.sister"
@@ -1561,6 +1842,34 @@
       ]
     },
     {
+      "id": "auto.privacy.therapist",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.therapist=unwanted",
+        "m.private.anxiety(private)=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.medication",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "success",
+      "items": [
+        "c.carrier=unwanted",
+        "c.medication=unwanted",
+        "m.engineering.1=unwanted"
+      ]
+    },
+    {
+      "id": "auto.privacy.lottery",
+      "family": "privacy",
+      "path": "automatic",
+      "status": "empty",
+      "items": []
+    },
+    {
       "id": "memory_search.dinner",
       "family": "relevant",
       "path": "memory_search",
@@ -1622,9 +1931,9 @@
         "m.0024.a=tolerated",
         "m.0169=tolerated",
         "m.0767.a=tolerated",
-        "m.0767=tolerated",
         "m.0769.a=tolerated",
         "m.0775=tolerated",
+        "m.c.birthday.fixed=tolerated",
         "m.c.birthday=tolerated",
         "n.mother=required"
       ]
@@ -1958,6 +2267,7 @@
       "path": "memory_search_conversations",
       "status": "success",
       "items": [
+        "m.c.home=tolerated",
         "n.wifi=unwanted"
       ]
     },
@@ -2105,6 +2415,261 @@
       "items": [
         "m.c.barber.second=tolerated",
         "m.c.barber=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search.when.marek",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.marek",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.marek.booked=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.paint",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.paint",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.paint.picked=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.lease",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.lease",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.lease.sent=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.priya",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.priya",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.priya.korean=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.insurance",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.insurance",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "n.tyres=tolerated",
+        "t.insurance.renewed=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.bill",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.bill",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.bill.settled=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.class",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.class",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0769.a=unwanted",
+        "t.bill.tariff=unwanted",
+        "t.class.pottery=required",
+        "t.lease.sent=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.when.parcel",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "empty",
+      "items": []
+    },
+    {
+      "id": "memory_search_conversations.when.parcel",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "t.parcel.today=required"
+      ]
+    },
+    {
+      "id": "memory_search.when.employer",
+      "family": "temporal",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.employer.new=tolerated",
+        "c.employer=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.when.employer",
+      "family": "temporal",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.0310=unwanted",
+        "m.0450.a=unwanted",
+        "m.0600=unwanted",
+        "m.c.employer.new=tolerated",
+        "m.private.anxiety(private)=unwanted",
+        "n.passport=unwanted",
+        "n.vet.a=unwanted",
+        "n.vet=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.fact.apartment",
+      "family": "fact_key",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.apartment=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.fact.apartment",
+      "family": "fact_key",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.apartment=required"
+      ]
+    },
+    {
+      "id": "memory_search.fact.blood",
+      "family": "fact_key",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.blood=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.fact.blood",
+      "family": "fact_key",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.blood=required",
+        "n.ferritin(private)=unwanted",
+        "n.pressure(private)=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.fact.commute",
+      "family": "fact_key",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.commute=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.fact.commute",
+      "family": "fact_key",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.commute=required"
+      ]
+    },
+    {
+      "id": "memory_search.fact.locker",
+      "family": "fact_key",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.gym=tolerated",
+        "c.locker=required",
+        "m.gym.newer=tolerated"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.fact.locker",
+      "family": "fact_key",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.gym=tolerated",
+        "m.c.locker=required",
+        "m.gym.newer=tolerated",
+        "t.parcel.locker=unwanted"
+      ]
+    },
+    {
+      "id": "memory_search.fact.bicycle",
+      "family": "fact_key",
+      "path": "memory_search",
+      "status": "success",
+      "items": [
+        "c.bicycle=required"
+      ]
+    },
+    {
+      "id": "memory_search_conversations.fact.bicycle",
+      "family": "fact_key",
+      "path": "memory_search_conversations",
+      "status": "success",
+      "items": [
+        "m.c.bicycle=required"
       ]
     }
   ]

@@ -119,6 +119,7 @@ func (s *Store) SearchMemory(ctx context.Context, scope memory.ScopeContext, que
 		return retrievalReadFailure(ctx, result, err)
 	}
 	result.DenseCoverage = candidates.denseCoverage
+	result.TimeWindow = candidates.timeWindow
 	if candidates.denseCut {
 		result.Gaps = append(result.Gaps, memory.RetrievalGapDenseScan)
 	}

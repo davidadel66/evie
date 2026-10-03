@@ -10,14 +10,24 @@ import (
 	"github.com/davidadel66/evie/internal/memory"
 )
 
-const conversationIndexGeneration = "conversation-fts-unicode61-v3"
+// Generation v4 (memory architecture Stage 6) adds the keys column: the words
+// of the accepted, current Claims a message is a Source of (fact-augmented
+// keys). The v3 table is left in place, unread, so an older binary can still
+// resume it; the new generation backfills every retained event before it
+// serves queries, as every generation does.
+const conversationIndexGeneration = "conversation-fts-unicode61-v4"
+
+// conversationRankSQL ranks conversation hits by bm25 over the message's own
+// words (weight 1) and its fact keys (weight 0.5): a key match counts, but
+// less than the message saying the word itself.
+const conversationRankSQL = `bm25(memory_retrieval_event_fts_v4,0,0,0,1.0,0.5)`
 
 const conversationRetrievalSchema = `
 INSERT OR IGNORE INTO memory_retrieval_generations(generation,configuration,state)
- VALUES ('conversation-fts-unicode61-v3','{"tokenizer":"unicode61","document_version":3,"lifecycle":"source-eligible-history","fields":["user_message.content","assistant_message.content"]}','building');
+ VALUES ('conversation-fts-unicode61-v4','{"tokenizer":"unicode61","document_version":4,"lifecycle":"source-eligible-history","fields":["user_message.content","assistant_message.content"],"keys":"accepted-current-claims-v1"}','building');
 CREATE TABLE IF NOT EXISTS memory_retrieval_event_dirty(event_id TEXT PRIMARY KEY);
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_event_fts_v3 USING fts5(
- generation UNINDEXED,event_id UNINDEXED,scope_key UNINDEXED,body,tokenize='unicode61');
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_retrieval_event_fts_v4 USING fts5(
+ generation UNINDEXED,event_id UNINDEXED,scope_key UNINDEXED,body,keys,tokenize='unicode61');
 CREATE TRIGGER IF NOT EXISTS memory_retrieval_event_source_added AFTER INSERT ON semantic_source_links BEGIN
  INSERT OR IGNORE INTO memory_retrieval_event_dirty VALUES(NEW.event_id);
 END;
@@ -39,7 +49,7 @@ func conversationIndexCoverage(ctx context.Context, q semanticInspectionQueryer)
 	err := q.QueryRowContext(ctx, `SELECT state,
  (SELECT count(*) FROM events WHERE rowid>g.checkpoint)
  +(SELECT count(*) FROM memory_retrieval_event_dirty d JOIN events e ON e.id=d.event_id WHERE e.rowid<=g.checkpoint),
- (SELECT count(*) FROM memory_retrieval_event_fts_v3 WHERE generation=g.generation)
+ (SELECT count(*) FROM memory_retrieval_event_fts_v4 WHERE generation=g.generation)
  FROM memory_retrieval_generations g WHERE generation=?`, conversationIndexGeneration).Scan(&c.State, &c.Pending, &c.Indexed)
 	return c, err
 }
@@ -76,6 +86,11 @@ func combinedRetrievalCoverage(ctx context.Context, q semanticInspectionQueryer)
 
 // appendConversationProjection participates in the already fenced event
 // transaction. Only allowlisted public content is copied; no payload is read.
+// A new message is no Claim's Source yet, so it has no keys; the Source Link
+// that later cites it marks it for refresh. A later change to a Claim's
+// words (an alias added, an Entity or alias retired) marks the Claim dirty in
+// the accepted index, and refreshing that Claim marks its Sources' messages
+// (refreshAcceptedMemoryIndex), so key upkeep adds no work to memory writes.
 func appendConversationProjection(ctx context.Context, q eventQueryExecutor, event memory.Event) error {
 	var rowid int64
 	var primary bool
@@ -85,7 +100,7 @@ func appendConversationProjection(ctx context.Context, q eventQueryExecutor, eve
 	eligible := primary && ((event.Type == memory.EventUserMessage && event.Role == memory.RoleUser) || (event.Type == memory.EventAssistantMessage && event.Role == memory.RoleAssistant))
 	if eligible && event.Content != "" && len(event.Content) <= 32768 && utf8.ValidString(event.Content) && !memory.HasRetrievalSecret([]byte(event.Content)) {
 		var generation string
-		if err := q.queryRowContext(ctx, `INSERT INTO memory_retrieval_event_fts_v3(generation,event_id,scope_key,body) VALUES(?,?,?,?) RETURNING generation`,
+		if err := q.queryRowContext(ctx, `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,'') RETURNING generation`,
 			conversationIndexGeneration, event.ID, scopeKeyForContext(memory.ScopeContext{SessionID: event.SessionID, WorkspaceID: event.WorkspaceID, ProjectID: event.ProjectID}), event.Content).Scan(&generation); err != nil {
 			return err
 		}
@@ -147,8 +162,33 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 			}
 			rows.Close()
 		}
+		// Only messages some Claim cites can have keys; one read finds them.
+		cited := map[memory.EventID]bool{}
+		if len(entries) > 0 {
+			ids := make([]any, len(entries))
+			for i, e := range entries {
+				ids[i] = e.id
+			}
+			rows, err := q.QueryContext(ctx, `SELECT DISTINCT event_id FROM semantic_source_links WHERE event_id IN (?`+strings.Repeat(",?", len(ids)-1)+`)`, ids...)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var id memory.EventID
+				if err = rows.Scan(&id); err != nil {
+					rows.Close()
+					return err
+				}
+				cited[id] = true
+			}
+			if err = rows.Err(); err != nil {
+				rows.Close()
+				return err
+			}
+			rows.Close()
+		}
 		for _, e := range entries {
-			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_event_fts_v3 WHERE generation=? AND event_id=?`, conversationIndexGeneration, e.id); err != nil {
+			if _, err = q.ExecContext(ctx, `DELETE FROM memory_retrieval_event_fts_v4 WHERE generation=? AND event_id=?`, conversationIndexGeneration, e.id); err != nil {
 				return err
 			}
 			event, eligible, err := loadConversationEvidence(ctx, q, e.id)
@@ -165,7 +205,13 @@ func (s *Store) refreshConversationIndex(ctx context.Context, limit int) error {
 					parts = append(parts, event.content[span.start:span.end])
 				}
 				if body := strings.Join(parts, "\n"); strings.TrimSpace(body) != "" {
-					if _, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_event_fts_v3(generation,event_id,scope_key,body) VALUES(?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body); err != nil {
+					var keys []conversationFactKey
+					if cited[e.id] {
+						if keys, err = conversationFactKeys(ctx, q, event, s.now().UTC()); err != nil {
+							return err
+						}
+					}
+					if _, err = q.ExecContext(ctx, `INSERT INTO memory_retrieval_event_fts_v4(generation,event_id,scope_key,body,keys) VALUES(?,?,?,?,?)`, conversationIndexGeneration, e.id, event.scope, body, conversationFactKeyText(keys)); err != nil {
 						return err
 					}
 				}
