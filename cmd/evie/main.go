@@ -303,6 +303,15 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to read launch directory: %v", err)
 		}
+		// The REPL is a long-lived process: it runs the workflow scheduler
+		// (Stage 14 sub-stage 4) like the memory background pass. A
+		// configuration problem disables it with a reason; chat still starts.
+		if workflowRuntime, err := newWorkflowRuntime(kernelStore, os.Getenv); err != nil {
+			log.Printf("workflow scheduler off: %v", err)
+		} else {
+			stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
+			defer stopWorkflows()
+		}
 		scanner := bufio.NewScanner(os.Stdin)
 		session := newSession(runtimeCtx, func(store *eviedb.Store, resolved plugins.ResolvedComposition) (storedSessionSelection, error) {
 			boundStore := &receiptBoundREPLStore{Store: store, composition: resolved, resolvePreset: pluginManager.ResolvePresetContext}
@@ -330,6 +339,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("workflow runtime: %v", err)
 		}
+		// The web process runs the workflow scheduler (Stage 14 sub-stage
+		// 4) in both its full and management-only modes.
+		stopWorkflows := startWorkflowScheduler(runtimeCtx, workflowRuntime)
+		defer stopWorkflows()
 		presetReport, err := pluginManager.ValidatePresetContext(runtimeCtx, "")
 		if err != nil {
 			log.Fatalf("failed to refresh plugin enabled configuration: %v", err)

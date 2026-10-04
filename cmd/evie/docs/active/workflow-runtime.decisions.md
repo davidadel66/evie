@@ -1,5 +1,179 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Durable restart and leases (Stage 14, sub-stage 4)
+
+Source: sub-stage 4 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the sub-stage 3 entry below ("What sub-stage 4 must pick up"): fenced
+leases on attempt begin, finish and run failure, a background scheduler
+and a recovery scan over unfinished runs, a terminal record for an attempt
+a crash left running, admission and the approved definition re-checked
+before a run continues, pinned runtime compatibility, and a durable
+not-before time for backoff. Binding: ADR 0016, 0017, 0025, 0029 and 0033
+and this spec's lease, scheduler, recovery, state and retry decisions
+("foreground and background runs share one runtime"; "session disconnect
+does not cancel a run").
+
+### What was built
+
+- **Leases.** `workflow_run_leases` holds one row per run any runtime ever
+  claimed: the holder (one runtime instance, `evie-<pid>-<uuid>`), a
+  fencing token, and acquired, heartbeat, expiry and release times. Each
+  claim raises the token by one (a trigger refuses a smaller token and the
+  rows are never deleted). A run can be claimed when it was never claimed,
+  when its lease was released, or once its lease expired; claiming an
+  expired lease is a takeover. The holder renews the lease every third of
+  its duration (default 30 seconds) and releases it when it stops
+  advancing the run. Lease and retry times are stored as fixed-width UTC
+  text so SQLite compares them in time order.
+- **Fencing.** Every attempt begin and finish (and so every checkpoint),
+  run failure, pause and resume takes the lease and runs in one immediate
+  transaction that requires the holder's exact token, unreleased and
+  unexpired, at its start and again at a fresh time before it commits; a
+  holder whose lease expired, was released or was taken over writes
+  nothing (`ErrWorkflowRunLeaseLost`), even before anyone takes over.
+  Each attempt records the holder and token it ran under. Several Evie
+  processes (the REPL, `evie serve`, a one-shot CLI start) share the
+  database; exactly one of them can record a run's progress at a time.
+- **Interrupted attempts.** Attempts gain the state `interrupted`.
+  Sub-stage 3's attempt table had a closed state check, so it is rebuilt
+  once at startup (rows and rowids copied unchanged, lease columns `''`
+  and `0`, triggers recreated; the shape is re-read under the write lock
+  and an unknown shape fails closed), and runs gain `not_before`. A claim
+  records, in its own transaction and before anything else, every attempt
+  an earlier lease left `running` as `interrupted` ("interrupted: holder X
+  (lease N) stopped before the attempt's outcome was recorded"), so the
+  new holder starts from a settled checkpoint. This covers a crash, a lost
+  lease and a write that failed. Chosen over recording such attempts
+  `failed` so inspection tells a crash from a function's own error.
+- **Retry after interruption.** An interrupted attempt counts as an
+  attempt of its step's Retry Policy and of `limits.max_attempts`, like a
+  failed one, as the sub-stage 3 entry asked ("retries from the same
+  checkpoint within its policy") and as the amendment already says of agent
+  attempts. A deterministic step retries from the same checkpoint with the
+  same recorded input, so the run's output is identical to an
+  uninterrupted one; a step whose policy allows one attempt (the default)
+  fails the run visibly ("steps.leftover failed after 1 attempt:
+  interrupted: …") rather than looping on a node that kills its process.
+  A branch decision is pure and is simply decided again.
+- **Output and checkpoint together.** An attempt's output and the next
+  checkpoint were already one transaction; now it is also fenced. A crash
+  or fault between them cannot leave an output without its checkpoint:
+  both commit or neither does, and recovery then treats the attempt as
+  interrupted (proved by a test that makes the checkpoint write fail).
+- **Durable backoff.** A failed attempt with attempts left records the
+  step's `retry.backoff` as the run's `not_before`, in the transaction that
+  records the failure, with a `retry_scheduled` event, and its pass
+  releases the lease. No runtime can claim the run before that time
+  (`ErrWorkflowRunNotDue`), across restarts; the retry's begin clears it.
+  The in-process sleep is gone.
+- **Continuing a run.** Every claim checks, in order, before any node
+  runs: the run's pinned `composition.runtime` is one this runtime declares
+  compatible (`evie.workflow.runtime/1`, unchanged because this sub-stage
+  keeps the node semantics; the run's pinned step kinds must also be ones
+  it executes) (ADR 0025); run admission (`AdmitWorkflowRun`:
+  `authorizeWorkflowActivation`, so the definition's latest version is
+  approved, not deactivated and not blocked, and the run's own pinned
+  version is neither deactivated nor blocked, ADR 0033); and the pinned
+  commit read through procedural Git still validates and hashes to the
+  approval (`approvedDefinition`). Then `ResumeWorkflowRun` re-applies
+  admission in the transaction that resumes a paused run. A run of a
+  superseded version continues under its own pins.
+- **Visible pause.** When a check fails, the run pauses: state
+  `waiting_for_dependency`, its `error` holding the reason (for example
+  "workflow is not active: version 1 was deactivated", "workflow is
+  blocked: the Workspace is archived", "the approved workflow definition
+  no longer matches its approval: …", or "its pinned runtime … is not one
+  this Evie declares compatible …; continue it with an Evie that does, or
+  migrate it…"), and a recheck time (`not_before`, default one minute).
+  A `paused` event is recorded once per reason. At each recheck the
+  checks run again; when they pass, the run resumes by itself (a `resumed`
+  event; safe under ADR 0029 because no run yet has an effect or a human
+  interruption). Nothing is migrated or failed: a run whose own version
+  was deactivated or whose access was revoked stays paused, holding its
+  Run Key, until cancellation (sub-stage 8) or migration (sub-stage 12).
+- **Scheduler.** `Runtime.Start` runs a scheduler in long-lived processes:
+  `evie serve` (full and management-only modes) and the REPL start it
+  like the memory background pass (a configuration problem disables it in
+  the REPL with a logged reason). Each poll (default every second, and at
+  once when a local start wakes it) lists due runs (`DueWorkflowRuns`:
+  queued, running or paused runs past their `not_before` whose lease was
+  never taken, was released or expired, oldest first) and runs an
+  execution pass for each, at most `EVIE_WORKFLOW_WORKERS` at once
+  (default 2, 1 to 32; an invalid value is refused). The first poll is at
+  start, so every startup is a recovery scan, and every later poll is one
+  too: a run whose holder died is due once its lease expires.
+- **Shutdown.** Stopping the scheduler ends every pass between nodes: a
+  node in flight finishes and is recorded, the lease is released (with a
+  `lease_released` event when the run still has work), and stop waits at
+  most five seconds. The next process continues the run at once, with no
+  takeover and nothing interrupted. A process killed outright leaves its
+  lease to expire, and the next scheduler recovers the run.
+- **Starting.** `StartRun` records the run as before. With `Detach` it
+  returns the queued run at once and wakes the local scheduler. Otherwise
+  it waits until the run finishes or pauses: in a process whose scheduler
+  runs, the scheduler executes it and the start only watches; elsewhere
+  (the one-shot CLI) the start executes it itself, detached from the
+  caller's cancellation. If another process holds the run, the start
+  watches until that process finishes it or its lease expires. A caller
+  that stops waiting (a closed browser, a cancelled request) never stops
+  the run.
+- **Surfaces.** `evie workflows run [--detach] <workspace-id> <name> …`:
+  by default it waits and shows the finished or paused run (a paused run
+  exits with "workflow run … is paused: …"); `--detach` shows the queued
+  run and says a running Evie (`evie serve` or the REPL) executes it.
+  Stopping a foreground CLI start ends only that process: its lease
+  expires and a long-lived Evie recovers the run. `POST
+  /api/workflows/start` accepts `"detach": true`. `evie workflows inspect`
+  and `POST /api/workflows/inspect` show the lease (holder, token, expiry
+  or release, last heartbeat), a paused run's reason and recheck time, a
+  pending retry time, each attempt's holder and token (JSON), interrupted
+  attempts, and the recovery events (`workflow_run_events`, append-only:
+  `lease_taken_over`, `attempt_interrupted`, `paused`, `resumed`,
+  `retry_scheduled`, `lease_released`). The Workspace home's run view
+  shows the same and labels a paused run's reason as a pause, not an
+  error.
+
+### Decisions and known limits
+
+- Routine claims and clean releases record no event; the lease row keeps
+  the latest holder. Rechecks of a paused run that stays paused claim and
+  release the lease (raising the token) without recording anything.
+- Leases fence durable writes, not computation: after a takeover the stale
+  holder may still finish computing a node, but its result is refused and
+  the node runs again under the new lease. Deterministic nodes are pure,
+  so this is harmless; sub-stage 6 must check the lease immediately before
+  invoking a provider, after recording the Effect Intent under the fence.
+- Admission is re-checked at every claim (start, recovery, each retry
+  after its backoff, each recheck), not before every node of an
+  uninterrupted pass; revocation pauses a run at its next claim.
+  Sub-stage 6 adds the check before each covered effect (ADR 0017, 0033).
+- A paused run holds its Run Key, so a new start with the same key returns
+  it, until sub-stage 8 lets the owner cancel it.
+- `limits.max_duration` keeps counting while a run waits for a retry or is
+  paused; a run resumed after its limit fails at its next node.
+- Lease expiry is wall-clock based; processes share one machine's clock.
+- Automatic resume of a paused run assumes no Outcome Unknown and no
+  outstanding human interruption, true until sub-stages 6 and 7; they must
+  keep such runs paused (ADR 0029).
+
+### What sub-stage 5 must pick up
+
+- Capability reads run as node attempts under the same lease: begin the
+  attempt under the fence, call the provider, finish it with its output and
+  checkpoint in one fenced transaction; a read interrupted by a crash is
+  recorded `interrupted` and retried within its Retry Policy, with the
+  read's limited backoff as the durable `not_before`.
+- Pin capability providers (Capability IDs, contract and schema hashes,
+  provider versions, Connection IDs) in the run's Execution Composition and
+  extend `incompatible` so a run whose pinned provider or contract is
+  missing or changed pauses visibly (ADR 0016, 0025), instead of
+  substituting; an audited compatible substitution (ADR 0041) needs its own
+  record.
+- Pass the run's context to providers so that a lost lease or a stopping
+  runtime stops a read in flight, and make the per-node admission check
+  that effects (sub-stage 6) will need.
+
 ## 2026-10-04 — Manual deterministic runs (Stage 14, sub-stage 3)
 
 Source: sub-stage 3 of Stage 14 in

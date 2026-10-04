@@ -18,7 +18,7 @@ const workflowsUsage = "usage: evie workflows validate [--json] <dir> | evie wor
 	" | evie workflows show [--json] <workspace-id> <name> | evie workflows diff [--json] <proposal-id>" +
 	" | evie workflows approve [--json] <proposal-id> --hash <executable-hash> --authority <authority-hash> --expect-version <n>" +
 	" | evie workflows deactivate [--json] <workspace-id> <name> --version <n> [--reason <text>]" +
-	" | evie workflows run [--json] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]" +
+	" | evie workflows run [--json] [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]" +
 	" | evie workflows runs [--json] [<workspace-id>] [--workflow <name>] | evie workflows inspect [--json] <run-id>"
 
 // workflowActivationCommands need the database and the procedural

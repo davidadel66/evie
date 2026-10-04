@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
@@ -99,6 +100,46 @@ func TestWorkflowWebRoutesStartListAndInspectRuns(t *testing.T) {
 	}
 	if resp := workflowPost(t, h, "start", start); resp.Code != http.StatusConflict || !strings.Contains(resp.Body.String(), "not_active") {
 		t.Fatalf("deactivated = %d %s", resp.Code, resp.Body)
+	}
+}
+
+// A detached web start records the run and returns it at once; the
+// server's scheduler executes it, and inspection shows its lease and
+// recovery events.
+func TestWorkflowWebDetachedStartReturnsTheRecordedRun(t *testing.T) {
+	_, rt, w := workflowRuntimeForWeb(t)
+	splitFixtures, err := os.ReadFile(filepath.Join(webTestdata, "split-bill.fixtures.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	approveForWeb(t, rt, w.ID, "split-bill", splitFixtures)
+	h := web.WithWorkflows(web.NewServer(nil), rt).Handler()
+	resp := workflowPost(t, h, "start", map[string]any{"workspace_id": w.ID, "name": "split-bill", "detach": true,
+		"inputs": map[string]any{"bill_id": "dinner-1", "total_cents": 1000, "people": 3}})
+	var started workflowruntime.RunResult
+	if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &started) != nil || started.Existing ||
+		started.Run.Run.State != eviedb.WorkflowRunQueued || len(started.Run.Attempts) != 0 || started.Run.Lease != nil {
+		t.Fatalf("detached start = %d %s", resp.Code, resp.Body)
+	}
+	stop := rt.Start(context.Background())
+	defer stop()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		resp = workflowPost(t, h, "inspect", map[string]any{"run_id": started.Run.Run.ID})
+		var detail eviedb.WorkflowRunDetail
+		if resp.Code != http.StatusOK || json.Unmarshal(resp.Body.Bytes(), &detail) != nil {
+			t.Fatalf("inspect = %d %s", resp.Code, resp.Body)
+		}
+		if detail.Run.State == eviedb.WorkflowRunSucceeded {
+			if detail.Lease == nil || detail.Lease.Holder != rt.Holder() || detail.Lease.ReleasedAt == nil || detail.Events == nil {
+				t.Fatalf("inspected lease = %s", resp.Body)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the scheduler did not finish the run: %s", resp.Body)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 

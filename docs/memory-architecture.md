@@ -473,6 +473,24 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   crash leaves the run at its last checkpoint for sub-stage 4's recovery.
   Binding record: the sub-stage 3 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 4 implemented** (2026-10-04). Runs are advanced under a
+  fenced lease (holder, growing fencing token, expiry renewed by
+  heartbeat), so the REPL, `evie serve` and a CLI start can share one
+  database and exactly one of them records a run's progress at a time;
+  every attempt, checkpoint, failure, pause and resume is refused for a
+  stale holder. `evie serve` and the REPL run a background scheduler
+  (`EVIE_WORKFLOW_WORKERS`, default 2) whose every poll, starting at
+  startup, is also the recovery scan: a run whose process died is claimed
+  once its lease expires, the attempt it left in flight is recorded
+  `interrupted`, and the step retries from the same checkpoint within its
+  Retry Policy. Retry backoff is a durable not-before time. Before a run
+  continues, its pinned runtime must be declared compatible (ADR 0025),
+  run admission must still hold and its approved commit must still hash
+  to the approval; otherwise it pauses visibly (waiting for a dependency,
+  with the reason) and resumes by itself once the cause clears. `evie
+  workflows run` waits by default and takes `--detach`; inspection shows
+  the lease and recovery events. Binding record: the sub-stage 4 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

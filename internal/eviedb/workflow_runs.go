@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
@@ -34,9 +35,10 @@ import (
 //     the same transaction as the next checkpoint. Only one attempt of a run
 //     may be in flight, and a finished attempt is immutable.
 //
-// Every write is a compare-and-set on the run's latest checkpoint, so a
-// second executor of the same run cannot interleave with the first; fenced
-// leases and restart recovery arrive in sub-stage 4.
+// Every write is a compare-and-set on the run's latest checkpoint and, since
+// sub-stage 4, fenced by the run's lease (workflow_run_leases.go): only the
+// runtime holding the current, unexpired lease can begin or finish an
+// attempt, write a checkpoint or fail the run.
 
 var (
 	ErrWorkflowRunNotFound = errors.New("workflow run not found")
@@ -68,13 +70,17 @@ func (s WorkflowRunState) Terminal() bool {
 	return s == WorkflowRunSucceeded || s == WorkflowRunFailed || s == WorkflowRunCancelled
 }
 
-// WorkflowAttemptState is one node attempt's state.
+// WorkflowAttemptState is one node attempt's state. An attempt is
+// interrupted when the runtime holding the run stopped before recording its
+// outcome (a crash, a lost lease or a failed write); the next holder records
+// it so before anything else happens (sub-stage 4).
 type WorkflowAttemptState string
 
 const (
-	WorkflowAttemptRunning   WorkflowAttemptState = "running"
-	WorkflowAttemptSucceeded WorkflowAttemptState = "succeeded"
-	WorkflowAttemptFailed    WorkflowAttemptState = "failed"
+	WorkflowAttemptRunning     WorkflowAttemptState = "running"
+	WorkflowAttemptSucceeded   WorkflowAttemptState = "succeeded"
+	WorkflowAttemptFailed      WorkflowAttemptState = "failed"
+	WorkflowAttemptInterrupted WorkflowAttemptState = "interrupted"
 )
 
 // WorkflowRun is one run with its pins, input and progress.
@@ -105,6 +111,10 @@ type WorkflowRun struct {
 	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	UpdatedAt  time.Time  `json:"updated_at"`
+	// NotBefore is the durable time before which no runtime advances the
+	// run: a retry's backoff, or a paused run's next check. While the run
+	// waits for a dependency, Error says why.
+	NotBefore *time.Time `json:"not_before,omitempty"`
 }
 
 // WorkflowNodeAttempt is one node attempt.
@@ -123,6 +133,10 @@ type WorkflowNodeAttempt struct {
 	Note            string               `json:"note,omitempty"`
 	StartedAt       time.Time            `json:"started_at"`
 	FinishedAt      *time.Time           `json:"finished_at,omitempty"`
+	// LeaseHolder and LeaseToken are the lease the attempt ran under (empty
+	// and 0 for attempts recorded before leases existed).
+	LeaseHolder string `json:"lease_holder,omitempty"`
+	LeaseToken  int64  `json:"lease_token,omitempty"`
 }
 
 // WorkflowCheckpoint is the durable state between nodes.
@@ -138,11 +152,14 @@ type WorkflowCheckpoint struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
-// WorkflowRunDetail is a run with its full attempt and checkpoint history.
+// WorkflowRunDetail is a run with its full attempt and checkpoint history,
+// its lease (nil before any runtime claimed it) and its recovery events.
 type WorkflowRunDetail struct {
 	Run         WorkflowRun           `json:"run"`
 	Attempts    []WorkflowNodeAttempt `json:"attempts"`
 	Checkpoints []WorkflowCheckpoint  `json:"checkpoints"`
+	Lease       *WorkflowRunLease     `json:"lease,omitempty"`
+	Events      []WorkflowRunEvent    `json:"events"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -154,11 +171,51 @@ type WorkflowRunProgress struct {
 	Attempts  int
 	LastError string
 	// Counted is every attempt counted against limits.max_attempts
-	// (branch decisions are not counted).
+	// (branch decisions are not counted; interrupted attempts are).
 	Counted int
 	// InFlight is an attempt recorded but not finished.
 	InFlight *WorkflowNodeAttempt
 }
+
+// workflowNodeAttemptsTable is the node attempt table since sub-stage 4:
+// an attempt records the lease it ran under, and a crash leaves it
+// interrupted rather than failed.
+const workflowNodeAttemptsTable = `CREATE TABLE IF NOT EXISTS workflow_node_attempts (
+ run_id TEXT NOT NULL REFERENCES workflow_runs(id),
+ seq INTEGER NOT NULL CHECK(seq > 0),
+ step_id TEXT NOT NULL CHECK(length(step_id) BETWEEN 1 AND 64),
+ kind TEXT NOT NULL CHECK(kind IN ('deterministic','capability','ai','agent','map','branch','interrupt')),
+ attempt INTEGER NOT NULL CHECK(attempt > 0),
+ input_checkpoint INTEGER NOT NULL,
+ input TEXT NOT NULL CHECK(json_valid(input)),
+ state TEXT NOT NULL CHECK(state IN ('running','succeeded','failed','interrupted')),
+ output TEXT CHECK(output IS NULL OR json_valid(output)),
+ error TEXT NOT NULL,
+ next_step TEXT NOT NULL,
+ note TEXT NOT NULL,
+ started_at TEXT NOT NULL,
+ finished_at TEXT,
+ lease_holder TEXT NOT NULL,
+ lease_token INTEGER NOT NULL CHECK(lease_token >= 0),
+ PRIMARY KEY(run_id, seq),
+ FOREIGN KEY(run_id, input_checkpoint) REFERENCES workflow_run_checkpoints(run_id, seq),
+ CHECK((state = 'running') = (finished_at IS NULL)),
+ CHECK(state <> 'succeeded' OR output IS NOT NULL),
+ CHECK(state NOT IN ('failed','interrupted') OR (error <> '' AND output IS NULL)))`
+
+const workflowNodeAttemptsIndexes = `CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_one_in_flight ON workflow_node_attempts(run_id) WHERE state = 'running';
+ CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_numbered ON workflow_node_attempts(run_id, input_checkpoint, step_id, attempt);
+ CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_finished BEFORE UPDATE ON workflow_node_attempts
+ WHEN OLD.state <> 'running'
+ BEGIN SELECT RAISE(ABORT,'finished workflow node attempts are immutable'); END;
+ CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_identity BEFORE UPDATE OF run_id,seq,step_id,kind,attempt,input_checkpoint,input,started_at,lease_holder,lease_token ON workflow_node_attempts
+ BEGIN SELECT RAISE(ABORT,'a workflow node attempt''s identity is immutable'); END;
+ CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_no_delete BEFORE DELETE ON workflow_node_attempts
+ BEGIN SELECT RAISE(ABORT,'workflow node attempts are immutable'); END;`
+
+// subStage3Attempts identifies the sub-stage 3 attempt table: no lease
+// columns and no interrupted state.
+const subStage3Attempts = `state TEXT NOT NULL CHECK(state IN ('running','succeeded','failed'))`
 
 func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS workflow_runs (
@@ -184,6 +241,7 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  started_at TEXT,
  finished_at TEXT,
  updated_at TEXT NOT NULL,
+ not_before TEXT,
  FOREIGN KEY(workspace_id, workflow, version) REFERENCES workflow_activations(workspace_id, name, version),
  CHECK((state IN ('succeeded','failed','cancelled')) = (finished_at IS NOT NULL)),
  CHECK((state = 'succeeded') = (outputs IS NOT NULL)),
@@ -214,40 +272,63 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
  CREATE TRIGGER IF NOT EXISTS workflow_run_checkpoints_no_update BEFORE UPDATE ON workflow_run_checkpoints
  BEGIN SELECT RAISE(ABORT,'workflow checkpoints are immutable'); END;
  CREATE TRIGGER IF NOT EXISTS workflow_run_checkpoints_no_delete BEFORE DELETE ON workflow_run_checkpoints
- BEGIN SELECT RAISE(ABORT,'workflow checkpoints are immutable'); END;
- CREATE TABLE IF NOT EXISTS workflow_node_attempts (
- run_id TEXT NOT NULL REFERENCES workflow_runs(id),
- seq INTEGER NOT NULL CHECK(seq > 0),
- step_id TEXT NOT NULL CHECK(length(step_id) BETWEEN 1 AND 64),
- kind TEXT NOT NULL CHECK(kind IN ('deterministic','capability','ai','agent','map','branch','interrupt')),
- attempt INTEGER NOT NULL CHECK(attempt > 0),
- input_checkpoint INTEGER NOT NULL,
- input TEXT NOT NULL CHECK(json_valid(input)),
- state TEXT NOT NULL CHECK(state IN ('running','succeeded','failed')),
- output TEXT CHECK(output IS NULL OR json_valid(output)),
- error TEXT NOT NULL,
- next_step TEXT NOT NULL,
- note TEXT NOT NULL,
- started_at TEXT NOT NULL,
- finished_at TEXT,
- PRIMARY KEY(run_id, seq),
- FOREIGN KEY(run_id, input_checkpoint) REFERENCES workflow_run_checkpoints(run_id, seq),
- CHECK((state = 'running') = (finished_at IS NULL)),
- CHECK(state <> 'succeeded' OR output IS NOT NULL),
- CHECK(state <> 'failed' OR (error <> '' AND output IS NULL)));
- CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_one_in_flight ON workflow_node_attempts(run_id) WHERE state = 'running';
- CREATE UNIQUE INDEX IF NOT EXISTS workflow_node_attempts_numbered ON workflow_node_attempts(run_id, input_checkpoint, step_id, attempt);
- CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_finished BEFORE UPDATE ON workflow_node_attempts
- WHEN OLD.state <> 'running'
- BEGIN SELECT RAISE(ABORT,'finished workflow node attempts are immutable'); END;
- CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_identity BEFORE UPDATE OF run_id,seq,step_id,kind,attempt,input_checkpoint,input,started_at ON workflow_node_attempts
- BEGIN SELECT RAISE(ABORT,'a workflow node attempt''s identity is immutable'); END;
- CREATE TRIGGER IF NOT EXISTS workflow_node_attempts_no_delete BEFORE DELETE ON workflow_node_attempts
- BEGIN SELECT RAISE(ABORT,'workflow node attempts are immutable'); END;`)
+ BEGIN SELECT RAISE(ABORT,'workflow checkpoints are immutable'); END;`)
 	if err != nil {
 		return fmt.Errorf("create workflow run schema: %w", err)
 	}
-	return nil
+	// Sub-stage 4 adds the durable retry time to runs and the lease and
+	// interrupted state to attempts. A sub-stage 3 database is upgraded once,
+	// under the write lock, so competing startups migrate it once; an
+	// unknown shape fails closed.
+	err = withImmediateTransaction(ctx, db, func(conn *sql.Conn) error {
+		var hasNotBefore bool
+		if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('workflow_runs') WHERE name='not_before')`).Scan(&hasNotBefore); err != nil {
+			return err
+		}
+		if !hasNotBefore {
+			if _, err := conn.ExecContext(ctx, `ALTER TABLE workflow_runs ADD COLUMN not_before TEXT`); err != nil {
+				return fmt.Errorf("add the workflow run retry time: %w", err)
+			}
+		}
+		var definition string
+		err := conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='workflow_node_attempts'`).Scan(&definition)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			_, err = conn.ExecContext(ctx, workflowNodeAttemptsTable)
+			return err
+		case err != nil:
+			return err
+		case strings.Contains(definition, "lease_token") && strings.Contains(definition, "'interrupted'"):
+			return nil
+		case !strings.Contains(definition, subStage3Attempts):
+			return errors.New("unsupported workflow node attempt table schema")
+		}
+		var references int
+		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master AS m JOIN pragma_foreign_key_list(m.name) AS f WHERE m.type='table' AND f."table"='workflow_node_attempts'`).Scan(&references); err != nil {
+			return err
+		}
+		if references != 0 {
+			return errors.New("unsupported workflow node attempt foreign reference")
+		}
+		replacement := strings.Replace(workflowNodeAttemptsTable, "IF NOT EXISTS workflow_node_attempts", "workflow_node_attempts_leased", 1)
+		if _, err := conn.ExecContext(ctx, replacement); err != nil {
+			return fmt.Errorf("create workflow node attempt table: %w", err)
+		}
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts_leased(rowid,run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token)
+ SELECT rowid,run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,'',0 FROM workflow_node_attempts;
+ DROP TABLE workflow_node_attempts;
+ ALTER TABLE workflow_node_attempts_leased RENAME TO workflow_node_attempts;`); err != nil {
+			return fmt.Errorf("migrate workflow node attempts: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("upgrade workflow run schema: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, workflowNodeAttemptsIndexes); err != nil {
+		return fmt.Errorf("create workflow node attempt indexes: %w", err)
+	}
+	return ensureWorkflowRunLeaseSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -270,7 +351,7 @@ type WorkflowRunStart struct {
 
 const runColumns = `r.id,r.workspace_id,r.workflow,r.version,r.commit_id,r.tree_path,r.executable_hash,r.authority_hash,r.workspace_revision_id,r.access_revision,
  r.composition,r.run_key,r.inputs,r.state,r.outputs,r.error,r.origin_surface,r.session_id,r.created_at,r.started_at,r.finished_at,r.updated_at,
- c.seq,c.next_step`
+ r.not_before,c.seq,c.next_step`
 
 const runFrom = ` FROM workflow_runs r JOIN workflow_run_checkpoints c ON c.run_id=r.id
  AND c.seq=(SELECT MAX(seq) FROM workflow_run_checkpoints WHERE run_id=r.id)`
@@ -289,11 +370,18 @@ func parseOptionalTime(text sql.NullString) (*time.Time, error) {
 func scanWorkflowRun(scanner rowScanner) (WorkflowRun, error) {
 	var r WorkflowRun
 	var composition, inputs, created, updated string
-	var outputs, session, started, finished sql.NullString
+	var outputs, session, started, finished, notBefore sql.NullString
 	if err := scanner.Scan(&r.ID, &r.WorkspaceID, &r.Workflow, &r.Version, &r.Commit, &r.Path, &r.ExecutableHash, &r.AuthorityHash, &r.WorkspaceRevision, &r.AccessRevision,
 		&composition, &r.RunKey, &inputs, &r.State, &outputs, &r.Error, &r.Surface, &session, &created, &started, &finished, &updated,
-		&r.Checkpoint, &r.NextStep); err != nil {
+		&notBefore, &r.Checkpoint, &r.NextStep); err != nil {
 		return r, err
+	}
+	if notBefore.Valid {
+		t, err := parseLeaseTime(notBefore.String)
+		if err != nil {
+			return r, err
+		}
+		r.NotBefore = &t
 	}
 	r.Composition, r.Inputs = json.RawMessage(composition), json.RawMessage(inputs)
 	if outputs.Valid {
@@ -441,18 +529,30 @@ func runRunnable(ctx context.Context, q queryRower, runID string) (WorkflowRun, 
 	return r, nil
 }
 
-// BeginWorkflowAttempt durably records a node attempt before it runs: the
-// step the run's latest checkpoint names, its next attempt number from that
-// checkpoint, and its resolved input. No other attempt of the run may be in
-// flight. The run is running from its first attempt.
-func (s *Store) BeginWorkflowAttempt(ctx context.Context, a WorkflowAttemptStart) (WorkflowNodeAttempt, error) {
+// BeginWorkflowAttempt durably records a node attempt before it runs, under
+// the run's current lease: the step the run's latest checkpoint names, its
+// next attempt number from that checkpoint, its resolved input and the
+// lease. No other attempt of the run may be in flight, a paused run must be
+// resumed first, and a retry waits for its not-before time. The run is
+// running from its first attempt.
+func (s *Store) BeginWorkflowAttempt(ctx context.Context, lease WorkflowRunLease, a WorkflowAttemptStart) (WorkflowNodeAttempt, error) {
 	if len(a.Input) == 0 || !json.Valid(a.Input) {
 		return WorkflowNodeAttempt{}, errors.New("a node attempt needs its resolved input as JSON")
 	}
+	if a.RunID != lease.RunID {
+		return WorkflowNodeAttempt{}, fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
+	}
 	var out WorkflowNodeAttempt
-	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
-		if _, err := runRunnable(ctx, conn, a.RunID); err != nil {
+	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, now time.Time) error {
+		run, err := runRunnable(ctx, conn, a.RunID)
+		if err != nil {
 			return err
+		}
+		if run.State != WorkflowRunQueued && run.State != WorkflowRunRunning {
+			return fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
+		}
+		if run.NotBefore != nil && run.NotBefore.After(now) {
+			return &WorkflowRunNotDueError{NotBefore: *run.NotBefore}
 		}
 		c, err := latestCheckpoint(ctx, conn, a.RunID)
 		if err != nil {
@@ -472,17 +572,16 @@ func (s *Store) BeginWorkflowAttempt(ctx context.Context, a WorkflowAttemptStart
 		if inFlight > 0 || a.Attempt != made+1 {
 			return ErrWorkflowRunConflict
 		}
-		now := s.now()
-		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts(run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at)
- VALUES(?,?,?,?,?,?,?,'running',NULL,'','','',?,NULL)`, a.RunID, next, a.Step, a.Kind, a.Attempt, c.Seq, string(a.Input), formatTime(now)); err != nil {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts(run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token)
+ VALUES(?,?,?,?,?,?,?,'running',NULL,'','','',?,NULL,?,?)`, a.RunID, next, a.Step, a.Kind, a.Attempt, c.Seq, string(a.Input), formatTime(now), lease.Holder, lease.Token); err != nil {
 			return fmt.Errorf("record workflow node attempt: %w", err)
 		}
-		if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='running',started_at=COALESCE(started_at,?),updated_at=? WHERE id=?`,
+		if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='running',started_at=COALESCE(started_at,?),not_before=NULL,updated_at=? WHERE id=?`,
 			formatTime(now), formatTime(now), a.RunID); err != nil {
 			return fmt.Errorf("start workflow run: %w", err)
 		}
 		out = WorkflowNodeAttempt{RunID: a.RunID, Seq: next, Step: a.Step, Kind: a.Kind, Attempt: a.Attempt, InputCheckpoint: c.Seq,
-			Input: a.Input, State: WorkflowAttemptRunning, StartedAt: now.UTC()}
+			Input: a.Input, State: WorkflowAttemptRunning, StartedAt: now.UTC(), LeaseHolder: lease.Holder, LeaseToken: lease.Token}
 		return nil
 	})
 	return out, err
@@ -492,25 +591,32 @@ func (s *Store) BeginWorkflowAttempt(ctx context.Context, a WorkflowAttemptStart
 // succeeded: Output is its normalized output, and Next and State form the
 // next checkpoint; Outputs, given when Next is "", are the run's outputs
 // and the run succeeds. A failed attempt records Error; RunError, when set,
-// fails the run (no attempt is left).
+// fails the run (no attempt is left); otherwise RetryAfter, when positive,
+// is the retry's backoff, recorded as the run's durable not-before time.
 type WorkflowAttemptEnd struct {
-	RunID    string
-	Seq      int64
-	Error    string
-	Output   json.RawMessage
-	Note     string
-	Next     string
-	State    json.RawMessage
-	Outputs  json.RawMessage
-	RunError string
+	RunID      string
+	Seq        int64
+	Error      string
+	Output     json.RawMessage
+	Note       string
+	Next       string
+	State      json.RawMessage
+	Outputs    json.RawMessage
+	RunError   string
+	RetryAfter time.Duration
 }
 
 // FinishWorkflowAttempt records how an in-flight attempt ended and, when it
-// succeeded, the next checkpoint, in one transaction, before any other
-// attempt can start.
-func (s *Store) FinishWorkflowAttempt(ctx context.Context, e WorkflowAttemptEnd) (WorkflowRun, error) {
+// succeeded, the next checkpoint, in one transaction under the run's
+// current lease, before any other attempt can start. The attempt's output
+// and its checkpoint commit together or not at all.
+func (s *Store) FinishWorkflowAttempt(ctx context.Context, lease WorkflowRunLease, e WorkflowAttemptEnd) (WorkflowRun, error) {
 	succeeded := e.Error == ""
 	switch {
+	case e.RunID != lease.RunID:
+		return WorkflowRun{}, fmt.Errorf("%w: the lease is for run %s", ErrWorkflowRunLeaseLost, lease.RunID)
+	case e.RetryAfter < 0 || e.RetryAfter > 0 && (succeeded || e.RunError != ""):
+		return WorkflowRun{}, errors.New("only a failed attempt that leaves its run running is retried after a backoff")
 	case succeeded && (len(e.Output) == 0 || !json.Valid(e.Output) || !workflowJSONObject(e.State)):
 		return WorkflowRun{}, errors.New("a succeeded attempt needs its output and the next checkpoint's state")
 	case succeeded && e.Next == "" && !workflowJSONObject(e.Outputs):
@@ -520,14 +626,16 @@ func (s *Store) FinishWorkflowAttempt(ctx context.Context, e WorkflowAttemptEnd)
 	case !succeeded && (len(e.Output) > 0 || len(e.State) > 0 || len(e.Outputs) > 0):
 		return WorkflowRun{}, errors.New("a failed attempt has no output or checkpoint")
 	}
-	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, clock time.Time) error {
 		if _, err := runRunnable(ctx, conn, e.RunID); err != nil {
 			return err
 		}
-		var state string
-		var input int64
-		err := conn.QueryRowContext(ctx, `SELECT state,input_checkpoint FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).Scan(&state, &input)
-		if errors.Is(err, sql.ErrNoRows) || err == nil && state != string(WorkflowAttemptRunning) {
+		var state, step string
+		var input, token int64
+		var attempt int
+		err := conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
+			Scan(&state, &input, &token, &step, &attempt)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token) {
 			return ErrWorkflowRunConflict
 		}
 		if err != nil {
@@ -540,11 +648,19 @@ func (s *Store) FinishWorkflowAttempt(ctx context.Context, e WorkflowAttemptEnd)
 		if c.Seq != input {
 			return ErrWorkflowRunConflict
 		}
-		now := formatTime(s.now())
+		now := formatTime(clock)
 		if !succeeded {
 			if _, err := conn.ExecContext(ctx, `UPDATE workflow_node_attempts SET state='failed',error=?,note=?,finished_at=? WHERE run_id=? AND seq=?`,
 				e.Error, e.Note, now, e.RunID, e.Seq); err != nil {
 				return fmt.Errorf("record failed workflow node attempt: %w", err)
+			}
+			if e.RunError == "" && e.RetryAfter > 0 {
+				retry := clock.Add(e.RetryAfter)
+				if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET not_before=?,updated_at=? WHERE id=?`, formatLeaseTime(retry), now, e.RunID); err != nil {
+					return fmt.Errorf("record workflow retry time: %w", err)
+				}
+				return recordWorkflowRunEvent(ctx, conn, WorkflowRunEvent{RunID: e.RunID, Kind: WorkflowEventRetryScheduled, Holder: lease.Holder, Token: lease.Token, Attempt: e.Seq,
+					Detail: fmt.Sprintf("steps.%s attempt %d failed; it is retried from checkpoint %d no earlier than %s", step, attempt, input, formatLeaseTime(retry)), At: clock})
 			}
 			if e.RunError == "" {
 				_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
@@ -575,13 +691,14 @@ func (s *Store) FinishWorkflowAttempt(ctx context.Context, e WorkflowAttemptEnd)
 }
 
 // FailWorkflowRun fails a run between attempts (a run limit, or a
-// checkpoint the definition cannot continue from), when checkpoint is still
-// its latest and no attempt is in flight.
-func (s *Store) FailWorkflowRun(ctx context.Context, runID string, checkpoint int64, reason string) (WorkflowRun, error) {
+// checkpoint the definition cannot continue from), under the run's current
+// lease, when checkpoint is still its latest and no attempt is in flight.
+func (s *Store) FailWorkflowRun(ctx context.Context, lease WorkflowRunLease, checkpoint int64, reason string) (WorkflowRun, error) {
 	if reason == "" {
 		return WorkflowRun{}, errors.New("a failed run needs its reason")
 	}
-	err := s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
+	runID := lease.RunID
+	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, clock time.Time) error {
 		if _, err := runRunnable(ctx, conn, runID); err != nil {
 			return err
 		}
@@ -596,8 +713,8 @@ func (s *Store) FailWorkflowRun(ctx context.Context, runID string, checkpoint in
 		if c.Seq != checkpoint || inFlight > 0 {
 			return ErrWorkflowRunConflict
 		}
-		now := formatTime(s.now())
-		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='failed',error=?,finished_at=?,updated_at=? WHERE id=?`, reason, now, now, runID)
+		now := formatTime(clock)
+		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='failed',error=?,not_before=NULL,finished_at=?,updated_at=? WHERE id=?`, reason, now, now, runID)
 		return err
 	})
 	if err != nil {
@@ -606,13 +723,14 @@ func (s *Store) FailWorkflowRun(ctx context.Context, runID string, checkpoint in
 	return readWorkflowRun(ctx, s.db, runID)
 }
 
-const attemptColumns = `run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at`
+const attemptColumns = `run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token`
 
 func scanWorkflowAttempt(scanner rowScanner) (WorkflowNodeAttempt, error) {
 	var a WorkflowNodeAttempt
 	var input, started string
 	var output, finished sql.NullString
-	if err := scanner.Scan(&a.RunID, &a.Seq, &a.Step, &a.Kind, &a.Attempt, &a.InputCheckpoint, &input, &a.State, &output, &a.Error, &a.Next, &a.Note, &started, &finished); err != nil {
+	if err := scanner.Scan(&a.RunID, &a.Seq, &a.Step, &a.Kind, &a.Attempt, &a.InputCheckpoint, &input, &a.State, &output, &a.Error, &a.Next, &a.Note, &started, &finished,
+		&a.LeaseHolder, &a.LeaseToken); err != nil {
 		return a, err
 	}
 	a.Input = json.RawMessage(input)
@@ -669,7 +787,7 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 		return WorkflowRunDetail{}, err
 	}
 	defer conn.Close()
-	d := WorkflowRunDetail{Attempts: []WorkflowNodeAttempt{}, Checkpoints: []WorkflowCheckpoint{}}
+	d := WorkflowRunDetail{Attempts: []WorkflowNodeAttempt{}, Checkpoints: []WorkflowCheckpoint{}, Events: []WorkflowRunEvent{}}
 	if d.Run, err = readWorkflowRun(ctx, conn, id); err != nil {
 		return d, err
 	}
@@ -713,7 +831,18 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if err := rows.Close(); err != nil {
 		return d, err
 	}
-	return d, rows.Err()
+	if err := rows.Err(); err != nil {
+		return d, err
+	}
+	lease, held, err := readWorkflowRunLease(ctx, conn, id)
+	if err != nil {
+		return d, err
+	}
+	if held {
+		d.Lease = &lease
+	}
+	d.Events, err = workflowRunEvents(ctx, conn, id)
+	return d, err
 }
 
 // WorkflowRunFilter narrows a run listing: one Workspace, one workflow in

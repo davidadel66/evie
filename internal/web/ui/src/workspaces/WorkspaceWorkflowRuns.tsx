@@ -7,10 +7,12 @@ import {
 
 // Runs of this Workspace's workflows (Stage 14 sub-stage 3). David starts a
 // run of an active workflow with its inputs; Evie executes its deterministic
-// and branch steps, recording each node attempt and checkpoint, before the
-// response. A start whose Run Key already has a run shows that run instead.
-// Definitions with other step kinds are refused until the runtime supports
-// them.
+// and branch steps, recording each node attempt and checkpoint, and
+// responds when the run finishes or pauses. A start whose Run Key already
+// has a run shows that run instead. Definitions with other step kinds are
+// refused until the runtime supports them. Since sub-stage 4 a run survives
+// restarts: one Evie process at a time advances it under a fenced lease, a
+// paused run shows why, and inspection lists its lease and recovery events.
 
 const stateLabel: Record<WorkflowRunState, string> = {
   queued: "Queued",
@@ -33,6 +35,13 @@ function when(time: string): string {
   return Number.isNaN(date.getTime()) ? time : date.toLocaleString();
 }
 
+const paused = (run: WorkflowRun) => run.state === "waiting_for_dependency";
+
+/** A run's error line: why it failed, or why it is paused. */
+function reason(run: WorkflowRun): string {
+  return paused(run) ? `Paused: ${run.error}` : run.error ?? "";
+}
+
 export function WorkflowRunList({runs, busy, onInspect}: {
   runs: WorkflowRun[];
   busy: boolean;
@@ -50,7 +59,7 @@ export function WorkflowRunList({runs, busy, onInspect}: {
         <span className="text-fainter">{when(run.created_at)}</span>
         <button type="button" disabled={busy} onClick={() => onInspect(run)} className="text-body underline underline-offset-2 disabled:opacity-40">Inspect</button>
       </div>
-      {run.error && <p className="text-danger mt-1 leading-5">{run.error}</p>}
+      {run.error && <p className={`${paused(run) ? "text-muted-text" : "text-danger"} mt-1 leading-5`}>{reason(run)}</p>}
     </li>)}
   </ul>;
 }
@@ -63,7 +72,13 @@ export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; o
     <p className="text-muted-text">Run key <code className="font-mono">{run.run_key}</code></p>
     <p className="text-muted-text">Executable hash <code className="font-mono">{run.executable_hash}</code></p>
     <p className="text-muted-text">Pinned to Workspace revision {run.workspace_revision}, access revision {run.access_revision}.</p>
-    {run.error && <p role="alert" className="text-danger mt-2">{run.error}</p>}
+    {run.error && (paused(run)
+      ? <p role="status" className="text-muted-text mt-2">{reason(run)}{run.not_before ? ` Checked again after ${when(run.not_before)}.` : ""}</p>
+      : <p role="alert" className="text-danger mt-2">{run.error}</p>)}
+    {run.not_before && !paused(run) && !["succeeded", "failed", "cancelled"].includes(run.state) && <p className="text-muted-text">Retry not before {when(run.not_before)}.</p>}
+    {detail.lease && <p className="text-muted-text">{detail.lease.released_at
+      ? `Lease released by ${detail.lease.holder} (lease ${detail.lease.token}) at ${when(detail.lease.released_at)}; last heartbeat ${when(detail.lease.heartbeat_at)}.`
+      : `Lease held by ${detail.lease.holder} (lease ${detail.lease.token}) until ${when(detail.lease.expires_at)}; last heartbeat ${when(detail.lease.heartbeat_at)}.`}</p>}
     <section className="mt-3">
       <h4 className="text-body font-medium">Inputs</h4>
       <pre className="font-mono whitespace-pre-wrap">{json(run.inputs)}</pre>
@@ -72,7 +87,7 @@ export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; o
       <h4 className="text-body font-medium">Nodes</h4>
       {detail.attempts.length === 0 ? <p className="text-muted-text">No node has started.</p> : <ol>
         {detail.attempts.map((a) => <li key={a.seq} className="mt-1">
-          <p className={a.state === "failed" ? "text-danger" : "text-body"}>
+          <p className={a.state === "failed" || a.state === "interrupted" ? "text-danger" : "text-body"}>
             {`#${a.seq} ${a.step} attempt ${a.attempt}: ${a.state}${a.next ? ` → ${a.next}` : ""}`}
             <span className="text-fainter">{` (from checkpoint ${a.input_checkpoint})`}</span>
             {a.state === "running" && <span className="text-muted-text"> in flight</span>}
@@ -86,6 +101,12 @@ export function WorkflowRunView({detail, onClose}: {detail: WorkflowRunDetail; o
     {run.outputs && <section className="mt-3">
       <h4 className="text-body font-medium">Outputs</h4>
       <pre className="font-mono whitespace-pre-wrap">{json(run.outputs)}</pre>
+    </section>}
+    {detail.events && detail.events.length > 0 && <section className="mt-3">
+      <h4 className="text-body font-medium">Recovery</h4>
+      <ol>
+        {detail.events.map((e) => <li key={e.seq} className="text-muted-text mt-1">{`${when(e.at)} ${e.kind} by ${e.holder} (lease ${e.token}): ${e.detail}`}</li>)}
+      </ol>
     </section>}
     <button type="button" onClick={onClose} className="text-body mt-3 underline underline-offset-2">Close</button>
   </div>;
@@ -156,7 +177,7 @@ export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definiti
   });
   return <section aria-label="Workflow runs" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflow runs</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Workflows with AI, agent, map, capability or interruption steps cannot run yet.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. Workflows with AI, agent, map, capability or interruption steps cannot run yet.</p>
     {workspace.state === "active" && <WorkflowRunStart workflows={active} busy={busy} onStart={(name, inputs) => void start(name, inputs)} />}
     {runs === null ? <p className="text-muted-text text-xs">Loading runs…</p>
       : <WorkflowRunList runs={runs} busy={busy} onInspect={(run) => void inspect(run)} />}

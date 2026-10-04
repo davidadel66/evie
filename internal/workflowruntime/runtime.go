@@ -4,8 +4,9 @@
 // validation report and dry run, present the approval card (executable and
 // authority diffs against the current version), approve one exact version
 // for future runs, deactivate it, and list and show definitions. Sub-stage 3
-// adds manual runs of deterministic and branch steps (runs.go); later
-// sub-stages extend runs through this same type.
+// adds manual runs of deterministic and branch steps (runs.go); sub-stage 4
+// adds fenced run leases, the background scheduler and restart recovery
+// (scheduler.go); later sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (empty until providers declare
@@ -22,14 +23,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/procedural"
 	"github.com/davidadel66/evie/internal/workflow"
+	"github.com/google/uuid"
 )
 
 // Store is the durable activation state the runtime needs.
@@ -45,12 +49,22 @@ type Store interface {
 	ActiveWorkflow(ctx context.Context, ws memory.WorkspaceID, name string) (eviedb.WorkflowActivation, error)
 
 	StartWorkflowRun(ctx context.Context, req eviedb.WorkflowRunStart) (eviedb.WorkflowRun, bool, error)
-	BeginWorkflowAttempt(ctx context.Context, a eviedb.WorkflowAttemptStart) (eviedb.WorkflowNodeAttempt, error)
-	FinishWorkflowAttempt(ctx context.Context, e eviedb.WorkflowAttemptEnd) (eviedb.WorkflowRun, error)
-	FailWorkflowRun(ctx context.Context, runID string, checkpoint int64, reason string) (eviedb.WorkflowRun, error)
 	WorkflowRunProgress(ctx context.Context, id string) (eviedb.WorkflowRunProgress, error)
 	WorkflowRun(ctx context.Context, id string) (eviedb.WorkflowRunDetail, error)
 	ListWorkflowRuns(ctx context.Context, f eviedb.WorkflowRunFilter) ([]eviedb.WorkflowRun, error)
+
+	// Leases, recovery and scheduling (sub-stage 4): every write below is
+	// fenced by the run's current lease.
+	AcquireWorkflowRunLease(ctx context.Context, runID, holder string, d time.Duration) (eviedb.WorkflowRunClaim, error)
+	HeartbeatWorkflowRunLease(ctx context.Context, lease eviedb.WorkflowRunLease, d time.Duration) (eviedb.WorkflowRunLease, error)
+	ReleaseWorkflowRunLease(ctx context.Context, lease eviedb.WorkflowRunLease, reason string) error
+	AdmitWorkflowRun(ctx context.Context, lease eviedb.WorkflowRunLease) error
+	ResumeWorkflowRun(ctx context.Context, lease eviedb.WorkflowRunLease) (eviedb.WorkflowRun, error)
+	PauseWorkflowRun(ctx context.Context, lease eviedb.WorkflowRunLease, reason string, recheck time.Duration) (eviedb.WorkflowRun, error)
+	BeginWorkflowAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, a eviedb.WorkflowAttemptStart) (eviedb.WorkflowNodeAttempt, error)
+	FinishWorkflowAttempt(ctx context.Context, lease eviedb.WorkflowRunLease, e eviedb.WorkflowAttemptEnd) (eviedb.WorkflowRun, error)
+	FailWorkflowRun(ctx context.Context, lease eviedb.WorkflowRunLease, checkpoint int64, reason string) (eviedb.WorkflowRun, error)
+	DueWorkflowRuns(ctx context.Context, limit int) ([]string, error)
 }
 
 // Config wires a Runtime.
@@ -61,6 +75,57 @@ type Config struct {
 	Catalog workflow.Catalog
 	// Workers is the operator's subagent ceiling bounding agent budgets.
 	Workers workflow.WorkerCeiling
+	// Scheduler bounds and paces how this runtime executes runs; zero
+	// fields take their defaults.
+	Scheduler SchedulerConfig
+	// Report receives scheduler errors, each distinct one once while it
+	// persists; nil drops them.
+	Report func(error)
+}
+
+// SchedulerConfig bounds and paces a runtime's execution of runs
+// (sub-stage 4).
+type SchedulerConfig struct {
+	// Workers is how many runs this runtime's scheduler advances at once
+	// (default 2, at most MaxSchedulerWorkers).
+	Workers int
+	// Lease is how long a claim on a run lasts without renewal (default
+	// 30s); the holder renews it every third of that.
+	Lease time.Duration
+	// Poll is how often the scheduler looks for due runs (default 1s).
+	Poll time.Duration
+	// Recheck is how long a paused run waits before its cause is checked
+	// again (default 1m).
+	Recheck time.Duration
+}
+
+const (
+	// DefaultSchedulerWorkers and MaxSchedulerWorkers bound
+	// SchedulerConfig.Workers.
+	DefaultSchedulerWorkers = 2
+	MaxSchedulerWorkers     = 32
+	defaultLease            = 30 * time.Second
+	defaultPoll             = time.Second
+	defaultRecheck          = time.Minute
+)
+
+func (c SchedulerConfig) resolve() (SchedulerConfig, error) {
+	if c.Workers < 0 || c.Workers > MaxSchedulerWorkers || c.Lease < 0 || c.Poll < 0 || c.Recheck < 0 {
+		return c, fmt.Errorf("workflow scheduler needs 1 to %d workers and positive durations", MaxSchedulerWorkers)
+	}
+	if c.Workers == 0 {
+		c.Workers = DefaultSchedulerWorkers
+	}
+	if c.Lease == 0 {
+		c.Lease = defaultLease
+	}
+	if c.Poll == 0 {
+		c.Poll = defaultPoll
+	}
+	if c.Recheck == 0 {
+		c.Recheck = defaultRecheck
+	}
+	return c, nil
 }
 
 // Runtime is the Workflow Runtime.
@@ -69,12 +134,32 @@ type Runtime struct {
 	repo    *procedural.Repo
 	catalog workflow.Catalog
 	workers workflow.WorkerCeiling
+	sched   SchedulerConfig
+	report  func(error)
+	// holder names this runtime instance on every lease it takes.
+	holder string
+	// compatible are the pinned runtimes this runtime continues (ADR 0025).
+	compatible []string
 	// call runs one deterministic step's function; nil is the reviewed
-	// function itself. Tests replace it to inject failures and to observe
-	// durable state from inside a node.
-	call  func(v *workflow.Validated, step string, input map[string]any) (any, error)
+	// function itself. Tests replace it to inject failures, crashes and
+	// to observe durable state from inside a node.
+	call  func(run string, v *workflow.Validated, step string, input map[string]any) (any, error)
 	now   func() time.Time
 	sleep func(ctx context.Context, d time.Duration) error
+
+	mu sync.Mutex
+	// scheduling is set while Start's scheduler runs in this process.
+	scheduling bool
+	// active are the runs this process is advancing now.
+	active map[string]bool
+	// failures are the last error of each run's latest pass here, for
+	// waiters; reported are the errors already reported.
+	failures map[string]error
+	reported map[string]string
+	// wakeup prompts the scheduler; changed is closed and replaced each
+	// time a pass ends.
+	wakeup  chan struct{}
+	changed chan struct{}
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -88,8 +173,19 @@ func New(c Config) (*Runtime, error) {
 	if c.Catalog == nil {
 		c.Catalog = workflow.NewCatalog()
 	}
-	return &Runtime{store: c.Store, repo: c.Repo, catalog: c.Catalog, workers: c.Workers, now: time.Now, sleep: sleepContext}, nil
+	sched, err := c.Scheduler.resolve()
+	if err != nil {
+		return nil, err
+	}
+	return &Runtime{store: c.Store, repo: c.Repo, catalog: c.Catalog, workers: c.Workers, sched: sched, report: c.Report,
+		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
+		now: time.Now, sleep: sleepContext,
+		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{},
+		wakeup: make(chan struct{}, 1), changed: make(chan struct{})}, nil
 }
+
+// Holder is the name this runtime instance takes leases under.
+func (r *Runtime) Holder() string { return r.holder }
 
 func ownerSurface(surface string) bool { return surface == "cli" || surface == "web" }
 

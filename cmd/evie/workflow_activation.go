@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -33,12 +34,17 @@ type workflowCommands interface {
 
 // newWorkflowRuntime is the production Workflow Runtime: the kernel store,
 // the procedural repository at ~/.evie/procedural, no capability contracts
-// yet (providers declare them in sub-stage 5) and the operator's subagent
-// ceiling for agent budgets.
+// yet (providers declare them in sub-stage 5), the operator's subagent
+// ceiling for agent budgets, and the scheduler's worker bound from
+// EVIE_WORKFLOW_WORKERS, its errors logged.
 func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string) (*workflowruntime.Runtime, error) {
 	policy, err := configuredSubagentPolicy(getenv)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Subagents configuration: %w", err)
+	}
+	scheduler, err := workflowSchedulerConfig(getenv)
+	if err != nil {
+		return nil, err
 	}
 	root, err := procedural.DefaultRoot()
 	if err != nil {
@@ -46,7 +52,9 @@ func newWorkflowRuntime(store *eviedb.Store, getenv func(string) string) (*workf
 	}
 	return workflowruntime.New(workflowruntime.Config{
 		Store: store, Repo: procedural.New(root), Catalog: workflow.NewCatalog(),
-		Workers: workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
+		Workers:   workflow.WorkerCeiling{Deadline: policy.Deadline, Tokens: policy.TokenBudget},
+		Scheduler: scheduler,
+		Report:    func(err error) { log.Printf("workflow scheduler: %v", err) },
 	})
 }
 

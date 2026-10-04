@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/memory"
 	"github.com/davidadel66/evie/internal/workflow"
@@ -21,6 +22,8 @@ type runDB struct {
 	path string
 	db   *sql.DB
 	s    *Store
+	// clock, when set, is every reopened store's clock.
+	clock func() time.Time
 }
 
 func openRunDB(t *testing.T) *runDB {
@@ -44,6 +47,9 @@ func (r *runDB) reopen() {
 		r.t.Fatal(err)
 	}
 	r.db, r.s = db, NewStore(db)
+	if r.clock != nil {
+		r.s.UseClock(r.clock, time.UTC)
+	}
 }
 
 // splitBillActivation approves the split-bill example in a new Workspace.
@@ -155,10 +161,10 @@ func TestWorkflowRunKeyIsUniqueWhileActiveOrSucceeded(t *testing.T) {
 	if err != nil || !existing || again.ID != first.ID {
 		t.Fatalf("duplicate start = %+v, %v, %v", again, existing, err)
 	}
-	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'other',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at FROM workflow_runs WHERE id=?`, first.ID); err == nil {
-		t.Fatal("the database accepted a second active run for one key")
+	if _, err := r.db.ExecContext(ctx, `INSERT INTO workflow_runs SELECT 'other',workspace_id,workflow,version,commit_id,tree_path,executable_hash,authority_hash,workspace_revision_id,access_revision,composition,run_key,inputs,state,outputs,error,origin_surface,session_id,created_at,started_at,finished_at,updated_at,not_before FROM workflow_runs WHERE id=?`, first.ID); err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+		t.Fatalf("the database accepted a second active run for one key: %v", err)
 	}
-	if _, err := r.s.FailWorkflowRun(ctx, first.ID, 0, "stopped by test"); err != nil {
+	if _, err := r.s.FailWorkflowRun(ctx, testLease(t, r.s, first.ID), 0, "stopped by test"); err != nil {
 		t.Fatal(err)
 	}
 	second, existing, err := r.s.StartWorkflowRun(ctx, runStart(a, "split-bill:k1"))
@@ -176,15 +182,26 @@ func TestWorkflowRunKeyIsUniqueWhileActiveOrSucceeded(t *testing.T) {
 	}
 }
 
+// testLease claims a run's lease for a test's writes.
+func testLease(t *testing.T, s *Store, runID string) WorkflowRunLease {
+	t.Helper()
+	c, err := s.AcquireWorkflowRunLease(context.Background(), runID, "test-holder", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.Lease
+}
+
 // finishRun drives one attempt that ends the graph.
 func finishRun(t *testing.T, s *Store, run WorkflowRun) {
 	t.Helper()
 	ctx := context.Background()
-	at, err := s.BeginWorkflowAttempt(ctx, WorkflowAttemptStart{RunID: run.ID, Checkpoint: 0, Step: "split", Kind: workflow.KindDeterministic, Attempt: 1, Input: json.RawMessage(`{}`)})
+	lease := testLease(t, s, run.ID)
+	at, err := s.BeginWorkflowAttempt(ctx, lease, WorkflowAttemptStart{RunID: run.ID, Checkpoint: 0, Step: "split", Kind: workflow.KindDeterministic, Attempt: 1, Input: json.RawMessage(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.FinishWorkflowAttempt(ctx, WorkflowAttemptEnd{RunID: run.ID, Seq: at.Seq, Output: json.RawMessage(`1`), State: json.RawMessage(`{"split":1}`), Outputs: json.RawMessage(`{"x":1}`)}); err != nil {
+	if _, err := s.FinishWorkflowAttempt(ctx, lease, WorkflowAttemptEnd{RunID: run.ID, Seq: at.Seq, Output: json.RawMessage(`1`), State: json.RawMessage(`{"split":1}`), Outputs: json.RawMessage(`{"x":1}`)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -200,8 +217,9 @@ func TestWorkflowRunAttemptsAndCheckpointsAreOrderedAndImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lease := testLease(t, r.s, run.ID)
 	begin := func(checkpoint int64, step string, attempt int) (WorkflowNodeAttempt, error) {
-		return r.s.BeginWorkflowAttempt(ctx, WorkflowAttemptStart{RunID: run.ID, Checkpoint: checkpoint, Step: step, Kind: workflow.KindDeterministic, Attempt: attempt, Input: json.RawMessage(`{"total":1000}`)})
+		return r.s.BeginWorkflowAttempt(ctx, lease, WorkflowAttemptStart{RunID: run.ID, Checkpoint: checkpoint, Step: step, Kind: workflow.KindDeterministic, Attempt: attempt, Input: json.RawMessage(`{"total":1000}`)})
 	}
 	if _, err := begin(1, "split", 1); !errors.Is(err, ErrWorkflowRunConflict) {
 		t.Fatalf("future checkpoint: %v", err)
@@ -224,7 +242,7 @@ func TestWorkflowRunAttemptsAndCheckpointsAreOrderedAndImmutable(t *testing.T) {
 	if _, err := begin(0, "split", 2); !errors.Is(err, ErrWorkflowRunConflict) {
 		t.Fatalf("second attempt while one is in flight: %v", err)
 	}
-	if _, err := r.s.FinishWorkflowAttempt(ctx, WorkflowAttemptEnd{RunID: run.ID, Seq: 1, Error: "parts must be between 1 and 1000"}); err != nil {
+	if _, err := r.s.FinishWorkflowAttempt(ctx, lease, WorkflowAttemptEnd{RunID: run.ID, Seq: 1, Error: "parts must be between 1 and 1000"}); err != nil {
 		t.Fatal(err)
 	}
 	p, _ = r.s.WorkflowRunProgress(ctx, run.ID)
@@ -235,10 +253,10 @@ func TestWorkflowRunAttemptsAndCheckpointsAreOrderedAndImmutable(t *testing.T) {
 	if err != nil || second.Seq != 2 || second.Attempt != 2 {
 		t.Fatalf("retry = %+v, %v", second, err)
 	}
-	if _, err := r.s.FinishWorkflowAttempt(ctx, WorkflowAttemptEnd{RunID: run.ID, Seq: 2, Output: json.RawMessage(`{"share":333}`), Next: "check", State: json.RawMessage(`{"split":{"share":333}}`)}); err != nil {
+	if _, err := r.s.FinishWorkflowAttempt(ctx, lease, WorkflowAttemptEnd{RunID: run.ID, Seq: 2, Output: json.RawMessage(`{"share":333}`), Next: "check", State: json.RawMessage(`{"split":{"share":333}}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.s.FinishWorkflowAttempt(ctx, WorkflowAttemptEnd{RunID: run.ID, Seq: 2, Output: json.RawMessage(`{}`), Next: "check", State: json.RawMessage(`{}`)}); !errors.Is(err, ErrWorkflowRunConflict) {
+	if _, err := r.s.FinishWorkflowAttempt(ctx, lease, WorkflowAttemptEnd{RunID: run.ID, Seq: 2, Output: json.RawMessage(`{}`), Next: "check", State: json.RawMessage(`{}`)}); !errors.Is(err, ErrWorkflowRunConflict) {
 		t.Fatalf("finishing an attempt twice: %v", err)
 	}
 	r.reopen()
@@ -273,7 +291,7 @@ func TestWorkflowRunAttemptsAndCheckpointsAreOrderedAndImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	failed, err := r.s.FinishWorkflowAttempt(ctx, WorkflowAttemptEnd{RunID: run.ID, Seq: third.Seq, Error: "boom", RunError: "steps.check failed after 1 attempt: boom"})
+	failed, err := r.s.FinishWorkflowAttempt(ctx, lease, WorkflowAttemptEnd{RunID: run.ID, Seq: third.Seq, Error: "boom", RunError: "steps.check failed after 1 attempt: boom"})
 	if err != nil || failed.State != WorkflowRunFailed || failed.FinishedAt == nil || failed.Error != "steps.check failed after 1 attempt: boom" {
 		t.Fatalf("failed run = %+v, %v", failed, err)
 	}
@@ -283,7 +301,7 @@ func TestWorkflowRunAttemptsAndCheckpointsAreOrderedAndImmutable(t *testing.T) {
 	if _, err := r.db.ExecContext(ctx, `UPDATE workflow_runs SET state='running', finished_at=NULL WHERE id=?`, run.ID); err == nil || !strings.Contains(err.Error(), "immutable") {
 		t.Fatalf("reopening a terminal run: %v", err)
 	}
-	if _, err := r.s.FailWorkflowRun(ctx, run.ID, 1, "again"); !errors.Is(err, ErrWorkflowRunFinished) {
+	if _, err := r.s.FailWorkflowRun(ctx, lease, 1, "again"); !errors.Is(err, ErrWorkflowRunFinished) {
 		t.Fatalf("failing a finished run: %v", err)
 	}
 }

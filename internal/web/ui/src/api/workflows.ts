@@ -99,8 +99,11 @@ export function pendingProposal(definition: WorkflowDefinition): WorkflowProposa
 }
 
 // Workflow runs (Stage 14 sub-stage 3): the owner starts a run of an active
-// workflow, which executes its deterministic and branch steps before the
-// response, and lists and inspects runs with every node attempt.
+// workflow, which executes its deterministic and branch steps, and lists
+// and inspects runs with every node attempt. Since sub-stage 4 a run is
+// advanced under a fenced lease by one Evie process at a time; inspection
+// shows the lease and the recovery events (takeovers, interrupted attempts,
+// pauses, resumes, scheduled retries).
 
 export type WorkflowRunState =
   | "queued" | "running" | "waiting_for_human" | "waiting_for_dependency" | "needs_reconciliation"
@@ -128,6 +131,8 @@ export type WorkflowRun = {
   created_at: string;
   started_at?: string;
   finished_at?: string;
+  /** No process advances the run before this time: a retry's backoff, or a paused run's next check. */
+  not_before?: string;
 };
 
 export type WorkflowNodeAttempt = {
@@ -137,18 +142,47 @@ export type WorkflowNodeAttempt = {
   attempt: number;
   input_checkpoint: number;
   input: unknown;
-  state: "running" | "succeeded" | "failed";
+  state: "running" | "succeeded" | "failed" | "interrupted";
   output?: unknown;
   error?: string;
   next?: string;
   note?: string;
   started_at: string;
   finished_at?: string;
+  lease_holder?: string;
+  lease_token?: number;
 };
 
 export type WorkflowCheckpoint = { seq: number; after_attempt?: number; next: string; state: Record<string, unknown>; created_at: string };
 
-export type WorkflowRunDetail = { run: WorkflowRun; attempts: WorkflowNodeAttempt[]; checkpoints: WorkflowCheckpoint[] };
+export type WorkflowRunLease = {
+  run_id: string;
+  holder: string;
+  token: number;
+  acquired_at: string;
+  heartbeat_at: string;
+  expires_at: string;
+  released_at?: string;
+};
+
+export type WorkflowRunEvent = {
+  run_id: string;
+  seq: number;
+  kind: "lease_taken_over" | "attempt_interrupted" | "paused" | "resumed" | "retry_scheduled" | "lease_released";
+  holder: string;
+  token: number;
+  attempt?: number;
+  detail: string;
+  at: string;
+};
+
+export type WorkflowRunDetail = {
+  run: WorkflowRun;
+  attempts: WorkflowNodeAttempt[];
+  checkpoints: WorkflowCheckpoint[];
+  lease?: WorkflowRunLease;
+  events?: WorkflowRunEvent[];
+};
 
 export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
 

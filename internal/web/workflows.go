@@ -196,7 +196,9 @@ const maxWorkflowStartBytes = 72 << 10
 // handleWorkflowStart is the owner starting a run of a Workspace's active
 // workflow from the web (Stage 14 sub-stage 3). It names the Workspace, the
 // workflow, JSON inputs and optionally its originating session; the surface
-// is always the web. The run executes before the response, and does not
+// is always the web. The response waits until the run finishes or pauses,
+// unless detach is set (sub-stage 4): then it returns the recorded run at
+// once and the server's scheduler executes it. Either way the run does not
 // stop if the browser disconnects.
 func (s *Server) handleWorkflowStart(w http.ResponseWriter, r *http.Request) {
 	var request struct {
@@ -204,11 +206,12 @@ func (s *Server) handleWorkflowStart(w http.ResponseWriter, r *http.Request) {
 		Name        string             `json:"name"`
 		Inputs      json.RawMessage    `json:"inputs"`
 		SessionID   memory.SessionID   `json:"session_id"`
+		Detach      bool               `json:"detach"`
 	}
 	if !decodeCandidateRequestLimit(w, r, &request, maxWorkflowStartBytes) {
 		return
 	}
-	run := workflowruntime.RunRequest{WorkspaceID: request.WorkspaceID, Workflow: request.Name, SessionID: request.SessionID, Surface: "web"}
+	run := workflowruntime.RunRequest{WorkspaceID: request.WorkspaceID, Workflow: request.Name, SessionID: request.SessionID, Detach: request.Detach, Surface: "web"}
 	valid := boundedID(string(request.WorkspaceID)) && boundedID(request.Name) && len(request.SessionID) <= 128
 	if valid && len(request.Inputs) > 0 {
 		var err error

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidadel66/evie/internal/eviedb"
 	"github.com/davidadel66/evie/internal/memory"
@@ -164,5 +165,65 @@ func TestWorkflowCLIRunUsage(t *testing.T) {
 		if handled, _ := runWorkflowManagement(context.Background(), []string{"workflows", sub}, &out, func(string) string { return "" }); handled {
 			t.Fatalf("%s was answered before the database opened", sub)
 		}
+	}
+}
+
+// A detached run is recorded and shown at once, queued for a long-lived
+// Evie process; inspection says nobody has claimed it yet. A process with a
+// scheduler then finishes it, and inspection shows the released lease.
+func TestWorkflowCLIRunDetachRecordsTheRunForTheScheduler(t *testing.T) {
+	c := newWorkflowCLI(t)
+	w := c.approveSplitBill()
+	out := c.mustRun("workflows", "run", "--detach", string(w.ID), "split-bill", "--input", "bill_id=dinner-1", "--input", "total_cents=1000", "--input", "people=3")
+	for _, want := range []string{"queued", "Detached:", "evie serve", "Lease: not claimed yet"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("detached run output lacks %q:\n%s", want, out)
+		}
+	}
+	m := runIDLine.FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("no run ID:\n%s", out)
+	}
+	stop := c.rt.Start(context.Background())
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(c.mustRun("workflows", "inspect", m[1]), "succeeded") {
+		if time.Now().After(deadline) {
+			t.Fatal("the scheduler did not finish the detached run")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+	if inspected := c.mustRun("workflows", "inspect", m[1]); !strings.Contains(inspected, "Lease: released by "+c.rt.Holder()) {
+		t.Fatalf("inspect after the scheduler:\n%s", inspected)
+	}
+	if _, err := c.run("workflows", "run", "--detach", "--detach", string(w.ID), "split-bill"); err == nil || !strings.Contains(err.Error(), "usage") {
+		t.Fatalf("repeated --detach: %v", err)
+	}
+}
+
+// The scheduler's worker bound comes from EVIE_WORKFLOW_WORKERS; a bad
+// value is refused rather than ignored.
+func TestWorkflowSchedulerWorkersFromEnvironment(t *testing.T) {
+	for value, ok := range map[string]bool{"": true, "1": true, "4": true, "32": true, "0": false, "33": false, "-1": false, "two": false} {
+		_, err := workflowSchedulerConfig(func(name string) string {
+			if name == "EVIE_WORKFLOW_WORKERS" {
+				return value
+			}
+			return ""
+		})
+		if (err == nil) != ok {
+			t.Fatalf("EVIE_WORKFLOW_WORKERS=%q: %v", value, err)
+		}
+	}
+	config, err := workflowSchedulerConfig(func(name string) string {
+		if name == "EVIE_WORKFLOW_WORKERS" {
+			return "4"
+		}
+		return ""
+	})
+	if err != nil || config.Workers != 4 {
+		t.Fatalf("config = %+v, %v", config, err)
 	}
 }

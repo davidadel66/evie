@@ -56,6 +56,36 @@ describe("Workspace workflow runs", () => {
     expect(html).toContain("&quot;leftover_cents&quot;: 1");
   });
 
+  it("shows a paused run's reason, its lease and its recovery events", () => {
+    const paused: WorkflowRun = {...run, id: "run-3", state: "waiting_for_dependency", outputs: undefined, finished_at: undefined,
+      error: "workflow is not active: version 2 was deactivated", not_before: "2026-10-04T12:05:00Z"};
+    const listed = renderToStaticMarkup(<WorkflowRunList runs={[paused]} busy={false} onInspect={()=>{}} />);
+    expect(listed).toContain("Paused: workflow is not active: version 2 was deactivated");
+    expect(listed).not.toContain("text-danger");
+    const html = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{
+      run: paused,
+      attempts: [
+        {seq: 1, step: "split", kind: "deterministic", attempt: 1, input_checkpoint: 0, input: {}, state: "interrupted", error: "interrupted: holder evie-1-a (lease 1) stopped before the attempt's outcome was recorded", started_at: "", lease_holder: "evie-1-a", lease_token: 1},
+      ],
+      checkpoints: [],
+      lease: {run_id: "run-3", holder: "evie-2-b", token: 2, acquired_at: "2026-10-04T12:00:30Z", heartbeat_at: "2026-10-04T12:00:40Z", expires_at: "2026-10-04T12:01:00Z", released_at: "2026-10-04T12:00:41Z"},
+      events: [
+        {run_id: "run-3", seq: 1, kind: "lease_taken_over", holder: "evie-2-b", token: 2, detail: "holder evie-1-a's lease 1 expired", at: "2026-10-04T12:00:30Z"},
+        {run_id: "run-3", seq: 2, kind: "paused", holder: "evie-2-b", token: 2, detail: "workflow is not active: version 2 was deactivated", at: "2026-10-04T12:00:41Z"},
+      ],
+    }} />);
+    expect(html).toContain("Paused: workflow is not active: version 2 was deactivated");
+    expect(html).not.toContain('role="alert"');
+    expect(html).toContain("#1 split attempt 1: interrupted");
+    expect(html).toContain("Lease released by evie-2-b (lease 2)");
+    expect(html).toContain("Recovery");
+    expect(html).toContain("lease_taken_over by evie-2-b (lease 2): holder evie-1-a&#x27;s lease 1 expired");
+    const held = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{...detail, run: {...run, state: "running", outputs: undefined},
+      lease: {run_id: "run-1", holder: "evie-3-c", token: 4, acquired_at: "", heartbeat_at: "2026-10-04T12:00:40Z", expires_at: "2026-10-04T12:01:00Z"}}} />);
+    expect(held).toContain("Lease held by evie-3-c (lease 4) until");
+    expect(held).not.toContain("Recovery");
+  });
+
   it("starts only active workflows, with a JSON inputs object", () => {
     const html = renderToStaticMarkup(<WorkflowRunStart workflows={["split-bill"]} busy={false} onStart={()=>{}} />);
     expect(html).toContain("split-bill");

@@ -37,6 +37,10 @@ type harness struct {
 	store *eviedb.Store
 	repo  *procedural.Repo
 	rt    *Runtime
+	// clock, when set, is the store's and runtime's clock; scheduler
+	// configures each runtime's scheduler and leases.
+	clock     *testClock
+	scheduler SchedulerConfig
 }
 
 func newHarness(t *testing.T) *harness {
@@ -53,9 +57,13 @@ func newHarness(t *testing.T) *harness {
 
 func (h *harness) runtime(catalog workflow.Catalog) *Runtime {
 	h.t.Helper()
-	rt, err := New(Config{Store: h.store, Repo: h.repo, Catalog: catalog, Workers: ceiling})
+	rt, err := New(Config{Store: h.store, Repo: h.repo, Catalog: catalog, Workers: ceiling, Scheduler: h.scheduler})
 	if err != nil {
 		h.t.Fatal(err)
+	}
+	if h.clock != nil {
+		h.store.UseClock(h.clock.Now, time.UTC)
+		rt.now = h.clock.Now
 	}
 	return rt
 }

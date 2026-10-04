@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -148,7 +147,7 @@ func checkOrdering(t *testing.T, d eviedb.WorkflowRunDetail) {
 				next = &d.Checkpoints[j]
 			}
 		}
-		if a.State == eviedb.WorkflowAttemptFailed {
+		if a.State == eviedb.WorkflowAttemptFailed || a.State == eviedb.WorkflowAttemptInterrupted {
 			if next != nil {
 				t.Fatalf("failed attempt %d produced checkpoint %d", a.Seq, next.Seq)
 			}
@@ -259,7 +258,7 @@ func TestWorkflowRunRecordsEachAttemptBeforeItRunsAndCheckpointsBeforeTheNext(t 
 	defer observer.Close()
 	view := eviedb.NewStore(observer)
 	var seen []string
-	h.rt.call = func(v *workflow.Validated, step string, input map[string]any) (any, error) {
+	h.rt.call = func(_ string, v *workflow.Validated, step string, input map[string]any) (any, error) {
 		runs, err := view.ListWorkflowRuns(ctx, eviedb.WorkflowRunFilter{WorkspaceID: w.ID})
 		if err != nil || len(runs) != 1 {
 			t.Fatalf("observer runs = %+v, %v", runs, err)
@@ -366,7 +365,7 @@ func TestWorkflowRunRetriesDeterministicStepsWithinBounds(t *testing.T) {
 
 	// A transient failure is retried with the same recorded input.
 	calls := 0
-	h.rt.call = func(v *workflow.Validated, step string, input map[string]any) (any, error) {
+	h.rt.call = func(_ string, v *workflow.Validated, step string, input map[string]any) (any, error) {
 		calls++
 		if calls == 1 {
 			return nil, errors.New("transient")
@@ -493,41 +492,6 @@ func TestWorkflowRunRefusesADefinitionThatNoLongerMatchesItsApproval(t *testing.
 	}
 	if runs := h.runs(w.ID); len(runs) != 0 {
 		t.Fatalf("runs = %+v", runs)
-	}
-}
-
-// What a crash in the middle of a run leaves today (no recovery until
-// sub-stage 4): the run stays running at its last checkpoint with the
-// interrupted attempt in flight, and its Run Key stays held, so a duplicate
-// start returns it without executing anything.
-func TestWorkflowRunCrashMidRunLeavesTheLastCheckpoint(t *testing.T) {
-	h := newRunHarness(t)
-	w, _ := h.approveSplitBill(splitBillDir)
-	h.rt.call = func(v *workflow.Validated, step string, input map[string]any) (any, error) {
-		if step == "leftover" {
-			runtime.Goexit() // the process dies inside the node
-		}
-		return v.CallFunction(step, input)
-	}
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_, _ = h.rt.StartRun(context.Background(), RunRequest{WorkspaceID: w.ID, Workflow: "split-bill", Inputs: billInputs("dinner-1", 1000, 3), Surface: "cli"})
-	}()
-	<-done
-	h.reopen()
-	runs := h.runs(w.ID)
-	if len(runs) != 1 || runs[0].State != eviedb.WorkflowRunRunning || runs[0].Checkpoint != 2 || runs[0].NextStep != "leftover" {
-		t.Fatalf("after the crash = %+v", runs)
-	}
-	d := h.inspect(runs[0].ID)
-	last := d.Attempts[len(d.Attempts)-1]
-	if len(d.Attempts) != 3 || last.Step != "leftover" || last.State != eviedb.WorkflowAttemptRunning || last.InputCheckpoint != 2 || last.FinishedAt != nil {
-		t.Fatalf("attempts = %+v", summarize(d))
-	}
-	again := h.start(w.ID, billInputs("dinner-1", 1000, 3))
-	if !again.Existing || again.Run.Run.ID != runs[0].ID || len(again.Run.Attempts) != 3 {
-		t.Fatalf("duplicate start after the crash = %+v", again)
 	}
 }
 
