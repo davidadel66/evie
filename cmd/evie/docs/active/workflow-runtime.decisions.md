@@ -1,5 +1,201 @@
 # Workflow Runtime implementation decisions
 
+## 2026-10-04 — Cancellation and recovery (Stage 14, sub-stage 8)
+
+Source: sub-stage 8 of Stage 14 in
+[docs/memory-architecture.md](../../../../docs/memory-architecture.md) and
+the entries below: sub-stage 7's "What sub-stage 8 must pick up" (withdraw
+an open question before the run ends `cancelled`; never withdraw an
+effect reconciliation; end an AI call in flight like a stop; make
+`cancelling` schedulable), sub-stage 6's note that the audited override
+must enter the key derivation, and sub-stage 4's note that paused runs
+hold their Run Key until cancellation exists. Binding: ADR 0017, 0021,
+0025, 0029 and 0033 and this spec's cancellation, Run Key, state,
+revocation and recovery decisions ("cancellation stops future nodes; an
+in-flight effect completes or enters reconciliation"; "terminal history
+is never rewritten"; "an explicit audited override is required to rerun
+a completed key").
+
+### What was built
+
+- **The owner's cancellation.** `evie workflows cancel [--json]
+  [--detach] <run-id> [--reason <text>]` and `POST /api/workflows/cancel`
+  (`run_id`, optional `reason` up to 1,000 bytes, `detach`; the surface
+  is always `web`) call `Runtime.Cancel`, owner surfaces only (no model
+  tool). One transaction records the cancellation once
+  (`workflow_run_cancellations`: owner, surface, reason, the state it
+  interrupted, time; immutable) and moves the run to `cancelling`
+  without the run's lease, like any owner instruction a holder observes:
+  every holder write checks the run's state in its own transaction, so
+  from that commit no node attempt, question, pause, failure or retry
+  starts (`ErrWorkflowRunCancelling`). Cancelling a `cancelling` or
+  `cancelled` run returns the same record; a `succeeded` or `failed` run
+  is refused (`ErrWorkflowRunFinished`, web 409 `run_finished`) and never
+  changed. By default the command waits like `run` does; `--detach`
+  leaves the rest to the runtime holding the run or a running Evie. The
+  Workspace home's run view has a Cancel run control with an optional
+  reason and shows the cancellation.
+- **Transitions.** `queued`, `waiting_for_dependency` (paused) and
+  `waiting_for_human` become `cancelling` and are finished `cancelled` by
+  the canceller's own claim at once (a question is withdrawn unanswered in
+  that transaction). `running` becomes `cancelling`; the node in flight
+  ends by its kind and the holder finishes the cancellation at the next
+  boundary. `needs_reconciliation` becomes `cancelling`, keeping its
+  automatic reconciliation time; it finishes once the effect's receipt
+  is recorded. Terminal states are unchanged. A trigger refuses
+  `cancelling` or `cancelled` without the owner's record, and another
+  lets a `cancelling` run only finish (`cancelled`, or `succeeded` or
+  `failed` by the node in flight; below).
+- **What is in flight.** A deterministic function or branch finishes and
+  is recorded (it is pure, bounded and takes no context). A capability
+  read and an AI call are stopped through their context, at once when
+  the cancellation came from the same process and otherwise within one
+  scheduler poll (a watcher reads the run's state while the call runs),
+  and the attempt is recorded `interrupted` ("the owner cancelled the run
+  during the read" / "during the model call"); the AI call stays
+  unfinished, so it counts at its estimate, as a stop does. An effect is
+  never stopped: it completes and its receipt, output and next
+  checkpoint are recorded, or its outcome becomes unknown and the run
+  stays `cancelling` (never `needs_reconciliation`) with its
+  `effect_reconciliation` interruption open, never retried, until the
+  provider's reconciliation or the owner (`reconcile`, or answering the
+  interruption) records the receipt; then the cancellation finishes
+  without running the dependent step, whatever the outcome. A failed
+  attempt is not retried, and a node in flight that ends the run (the
+  graph's last node, or a step's last allowed attempt failing) ends it
+  `succeeded` or `failed`: nothing was left to cancel, and the
+  cancellation stays recorded.
+- **Finishing.** `FinishWorkflowCancellation`, under the lease, requires
+  `cancelling`, no attempt in flight and no Effect Intent without its
+  receipt; it withdraws every open question (`withdrawn`, actor
+  `runtime`, with the owner's surface and reason) and records
+  `cancelled` with "cancelled by the owner via <surface>: <reason>". It
+  calls nothing, so it needs neither admission, a compatible runtime nor
+  the approved definition: a run paused because its version was
+  deactivated, blocked or no longer matches its approval can always be
+  cancelled, which frees its Run Key. Completed nodes, checkpoints and
+  effects stay recorded.
+- **Schedulable across restarts.** `cancelling` is claimable whatever its
+  not-before time (a retry's backoff never delays a cancellation) and
+  due for the scheduler once its lease is free or expired: at once
+  unless an effect's outcome is unknown, then at its automatic
+  reconciliation time (never, when only the owner reconciles). A claim
+  of a cancelling run records what a dead holder left in flight
+  (interrupted, or Outcome Unknown for an effect, keeping `cancelling`)
+  and then finishes it or reconciles it. `await` treats a cancelling run
+  as settled only while an effect's outcome is unknown.
+- **Revocation at every node boundary.** Every node attempt (branch,
+  deterministic, read, effect, AI, the recorded answer and the receipt's
+  output) and every question applies run admission
+  (`authorizeWorkflowRun`) in the transaction that records it, so a
+  deactivation, an archived Workspace, a worker revocation or a Workspace
+  Access revision that revokes the run's authority reaches a running run
+  at its next node boundary, whatever the node: the node does not start,
+  nothing is sent, and the run pauses with the reason (sub-stage 4
+  checked only at each claim). Effects keep per-node admission of their
+  exact operation inside `BeginWorkflowEffect`, and reconciliation
+  replays keep theirs. Such a run stays paused (a new approval does not
+  revive a deactivated or blocked version) until the owner cancels it.
+- **Audited rerun override (ADR 0021).** `evie workflows run ...
+  --rerun-of <run-id> --reason <text>` and `POST /api/workflows/start`
+  with `rerun_of` and `reason` start a new run of a logical execution
+  that already succeeded, from the owner's surfaces only. The named run
+  must have succeeded and belong to the same Workspace, workflow and
+  logical Run Key (the inputs' Run Key under the active version; without
+  inputs the rerun takes that run's accepted input), and the reason (up
+  to 1,000 bytes) is required. The rerun's Run Key is
+  `<workflow>:rerun:sha256:<digest>` over the logical Run Key and the run
+  it reruns, so the one-run-per-key index still holds, repeating the same
+  override returns that rerun (`existing`), and every Effect Intent's
+  idempotency key, which is derived from the Run Key, differs from the
+  earlier run's: an idempotent provider performs the rerun's effects
+  rather than answering with the earlier result. `workflow_run_overrides`
+  records the run, the run it reruns, the logical Run Key, the reason,
+  the owner and surface in the transaction that records the run
+  (immutable), and the store re-checks the named run there
+  (`ErrWorkflowRerunRefused`, web 409 `rerun_refused`). A rerun of the
+  rerun continues the same logical execution. A normal start of the key
+  still returns the run that holds it.
+- **Inspection.** `inspect` and the run view show the cancellation (who,
+  via which surface, when, from which state, why), a cancelling run's
+  reason for still waiting, and a rerun's override. `RunText` no longer
+  shows a next step for a cancelling run.
+- **Runtime version.** Runs still pin `evie.workflow.runtime/4`:
+  cancellation and admission at every node boundary change when a run
+  stops, not what any node does, and a rerun is an ordinary run with its
+  own key. An Evie from before this sub-stage cannot claim a cancelling
+  run (it is not schedulable there) and leaves it alone.
+
+### State → recovery
+
+| State | What a claim after a restart finds | Recovery |
+|---|---|---|
+| `queued` | no attempt; lease never taken, released or expired | due at once; runs from checkpoint 0 |
+| `running`, between nodes | latest checkpoint; maybe a retry's not-before time | due once the lease is free or expired and the not-before time passed; continues from the checkpoint |
+| `running`, deterministic, branch, read or AI attempt in flight | attempt `running` under a dead lease | due once the lease expires; the claim records it `interrupted` (an AI call counts at its estimate) and the step runs again from the same checkpoint within the per-node interruption bound |
+| `running`, effect attempt in flight | Effect Intent without a receipt | due once the lease expires; the claim records the attempt `interrupted` and the outcome unknown: `needs_reconciliation`, never rerun |
+| `waiting_for_dependency` (paused) | reason and recheck time; nothing in flight | due at the recheck; resumes by itself once the cause clears, otherwise stays paused; the owner can cancel it |
+| `waiting_for_human` | open question; no lease | never due; the owner's answer continues it (a crash after the answer leaves it `running`, due once that lease expires); cancellation withdraws the question |
+| `needs_reconciliation` | unknown outcome; open `effect_reconciliation` | due at its automatic reconciliation time when the provider reconciles, otherwise waits for the owner; never paused, resumed or retried |
+| `cancelling`, nothing unresolved | the owner's cancellation | due at once, whatever its not-before time; the claim finishes it `cancelled`, withdrawing any open question |
+| `cancelling`, effect in flight | intent without receipt under a live lease | not due while the holder lives; the holder records the receipt or the unknown outcome; after a crash the claim records it unknown and the run stays `cancelling` |
+| `cancelling`, outcome unknown | unknown outcome; open `effect_reconciliation` | as `needs_reconciliation`; the receipt lets the next claim finish the cancellation, with no retry |
+
+### Decisions and known limits
+
+- The request moves the run's state without its lease. Every holder
+  write is a compare-and-set on the run's state inside its fenced
+  transaction, so the flip is the barrier: nothing starts after it, and
+  only the holder (or the next claim) finishes the run. The alternative,
+  a request the holder alone turns into `cancelling`, would show
+  `running` after the owner cancelled and leave unclaimed runs needing a
+  scan of requests.
+- A node in flight that ends the run ends it `succeeded` or `failed`
+  rather than `cancelled`: the work all happened (a `cancelled` run has
+  no outputs and frees its key, so recording it cancelled after its last
+  effect would invite a duplicate execution).
+- A cancelled run frees its Run Key even when some of its effects
+  happened, as a failed run does (sub-stage 3). A later run of the same
+  key derives the same idempotency keys, so an idempotent provider does
+  not repeat them; a non-idempotent provider's completed effect would be
+  sent again by a new run of that key. No production effect provider
+  ships yet.
+- A deterministic function cannot be interrupted: one that never returns
+  keeps its lease alive by heartbeat and blocks the cancellation (the
+  registry's functions are reviewed and bounded). A provider that ignores
+  its context is not waited for, as before.
+- A cancellation from another process reaches a read or AI call in
+  flight within one scheduler poll (default one second); the watcher
+  reads one row per poll only while such a call runs.
+- `WithdrawWorkflowQuestion` now requires the owner's recorded
+  cancellation (the run is `cancelling`); finishing the cancellation
+  withdraws open questions itself, so the runtime does not call it.
+- Withdrawals, cancellations and overrides are records of their own; no
+  run event kinds were added (the events table checks its kinds).
+- The rerun's identity is the run it reruns, not a fresh one: a
+  double-submitted override is one rerun, and a rerun started again after
+  it failed or was cancelled reuses its idempotency keys, as any run of a
+  key does. A rerun runs the currently active version. The web UI has no
+  rerun control; the CLI and API do.
+- Per-node admission costs one authorization read per node inside the
+  attempt's transaction; map fan-outs (sub-stage 9) multiply it.
+
+### What sub-stage 9 must pick up
+
+- Cancellation must reach agent workers and map items: unstarted items
+  never start, running workers are cancelled through their context and
+  recorded per item, a cancelling run finishes only once every item in
+  flight has ended, and a build worker's branch and worktree stay as
+  they are (workflows cannot merge). Use `cancellable` for worker calls
+  and decide how an item's cancelled worker is recorded.
+- `settled` and the scheduler's due rule assume one attempt in flight;
+  map items need their own rows in the recovery table (each item
+  recovers from its own checkpoint) and a decision on whether a
+  cancellation of a run with items in flight may be finished by an Evie
+  that does not run agent or map steps.
+- Each item attempt applies run admission in its transaction; batch it
+  if hundreds of items make that costly.
+
 ## 2026-10-04 — Interruptions and AI steps (Stage 14, sub-stage 7)
 
 Source: sub-stage 7 of Stage 14 in

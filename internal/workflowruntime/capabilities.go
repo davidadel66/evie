@@ -231,11 +231,12 @@ func (r *Runtime) providersCompatible(ctx context.Context, runID string, c compo
 // maxReadOutputBytes bounds one read's normalized output.
 const maxReadOutputBytes = 1 << 20
 
-// callRead calls one provider read with a context that ends when the run's
-// lease is lost, the runtime stops or the read timeout passes. A provider
-// that ignores its context is not waited for; a panic is a failure.
-func (r *Runtime) callRead(pc *pass, read plugins.WorkflowRead, req plugins.WorkflowReadRequest) (any, error) {
-	ctx, cancel := context.WithTimeout(pc.stop, r.sched.ReadTimeout)
+// callRead calls one provider read with a context that ends when parent
+// does (the runtime stops, or the owner cancels the run), the run's lease
+// is lost or the read timeout passes. A provider that ignores its context
+// is not waited for; a panic is a failure.
+func (r *Runtime) callRead(pc *pass, parent context.Context, read plugins.WorkflowRead, req plugins.WorkflowReadRequest) (any, error) {
+	ctx, cancel := context.WithTimeout(parent, r.sched.ReadTimeout)
 	defer cancel()
 	stopLost := context.AfterFunc(pc.lost, cancel)
 	defer stopLost()
@@ -334,13 +335,20 @@ func (r *Runtime) read(pc *pass, p eviedb.WorkflowRunProgress, step workflow.Ste
 	if err := r.store.CheckWorkflowRunLease(pc.writes, pc.lease); err != nil {
 		return err
 	}
-	out, callErr := r.callRead(pc, provider.Read, plugins.WorkflowReadRequest{Connection: step.Connection, Resource: step.Resource, Input: input})
+	// The owner's cancellation stops the read through its context
+	// (sub-stage 8).
+	calls, stopWatch := r.cancellable(pc, pc.stop)
+	out, callErr := r.callRead(pc, calls, provider.Read, plugins.WorkflowReadRequest{Connection: step.Connection, Resource: step.Resource, Input: input})
+	stopWatch()
 	switch {
 	case pc.lost.Err() != nil:
 		return fmt.Errorf("%w: lost while steps.%s was read", eviedb.ErrWorkflowRunLeaseLost, step.ID)
 	case callErr != nil && pc.stop.Err() != nil:
 		return r.store.InterruptWorkflowAttempt(pc.writes, pc.lease, a.Seq,
 			"interrupted: the runtime stopped during the read; it is read again from the same checkpoint")
+	case callErr != nil && pc.cancelled():
+		return r.store.InterruptWorkflowAttempt(pc.writes, pc.lease, a.Seq,
+			"interrupted: the owner cancelled the run during the read, which was stopped")
 	case errors.Is(callErr, context.DeadlineExceeded):
 		callErr = fmt.Errorf("the read did not finish within %s", r.sched.ReadTimeout)
 	}

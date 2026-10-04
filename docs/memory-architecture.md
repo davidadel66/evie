@@ -571,6 +571,31 @@ Decided (David, 2026-10-04) after Stage 11 landed:
   `evie.workflow.runtime/4`; `/1`–`/3` stay compatible; agent and map
   steps wait for sub-stage 9. Binding record: the sub-stage 7 entry in
   `cmd/evie/docs/active/workflow-runtime.decisions.md`.
+- **Sub-stage 8 implemented** (2026-10-04). The owner cancels a run with
+  `evie workflows cancel <run-id> [--reason]`, `POST
+  /api/workflows/cancel` or the run view's Cancel run control. The
+  cancellation is recorded once and moves the run to `cancelling`: no
+  further node starts. A deterministic node in flight finishes; a read or
+  AI call is stopped through its context and recorded interrupted (the
+  call counts at its estimate); a question is withdrawn. An effect
+  completes, or its outcome becomes unknown and the run stays
+  `cancelling` until the receipt. Queued, paused and waiting runs are
+  `cancelled` at once. A run that needed reconciliation is cancelled once
+  its effect is reconciled, never retried. Cancelled runs keep their
+  history and free their Run Key; finished runs are refused and never
+  changed. `cancelling` is schedulable, so whichever Evie claims the run
+  next, after a restart too, finishes it. Every node and question now
+  applies run admission in the transaction that records it, so a
+  deactivation or block pauses a running run at its next node boundary
+  (before an AI step sends anything), and the owner can cancel the paused
+  run. ADR 0021's audited override (`evie workflows run ... --rerun-of
+  <run> --reason <text>`, or `rerun_of` and `reason` on the start route)
+  reruns a succeeded logical execution as a new run. Its Run Key, and so
+  every effect's idempotency key, includes the override, so effects are
+  sent again rather than suppressed, and the override is recorded with
+  the run. The decisions entry holds the state-to-recovery table. Binding
+  record: the sub-stage 8 entry in
+  `cmd/evie/docs/active/workflow-runtime.decisions.md`.
 
 ## Decisions (David, 2026-10-03)
 

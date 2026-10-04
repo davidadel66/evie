@@ -37,6 +37,7 @@ type workflowCommands interface {
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
+	Cancel(context.Context, workflowruntime.CancelRequest) (eviedb.WorkflowRunDetail, error)
 }
 
 // workflowCapabilityPlugins are the compiled plugins that contribute
@@ -359,6 +360,8 @@ func runWorkflowActivation(ctx context.Context, args []string, out io.Writer, rt
 		return true, answerWorkflowInterruption(ctx, args[2:], out, rt)
 	case "interruptions":
 		return true, listWorkflowInterruptions(ctx, args[2:], out, rt)
+	case "cancel":
+		return true, cancelWorkflowRun(ctx, args[2:], out, rt)
 	}
 	return true, usage
 }

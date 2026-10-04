@@ -228,12 +228,14 @@ func validLeaseRequest(holder string, d time.Duration) error {
 // runs, runs paused waiting for a dependency, which are checked again at
 // their recheck time, (sub-stage 6) runs that need reconciliation, which a
 // runtime claims to reconcile them automatically or to record the owner's
-// reconciliation, and (sub-stage 7) runs waiting for a human, which only
+// reconciliation, (sub-stage 7) runs waiting for a human, which only
 // the owner's answering surface claims, to record the answer:
-// DueWorkflowRuns never lists them, so no scheduler resumes them.
+// DueWorkflowRuns never lists them, so no scheduler resumes them, and
+// (sub-stage 8) cancelling runs, which a runtime claims to finish the
+// owner's cancellation, after restarts too.
 func schedulable(state WorkflowRunState) bool {
 	return state == WorkflowRunQueued || state == WorkflowRunRunning || state == WorkflowRunWaitingForDependency || state == WorkflowRunNeedsReconciliation ||
-		state == WorkflowRunWaitingForHuman
+		state == WorkflowRunWaitingForHuman || state == WorkflowRunCancelling
 }
 
 // AcquireWorkflowRunLease claims a run for holder for d. It refuses a
@@ -258,12 +260,13 @@ func (s *Store) AcquireWorkflowRunLease(ctx context.Context, runID, holder strin
 			return fmt.Errorf("%w: %s", ErrWorkflowRunFinished, run.State)
 		case !schedulable(run.State):
 			return fmt.Errorf("%w: %s", ErrWorkflowRunNotSchedulable, run.State)
-		case run.NotBefore != nil && run.NotBefore.After(now) && run.State != WorkflowRunNeedsReconciliation:
+		case run.NotBefore != nil && run.NotBefore.After(now) && run.State != WorkflowRunNeedsReconciliation && run.State != WorkflowRunCancelling:
 			// A run that needs reconciliation, or has an Effect Intent
 			// without a receipt that this claim records unknown, can be
 			// claimed at any time for the owner's reconciliation; its
 			// not-before time only paces automatic reconciliation
-			// (DueWorkflowRuns).
+			// (DueWorkflowRuns). A cancelling run is never held back by a
+			// retry's backoff (sub-stage 8).
 			switch err := requireEffectsResolved(ctx, conn, runID); {
 			case err == nil:
 				return &WorkflowRunNotDueError{NotBefore: *run.NotBefore}
@@ -446,6 +449,11 @@ func (s *Store) PauseWorkflowRun(ctx context.Context, lease WorkflowRunLease, re
 		if err != nil {
 			return err
 		}
+		// A cancelling run is never paused: a pause would resume by itself
+		// and hide the owner's cancellation (sub-stage 8).
+		if run.State == WorkflowRunCancelling {
+			return ErrWorkflowRunCancelling
+		}
 		var inFlight int
 		if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_node_attempts WHERE run_id=? AND state='running'`, lease.RunID).Scan(&inFlight); err != nil {
 			return err
@@ -558,9 +566,11 @@ func (s *Store) ResumeWorkflowRun(ctx context.Context, lease WorkflowRunLease) (
 // scheduler should claim now: queued, running or paused runs past their
 // not-before time, and runs needing reconciliation whose automatic
 // reconciliation is due (sub-stage 6; one waiting for the owner has no
-// not-before time and is never due), whose lease was never taken, was
-// released or expired. Every scheduler pass is therefore also the recovery
-// scan: a run whose holder died is due once its lease expires.
+// not-before time and is never due), and (sub-stage 8) cancelling runs,
+// at once unless an effect's outcome is unknown, then when its automatic
+// reconciliation is due, whose lease was never taken, was released or
+// expired. Every scheduler pass is therefore also the recovery scan: a run
+// whose holder died is due once its lease expires.
 func (s *Store) DueWorkflowRuns(ctx context.Context, limit int) ([]string, error) {
 	if limit <= 0 {
 		return nil, nil
@@ -568,9 +578,11 @@ func (s *Store) DueWorkflowRuns(ctx context.Context, limit int) ([]string, error
 	now := formatLeaseTime(s.now())
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id FROM workflow_runs r LEFT JOIN workflow_run_leases l ON l.run_id=r.id
  WHERE (r.state IN ('queued','running','waiting_for_dependency') AND (r.not_before IS NULL OR r.not_before<=?)
- OR r.state='needs_reconciliation' AND r.not_before IS NOT NULL AND r.not_before<=?)
+ OR r.state='needs_reconciliation' AND r.not_before IS NOT NULL AND r.not_before<=?
+ OR r.state='cancelling' AND (r.not_before IS NOT NULL AND r.not_before<=? OR NOT EXISTS(SELECT 1 FROM workflow_effect_unknowns u WHERE u.run_id=r.id
+ AND NOT EXISTS(SELECT 1 FROM workflow_effect_receipts x WHERE x.run_id=u.run_id AND x.intent_seq=u.intent_seq))))
  AND (l.run_id IS NULL OR l.released_at IS NOT NULL OR l.expires_at<=?)
- ORDER BY r.rowid LIMIT ?`, now, now, now, limit)
+ ORDER BY r.rowid LIMIT ?`, now, now, now, now, limit)
 	if err != nil {
 		return nil, err
 	}

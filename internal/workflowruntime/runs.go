@@ -109,6 +109,11 @@ type RunRequest struct {
 	SessionID   memory.SessionID           `json:"session_id,omitempty"`
 	Detach      bool                       `json:"detach,omitempty"`
 	Surface     string                     `json:"-"`
+	// RerunOf and Reason are the owner's audited rerun override (sub-stage
+	// 8, ADR 0021): the succeeded run whose logical execution runs again,
+	// and why. Without inputs, the rerun takes that run's accepted input.
+	RerunOf string `json:"rerun_of,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 // RunResult is a started run, or the run that already holds its Run Key
@@ -212,6 +217,18 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if r.models == nil && hasAISteps(v) {
 		return preparedRun{}, &ModelsUnavailableError{Workflow: a.Name, Reason: r.modelsOff}
 	}
+	var prior eviedb.WorkflowRunDetail
+	var logical string
+	if req.RerunOf != "" || strings.TrimSpace(req.Reason) != "" {
+		if prior, logical, err = r.rerunBase(ctx, req, a.Name); err != nil {
+			return preparedRun{}, err
+		}
+		if len(req.Inputs) == 0 && len(req.TextInputs) == 0 {
+			if req.Inputs, err = workflow.ParseInputs(prior.Run.Inputs); err != nil {
+				return preparedRun{}, fmt.Errorf("%w: run %s's input cannot be read: %v", ErrRerunRefused, prior.Run.ID, err)
+			}
+		}
+	}
 	inputs, err := v.AcceptInputs(req.Inputs, req.TextInputs)
 	if err != nil {
 		return preparedRun{}, fmt.Errorf("%w: %v", ErrRunInput, err)
@@ -228,10 +245,20 @@ func (r *Runtime) prepareRun(ctx context.Context, req RunRequest) (preparedRun, 
 	if err != nil {
 		return preparedRun{}, err
 	}
-	return preparedRun{v: v, start: eviedb.WorkflowRunStart{
+	start := eviedb.WorkflowRunStart{
 		WorkspaceID: req.WorkspaceID, Workflow: a.Name, Version: a.Version, ExecutableHash: a.ExecutableHash, AuthorityHash: a.AuthorityHash,
 		Composition: pinned, RunKey: v.RunKey(inputs), Inputs: encoded, Start: v.Start(), Surface: req.Surface, SessionID: req.SessionID,
-	}}, nil
+	}
+	if req.RerunOf != "" {
+		if start.RunKey != logical {
+			return preparedRun{}, fmt.Errorf("%w: run %s ran the logical execution %s, and these inputs name %s", ErrRerunRefused, prior.Run.ID, logical, start.RunKey)
+		}
+		if start.RunKey, err = rerunKey(a.Name, logical, prior.Run.ID); err != nil {
+			return preparedRun{}, err
+		}
+		start.RerunOf, start.LogicalKey, start.Reason = prior.Run.ID, logical, strings.TrimSpace(req.Reason)
+	}
+	return preparedRun{v: v, start: start}, nil
 }
 
 // approvedDefinition reads the activation's exact commit through procedural
@@ -300,7 +327,7 @@ func (r *Runtime) await(ctx context.Context, id string) (eviedb.WorkflowRunDetai
 			}
 		}
 		d, err := r.store.WorkflowRun(reads, id)
-		if err != nil || settled(d.Run.State) {
+		if err != nil || settled(d) {
 			return d, err
 		}
 		if wait == 0 {
@@ -328,10 +355,20 @@ func (r *Runtime) await(ctx context.Context, id string) (eviedb.WorkflowRunDetai
 	}
 }
 
-// settled reports a run state await returns on: finished, paused, or
-// waiting for something no scheduler resumes.
-func settled(state eviedb.WorkflowRunState) bool {
-	return state.Terminal() || state != eviedb.WorkflowRunQueued && state != eviedb.WorkflowRunRunning
+// settled reports a run await returns on: finished, paused, waiting for
+// something no scheduler resumes, or (sub-stage 8) cancelling while an
+// effect's outcome is unknown, which only its reconciliation ends. A run
+// cancelling otherwise is not settled: the node in flight finishes and the
+// cancellation with it.
+func settled(d eviedb.WorkflowRunDetail) bool {
+	switch state := d.Run.State; {
+	case state.Terminal():
+		return true
+	case state == eviedb.WorkflowRunCancelling:
+		_, unknown := unknownIntent(d.Effects)
+		return unknown
+	}
+	return d.Run.State != eviedb.WorkflowRunQueued && d.Run.State != eviedb.WorkflowRunRunning
 }
 
 // passEnd is why an execution pass stopped.
@@ -372,6 +409,8 @@ func (r *Runtime) execute(ctx context.Context, runID string) (passEnd, error) {
 		return 0, err
 	}
 	lease := claim.Lease
+	signal, stopListening := r.listenForCancel(runID)
+	defer stopListening()
 	lost, markLost := context.WithCancelCause(context.Background())
 	defer markLost(nil)
 	beat, stopBeat := context.WithCancel(context.Background())
@@ -380,7 +419,12 @@ func (r *Runtime) execute(ctx context.Context, runID string) (passEnd, error) {
 		defer close(beating)
 		r.heartbeat(beat, lease, markLost)
 	}()
-	end, err := r.continueRun(ctx, writes, lease, lost)
+	end, err := r.continueRun(ctx, writes, lease, lost, signal)
+	if errors.Is(err, eviedb.ErrWorkflowRunCancelling) {
+		// The owner's cancellation arrived while the run was checked: the
+		// run is cancelling now, which this claim finishes.
+		end, err = r.continueRun(ctx, writes, lease, lost, signal)
+	}
 	stopBeat()
 	<-beating
 	if errors.Is(err, eviedb.ErrWorkflowRunLeaseLost) || lost.Err() != nil && end != passDone {
@@ -440,6 +484,9 @@ type pass struct {
 	lease  eviedb.WorkflowRunLease
 	v      *workflow.Validated
 	comp   composition
+	// cancel ends when the owner's cancellation of the run reaches this
+	// pass (sub-stage 8); nil outside a pass.
+	cancel *cancelSignal
 	// settling is set when this pass found an effect's outcome unknown and
 	// automatic reconciliation waits its settle delay (sub-stage 6).
 	settling bool
@@ -454,7 +501,7 @@ type pass struct {
 // still hold for it (ADR 0033: revocations apply despite the pin), its
 // pinned commit must still validate and hash to its approval, and when its
 // next step reads a capability, that provider must be available now.
-func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context) (passEnd, error) {
+func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context, signal *cancelSignal) (passEnd, error) {
 	pause := func(reason string) (passEnd, error) {
 		if _, err := r.store.PauseWorkflowRun(writes, lease, reason, r.sched.Recheck); err != nil {
 			return 0, err
@@ -469,7 +516,11 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 	switch run.State {
 	case eviedb.WorkflowRunNeedsReconciliation:
 		// Never paused or resumed: only a receipt lets it continue.
-		return r.continueReconciliation(ctx, writes, lease, lost, p)
+		return r.continueReconciliation(ctx, writes, lease, lost, p, signal)
+	case eviedb.WorkflowRunCancelling:
+		// The owner cancelled it: finishing calls nothing, so it needs
+		// neither admission nor the approved definition (sub-stage 8).
+		return r.continueCancellation(ctx, writes, lease, lost, p, signal)
 	case eviedb.WorkflowRunWaitingForHuman:
 		// Only the owner's answer lets it continue (sub-stage 7).
 		return passParked, nil
@@ -540,7 +591,7 @@ func (r *Runtime) continueRun(ctx, writes context.Context, lease eviedb.Workflow
 		}
 		return 0, err
 	}
-	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp})
+	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp, cancel: signal})
 }
 
 // pinnedActivation is the approved version a run is pinned to, as
@@ -597,13 +648,14 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			// The owner's answer, recorded under another claim, lets it
 			// continue; nothing here resumes it (ADR 0029).
 			return passParked, nil
-		case p.Run.State == eviedb.WorkflowRunNeedsReconciliation:
-			// An effect's outcome is unknown: reconcile it automatically
-			// when that is due, before anything else; otherwise the run
-			// waits (for its recheck, or for the owner). When this pass
-			// has just found it unknown, it waits out the settle delay
-			// under its lease first, so a request still landing is not
-			// looked up too early.
+		case p.Run.State == eviedb.WorkflowRunNeedsReconciliation, p.Run.State == eviedb.WorkflowRunCancelling && p.Unresolved > 0:
+			// An effect's outcome is unknown (in a cancelling run too,
+			// whose cancellation finishes once it is reconciled):
+			// reconcile it automatically when that is due, before anything
+			// else; otherwise the run waits (for its recheck, or for the
+			// owner). When this pass has just found it unknown, it waits
+			// out the settle delay under its lease first, so a request
+			// still landing is not looked up too early.
 			settling := pc.settling
 			pc.settling = false
 			if settling && p.Run.NotBefore != nil && p.Run.NotBefore.After(r.now()) && pc.stop.Err() == nil {
@@ -625,6 +677,12 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			continue
 		case p.InFlight != nil:
 			return 0, fmt.Errorf("%w: steps.%s attempt %d is in flight under lease %d", eviedb.ErrWorkflowRunConflict, p.InFlight.Step, p.InFlight.Attempt, p.InFlight.LeaseToken)
+		case p.Run.State == eviedb.WorkflowRunCancelling:
+			// The owner cancelled it: no further node starts (sub-stage 8).
+			if _, err := r.store.FinishWorkflowCancellation(pc.writes, pc.lease); err != nil {
+				return 0, err
+			}
+			return passDone, nil
 		case p.Run.NotBefore != nil && p.Run.NotBefore.After(r.now()):
 			return passWaiting, nil
 		case pc.stop.Err() != nil:
@@ -632,8 +690,24 @@ func (r *Runtime) advance(pc *pass) (passEnd, error) {
 			return passStopped, nil
 		}
 		if err := r.step(pc, p); err != nil {
-			if errors.Is(err, eviedb.ErrWorkflowRunNotDue) {
+			switch {
+			case errors.Is(err, eviedb.ErrWorkflowRunNotDue):
 				return passWaiting, nil
+			case errors.Is(err, eviedb.ErrWorkflowRunCancelling):
+				// Cancelled before the node started: nothing was recorded,
+				// and the next round finishes the cancellation.
+				continue
+			case admissionRefused(err):
+				// Deactivated or blocked since the claim: the node did not
+				// start, and the run pauses at this boundary (sub-stage 8,
+				// ADR 0033).
+				if _, err := r.store.PauseWorkflowRun(pc.writes, pc.lease, err.Error(), r.sched.Recheck); err != nil {
+					if errors.Is(err, eviedb.ErrWorkflowRunCancelling) {
+						continue
+					}
+					return 0, err
+				}
+				return passPaused, nil
 			}
 			return 0, err
 		}
@@ -727,6 +801,14 @@ func (r *Runtime) step(pc *pass, p eviedb.WorkflowRunProgress) error {
 		return r.interrupt(pc, p, step, inputs, state, fail)
 	}
 	return fail(fmt.Sprintf("steps.%s is a %s step, which this runtime version cannot run", step.ID, step.Kind))
+}
+
+// reasonText renders an optional reason after a colon.
+func reasonText(reason string) string {
+	if reason == "" {
+		return ""
+	}
+	return ": " + reason
 }
 
 func times(n int) string {
@@ -894,7 +976,7 @@ const timeLayout = "2006-01-02 15:04:05Z07:00"
 // RunLine is one run in a listing.
 func RunLine(run eviedb.WorkflowRun) string {
 	line := fmt.Sprintf("%s  %s  %s v%d  %s  %s", run.ID, run.WorkspaceID, run.Workflow, run.Version, run.State, run.CreatedAt.Format(timeLayout))
-	if !run.State.Terminal() && run.NextStep != "" {
+	if !run.State.Terminal() && run.State != eviedb.WorkflowRunCancelling && run.NextStep != "" {
 		line += "  next " + run.NextStep
 	}
 	if run.Error != "" {
@@ -911,6 +993,9 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	run := d.Run
 	line("Run %s: %s version %d in Workspace %s, %s", run.ID, run.Workflow, run.Version, run.WorkspaceID, run.State)
 	line("Run key: %s", run.RunKey)
+	if o := d.Override; o != nil {
+		line("Rerun of %s by the %s via %s at %s (logical Run Key %s): %s", o.RerunOf, o.Actor, o.Surface, o.RecordedAt.Format(timeLayout), o.LogicalKey, o.Reason)
+	}
 	line("Pinned: commit %s, executable %s, authority %s, Workspace revision %s, access revision %d",
 		short(run.Commit), run.ExecutableHash, run.AuthorityHash, run.WorkspaceRevision, run.AccessRevision)
 	var pinned composition
@@ -937,7 +1022,17 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	}
 	line("%s", started)
 	line("Inputs: %s", valuesLine(run.Inputs))
+	if c := d.Cancellation; c != nil {
+		label := "Cancellation requested"
+		if run.State == eviedb.WorkflowRunCancelled {
+			label = "Cancelled"
+		}
+		line("%s by the %s via %s at %s, while the run was %s%s", label, c.Actor, c.Surface, c.RequestedAt.Format(timeLayout), c.FromState, reasonText(c.Reason))
+	}
 	switch {
+	case run.State == eviedb.WorkflowRunCancelled:
+	case run.State == eviedb.WorkflowRunCancelling:
+		line("Cancelling: %s", run.Error)
 	case run.State == eviedb.WorkflowRunWaitingForHuman:
 		line("Waiting for your answer: no Evie continues it until you answer (see Interruptions)")
 	case run.State == eviedb.WorkflowRunWaitingForDependency:
@@ -955,7 +1050,8 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	case run.Error != "":
 		line("Error: %s", run.Error)
 	}
-	if run.NotBefore != nil && run.State != eviedb.WorkflowRunWaitingForDependency && run.State != eviedb.WorkflowRunNeedsReconciliation && !run.State.Terminal() {
+	if run.NotBefore != nil && run.State != eviedb.WorkflowRunWaitingForDependency && run.State != eviedb.WorkflowRunNeedsReconciliation &&
+		run.State != eviedb.WorkflowRunCancelling && !run.State.Terminal() {
 		line("Retry: not before %s", run.NotBefore.Format(timeLayout))
 	}
 	if l := d.Lease; l != nil {
@@ -993,7 +1089,10 @@ func RunText(d eviedb.WorkflowRunDetail) string {
 	effectsText(&b, d.Effects)
 	interruptionsText(&b, d.Interruptions)
 	modelCallsText(&b, d.ModelCalls)
-	if !run.State.Terminal() {
+	switch {
+	case run.State == eviedb.WorkflowRunCancelling:
+		line("No further node starts: the cancellation finishes from checkpoint %d", run.Checkpoint)
+	case !run.State.Terminal():
 		line("Next: %s from checkpoint %d", run.NextStep, run.Checkpoint)
 	}
 	if len(run.Outputs) > 0 {

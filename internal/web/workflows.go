@@ -19,7 +19,8 @@ import (
 // the browser names. Sub-stage 3 adds starting, listing and inspecting
 // runs; sub-stage 6 the owner's reconciliation of an effect whose outcome
 // is unknown; sub-stage 7 answering a run's durable interruptions and
-// listing them for a Workspace, the session that started a run, or a run.
+// listing them for a Workspace, the session that started a run, or a run;
+// sub-stage 8 cancelling a run and the audited rerun override.
 type WorkflowManager interface {
 	List(context.Context, memory.WorkspaceID) ([]eviedb.WorkflowDefinitionState, error)
 	Show(context.Context, memory.WorkspaceID, string) (eviedb.WorkflowDefinitionState, error)
@@ -32,6 +33,7 @@ type WorkflowManager interface {
 	Reconcile(context.Context, workflowruntime.Reconciliation) (eviedb.WorkflowRunDetail, error)
 	Answer(context.Context, workflowruntime.AnswerRequest) (eviedb.WorkflowRunDetail, error)
 	Interruptions(context.Context, workflowruntime.InterruptionFilter) ([]eviedb.WorkflowInterruption, error)
+	Cancel(context.Context, workflowruntime.CancelRequest) (eviedb.WorkflowRunDetail, error)
 }
 
 // WithWorkflows adds the workflow management routes.
@@ -55,6 +57,7 @@ func (s *Server) registerWorkflowRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/workflows/reconcile", s.managementRoute(s.handleWorkflowReconcile))
 	mux.Handle("/api/workflows/answer", s.managementRoute(s.handleWorkflowAnswer))
 	mux.Handle("/api/workflows/interruptions", s.managementRoute(s.handleWorkflowInterruptions))
+	mux.Handle("/api/workflows/cancel", s.managementRoute(s.handleWorkflowCancel))
 }
 
 func boundedID(id string) bool { return id != "" && len(id) <= 128 }
@@ -201,6 +204,10 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusConflict, "answer_refused", err.Error()
 	case errors.Is(err, workflowruntime.ErrModelsUnavailable):
 		status, code, message = http.StatusConflict, "models_unavailable", err.Error()
+	case errors.Is(err, eviedb.ErrWorkflowRunFinished):
+		status, code, message = http.StatusConflict, "run_finished", err.Error()
+	case errors.Is(err, workflowruntime.ErrRerunRefused):
+		status, code, message = http.StatusConflict, "rerun_refused", err.Error()
 	}
 	managementJSONError(w, status, code, message)
 }
@@ -301,6 +308,32 @@ func (s *Server) handleWorkflowInterruptions(w http.ResponseWriter, r *http.Requ
 	}{found})
 }
 
+// handleWorkflowCancel is the owner cancelling a run from the web (Stage
+// 14 sub-stage 8), with an optional reason; the surface is always the web.
+// The response waits until the run is cancelled, or until it can only
+// finish once an effect is reconciled, unless detach is set; either way
+// the cancellation stands if the browser disconnects.
+func (s *Server) handleWorkflowCancel(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RunID  string `json:"run_id"`
+		Reason string `json:"reason"`
+		Detach bool   `json:"detach"`
+	}
+	if !decodeCandidateRequest(w, r, &request) {
+		return
+	}
+	if !boundedID(request.RunID) || len(request.Reason) > eviedb.MaxWorkflowCancelReason {
+		managementJSONError(w, http.StatusBadRequest, "invalid_workflow_request", "cancel requires the run ID and takes a reason of at most 1000 bytes")
+		return
+	}
+	cancelled, err := s.workflows.Cancel(r.Context(), workflowruntime.CancelRequest{RunID: request.RunID, Reason: request.Reason, Detach: request.Detach, Surface: "web"})
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, cancelled)
+}
+
 // maxWorkflowStartBytes bounds a start request: the run input document (at
 // most 64 KiB) and its envelope.
 const maxWorkflowStartBytes = 72 << 10
@@ -311,7 +344,9 @@ const maxWorkflowStartBytes = 72 << 10
 // is always the web. The response waits until the run finishes or pauses,
 // unless detach is set (sub-stage 4): then it returns the recorded run at
 // once and the server's scheduler executes it. Either way the run does not
-// stop if the browser disconnects.
+// stop if the browser disconnects. Since sub-stage 8 it also takes the
+// owner's audited rerun override: rerun_of, a succeeded run, with a reason
+// (and that run's input when inputs is omitted).
 func (s *Server) handleWorkflowStart(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		WorkspaceID memory.WorkspaceID `json:"workspace_id"`
@@ -319,12 +354,16 @@ func (s *Server) handleWorkflowStart(w http.ResponseWriter, r *http.Request) {
 		Inputs      json.RawMessage    `json:"inputs"`
 		SessionID   memory.SessionID   `json:"session_id"`
 		Detach      bool               `json:"detach"`
+		RerunOf     string             `json:"rerun_of"`
+		Reason      string             `json:"reason"`
 	}
 	if !decodeCandidateRequestLimit(w, r, &request, maxWorkflowStartBytes) {
 		return
 	}
-	run := workflowruntime.RunRequest{WorkspaceID: request.WorkspaceID, Workflow: request.Name, SessionID: request.SessionID, Detach: request.Detach, Surface: "web"}
-	valid := boundedID(string(request.WorkspaceID)) && boundedID(request.Name) && len(request.SessionID) <= 128
+	run := workflowruntime.RunRequest{WorkspaceID: request.WorkspaceID, Workflow: request.Name, SessionID: request.SessionID, Detach: request.Detach, Surface: "web",
+		RerunOf: request.RerunOf, Reason: request.Reason}
+	valid := boundedID(string(request.WorkspaceID)) && boundedID(request.Name) && len(request.SessionID) <= 128 && len(request.RerunOf) <= 128 &&
+		len(request.Reason) <= eviedb.MaxWorkflowCancelReason
 	if valid && len(request.Inputs) > 0 {
 		var err error
 		run.Inputs, err = workflow.ParseInputs(request.Inputs)

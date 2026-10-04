@@ -216,15 +216,23 @@ func TestWorkflowQuestionIsSurfacedToTheOriginatingSession(t *testing.T) {
 	}
 }
 
-// The hook cancellation (sub-stage 8) uses: an open question is withdrawn,
-// never answered, and the run moves to cancelling; an effect whose outcome
-// is unknown can never be withdrawn, only reconciled.
+// The hook cancellation uses: an open question of a run the owner
+// cancelled is withdrawn, never answered (sub-stage 8 requires the
+// owner's recorded cancellation first: only it moves the run to
+// cancelling); an effect whose outcome is unknown can never be withdrawn,
+// only reconciled.
 func TestWorkflowQuestionWithdrawalIsTheCancellationHook(t *testing.T) {
 	ctx := context.Background()
 	r, _ := openLeasedRunDB(t)
 	run, lease := notesAtAsk(t, r.s)
 	q, err := r.s.AskWorkflowQuestion(ctx, lease, askQuestion(run.ID))
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.s.WithdrawWorkflowQuestion(ctx, lease, run.ID, q.Seq, "the owner cancelled the run"); !errors.Is(err, ErrWorkflowInterruptionClosed) {
+		t.Fatalf("withdrawing without the owner's cancellation: %v", err)
+	}
+	if _, err := r.s.RequestWorkflowRunCancellation(ctx, WorkflowRunCancellationRequest{RunID: run.ID, Surface: "cli"}); err != nil {
 		t.Fatal(err)
 	}
 	withdrawn, err := r.s.WithdrawWorkflowQuestion(ctx, lease, run.ID, q.Seq, "the owner cancelled the run")

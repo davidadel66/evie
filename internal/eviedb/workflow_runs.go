@@ -157,7 +157,8 @@ type WorkflowCheckpoint struct {
 // the compatible provider substitutions the owner approved for it,
 // (sub-stage 6) its Effect Intents with their unknown outcomes and
 // receipts, and (sub-stage 7) its interruptions with their resolutions and
-// the model calls of its AI attempts.
+// the model calls of its AI attempts, and (sub-stage 8) the owner's
+// cancellation and the rerun override it was started under, if any.
 type WorkflowRunDetail struct {
 	Run           WorkflowRun               `json:"run"`
 	Attempts      []WorkflowNodeAttempt     `json:"attempts"`
@@ -168,6 +169,8 @@ type WorkflowRunDetail struct {
 	Effects       []WorkflowEffectIntent    `json:"effects"`
 	Interruptions []WorkflowInterruption    `json:"interruptions"`
 	ModelCalls    []WorkflowModelCall       `json:"model_calls"`
+	Cancellation  *WorkflowRunCancellation  `json:"cancellation,omitempty"`
+	Override      *WorkflowRunOverride      `json:"override,omitempty"`
 }
 
 // WorkflowRunProgress is what an executor needs to take the next step.
@@ -200,6 +203,9 @@ type WorkflowRunProgress struct {
 	// whose usage was never recorded (it may have been billed).
 	ModelTokens   int64
 	ModelMicroUSD int64
+	// Unresolved counts the run's Effect Intents without a receipt
+	// (sub-stage 8: a cancelling run finishes only when there are none).
+	Unresolved int
 }
 
 // workflowNodeAttemptsTable is the node attempt table since sub-stage 4:
@@ -365,7 +371,10 @@ func ensureWorkflowRunSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureWorkflowInterruptionSchema(ctx, db); err != nil {
 		return err
 	}
-	return ensureWorkflowModelCallSchema(ctx, db)
+	if err := ensureWorkflowModelCallSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureWorkflowRunCancellationSchema(ctx, db)
 }
 
 // WorkflowRunStart is a run the runtime has validated: the exact approved
@@ -384,6 +393,12 @@ type WorkflowRunStart struct {
 	Start     string
 	Surface   string
 	SessionID memory.SessionID
+	// RerunOf, LogicalKey and Reason are the owner's audited rerun override
+	// (sub-stage 8, ADR 0021): the succeeded run this reruns, the logical
+	// Run Key both share, and why. RunKey then includes the override.
+	RerunOf    string
+	LogicalKey string
+	Reason     string
 }
 
 const runColumns = `r.id,r.workspace_id,r.workflow,r.version,r.commit_id,r.tree_path,r.executable_hash,r.authority_hash,r.workspace_revision_id,r.access_revision,
@@ -466,6 +481,9 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 	if !workflowJSONObject(req.Inputs) || !workflowJSONObject(req.Composition) || req.RunKey == "" || req.Start == "" {
 		return WorkflowRun{}, false, errors.New("a workflow run needs its accepted input and composition as JSON objects, a Run Key and a first step")
 	}
+	if err := validRerun(req); err != nil {
+		return WorkflowRun{}, false, err
+	}
 	id := uuid.NewString()
 	err = s.withImmediateTransaction(ctx, func(conn *sql.Conn) error {
 		a, err := authorizeWorkflowActivation(ctx, conn, req.WorkspaceID, req.Workflow)
@@ -474,6 +492,11 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 		}
 		if a.Version != req.Version || a.ExecutableHash != req.ExecutableHash || a.AuthorityHash != req.AuthorityHash {
 			return ErrWorkflowChanged
+		}
+		if req.RerunOf != "" {
+			if err := checkRerun(ctx, conn, req); err != nil {
+				return err
+			}
 		}
 		var held string
 		err = conn.QueryRowContext(ctx, `SELECT id FROM workflow_runs WHERE workspace_id=? AND workflow=? AND run_key=? AND state NOT IN ('failed','cancelled')`,
@@ -517,6 +540,12 @@ func (s *Store) StartWorkflowRun(ctx context.Context, req WorkflowRunStart) (run
 		if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_checkpoints(run_id,seq,after_attempt,next_step,state,created_at) VALUES(?,0,NULL,?,'{}',?)`,
 			id, req.Start, now); err != nil {
 			return fmt.Errorf("record workflow checkpoint: %w", err)
+		}
+		if req.RerunOf != "" {
+			if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_run_overrides(run_id,rerun_of,logical_key,reason,actor,surface,recorded_at) VALUES(?,?,?,?,'owner',?,?)`,
+				id, req.RerunOf, req.LogicalKey, strings.TrimSpace(req.Reason), req.Surface, now); err != nil {
+				return fmt.Errorf("record workflow rerun override: %w", err)
+			}
 		}
 		run = WorkflowRun{ID: id}
 		return nil
@@ -602,6 +631,9 @@ func beginWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRun
 	if err != nil {
 		return WorkflowNodeAttempt{}, err
 	}
+	if run.State == WorkflowRunCancelling {
+		return WorkflowNodeAttempt{}, fmt.Errorf("%w (steps.%s was not started)", ErrWorkflowRunCancelling, a.Step)
+	}
 	if run.State != WorkflowRunQueued && run.State != WorkflowRunRunning {
 		return WorkflowNodeAttempt{}, fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
 	}
@@ -628,6 +660,12 @@ func beginWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRun
 	}
 	if inFlight > 0 || a.Attempt != made+1 {
 		return WorkflowNodeAttempt{}, ErrWorkflowRunConflict
+	}
+	// Every node applies run admission in the transaction that records it
+	// (sub-stage 8, ADR 0033): a deactivation, a block or a revocation
+	// reaches a running run at its next node boundary, whatever the node.
+	if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
+		return WorkflowNodeAttempt{}, err
 	}
 	if _, err := conn.ExecContext(ctx, `INSERT INTO workflow_node_attempts(run_id,seq,step_id,kind,attempt,input_checkpoint,input,state,output,error,next_step,note,started_at,finished_at,lease_holder,lease_token)
  VALUES(?,?,?,?,?,?,?,'running',NULL,'','','',?,NULL,?,?)`, a.RunID, next, a.Step, a.Kind, a.Attempt, c.Seq, string(a.Input), formatTime(now), lease.Holder, lease.Token); err != nil {
@@ -711,13 +749,17 @@ func validAttemptEnd(lease WorkflowRunLease, e WorkflowAttemptEnd) error {
 // run's failure.
 func finishWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, e WorkflowAttemptEnd, clock time.Time) error {
 	succeeded := e.Error == ""
-	if _, err := runRunnable(ctx, conn, e.RunID); err != nil {
+	run, err := runRunnable(ctx, conn, e.RunID)
+	if err != nil {
 		return err
 	}
+	// A node in flight when the owner cancelled the run is recorded as it
+	// ended, but a failed one is not retried (sub-stage 8).
+	cancelling := run.State == WorkflowRunCancelling
 	var state, step string
 	var input, token int64
 	var attempt int
-	err := conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
+	err = conn.QueryRowContext(ctx, `SELECT state,input_checkpoint,lease_token,step_id,attempt FROM workflow_node_attempts WHERE run_id=? AND seq=?`, e.RunID, e.Seq).
 		Scan(&state, &input, &token, &step, &attempt)
 	if errors.Is(err, sql.ErrNoRows) || err == nil && (state != string(WorkflowAttemptRunning) || token != lease.Token) {
 		return ErrWorkflowRunConflict
@@ -738,7 +780,7 @@ func finishWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRu
 			e.Error, e.Note, now, e.RunID, e.Seq); err != nil {
 			return fmt.Errorf("record failed workflow node attempt: %w", err)
 		}
-		if e.RunError == "" && e.RetryAfter > 0 {
+		if e.RunError == "" && e.RetryAfter > 0 && !cancelling {
 			retry := clock.Add(e.RetryAfter)
 			if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET not_before=?,updated_at=? WHERE id=?`, formatLeaseTime(retry), now, e.RunID); err != nil {
 				return fmt.Errorf("record workflow retry time: %w", err)
@@ -765,7 +807,7 @@ func finishWorkflowAttempt(ctx context.Context, conn *sql.Conn, lease WorkflowRu
 		_, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET updated_at=? WHERE id=?`, now, e.RunID)
 		return err
 	}
-	_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='succeeded',outputs=?,finished_at=?,updated_at=? WHERE id=?`, string(e.Outputs), now, now, e.RunID)
+	_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='succeeded',outputs=?,error='',not_before=NULL,finished_at=?,updated_at=? WHERE id=?`, string(e.Outputs), now, now, e.RunID)
 	return err
 }
 
@@ -778,8 +820,13 @@ func (s *Store) FailWorkflowRun(ctx context.Context, lease WorkflowRunLease, che
 	}
 	runID := lease.RunID
 	err := s.withWorkflowRunLease(ctx, lease, func(conn *sql.Conn, clock time.Time) error {
-		if _, err := runRunnable(ctx, conn, runID); err != nil {
+		run, err := runRunnable(ctx, conn, runID)
+		if err != nil {
 			return err
+		}
+		// A cancelling run is cancelled, not failed (sub-stage 8).
+		if run.State == WorkflowRunCancelling {
+			return ErrWorkflowRunCancelling
 		}
 		c, err := latestCheckpoint(ctx, conn, runID)
 		if err != nil {
@@ -883,6 +930,10 @@ func (s *Store) WorkflowRunProgress(ctx context.Context, id string) (WorkflowRun
 	if p.ModelTokens, p.ModelMicroUSD, err = modelSpend(ctx, conn, id); err != nil {
 		return p, err
 	}
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_effect_intents i WHERE i.run_id=?
+ AND NOT EXISTS(SELECT 1 FROM workflow_effect_receipts r WHERE r.run_id=i.run_id AND r.intent_seq=i.seq)`, id).Scan(&p.Unresolved); err != nil {
+		return p, err
+	}
 	return p, nil
 }
 
@@ -959,8 +1010,20 @@ func (s *Store) WorkflowRun(ctx context.Context, id string) (WorkflowRunDetail, 
 	if d.Interruptions, err = workflowInterruptions(ctx, conn, id); err != nil {
 		return d, err
 	}
-	d.ModelCalls, err = workflowModelCalls(ctx, conn, id)
-	return d, err
+	if d.ModelCalls, err = workflowModelCalls(ctx, conn, id); err != nil {
+		return d, err
+	}
+	if c, found, err := readWorkflowRunCancellation(ctx, conn, id); err != nil {
+		return d, err
+	} else if found {
+		d.Cancellation = &c
+	}
+	if o, found, err := readWorkflowRunOverride(ctx, conn, id); err != nil {
+		return d, err
+	} else if found {
+		d.Override = &o
+	}
+	return d, nil
 }
 
 // WorkflowRunFilter narrows a run listing: one Workspace, one workflow in

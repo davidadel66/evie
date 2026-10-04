@@ -86,6 +86,41 @@ describe("Workspace workflow runs", () => {
     expect(held).not.toContain("Recovery");
   });
 
+  it("offers a cancellation for an unfinished run and shows it once recorded", () => {
+    const running: WorkflowRun = {...run, id: "run-4", state: "running", outputs: undefined, finished_at: undefined};
+    const html = renderToStaticMarkup(<WorkflowRunView detail={{...detail, run: running}} onClose={()=>{}} onCancel={()=>{}} />);
+    expect(html).toMatch(/<button[^>]*>Cancel run<\/button>/);
+    expect(html).toContain('aria-label="Cancellation reason"');
+    for (const state of ["succeeded", "failed", "cancelled", "cancelling"] as const) {
+      const shown = renderToStaticMarkup(<WorkflowRunView detail={{...detail, run: {...running, state}}} onClose={()=>{}} onCancel={()=>{}} />);
+      expect(shown).not.toContain(">Cancel run<");
+    }
+    expect(renderToStaticMarkup(<WorkflowRunView detail={{...detail, run: running}} onClose={()=>{}} />)).not.toContain(">Cancel run<");
+    const cancellation = {run_id: "run-4", reason: "wrong bill", actor: "owner", surface: "web", from_state: "running" as const, requested_at: "2026-10-04T12:00:00Z"};
+    const cancelling = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} onCancel={()=>{}} detail={{...detail, cancellation,
+      run: {...running, state: "cancelling", error: "cancelling once its effect is reconciled: reconcile it with: evie workflows reconcile run-4 post"}}} />);
+    expect(cancelling).toContain("Cancelling");
+    expect(cancelling).toContain("Cancellation requested via web");
+    expect(cancelling).toContain("wrong bill");
+    expect(cancelling).toContain("cancelling once its effect is reconciled");
+    expect(cancelling).not.toContain('role="alert"');
+    expect(cancelling).not.toContain("Next:");
+    const cancelled = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{...detail, cancellation,
+      run: {...running, state: "cancelled", error: "cancelled by the owner via web: wrong bill", finished_at: "2026-10-04T12:00:02Z"}}} />);
+    expect(cancelled).toContain("Cancelled via web");
+    expect(cancelled).not.toContain('role="alert"');
+    const listed = renderToStaticMarkup(<WorkflowRunList runs={[{...running, state: "cancelled", error: "cancelled by the owner via web: wrong bill"}]} busy={false} onInspect={()=>{}} />);
+    expect(listed).toContain("Cancelled");
+    expect(listed).not.toContain("text-danger");
+  });
+
+  it("shows the override a rerun was started under", () => {
+    const html = renderToStaticMarkup(<WorkflowRunView onClose={()=>{}} detail={{...detail, override: {run_id: "run-1", rerun_of: "run-0",
+      logical_key: "split-bill:sha256:" + "d".repeat(64), reason: "the bill was corrected", actor: "owner", surface: "cli", recorded_at: "2026-10-04T12:00:00Z"}}} />);
+    expect(html).toContain("Rerun of run-0");
+    expect(html).toContain("the bill was corrected");
+  });
+
   it("starts only active workflows, with a JSON inputs object", () => {
     const html = renderToStaticMarkup(<WorkflowRunStart workflows={["split-bill"]} busy={false} onStart={()=>{}} />);
     expect(html).toContain("split-bill");

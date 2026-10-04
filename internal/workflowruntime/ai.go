@@ -144,13 +144,15 @@ type modelAnswer struct {
 	in, out  int64
 	reported bool
 	err      error
-	// stopped: the runtime stopped while a request was in flight.
-	stopped bool
+	// stopped: the runtime stopped, or (cancelled) the owner cancelled the
+	// run, while a request was in flight.
+	stopped, cancelled bool
 }
 
 // callModel sends the request, again only after a failure that proved
-// nothing was generated, within the retry bound.
-func (r *Runtime) callModel(pc *pass, req ModelRequest, estIn, estOut int64) modelAnswer {
+// nothing was generated, within the retry bound. Its requests and waits
+// end with calls (the runtime stopping, or the owner cancelling the run).
+func (r *Runtime) callModel(pc *pass, calls context.Context, req ModelRequest, estIn, estOut int64) modelAnswer {
 	a := modelAnswer{reported: true}
 	count := func(resp ModelResponse) {
 		if resp.UsageReported {
@@ -161,7 +163,7 @@ func (r *Runtime) callModel(pc *pass, req ModelRequest, estIn, estOut int64) mod
 	}
 	for attempt := 0; ; attempt++ {
 		a.requests++
-		resp, err := r.requestModel(pc, req)
+		resp, err := r.requestModel(pc, calls, req)
 		if err == nil {
 			count(resp)
 			a.text = resp.Text
@@ -178,6 +180,9 @@ func (r *Runtime) callModel(pc *pass, req ModelRequest, estIn, estOut int64) mod
 		case pc.stop.Err() != nil:
 			a.err, a.stopped = err, true
 			return a
+		case pc.cancelled():
+			a.err, a.stopped, a.cancelled = err, true, true
+			return a
 		case me == nil || !me.Retryable || attempt >= maxModelRetries:
 			a.err = err
 			return a
@@ -187,19 +192,19 @@ func (r *Runtime) callModel(pc *pass, req ModelRequest, estIn, estOut int64) mod
 			a.err = err
 			return a
 		}
-		if err := r.sleep(pc.stop, delay); err != nil {
-			a.err, a.stopped = err, true
+		if err := r.sleep(calls, delay); err != nil {
+			a.err, a.stopped, a.cancelled = err, true, pc.cancelled()
 			return a
 		}
 	}
 }
 
 // requestModel sends one request with a context that ends when the run's
-// lease is lost, the runtime stops or the model timeout passes. A provider
-// that ignores its context is not waited for; a panic is a failure that
-// may have been billed.
-func (r *Runtime) requestModel(pc *pass, req ModelRequest) (ModelResponse, error) {
-	ctx, cancel := context.WithTimeout(pc.stop, r.sched.ModelTimeout)
+// lease is lost, calls ends (the runtime stops or the owner cancels the
+// run) or the model timeout passes. A provider that ignores its context is
+// not waited for; a panic is a failure that may have been billed.
+func (r *Runtime) requestModel(pc *pass, calls context.Context, req ModelRequest) (ModelResponse, error) {
+	ctx, cancel := context.WithTimeout(calls, r.sched.ModelTimeout)
 	defer cancel()
 	stopLost := context.AfterFunc(pc.lost, cancel)
 	defer stopLost()
@@ -219,12 +224,12 @@ func (r *Runtime) requestModel(pc *pass, req ModelRequest) (ModelResponse, error
 	}()
 	select {
 	case res := <-done:
-		if res.err != nil && ctx.Err() != nil && pc.stop.Err() == nil && pc.lost.Err() == nil {
+		if res.err != nil && ctx.Err() != nil && calls.Err() == nil && pc.lost.Err() == nil {
 			return res.resp, &ModelError{Err: fmt.Errorf("the model did not answer within %s", r.sched.ModelTimeout), MayHaveBilled: true}
 		}
 		return res.resp, res.err
 	case <-ctx.Done():
-		if pc.stop.Err() == nil && pc.lost.Err() == nil {
+		if calls.Err() == nil && pc.lost.Err() == nil {
 			return ModelResponse{}, &ModelError{Err: fmt.Errorf("the model did not answer within %s", r.sched.ModelTimeout), MayHaveBilled: true}
 		}
 		return ModelResponse{}, &ModelError{Err: ctx.Err(), MayHaveBilled: true}
@@ -358,10 +363,17 @@ func (r *Runtime) ai(pc *pass, p eviedb.WorkflowRunProgress, step workflow.StepP
 	if err := r.store.CheckWorkflowRunLease(pc.writes, pc.lease); err != nil {
 		return err
 	}
-	answer := r.callModel(pc, req, estIn, estOut)
+	// The owner's cancellation stops the call through its context, like a
+	// stop (sub-stage 8).
+	calls, stopWatch := r.cancellable(pc, pc.stop)
+	answer := r.callModel(pc, calls, req, estIn, estOut)
+	stopWatch()
 	switch {
 	case pc.lost.Err() != nil:
 		return fmt.Errorf("%w: lost while steps.%s was sent", eviedb.ErrWorkflowRunLeaseLost, step.ID)
+	case answer.cancelled:
+		return r.store.InterruptWorkflowAttempt(pc.writes, pc.lease, a.Seq,
+			"interrupted: the owner cancelled the run during the model call, which was stopped; the call may have been billed and counts at its estimate")
 	case answer.stopped:
 		return r.store.InterruptWorkflowAttempt(pc.writes, pc.lease, a.Seq,
 			"interrupted: the runtime stopped during the model call; the step runs again from the same checkpoint, and the call may have been billed")

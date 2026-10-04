@@ -265,6 +265,10 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Each run derives a deterministic workflow-specific Run Key from accepted
   logical input. The database prevents a second active or completed run for the
   same key. An explicit audited override is required to rerun a completed key.
+  (Implemented 2026-10-04, sub-stage 8: the override names the succeeded run
+  and a reason, is recorded with the new run, and enters the new run's Run
+  Key, so its effects' idempotency keys differ. See the sub-stage 8 entry in
+  [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - Each run resolves its own Execution Composition from definition requirements.
   It does not inherit the initiating session's Agent Preset, although that
   preset must expose the capability used to start or inspect workflows.
@@ -317,7 +321,11 @@ coordinate nodes, leases, receipts, or recovery themselves.
 - Cancellation stops future nodes. An in-flight effect completes or enters
   reconciliation; completed effects remain recorded and are not undone.
   Standing Authority or Workspace Access revocation blocks new runs and pauses
-  active runs before their next covered effect.
+  active runs before their next covered effect. (Implemented 2026-10-04,
+  sub-stage 8: a cancelled run stays `cancelling` until an effect in flight
+  has its receipt, and every node applies run admission when it is recorded,
+  so revocation pauses a run at its next node boundary. See the sub-stage 8
+  entry in [workflow-runtime.decisions.md](workflow-runtime.decisions.md).)
 - A restored plugin or Connection may resume a run automatically only when no
   effect is Outcome Unknown and no human interruption is outstanding.
 - Capability providers declare Resource Conflict Keys. The runtime permits

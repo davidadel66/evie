@@ -30,10 +30,10 @@ import (
 //   - workflow_interruption_resolutions: how an interruption closed,
 //     recorded once: the owner's answer (with the answering surface and,
 //     when answered from a session, that session), the provider's
-//     reconciliation of an unknown effect, or a withdrawal (the hook
-//     cancellation uses). Immutable. An effect_reconciliation closes only
-//     in the transaction that records its Effect Receipt, so the owner's
-//     reconciliation and the receipt are one durable record.
+//     reconciliation of an unknown effect, or a withdrawal when the owner
+//     cancels the run (sub-stage 8). Immutable. An effect_reconciliation
+//     closes only in the transaction that records its Effect Receipt, so
+//     the owner's reconciliation and the receipt are one durable record.
 //
 // While a question is open nothing advances, pauses, resumes or fails its
 // run, and no scheduler finds it due (ADR 0029); any later session's
@@ -444,6 +444,9 @@ func (s *Store) AskWorkflowQuestion(ctx context.Context, lease WorkflowRunLease,
 		if err != nil {
 			return err
 		}
+		if run.State == WorkflowRunCancelling {
+			return fmt.Errorf("%w (steps.%s was not asked)", ErrWorkflowRunCancelling, q.Step)
+		}
 		if run.State != WorkflowRunQueued && run.State != WorkflowRunRunning {
 			return fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
 		}
@@ -471,6 +474,11 @@ func (s *Store) AskWorkflowQuestion(ctx context.Context, lease WorkflowRunLease,
 		}
 		if asked > 0 {
 			return fmt.Errorf("%w: steps.%s was already asked at checkpoint %d", ErrWorkflowRunConflict, q.Step, q.Checkpoint)
+		}
+		// A question is a node: it applies run admission like any other
+		// (sub-stage 8).
+		if err := authorizeWorkflowRun(ctx, conn, run); err != nil {
+			return err
 		}
 		if seq, err = openInterruption(ctx, conn, lease, interruptionRow{kind: WorkflowInterruptionQuestion, step: q.Step, checkpoint: q.Checkpoint,
 			message: q.Message, request: q.Request, schema: q.ResponseSchema}, now); err != nil {
@@ -546,11 +554,12 @@ func interruptionStatus(i WorkflowInterruption) string {
 	return string(i.Resolution.Kind)
 }
 
-// WithdrawWorkflowQuestion is the hook cancellation (sub-stage 8) uses: it
-// records, under the run's current lease, that an open question is
-// withdrawn unanswered, and moves its run to cancelling. An effect whose
-// outcome is unknown cannot be withdrawn: it closes only with its receipt
-// (ErrWorkflowEffectUnresolved).
+// WithdrawWorkflowQuestion records, under the run's current lease, that an
+// open question of a run the owner cancelled (it is cancelling) is
+// withdrawn unanswered; FinishWorkflowCancellation does the same for
+// every open question in the transaction that ends the run cancelled
+// (sub-stage 8). An effect whose outcome is unknown cannot be withdrawn:
+// it closes only with its receipt (ErrWorkflowEffectUnresolved).
 func (s *Store) WithdrawWorkflowQuestion(ctx context.Context, lease WorkflowRunLease, runID string, seq int64, reason string) (WorkflowRun, error) {
 	if strings.TrimSpace(reason) == "" {
 		return WorkflowRun{}, errors.New("a withdrawal needs its reason")
@@ -570,14 +579,10 @@ func (s *Store) WithdrawWorkflowQuestion(ctx context.Context, lease WorkflowRunL
 		if i.Kind == WorkflowInterruptionEffect {
 			return fmt.Errorf("%w (steps.%s, Effect Intent #%d): an unknown effect is reconciled, never withdrawn", ErrWorkflowEffectUnresolved, i.Step, i.IntentSeq)
 		}
-		if !i.Open() || run.State != WorkflowRunWaitingForHuman {
-			return fmt.Errorf("%w: interruption #%d is %s, and the run is %s", ErrWorkflowInterruptionClosed, i.Seq, interruptionStatus(i), run.State)
+		if !i.Open() || run.State != WorkflowRunCancelling {
+			return fmt.Errorf("%w: interruption #%d is %s, and the run is %s, not cancelling", ErrWorkflowInterruptionClosed, i.Seq, interruptionStatus(i), run.State)
 		}
-		if err := resolveInterruption(ctx, conn, lease, i.Seq, resolutionRow{kind: WorkflowInterruptionWithdrawn, actor: "runtime", detail: reason}, now); err != nil {
-			return err
-		}
-		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='cancelling',error=?,not_before=NULL,updated_at=? WHERE id=?`, reason, formatTime(now), runID)
-		return err
+		return resolveInterruption(ctx, conn, lease, i.Seq, resolutionRow{kind: WorkflowInterruptionWithdrawn, actor: "runtime", detail: reason}, now)
 	})
 	if err != nil {
 		return WorkflowRun{}, err

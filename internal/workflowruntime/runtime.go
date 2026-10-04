@@ -11,8 +11,9 @@
 // the durable intent-call-receipt-checkpoint protocol and their
 // reconciliation (effects.go); sub-stage 7 adds AI steps through pinned
 // Model Policies (ai.go, models.go) and durable interruptions answered by
-// the owner (interrupts.go); later sub-stages extend runs through this
-// same type.
+// the owner (interrupts.go); sub-stage 8 adds the owner's cancellation,
+// revocation at every node boundary and the audited rerun override
+// (cancel.go); later sub-stages extend runs through this same type.
 //
 // Validation runs against the bound Workspace: its current Workspace Access
 // and the runtime's capability catalog (the workflow capabilities compiled
@@ -103,6 +104,13 @@ type Store interface {
 	AskWorkflowQuestion(ctx context.Context, lease eviedb.WorkflowRunLease, q eviedb.WorkflowQuestion) (eviedb.WorkflowInterruption, error)
 	AnswerWorkflowQuestion(ctx context.Context, lease eviedb.WorkflowRunLease, a eviedb.WorkflowAnswer) (eviedb.WorkflowRun, error)
 	ListWorkflowInterruptions(ctx context.Context, f eviedb.WorkflowInterruptionFilter) ([]eviedb.WorkflowInterruption, error)
+
+	// Cancellation (sub-stage 8): the owner's cancellation recorded without
+	// the lease, finished under it, and the run's state read alone while a
+	// node's call is in flight.
+	RequestWorkflowRunCancellation(ctx context.Context, req eviedb.WorkflowRunCancellationRequest) (eviedb.WorkflowRunCancellation, error)
+	FinishWorkflowCancellation(ctx context.Context, lease eviedb.WorkflowRunLease) (eviedb.WorkflowRun, error)
+	WorkflowRunState(ctx context.Context, id string) (eviedb.WorkflowRunState, error)
 }
 
 // Config wires a Runtime.
@@ -257,6 +265,9 @@ type Runtime struct {
 	// time a pass ends.
 	wakeup  chan struct{}
 	changed chan struct{}
+	// signals reach the passes this process runs when the owner cancels
+	// their runs here (sub-stage 8).
+	signals map[string]*cancelSignal
 }
 
 // New returns a Runtime. It touches neither Git nor the database.
@@ -281,7 +292,7 @@ func New(c Config) (*Runtime, error) {
 		models: c.Models, modelsOff: c.ModelsOff,
 		holder: fmt.Sprintf("evie-%d-%s", os.Getpid(), uuid.NewString()), compatible: slices.Clone(compatibleRuntimes),
 		now: time.Now, sleep: sleepContext,
-		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{},
+		active: map[string]bool{}, failures: map[string]error{}, reported: map[string]string{}, signals: map[string]*cancelSignal{},
 		wakeup: make(chan struct{}, 1), changed: make(chan struct{})}, nil
 }
 

@@ -20,9 +20,11 @@ import (
 
 // The owner's workflow run commands (Stage 14 sub-stage 3, 2026-10-04;
 // --detach and leases from sub-stage 4; reconcile from sub-stage 6; answer
-// and interruptions from sub-stage 7):
+// and interruptions from sub-stage 7; cancel and --rerun-of from sub-stage
+// 8):
 //
-//	evie workflows run [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>]
+//	evie workflows run [--detach] <workspace-id> <name> [--input <name>=<value>]... [--input-json <file>] [--rerun-of <run-id> --reason <text>]
+//	evie workflows cancel [--detach] <run-id> [--reason <text>]
 //	evie workflows runs [<workspace-id>] [--workflow <name>]
 //	evie workflows inspect <run-id>
 //	evie workflows reconcile [--detach] <run-id> <step> --outcome happened|did-not-happen [--evidence <text>] [--output-json <file>]
@@ -34,9 +36,11 @@ import (
 // process (evie serve or the REPL) executes it in the background. Stopping
 // the command never cancels a run: once this process's lease expires,
 // another process recovers it from its last checkpoint. A run already
-// holding the same Run Key is shown instead and nothing new starts. A failed
-// or paused run exits with an error after it is shown. Each command takes
-// --json.
+// holding the same Run Key is shown instead and nothing new starts; the
+// owner's audited override (--rerun-of a succeeded run, with a reason, and
+// that run's input unless others are given) reruns it as a new run. A
+// failed or paused run exits with an error after it is shown. Each command
+// takes --json.
 
 func workflowEncoder(out io.Writer) *json.Encoder {
 	encoder := json.NewEncoder(out)
@@ -48,11 +52,28 @@ func runWorkflowRun(ctx context.Context, args []string, out io.Writer, rt workfl
 	usage := errors.New(workflowsUsage)
 	req := workflowruntime.RunRequest{TextInputs: map[string]string{}, Surface: "cli"}
 	var positional []string
-	asJSON, inputFile := false, ""
+	asJSON, inputFile, reasoned := false, "", false
 	for i := 0; i < len(args); i++ {
 		switch a := args[i]; a {
 		case "--json":
 			asJSON = true
+		case "--rerun-of", "--reason":
+			if i+1 >= len(args) {
+				return usage
+			}
+			value := args[i+1]
+			i++
+			if a == "--reason" {
+				if reasoned {
+					return usage
+				}
+				req.Reason, reasoned = value, true
+				continue
+			}
+			if req.RerunOf != "" || value == "" {
+				return usage
+			}
+			req.RerunOf = value
 		case "--detach":
 			if req.Detach {
 				return usage
@@ -83,7 +104,7 @@ func runWorkflowRun(ctx context.Context, args []string, out io.Writer, rt workfl
 			positional = append(positional, a)
 		}
 	}
-	if len(positional) != 2 {
+	if len(positional) != 2 || (req.RerunOf != "") != reasoned {
 		return usage
 	}
 	req.WorkspaceID, req.Workflow = memory.WorkspaceID(positional[0]), positional[1]
@@ -107,6 +128,8 @@ func runWorkflowRun(ctx context.Context, args []string, out io.Writer, rt workfl
 	} else {
 		if res.Existing {
 			fmt.Fprintf(out, "A run of %s already holds this Run Key; nothing new was started.\n", res.Run.Run.Workflow)
+		} else if o := res.Run.Override; o != nil {
+			fmt.Fprintf(out, "Rerun of %s under your recorded override; its Run Key includes the override, so its effects are sent again.\n", o.RerunOf)
 		}
 		if _, err := io.WriteString(out, workflowruntime.RunText(res.Run)); err != nil {
 			return err
@@ -130,6 +153,8 @@ func runResultError(res workflowruntime.RunResult) error {
 		return fmt.Errorf("workflow run %s is paused: %s", run.ID, run.Error)
 	case run.State == eviedb.WorkflowRunNeedsReconciliation:
 		return fmt.Errorf("workflow run %s needs reconciliation: %s", run.ID, run.Error)
+	case run.State == eviedb.WorkflowRunCancelling:
+		return fmt.Errorf("workflow run %s is cancelling: %s", run.ID, run.Error)
 	case run.State == eviedb.WorkflowRunWaitingForHuman:
 		for _, i := range res.Run.Interruptions {
 			if i.Open() {
@@ -317,6 +342,65 @@ func reconcileWorkflowEffect(ctx context.Context, args []string, out io.Writer, 
 		}
 	}
 	return runResultError(workflowruntime.RunResult{Run: d})
+}
+
+// cancelWorkflowRun is `evie workflows cancel [--json] [--detach] <run-id>
+// [--reason <text>]` (Stage 14 sub-stage 8): the owner cancels an
+// unfinished run. No further node starts; what is in flight finishes (an
+// effect completes or is reconciled first), and the run is cancelled with
+// its completed nodes and effects recorded and its Run Key free. By default
+// it waits for that, as run does; --detach records the cancellation and
+// leaves the rest to the runtime holding the run or a running Evie. A run
+// that stays cancelling until an effect is reconciled exits with an error
+// naming how to reconcile it.
+func cancelWorkflowRun(ctx context.Context, args []string, out io.Writer, rt workflowCommands) error {
+	usage := errors.New(workflowsUsage)
+	detach := false
+	rest := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "--detach" {
+			if detach {
+				return usage
+			}
+			detach = true
+			continue
+		}
+		rest = append(rest, a)
+	}
+	a, ok := parseWorkflowArgs(rest, "reason")
+	if !ok || len(a.positional) != 1 {
+		return usage
+	}
+	req := workflowruntime.CancelRequest{RunID: a.positional[0], Reason: a.flags["reason"], Detach: detach, Surface: "cli"}
+	d, err := rt.Cancel(ctx, req)
+	if err != nil {
+		return err
+	}
+	run := d.Run
+	if a.json {
+		if err := workflowEncoder(out).Encode(d); err != nil {
+			return err
+		}
+	} else {
+		switch run.State {
+		case eviedb.WorkflowRunCancelled:
+			fmt.Fprintf(out, "Cancelled run %s; its completed nodes and effects stay recorded, and its Run Key is free.\n", run.ID)
+		case eviedb.WorkflowRunSucceeded, eviedb.WorkflowRunFailed:
+			fmt.Fprintf(out, "Run %s %s: its last node finished before the cancellation could stop anything.\n", run.ID, run.State)
+		default:
+			fmt.Fprintf(out, "Cancellation of run %s recorded; no further node starts.\n", run.ID)
+		}
+		if _, err := io.WriteString(out, workflowruntime.RunText(d)); err != nil {
+			return err
+		}
+		if detach && run.State == eviedb.WorkflowRunCancelling {
+			fmt.Fprintf(out, "Detached: the runtime holding the run, or a running Evie, finishes the cancellation; follow it with evie workflows inspect %s\n", run.ID)
+		}
+	}
+	if run.State == eviedb.WorkflowRunCancelling && !detach {
+		return fmt.Errorf("workflow run %s is still cancelling: %s", run.ID, run.Error)
+	}
+	return nil
 }
 
 // workflowSchedulerConfig is the Workflow Runtime's scheduler configuration

@@ -681,6 +681,10 @@ type WorkflowEffectUnknownMark struct {
 // effect_reconciliation interruption (sub-stage 7), which only the
 // intent's receipt closes.
 func markUnknown(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, i WorkflowEffectIntent, reason string, response json.RawMessage, runError string, now time.Time, settle time.Duration) error {
+	run, err := readWorkflowRun(ctx, conn, i.RunID)
+	if err != nil {
+		return err
+	}
 	row, err := effectInterruption(i, reason)
 	if err != nil {
 		return err
@@ -700,8 +704,14 @@ func markUnknown(ctx context.Context, conn *sql.Conn, lease WorkflowRunLease, i 
 	if i.Reconcile == WorkflowEffectReconcileByProvider {
 		notBefore = formatLeaseTime(now.Add(settle))
 	}
-	if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state='needs_reconciliation',error=?,not_before=?,updated_at=? WHERE id=?`,
-		runError, notBefore, formatTime(now), i.RunID); err != nil {
+	// A run the owner is cancelling stays cancelling: it finishes once the
+	// effect's receipt is recorded, never by retrying it (sub-stage 8).
+	state := WorkflowRunNeedsReconciliation
+	if run.State == WorkflowRunCancelling {
+		state, runError = WorkflowRunCancelling, clipText(cancellingUnknownError(runError), maxEffectText)
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE workflow_runs SET state=?,error=?,not_before=?,updated_at=? WHERE id=?`,
+		string(state), runError, notBefore, formatTime(now), i.RunID); err != nil {
 		return fmt.Errorf("record workflow run needing reconciliation: %w", err)
 	}
 	return nil
@@ -823,10 +833,12 @@ type WorkflowEffectResolution struct {
 // Resource Conflict Keys and lets the run continue: it is running again
 // from its latest checkpoint, where the runtime continues from the receipt
 // (the step's output when it happened; a retry within the Retry Policy, or
-// the run's failure, when it did not). In the same transaction it closes
-// the intent's effect_reconciliation interruption (sub-stage 7): answered,
-// with the owner's answer, surface and session, or reconciled by the
-// provider, so the reconciliation and the receipt are one record.
+// the run's failure, when it did not); a run the owner is cancelling stays
+// cancelling, and its holder then finishes the cancellation (sub-stage 8).
+// In the same transaction it closes the intent's effect_reconciliation
+// interruption (sub-stage 7): answered, with the owner's answer, surface
+// and session, or reconciled by the provider, so the reconciliation and
+// the receipt are one record.
 func (s *Store) ResolveWorkflowEffect(ctx context.Context, lease WorkflowRunLease, r WorkflowEffectResolution) (WorkflowRun, error) {
 	if r.Source != WorkflowEffectFromOwner && r.SessionID != "" {
 		return WorkflowRun{}, errors.New("only the owner answers from a session")
@@ -866,7 +878,7 @@ func (s *Store) ResolveWorkflowEffect(ctx context.Context, lease WorkflowRunLeas
 		if err != nil {
 			return err
 		}
-		if i.State() != WorkflowEffectUnknown || run.State != WorkflowRunNeedsReconciliation {
+		if i.State() != WorkflowEffectUnknown || run.State != WorkflowRunNeedsReconciliation && run.State != WorkflowRunCancelling {
 			return fmt.Errorf("%w: Effect Intent #%d is %s and the run is %s", ErrWorkflowEffectNotUnknown, i.Seq, i.State(), run.State)
 		}
 		if err := requireWorkspaceSession(ctx, conn, run, r.SessionID); err != nil {
@@ -899,6 +911,14 @@ func (s *Store) ResolveWorkflowEffect(ctx context.Context, lease WorkflowRunLeas
 		case err != nil:
 			return err
 		}
+		if run.State == WorkflowRunCancelling {
+			c, _, err := readWorkflowRunCancellation(ctx, conn, r.RunID)
+			if err != nil {
+				return err
+			}
+			_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET error=?,not_before=NULL,updated_at=? WHERE id=?`, cancellingError(c), formatTime(now), r.RunID)
+			return err
+		}
 		_, err = conn.ExecContext(ctx, `UPDATE workflow_runs SET state='running',error='',not_before=NULL,updated_at=? WHERE id=?`, formatTime(now), r.RunID)
 		return err
 	})
@@ -924,8 +944,14 @@ func (s *Store) DeferWorkflowReconciliation(ctx context.Context, lease WorkflowR
 		if err != nil {
 			return err
 		}
-		if run.State != WorkflowRunNeedsReconciliation {
+		if run.State != WorkflowRunNeedsReconciliation && run.State != WorkflowRunCancelling {
 			return fmt.Errorf("%w: the run is %s", ErrWorkflowRunConflict, run.State)
+		}
+		if run.State == WorkflowRunCancelling {
+			if err := requireEffectsResolved(ctx, conn, run.ID); !errors.Is(err, ErrWorkflowEffectUnresolved) {
+				return fmt.Errorf("%w: the cancelling run has no effect to reconcile", ErrWorkflowRunConflict)
+			}
+			reason = clipText(cancellingUnknownError(reason), maxEffectText)
 		}
 		var notBefore any
 		if recheck > 0 {

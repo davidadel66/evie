@@ -488,7 +488,7 @@ func unknownIntent(intents []eviedb.WorkflowEffectIntent) (eviedb.WorkflowEffect
 // when automatic reconciliation is due and the run's pins still hold, it
 // reconciles and continues; otherwise it records why automatic
 // reconciliation waits, and the run never pauses or resumes meanwhile.
-func (r *Runtime) continueReconciliation(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context, p eviedb.WorkflowRunProgress) (passEnd, error) {
+func (r *Runtime) continueReconciliation(ctx, writes context.Context, lease eviedb.WorkflowRunLease, lost context.Context, p eviedb.WorkflowRunProgress, signal *cancelSignal) (passEnd, error) {
 	run := p.Run
 	if run.NotBefore == nil || run.NotBefore.After(r.now()) {
 		return passParked, nil
@@ -526,7 +526,7 @@ func (r *Runtime) continueReconciliation(ctx, writes context.Context, lease evie
 	if err != nil {
 		return 0, err
 	}
-	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp})
+	return r.advance(&pass{stop: ctx, writes: writes, lost: lost, lease: lease, v: v, comp: comp, cancel: signal})
 }
 
 // deferred is a run's error while automatic reconciliation waits: the
@@ -683,7 +683,9 @@ func (r *Runtime) reconcile(ctx context.Context, req Reconciliation, session mem
 		return eviedb.WorkflowRunDetail{}, err
 	}
 	switch d.Run.State {
-	case eviedb.WorkflowRunNeedsReconciliation:
+	case eviedb.WorkflowRunNeedsReconciliation, eviedb.WorkflowRunCancelling:
+		// A cancelling run's cancellation finishes once its effect is
+		// reconciled (sub-stage 8).
 	case eviedb.WorkflowRunRunning, eviedb.WorkflowRunWaitingForDependency:
 		// A runtime may have stopped between an intent and its receipt
 		// (and an older Evie may have paused the run); the claim below
@@ -725,7 +727,7 @@ func (r *Runtime) reconcileClaimed(ctx context.Context, lease eviedb.WorkflowRun
 	if err != nil {
 		return err
 	}
-	if d.Run.State != eviedb.WorkflowRunNeedsReconciliation {
+	if d.Run.State != eviedb.WorkflowRunNeedsReconciliation && d.Run.State != eviedb.WorkflowRunCancelling {
 		return refuse("run %s does not need reconciliation (it is %s)", req.RunID, d.Run.State)
 	}
 	var intent *eviedb.WorkflowEffectIntent

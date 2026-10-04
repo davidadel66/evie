@@ -16,7 +16,11 @@ import { WorkflowInterruptionAnswer } from "./WorkflowInterruptionAnswer";
 // paused run shows why, and inspection lists its lease and recovery events.
 // Since sub-stage 7 a run may wait for David's answer to a question, or to
 // an effect whose outcome is unknown; he answers it here, from any later
-// session, and AI steps show their model calls and spend.
+// session, and AI steps show their model calls and spend. Since sub-stage 8
+// he cancels an unfinished run here: no further step starts, what is in
+// flight finishes (an effect completes or is reconciled first), and the run
+// ends cancelled with its completed steps recorded and its Run Key free. A
+// rerun of a succeeded run shows the override it was started under.
 
 const stateLabel: Record<WorkflowRunState, string> = {
   queued: "Queued",
@@ -41,7 +45,12 @@ function when(time: string): string {
 
 const paused = (run: WorkflowRun) => run.state === "waiting_for_dependency";
 
-/** A run's error line: why it failed, or why it is paused. */
+const finished = (state: WorkflowRunState) => state === "succeeded" || state === "failed" || state === "cancelled";
+
+/** A run whose error line is a status, not a failure: paused, or cancelled by David. */
+const quiet = (run: WorkflowRun) => paused(run) || run.state === "cancelling" || run.state === "cancelled";
+
+/** A run's error line: why it failed, why it is paused, or how it was cancelled. */
 function reason(run: WorkflowRun): string {
   return paused(run) ? `Paused: ${run.error}` : run.error ?? "";
 }
@@ -63,7 +72,7 @@ export function WorkflowRunList({runs, busy, onInspect}: {
         <span className="text-fainter">{when(run.created_at)}</span>
         <button type="button" disabled={busy} onClick={() => onInspect(run)} className="text-body underline underline-offset-2 disabled:opacity-40">Inspect</button>
       </div>
-      {run.error && <p className={`${paused(run) ? "text-muted-text" : "text-danger"} mt-1 leading-5`}>{reason(run)}</p>}
+      {run.error && <p className={`${quiet(run) ? "text-muted-text" : "text-danger"} mt-1 leading-5`}>{reason(run)}</p>}
     </li>)}
   </ul>;
 }
@@ -76,13 +85,26 @@ function resolutionLine(i: WorkflowInterruption): string {
   return `Interruption #${i.seq} at ${i.step}: ${who}${r.answer ? `: ${JSON.stringify(r.answer)}` : ""}`;
 }
 
-export function WorkflowRunView({detail, onClose, busy = false, onAnswer}: {
+/** David's cancellation of an unfinished run, with an optional reason. */
+function WorkflowRunCancel({busy, onCancel}: {busy: boolean; onCancel: (reason: string) => void}) {
+  const [why, setWhy] = useState("");
+  return <form className="mt-3 flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); onCancel(why); }}>
+    <input aria-label="Cancellation reason" value={why} onChange={(event) => setWhy(event.target.value)} maxLength={1000} placeholder="Reason (optional)"
+      className="border-hair bg-app text-body min-w-0 flex-1 rounded-[6px] border px-2 py-1" />
+    <button type="submit" disabled={busy} className="border-hair text-body rounded-[6px] border px-3 py-1 font-semibold disabled:opacity-40">Cancel run</button>
+  </form>;
+}
+
+export function WorkflowRunView({detail, onClose, busy = false, onAnswer, onCancel}: {
   detail: WorkflowRunDetail;
   onClose: () => void;
   busy?: boolean;
   onAnswer?: (step: string, answer: Record<string, unknown>) => void;
+  onCancel?: (reason: string) => void;
 }) {
   const run = detail.run;
+  const cancellation = detail.cancellation;
+  const override = detail.override;
   const interruptions = detail.interruptions ?? [];
   const open = interruptions.filter((i) => !i.resolution);
   const calls = detail.model_calls ?? [];
@@ -94,12 +116,15 @@ export function WorkflowRunView({detail, onClose, busy = false, onAnswer}: {
     <h3 className="text-body mb-2 text-sm font-medium">{run.workflow} version {run.version}: {stateLabel[run.state]}</h3>
     <p className="text-muted-text">Run <code className="font-mono">{run.id}</code>, started from the {run.surface === "web" ? "web" : "CLI"}{run.session_id ? ` in session ${run.session_id}` : ""}.</p>
     <p className="text-muted-text">Run key <code className="font-mono">{run.run_key}</code></p>
+    {override && <p className="text-muted-text">{`Rerun of ${override.rerun_of} under your override via ${override.surface} at ${when(override.recorded_at)}: ${override.reason}`}</p>}
     <p className="text-muted-text">Executable hash <code className="font-mono">{run.executable_hash}</code></p>
     <p className="text-muted-text">Pinned to Workspace revision {run.workspace_revision}, access revision {run.access_revision}.</p>
-    {run.error && (paused(run)
-      ? <p role="status" className="text-muted-text mt-2">{reason(run)}{run.not_before ? ` Checked again after ${when(run.not_before)}.` : ""}</p>
+    {cancellation && <p className="text-muted-text mt-2">{`${run.state === "cancelled" ? "Cancelled" : "Cancellation requested"} via ${cancellation.surface} at ${when(cancellation.requested_at)}, while the run was ${stateLabel[cancellation.from_state].toLowerCase()}${cancellation.reason ? `: ${cancellation.reason}` : ""}`}</p>}
+    {run.error && (quiet(run)
+      ? <p role="status" className="text-muted-text mt-2">{reason(run)}{paused(run) && run.not_before ? ` Checked again after ${when(run.not_before)}.` : ""}</p>
       : <p role="alert" className="text-danger mt-2">{run.error}</p>)}
-    {run.not_before && !paused(run) && !["succeeded", "failed", "cancelled"].includes(run.state) && <p className="text-muted-text">Retry not before {when(run.not_before)}.</p>}
+    {run.not_before && !quiet(run) && !finished(run.state) && <p className="text-muted-text">Retry not before {when(run.not_before)}.</p>}
+    {onCancel && !finished(run.state) && run.state !== "cancelling" && <WorkflowRunCancel key={run.id} busy={busy} onCancel={onCancel} />}
     {open.length > 0 && <section className="mt-3" aria-label="Waiting for you">
       <h4 className="text-body font-medium">Waiting for you</h4>
       {open.map((i) => onAnswer
@@ -126,7 +151,7 @@ export function WorkflowRunView({detail, onClose, busy = false, onAnswer}: {
           {a.note && <p className="text-muted-text">{a.note}</p>}
         </li>)}
       </ol>}
-      {!["succeeded", "failed", "cancelled"].includes(run.state) && run.next_step && <p className="text-muted-text mt-1">Next: {run.next_step} from checkpoint {run.checkpoint}.</p>}
+      {!finished(run.state) && run.state !== "cancelling" && run.next_step && <p className="text-muted-text mt-1">Next: {run.next_step} from checkpoint {run.checkpoint}.</p>}
     </section>
     {interruptions.some((i) => i.resolution) && <section className="mt-3">
       <h4 className="text-body font-medium">Interruptions</h4>
@@ -216,6 +241,15 @@ export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definiti
     setDetail(await api.inspect(run.id));
     return "";
   });
+  const cancel = (why: string) => act(async () => {
+    if (!detail) return "";
+    const cancelled = await api.cancel(detail.run.id, why);
+    setDetail(cancelled);
+    await refresh();
+    return cancelled.run.state === "cancelled"
+      ? "Run cancelled; its completed steps stay recorded and its Run Key is free."
+      : `Cancellation recorded; the run is ${stateLabel[cancelled.run.state].toLowerCase()}.`;
+  });
   const answer = (step: string, value: Record<string, unknown>) => act(async () => {
     if (!detail) return "";
     const answered = await api.answer(detail.run.id, step, value);
@@ -225,11 +259,11 @@ export function WorkspaceWorkflowRuns({workspace, api = workflowRunAPI, definiti
   });
   return <section aria-label="Workflow runs" className="border-hair mt-7 border-b pb-7">
     <h2 className="text-body mb-3 text-sm font-medium">Workflow runs</h2>
-    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Workflows with agent or map steps cannot run yet.</p>
+    <p className="text-muted-text mb-3 max-w-[620px] text-xs leading-5">Start an active workflow with its inputs. Each run is pinned to the approved version and records every step it takes; a run whose Run Key already ran is shown instead of starting again. Runs keep going if you leave this page, and a run cut short by a restart resumes from its last checkpoint. A run that asks you something waits here until you answer, from this or any later session. Cancelling a run stops its remaining steps; a step already running finishes first. Workflows with agent or map steps cannot run yet.</p>
     {workspace.state === "active" && <WorkflowRunStart workflows={active} busy={busy} onStart={(name, inputs) => void start(name, inputs)} />}
     {runs === null ? <p className="text-muted-text text-xs">Loading runs…</p>
       : <WorkflowRunList runs={runs} busy={busy} onInspect={(run) => void inspect(run)} />}
-    {detail && <WorkflowRunView detail={detail} busy={busy} onAnswer={(step, value) => void answer(step, value)} onClose={() => setDetail(null)} />}
+    {detail && <WorkflowRunView detail={detail} busy={busy} onAnswer={(step, value) => void answer(step, value)} onCancel={(why) => void cancel(why)} onClose={() => setDetail(null)} />}
     <p role="status" className="text-muted-text mt-2 text-xs">{busy ? "Working…" : message}</p>
     {problem && <p role="alert" className="text-danger mt-2 text-xs">{problem}</p>}
   </section>;

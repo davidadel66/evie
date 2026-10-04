@@ -226,6 +226,29 @@ export type WorkflowModelCall = {
   error?: string;
 };
 
+// Cancellation and the audited rerun override (Stage 14 sub-stage 8): the
+// owner cancels an unfinished run (no further step starts; what is in
+// flight finishes, an effect completes or is reconciled first), and a
+// rerun of a succeeded run records the override it was started under.
+export type WorkflowRunCancellation = {
+  run_id: string;
+  reason?: string;
+  actor: string;
+  surface: string;
+  from_state: WorkflowRunState;
+  requested_at: string;
+};
+
+export type WorkflowRunOverride = {
+  run_id: string;
+  rerun_of: string;
+  logical_key: string;
+  reason: string;
+  actor: string;
+  surface: string;
+  recorded_at: string;
+};
+
 export type WorkflowRunDetail = {
   run: WorkflowRun;
   attempts: WorkflowNodeAttempt[];
@@ -234,6 +257,8 @@ export type WorkflowRunDetail = {
   events?: WorkflowRunEvent[];
   interruptions?: WorkflowInterruption[];
   model_calls?: WorkflowModelCall[];
+  cancellation?: WorkflowRunCancellation;
+  override?: WorkflowRunOverride;
 };
 
 export type WorkflowRunResult = { run: WorkflowRunDetail; existing: boolean };
@@ -246,6 +271,8 @@ export const workflowRunAPI = {
   answer: (runId: string, step: string, answer: Record<string, unknown>): Promise<WorkflowRunDetail> =>
     postWorkflows("answer", { run_id: runId, step, answer }),
   interruptions: (workspaceId: string): Promise<{ interruptions: WorkflowInterruption[] }> => postWorkflows("interruptions", { workspace_id: workspaceId }),
+  cancel: (runId: string, reason: string): Promise<WorkflowRunDetail> =>
+    postWorkflows("cancel", reason.trim() === "" ? { run_id: runId } : { run_id: runId, reason: reason.trim() }),
 };
 export type WorkflowRunAPI = typeof workflowRunAPI;
 
